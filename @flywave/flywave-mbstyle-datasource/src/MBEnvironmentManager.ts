@@ -475,6 +475,26 @@ export class MBEnvironmentManager {
     /** Multi-tile terrain controller (null if no terrain or single-tile fallback). */
     get terrainController(): TerrainController | null { return this.m_terrainController; }
     private m_backgroundQuad: THREE.Mesh | null = null;
+    /** §357: live background-pattern uniforms (shared Vector2s auto-update). */
+    private m_bgPatternInfo: {
+        texture: THREE.Texture;
+        origin: THREE.Vector2;
+        size: THREE.Vector2;
+        count: THREE.Vector2;
+        phase: THREE.Vector2;
+        pxSize: THREE.Vector2;
+    } | null = null;
+    /** §357: pattern info for the raster pattern-base injection (null = none). */
+    getBackgroundPatternInfo(): {
+        texture: THREE.Texture;
+        origin: THREE.Vector2;
+        size: THREE.Vector2;
+        count: THREE.Vector2;
+        phase: THREE.Vector2;
+        pxSize: THREE.Vector2;
+    } | null {
+        return this.m_backgroundQuad ? this.m_bgPatternInfo : null;
+    }
     private m_rasterQuad: THREE.Mesh | null = null;
     private m_imageQuads: THREE.Mesh[] = [];
 
@@ -2132,6 +2152,7 @@ export class MBEnvironmentManager {
             (this.m_backgroundQuad.geometry as THREE.BufferGeometry).dispose();
             (this.m_backgroundQuad.material as THREE.Material).dispose();
             this.m_backgroundQuad = null;
+            this.m_bgPatternInfo = null;
         }
 
         if (!patternName || !spriteAtlas) return;
@@ -2172,12 +2193,26 @@ export class MBEnvironmentManager {
             return (axis === 0 ? iconInfo.width : iconInfo.height) / pr;
         };
         const tileCount = { value: new THREE.Vector2(8, 8) };
+        // §357: live pattern info for the raster pattern-base injection
+        // (terrain styles: blended raster quads must composite over the
+        // PATTERN like mgl's RTT drape content framebuffer, not over the
+        // terrain mesh's dark surface).
+        this.m_bgPatternInfo = {
+            texture: tex,
+            origin: new THREE.Vector2(u0, v0),
+            size: new THREE.Vector2(w, h),
+            count: tileCount.value,
+            phase: null as unknown as THREE.Vector2,
+            pxSize: new THREE.Vector2(
+                iconInfo ? iconInfo.width : 1, iconInfo ? iconInfo.height : 1),
+        };
         // Pattern phase: mgl anchors the pattern to WORLD pixel 0 (mercator
         // origin lng −180 / lat 85.05), not the screen origin — see
         // get_pattern_pos in _prelude.vertex.glsl (pixel_coord comes from the
         // tile's world pixel offset). At zoom 0 / 64px viewport this is a
         // visible 4px phase vs screen anchoring.
         const tilePhase = { value: new THREE.Vector2(0, 0) };
+        if (this.m_bgPatternInfo) this.m_bgPatternInfo.phase = tilePhase.value;
         const updatePhase = (renderer: THREE.WebGLRenderer): void => {
             try {
                 const { GeoCoordinates } = require('@flywave/flywave-geoutils');

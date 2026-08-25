@@ -4469,3 +4469,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实验确证**：applyTerrain 早退（terrain mesh/controller 全禁）→ **162902→155636、202254→197399、202317→178847**（transparent −23.5k）——§355 头号嫌疑成立。全链条闭合：全屏图案 quad（renderOrder −10000）→ terrain mesh 不透明盖住图案 → raster quads 带 injectTerrainDrape 贴在 terrain 表面之上 → 0.208 绿瓦 blend **over terrain 表面（MapTerrainMaterial 底色黑）** = (0,52,0)；期望 = over 图案 (68,143,168)。mgl 语义：terrain 下 background/raster 经 RTT drape（内容 framebuffer 含 background）。
 - **修复方向（下会话工程项，二选一）**：①**图案底注入 raster shader**——terrain 激活且样式含 background-pattern 时，把图案 atlas 纹理+子矩形（复用 bg quad 的 uMBPatOrigin/Size/Count/Phase uniforms）注入 raster 材质，baseSrgb 替换为图案屏幕平铺采样（精确复刻 RTT 内容近似）；②**terrain mesh 图案化**——无 drape 内容时 terrain 表面直接采样图案（更粗近似，快）。禁用 terrain 不可入库（期望含地形形变，155636 仍远超阈值）。
 - **终态**：实验回退、基线复现 ✓、工作树=提交态。
+
+**§357. 图案底注入 raster shader【落地】——terrain 激活时 raster 混合底=背景图案采样（近似 mgl RTT drape 内容 framebuffer），error-overlap 三例净改善 −61k（2026-08-25 二百四十八，修复落地记档）**：
+
+- **实现**：①MBEnvironmentManager 暴露 `getBackgroundPatternInfo()`（图案 atlas 纹理+子矩形+**共享活 uniform**（count/phase Vector2 与 bg quad 同对象、每帧自动更新）；②patchRasterMaterial：terrain 激活（centerDem 或 terrainController 存在）且图案可用时 `rasRealBlend=false`，opaque 合成路径的 `uMBRasBase` 替换为**图案屏幕平铺采样**（gl_FragCoord/buf ↔ bg quad 的 vMapUv 同数学，含 y 翻转/半纹元 inset/相位），uMBRasPatBuf 每帧 onBeforeRender 更新 drawingBufferSize。
+- **结果**：error-overlap **162902→155635、202254→162153、202317→188406**（净 −61.1k；initializing 155635 恰=§356 禁 terrain 实验 155636——图案底完全等价"terrain 不遮图案"效应 ✓ 链条终验）。门控放宽到 terrainController 存在（initializing 的 centerDem 为空但 terrain mesh 在）。
+- **回归**：raster 全族 30 PASS/8 FAIL 失败集不变零回退；raster-masking/terrain/overlapping-zoom **13px→PASS**（连带转正）；208 项 terrain 套件无新增失败（error-overlap 三例在列改善）。
+- **残差**：155635/162153/188406 仍远超阈值 263——剩余为 terrain 几何/高度域（期望含地形形变与 RTT 内容精确合成），见 §336 terrain 域既有记档。
+- **终态**：修复入库、工作树=提交态+本修复。

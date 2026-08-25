@@ -767,6 +767,19 @@ export class MBMaterialPatchManager {
                     l.layout?.visibility !== 'none' &&
                     (l.type !== 'background' || l.paint?.['background-pattern']));
         } catch {}
+        // §357: terrain styles — the opaque terrain mesh covers the background
+        // pattern quad, so REAL framebuffer blending composites over the dark
+        // terrain surface instead of the pattern (mgl's RTT drape framebuffer
+        // contains the background). When terrain is active AND the pattern
+        // uniforms are available, composite in-shader over the PATTERN sample
+        // instead (see the uMBRasPat* injection below).
+        const env: any = (this.m_dataSource as any).m_environment;
+        const terrainActive = !!this.centerDem || !!env?.terrainController;
+        const bgPat = terrainActive
+            ? env?.getBackgroundPatternInfo?.() ?? null
+            : null;
+        const patBase = bgPat !== null && bgPat !== undefined;
+        if (patBase) rasRealBlend = false;
         if ('opacity' in material) {
             if (rasRealBlend) {
                 (material as any).opacity = 1;
@@ -966,6 +979,19 @@ export class MBMaterialPatchManager {
                 }
                 const rasRes = new THREE.Vector2(512, 256);
                 shader.uniforms.uMBRasRes = { value: rasRes };
+                // §357 pattern-base (terrain styles): shared live uniforms from
+                // the background-pattern quad — count/phase Vector2s are the
+                // SAME objects the bg quad's onBeforeRender keeps updated.
+                if (patBase && bgPat) {
+                    shader.uniforms.uMBRasPatTex = { value: bgPat.texture };
+                    shader.uniforms.uMBRasPatOrigin = { value: bgPat.origin };
+                    shader.uniforms.uMBRasPatSize = { value: bgPat.size };
+                    shader.uniforms.uMBRasPatCount = { value: bgPat.count };
+                    shader.uniforms.uMBRasPatPhase = { value: bgPat.phase };
+                    shader.uniforms.uMBRasPatPx = { value: bgPat.pxSize };
+                    shader.uniforms.uMBRasPatBuf = { value: new THREE.Vector2(512, 256) };
+                    (material as any).__mbRasPatBuf = shader.uniforms.uMBRasPatBuf;
+                }
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
                     'varying vec2 vMBRasUv; varying float vMBRasEyeDist; uniform vec2 uMBRasRes;\nvoid main() {',
@@ -998,6 +1024,10 @@ export class MBMaterialPatchManager {
                 (material as any).onBeforeRender = (renderer: any, scene: any, camera: any, geometry: any, object: any, group: any) => {
                     if (origBefore) origBefore(renderer, scene, camera, geometry, object, group);
                     try { renderer.getSize(rasRes); } catch { /* keep last */ }
+                    try {
+                        const pb = (material as any).__mbRasPatBuf;
+                        if (pb) renderer.getDrawingBufferSize(pb.value);
+                    } catch {}
                 };
                 shader.fragmentShader = shader.fragmentShader.replace(
                     'void main() {',
@@ -1009,7 +1039,7 @@ export class MBMaterialPatchManager {
                      uniform vec3 uMBRasBase;
                      uniform float uMBRasFar;
                      varying float vMBRasEyeDist;
-                     uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx; uniform float uMBRasPadOn;\n                     uniform sampler2D uMBRasRamp;\n                     uniform vec4 uMBArrMix; uniform float uMBArrOff; uniform float uMBArrTile; uniform float uMBArrBuf; uniform float uMBArrRes;
+                     uniform vec2 uMBRasPadPx; uniform vec2 uMBRasFullPx; uniform float uMBRasPadOn;\n                     uniform sampler2D uMBRasPatTex; uniform vec2 uMBRasPatOrigin; uniform vec2 uMBRasPatSize; uniform vec2 uMBRasPatCount; uniform vec2 uMBRasPatPhase; uniform vec2 uMBRasPatPx; uniform vec2 uMBRasPatBuf;\n                     uniform sampler2D uMBRasRamp;\n                     uniform vec4 uMBArrMix; uniform float uMBArrOff; uniform float uMBArrTile; uniform float uMBArrBuf; uniform float uMBArrRes;
                      vec3 mbSrgbEnc(vec3 c) { return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
                      vec3 mbSrgbDec(vec3 c) { return mix(c / 12.92, pow((max(c, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
                      void main() {`,
@@ -1106,7 +1136,23 @@ export class MBMaterialPatchManager {
                             // framebuffer blends the sRGB-encoded output
                             // (mgl numeric-space semantics).
                             gl_FragColor = vec4(mbSrgbDec(mbR), ${opacity.toFixed(3)} * mbRasT.a);`
-                         : `vec3 mbMix = mix(uMBRasBase, mbR, ${opacity.toFixed(3)} * mbRasT.a);
+                         : `vec3 mbBase = uMBRasBase;
+                            ${patBase ? `
+                            // §357 pattern base (terrain): composite over the
+                            // background-pattern sample like mgl's RTT drape
+                            // framebuffer — same screen tiling/phase math as
+                            // the bg quad (gl_FragCoord/buf ↔ vMapUv, y-flip).
+                            vec2 mbPatUvn = gl_FragCoord.xy / max(uMBRasPatBuf, vec2(1.0));
+                            vec2 mbPatT = vec2(
+                                fract(mbPatUvn.x * uMBRasPatCount.x - uMBRasPatPhase.x),
+                                fract((1.0 - mbPatUvn.y) * uMBRasPatCount.y - uMBRasPatPhase.y));
+                            vec2 mbPatPx = clamp(1.0 / max(uMBRasPatPx, vec2(1.0)), vec2(0.0), vec2(0.25));
+                            vec2 mbPatF = mbPatPx * 0.5 + mbPatT * (1.0 - mbPatPx);
+                            vec2 mbPatUv = vec2(
+                                uMBRasPatOrigin.x + mbPatF.x * uMBRasPatSize.x,
+                                1.0 - uMBRasPatOrigin.y - mbPatF.y * uMBRasPatSize.y);
+                            mbBase = mbSrgbEnc(texture2D(uMBRasPatTex, mbPatUv).rgb);` : ''}
+                            vec3 mbMix = mix(mbBase, mbR, ${opacity.toFixed(3)} * mbRasT.a);
                             gl_FragColor = vec4(mbSrgbDec(mbMix), 1.0);`}
                      }`,
                 );
