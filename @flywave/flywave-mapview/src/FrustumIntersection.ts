@@ -283,9 +283,19 @@ export class FrustumIntersection {
                         this.mapView.viewportHeight;
                     if (ccdPx > 0) {
                         const C = 40075016.686;
+                        // §346/§347: mgl shouldSplit exact spec (transform.ts
+                        // distToSplit) — zoomSplitDistance = ccd/tileSize is
+                        // in units of tiles at the COVERING zoom (maxZoom),
+                        // and the threshold scales by 2^(maxZoom − level):
+                        //   distToSplit = (C / 2^maxZoom) · ccd/tileSize · 2^(maxZoom−level)
+                        // (= mgl's `(1 << (maxZoom - it.zoom)) * zoomSplitDistance`
+                        // converted to meters). Without the factor the LOD
+                        // band never stops anything (measured: 0 stops);
+                        // basing it on the level's tile size doubles it again.
                         const distWorld =
-                            (C / Math.pow(2, tileKey.level)) *
+                            (C / Math.pow(2, maxZoomLod)) *
                             (ccdPx / this.mglDistanceLodTileSize) *
+                            Math.pow(2, maxZoomLod - tileKey.level) *
                             (this.mglDistanceLodScale ?? 1);
                         const mv = this.mapView as any;
                         const tiltRad = ((mv.tilt ?? 0) * Math.PI) / 180;

@@ -1,6 +1,6 @@
 // Offline port of mgl Transform.coveringTiles (mercator, no elevation) — §314/§315.
 // Computes the reference tile set for the error-overlap fixture camera.
-const path = '/home/aninggo/work/flywave.gl/node_modules/.pnpm/gl-matrix@3.4.3/node_modules/gl-matrix';
+const path = require('path').join(__dirname, '..', 'node_modules', '.pnpm', 'gl-matrix@3.4.3', 'node_modules', 'gl-matrix');
 const { mat4, vec3, vec4, quat } = require(path);
 
 // ---------- fixture camera ----------

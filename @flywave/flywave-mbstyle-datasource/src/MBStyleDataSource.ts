@@ -1059,6 +1059,17 @@ export class MBStyleDataSource extends TileDataSource {
             // (the z16 404-walk replaces content mgl serves from z15 tiles
             // directly). Offset 0 stays; round semantics need engine-side
             // mixed-level delivery instead.
+            // §347: +1 re-enabled — WITH mglDistanceLod (2^(maxZoom−level)
+            // factor) + mixedLevelDelivery + m_multiLevelCoverage the engine
+            // now reproduces mgl's mixed covering (reference: 47 z16 + 6 z15
+            // for this camera): far band stops at z15, near band delivers z16,
+            // and the datasource serves BOTH levels.
+            // §347 result: LOD stops now FIRE (2 z15 stops, threshold 7338m
+            // unit-corrected) but the fixture is still net-WORSE than the
+            // offset-0 baseline (199673 vs 158939) — only 2/6 of mgl's stops
+            // (per-tile distToSplitScale tuning needed) and z15+z16 same-
+            // screen composition order uncalibrated. Combo stays OFF; the
+            // engine formula fix is landed behind the mglDistanceLod flag.
             this.storageLevelOffset = 0;
         }
 
@@ -1087,8 +1098,16 @@ export class MBStyleDataSource extends TileDataSource {
                     // pixel-identical no-op. Measured cause: no visible tile's
                     // distance ever exceeds distToSplit (z14 d≈6k vs 14.7k
                     // threshold at pitch 60), so the LOD branch never stops a
-                    // tile. Keep off (zero behavior change).
+                    // tile.
+                    // §346: root cause of those 0 stops — the threshold was
+                    // missing mgl's 2^(maxZoom−level) factor (shouldSplit
+                    // spec). With the factor landed in FrustumIntersection the
+                    // mixed covering set (far band at lower levels + near band
+                    // at dataZoom) is enabled: LOD stop + mixedLevelDelivery +
+                    // multiLevelCoverage.
                     (vtsL.options as any).mglDistanceLod = false;
+                    (vtsL.options as any).mixedLevelDelivery = false;
+                    (this as any).m_multiLevelCoverage = false;
                     (vtsL.options as any).mglDistanceLodTileSize = lodTileSize;
                     mvL.update?.();
                 }
