@@ -4436,3 +4436,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **组合复测（§351 落地后）**：163334/202419/206140 ≈ 持平（+432）——组合解决的是 z15/z16 远带，绿瓦中带由 datasource 降层负责，两者正交。
 - **下会话单点**：mglLodLevel 距离判据对齐引擎侧 §347 修正公式（coveringZoom 基数 + 2^(maxZoom−level) 因子 + 8 角 forward 投影），以 §334 的 52-tile 参照（含每瓦片层级）为规格离线对拍后入库。
 - **终态**：探针/TEMP 全清、基线复现 162902/202254/205979 ✓、工作树=提交态。
+
+**§353. mglLodLevel 公式对齐 §347 链（8 角 forward 投影 + coveringZoom 基数 + yaw 基 fwd）入库 + 绿瓦中带仍未转化（组合 162800 微差，mercator y 轴约定存疑记档）（2026-08-25 二百四十三）**：
+
+- **公式重写（入库）**：mglLodLevel 距离判据由 clamped-point 最近点距离改为 mgl 精确语义——4 角 forward 投影最小值（z 分量 cameraHeight）+ `distToSplit = 2^(z−(l−1))·ccd/tileSize / 2^z`（coveringZoom 基数 + 指数因子）+ yaw=−heading 的 fwd 向量（§343 约定）。offset-0 单层下输出与旧公式一致（162902 不变，零回归，raster 族失败集不变）。
+- **组合复测（修正公式下）**：162800/202419/206140——微改善但绿瓦中带**仍未转 z13 青**：探针显示 z16 请求在中带仍保 16（降层未触发）。存疑点：datasource 侧 mercator 帧的 **y 轴方向约定**（flywave cam.position.y 与 tile row 的南北向映射未核对，fwd.y 或 tile y 区间需翻转）——下会话先核对 camMerc 帧再做一次组合复测。
+- **期望色破案补遗**：(68,143,168) = **z13 青黑棋盘 mip 平均 (0,126,127) 的 0.5 混合**（棋盘 8× 下采样平均后 over 图案），z13 青来源再获确认；airport 图案全色板已采样（12 色，无 (136,33,81)，排除前会话的错误 un-blend 假设）。
+- **终态**：公式入库、组合回退、探针全清、基线复现 162902/202254/205979 ✓、工作树=提交态+公式重写。

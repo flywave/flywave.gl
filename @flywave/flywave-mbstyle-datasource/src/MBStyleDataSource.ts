@@ -97,8 +97,24 @@ class RasterTileDataProvider extends DataProvider {
             const C = 40075016.686;
             const fovRad = (cam.fov ?? 36.87) * Math.PI / 180;
             const ccdPx = 0.5 / Math.tan(fovRad / 2) * canvas.height;
-            const zoomSplitTiles = ccdPx / Math.max(1, this.m_sourceTileSize); // ccd/tileSize (§350: source tileSize, was hardcoded 512)
+            // §352: mgl shouldSplit exact spec, aligned with the engine-side
+            // §347 formula — zoomSplitDistance = ccd/tileSize is in units of
+            // tiles at the COVERING zoom (z here = the request/data zoom), and
+            // the threshold scales by 2^(coveringZoom − level):
+            //   distToSplit(level) = 2^(z−level) · ccd/tileSize / 2^z   (mercator)
+            const zoomSplitTiles = ccdPx / Math.max(1, this.m_sourceTileSize);
             const camMerc = [cam.position.x / C, cam.position.y / C, cam.position.z / C];
+            // forward vector (mgl camera.forward()): yaw = −heading, same
+            // convention as FrustumIntersection §343 —
+            // (−sin(yaw)·sinT, cos(yaw)·sinT, −cosT).
+            const tiltRad = ((mv.tilt ?? 0) * Math.PI) / 180;
+            const yawRad = (-(mv.heading ?? 0) * Math.PI) / 180;
+            const sinT = Math.sin(tiltRad), cosT = Math.cos(tiltRad);
+            const fwd = [
+                -Math.sin(yawRad) * sinT,
+                Math.cos(yawRad) * sinT,
+                -cosT,
+            ];
             // distToSplitScale (mgl transform.ts): acute-angle adaptive stretch
             const scale = (dz: number, d: number): number => {
                 const s = 0.707, stretch = 1.1;
@@ -109,25 +125,30 @@ class RasterTileDataProvider extends DataProvider {
             };
             // Walk top-down: the level where the ancestor stops splitting is
             // mgl's render level for this tile's area.
+            const camHm = Math.abs(camMerc[2]);
             for (let l = 1; l <= z; l++) {
-                const shift = z - l;
-                const lx = x >> shift, ly = y >> shift;
                 // would the l-1 parent split into l?
                 const pshift = z - (l - 1);
                 const px = x >> pshift, py = y >> pshift;
                 const n = Math.pow(2, l - 1);
                 // tile extent in mercator units
                 const minX = px / n, maxX = (px + 1) / n, minY = py / n, maxY = (py + 1) / n;
-                let closest = Infinity;
-                // closest point on AABB to camera (mgl corner-dot approximated by clamped point)
-                const qx = Math.max(Math.min(maxX, camMerc[0]), minX);
-                const qy = Math.max(Math.min(maxY, camMerc[1]), minY);
-                const dmerc = Math.hypot(qx - camMerc[0], qy - camMerc[1], -camMerc[2]);
-                // distToSplit in mercator units: tiles at level z are the unit
-                const distTiles = (1 << (z - (l - 1))) * zoomSplitTiles;
-                const distMerc = distTiles / Math.pow(2, z);
-                const dzMerc = Math.max(Math.abs(camMerc[2]), 1e-9);
-                if (!(dmerc * scale(dzMerc, dmerc) < distMerc)) {
+                // mgl uses the MIN forward-projected corner distance
+                // (mercator z-comp = cameraHeight), NOT the clamped closest
+                // point (§352: the clamped form under-demotes the mid band).
+                let d = Infinity;
+                for (const cx of [minX, maxX]) {
+                    for (const cy of [minY, maxY]) {
+                        const dist =
+                            (cx - camMerc[0]) * fwd[0] +
+                            (cy - camMerc[1]) * fwd[1] +
+                            camHm * fwd[2];
+                        if (dist < d) d = dist;
+                    }
+                }
+                const distMerc = Math.pow(2, z - (l - 1)) * zoomSplitTiles / Math.pow(2, z);
+                const dzMerc = Math.max(camHm, 1e-9);
+                if (!(d * scale(dzMerc, d) < distMerc)) {
                     return l - 1;
                 }
             }
