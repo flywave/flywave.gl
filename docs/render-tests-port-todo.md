@@ -5079,3 +5079,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **baseline7-pass.txt 落盘 461 例**（§434h/§435a/b + §436a/b 五轮运行聚合 + baseline6 未重跑项继承，剔除 22 项 §412–§418 已证陈旧项）。注：baseline6 实际未含 runtime-styling 条目（§418 聚合目录遗漏），461 为当前真实通过集。
 - **bottom 剩余 632 归因初步**：缺失像素 268 个聚 5 簇，形态=字形内部白色横带（部分标签整块缺失）；排除引擎 dedup（§429 已层域化 featureId 且 getFeatureId 读 $id ✓）；候选=引擎 ScreenCollisions 对 text 的 mayOverlap 链（props.mayOverlap 已设但 textMayOverlap 传播路径待查）或 our PlacementEngine 的 text 分支——下会话 probe placeText 决策。
 - **终态**：baseline7 落盘 + 记档提交。
+
+**§436. bottom 剩余 632 排除 mayOverlap 拒因（探针：1448 次 placeText 全 Accepted）+ 归因转向换行断点（text-max-width 词拆分）+ 补扫零回归与 cross-tile-sort 收回（2026-08-26 三百二十八）**：
+
+- **mayOverlap 链排除（探针）**：Placement.placePointLabelAtAnchor 拒绝门 `!textMayOverlap && isAllocated` 全程未触发——1448 次 "Test Test Test" 全部 Accepted（mayOverlap=true 传播 ✓，§435 候选证伪）。
+- **新候选（形态学）**：缺失像素为**字形内部白色横带**/整词错位——与 text-max-width=5 的**词换行断点差**吻合（mgl "Test Test|Test" vs 我们不同拆分 → 局部墨迹分布错位，形成带状 diff）。下会话：shapeText 断行逻辑与 mgl shaping.ts 的 word-break 对拍（mgl 以 maxWidth=5em 在词边界断行）。
+- **补扫**：text-emphasis/justify/tracking + sort-key + symbol-spacing/crosses-tile 等 37 例零回归，**circle-sort-key/cross-tile-sort 收回 PASS**（§419 点重复方案的连带收益）。
+- **终态**：baseline7 增至 462；探针全清（tsc 绿），随记档提交。

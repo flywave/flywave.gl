@@ -50,6 +50,7 @@ circle-radius/function
 circle-radius/literal
 circle-radius/property-function
 circle-radius/zoom-and-property-function
+circle-sort-key/cross-tile-sort
 circle-stroke-color/zoom-and-property-function
 circle-stroke-opacity/zoom-and-property-function
 circle-stroke-width/default
