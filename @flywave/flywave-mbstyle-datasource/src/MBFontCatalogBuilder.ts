@@ -183,18 +183,17 @@ function buildGlyphAtlas(glyphs: Map<number, ParsedGlyph>): GlyphAtlas {
 
         if (g.bitmap.length > 0) {
             // Copy the full bordered bitmap row-by-row (stride = bw) into the
-            // RGB channels — the SDF shader reads texel.r (edge at 0.5) and
-            // interprets the value with distanceRange. Alpha must stay opaque.
+            // RGB channels. Alpha must stay opaque.
             //
-            // Mapbox bakes its glyph SDFs with the glyph edge at 0.75 (the
-            // shader's `buff = (256-64)/256`, see mapbox-gl-js
-            // symbol.fragment.glsl), while flywave's shader assumes the edge at
-            // 0.5. Remap by -64 (=-0.25) so the edge lands on 0.5 and strokes
-            // don't bloom into solid blobs.
+            // §383: keep the RAW mapbox SDF bytes (edge at 0.75, full 0..255
+            // ramp). The former -64 clamp remap moved the edge to 0.5 for the
+            // native shader but ZEROED the outer half of the distance ramp
+            // (bytes < 64), halving the AA slope; the shader's mgl branch now
+            // uses mapbox's exact 0.75 threshold instead.
             const imgData = ctx.createImageData(bw, bh);
             for (let r = 0; r < bh; r++) {
                 for (let c = 0; c < bw; c++) {
-                    const v = Math.max(0, (g.bitmap[r * bw + c] ?? 0) - 64);
+                    const v = g.bitmap[r * bw + c] ?? 0;
                     const o = (r * bw + c) * 4;
                     imgData.data[o + 0] = v;
                     imgData.data[o + 1] = v;

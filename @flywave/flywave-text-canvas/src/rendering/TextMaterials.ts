@@ -69,7 +69,10 @@ const SdfShaderChunks = {
             float dy = dFdy(rotatedUVs.y) * sdfParams.y;
             float toPixels = sdfParams.w * inversesqrt( dx * dx + dy * dy );
 
-            float d = getDistance(uvOffset) + min(weight, 0.5 - 1.0 / sdfParams.w) - 0.5;
+            // §383: mgl SDF edge threshold buff=(256-64)/256=0.75 — d must
+            // be ZERO at dist=0.75, so subtract 0.75 (pairs with the atlas
+            // keeping RAW mapbox bytes, no -64 remap).
+            float d = getDistance(uvOffset) + min(weight, 0.5 - 1.0 / sdfParams.w) - 0.75;
             float rampW = 0.5 / max(toPixels, 1e-4);
             if (uMglGammaScale > 0.0) {
                 // PER-SYMBOL mgl gamma (uv.w carries fontScale): exact
