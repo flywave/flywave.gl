@@ -5166,3 +5166,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **三轮校准实证**：yOffset ±0.5/−1.0 全标签平移 → bottom **双向 673 劣化**（632 基线）——残差按 text-anchor/行数分布而非全局 Δ。bottom-left 在 −1.0 微改善（7663→7641，噪声级）。
 - **下会话正解落点**：flywave LineTypesetter 的行基线构造（读 fontCatalog lineHeight→行内 glyph y）与 mgl `y=i·lh−17` 的逐行对拍（多行 fixture 定标），或 GlyphData `offsetY=distanceRange/2−top−border` 的常量项修正（24em 换算 −17+lh/2−distanceRange/2）。
 - **终态**：实验全回退（tsc 绿），纯 docs 提交。
+
+**§449. §448 落点实施第一扫证伪——catalog lineHeight 24→28.8（mgl 1.2 烘焙）全量劣化（bottom 632→11403、text-offset 多行族 9-17k）→ **现有 24px 行进已近 mgl 有效值**（text-line-height 在我们链路他处已等效作用或 mgl 实际渲染行进≠1.2·em），lineHeight 常量路径关闭；bottom 632 的排印层修复需 LineTypesetter 逐行 y 数值 dump 对拍定标（非常量假设）（2026-08-26 三百四十一）**：
+
+- **实验**：FontCatalog lineHeight = 24×1.2（mgl default text-line-height 烘焙）→ bottom **632→11403**、text-max-width/literal 1963、text-offset 全族 9-17k 全面劣化——已回退。结论：现有 lineHeight=24（行进=textSize）与期望更贴，mgl 1.2 在此链路已被他处补偿（疑：style.fontSize 传法或 layout 换算含 1.2），**常量假设路径全部关闭**（§448 yOffset ±、§449 lineHeight）。
+- **正确方法（终案）**：LineTypesetter 逐行 position.y 数值 dump（多行 fixture 2 行各 y）vs mgl align 后 y（i·lh·scale − H·vAlign·scale）数值对拍——一次运行定 Δ 公式，不再常量猜测。
+- **终态**：实验回退（tsc 绿），纯 docs 提交。
