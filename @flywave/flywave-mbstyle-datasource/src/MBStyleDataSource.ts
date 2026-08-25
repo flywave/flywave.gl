@@ -2191,45 +2191,80 @@ export class MBStyleDataSource extends TileDataSource {
     flushIconBlends(): void {
         const pending = (MBTileDataEmitter as any).pendingIconBlends as Map<string, { a: string; b: string; t: number }>;
         if (!pending || pending.size === 0) return;
+        for (const [name, { a, b, t }] of pending) {
+            this.registerIconBlend(name, a, b, t);
+        }
+    }
+
+    /** Composite two sprite icons (A·(1−t) + B·t) and cache by blend name. */
+    private registerIconBlend(name: string, a: string, b: string, t: number): void {
+        if (this.m_registeredIconBlends.has(name)) return;
         const atlas = this.m_spriteAtlas;
         const userImageCache = (this.mapView as any)?.userImageCache;
         if (!atlas || !userImageCache || typeof userImageCache.addImage !== 'function') return;
+        const infoA = atlas.icons.get(a);
+        const infoB = atlas.icons.get(b);
+        if (!infoA || !infoB || typeof document === 'undefined') return;
         const atlasImage = (atlas.texture as any).image as any;
-        for (const [name, { a, b, t }] of pending) {
-            if (this.m_registeredIconBlends.has(name)) continue;
-            const infoA = atlas.icons.get(a);
-            const infoB = atlas.icons.get(b);
-            if (!infoA || !infoB || typeof document === 'undefined') continue;
-            const w = Math.max(infoA.width, infoB.width);
-            const h = Math.max(infoA.height, infoB.height);
-            const cv = document.createElement('canvas');
-            cv.width = w; cv.height = h;
-            const ctx = cv.getContext('2d')!;
-            const px = (info: any): ImageData => {
-                const tmp = document.createElement('canvas');
-                tmp.width = info.width; tmp.height = info.height;
-                const tctx = tmp.getContext('2d')!;
-                tctx.drawImage(atlasImage, info.x, info.y, info.width, info.height, 0, 0, info.width, info.height);
-                return tctx.getImageData(0, 0, info.width, info.height);
-            };
-            const da = px(infoA).data;
-            const db = px(infoB).data;
-            const out = ctx.createImageData(w, h);
-            for (let y = 0; y < h; y++) {
-                for (let x = 0; x < w; x++) {
-                    const ia = (y < infoA.height && x < infoA.width) ? (y * infoA.width + x) * 4 : -1;
-                    const ib = (y < infoB.height && x < infoB.width) ? (y * infoB.width + x) * 4 : -1;
-                    const o = (y * w + x) * 4;
-                    for (let c = 0; c < 4; c++) {
-                        const va = ia >= 0 ? da[ia + c] : 0;
-                        const vb = ib >= 0 ? db[ib + c] : 0;
-                        out.data[o + c] = va * (1 - t) + vb * t;
-                    }
+        const w = Math.max(infoA.width, infoB.width);
+        const h = Math.max(infoA.height, infoB.height);
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d')!;
+        const px = (info: any): ImageData => {
+            const tmp = document.createElement('canvas');
+            tmp.width = info.width; tmp.height = info.height;
+            const tctx = tmp.getContext('2d')!;
+            tctx.drawImage(atlasImage, info.x, info.y, info.width, info.height, 0, 0, info.width, info.height);
+            return tctx.getImageData(0, 0, info.width, info.height);
+        };
+        const da = px(infoA).data;
+        const db = px(infoB).data;
+        const out = ctx.createImageData(w, h);
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const ia = (y < infoA.height && x < infoA.width) ? (y * infoA.width + x) * 4 : -1;
+                const ib = (y < infoB.height && x < infoB.width) ? (y * infoB.width + x) * 4 : -1;
+                const o = (y * w + x) * 4;
+                for (let c = 0; c < 4; c++) {
+                    const va = ia >= 0 ? da[ia + c] : 0;
+                    const vb = ib >= 0 ? db[ib + c] : 0;
+                    out.data[o + c] = va * (1 - t) + vb * t;
                 }
             }
-            ctx.putImageData(out, 0, 0);
-            userImageCache.addImage(name, cv);
-            this.m_registeredIconBlends.add(name);
+        }
+        ctx.putImageData(out, 0, 0);
+        userImageCache.addImage(name, cv);
+        this.m_registeredIconBlends.add(name);
+    }
+
+    /**
+     * Pre-register icon cross-fade blends straight after the sprite atlas
+     * loads, BEFORE any tile decodes — a late (AfterRender) registration
+     * restarts the POI fade-in animation and the icon is captured mid-fade
+     * (observed as a uniform 0.75 opacity lift, §410). Only literal
+     * ["image", "a", "b"] pairs are pre-computable here; token/expression
+     * pairs fall back to the flushIconBlends path.
+     */
+    private preRegisterIconBlends(): void {
+        const style = this.m_styleManager.getStyle();
+        for (const layer of (style?.layers ?? []) as any[]) {
+            if (layer.type !== 'symbol') continue;
+            const t = Number(layer.paint?.['icon-image-cross-fade'] ?? 0);
+            if (!(t > 0)) continue;
+            const candidates: unknown[] = [layer.layout?.['icon-image']];
+            for (const app of layer.appearances ?? []) {
+                candidates.push(app.properties?.['icon-image']);
+            }
+            for (const raw of candidates) {
+                let expr: any = raw;
+                while (Array.isArray(expr) && expr[0] === 'memo') expr = expr[1];
+                if (Array.isArray(expr) && expr[0] === 'image'
+                    && typeof expr[1] === 'string' && typeof expr[2] === 'string') {
+                    const name = MBTileDataEmitter.iconBlendName(expr[1], expr[2], t);
+                    this.registerIconBlend(name, expr[1], expr[2], t);
+                }
+            }
         }
     }
 
@@ -2416,12 +2451,15 @@ export class MBStyleDataSource extends TileDataSource {
             }
         }
 
+        // Icon cross-fade blends must exist in userImageCache BEFORE tiles
+        // decode — a late registration restarts the POI fade-in (§410).
+        this.preRegisterIconBlends();
+
         // The color-theme may have decoded before the sprite atlas finished
         // loading — bake it now so late atlases are themed too.
         if (this.m_colorThemeLut && this.m_spriteAtlas) {
             try {
-                this.m_spriteAtlas.applyColorTheme(this.m_colorThemeLut);
-                const { applyColorThemeToPixels, bumpThemeGeneration } = require('./MBColorTheme');
+                this.m_spriteAtlas.applyColorTheme(this.m_colorThemeLut);                const { applyColorThemeToPixels, bumpThemeGeneration } = require('./MBColorTheme');
                 for (const cv of this.m_themedIconCanvases) {
                     const ctx = cv.getContext('2d');
                     if (!ctx) continue;

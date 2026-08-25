@@ -4866,3 +4866,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验收**：one-to-two/two-to-two/zero-to-two 867→218、two-to-one 845→277；邻域回归（icon-image/anchor/size、text-size/max-width、symbol-z-order，101 例）**基线通过 22 例零回归**。
 - **残差定性（记档移交）**：mgl 期望图字形呈近二值边缘（暗蓝描边+白高光，候选合成对拍 MSE ~14k 全不匹配），非任何 A/B 线性组合可表达——疑 mgl 对该 fixture 的图标经过 SDF 化/双重绘制路径，需 mgl 运行时截图取证（当前环境无 mgl 参照渲染器）；两-to-one 语义（appearance 单图覆盖基对）亦待 mgl 实测确认（期望≠纯 music）。
 - **终态**：MBLayerEvaluator/MBStyleDecoder/MBTileDataEmitter/MBStyleDataSource 四文件 + 文档，tsc 绿，随记档提交。
+
+**§410. §409 残差取证三轮——fade-in 假说证伪（addPoi opacity=1）、mgl appearance 激活语义定案（getCombinedIconVariants：激活时 icon 完全来自 appearance，基 layout 被忽略）、残差重定性=图标尺寸 40:38 相位差+AA；preRegisterIconBlends 预注册入库（2026-08-25 三百零二）**：
+
+- **mgl 语义定案（symbol_bucket.ts:1131 getCombinedIconVariants）**：appearance 激活时 icon primary/secondary **完全取自 appearance 的 icon-image**（`appearance.hasLayoutProperty('icon-image')` 分支），基 layout 的图标被整体替换——证实 §409 实现语义正确：one-to-two=blend(music,building)、two-to-one=纯 music（appearance 单图无 secondary，无混合）。
+- **fade-in 假说证伪**：探针（PoiRenderer.addIcon）实锤 blend 图标 addPoi opacity=1——0.75 提亮非 POI 淡入。合成 canvas 像素探针亦证明 canvas 本身精确（(141,170,186,255)）。
+- **残差重定性（数值对拍）**：cur 图标 bbox (13,11)-(53,50) vs exp (14,12)-(51,49)——**图标整体大 ~5%（40:38 device px）**，218/277 残差主要由尺寸相位差下的字形边缘错位构成（内点数值在相位对齐处精确一致，如 (33,31) cur=(141,171,189) vs exp=(141,170,186)）。色彩域/混合公式无残差。
+- **工程入库**：flushIconBlends 重构出 registerIconBlend 共用体 + `preRegisterIconBlends`（loadSpriteAtlas 尾部预扫 layer.layout/appearances 的字面量 ["image",a,b] + cross-fade paint 提前注册，赶在 tile 解码前；token/表达式对仍走 AfterRender 后备路径）。回归：icon-image/anchor/size、text-size、icon-text-fit 132 例，基线通过 21 例零回归。
+- **下会话候选（记档移交）**：图标 40:38 尺寸差的来源——PoiRenderer computeIconScreenBox 的 imageTexture 尺寸语义（22px@pr1 sprite 在 DPR2 下应为 19 CSS px？mgl getScaledImageVariant/rasterization 尺寸链需对拍）；注意 plain 图标在 DPR1 fixture（icon-image/literal）尺寸是吻合的，疑为 DPR2 缩放因子差，全局改动需防回归。
+- **终态**：MBStyleDataSource 单文件重构（净 +73/−35），tsc 绿，PoiRenderer 探针已清，随记档提交。
