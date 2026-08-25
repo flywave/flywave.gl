@@ -5041,3 +5041,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **§429 连带面扫描**：symbol-placement/icon-text-fit/text-writing-mode/text-variable-anchor 四族 92 例仍全红（icon-text-fit 全族结构性缺失、variable-anchor collision 域等大域工程），零回归零连带翻盘——featureId 层域化收益仅限多层同 feature 图标场景 ✓ 符合预期。
 - **收割策略记档**：低残差带（<70px）快赢面枯竭；下轮 ROI 排序：①icon-text-fit 全族（§396 时代已建 fitIconToText 移植但全族红，疑一处断点）——单点修好可翻数十例；②symbol-spacing line 族（13-21 万像素=结构性缺失）；③mgl 抗摩尔纹三候选（§428）。
 - **终态**：纯 docs 提交（零代码变更）。
+
+**§431. icon-text-fit 全族门槛重定性——连 `none` 例（无 fit）都败在文字覆盖率（cur 灰 154 vs exp 近黑），全族解锁被 SDF 文字 AA 域门控而非 fit 断点——mgl 抗摩尔纹三候选（§428）升级为最大剩余解锁面（text-anchor 2009 族 + icon-text-fit 30+ 例共同门槛）（2026-08-26 三百二十三）**：
+
+- **证据**：icon-text-fit/none（layout 仅 text-field ABC + icon-text-fit none）：117px 残差全部为文字像素（cur (154,154,154) vs exp (2,2,2)/(77,77,77)）——无 fit 也败 → fit 几何移植（§396 时代）并非全族瓶颈；width/height/both 各例 118-184px 同构（文字边缘主导），text-anchor 子族 3.2-3.6k（文字+锚点双重）。
+- **ROI 重排（终案）**：mgl 抗摩尔纹机制（§428 三候选：图集 UV 布局 dump / text sx 光栅化二次确认 / glyph quad 像素尺寸实测）成为**最大剩余解锁面**——一旦破案，text-anchor 2009 族 + icon-text-fit 30+ 例 + 全部文字近失族（§380 记录 bottom 2009 为全 258 用例共同近失源）联动翻盘。下会话首选。
+- **本日收割带总结**：§429 #11451（67→9）为带内最后快赢；#9009/#6820 深域单例记档；icon-text-fit/symbol-placement/variable-anchor 大域均以文字 AA 或结构性工程为门槛。
+- **终态**：纯 docs 提交。
