@@ -2353,7 +2353,7 @@ export class MBEnvironmentManager {
     }
 
     async applyTerrain(
-        terrain: { source: string; exaggeration?: number } | undefined,
+        terrain: { source: string; exaggeration?: number; encoding?: 'mapbox' | 'terrarium' } | undefined,
         demTileUrl: string | null,
         zoom: number = 8,
         center: [number, number] = [0, 0],
@@ -2403,6 +2403,7 @@ export class MBEnvironmentManager {
                 center,
                 terrain.exaggeration ?? 1.0,
                 1, // radius → 3×3 grid around center
+                terrain.encoding === 'terrarium' ? 'terrarium' : 'mapbox',
             );
             if (this.m_terrainController.meshCount > 0) {
                 // mapbox terrain semantics: content rides the terrain —

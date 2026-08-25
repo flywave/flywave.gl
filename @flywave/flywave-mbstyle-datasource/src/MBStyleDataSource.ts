@@ -903,6 +903,9 @@ export class MBStyleDataSource extends TileDataSource {
     private m_demTileUrl: string | null = null;
     private m_demTileSize: number = 256;
     private m_demMaxZoom: number = 22;
+    /** DEM encoding of the raster-dem source (mgl: encoding lives on the
+     * source spec, not on the terrain object). */
+    private m_demEncoding: 'mapbox' | 'terrarium' = 'mapbox';
     private m_rasterTileUrl: string | null = null;
     /**
      * Cached mapbox glyph metrics (font→char→metrics), shared with the worker
@@ -1415,6 +1418,7 @@ export class MBStyleDataSource extends TileDataSource {
                     this.m_demTileUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
                     this.m_demTileSize = demSpec?.tileSize ?? 256;
                     this.m_demMaxZoom = demSpec?.maxzoom ?? source.maxzoom ?? 22;
+                    this.m_demEncoding = demSpec?.encoding === 'terrarium' ? 'terrarium' : 'mapbox';
                 }
                 break;
             }
@@ -1661,7 +1665,7 @@ export class MBStyleDataSource extends TileDataSource {
 
         if (this.m_environment && style.terrain) {
             await this.m_environment.applyTerrain(
-                style.terrain as any,
+                { ...(style.terrain as any), encoding: this.m_demEncoding },
                 this.m_demTileUrl,
                 style.zoom ?? 8,
                 style.center ?? [0, 0],
@@ -2707,7 +2711,7 @@ export class MBStyleDataSource extends TileDataSource {
         if (this.m_environment && style.terrain) {
             try {
                 await this.m_environment.applyTerrain(
-                    style.terrain as any,
+                    { ...(style.terrain as any), encoding: this.m_demEncoding },
                     this.m_demTileUrl,
                     style.zoom ?? 8,
                     style.center ?? [0, 0],

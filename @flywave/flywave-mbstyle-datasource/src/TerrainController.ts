@@ -342,6 +342,7 @@ export class TerrainController {
         center: [number, number],
         exaggeration: number,
         radius: number = 1,
+        encoding: 'mapbox' | 'terrarium' = 'mapbox',
     ): Promise<void> {
         // Capture previous DEM textures before disposing, to enable a morph
         // transition (old → new elevation) when the grid is rebuilt (e.g. zoom
@@ -375,7 +376,7 @@ export class TerrainController {
                     .replace('{y}', String(yTile));
 
                 tasks.push(this.loadAndAddTile(url, loader, dx, dy, cxTile, cyTile,
-                    tileSizeWorld, C, exaggeration, zoom));
+                    tileSizeWorld, C, exaggeration, zoom, encoding));
             }
         }
         await Promise.all(tasks);
@@ -404,11 +405,12 @@ export class TerrainController {
         cxTile: number, cyTile: number,
         tileSizeWorld: number, C: number,
         exaggeration: number, zoom: number,
+        encoding: 'mapbox' | 'terrarium' = 'mapbox',
     ): Promise<void> {
         try {
             const pngTexture = await loader.loadAsync(url);
             // Decode the PNG into an R32F elevation DataTexture.
-            const demTex = decodeDemImage(pngTexture.image, 'mapbox');
+            const demTex = decodeDemImage(pngTexture.image, encoding);
             try {
                 const h = demTex.image.data as Float32Array;
                 for (let i = 0; i < h.length; i++) {
