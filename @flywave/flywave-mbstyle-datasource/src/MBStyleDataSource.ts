@@ -67,6 +67,8 @@ class RasterTileDataProvider extends DataProvider {
     /** §335: mgl LOD mode — allow multi-level coverage (engine schedules a
      * mixed z/z+1 set; the single-ideal-level gate would empty the LOD band). */
     m_multiLevelCoverage = false;
+    /** §350: source tileSize (mgl distToSplit uses ccd/tileSize; was hardcoded 512). */
+    m_sourceTileSize = 512;
 
     constructor(tileUrlTemplate: string, minZoom: number = 0, maxZoom: number = 22,
         idealLevel?: () => number) {
@@ -95,7 +97,7 @@ class RasterTileDataProvider extends DataProvider {
             const C = 40075016.686;
             const fovRad = (cam.fov ?? 36.87) * Math.PI / 180;
             const ccdPx = 0.5 / Math.tan(fovRad / 2) * canvas.height;
-            const zoomSplitTiles = ccdPx / 512; // ccd/tileSize, tile units at z
+            const zoomSplitTiles = ccdPx / Math.max(1, this.m_sourceTileSize); // ccd/tileSize (§350: source tileSize, was hardcoded 512)
             const camMerc = [cam.position.x / C, cam.position.y / C, cam.position.z / C];
             // distToSplitScale (mgl transform.ts): acute-angle adaptive stretch
             const scale = (dz: number, d: number): number => {
@@ -1032,6 +1034,11 @@ export class MBStyleDataSource extends TileDataSource {
                     const resolvedUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
                     const rasterProvider = new RasterTileDataProvider(resolvedUrl,
                         rasterSpec?.minzoom ?? 0, rasterSpec?.maxzoom ?? 22);
+                    // §350: mgl default raster tileSize is 512; the spec may
+                    // override (error-overlap color source uses 256).
+                    if (typeof rasterSpec?.tileSize === 'number' && rasterSpec.tileSize > 0) {
+                        rasterProvider.m_sourceTileSize = rasterSpec.tileSize;
+                    }
                     rasterProvider.m_mapViewRef = () => (this as any).mapView;
                     composite.add(sourceId, rasterProvider);
                     this.m_rasterTileUrl = resolvedUrl;
