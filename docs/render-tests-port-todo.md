@@ -4725,3 +4725,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实验**：patchTile 时若 `_mbBgTile` 且 material.fog===false 且 scene.fog 已存在 → fog=true+needsUpdate——**fog 域 16/70 与 space-color 剖面逐位不变**（y0.4 仍 (245,245,220)）。已回退。
 - **推断**：断点不在 material.fog 旗标（或旗标本就 true）——USE_FOG 缺席的来源需上溯：①TileGeometryCreator createMaterial 的 `fog: scene.fog !== null` 在材质创建时锁定且 three 的 fog 旗标重编译路径未生效；②或 bg 四边形材质类型（MapMeshBasicMaterial）不含 fog chunk include；③或 scene.fog 在整个 tile 生命期为 null（§879 的 m_scene.fog 赋值时序/条件未满足此 fixture）。下会话首查：探针轮复跑确认 material.fog/scene.fog 运行时值 + 该材质 fragment 是否含 `#include <fog_fragment>`。
 - **终态**：实验回退、工作树=提交态。
+
+**§392. 探针复跑终案——fog/space-color 地面=【MBBackgroundFogRenderer】AfterRender 全屏 quad（经验 per-pitch 标定 [[70,0.735],[85,0.10]]），78px=标定过窄非接线缺失（2026-08-25 二百八十四，fog 域排查链终案）**：
+
+- **探针（BG-FOG-PROBE 零输出）**：`_mbBgTile` 路径在本 fixture **从未执行**（style 无 sources、仅 background 层 → §236 门控不放行 per-tile 注入）——§390/§391 的"背景四边形接线"整个前提作废。
+- **真地面路径**：`MBBackgroundFogRenderer`（AfterRender 全屏 far-plane quad、LESS 深度只填未渲染区）——**经验 per-pitch fog-space scale 表 [[70,0.735],[85,0.10]]**（§fog/horizon-blend 族拟合）——pitch 85 取 0.10 → 雾带过窄/过弱 = 78px 亮带缺失的直接来源。
+- **下会话正解（已定档）**：把该 renderer 的经验 scale 替换为 **mgl 精确式**——每像素 ray∩ground 深度 → `fogT=(shift·d/distCam−(r0+shift))/(r1−r0)`（§389 已对拍同构的公式），删除 per-pitch 表。这将同时惠及 fog/color 族全套标定。
+- **终态**：探针清除、零代码变更、工作树=提交态。fog 域排查链（§387→§392 六轮）完整闭环。
