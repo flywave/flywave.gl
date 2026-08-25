@@ -749,11 +749,14 @@ export class MBMaterialPatchManager {
 
         const opacity = technique.opacity ?? 1;
         // mgl blends raster-opacity against the RENDERED CONTENT below the
-        // layer. The in-shader opaque composite only knows the background
-        // color — with any non-background layer beneath (raster-masking:
-        // contour raster below a 0.5-opacity raster) it erases that content.
-        // Use REAL alpha blending when content sits below; keep the opaque
-        // composite for bottom-most rasters (calibrated on raster-opacity).
+        // layer. The in-shader opaque composite knows only a base COLOR: a
+        // plain background-color below is captured exactly (raster-opacity
+        // family PASSes opaquely), but a background-PATTERN (terrain/
+        // error-overlap: 0.5-opacity rasters over the airport pattern) is
+        // composited over the default black and halves the pattern away. Use
+        // REAL alpha blending when content the opaque path can't represent
+        // sits below — any visible non-background layer, or a patterned
+        // background layer.
         let rasRealBlend = false;
         try {
             const styleLayers: any[] = (this.m_dataSource as any).styleManager
@@ -761,7 +764,8 @@ export class MBMaterialPatchManager {
             const idx = styleLayers.findIndex(l => l.id === technique._layerId);
             rasRealBlend = opacity < 1 && idx > 0
                 && styleLayers.slice(0, idx).some(l =>
-                    l.type !== 'background' && l.layout?.visibility !== 'none');
+                    l.layout?.visibility !== 'none' &&
+                    (l.type !== 'background' || l.paint?.['background-pattern']));
         } catch {}
         if ('opacity' in material) {
             if (rasRealBlend) {

@@ -1077,6 +1077,11 @@ export class MBStyleDataSource extends TileDataSource {
                     // FROZEN at an early state (new tile requests never
                     // repaint; see §336 doc entry). Keep off until the
                     // repaint gating is fixed.
+                    // §344: combo re-tested WITH the real-blend fix — still a
+                    // pixel-identical no-op. Measured cause: no visible tile's
+                    // distance ever exceeds distToSplit (z14 d≈6k vs 14.7k
+                    // threshold at pitch 60), so the LOD branch never stops a
+                    // tile. Keep off (zero behavior change).
                     (vtsL.options as any).mglDistanceLod = false;
                     (vtsL.options as any).mglDistanceLodTileSize = lodTileSize;
                     mvL.update?.();
