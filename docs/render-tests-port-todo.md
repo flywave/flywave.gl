@@ -4493,3 +4493,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **①source-layer fallback（再回退）**：重新应用（层发射/材质/纹理 attach 全链路探针验证通过：MRT-EMIT×8、MRT-PATCH attach 含捕获时同 uuid 材质）后层仍不可见（cur 零红色像素 vs 期望 25924），且 no-raster-color 单独劣化 10525→63630——单独特不可入库，再回退。
 - **不可见性最终收敛**：对象树（visible/parent/几何/willRender 路径——对象经 rootNode.add 确证入渲染）全部排除后，唯一存活嫌疑=**rcCol/ramp 采样路径返回 (0,0,0,0)**（real-blend alpha=0 不可见、opaque 路径回退 base=图像不变，与全部观测自洽）。下会话单点：ramp DataTexture 的 GPU 侧有效性（256×1 过滤器/上传）与 uMBRasRamp uniform 绑定链打点（renderer.readRenderTargetPixels 或 1 纹元 ramp 换 2×2 红色 DataTexture 二分验证）。
 - **终态**：alpha 修复入库、fallback/探针全清、raster-array+raster 族基线复现（10525 等）✓、工作树=提交态+alpha 修复。
+
+**§360. ramp 二分验证——纯红 ramp + fallback 有效执行仍零红像素：绑定链/分支编译层排除 ramp 内容；depthTest=false 实验破坏 runner（无效）（2026-08-25 二百五十一，二分记档）**：
+
+- **ramp 二分【有效执行】**：.mrt 的 rasRampTex 换 2×2 纯红 DataTexture + source-layer fallback（bisect3 运行 Executed、28753、**红像素 0** vs 期望 25924）——ramp 内容/构建路径排除；rcCol 理论上恒红。结论收敛：**RASTER_COLOR+RASTER_ARRAY 分支未在实际绘制的材质上编译，或四边形片元未光栅化**（对象树/渲染列表已排除，§359）。
+- **depthTest 假设实验【无效】**：real-blend 材质 depthTest=false（叠 depthWrite=false + transparent）→ 测试 runner 崩溃（Executed 0 of 1、无结果记录，疑似 three 渲染路径异常）——不可用，已回退。卫星同平面深度遮挡假设保持未验证状态（替代验证法：卫星材质 depthWrite=false 或 precip 四边形 +ε z 偏移）。
+- **flaky 教训**：多轮 "Executed 0 of 1 / No test results" 的 current.png 是陈旧拷贝——红像素计数必须以 Executed 确认有效运行的轮次为准（§174/§183 陷阱再犯，已记档）。
+- **下会话单点（二分续）**：①renderer.info.drawCalls 打点确认 precip 对象是否产生 draw call；②若无 draw call→TileObjectsRenderer/渲染列表深层门控（对照 §336）；③若有 draw call→GLSL 注入打样（fragment 里输出 debug 色）定位分支未编译原因（候选：onBeforeCompile 链序、material 版本）。
+- **终态**：TEMP 全清（红 ramp/depthTest/fallback）、基线复现 28753/10525 ✓、工作树=提交态。
