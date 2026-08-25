@@ -5159,3 +5159,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实施映射**：TextShaping 均匀分支的 `yOffsets[i] = startY + i·lh`（startY=−H/2+lh/2）替换为 mgl 行参考制（yOffsets 以 glyph-top 锚点表达），TextGeometry 侧 GlyphData top（=lineHeight−offsetY）换算差一并在下会话推导（harness 单 'T' 可 10 分钟内迭代定标）。
 - **本节产出**：公式与 align() 全文摘档（防 mgl 参照目录漂移），实施留待下会话（session 时间盒尽）。
 - **终态**：纯 docs 提交。
+
+**§448. §447 公式实施定位修正 + 常量平移校准三轮证伪——TextShaping yOffsets 仅作用于 icon-text-fit 量测（文字实际排印在 flywave LineTypesetter/字体目录层，shapeText 非消费方）；全标签常量 yOffset 三扫（−0.5/+0.5/−1.0 px）：bottom 632→673/673/673 双向劣化——**残差非全局平移**（按 anchor/行数分布），mgl 基线公式的正确落点=flywave 排印层（TextLayoutStyle/LineTypesetter）或 glyph GlyphData top 换算，常量校准路径关闭（2026-08-26 三百四十）**：
+
+- **架构定位修正（重要）**：emitTextGeometry → poiGeometry.texts → flywave TextCanvas/LineTypesetter 排印（我们 shapeText 的 yOffsets 只喂 icon-text-fit 量测）——§447"TextShaping 一级实施"落点错误，正确层=flywave 排印（FontCatalog lineHeight/距离场换算）或 GlyphData offsetY。
+- **三轮校准实证**：yOffset ±0.5/−1.0 全标签平移 → bottom **双向 673 劣化**（632 基线）——残差按 text-anchor/行数分布而非全局 Δ。bottom-left 在 −1.0 微改善（7663→7641，噪声级）。
+- **下会话正解落点**：flywave LineTypesetter 的行基线构造（读 fontCatalog lineHeight→行内 glyph y）与 mgl `y=i·lh−17` 的逐行对拍（多行 fixture 定标），或 GlyphData `offsetY=distanceRange/2−top−border` 的常量项修正（24em 换算 −17+lh/2−distanceRange/2）。
+- **终态**：实验全回退（tsc 绿），纯 docs 提交。
