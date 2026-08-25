@@ -4699,3 +4699,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **space-color 78 取证**：垂直剖面——space 区 (15,15,81) ✓ 逐位一致、地面米色 ✓ 一致；**唯一差异=y0.3-0.45 过渡带**：期望经 (29,28,126)→(254,254,250) 亮带→(245,246,221) 三段，我们 (28,28,126)→直达 (245,245,220)——**缺 horizon-blend 亮带**（high-color/horizon-blend 0.05 的中间发光带宽度不足）。fixture：color white/high-color blue/space (15,15,80)/horizon-blend 0.05/pitch 85。
 - **下会话单点**：horizon-blend 带宽公式对拍（mgl sky_style_layer/fog 的 horizon-blend 几何 vs 我们 MBEnvironmentManager 的雾带渐变宽度——star-intensity 84 同族疑共享该带）。
 - **终态**：零代码变更、fog 基线入库、工作树=提交态。
+
+**§388. fog/space-color 78 再定性——缺失亮带在【地面雾】非 dome：期望地平线下紧邻全白雾色带 (254,254,250)，我们从蓝渐变直达米色；dome 角度原点实验零变化后回退（2026-08-25 二百八十）**：
+
+- **再定性（垂直剖面对拍）**：dome 渐变区逐位吻合（43/136 系两图一致 ✓）；**唯一差异=y0.40 一行**：期望 (254,254,250)≈全白雾色（fog color white 全强度贴地平线），我们 (245,245,220) 直接地面米色——**背景瓦片雾（§244 注入的 mgl fog chunk）的 ramp 起点差**：mgl 在地平线紧下方即 100% 雾色，我们的 ramp 在该行尚未饱和。
+- **dome 角度原点实验（回退）**：horizonAngle 原点移至 uHorizonRefElev（mgl 屏幕视平线语义）——**零像素变化**（dome 在该 fixture 与期望已吻合，证实差异不在此）。
+- **下会话单点**：地面雾 chunk（fogMgl* uniforms/ramp）近端边界对拍——mgl fog 公式的 near/起点 vs 我们（§244 mix(bgColor,fogColor,α²) 链），目标让地平线紧下方第一行达到全雾色。
+- **终态**：实验回退、工作树=提交态。
