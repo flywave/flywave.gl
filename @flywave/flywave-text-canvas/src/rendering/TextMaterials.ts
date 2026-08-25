@@ -76,8 +76,10 @@ const SdfShaderChunks = {
             float rampW = 0.5 / max(toPixels, 1e-4);
             if (uMglGammaScale > 0.0) {
                 // PER-SYMBOL mgl gamma (uv.w carries fontScale): exact
-                // symbol.fragment.glsl form per glyph quad.
-                rampW = (0.105 / max(vMglScale, 1e-3)) * (64.0 / 255.0);
+                // symbol.fragment.glsl form — gamma_scaled =
+                // EDGE_GAMMA/fontScale (flat view: gamma_scale = 1). The
+                // former 64/255 factor was a remnant of the -64 atlas remap.
+                rampW = 0.105 / max(vMglScale, 1e-3);
             }
             // S-curve form of the same derivative-scaled ramp: mgl uses a
             // smoothstep around the edge, which saturates the stroke interior

@@ -4673,3 +4673,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复（入库）**：图集保留 RAW mapbox 字节 + shader `d=dist−0.75`（mgl buff 精确配对，符号修正后）。**text-anchor/justify 7 例净改善 −190**（bottom 2067→2009、center −22、bottom-left/right −38/−38、justify/right −20）；text 域广谱回归 3 PASS/80 FAIL 无新增异常（icon-text-fit/scale-factor 等族为既有失败）。
 - **残差**：bottom 2009 级仍远超阈值——AA 斜坡已全宽，下一候选=**AA ramp 宽度标定**（我们 derivative toPixels vs mgl gamma 常数——§381 gamma 旗标 break-even 是在旧半斜坡图集上测的，**值得在全斜坡图集上重测**）。
 - **终态**：配对修复入库、工作树=提交态。
+
+**§384. gamma 旗标全斜坡重测——结论确认（非反转）：垂直锚系显著劣化（bottom 2009→2711）、水平系微改善，回退；rampW 公式修正入库（休眠）（2026-08-25 二百七十六）**：
+
+- **重测（全斜坡图集 + 修正后 rampW=0.105/fontScale 精确式）**：text-anchor/justify 15 例——bottom 2009→2711（+702）、bottom-left 10323→11630（+1307）**垂直锚系显著劣化**；center −25/justify:right −68/left −36 水平系微改善——**净劣化，回退**（旗标维持默认关）。§381 结论确认非半斜坡伪影：mgl 常数 gamma 与我们 derivative 宽度在垂直锚（含 halo 双 pass？）上系统性不合。
+- **rampW 公式修正（入库，休眠）**：gamma 分支的 `×(64/255)` 遗留因子移除（精确 mgl `0.105/fontScale`，flat gamma_scale=1）——旗标关时零行为。
+- **text 残差收敛态**：bottom 2009 的候选剩余=AA ramp 宽度的 derivative 标定（非 gamma 常数）与 halo/双 pass——下会话：垂直锚系专项取证（bottom vs center 的差异分解——为何垂直锚劣化只出现在 gamma 模式下）。
+- **终态**：旗标回退、公式修正入库、基线复现（bottom 2009 ✓）、工作树=提交态。
