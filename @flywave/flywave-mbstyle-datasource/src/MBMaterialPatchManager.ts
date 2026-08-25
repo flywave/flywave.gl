@@ -2505,6 +2505,62 @@ export class MBMaterialPatchManager {
             material.needsUpdate = true;
         }
 
+        // mgl `fill-extrusion-front-cutoff`: discard fragments whose screen
+        // position (fraction from the viewport BOTTOM) falls below the cutoff
+        // — the cutout band that keeps the route indicator visible. A bare
+        // number is a constant; a number array [a,b,c,...] is stops sampled
+        // across the screen width (equal spacing), e.g. the indicator-cutout
+        // fixture's [0.1, 0.2, 0.5] rises from left to right.
+        const frontCutoff = paint['fill-extrusion-front-cutoff'];
+        const fcConstant = typeof frontCutoff === 'number' ? frontCutoff : null;
+        const fcStops = Array.isArray(frontCutoff)
+            && frontCutoff.length === 3
+            && frontCutoff.every((v: any) => typeof v === 'number')
+            ? (frontCutoff as number[]) : null;
+        if (fcConstant !== null || fcStops !== null) {
+            material.onBeforeCompile = (shader: any) => {
+                const mapView = (this.m_dataSource as any).mapView;
+                const renderer = (mapView as any)?.renderer;
+                const vp = renderer ? renderer.getDrawingBufferSize(new THREE.Vector2()) : null;
+                const vpH = vp ? vp.y : 768;
+                const vpW = vp ? vp.x : 1024;
+                if (fcConstant !== null) {
+                    shader.uniforms.uMBFrontCutoffPx = {
+                        value: Math.max(0, Math.min(1, fcConstant)) * vpH,
+                    };
+                } else {
+                    const stops = fcStops!;
+                    // Piecewise-linear across screen width: sample the stop
+                    // ramp at the fragment's x (GL: 0=left).
+                    shader.uniforms.uMBFrontCutoffStops = {
+                        value: stops.map((v: number) => Math.max(0, Math.min(1, v)) * vpH),
+                    };
+                    shader.uniforms.uMBViewportW = { value: vpW };
+                }
+                const uniformDecl = fcConstant !== null
+                    ? 'uniform float uMBFrontCutoffPx;\n'
+                    : 'uniform float uMBFrontCutoffStops[3];\nuniform float uMBViewportW;\n';
+                const cutCode = fcConstant !== null
+                    ? 'if (gl_FragCoord.y < uMBFrontCutoffPx) discard;'
+                    : `{
+                        float mbFcX = clamp(gl_FragCoord.x / uMBViewportW, 0.0, 1.0) * 2.0;
+                        float mbCutPx = mbFcX < 1.0
+                            ? mix(uMBFrontCutoffStops[0], uMBFrontCutoffStops[1], mbFcX)
+                            : mix(uMBFrontCutoffStops[1], uMBFrontCutoffStops[2], mbFcX - 1.0);
+                        if (gl_FragCoord.y < mbCutPx) discard;
+                    }`;
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'void main() {',
+                    uniformDecl + 'void main() {'
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <clipping_planes_fragment>',
+                    `#include <clipping_planes_fragment>\n${cutCode}`
+                );
+            };
+            material.needsUpdate = true;
+        }
+
         const origOnCompile = material.onBeforeCompile;
         // Terrain DEM for fill-extrusion-terrain: buildings sit on the terrain
         // surface. Sample the center DEM tile at the vertex's world position.
