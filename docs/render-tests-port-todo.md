@@ -5000,3 +5000,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **域内定位收敛**：字节忠实（§423）→ 拷贝精确（本节）→ **降解在 ①RT 条目内容生成（FontCatalog/MBFontCatalogBuilder 的页面打包链，待 readRenderTargetPixels 直接 dump RT 条目对拍）或 ②终绘 16/24 欠采样（mgl 同样 minify 但内区均值≥0.75 保持纯黑——我们 RT 内区若忠实则不应斑点，故主嫌疑仍是 ①）**。下会话首项：readRenderTargetPixels dump 单字形 RT 条目，与源字节直接 diff。
 - **方法论**：TextCanvas 两条滤波通路（拷贝源/RT 终采）均已单变量实验并复位。
 - **终态**：实验代码全清（tsc 绿），纯 docs 提交。
+
+**§426. §425 RT 条目内容假设证伪——readRenderTargetPixels 直接 dump：拷贝链健康（'!' 场平滑梯度 30→224 无噪），源字节梯度本身即非饱和（'T' 字干峰值 231、行内 180-197）；降解点收敛至终绘 minification 覆盖率数学（2026-08-26 三百一十八）**：
+
+- **RT dump（readRenderTargetPixels）**：首非空字形 '!'（11×25）RT 条目行值 = 平滑 SDF 梯度（0→30,50,67,80,84,89,84…与 75,107,139,171,203,224,192,160…）——**GlyphTextureCache 拷贝链排除**（§425 候选①证伪），无任何纹元级噪声。
+- **源字节梯度特性（离线 PBF dump）**：Open Sans Semibold 的 'T' 字干内区值仅 180-231（0.706-0.906），'e'/'s' 同级——**Semibold 细笔画 SDF 本来就不饱和**，0.75 阈值下覆盖率天然 <1；'T' 峰值 231=0.906 恰在 ramp 上沿（0.75+0.157）边际黑。
+- **域内最终收敛**：字节 ✓、公式 ✓、拷贝 ✓ → 残差唯一来源 = **终绘 16/24 minification 的覆盖率数学**（细字干 2px 场在 16px 呈现下采样平均 ~207=0.81 → mgl 公式 alpha≈0.74，而期望图呈纯黑）——**期望图纯黑与"同公式同字节应得灰"矛盾**，指向 mgl 实际 size/fontScale 取值与我们推导不同（size 或为 device-px/24 字径而非 16）。下会话：用 mgl 参照渲染器插桩 `v_gamma_scale_size_fade_opacity.y`（size）实测值定案。
+- **终态**：RT dump 探针全清（含一次探针删除误删闭括号的修复），tsc 绿，纯 docs 提交。
