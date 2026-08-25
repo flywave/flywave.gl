@@ -4400,3 +4400,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **6/6 stop 逐瓦片对齐【里程碑】**：修正探针输出处理（此前 `sort -u -k2` 按列去重损坏了表格，"2 stop"为伪影）——引擎全量 z15 评估表 22 瓦片，stop 6 个 = (16379,16378)(16379,16379)(16380,16377)(16380,16378)(16380,16379)(16381,16378)，**与 mgl-covering-tiles-ref.js 参照的 6 个 z15 stop 逐瓦片完全一致**（d 8227/7478 > 7338 阈值）。§347 待办①（distToSplitScale 逐瓦片 dz）**无需实施**——mgl 在 2D 无 elevation 时 dz=max(closestElevation, cameraHeight)=cameraHeight，与我们恒 camH 等价（源码确证 transform.ts:1520 `distanceXyz[2] = cameraHeight` 非 elevation 分支）。LOD 公式（§347 单位修正版）即为最终形态。
 - **残域转移定案**：组合全开下 error-overlap 仍 199673>基线 158939，但失败形态已变——中部色调大幅改善（橙 246,91,14 系出现=新 z15 内容），**唯一大残差=底部 1/3 恒定 49k 纯白：近地 z16 带瓦片已交付（census 47）但不上屏**。这与 §339"renderedTiles 0→47 增长但 218893 恒定"同源——z16 瓦片渲染为不可见/白（候选：z16 四边形材质 baseSrgb 默认白 [1,1,1]（无 bg 层时）+ 纹理未达；或 TileObjectsRenderer 对非 dataZoom 层级的剔除；或 z16 全屏大四边形 near-plane 裁剪）。下会话单点：z16 瓦片对象树探针（visible/geometry/material/frustum 各层逐一断点）。
 - **终态**：TEMP 组合与探针全清（git checkout 复原）、公式保持 §347 提交态（flag 默认关）、基线复现 158939/199086/202317 ✓、工作树=提交态。
+
+**§349. z16 白区对象树逐层断点——根因定位到"无 color 祖先的 null-fallback 白四边形"+ mgl-skip 语义在两端均测劣化（负结果链收束）（2026-08-25 二百三十八，断点探针记档）**：
+
+- **对象树探针（组合全开）**：patchTile 时点全绿（objVis/matVis/parent/geometry=6 全正常、z16+z15 混合 URL 全在）；逐帧探针（捕获时点）**决定性数据**：z13/z12/z10/z15 祖先纹理全部 'on'，唯一 'no'=**16-32771-32768（20 次采样恒 no）**——z16 直达 URL 的纹理永不附着。
+- **根因【破案】**：fixture 的 const 目录**低层只有 terrain 瓦片、z10 以下没有任何 .color.png**——16-32771 的祖先链（15-16385/14-8192/13-4096/…/z0）逐层全 404 → `resolveAncestor` 返回 null → 旧 fallback 直接用**请求层 URL** 建四边形（必然 404）→ 纹理加载失败 → 未贴图白四边形（底带 49k 白区实体）。
+- **mgl-skip 修复两端测劣化（负结果）**：null→空 FeatureCollection（mgl `continue` 语义）——组合开 203814（劣化）、组合关 163074/202298/206371（与 §345① skip 测试同数，+3.2~4.1k）。结论：白四边形（0.5 不透明度白洗）比露背景**更接近期望**——期望底带蓝色内容来自**存在且已正确贴图的 15-16380-16380**（探针 tex on ✓），残差是它与白/null 四边形的**z 序与覆盖形态**问题，非纹理问题。
+- **新收敛线索**：引擎在 pitch 60 下只枚举 ~9 个 z16 请求（karma 404 日志）vs mgl 参照 47——FrustumIntersection 的 `tileEntry.area < targetTileArea && pitch > π/3` 面积停止门在 60° 边界吞掉近地细分（瓦片以其低层形态交付，恰落入 null-ancestor 带）。下会话单点：该面积门的 pitch 边界与交付层级核查（停止时应以当前层入 levelEntries 而非静默丢细分）。
+- **终态**：全部实验回退（datasource/patcher 探针与组合）、基线复现 158939/199086/202317 ✓、工作树=提交态。
