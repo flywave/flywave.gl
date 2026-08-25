@@ -23,6 +23,8 @@ export class MBStyleSymbolPlacement {
     private m_placementEngine = new PlacementEngine();
     private m_crossTileIndex = new CrossTileSymbolIndex();
     private m_lastZoom = -1;
+    /** True while any placed symbol's fade has not reached 1 yet. */
+    private m_anyFading = false;
     private m_collisionDebug = false;
     /** mgl-parity collision overlay state (collisionDebug fixtures only). */
     private m_collisionOverlay: {
@@ -104,9 +106,15 @@ export class MBStyleSymbolPlacement {
         // Apply icon-rotation-alignment
         this.applyRotationAlignment(symbols, bearing);
 
-        // Only re-run placement if zoom changed (optimization)
-        if (zoom !== this.m_lastZoom) {
+        // Re-run placement when the zoom changed OR a fade is still in
+        // flight — the fade advances by wall clock, so without the second
+        // condition a label captured mid-fade stays at its initial low
+        // opacity forever (regressions/mapbox-gl-js#3365: bearing-only
+        // camera moves never re-placed).
+        let needsPlace = zoom !== this.m_lastZoom || this.m_anyFading;
+        if (needsPlace) {
             this.m_lastZoom = zoom;
+            this.m_anyFading = false;
             const results = this.m_placementEngine.place(symbols, Date.now(), zoom);
 
             for (const sym of symbols) {
@@ -116,7 +124,11 @@ export class MBStyleSymbolPlacement {
                 const result = results.get(key);
                 if (result && sym.object) {
                     sym.object.visible = result.opacity > 0.01;
+                    // Assign opacity EVERY re-place: the fade-in path leaves
+                    // a low value on the material and completion (>=1) must
+                    // restore it, not skip it.
                     if (result.opacity < 1) {
+                        this.m_anyFading = true;
                         sym.object.traverse((child: THREE.Object3D) => {
                             if ((child as THREE.Mesh).material) {
                                 const mat = (child as THREE.Mesh).material as THREE.Material | THREE.Material[];
@@ -128,6 +140,19 @@ export class MBStyleSymbolPlacement {
                                 } else {
                                     (mat as any).opacity = result.opacity;
                                     (mat as any).transparent = true;
+                                }
+                            }
+                        });
+                    } else {
+                        // Fade complete: restore full opacity on materials the
+                        // fade-in path left at a low value.
+                        sym.object.traverse((child: THREE.Object3D) => {
+                            if ((child as THREE.Mesh).material) {
+                                const mat = (child as THREE.Mesh).material as THREE.Material | THREE.Material[];
+                                if (Array.isArray(mat)) {
+                                    for (const m of mat) (m as any).opacity = 1;
+                                } else {
+                                    (mat as any).opacity = 1;
                                 }
                             }
                         });

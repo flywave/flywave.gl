@@ -4901,3 +4901,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验收**：#2769 PASS（cur 中心 (136,0,0) vs exp (128,0,0) 阈内）；runtime-styling 全族 191 例基线通过 100 例**零回归**；regressions 全族 A/B 44→**45** 零回归。
 - **影响面注记**：wait 语义修正影响所有带 operations 的 fixture——runtime-styling 全族守卫已过；其余族（image-fallback 等）在 §412 轮已含 wait 用例的抽样。
 - **终态**：MBStyleRuntime（duration 默认/oldValue 默认/命名色/线性/hasActiveTransitions）+ MBStyleCompatRenderTest（wait 重写/快路径），tsc 绿，随记档提交。
+
+**§414. SDF AA 域开题即重定性——#3365/#3623 非字形 AA，系"相机操作后标签元素生命周期"（双拷贝：5% 残影 + 3px 位移）；PlacementEngine fade 推进/恢复两缺陷顺手修复（行为零变化入库）（2026-08-25 三百零六）**：
+
+- **重定性证据链**：①白底合成后 diff bbox 局部 (0,56)-(74,73)、525px；②cur 同一位置有**两份标签**——主拷贝（暗，与 exp 字形基本一致）+ 上方 3px 处 5% 不透明度残影；③exp 单份全不透明。结论：setBearing 90 后引擎重建文本元素，旧拷贝停在淡出 5%、新拷贝位置差 3px——**mgl 相机移动不重置 placement（标签仅重投影，无 fade）**，我们元素生命周期不同构。
+- **排查记录**：探针实证 MBStyleSymbolPlacement.run() 每帧调用但 collectSymbols 对纯 text 元素返回 0（placement 系统只管 icon POI）——残影在引擎 TextElementsRenderer 域；mapView.disableFading=true 已设仍残影（疑 rejected-label 旁路或元素重建 fade 状态未受旗标管辖）。域移交引擎 text 元素生命周期，非 mbstyle 层可修。
+- **顺手修复（PlacementEngine 两缺陷，语义正确）**：① zoom 未变但 fade 未完成时也 re-place（原 `zoom !== m_lastZoom` 门控使 bearing-only 相机移动后 5% 不透明度永不推进，#3365 初判由此而来——实证主因不在此但缺陷真实）；② fade 完成（opacity≥1）时恢复 material.opacity=1（原只在 <1 时赋值，材质一旦被写低值永不还原）。
+- **验收**：#3365/#3623 数值不变（418，域移交）；symbol-placement/allow-overlap/symbol-optional/rotation-alignment 25 例 + text-rotation-alignment 3 例 HEAD A/B 同值（基线陈旧项，浏览器壳漂移同 §402/§412 结论）；regressions 全族 A/B **45→45 零回归**。
+- **下会话候选**：①引擎 TextElementsRenderer 相机操作元素生命周期（需 mapview 层改动）；②SDF AA 真域仍待开题（text-anchor bottom 2009 族）；③transition 族剩余 wait 类用例。
+- **终态**：MBStyleSymbolPlacement 单文件（m_anyFading + opacity 恢复），tsc 绿，随记档提交。
