@@ -944,6 +944,13 @@ export class Tile implements CachedResource {
         };
 
         this.objects.forEach((rootObject: TileObject & DisposableObject) => {
+            // Detach from the scene graph first: disposing alone leaves the
+            // mesh parented — three re-initializes disposed materials on the
+            // next render, so reloaded tiles (e.g. feature-state updates)
+            // stack ghost copies of every object.
+            if (rootObject.parent !== null && rootObject.parent !== undefined) {
+                rootObject.parent.remove(rootObject);
+            }
             rootObject.traverse((object: TileObject & DisposableObject) => {
                 disposeObject(object);
             });

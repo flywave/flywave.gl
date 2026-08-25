@@ -474,6 +474,94 @@ class HillshadeTileDataProvider extends DataProvider {
     protected async connect(): Promise<void> {}
     protected dispose(): void {}
 }
+/**
+ * Tile-bounds filtering with mgl geojson-vt semantics: a point exactly on a
+ * tile corner renders ONCE (half-open [west,east) × (south,north]), not once
+ * per adjacent tile. Without this, low-zoom views stack the same feature 4×
+ * (invisible with opaque paints, exposed by circle-opacity 0.5, #6655).
+ * Lines/polygons stay in every intersecting tile (clipped at render, like vt).
+ */
+function filterFeaturesToTile(fc: any, tileKey: any): any {
+    if (!fc || typeof fc !== 'object') return fc;
+    // Normalize bare Feature / bare geometry into a FeatureCollection (the
+    // decoder does the same at decode time — normalizeGeoJson).
+    if (fc.type === 'Feature') {
+        fc = { type: 'FeatureCollection', features: [fc] };
+    } else if (!Array.isArray(fc.features)) {
+        const geometryTypes = new Set([
+            'Point', 'MultiPoint', 'LineString', 'MultiLineString',
+            'Polygon', 'MultiPolygon', 'GeometryCollection',
+        ]);
+        if (typeof fc.type === 'string' && geometryTypes.has(fc.type)) {
+            fc = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: fc, properties: {} }] };
+        } else {
+            return fc;
+        }
+    }
+    // GeometryCollection features: keep conservatively when any sub-geometry
+    // intersects (per-type logic below).
+    const n = Math.pow(2, tileKey.level);
+    const west = (tileKey.column / n) * 360 - 180;
+    const east = ((tileKey.column + 1) / n) * 360 - 180;
+    const latAtY = (y: number) => {
+        const r = Math.PI * (1 - 2 * y);
+        return (180 / Math.PI) * Math.atan(Math.sinh(r));
+    };
+    const north = latAtY(tileKey.row / n);
+    const south = latAtY((tileKey.row + 1) / n);
+    const lng = (v: number) => ((((v + 180) % 360) + 360) % 360) - 180;
+    const pointInTile = (x: number, y: number): boolean => {
+        const lx = lng(x);
+        return lx >= west && lx < east && y <= north && y > south;
+    };
+    const geomBbox = (g: any): [number, number, number, number] | null => {
+        let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+        const visit = (coords: any) => {
+            if (!Array.isArray(coords)) return;
+            if (typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+                minLng = Math.min(minLng, lng(coords[0])); maxLng = Math.max(maxLng, lng(coords[0]));
+                minLat = Math.min(minLat, coords[1]); maxLat = Math.max(maxLat, coords[1]);
+                return;
+            }
+            for (const c of coords) visit(c);
+        };
+        visit(g?.coordinates ?? g);
+        return minLng === Infinity ? null : [minLng, minLat, maxLng, maxLat];
+    };
+    const out: any[] = [];
+    for (let f of fc.features) {
+        const geomType = f?.geometry?.type;
+        if (geomType === 'Point') {
+            const [x, y] = f.geometry.coordinates;
+            if (!pointInTile(x, y)) continue;
+        } else if (geomType === 'MultiPoint') {
+            const pts = (f.geometry.coordinates as number[][]).filter(p => pointInTile(p[0], p[1]));
+            if (pts.length === 0) continue;
+            if (pts.length < (f.geometry.coordinates as number[][]).length) {
+                f = { ...f, geometry: { ...f.geometry, coordinates: pts } };
+            }
+        } else if (geomType === 'GeometryCollection') {
+            const subs = (f.geometry.geometries ?? []) as any[];
+            const keep = subs.some(g =>
+                g?.type === 'Point'
+                    ? pointInTile(g.coordinates[0], g.coordinates[1])
+                    : (() => {
+                        const b = geomBbox(g);
+                        return !!b && !(b[0] > east || b[2] < west || b[3] < south || b[1] > north);
+                    })());
+            if (!keep) continue;
+        } else if (geomType) {
+            const bbox = geomBbox(f.geometry);
+            if (!bbox || bbox[0] > east || bbox[2] < west || bbox[3] < south || bbox[1] > north) {
+                continue;
+            }
+        }
+        out.push(f);
+    }
+    fc.features = out;
+    return fc;
+}
+
 class GeoJSONDataProvider extends DataProvider {
     private m_geoJsonData: string;
     private m_cluster: boolean = false;
@@ -507,7 +595,15 @@ class GeoJSONDataProvider extends DataProvider {
     ready(): boolean { return true; }
 
     async getTile(tileKey: TileKey): Promise<ArrayBufferLike | {}> {
-        if (!this.m_cluster) return this.m_geoJsonData;
+        if (!this.m_cluster) {
+            // Per-tile bounds filtering (see filterFeaturesToTile) — the raw
+            // payload would repeat every point across all adjacent tiles.
+            try {
+                return JSON.stringify(filterFeaturesToTile(JSON.parse(this.m_geoJsonData), tileKey));
+            } catch {
+                return this.m_geoJsonData;
+            }
+        }
         const zoom = tileKey.level;
         if (zoom >= this.m_clusterMaxZoom) return this.m_geoJsonData;
         const roundedZoom = Math.floor(zoom / 2) * 2;
@@ -736,7 +832,58 @@ class CompositeGeoDataProvider extends DataProvider {
             if (!fc || !Array.isArray(fc.features)) {
                 continue;
             }
+            // Tile-bounds filtering (mgl geojson-vt semantics): a point
+            // exactly on a tile corner must render ONCE, not once per
+            // adjacent tile — without this, low-zoom views show the same
+            // feature stacked 4× (invisible with opaque paints, exposed by
+            // circle-opacity 0.5, regressions/mapbox-gl-js#6655).
+            const n = Math.pow(2, tileKey.level);
+            const west = (tileKey.column / n) * 360 - 180;
+            const east = ((tileKey.column + 1) / n) * 360 - 180;
+            const latAtY = (y: number) => {
+                const r = Math.PI * (1 - 2 * y);
+                return (180 / Math.PI) * Math.atan(Math.sinh(r));
+            };
+            const north = latAtY(tileKey.row / n);
+            const south = latAtY((tileKey.row + 1) / n);
+            const lng = (v: number) => ((((v + 180) % 360) + 360) % 360) - 180;
+            const pointInTile = (x: number, y: number): boolean => {
+                const lx = lng(x);
+                // Half-open [west, east) × (south, north]: every point maps
+                // to exactly one tile across the whole grid.
+                return lx >= west && lx < east && y <= north && y > south;
+            };
+            const geomBbox = (g: any): [number, number, number, number] | null => {
+                let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+                const visit = (coords: any) => {
+                    if (!Array.isArray(coords)) return;
+                    if (typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+                        minLng = Math.min(minLng, lng(coords[0])); maxLng = Math.max(maxLng, lng(coords[0]));
+                        minLat = Math.min(minLat, coords[1]); maxLat = Math.max(maxLat, coords[1]);
+                        return;
+                    }
+                    for (const c of coords) visit(c);
+                };
+                visit(g?.coordinates ?? g);
+                return minLng === Infinity ? null : [minLng, minLat, maxLng, maxLat];
+            };
             for (const f of fc.features) {
+                const geomType = f?.geometry?.type;
+                if (geomType === 'Point') {
+                    const [x, y] = f.geometry.coordinates;
+                    if (!pointInTile(x, y)) continue;
+                } else if (geomType === 'MultiPoint') {
+                    const pts = (f.geometry.coordinates as number[][]).filter(p => pointInTile(p[0], p[1]));
+                    if (pts.length === 0) continue;
+                    if (pts.length < (f.geometry.coordinates as number[][]).length) {
+                        f.geometry = { ...f.geometry, coordinates: pts };
+                    }
+                } else if (geomType) {
+                    const bbox = geomBbox(f.geometry);
+                    if (!bbox || bbox[0] > east || bbox[2] < west || bbox[3] < south || bbox[1] > north) {
+                        continue;
+                    }
+                }
                 features.push({
                     ...f,
                     properties: { ...(f.properties ?? {}), _sourceId: sourceId },

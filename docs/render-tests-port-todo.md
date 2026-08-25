@@ -4927,3 +4927,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验收**：regressions 全族 A/B **45→50**（新增 #7792/#4172/#9518/#8026/#4235 连带），零回归；filter+circle-stroke 守卫 73 例基线通过项零回归。
 - **留档**：#6655（setFeatureState hover→数据驱动 circle-stroke-width 后 stroke/fill 分界异常：期望内区纯 fill (255,127,127)，我们内区暗红）——patchCircleMaterial 的 color_t 分界在数据驱动 stroke 场景待查，52px。
 - **终态**：MBExpressionEngine/MBFilterCompiler/MBLayerEvaluator/MBStyleDataSource/MBStyleCompatRenderTest 五文件，tsc 绿，随记档提交。
+
+**§417. #6655 归因终破——geojson 特征跨瓦片重复（corner 点 4× 叠画）+ Tile.clear 不脱离场景图双修复（regressions A/B 50→55，含 #7357 翻盘）（2026-08-25 三百零九）**：
+
+- **取证链（四探针收敛）**：①scene 中 4 个 circle 对象但 tile.objects 恒 1 → 非本 tile 重建泄漏；②getDecodedTiles 4 tile = level2 四象限 (1,1)(1,2)(2,1)(2,2) 各 1 对象——特征点 (0,0) 恰在四 tile 公共角；③provider 层实证：DelegatingDataProvider→GeoJSONDataProvider **对每个 tileKey 返回全量 FeatureCollection**（无瓦片边界过滤）→ 同一点每瓦片各画一次；④不透明填充下 4× 不可见（历史无感），#6655 的 circle-opacity 0.5 使 4×0.5 叠成 (255,16,16) 暴露。
+- **修复一（filterFeaturesToTile，普适根因修复）**：mgl geojson-vt 语义——点按半开区间 [west,east)×(south,north] **唯一归属**一瓦片（经度环形归一），MultiPoint 逐点拆分，线/面按 bbox 相交保留（跨瓦片合法重复），GeometryCollection 保守保留（任一子几何相交）；裸 Feature/geometry 先规范化（delegate 实测持有裸 Feature——构造期某处已解包，规范化兜底）。落点：GeoJSONDataProvider.getTile（单源路径）+ CompositeGeoDataProvider.getTile（多源路径）。
+- **修复二（引擎 Tile.clear 脱离场景图）**：Tile.clear() 只 dispose+清数组，对象仍是 rootNode 子节点（three 对已 dispose 材质下一帧重建继续渲染）→ tile 重载（feature-state 等）叠残影。修复：清理前 `parent.remove(rootObject)`。此缺陷独立于 #6655（该例 4 拷贝来自 4 瓦片非重载泄漏），但同属叠画域，一并入库。
+- **验收**：目标 5 例（#6655/#8026/#4172/#9518/#2769）全 PASS；regressions 全族 A/B **50→55**（新增 #6655/#7357/#4144/#4146/#8460——**#7357 的"8px 圆边缘 AA"定性翻案：实为 4× 叠画暗化**），零回归；geojson 全族 45 例基线 18 通过零回归；runtime-styling 191 例基线 100 通过零回归。
+- **连带定性修正**：§412 记档的 #7357 亚像素 AA 归因作废（叠画域）；瓦片边界过滤影响全部 geojson fixture（历史不可见重复消除）。
+- **终态**：MBStyleDataSource（filterFeaturesToTile + 双 provider 接线）+ Tile.ts（clear 脱离），tsc 绿（datasource+mapview 双包），随记档提交。
