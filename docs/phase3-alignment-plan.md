@@ -69,5 +69,14 @@
 - [x] 批次 2.5 cluster（8b7da3b1）：supercluster 语义层级贪心聚类；
   geojson/clustered → PASS，filter/properties 大幅收敛（剩余为期望图
   半高/黑底合成语义，非聚类问题）
+- [x] 批次 3 前置 P3.14 slots（1777ff5f）：applySlotOrdering 忠实移植
+  mgl style.ts mergeLayers——slot 命名位置展开 + 3D/occlusion 优先级
+  稳定排序（occlusion 层紧贴最后一个 3D 层）
+- [x] 批次 3 前置 P3.15b symbol occlusion（1777ff5f）：
+  patchSymbolOcclusion 为 labeled-icon/text 材质注入地形深度 fade
+  （icon/text-occlusion-opacity 消费者；mgl DEPTH_OCCLUSION 语义）
+  注：text 技术若不产生带材质的 tile 对象则不生效（TextCanvas 共享
+  材质路径的 per-layer occlusion 为后续项）；cross-source-elevation
+  仍未实现。测试按批次延后策略攒批
 - 后续: vector overscale/sparse 需引擎级父级保留（mgl
   updateRetainedTiles 等价物）、hillshade 家族精度、无背景层黑底合成
