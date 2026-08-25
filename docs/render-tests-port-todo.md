@@ -4910,3 +4910,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验收**：#3365/#3623 数值不变（418，域移交）；symbol-placement/allow-overlap/symbol-optional/rotation-alignment 25 例 + text-rotation-alignment 3 例 HEAD A/B 同值（基线陈旧项，浏览器壳漂移同 §402/§412 结论）；regressions 全族 A/B **45→45 零回归**。
 - **下会话候选**：①引擎 TextElementsRenderer 相机操作元素生命周期（需 mapview 层改动）；②SDF AA 真域仍待开题（text-anchor bottom 2009 族）；③transition 族剩余 wait 类用例。
 - **终态**：MBStyleSymbolPlacement 单文件（m_anyFading + opacity 恢复），tsc 绿，随记档提交。
+
+**§415. §414 双拷贝假说证伪（引擎域取证三探针）——#3365/#3623 残差终定性：无第二元素，系字形边缘 AA 强度差（真 SDF AA 族），"3px 高差"亦为 AA 阈值测量伪影（2026-08-25 三百零七）**：
+
+- **探针三轮**：①TileGeometryCreator.createTextElements 仅调用 1 次（tile 无重建）；②TextElementsRenderer.addTextElement 每帧 opacity 全 1.000（rs=fade=style=1，state=FadedIn）——**无任何 5% 淡影元素**；③所谓"残影"像素 (236,245,250,255) 实为字形边缘 AA 中间调（蓝色偏移=黑字 AA），inkbbox 顶差 3px 是 AA 阈值测量伪影（我们的边缘带更宽/更浓，mgl 顶部 AA 更浅未计入 bbox；两者底边同为 73）。
+- **终定性**：#3365/#3623 = 字形边缘 AA 强度差——**真 SDF AA 域成员**（§380–§386 族的 bearing 相机子集），§414 的"TextElementsRenderer 元素生命周期域移交"**撤回**。引擎 text 生命周期经此取证确认无恙（元素单份、fade 状态正常）。
+- **SDF AA 域现状（合并记档）**：已证伪候选——gamma 形状（§381 break-even）、边缘阈值 0.75 vs 0.5（§382/§383 已修图集 -64 clamp）、AA 宽度缩放（§385 双向劣化）、色域往返（§386 量级小）。本域剩余候选：SDF 场逐纹元离线对拍（§384 记档未做）与 TextCanvas 顶点级边缘处理——工程深，保持 §380 记档的"最大解锁面"排序不变。
+- **终态**：mapview 探针全清（工作树=§414 态 + 本记档），纯 docs 提交。

@@ -225,7 +225,6 @@ function addTextBufferToCanvas(
     const textElement = textElementState.element;
     const textRenderState = textElementState.textRenderState;
     const opacity = textRenderState!.opacity * fadeFactor * textElement.renderStyle!.opacity;
-
     if (opacity === 0) {
         return false;
     }
