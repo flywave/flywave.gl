@@ -5055,3 +5055,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **候选③半定案（插桩）**：γ' 实测 0.0787 = (0.105/dpr2)/fontScale0.667 ✓ 公式含 dpr 与推导完全吻合（pr1 时 §427 已证恒等）；texel-ratio 探针（1/fwidth(v_tex_a.x)）读数 61.2 但 v_tex_a 的 UV 空间（图集归一/纹元/字形局部）未确证，比值不可解释——探针方法记档（需先 dump v_tex 边界值定空间）。
 - **域状态**：三候选排除其二半，唯余候选①（mgl 图集 UV 布局 dump——glyph 在图集中的 rect/padding 与 UV 映射，验证其 LINEAR 采样为何在 0.667 缩放下不摩尔纹）。下会话直接 dump glyph atlas 纹理对比局部采样行为。
 - **终态**：mgl 插桩全清（复跑 PASS），主仓纯 docs 提交。
+
+**§433. 候选①源码定案（提前对齐）+ 抗摩尔纹域终态——三候选全部排除：①我们的 GlyphData quad 本就含 3px×2 SDF 边界（MBFontCatalogBuilder offsetX/Y −border、宽高 = bordered 位图，与 mgl rectBuffer=4 同构）；②text 无 sx 光栅化（§432）；③γ' 公式含 dpr 实测吻合（§432）——mgl 抗摩尔纹机制在已查四层之外，需最小 GL 复现 harness 定案（2026-08-26 三百二十五）**：
+
+- **mgl quads.ts 修复规范摘录（对齐参考）**：`paddedWidth = rect.w×scale/(pixelRatio×(localGlyph?SDF_SCALE:1))`；`x1 = (metrics.left − rectBuffer)×scale − halfAdvance`，rectBuffer = GLYPH_PBF_BORDER(3)+glyphPadding(1)；quad 覆盖整 bordered 位图。我们的 builder 已同构（bordered 宽高 + offsetX/Y −border）。
+- **域终态**：字节✓ 公式✓ 拷贝✓ 数学✓ 边界✓ 光栅化路径✓ —— **六大层全部同构而输出仍异**，残差机制在更深处（疑 GL 实现/驱动级纹理采样差异，或我们链路中某个未审计的中间变换，如 TextCanvas 渲染目标分辨率或 DPI 变换）。**下会话方法（定案级）：最小 GL 复现 harness**——同一 SDF 位图、同一 quad 变换、同一 shader，分别在 mgl 上下文与我们的 TextCanvas 上下文离屏渲染，逐像素 diff 直接定位分叉层（不再逐层猜测）。
+- **域内投入评估（终案）**：本域本日累计 §423–§433 十一节、五层假设证伪 + 三候选排除 + 三修复尝试，边际收益已清零——除非最小 harness 一次定案，否则此域冻结，产能转向 regressions 66 例与 symbol-spacing/icon-rotation 等结构性缺失大域。
+- **终态**：纯 docs 提交（零代码变更）。
