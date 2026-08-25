@@ -124,7 +124,13 @@ class PoiBatch {
             THREE.UVMapping,
             undefined,
             undefined,
-            PoiBatch.trilinear ? THREE.LinearFilter : THREE.LinearFilter,
+            // Non-SDF icons: mgl rasterizes a sx-scaled variant (iconSize ×
+            // devicePixelRatio) so the atlas is sampled ~1:1 — magnifying the
+            // 1x sprite with LINEAR softens every edge by ~1px each side
+            // (icon-image-cross-fade 218→56 mismatch). NEAREST on magnification
+            // reproduces mgl's crisp edges. SDF icons keep LINEAR — the
+            // distance field must interpolate for the edge ramp.
+            this.imageItem.sdf === true ? THREE.LinearFilter : THREE.NearestFilter,
             PoiBatch.trilinear ? THREE.LinearMipMapLinearFilter : THREE.LinearFilter,
             THREE.RGBAFormat
         );
@@ -276,6 +282,20 @@ export class PoiBatchRegistry {
         // image name.
         assert(poiInfo.imageTextureName !== undefined);
         let batchKey = imageTexture?.image ?? poiInfo.imageTextureName!;
+        try {
+            const mm = imageItem.mipMaps && imageItem.mipMaps[0];
+            if (mm && String(poiInfo.imageTextureName).startsWith('mbblend')) {
+                const row = 11;
+                let out = '';
+                for (let x = 0; x < 24; x++) out += mm.data[(row * mm.width + x) * 4 + 3] + ',';
+                // eslint-disable-next-line no-console
+                console.log('[mbdbg] miprow', out);
+                let out2 = '';
+                for (let x = 0; x < 24; x++) out2 += (imageItem.image as any).getContext ? '?' : mm.data[((row) * mm.width + x) * 4] + ',';
+                // eslint-disable-next-line no-console
+                console.log('[mbdbg] miprowR', out2);
+            }
+        } catch {}
 
         // SDF icons: the halo uniforms change the rendered pixels, so split
         // the batch per (icon, halo) signature. Mapbox halo_width/blur are in

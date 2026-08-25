@@ -4967,3 +4967,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **排除项**：IconMaterial 顶点着色器无缩放；BoxBuffer 顶点直通；blend canvas（22px 精确）与 plain 图标（two-to-one 同 41px）同症；全局画布缩放排除（背景/地图内容与 mgl 对齐）。
 - **剩余候选（下会话）**：①纹理上传/基态 mipmap 层内容逐像素 dump（WebGL readPixels 或把 mipMaps[0] 画回 canvas 对拍 sprite）——疑 canvas2d drawImage 提取在圆边缘引入 ~1px 半透明 fringe（a>10 阈值下计入 bbox，mgl 的 fringe 更窄）；②中心 +0.5 CSS 偏移独立小项（screenPosition 投影取整）。
 - **终态**：全部探针清除（tsc 绿双包），工作树=§420 态 + 本记档，纯 docs 提交。
+
+**§422. pr2 图标边缘软化根因定案——mgl 用 sx 光栅化变体实现 ~1:1 采样，我们 1x 精灵 LINEAR 放大软化 ±1px/侧；非 SDF 图标 magnification 改 NEAREST：cross-fade 218→56/66，图标/appearance 域零回归（2026-08-26 三百一十四）**：
+
+- **fringe 对拍（§421 候选①执行）**：mipMaps[0]（32×32 padding）中心行 alpha 逐纹元 dump = `0,0,232,255×17,232,0`——纹理内容与 sprite **逐位忠实**，无提取 fringe；候选①证伪。
+- **真根因（边缘形态对拍定案）**：mgl 期望/mgl-pr1-actual 边缘均为**单 AA 像素**（ring 色 alpha 216→255，2px 陡沿）；我们为 4px 渐变色坡——mgl `getScaledImageVariant` 以 `sx = iconSize×devicePixelRatio` **光栅化放大变体入图集**（≈1:1 采样），我们把 22px 1x 精灵用 LINEAR ×2 放大 → 每侧软化 ~1px、bbox +2~3px（§421 的"+3px 超几何预测"即此，非几何链问题）。
+- **修复（语义有据的等效）**：PoiBatch 纹理 **magnification 对非 SDF 图标用 NearestFilter**（复现 mgl 的 ~1:1 采样锐度；SDF 图标保留 LINEAR——距离场必须插值，首轮未分流的实验致 6 例 SDF 回归实证）。minification/mipmap 链不变。
+- **验收**：icon-image-cross-fade 4 例 **218→56/66**（残差=周界 ~56 边缘像素的相位差——像素级收口需移植 mgl 的 sx 光栅化变体管线，记档后续）；icon-anchor/size/image/halo/color 86 例 + appearance 全族 20 例基线**零回归**（SDF 分流后）。
+- **终态**：PoiRenderer 单文件（纹理 filter 分流），tsc 绿，随记档提交。
