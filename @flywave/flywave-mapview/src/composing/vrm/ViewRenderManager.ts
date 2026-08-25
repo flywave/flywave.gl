@@ -96,7 +96,7 @@ export class ViewRenderManager implements IViewRenderManager {
         brightnessContrast: { enabled: false, brightness: 0, contrast: 0 },
         hueSaturation: { enabled: false, hue: 0, saturation: 0 },
         sepia: { enabled: false, amount: 0 },
-        outline: { enabled: false, thickness: 0.002, color: "#ffffff" },
+        outline: { enabled: false, thickness: 2, color: "#ffffff" },
         taa: { enabled: false },
         clouds: { enabled: false },
         antialiasing: "taa",
@@ -136,6 +136,13 @@ export class ViewRenderManager implements IViewRenderManager {
 
     bloomObjects: Set<THREE.Object3D> = new Set();
     bloomIgnoreObjects: Set<THREE.Object3D> = new Set();
+    /**
+     * Objects registered for the selective depth-edge outline (populated via
+     * `MapRenderingManager.addOutlineObject`). The outline pass only exists
+     * while this set is non-empty; its silhouette comes from the
+     * `outlineMask` MRT channel those objects write.
+     */
+    outlineObjects: Set<THREE.Object3D> = new Set();
     translucentLayerEffect?: TranslucentLayerEffect;
     csmShadowNode?: CascadedShadowMapsNode;
     exposure = uniform(3);
@@ -206,6 +213,7 @@ export class ViewRenderManager implements IViewRenderManager {
 
         const taaEnabled = this.config.antialiasing === "taa";
         const bloomEnabled = this.config.bloom.enabled;
+        const outlineEnabled = this.config.outline.enabled && this.outlineObjects.size > 0;
         const aerialEnabled = this.config.aerialPerspective.enabled;
         const hasCSM = this.csmShadowNode != null;
 
@@ -214,6 +222,7 @@ export class ViewRenderManager implements IViewRenderManager {
         const mrtEntries: Record<string, unknown> = { output };
         if (taaEnabled) mrtEntries.velocity = highpVelocity;
         if (bloomEnabled) mrtEntries.bloomIntensity = float(0);
+        if (outlineEnabled) mrtEntries.outlineMask = float(0);
         if (aerialEnabled && hasCSM) {
             mrtEntries.viewZUnit = positionView.z.mul(WORLD_TO_UNIT);
         }
@@ -383,10 +392,10 @@ export class ViewRenderManager implements IViewRenderManager {
             this._smaaNode = null;
         }
 
-        if (this.config.outline.enabled) {
+        if (outlineEnabled) {
             finalNode = outline(
                 finalNode,
-                depthNode,
+                this.passNode.getTextureNode("outlineMask"),
                 this.config.outline.thickness,
                 this.config.outline.color
             );
@@ -599,9 +608,7 @@ export class ViewRenderManager implements IViewRenderManager {
      * "sky/background"; `{ depth, pickId > 0 }` when geometry was hit — the
      * pickId is the meshId registered by the owning data source.
      */
-    readPickSync(
-        ndc: THREE.Vector2 | THREE.Vector3
-    ): { depth: number; pickId: number } | null {
+    readPickSync(ndc: THREE.Vector2 | THREE.Vector3): { depth: number; pickId: number } | null {
         const slot = this.acquirePickSlot(ndc);
         if (slot === null || slot.pickId === null || slot.invW === null) return null;
         return { depth: this.invWToNdcZ(slot.invW), pickId: slot.pickId };
@@ -658,8 +665,7 @@ export class ViewRenderManager implements IViewRenderManager {
         // pose-consistent.
         const moved =
             slot.camPos.distanceToSquared(this.camera.position) > 0.01 ||
-            slot.camDir.distanceToSquared(this.camera.getWorldDirection(this.tmpDir)) >
-                0.0001;
+            slot.camDir.distanceToSquared(this.camera.getWorldDirection(this.tmpDir)) > 0.0001;
         if (moved) {
             this.requestDepthRead(slot, x, y);
             return null;
@@ -718,8 +724,7 @@ export class ViewRenderManager implements IViewRenderManager {
             );
             // pickDepth packs depth (R) and pickId (G/B): G + B * 2048
             const raw = data as Uint16Array;
-            const pickId =
-                halfFloatToNumber(raw[1]) + halfFloatToNumber(raw[2]) * 2048;
+            const pickId = halfFloatToNumber(raw[1]) + halfFloatToNumber(raw[2]) * 2048;
             if (!(pickId > 0)) return null; // sky/background
             const invW = halfFloatToNumber(raw[0]);
             if (!isFinite(invW) || invW <= 0) return null;
@@ -774,8 +779,7 @@ export class ViewRenderManager implements IViewRenderManager {
                 //   11-bit halves (decode: G + B * 2048). pickId 0 = sky.
                 // Only serve when pickId > 0 (real geometry) AND R > 0.
                 const raw = data as Uint16Array;
-                const pickId =
-                    halfFloatToNumber(raw[1]) + halfFloatToNumber(raw[2]) * 2048;
+                const pickId = halfFloatToNumber(raw[1]) + halfFloatToNumber(raw[2]) * 2048;
                 if (!(pickId > 0)) {
                     // Definitive empty (sky/background): clear any stale geometry
                     // value so consumers see a miss, not the previous hit.

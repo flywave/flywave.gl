@@ -46,7 +46,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and viewpoint (a location in Shandong Province, China)
     const initialLocation = new GeoCoordinates(36.4902, 118.1742, 900);
 
-    return new MapView({ 
+    return new MapView({
         target: initialLocation, // Initial target position
         zoomLevel: 17, // Initial zoom level
         tilt: 45, // Initial tilt angle
@@ -83,7 +83,50 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
 
     // Initialize post-processing GUI module after theme is loaded
     mapView.addEventListener(MapViewEventNames.ThemeLoaded, () => {
-        new PostProcessingGUIModule(mapView, new GUI()).open();
+        const gui = new GUI();
+        new PostProcessingGUIModule(mapView, gui).open();
+        setupOutlineGui(mapView, gui);
+    });
+};
+
+// Object currently registered for the selective outline pass.
+let outlinedObject: any = null;
+
+/**
+ * Wire a dat.GUI folder driving the selective depth-edge outline
+ * (mapRenderingManager.addOutlineObject / removeOutlineObject).
+ * @param mapView Map view instance
+ * @param gui Root dat.GUI instance
+ */
+const setupOutlineGui = (mapView: MapView, gui: GUI): void => {
+    const mrm = mapView.mapRenderingManager;
+    const state = {
+        enabled: outlinedObject != null,
+        thickness: mrm.outline.thickness,
+        color: mrm.outline.color as string
+    };
+    const folder = gui.addFolder("Outline (selective)");
+    folder.add(state, "enabled").onChange((value: boolean) => {
+        if (outlinedObject == null) return;
+        if (value) {
+            mrm.addOutlineObject(outlinedObject);
+        } else {
+            mrm.removeOutlineObject(outlinedObject);
+        }
+        mapView.update();
+    });
+    folder
+        .add(state, "thickness", 1, 10, 1)
+        .onFinishChange((value: number) => {
+            mrm.updateOutline({ thickness: value, color: state.color });
+            mrm.syncPostEffectsToVRM();
+            mapView.update();
+        })
+        .name("thickness (px)");
+    folder.addColor(state, "color").onFinishChange((value: string) => {
+        mrm.updateOutline({ thickness: state.thickness, color: value });
+        mrm.syncPostEffectsToVRM();
+        mapView.update();
     });
 };
 
@@ -342,6 +385,10 @@ const addGlowingObjectsToMap = (mapView: MapView): void => {
     // @ts-ignore
     glowingStructure.anchor = structureCoords;
     mapView.mapAnchors.add(glowingStructure);
+
+    // Demo the selective depth-edge outline on this structure.
+    outlinedObject = glowingStructure;
+    mapView.mapRenderingManager.addOutlineObject(glowingStructure);
 
     // 3. Floating particles (around main coordinates)
     const floatingParticles = createFloatingParticles(mapView, 12);

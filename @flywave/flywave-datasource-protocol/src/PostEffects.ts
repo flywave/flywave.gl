@@ -25,7 +25,13 @@ export interface PostEffects {
 }
 
 export interface IOutlineEffect {
+    /**
+     * @deprecated The selective outline is enabled at runtime via
+     * `mapRenderingManager.addOutlineObject` / `removeOutlineObject`
+     * (one outlined object is enough to turn it on). This field is ignored.
+     */
     enabled: boolean;
+    /** Stroke width in pixels (selection mask dilation radius). */
     thickness: number;
     color: string;
 }

@@ -95,6 +95,8 @@ export interface IViewRenderManager {
     readonly config: IViewRenderConfig;
     bloomObjects: Set<THREE.Object3D>;
     bloomIgnoreObjects: Set<THREE.Object3D>;
+    /** Objects registered for the selective outline pass (see MapRenderingManager). */
+    outlineObjects: Set<THREE.Object3D>;
     translucentLayerEffect?: TranslucentLayerEffect;
     exposure: { value: number };
     gpuPicking: boolean;
@@ -114,9 +116,7 @@ export interface IViewRenderManager {
      * readback is available yet (cold pixel / camera moved), pickId 0 when
      * the GPU definitively answered "sky".
      */
-    readPickSync(
-        ndc: THREE.Vector2 | THREE.Vector3
-    ): { depth: number; pickId: number } | null;
+    readPickSync(ndc: THREE.Vector2 | THREE.Vector3): { depth: number; pickId: number } | null;
     /** Resolves a pickId to the object rendered with it (prunes stale). */
     getPickedObject(pickId: number): THREE.Object3D | undefined;
     /** Camera-relative render camera for unprojecting GPU depth. */
