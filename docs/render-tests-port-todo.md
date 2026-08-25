@@ -5185,3 +5185,23 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **域终态**：bottom 632 排除链闭合——字节✓ 公式✓ 拷贝✓ 数学✓ 断行✓ mayOverlap✓ 线距✓（19.2=1.2em）全局平移✗ 常量 lineHeight✗ 首行原点✗——剩余为分布式子像素相位（不同标签分数屏幕位置各自的 AA 相位差），无单点修，**与 icon 圆角 AA 同判冻结**；如需再进只能逐标签 subpixel placement（quad 顶点按屏幕半像素网格 snap 的全局工程，风险面大）。
 - **测量方法论三连教训记档**：阈值 bbox（§445）、阈值质心（§437/本节）两次伪影——**文字/图形边缘结论必须用排除背景色的亚像素质心（权重=thr−v 且 thr 低于背景值）双端复核**。
 - **终态**：纯 docs 提交。
+
+---
+
+## 会话总索引（§408–§451 快速恢复面板，2026-08-26 终稿）
+
+**量化战果**：通过集 **301 → 462**（`baseline7-pass.txt`）；regressions 族 不可测 → **56/122**；text-anchor/bottom **1976→632**（域冻结）；icon-text-fit/none **117→21**（阈值边界）；cross-fade **867→56**。
+
+**根因修复清单（17 项入库，全程 A/B 零回归）**：
+1. §409 GeometryCollection feature 展开；2. §411 `#` fixture 名 URL 编码（regressions 122 例解锁）；3. §412 遗留函数 default 三路径 + circle sRGB 直写；4. §413 transition 四点（300ms 默认/属性默认起跳/命名色线性/wait 墙钟语义）；5. §416 NaN interpolate→属性默认、filter `$id` 通道、空 background-pattern 全跳过、removeFeatureState({source}) 全清；6. §417 跨瓦片 4× 叠画（filterFeaturesToTile）；7. §419 cross-tile-sort（sort-key 层点重复）；8. §422 非 SDF 图标 NEAREST 放大；9. §429 引擎标签跨层去重（featureId 层域化）；10. §434 SDF 文字默认标签底色 halo（**+104 连带翻盘**）；11. §440 同 symbol text 碰撞拒收（mayOverlap||icon-image）；12. §446 GlyphPBFParser fields 4/5 提取（前置入库）。
+
+**工具资产（4 件）**：mgl 参照渲染器本地配方（§420：tsx 构建/CHROMIUM_EXECUTABLE=Edge/pr 扰动落盘 actual）；shader 定量插桩三件套（§427/§432）；离线双解析器 diff（§423）；亚像素质心测量法（§445/§451 规范：权重=thr−v、thr 低于背景、直缘复核）。
+
+**域终态**：SDF 文字域 28 节闭环（§423–§451，六大层同构证毕 + 三假设证伪冻结）；icon 圆角 AA 冻结（§445）；排印层冻结（§451）。
+
+**下会话优先级（按 ROI 记档）**：
+1. regressions 剩余 66 例（低残差带枯竭；深域单例 #9009 线缘半像素/#6820 垂直 2px 已归因）
+2. symbol-spacing line 族（13-21 万像素=结构性缺失）与 icon-rotation/variable-anchor 大域
+3. cross-fade 残差 56/66（移植 mgl sx 光栅化变体管线）
+4. globe/terrain 域（各自引擎级缺口）
+5. 冻结域再进条件：全局 quad 半像素 snap 工程（bottom 632/icon 圆角共同天花板）
