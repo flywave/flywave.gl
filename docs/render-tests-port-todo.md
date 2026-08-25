@@ -4848,3 +4848,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **覆盖分析**：本批 7 项改动的行为面——①§396/§397 text shaping/format scale（text-field/text-anchor/text-justify 已验 §401）；②§398/§403/§404 pattern/extrusion（fill/fill-extrusion pattern 全族已验 §403d/§404）；③§399/§400 decoder symbol 路径（symbol-geometry/symbol-placement 已验 §401）；④§397 的 MBLayerEvaluator 侧通道仅作用于顶层 format text-field（其余键零路径变化）、§399/§400 仅 symbol 层 line/polygon 特征——邻域扫描针对③④的宽泛外溢面。
 - **状态**：WIP 数值已落盘 `rendering-test-results/mbstyle-s407-sweep-wip/`（Edge）；HEAD 对照跑中断（stash 已安全恢复，工作树完整）。扫描收口=下会话首项（HEAD 同过滤器对照跑 + 数值 diff）；其余引擎域/长链候选按 §406 记档排序。
 - **终态**：工作树=§396–§404 七批（7 源文件 + PoleOfInaccessibility.ts 新文件 + 文档），tsc 绿，本批随本记档提交。
+
+**§408. §407 邻域扫描收口——s407-sweep-wip 结果目录已灭失（rendering-test-results 未入库），改为 HEAD 直跑 + baseline5-pass 对照：基线通过 20 例全部仍过、零回归（2026-08-25 三百）**：
+
+- **背景修正**：§407 记档的 `mbstyle-s407-sweep-wip/` 目录已不存在（rendering-test-results/ 整体 gitignore + 会话间清理），"WIP vs HEAD diff" 不可复现；且 §407 批改动已全部在 HEAD（d6f81eb7），HEAD 直跑即可代表改动后状态。
+- **方法**：Edge 壳（CHROME_BIN=/usr/bin/microsoft-edge，§402 定案的对照环境），§407 同十过滤器（text-size/color/offset、icon-image/anchor/size、symbol-z-order/spacing、icon-text-fit、text-max-width）两轮跑完 206 例（18+188）；对照 baseline5-pass.txt 中属该域的 20 个通过用例逐一核验。
+- **结果【零回归 ✓】**：icon-anchor 10 例、icon-image/{image-expression,literal}、icon-size 8 例（camera-function-{high-base-sdf,plain,sdf}、composite-function-{both-scale-rasterized,plain,sdf}、default、small-stretch-area）、text-max-width/force-newline、text-size/camera-function-high-base——**20/20 全部仍 PASS**。§396–§404 七批改动在邻域面确认无外溢回归，扫描收口。
+- **顺带观察（非回归，均为基线已红域）**：icon-image-cross-fade 4 例（845-867px）、icon-text-fit 全族大值差、symbol-spacing line 族 13-21 万级——cross-fade 域与 §406 记档的"icon-image cross-fade 半引擎链"候选吻合，列为下轮代码对齐首项。
+- **方法论**：`pkill -f RenderingTestResultServer` 会自匹配杀掉含该串的当前 shell（两次静默无输出失败的根因）——后续一律用 `pkill -f 'RenderingTestResult[S]erver'`。
+- **终态**：结果落盘 `rendering-test-results/mbstyle-s407-head/`，本节随记档提交。
