@@ -4653,3 +4653,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **F13 域重定性**：§379 justify 语义修复 + 本轮取证 → **text-anchor 放置链（justify/anchor offset/垂直基线）对齐完成**；剩余两支：①SDF AA 精度（bottom 2067 系，全 258 用例的共同近失源）；②§379 清单的 per-line 变高行（仅影响 formatted 多行变尺寸用例）。**下会话 ROI**：SDF AA = text 域最大解锁面，但工程深（TextCanvas 顶点/SDF gamma）；per-line 变高行=中等工程。建议下会话以 SDF AA 取证开题（gamma/边缘斜率对拍 mgl text.fragment.glsl 的 u_gamma 与 SDF 阈值）。
 - **并行顺位**：raster-array 终局取证（全量 draw 采样+纹理对象唯一化）、error-overlap RTT 合成长线——均按记档待新会话。
 - **终态**：零代码变更（§379 修复已入库）、工作树=提交态。
+
+**§381. SDF AA 开题——mgl gamma 旗标实测（break-even 偏负，回退）+ buff=0.75 vs 0.5 静态差异新线索（2026-08-25 二百七十三）**：
+
+- **静态发现**：mgl 精确 gamma 管线**完整存在**（TextGeometry.MglGammaMode 旗标：uv.w=fontScale + TextMaterials shader 的 `(0.105/fontScale)·(64/255)` ramp），默认关——在测试 harness 启用（setFontCatalog 处一行）实测。
+- **单变量（清缓存 vs §379 基线）**：text-anchor/justify 17 例——**净 +395**（7 改善 9 劣化；bottom 2067→2146、justify/left −44/right −63/property-function 双改善）——**break-even 偏负，回退**（旗标维持默认关）。gamma 形状不是主导残差源。
+- **新静态差异（下会话单点）**：mgl 边缘阈值 **buff=(256−64)/256=0.75**（symbol.fragment.glsl:122，SDF 图集 64px padding 约定），我们 getOpacity 的 `d = dist + weight − 0.5` 以 **0.5** 为心——若图集编码同源（64px padding SDF），**边缘阈值差 0.25** 才是 AA 差的主导候选（对 2067 级近失，0.25 阈值差在边缘带 ±1-2 值的观测吻合）。下会话：getOpacity 的 −0.5 改 −0.25 试验 + gamma_scale 透视因子（平面=1 无影响）核对。
+- **终态**：旗标启用回退、基线复现、工作树=提交态。
