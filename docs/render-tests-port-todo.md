@@ -4610,3 +4610,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **最终 shader dump（onBeforeCompile 末尾，8 次）**：**部分 mrt 材质的 fragment 同时呈现"uMBArr* uniform 已注入"与"mbArrUv/RASTER_COLOR 分支缺失"**——分支由 `${rasRampTex ? ... : ''}` 门控，即这些材质 patch 时 **rasRampTex=null**（ramp 构建读取 styleManager.getStyle() 的 raster-color 表达式——style 未就绪时 fetch 失败→无 ramp→无分支→无 nodata 掩码/值域解码→渲染错位内容）。**且 `__mbPatched` 门控阻止后续重 patch**（style 就绪后不会补分支）——这就是 21560 残差与 §372 三修正"零变化"（改动在分支内、部分材质无分支）的统一解释。
 - **下会话单点（一行级）**：.mrt 材质在 ramp 不可得时**跳过 patch（不设 __mbPatched）**，待 style 就绪后由逐帧循环重试——预期分支补齐后 CPU 值（0.40/0.50/0.60）× ramp（已证正确）直接贯通，default 大幅收敛。
 - **终态**：dump/哨兵探针全清、基线复现 21560 ✓、工作树=提交态。
+
+**§375. uniform 送达确证（哨兵5 全屏白：mix×255 生效、offset=−100000 ✓）+ 残案收敛到"纹元采样返回 0"+ 哨兵6 无效（本人 GLSL 重复声明编译错）（2026-08-25 二百六十七）**：
+
+- **哨兵5【uniform 全对 ✓】**：输出 clamp(mix.x, mix.y·0.1, offset/−100000) = **全屏白 (255,255,255)**——mix.x≥1（×255 修正生效）、offset=−100000 ✓ **全部 uniform 正确送达渲染 program**。§374"分支缺失"确认为 dump 提取伪影（哨兵1 强制绿曾在同锚点生效）。
+- **mix×255 干净重测**：仍 21560 恒定——uniform 对而输出不变 → 剩余唯一环节=**纹元采样本身返回 0**（value=offset+0→t=0→全红 ✓ 与全部观测闭合；§365 残余 glErr=1282×696 疑即此纹理上传/绑定失败）。
+- **哨兵6【无效实验】**：本人插入时造成 `mbArrUv` 重复声明 → GLSL 编译错 → 回退旧 program → 输出正常图（非探针结果）。**"编译失败静默回退"模式本会话已三次咬人（哨兵3/4/6）——后续一切 shader 探针必须先过编译错误 grep 再读结果（方法论固化）**。
+- **下会话终局单点**：修正哨兵6（删原行）验证采样是否恒 0；若是 → 修复 DataTexture 上传链（候选：texture.needsUpdate 时序、unpackAlignment、rasterTextureCache 命中的旧纹理对象未带新 needsUpdate）——CPU 值/uniform/ramp/分支四环已全部验证，只差采样一环。
+- **终态**：全部实验回退、基线复现 21560/6112 ✓、工作树=提交态。
