@@ -4603,3 +4603,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **哨兵3【存疑】**：输出 clamp(mbArrVal.x/y) 得到与哨兵2 **逐位相同的 (51,204,0)**（清端口重跑复现）——强烈提示哨兵3 的 shader **编译失败**（three 复用上一个可用 program=哨兵2 的）——这同时提示：**§372 部分零变化实验可能是 GLSL 编译失败的静默复用**（哨兵3 的 value=0.2/mask=0.8 恰等于 ramp@0.4 的 (51,204,0) 是巧合假象）。**方法论新增：每次 shader 改动后必须检查 karma console 的 three shader 编译错误日志**（此前从未查过——头号流程盲区）。
 - **下会话首查项**：①跑基线并 grep three 编译错误日志（正常渲染的 array program 可能本身就在报错！——若 21560 状态的 program 是"失败复用"的旧版本，真 program 从未跑过，一切自洽）；②修正后 CPU 值（0.40/0.50/0.60）与 ramp（已证正确）之间只剩 mbArrVal 计算一环。
 - **终态**：哨兵全清、基线复现 21560 ✓、工作树=提交态。
+
+**§374. 编译错误 grep（无错）+ 最终 shader 源码 dump【破案级发现】：部分 mrt 材质的 RASTER_COLOR 分支缺失而 uniform 存在——ramp 首次 patch 时为 null（style 未就绪时序）（2026-08-25 二百六十六）**：
+
+- **编译错误 grep（基线）**：karma console 无任何 three shader 编译错误——哨兵3/4 的"未执行"另有解释（哨兵4 输出=正常图疑同样命中无分支材质）。
+- **最终 shader dump（onBeforeCompile 末尾，8 次）**：**部分 mrt 材质的 fragment 同时呈现"uMBArr* uniform 已注入"与"mbArrUv/RASTER_COLOR 分支缺失"**——分支由 `${rasRampTex ? ... : ''}` 门控，即这些材质 patch 时 **rasRampTex=null**（ramp 构建读取 styleManager.getStyle() 的 raster-color 表达式——style 未就绪时 fetch 失败→无 ramp→无分支→无 nodata 掩码/值域解码→渲染错位内容）。**且 `__mbPatched` 门控阻止后续重 patch**（style 就绪后不会补分支）——这就是 21560 残差与 §372 三修正"零变化"（改动在分支内、部分材质无分支）的统一解释。
+- **下会话单点（一行级）**：.mrt 材质在 ramp 不可得时**跳过 patch（不设 __mbPatched）**，待 style 就绪后由逐帧循环重试——预期分支补齐后 CPU 值（0.40/0.50/0.60）× ramp（已证正确）直接贯通，default 大幅收敛。
+- **终态**：dump/哨兵探针全清、基线复现 21560 ✓、工作树=提交态。
