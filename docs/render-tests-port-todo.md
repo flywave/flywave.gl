@@ -5033,3 +5033,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验收**：#11451 **67→9px**（结构全同：红心蓝环两图一致，残差=图标边缘 AA 强度，9>5 阈值未过但量级收敛）；regressions 全族 A/B 54→54 **零回归**；runtime-styling+text-variable-anchor+icon 族 199 例守卫基线 46 通过项**零回归**。
 - **低残差带剩余归因（下会话按序）**：#9009 线宽边缘相位（26px）、#6820 NotoCJK text（59px）、#3394/#6233/#6649 line/text AA 域、#4564/#3614 已记档。
 - **终态**：MBTileDataEmitter 单文件（两处 $id 层域化），四级探针全清（tsc 双包绿），随记档提交。
+
+**§430. 低残差带 #9009/#6820 归因定档 + §429 连带面扫描（symbol 四族 92 例仍全红）——两例均深域单例，带内快赢面枯竭，收割转向大域工程（2026-08-26 三百二十二）**：
+
+- **#9009（26px，line-width 20 黑色道路）**：边沿 transect 实测 y5 上缘 cur=0/exp=143、y40 下缘 cur=64/exp=208——上缘我们多伸 1px、下缘少 1px，**对角半像素相位差**（我们 JS 预挤出 ribbon 顶点量化 vs mgl shader 浮点挤出 + patcher ~1px alpha feather 锚定相位）。修复涉共享 ribbon 管线（全 line 族风险面），单例 26px ROI 低，记档。
+- **#6820（59px，NotoCJK 'ā' setLayoutProperty）**：ink bbox cur y26-37 vs exp y28-39——**整字形垂直偏移 2px**（ā 的 macron 度量/垂直基线族，§379 清单②③ text vertical metrics 域），单例深域记档。
+- **§429 连带面扫描**：symbol-placement/icon-text-fit/text-writing-mode/text-variable-anchor 四族 92 例仍全红（icon-text-fit 全族结构性缺失、variable-anchor collision 域等大域工程），零回归零连带翻盘——featureId 层域化收益仅限多层同 feature 图标场景 ✓ 符合预期。
+- **收割策略记档**：低残差带（<70px）快赢面枯竭；下轮 ROI 排序：①icon-text-fit 全族（§396 时代已建 fitIconToText 移植但全族红，疑一处断点）——单点修好可翻数十例；②symbol-spacing line 族（13-21 万像素=结构性缺失）；③mgl 抗摩尔纹三候选（§428）。
+- **终态**：纯 docs 提交（零代码变更）。
