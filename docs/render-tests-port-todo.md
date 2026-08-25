@@ -4530,3 +4530,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **raster-array 不可见性残案状态**：DoubleSide 后排除清单再添一项（几何/编译/draw/attach/stencil/深度/ramp/强制红/背面剔除全否定），存活解释仍为引擎 RTT/pass 合成层——但**在环境非确定性解决前继续二分会产生误导性结论**，攻坚暂停。
 - **下会话顺序**：①清 karma webpack 缓存（rm 缓存目录或 HARP_NO_HARD_SOURCE_CACHE=true）复跑 raster-array 基线 + fallback 单变量，校准真值；②若 fallback 真值非劣化则直接入库并重估不可见性；③再续 RTT 对照攻坚。
 - **终态**：全部 TEMP 清除、基线复现 28753/10525 ✓、工作树=提交态。
+
+**§364. 环境校准完成——fallback 劣化确证为真值（10525→63630 单变量清缓存双跑），不可见性同样为真，raster-array 攻坚下会话续（2026-08-25 二百五十六，校准记档）**：
+
+- **校准方法**：`MB_NO_WEBPACK_CACHE=1`（webpack.tests.config.js:163 完全绕过文件系统缓存）双跑单变量——基线（提交态）7 例：28753/**10525**/28706/28854/1580/28731/38933；+source-layer fallback：default 不变 28753、no-raster-color **63630**。**§358 原测 63630 为真值**，§363 的 10525-with-fallback 确系缓存伪影。
+- **决策**：fallback 单独劣化 53k 不入库（回退）；default 不可见性（28753 两态恒定）**同为真值**（非 staleness）——残案维持"引擎 RTT/pass 合成层丢弃 draw 输出"。
+- **方法论入库**：后续 raster-array 攻坚与关键单变量对比一律 `MB_NO_WEBPACK_CACHE=1`（会话内多次陈旧捕获/不复现教训的终极预防）。
+- **下会话（环境已可信）**：卫星 vs mrt 四边形 renderer 层属性对照（material/program/renderItem/renderTarget）或单层 .mrt 最小重放，定位合成层丢弃点；fallback 须与 no-raster-color unbound-ramp 黑语义（§824）一起评估。
+- **终态**：fallback 回退、清缓存基线复现 ✓、工作树=提交态。
