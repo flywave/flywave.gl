@@ -1,0 +1,955 @@
+RenderingTestResultServer: start standaloneServer:  rendering-test-results/mbstyle-s418-pre5
+RenderingTestResultServer: serving IBCT report at /ibct-report endpoint
+RenderingTestResultServer: accepting IBCT results at /ibct-feedback endpoint
+RenderingTestResultServer: listening on port localhost:8099!
+tsconfig-paths-webpack-plugin: Using config file at /home/aninggo/work/flywave.gl/tsconfig.karma.json
+Matched test files: [
+  '@flywave/flywave-mbstyle-datasource/test/MBStyleCompatRenderTest.ts',
+  {
+    pattern: 'node_modules/three/examples/jsm/libs/draco/**/*.*',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-3dtile-render/test/data/**/*.*',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-map-theme/resources/fonts/**/*.*',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-mbstyle-datasource/test/render-tests/**/expected.png',
+    included: false
+  },
+  {
+    pattern: '@flywave/flywave-mbstyle-datasource/test/rendering/integration/**/*.*',
+    included: false
+  },
+  {
+    pattern: 'mapbox-gl-js/test/integration/image/*.*',
+    included: false
+  }
+]
+[33m25 08 2026 23:19:56.933:WARN [filelist]: [39mPattern "/home/aninggo/work/flywave.gl/@flywave/flywave-3dtile-render/test/data/**/*.*" does not match any file.
+Webpack bundling...
+asset [1m[32mcommons.js[39m[22m 41.1 MiB [1m[32m[emitted][39m[22m (name: commons) (id hint: commons)
+asset [1m[32mruntime.js[39m[22m 16.4 KiB [1m[32m[emitted][39m[22m (name: runtime)
+asset [1m[32mMBStyleCompatRenderTest.1077151467.js[39m[22m 517 bytes [1m[32m[emitted][39m[22m (name: MBStyleCompatRenderTest.1077151467)
+Entrypoint [1mMBStyleCompatRenderTest.1077151467[39m[22m 41.1 MiB = [1m[32mruntime.js[39m[22m 16.4 KiB [1m[32mcommons.js[39m[22m 41.1 MiB [1m[32mMBStyleCompatRenderTest.1077151467.js[39m[22m 517 bytes
+webpack 5.99.9 compiled [1m[32msuccessfully[39m[22m in 12022 ms
+[33m25 08 2026 23:20:10.869:WARN [filelist]: [39mPattern "/home/aninggo/work/flywave.gl/@flywave/flywave-3dtile-render/test/data/**/*.*" does not match any file.
+[32m25 08 2026 23:20:12.447:INFO [karma-server]: [39mKarma v6.4.4 server started at http://localhost:9876/
+[32m25 08 2026 23:20:12.447:INFO [launcher]: [39mLaunching browsers ChromeHeadlessNoSandbox with concurrency unlimited
+[32m25 08 2026 23:20:12.451:INFO [launcher]: [39mStarting browser ChromeHeadless
+[32m25 08 2026 23:20:13.181:INFO [Edge 150.0.0.0 (Linux x86_64)]: [39mConnected on socket XS6bzRqb6vWwZ8KdAAAB with id 76009301
+Edge 150.0.0.0 (Linux x86_64) LOG: 'RenderingTestHelper:', 'WebGlInfo', Object{vendor: 'Google Inc. (Google)', gpu: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)'}
+
+Edge 150.0.0.0 (Linux x86_64) LOG: 'RenderingTestHelper:', 'WebGlInfo', Object{vendor: 'Google Inc. (Google)', gpu: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)'}
+Edge 150.0.0.0 (Linux x86_64) LOG: '[MBStyleCompat] 3026 compatible tests loaded'
+
+Edge 150.0.0.0 (Linux x86_64) LOG: '[MBStyleCompat] 3026 compatible tests loaded'
+Edge 150.0.0.0 (Linux x86_64) LOG: '[MBStyleCompat] filtered to 18 tests matching "config-step-value", "terrain/cache-invalidation", "globe-transforms", "depth-segments"'
+
+Edge 150.0.0.0 (Linux x86_64) LOG: '[MBStyleCompat] filtered to 18 tests matching "config-step-value", "terrain/cache-invalidation", "globe-transforms", "depth-segments"'
+
+[1A[2KEdge 150.0.0.0 (Linux x86_64): Executed 0 of 18 SUCCESS (0 secs / 0 secs)
+(node:90412) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[33m25 08 2026 23:20:14.253:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3d-intersections-geometry-crash/17-65535-65536.mvt
+[33m25 08 2026 23:20:14.255:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3d-intersections-geometry-crash/17-65536-65536.mvt
+[33m25 08 2026 23:20:14.256:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3d-intersections-geometry-crash/17-65536-65535.mvt
+[33m25 08 2026 23:20:14.258:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3d-intersections-geometry-crash/17-65535-65535.mvt
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"3d-intersections/depth-segments-undefined-crash-geometry-pass"}
+RenderingTestResultServer: /ibct-feedback: result: ok
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-3d-intersections/depth-segments-undefined-crash-geometry-pass.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-3d-intersections/depth-segments-undefined-crash-geometry-pass.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-3d-intersections/depth-segments-undefined-crash-geometry-pass.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64): Executed 1 of 18 SUCCESS (0 secs / 0.256 secs)
+[1A[2KLOG: 'MBDBG willCensus tall=4 visible=4 parented=4'
+Edge 150.0.0.0 (Linux x86_64): Executed 1 of 18 SUCCESS (0 secs / 0.256 secs)
+LOG: 'MBDBG willCensus tall=4 visible=4 parented=4'
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"globe/globe-transforms/antimeridian-left"}
+RenderingTestResultServer: /ibct-feedback: result: ok
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/antimeridian-left.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/antimeridian-left.diff.png
+[1A[2KEdge 150.0.0.0 (Linux x86_64): Executed 2 of 18 SUCCESS (0 secs / 0.446 secs)
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/antimeridian-left.ibct-result.json
+[1A[2KLOG: 'MBDBG willCensus tall=2 visible=2 parented=2'
+Edge 150.0.0.0 (Linux x86_64): Executed 2 of 18 SUCCESS (0 secs / 0.446 secs)
+LOG: 'MBDBG willCensus tall=2 visible=2 parented=2'
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"globe/globe-transforms/antimeridian-right"}
+RenderingTestResultServer: /ibct-feedback: result: ok
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/antimeridian-right.current.png
+[1A[2KEdge 150.0.0.0 (Linux x86_64): Executed 3 of 18 SUCCESS (0 secs / 0.606 secs)
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/antimeridian-right.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/antimeridian-right.ibct-result.json
+[1A[2KWARN: 'THREE.WebGLRenderer: Texture has been resized from (16358x1024) to (8191x512).'
+Edge 150.0.0.0 (Linux x86_64): Executed 3 of 18 SUCCESS (0 secs / 0.606 secs)
+WARN: 'THREE.WebGLRenderer: Texture has been resized from (16358x1024) to (8191x512).'
+[33m25 08 2026 23:20:15.223:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-2-1.satellite.png
+[33m25 08 2026 23:20:15.225:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-3-1.satellite.png
+[33m25 08 2026 23:20:15.226:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-0-1.satellite.png
+[33m25 08 2026 23:20:15.227:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-2-0.satellite.png
+[33m25 08 2026 23:20:15.230:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-4-2.satellite.png
+[33m25 08 2026 23:20:15.232:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-3-0.satellite.png
+[33m25 08 2026 23:20:15.233:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-0-0.satellite.png
+[33m25 08 2026 23:20:15.240:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-5-2.satellite.png
+[33m25 08 2026 23:20:15.241:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-4-3.satellite.png
+[33m25 08 2026 23:20:15.241:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-5-3.satellite.png
+[33m25 08 2026 23:20:15.242:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-6-2.satellite.png
+[33m25 08 2026 23:20:15.242:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-7-2.satellite.png
+[33m25 08 2026 23:20:15.243:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-6-3.satellite.png
+[33m25 08 2026 23:20:15.246:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-7-3.satellite.png
+[33m25 08 2026 23:20:15.247:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-0-2.satellite.png
+[33m25 08 2026 23:20:15.248:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-1-2.satellite.png
+[33m25 08 2026 23:20:15.249:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-0-3.satellite.png
+[33m25 08 2026 23:20:15.250:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-1-3.satellite.png
+[33m25 08 2026 23:20:15.251:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-4-0.satellite.png
+[33m25 08 2026 23:20:15.252:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-4-1.satellite.png
+[33m25 08 2026 23:20:15.254:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-5-1.satellite.png
+[33m25 08 2026 23:20:15.255:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-6-0.satellite.png
+[33m25 08 2026 23:20:15.256:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-7-0.satellite.png
+[33m25 08 2026 23:20:15.256:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-5-0.satellite.png
+[33m25 08 2026 23:20:15.257:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-7-1.satellite.png
+[33m25 08 2026 23:20:15.258:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-0-0.satellite.png
+[33m25 08 2026 23:20:15.259:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-1-0.satellite.png
+[33m25 08 2026 23:20:15.260:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-0-1.satellite.png
+[33m25 08 2026 23:20:15.260:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-6-1.satellite.png
+[33m25 08 2026 23:20:15.262:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-1-1.satellite.png
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.008,"platform":"web-Edge-150.0.0.0-Linux","name":"globe/globe-transforms/high-lat-high-lng"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 193417 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/high-lat-high-lng.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/high-lat-high-lng.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/high-lat-high-lng.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/high-lat-high-lng FAILED
+	AssertionError: 193417 mismatched pixels, reference image: globe/globe-transforms/high-lat-high-lng: expected 193417 to be at most 2098
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+Edge 150.0.0.0 (Linux x86_64): Executed 4 of 18 (1 FAILED) (0 secs / 2.527 secs)
+Edge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/high-lat-high-lng FAILED
+	AssertionError: 193417 mismatched pixels, reference image: globe/globe-transforms/high-lat-high-lng: expected 193417 to be at most 2098
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+[1A[2KWARN: 'THREE.WebGLRenderer: Texture has been resized from (16358x1024) to (8191x512).'
+Edge 150.0.0.0 (Linux x86_64): Executed 4 of 18 (1 FAILED) (0 secs / 2.527 secs)
+WARN: 'THREE.WebGLRenderer: Texture has been resized from (16358x1024) to (8191x512).'
+[33m25 08 2026 23:20:17.152:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-3-2.satellite.png
+[33m25 08 2026 23:20:17.156:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-1-2.satellite.png
+[33m25 08 2026 23:20:17.160:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-0-2.satellite.png
+[33m25 08 2026 23:20:17.162:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-1-3.satellite.png
+[33m25 08 2026 23:20:17.163:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-3-3.satellite.png
+[33m25 08 2026 23:20:17.164:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-6-4.satellite.png
+[33m25 08 2026 23:20:17.166:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-0-3.satellite.png
+[33m25 08 2026 23:20:17.176:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-7-4.satellite.png
+[33m25 08 2026 23:20:17.179:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-6-5.satellite.png
+[33m25 08 2026 23:20:17.180:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-7-5.satellite.png
+[33m25 08 2026 23:20:17.181:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-2-4.satellite.png
+[33m25 08 2026 23:20:17.183:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-3-4.satellite.png
+[33m25 08 2026 23:20:17.185:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-2-5.satellite.png
+[33m25 08 2026 23:20:17.185:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-0-4.satellite.png
+[33m25 08 2026 23:20:17.186:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-1-4.satellite.png
+[33m25 08 2026 23:20:17.186:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-0-5.satellite.png
+[33m25 08 2026 23:20:17.187:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-1-5.satellite.png
+[33m25 08 2026 23:20:17.187:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-3-5.satellite.png
+[33m25 08 2026 23:20:17.194:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-2-6.satellite.png
+[33m25 08 2026 23:20:17.195:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-3-6.satellite.png
+[33m25 08 2026 23:20:17.196:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-2-7.satellite.png
+[33m25 08 2026 23:20:17.196:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-3-7.satellite.png
+[33m25 08 2026 23:20:17.197:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-6-6.satellite.png
+[33m25 08 2026 23:20:17.198:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-7-6.satellite.png
+[33m25 08 2026 23:20:17.198:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-7-7.satellite.png
+[33m25 08 2026 23:20:17.199:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-6-7.satellite.png
+[33m25 08 2026 23:20:17.202:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-0-6.satellite.png
+[33m25 08 2026 23:20:17.203:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-1-6.satellite.png
+[33m25 08 2026 23:20:17.204:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-0-7.satellite.png
+[33m25 08 2026 23:20:17.205:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-1-7.satellite.png
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"globe/globe-transforms/low-lat-low-lng"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 193037 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/low-lat-low-lng.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/low-lat-low-lng.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/low-lat-low-lng.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/low-lat-low-lng FAILED
+	AssertionError: 193037 mismatched pixels, reference image: globe/globe-transforms/low-lat-low-lng: expected 193037 to be at most 263
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+Edge 150.0.0.0 (Linux x86_64): Executed 5 of 18 (2 FAILED) (0 secs / 4.534 secs)
+Edge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/low-lat-low-lng FAILED
+	AssertionError: 193037 mismatched pixels, reference image: globe/globe-transforms/low-lat-low-lng: expected 193037 to be at most 263
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+[1A[2KWARN: 'THREE.WebGLRenderer: Texture has been resized from (16358x1024) to (8191x512).'
+Edge 150.0.0.0 (Linux x86_64): Executed 5 of 18 (2 FAILED) (0 secs / 4.534 secs)
+WARN: 'THREE.WebGLRenderer: Texture has been resized from (16358x1024) to (8191x512).'
+[33m25 08 2026 23:20:19.107:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-1-1.satellite.png
+[33m25 08 2026 23:20:19.108:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-2-2.satellite.png
+[33m25 08 2026 23:20:19.109:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-2-3.satellite.png
+[33m25 08 2026 23:20:19.111:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-2-2.satellite.png
+[33m25 08 2026 23:20:19.113:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-3-2.satellite.png
+[33m25 08 2026 23:20:19.114:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-2-3.satellite.png
+[33m25 08 2026 23:20:19.115:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-3-3.satellite.png
+[33m25 08 2026 23:20:19.116:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-4-4.satellite.png
+[33m25 08 2026 23:20:19.117:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-5-4.satellite.png
+[33m25 08 2026 23:20:19.118:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-4-5.satellite.png
+[33m25 08 2026 23:20:19.119:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-5-5.satellite.png
+[33m25 08 2026 23:20:19.121:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-5-6.satellite.png
+[33m25 08 2026 23:20:19.122:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-4-7.satellite.png
+[33m25 08 2026 23:20:19.124:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-5-7.satellite.png
+[33m25 08 2026 23:20:19.124:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-4-6.satellite.png
+[1A[2KEdge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/mid-lat-mid-lng FAILED
+	AssertionError: 192638 mismatched pixels, reference image: globe/globe-transforms/mid-lat-mid-lng: expected 192638 to be at most 525
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+Edge 150.0.0.0 (Linux x86_64): Executed 6 of 18 (3 FAILED) (0 secs / 6.324 secs)
+Edge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/mid-lat-mid-lng FAILED
+	AssertionError: 192638 mismatched pixels, reference image: globe/globe-transforms/mid-lat-mid-lng: expected 192638 to be at most 525
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.002,"platform":"web-Edge-150.0.0.0-Linux","name":"globe/globe-transforms/mid-lat-mid-lng"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 192638 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/mid-lat-mid-lng.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/mid-lat-mid-lng.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/mid-lat-mid-lng.ibct-result.json
+[33m25 08 2026 23:20:20.744:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-7-0.satellite.png
+[1A[2KWARN: 'THREE.WebGLRenderer: Texture has been resized from (16358x1024) to (8191x512).'
+Edge 150.0.0.0 (Linux x86_64): Executed 6 of 18 (3 FAILED) (0 secs / 6.324 secs)
+WARN: 'THREE.WebGLRenderer: Texture has been resized from (16358x1024) to (8191x512).'
+[33m25 08 2026 23:20:20.905:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-15-3.satellite.png
+[33m25 08 2026 23:20:20.907:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-0-3.satellite.png
+[33m25 08 2026 23:20:20.910:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-14-3.satellite.png
+[33m25 08 2026 23:20:20.915:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-15-2.satellite.png
+[33m25 08 2026 23:20:20.917:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-0-2.satellite.png
+[33m25 08 2026 23:20:20.919:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-14-2.satellite.png
+[33m25 08 2026 23:20:20.921:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-14-0.satellite.png
+[33m25 08 2026 23:20:20.925:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-15-0.satellite.png
+[33m25 08 2026 23:20:20.928:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-14-1.satellite.png
+[33m25 08 2026 23:20:20.930:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-15-1.satellite.png
+[33m25 08 2026 23:20:20.932:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-0-0.satellite.png
+[33m25 08 2026 23:20:20.933:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-1-0.satellite.png
+[33m25 08 2026 23:20:20.935:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-0-1.satellite.png
+[33m25 08 2026 23:20:20.936:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-30-6.satellite.png
+[33m25 08 2026 23:20:20.937:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-31-6.satellite.png
+[33m25 08 2026 23:20:20.938:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-30-7.satellite.png
+[33m25 08 2026 23:20:20.939:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-1-1.satellite.png
+[33m25 08 2026 23:20:20.940:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-1-6.satellite.png
+[33m25 08 2026 23:20:20.941:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-0-7.satellite.png
+[33m25 08 2026 23:20:20.942:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-1-7.satellite.png
+[33m25 08 2026 23:20:20.943:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-31-7.satellite.png
+[33m25 08 2026 23:20:20.944:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-0-6.satellite.png
+[33m25 08 2026 23:20:20.945:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-29-6.satellite.png
+[33m25 08 2026 23:20:20.946:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-28-7.satellite.png
+[33m25 08 2026 23:20:20.947:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-29-7.satellite.png
+[33m25 08 2026 23:20:20.948:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-28-6.satellite.png
+[33m25 08 2026 23:20:20.949:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-30-4.satellite.png
+[33m25 08 2026 23:20:20.950:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-31-4.satellite.png
+[33m25 08 2026 23:20:20.952:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-30-5.satellite.png
+[33m25 08 2026 23:20:20.953:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-31-5.satellite.png
+[33m25 08 2026 23:20:20.953:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-0-4.satellite.png
+[33m25 08 2026 23:20:20.954:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-1-4.satellite.png
+[33m25 08 2026 23:20:20.955:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-0-5.satellite.png
+[33m25 08 2026 23:20:20.955:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-1-5.satellite.png
+[33m25 08 2026 23:20:20.956:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-15-0.satellite.png
+[33m25 08 2026 23:20:20.957:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-14-1.satellite.png
+[33m25 08 2026 23:20:20.957:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-15-1.satellite.png
+[33m25 08 2026 23:20:20.958:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-14-0.satellite.png
+[33m25 08 2026 23:20:20.959:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-0-1.satellite.png
+[33m25 08 2026 23:20:20.959:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-0-0.satellite.png
+[33m25 08 2026 23:20:20.960:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-1-0.satellite.png
+[33m25 08 2026 23:20:20.961:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-1-1.satellite.png
+[33m25 08 2026 23:20:20.961:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-15-0.satellite.png
+[33m25 08 2026 23:20:20.962:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-14-1.satellite.png
+[33m25 08 2026 23:20:20.963:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-15-1.satellite.png
+[33m25 08 2026 23:20:20.964:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-14-0.satellite.png
+[33m25 08 2026 23:20:20.966:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-0-1.satellite.png
+[33m25 08 2026 23:20:20.967:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-0-0.satellite.png
+[33m25 08 2026 23:20:20.969:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-1-1.satellite.png
+[33m25 08 2026 23:20:20.969:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-15-0.satellite.png
+[33m25 08 2026 23:20:20.970:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-1-0.satellite.png
+[33m25 08 2026 23:20:20.970:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-14-1.satellite.png
+[33m25 08 2026 23:20:20.971:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-15-1.satellite.png
+[33m25 08 2026 23:20:20.971:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-14-0.satellite.png
+[33m25 08 2026 23:20:21.099:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-28-4.satellite.png
+[33m25 08 2026 23:20:21.100:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-29-4.satellite.png
+[33m25 08 2026 23:20:21.101:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-28-5.satellite.png
+[33m25 08 2026 23:20:21.101:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/5-29-5.satellite.png
+[33m25 08 2026 23:20:21.144:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/2-1-0.satellite.png
+[33m25 08 2026 23:20:21.147:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-14-4.satellite.png
+[33m25 08 2026 23:20:21.150:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-15-4.satellite.png
+[33m25 08 2026 23:20:21.153:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-14-5.satellite.png
+[33m25 08 2026 23:20:21.154:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-15-5.satellite.png
+[33m25 08 2026 23:20:21.155:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-0-4.satellite.png
+[33m25 08 2026 23:20:21.158:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-1-4.satellite.png
+[33m25 08 2026 23:20:21.159:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-0-5.satellite.png
+[33m25 08 2026 23:20:21.159:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-1-5.satellite.png
+[33m25 08 2026 23:20:21.160:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-12-4.satellite.png
+[33m25 08 2026 23:20:21.160:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-13-4.satellite.png
+[33m25 08 2026 23:20:21.161:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-12-5.satellite.png
+[33m25 08 2026 23:20:21.164:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-13-5.satellite.png
+[33m25 08 2026 23:20:21.166:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-2-4.satellite.png
+[33m25 08 2026 23:20:21.166:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-3-4.satellite.png
+[33m25 08 2026 23:20:21.167:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-2-5.satellite.png
+[33m25 08 2026 23:20:21.167:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-3-5.satellite.png
+[33m25 08 2026 23:20:21.168:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-1-2.satellite.png
+[33m25 08 2026 23:20:21.169:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-1-3.satellite.png
+[33m25 08 2026 23:20:21.171:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-12-2.satellite.png
+[33m25 08 2026 23:20:21.172:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-13-2.satellite.png
+[33m25 08 2026 23:20:21.172:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-12-3.satellite.png
+[33m25 08 2026 23:20:21.173:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-13-3.satellite.png
+[33m25 08 2026 23:20:21.174:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-2-2.satellite.png
+[33m25 08 2026 23:20:21.175:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-3-2.satellite.png
+[33m25 08 2026 23:20:21.178:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-2-3.satellite.png
+[33m25 08 2026 23:20:21.179:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-3-3.satellite.png
+[33m25 08 2026 23:20:21.179:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-12-0.satellite.png
+[33m25 08 2026 23:20:21.180:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-13-0.satellite.png
+[33m25 08 2026 23:20:21.181:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-12-1.satellite.png
+[33m25 08 2026 23:20:21.182:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-13-1.satellite.png
+[33m25 08 2026 23:20:21.183:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-3-0.satellite.png
+[33m25 08 2026 23:20:21.184:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-2-1.satellite.png
+[33m25 08 2026 23:20:21.185:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-2-0.satellite.png
+[33m25 08 2026 23:20:21.185:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/4-3-1.satellite.png
+[33m25 08 2026 23:20:21.187:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-2-0.satellite.png
+[33m25 08 2026 23:20:21.188:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-3-0.satellite.png
+[33m25 08 2026 23:20:21.189:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-2-1.satellite.png
+[33m25 08 2026 23:20:21.190:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/3-3-1.satellite.png
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"globe/globe-transforms/north-pole"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 200696 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/north-pole.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/north-pole.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/north-pole.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/north-pole FAILED
+	AssertionError: 200696 mismatched pixels, reference image: globe/globe-transforms/north-pole: expected 200696 to be at most 263
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+Edge 150.0.0.0 (Linux x86_64): Executed 7 of 18 (4 FAILED) (0 secs / 8.184 secs)
+Edge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/north-pole FAILED
+	AssertionError: 200696 mismatched pixels, reference image: globe/globe-transforms/north-pole: expected 200696 to be at most 263
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+[1A[2KLOG: 'MBDBG willCensus tall=4 visible=4 parented=4'
+Edge 150.0.0.0 (Linux x86_64): Executed 7 of 18 (4 FAILED) (0 secs / 8.184 secs)
+LOG: 'MBDBG willCensus tall=4 visible=4 parented=4'
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.007,"platform":"web-Edge-150.0.0.0-Linux","name":"globe/globe-transforms/north-pole-padded-dem"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 53472 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/north-pole-padded-dem.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/north-pole-padded-dem.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/north-pole-padded-dem.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/north-pole-padded-dem FAILED
+	AssertionError: 53472 mismatched pixels, reference image: globe/globe-transforms/north-pole-padded-dem: expected 53472 to be at most 459
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+Edge 150.0.0.0 (Linux x86_64): Executed 8 of 18 (5 FAILED) (0 secs / 12.823 secs)
+Edge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/north-pole-padded-dem FAILED
+	AssertionError: 53472 mismatched pixels, reference image: globe/globe-transforms/north-pole-padded-dem: expected 53472 to be at most 459
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+[33m25 08 2026 23:20:26.998:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/0-0--6.satellite.png
+[1A[2KLOG: 'MBDBG willCensus tall=2 visible=2 parented=2'
+Edge 150.0.0.0 (Linux x86_64): Executed 8 of 18 (5 FAILED) (0 secs / 12.823 secs)
+LOG: 'MBDBG willCensus tall=2 visible=2 parented=2'
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"globe/globe-transforms/north-pole-z0"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 58396 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/north-pole-z0.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/north-pole-z0.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/north-pole-z0.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/north-pole-z0 FAILED
+	AssertionError: 58396 mismatched pixels, reference image: globe/globe-transforms/north-pole-z0: expected 58396 to be at most 66
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+Edge 150.0.0.0 (Linux x86_64): Executed 9 of 18 (6 FAILED) (0 secs / 14.188 secs)
+Edge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/north-pole-z0 FAILED
+	AssertionError: 58396 mismatched pixels, reference image: globe/globe-transforms/north-pole-z0: expected 58396 to be at most 66
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+[1A[2KLOG: 'MBDBG willCensus tall=1 visible=1 parented=1'
+Edge 150.0.0.0 (Linux x86_64): Executed 9 of 18 (6 FAILED) (0 secs / 14.188 secs)
+LOG: 'MBDBG willCensus tall=1 visible=1 parented=1'
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.0015,"platform":"web-Edge-150.0.0.0-Linux","name":"globe/globe-transforms/south-pole-padded-dem"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 47284 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/south-pole-padded-dem.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/south-pole-padded-dem.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/south-pole-padded-dem.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/south-pole-padded-dem FAILED
+	AssertionError: 47284 mismatched pixels, reference image: globe/globe-transforms/south-pole-padded-dem: expected 47284 to be at most 99
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+Edge 150.0.0.0 (Linux x86_64): Executed 10 of 18 (7 FAILED) (0 secs / 15.756 secs)
+Edge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/south-pole-padded-dem FAILED
+	AssertionError: 47284 mismatched pixels, reference image: globe/globe-transforms/south-pole-padded-dem: expected 47284 to be at most 99
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+[33m25 08 2026 23:20:29.941:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/0-0-Infinity.satellite.png
+[1A[2KLOG: 'MBDBG willCensus tall=2 visible=2 parented=2'
+Edge 150.0.0.0 (Linux x86_64): Executed 10 of 18 (7 FAILED) (0 secs / 15.756 secs)
+LOG: 'MBDBG willCensus tall=2 visible=2 parented=2'
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"globe/globe-transforms/south-pole-z0"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 56637 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/south-pole-z0.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/south-pole-z0.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-globe/globe-transforms/south-pole-z0.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/south-pole-z0 FAILED
+	AssertionError: 56637 mismatched pixels, reference image: globe/globe-transforms/south-pole-z0: expected 56637 to be at most 66
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+Edge 150.0.0.0 (Linux x86_64): Executed 11 of 18 (8 FAILED) (0 secs / 17.119 secs)
+Edge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility globe/globe-transforms/south-pole-z0 FAILED
+	AssertionError: 56637 mismatched pixels, reference image: globe/globe-transforms/south-pole-z0: expected 56637 to be at most 66
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"imports/config-step-value"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 84 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-imports/config-step-value.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-imports/config-step-value.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-imports/config-step-value.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility imports/config-step-value FAILED
+	AssertionError: 84 mismatched pixels, reference image: imports/config-step-value: expected 84 to be at most 3
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+Edge 150.0.0.0 (Linux x86_64): Executed 12 of 18 (9 FAILED) (0 secs / 17.409 secs)
+Edge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility imports/config-step-value FAILED
+	AssertionError: 84 mismatched pixels, reference image: imports/config-step-value: expected 84 to be at most 3
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+[33m25 08 2026 23:20:31.637:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/11-378-805.terrain.png
+[33m25 08 2026 23:20:31.639:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/11-379-805.terrain.png
+[33m25 08 2026 23:20:31.642:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/11-380-805.terrain.png
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"terrain/cache-invalidation/background-layer"}
+RenderingTestResultServer: /ibct-feedback: result: ok
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/background-layer.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/background-layer.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/background-layer.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64): Executed 13 of 18 (9 FAILED) (0 secs / 22.33 secs)
+[33m25 08 2026 23:20:36.525:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/11-378-805.terrain.png
+[33m25 08 2026 23:20:36.526:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/11-379-805.terrain.png
+[33m25 08 2026 23:20:36.526:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/11-380-805.terrain.png
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"terrain/cache-invalidation/fill-layer-change-color"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 171 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/fill-layer-change-color.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/fill-layer-change-color.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/fill-layer-change-color.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility terrain/cache-invalidation/fill-layer-change-color FAILED
+	AssertionError: 171 mismatched pixels, reference image: terrain/cache-invalidation/fill-layer-change-color: expected 171 to be at most 66
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+Edge 150.0.0.0 (Linux x86_64): Executed 14 of 18 (10 FAILED) (0 secs / 27.247 secs)
+Edge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility terrain/cache-invalidation/fill-layer-change-color FAILED
+	AssertionError: 171 mismatched pixels, reference image: terrain/cache-invalidation/fill-layer-change-color: expected 171 to be at most 66
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+[33m25 08 2026 23:20:41.447:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/11-378-805.terrain.png
+[33m25 08 2026 23:20:41.448:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/11-379-805.terrain.png
+[33m25 08 2026 23:20:41.448:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/11-380-805.terrain.png
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"terrain/cache-invalidation/hide-layer"}
+RenderingTestResultServer: /ibct-feedback: result: ok
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/hide-layer.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/hide-layer.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/hide-layer.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64): Executed 15 of 18 (10 FAILED) (0 secs / 32.172 secs)
+[1A[2KWARN: 'Layer out of range, resetting to 2'
+Edge 150.0.0.0 (Linux x86_64): Executed 15 of 18 (10 FAILED) (0 secs / 32.172 secs)
+WARN: 'Layer out of range, resetting to 2'
+[33m25 08 2026 23:20:46.368:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/terrain-buffer-0/11-378-805.png
+[33m25 08 2026 23:20:46.369:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/terrain-buffer-0/11-379-805.png
+[33m25 08 2026 23:20:46.370:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/terrain-buffer-0/11-380-805.png
+[1A[2KERROR: 'THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+Edge 150.0.0.0 (Linux x86_64): Executed 15 of 18 (10 FAILED) (0 secs / 32.172 secs)
+ERROR: 'THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+[1A[2KERROR: 'THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+Edge 150.0.0.0 (Linux x86_64): Executed 15 of 18 (10 FAILED) (0 secs / 32.172 secs)
+ERROR: 'THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+[1A[2KERROR: 'THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+Edge 150.0.0.0 (Linux x86_64): Executed 15 of 18 (10 FAILED) (0 secs / 32.172 secs)
+ERROR: 'THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+[1A[2KERROR: 'THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+Edge 150.0.0.0 (Linux x86_64): Executed 15 of 18 (10 FAILED) (0 secs / 32.172 secs)
+ERROR: 'THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+[1A[2KERROR: 'THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+Edge 150.0.0.0 (Linux x86_64): Executed 15 of 18 (10 FAILED) (0 secs / 32.172 secs)
+ERROR: 'THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"terrain/cache-invalidation/hillshade-shared"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 9939 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/hillshade-shared.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/hillshade-shared.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/hillshade-shared.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility terrain/cache-invalidation/hillshade-shared FAILED
+	AssertionError: 9939 mismatched pixels, reference image: terrain/cache-invalidation/hillshade-shared: expected 9939 to be at most 66
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+Edge 150.0.0.0 (Linux x86_64): Executed 16 of 18 (11 FAILED) (0 secs / 36.69 secs)
+Edge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility terrain/cache-invalidation/hillshade-shared FAILED
+	AssertionError: 9939 mismatched pixels, reference image: terrain/cache-invalidation/hillshade-shared: expected 9939 to be at most 66
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+[33m25 08 2026 23:20:50.881:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/terrain-buffer-0/11-378-805.png
+[33m25 08 2026 23:20:50.882:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/terrain-buffer-0/11-379-805.png
+[33m25 08 2026 23:20:50.883:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/terrain-buffer-0/11-380-805.png
+[1A[2KERROR: 'THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+Edge 150.0.0.0 (Linux x86_64): Executed 16 of 18 (11 FAILED) (0 secs / 36.69 secs)
+ERROR: 'THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+[1A[2KERROR: 'THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+Edge 150.0.0.0 (Linux x86_64): Executed 16 of 18 (11 FAILED) (0 secs / 36.69 secs)
+ERROR: 'THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Material Name: 
+Material Type: MeshBasicMaterial
+
+Program Info Log: Fragment shader is not compiled.
+ 
+
+FRAGMENT
+
+ERROR: 0:480: 'vUv' : undeclared identifier
+ERROR: 0:480: 'mbDemUv' : no matching overloaded function found
+ERROR: 0:480: '=' : dimension mismatch
+ERROR: 0:480: '=' : cannot convert from 'const mediump float' to 'highp 2-component vector of float'
+ 
+
+  475: #endif
+  476: #ifdef USE_TRANSMISSION
+  477: diffuseColor.a *= material.transmissionAlpha;
+  478: #endif
+  479: gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+> 480:                      vec2 mbUv = mbDemUv(vUv);
+  481:                      float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
+  482:                      float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
+  483:                      float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
+  484:                      float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
+  485:                      vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
+  486:                      vec3 mbLight=normalize(vec3(0.7,0.7,1.0));'
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"terrain/cache-invalidation/remove-layer"}
+RenderingTestResultServer: /ibct-feedback: result: ok
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/remove-layer.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/remove-layer.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/remove-layer.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64): Executed 17 of 18 (11 FAILED) (0 secs / 41.242 secs)
+[33m25 08 2026 23:20:55.438:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/11-379-805.terrain.png
+[33m25 08 2026 23:20:55.439:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/11-378-805.terrain.png
+[33m25 08 2026 23:20:55.441:WARN [web-server]: [39m404: /base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/11-380-805.terrain.png
+RenderingTestResultServer: received results for {"module":"mbstyle-render","imageThreshold":0.001,"platform":"web-Edge-150.0.0.0-Linux","name":"terrain/cache-invalidation/show-layer"}
+RenderingTestResultServer: /ibct-feedback: result: failed: 173 wrong pixels
+RenderingTestResultServer: writing current image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/show-layer.current.png
+RenderingTestResultServer: writing diff image: rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/show-layer.diff.png
+RenderingTestResultServer: writing report rendering-test-results/mbstyle-s418-pre5/web-Edge-150.0.0.0-Linux/mbstyle-render-terrain/cache-invalidation/show-layer.ibct-result.json
+[1A[2KEdge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility terrain/cache-invalidation/show-layer FAILED
+	AssertionError: 173 mismatched pixels, reference image: terrain/cache-invalidation/show-layer: expected 173 to be at most 66
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+Edge 150.0.0.0 (Linux x86_64): Executed 18 of 18 (12 FAILED) (0 secs / 46.589 secs)
+Edge 150.0.0.0 (Linux x86_64) MBStyleDataSource render-tests compatibility terrain/cache-invalidation/show-layer FAILED
+	AssertionError: 173 mismatched pixels, reference image: terrain/cache-invalidation/show-layer: expected 173 to be at most 66
+	    at RenderingTestHelper.<anonymous> (/tmp/_karma_webpack_880717/commons.js:61121:54)
+	    at Generator.next (<anonymous>)
+	    at fulfilled (/tmp/_karma_webpack_880717/commons.js:61009:58)
+[1A[2KEdge 150.0.0.0 (Linux x86_64): Executed 18 of 18 (12 FAILED) (46.611 secs / 46.589 secs)
+TOTAL: 12 FAILED, 6 SUCCESS
+TOTAL: 12 FAILED, 6 SUCCESS
+Handlebars: Access has been denied to resolve the property "statements" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+Handlebars: Access has been denied to resolve the property "branches" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+Handlebars: Access has been denied to resolve the property "functions" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+Handlebars: Access has been denied to resolve the property "lines" because it is not an "own property" of its parent.
+You can add a runtime option to disable the check or this warning:
+See https://handlebarsjs.com/api-reference/runtime-options.html#options-to-control-prototype-access for details
+
+=============================== Coverage summary ===============================
+Statements   : Unknown% ( 0/0 )
+Branches     : Unknown% ( 0/0 )
+Functions    : Unknown% ( 0/0 )
+Lines        : Unknown% ( 0/0 )
+================================================================================
+
+=== Summary: 6 passed, 12 failed ===
+  FAIL globe/globe-transforms/high-lat-high-lng (193417 mismatched pixels)
+  FAIL globe/globe-transforms/low-lat-low-lng (193037 mismatched pixels)
+  FAIL globe/globe-transforms/mid-lat-mid-lng (192638 mismatched pixels)
+  FAIL globe/globe-transforms/north-pole-padded-dem (53472 mismatched pixels)
+  FAIL globe/globe-transforms/north-pole-z0 (58396 mismatched pixels)
+  FAIL globe/globe-transforms/north-pole (200696 mismatched pixels)
+  FAIL globe/globe-transforms/south-pole-padded-dem (47284 mismatched pixels)
+  FAIL globe/globe-transforms/south-pole-z0 (56637 mismatched pixels)
+  FAIL imports/config-step-value (84 mismatched pixels)
+  FAIL terrain/cache-invalidation/fill-layer-change-color (171 mismatched pixels)
+  FAIL terrain/cache-invalidation/hillshade-shared (9939 mismatched pixels)
+  FAIL terrain/cache-invalidation/show-layer (173 mismatched pixels)
+
+=== Render-test evaluation complete ===
+Results saved to: rendering-test-results/mbstyle-s418-pre5
+Open the HTML report:  http://localhost:8099/ibct-report
+(press Ctrl-C to stop the result server)

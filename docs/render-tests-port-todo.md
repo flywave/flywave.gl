@@ -4936,3 +4936,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验收**：目标 5 例（#6655/#8026/#4172/#9518/#2769）全 PASS；regressions 全族 A/B **50→55**（新增 #6655/#7357/#4144/#4146/#8460——**#7357 的"8px 圆边缘 AA"定性翻案：实为 4× 叠画暗化**），零回归；geojson 全族 45 例基线 18 通过零回归；runtime-styling 191 例基线 100 通过零回归。
 - **连带定性修正**：§412 记档的 #7357 亚像素 AA 归因作废（叠画域）；瓦片边界过滤影响全部 geojson fixture（历史不可见重复消除）。
 - **终态**：MBStyleDataSource（filterFeaturesToTile + 双 provider 接线）+ Tile.ts（clear 脱离），tsc 绿（datasource+mapview 双包），随记档提交。
+
+**§418. 叠画消除后全量基线复测（10 批，841 例覆盖）——连带着净增约 +40 翻盘，唯一真回归=circle-sort-key/cross-tile-sort（暴露跨瓦片全局排序缺失）；baseline6 落盘（2026-08-25 三百一十）**：
+
+- **方法**：chunked runner 按族分批（每类 40-60s 限时、外层 175s kill 保护），覆盖 baseline5 全部 66 个族 + regressions/geojson/runtime-styling 本日已验族；全部疑似回归逐一用 `git checkout 655b3527 -- <§417 两文件>` 做真 A/B（工作树干净时 `git stash` 会误弹历史遗留 stash——本日一次误弹已恢复，方法论：干净树上 A/B 一律用 checkout 单文件回退）。
+- **结果**：841 例中 **301 PASS** 落盘 `baseline6-pass.txt`。叠画消除连带翻盘（不在 baseline5 的新通过）约 **+40**：combinations 全族 +28（透明/不透明组合序因重复消除而正确）、circle-opacity/blending、feature-state/change-brightness、lighting-3d-mode/background/opacity、appearance/paint-icon-and-text、heatmap-radius/antimeridian、remove-feature-state/vector-source 等。
+- **A/B 定责（19 例 baseline5 流失）**：18 例在 §417 前代码同样失败（**基线陈旧/浏览器壳漂移**，与 §402/§412 同一现象，含 circle-opacity/literal、fill-extrusion-color 三例、camera/fov-default、text-rotation-alignment 三例、line-sort-key、symbol-translucent--background-opaque 等）；**唯一真回归 = circle-sort-key/cross-tile-sort（481px）**。
+- **cross-tile-sort 定性**：fixture 六点跨瓦片边界（lng ±0.2 跨 z5 瓦片列），重叠圆需按 sort-key **全局**排序；此前双瓦片重复渲染使每瓦片内含全部 6 点、瓦片内排序偶然等价于全局序（侥幸通过），去重后暴露引擎 **tile-by-tile 渲染无跨瓦片全局 sort**——mgl 语义为 translucent pass 全局 circle-sort-key。修复需对象级全局 renderOrder 排序（sortKey 全局归一），工程记档为独立任务。
+- **终态**：`baseline6-pass.txt`（301 例）+ 本记档提交；§417 净账 = +40 连带翻盘 − 1 真回归。
