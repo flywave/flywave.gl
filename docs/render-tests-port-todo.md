@@ -4501,3 +4501,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **flaky 教训**：多轮 "Executed 0 of 1 / No test results" 的 current.png 是陈旧拷贝——红像素计数必须以 Executed 确认有效运行的轮次为准（§174/§183 陷阱再犯，已记档）。
 - **下会话单点（二分续）**：①renderer.info.drawCalls 打点确认 precip 对象是否产生 draw call；②若无 draw call→TileObjectsRenderer/渲染列表深层门控（对照 §336）；③若有 draw call→GLSL 注入打样（fragment 里输出 debug 色）定位分支未编译原因（候选：onBeforeCompile 链序、material 版本）。
 - **终态**：TEMP 全清（红 ramp/depthTest/fallback）、基线复现 28753/10525 ✓、工作树=提交态。
+
+**§361. raster-array 二分续——draw call 确证（364 次）+ stencil/强制红全排除 + 几何破案：mrt 四边形=Z2 祖先尺寸（4× 错位）（2026-08-25 二百五十二，二分续记档）**：
+
+- **draw call 确证**：材质 onBeforeRender 打点（每次 draw 触发）——**MRT-DRAW 364 次**（有效执行轮）——材质确实在绘制，渲染列表门控（§336 方向）排除。
+- **stencil/强制红排除**：①材质 stencilWrite=false/Always——28753 不变（瓦片 stencil 假设排除）；②fragment 强制 `mbR=红/alpha=1`——**仍 28753 逐位不变**——注入 program 之外的片元级丢弃。
+- **几何破案【根因定位】**：mrt 对象几何 bbox=±2504689m（**z2 全瓦片尺寸**，z3 请求应为 ±626km）——**mglLodLevel 把 z3 请求降层 z2 后 buildFeature 以 z2 足迹建面**（4× 尺寸错位），四边形几何与瓦片位置错配 → 不覆盖预期屏幕区。卫星四边形不受影响（其 mglLodLevel 判定不同）。修复方向（下会话单点）：demote 后仍以**请求层足迹**建四边形（纹理从祖先取、uv 子矩形），即 buildFeature 的 zz 用 zReq 而非 demoted z（与引擎 z15/z16 混合集语义一致）；随后重试 source-layer fallback（§359）配 unbound-ramp 黑语义。
+- **终态**：TEMP 全清（draw/stencil/强制红/几何探针/fallback/签名改动）、基线复现 28753/10525 ✓、工作树=提交态。
