@@ -4632,3 +4632,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **强修复尝试（无效）**：URL 键 array 参数注册表（attach 时 texture 丢 flag 也能强制 array 公式+uniform）+ mix×255——**仍 21560 恒定**。结合全部证据，最终未解矛盾=**绘制的材质可能根本不含我们的 RASTER_COLOR 注入**（哨兵绿那代≠常驻渲染代）。
 - **下会话（换新会话清醒打法）**：onBeforeRender（draw 时）触发时 dump **该材质 uuid 对应的最终 fragment shader 全文**（uuid 关联消除多代歧义）——一次运行定谳"绘制 program 里到底有没有 array 分支"；有→单步值打印；无→追踪该材质 attach 链断裂点。
 - **终态**：全部实验回退（mix×255/注册表/哨兵）、基线复现 21560/6112 ✓、工作树=提交态。raster-array 残案跨 §358–§377 二十轮，六项修复已入库（整族净改善 25.8k），最后一环需 uuid 关联的 shader 全文取证（方法已定档）。
+
+**§378. uuid 关联取证定谳——绘制的 3 个材质 shader 全含 array 分支（arrUv/ramp/opaqueFrag 全 true）+ mix×255 第三次干净验证仍零变化：矛盾不可调和，残案挂起（2026-08-25 二百七十）**：
+
+- **uuid 取证【定谳】**：compile 时 uuid→fragment 映射 + draw 时打印——前 3 个绘制材质的最终 shader **全部含 mbArrUv/uMBRasRamp/opaque_fragment** ✓（分支在绘制 program 里确凿）。
+- **不可调和矛盾**：原 mix（归一化 dot≈1.7 vs offset −100000）下"全红"是数学必然；mix×255（dot≈100000→rcT≈0.4→绿）三次干净运行（清端口/清缓存/新目录）**均零像素变化**——两者不可同真。剩余解释候选：①绘制探针仅采样前 3 draw，红源材质（else 分支代）未被采样；②同 URL 多纹理对象（每代 patch 各自异步解码创建，attach 绑定各自纹理，缓存覆盖不影响已绑定 uniform）；③rcT 之后另有变色环节。
+- **残案挂起【决策】**：raster-array 残差（default 21560）跨 §358–§378 二十一轮、本会话累计 5+ 小时——六项修复已入库（整族净改善 25.8k、96% 覆盖），最后一环的取证成本已超边际收益。**挂起转 F13 text 精度域（258 用例解锁面更大）**；raster-array 终局取证（全量 draw 采样 + 纹理对象唯一化）记档为后续会话项。
+- **终态**：全部实验回退、基线复现 21560 ✓、工作树=提交态。
