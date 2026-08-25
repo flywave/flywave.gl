@@ -4944,3 +4944,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **A/B 定责（19 例 baseline5 流失）**：18 例在 §417 前代码同样失败（**基线陈旧/浏览器壳漂移**，与 §402/§412 同一现象，含 circle-opacity/literal、fill-extrusion-color 三例、camera/fov-default、text-rotation-alignment 三例、line-sort-key、symbol-translucent--background-opaque 等）；**唯一真回归 = circle-sort-key/cross-tile-sort（481px）**。
 - **cross-tile-sort 定性**：fixture 六点跨瓦片边界（lng ±0.2 跨 z5 瓦片列），重叠圆需按 sort-key **全局**排序；此前双瓦片重复渲染使每瓦片内含全部 6 点、瓦片内排序偶然等价于全局序（侥幸通过），去重后暴露引擎 **tile-by-tile 渲染无跨瓦片全局 sort**——mgl 语义为 translucent pass 全局 circle-sort-key。修复需对象级全局 renderOrder 排序（sortKey 全局归一），工程记档为独立任务。
 - **终态**：`baseline6-pass.txt`（301 例）+ 本记档提交；§417 净账 = +40 连带翻盘 − 1 真回归。
+
+**§419. cross-tile-sort 回归收口——sort-key 层点保留跨瓦片重复（组合学等价 mgl 全局序）：filterFeaturesToTile 增 keepPointsEverywhere 通道 + Composite 内联过滤重构为共享函数（2026-08-25 三百一十一）**：
+
+- **方案（代码分析定案）**：mgl 对 translucent pass 按 *-sort-key 全局排序；我们 tile-by-tile 渲染无法逐 feature 跨对象排序。但**点重复 + 瓦片内全局排序在组合学上等价全局序**——每对特征至少共存于最后绘制的瓦片（重复时每个瓦片含全量点且内部按全局序排列），最终合成必含每对的正确相对顺序。故仅对**含 circle/symbol-sort-key 的样式**保留点跨瓦片重复，其余样式维持 §417 去重（透明叠画修复不回退）。
+- **实现**：`filterFeaturesToTile(fc, tileKey, keepPointsEverywhere?)` 增通道（Point/MultiPoint 直通）；GeoJSONDataProvider 构造项 `keepPointsEverywhere`；数据源建 provider 时扫 `layout['circle-sort-key'|'symbol-sort-key']` 置样式级旗标 `s_keepPointsForSortKey`；CompositeGeoDataProvider 的 §417 内联过滤重构为共享函数调用（单一语义源）。
+- **验收**：circle-sort-key/cross-tile-sort **PASS**；守卫 #6655/#8026 + 透明 combinations 2 例全过（去重收益未回退）；sort-key 族其余 13 例为 §418 已证基线陈旧/前存失败（long-key-values 系 pre-§417 同败）。
+- **边界注记**：sort-key + 半透明 + 跨瓦片三条件同时满足时叠画仍会重现（理论残余，当前 fixture 集无此组合；真解仍是逐 feature 全局 renderOrder，维持 §418 工程记档）。
+- **终态**：MBStyleDataSource 单文件，tsc 绿，随记档提交。

@@ -481,7 +481,10 @@ class HillshadeTileDataProvider extends DataProvider {
  * (invisible with opaque paints, exposed by circle-opacity 0.5, #6655).
  * Lines/polygons stay in every intersecting tile (clipped at render, like vt).
  */
-function filterFeaturesToTile(fc: any, tileKey: any): any {
+/** Style-level: any layer uses a *-sort-key paint (points stay in all tiles). */
+let s_keepPointsForSortKey = false;
+
+function filterFeaturesToTile(fc: any, tileKey: any, keepPointsEverywhere?: boolean): any {
     if (!fc || typeof fc !== 'object') return fc;
     // Normalize bare Feature / bare geometry into a FeatureCollection (the
     // decoder does the same at decode time — normalizeGeoJson).
@@ -531,6 +534,16 @@ function filterFeaturesToTile(fc: any, tileKey: any): any {
     const out: any[] = [];
     for (let f of fc.features) {
         const geomType = f?.geometry?.type;
+        if (keepPointsEverywhere && (geomType === 'Point' || geomType === 'MultiPoint')) {
+            // Layers with a *-sort-key paint need every point in every tile:
+            // per-tile draw order is globally sorted, so duplicating points
+            // across adjacent tiles is compositionally equivalent to mgl's
+            // global translucent sort (every pair is ordered correctly in
+            // whichever tile draws last). Deduplicating instead would order
+            // pairs by tile draw order (cross-tile-sort regression, §418).
+            out.push(f);
+            continue;
+        }
         if (geomType === 'Point') {
             const [x, y] = f.geometry.coordinates;
             if (!pointInTile(x, y)) continue;
@@ -575,12 +588,15 @@ class GeoJSONDataProvider extends DataProvider {
      * aggregator (`['+']`, `['max']`, `['min']`, etc.) combines the values.
      */
     private m_clusterProperties: Record<string, any> = {};
+    /** See filterFeaturesToTile — keep points in every adjacent tile. */
+    private m_keepPointsEverywhere = false;
 
     constructor(data: any, clusterOpts?: {
         cluster?: boolean;
         clusterRadius?: number;
         clusterMaxZoom?: number;
         clusterProperties?: Record<string, any>;
+        keepPointsEverywhere?: boolean;
     }) {
         super();
         this.m_geoJsonData = typeof data === 'string' ? data : JSON.stringify(data);
@@ -589,6 +605,7 @@ class GeoJSONDataProvider extends DataProvider {
             this.m_clusterRadius = clusterOpts.clusterRadius ?? 50;
             this.m_clusterMaxZoom = clusterOpts.clusterMaxZoom ?? 16;
             this.m_clusterProperties = clusterOpts.clusterProperties ?? {};
+            this.m_keepPointsEverywhere = clusterOpts.keepPointsEverywhere === true;
         }
     }
 
@@ -599,7 +616,9 @@ class GeoJSONDataProvider extends DataProvider {
             // Per-tile bounds filtering (see filterFeaturesToTile) — the raw
             // payload would repeat every point across all adjacent tiles.
             try {
-                return JSON.stringify(filterFeaturesToTile(JSON.parse(this.m_geoJsonData), tileKey));
+                return JSON.stringify(
+                    filterFeaturesToTile(JSON.parse(this.m_geoJsonData), tileKey, this.m_keepPointsEverywhere)
+                );
             } catch {
                 return this.m_geoJsonData;
             }
@@ -832,58 +851,10 @@ class CompositeGeoDataProvider extends DataProvider {
             if (!fc || !Array.isArray(fc.features)) {
                 continue;
             }
-            // Tile-bounds filtering (mgl geojson-vt semantics): a point
-            // exactly on a tile corner must render ONCE, not once per
-            // adjacent tile — without this, low-zoom views show the same
-            // feature stacked 4× (invisible with opaque paints, exposed by
-            // circle-opacity 0.5, regressions/mapbox-gl-js#6655).
-            const n = Math.pow(2, tileKey.level);
-            const west = (tileKey.column / n) * 360 - 180;
-            const east = ((tileKey.column + 1) / n) * 360 - 180;
-            const latAtY = (y: number) => {
-                const r = Math.PI * (1 - 2 * y);
-                return (180 / Math.PI) * Math.atan(Math.sinh(r));
-            };
-            const north = latAtY(tileKey.row / n);
-            const south = latAtY((tileKey.row + 1) / n);
-            const lng = (v: number) => ((((v + 180) % 360) + 360) % 360) - 180;
-            const pointInTile = (x: number, y: number): boolean => {
-                const lx = lng(x);
-                // Half-open [west, east) × (south, north]: every point maps
-                // to exactly one tile across the whole grid.
-                return lx >= west && lx < east && y <= north && y > south;
-            };
-            const geomBbox = (g: any): [number, number, number, number] | null => {
-                let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
-                const visit = (coords: any) => {
-                    if (!Array.isArray(coords)) return;
-                    if (typeof coords[0] === 'number' && typeof coords[1] === 'number') {
-                        minLng = Math.min(minLng, lng(coords[0])); maxLng = Math.max(maxLng, lng(coords[0]));
-                        minLat = Math.min(minLat, coords[1]); maxLat = Math.max(maxLat, coords[1]);
-                        return;
-                    }
-                    for (const c of coords) visit(c);
-                };
-                visit(g?.coordinates ?? g);
-                return minLng === Infinity ? null : [minLng, minLat, maxLng, maxLat];
-            };
+            // Tile-bounds filtering — shared semantics, see
+            // filterFeaturesToTile (point dedup + sort-key opt-out).
+            filterFeaturesToTile(fc, tileKey, s_keepPointsForSortKey);
             for (const f of fc.features) {
-                const geomType = f?.geometry?.type;
-                if (geomType === 'Point') {
-                    const [x, y] = f.geometry.coordinates;
-                    if (!pointInTile(x, y)) continue;
-                } else if (geomType === 'MultiPoint') {
-                    const pts = (f.geometry.coordinates as number[][]).filter(p => pointInTile(p[0], p[1]));
-                    if (pts.length === 0) continue;
-                    if (pts.length < (f.geometry.coordinates as number[][]).length) {
-                        f.geometry = { ...f.geometry, coordinates: pts };
-                    }
-                } else if (geomType) {
-                    const bbox = geomBbox(f.geometry);
-                    if (!bbox || bbox[0] > east || bbox[2] < west || bbox[3] < south || bbox[1] > north) {
-                        continue;
-                    }
-                }
                 features.push({
                     ...f,
                     properties: { ...(f.properties ?? {}), _sourceId: sourceId },
@@ -1180,6 +1151,10 @@ export class MBStyleDataSource extends TileDataSource {
         }
 
         // No vector source: combine every GeoJSON-format source.
+        const hasPointSortKeyLayer = ((style.layers ?? []) as any[]).some(l =>
+            l?.layout?.['circle-sort-key'] !== undefined ||
+            l?.layout?.['symbol-sort-key'] !== undefined);
+        s_keepPointsForSortKey = hasPointSortKeyLayer;
         const composite = new CompositeGeoDataProvider();
         let currentSourceId = '';
         let hasRasterSource = false;
@@ -1202,6 +1177,7 @@ export class MBStyleDataSource extends TileDataSource {
                         clusterRadius: geoJsonSpec.clusterRadius,
                         clusterMaxZoom: geoJsonSpec.clusterMaxZoom,
                         clusterProperties: (geoJsonSpec as any).clusterProperties,
+                        keepPointsEverywhere: hasPointSortKeyLayer,
                     }));
                     if (!currentSourceId) currentSourceId = sourceId;
                 }
