@@ -339,13 +339,9 @@ function breakOverlongWord(
 /**
  * Justify a line of text within available width.
  *
- * For `justify: 'auto'`, the effective direction depends on the text-anchor:
- *   - 'left' anchor → text is right-justified (grows away from anchor)
- *   - 'right' anchor → text is left-justified
- *   - center/top/bottom anchors → text is centered
- *
- * This is the mapbox "binary justify" behavior where `auto` doesn't always
- * center — it follows the anchor direction.
+ * For `justify: 'auto'`, mgl resolves by the anchor's OWN direction
+ * (getAnchorJustification): left anchors left-justify, right anchors
+ * right-justify, everything else centers.
  */
 export function getJustifyOffset(
     lineWidth: number,
@@ -356,17 +352,22 @@ export function getJustifyOffset(
     const extra = availableWidth - lineWidth;
     let effective = justify;
     if (justify === 'auto') {
-        // Resolve auto based on anchor direction.
+        // mgl semantics: 'auto' resolves via getAnchorJustification
+        // (symbol_layout_shared.ts) — SAME-direction (a left anchor
+        // LEFT-justifies so the text grows right of the anchor, combined
+        // with align's shiftX = (justify − hAlign)·maxLineLength), and
+        // centers for non-horizontal anchors / plain shaping (shaping's
+        // justify ternary maps anything but left/right to 0.5).
         switch (anchor) {
             case 'left':
             case 'top-left':
             case 'bottom-left':
-                effective = 'right';
+                effective = 'left';
                 break;
             case 'right':
             case 'top-right':
             case 'bottom-right':
-                effective = 'left';
+                effective = 'right';
                 break;
             default:
                 effective = 'center';

@@ -4639,3 +4639,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **不可调和矛盾**：原 mix（归一化 dot≈1.7 vs offset −100000）下"全红"是数学必然；mix×255（dot≈100000→rcT≈0.4→绿）三次干净运行（清端口/清缓存/新目录）**均零像素变化**——两者不可同真。剩余解释候选：①绘制探针仅采样前 3 draw，红源材质（else 分支代）未被采样；②同 URL 多纹理对象（每代 patch 各自异步解码创建，attach 绑定各自纹理，缓存覆盖不影响已绑定 uniform）；③rcT 之后另有变色环节。
 - **残案挂起【决策】**：raster-array 残差（default 21560）跨 §358–§378 二十一轮、本会话累计 5+ 小时——六项修复已入库（整族净改善 25.8k、96% 覆盖），最后一环的取证成本已超边际收益。**挂起转 F13 text 精度域（258 用例解锁面更大）**；raster-array 终局取证（全量 draw 采样 + 纹理对象唯一化）记档为后续会话项。
 - **终态**：全部实验回退、基线复现 21560 ✓、工作树=提交态。
+
+**§379. F13 转战首批——justify 'auto' 方向纠错入库（mgl getAnchorJustification 同向，我们原反向）+ text-anchor/justify 单变量基线建立（2026-08-25 二百七十一）**：
+
+- **静态对拍（mgl 源码级差异）**：mgl `getAnchorJustification`（symbol_layout_shared.ts:150）为**同向**——left 锚系→'left' 对齐（文本在锚右侧生长，配合 align 的 shiftX=(justify−hAlign)·maxLen）、非水平锚→center（shaping 的三元映射非 left/right 恒 0.5）；我们原实现**反向**（left 锚→right 对齐）。修复入库（TextShaping.getJustifyOffset）。
+- **单变量验证（清缓存双跑，基线首次建立）**：text-anchor/justify 两域 15 例——**净 −12**（left −49/right/top-right/top-left 改善，top +44/bottom-left 微升）——语义正确方向、视觉量级持平（anchor 定位主导、justify 仅影响多行）。基线数值入库（bottom-left 10361/bottom-right 10743/center 10323/left 15117/top 11471/top-left 16531/top-right 17902/bottom 2067/property-function 962/line-symbol-with-text 4713 + justify 系）。
+- **F13 后续静态差异清单（下会话攒批）**：①字形基线精度（mgl per-line lineHeight·lineMaxScale 变高行 vs 我们固定 lineHeightEm）；②shaping.top/bottom 语义（−vAlign·height）；③vertical placement 的 left 对齐特例（symbol_layout 注释）；④getAnchorOffset 表 vs mgl align 组合的等价性验证（水平已证等价、垂直锚 top/bottom 待像素验证——bottom 2067 最近失提示垂直锚已接近）。
+- **终态**：justify 语义修复入库、text-anchor/justify 基线入库、工作树=提交态+修复。
