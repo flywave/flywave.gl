@@ -4719,3 +4719,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **§389 修正**："0.15 折叠标定"前提作废——地面雾**根未生效**，我们看到的渐变全来自 dome（天空侧），mgl 期望的白行=背景瓦片雾（fog_apply on draw_background）。§244 注释声称的 bg 四边形 mgl 雾公式路径未覆盖此 fixture（该路径可能仅 raster 材质 `MB_RASTER_MGL_FOG` 生效，fill/background 材质未挂 USE_FOG+chunk）。
 - **下会话单点**：背景四边形（fill 材质）挂接 fog chunk（USE_FOG 或注入与 raster 同款 MB_RASTER_MGL_FOG 分支）——一处材质接线 + fog 域复测（预期连带修复 star-intensity 84 同族）。
 - **终态**：探针回退、工作树=提交态。
+
+**§391. 背景材质 fog 接线实验（material.fog=true 重编译）——零像素变化：material.fog 已为 true 或 USE_FOG 仍缺席，接线断点在更上游（2026-08-25 二百八十三）**：
+
+- **实验**：patchTile 时若 `_mbBgTile` 且 material.fog===false 且 scene.fog 已存在 → fog=true+needsUpdate——**fog 域 16/70 与 space-color 剖面逐位不变**（y0.4 仍 (245,245,220)）。已回退。
+- **推断**：断点不在 material.fog 旗标（或旗标本就 true）——USE_FOG 缺席的来源需上溯：①TileGeometryCreator createMaterial 的 `fog: scene.fog !== null` 在材质创建时锁定且 three 的 fog 旗标重编译路径未生效；②或 bg 四边形材质类型（MapMeshBasicMaterial）不含 fog chunk include；③或 scene.fog 在整个 tile 生命期为 null（§879 的 m_scene.fog 赋值时序/条件未满足此 fixture）。下会话首查：探针轮复跑确认 material.fog/scene.fog 运行时值 + 该材质 fragment 是否含 `#include <fog_fragment>`。
+- **终态**：实验回退、工作树=提交态。
