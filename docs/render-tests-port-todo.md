@@ -4646,3 +4646,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **单变量验证（清缓存双跑，基线首次建立）**：text-anchor/justify 两域 15 例——**净 −12**（left −49/right/top-right/top-left 改善，top +44/bottom-left 微升）——语义正确方向、视觉量级持平（anchor 定位主导、justify 仅影响多行）。基线数值入库（bottom-left 10361/bottom-right 10743/center 10323/left 15117/top 11471/top-left 16531/top-right 17902/bottom 2067/property-function 962/line-symbol-with-text 4713 + justify 系）。
 - **F13 后续静态差异清单（下会话攒批）**：①字形基线精度（mgl per-line lineHeight·lineMaxScale 变高行 vs 我们固定 lineHeightEm）；②shaping.top/bottom 语义（−vAlign·height）；③vertical placement 的 left 对齐特例（symbol_layout 注释）；④getAnchorOffset 表 vs mgl align 组合的等价性验证（水平已证等价、垂直锚 top/bottom 待像素验证——bottom 2067 最近失提示垂直锚已接近）。
 - **终态**：justify 语义修复入库、text-anchor/justify 基线入库、工作树=提交态+修复。
+
+**§380. F13 第二批取证——text-anchor/bottom 2067 定性=字形 AA 边缘精度（非放置错位）：F13 域重定性，放置链对齐完成（2026-08-25 二百七十二）**：
+
+- **bottom 像素取证**：差异 2067 px 全为散射 '+'（无主导位移块）——主导对 (255,255,255)vs(0,0,0)（AA 边缘）、(246,250,253)vs(236,236,236)（±1-2 值字形边缘）——**放置/锚/对齐链已正确**，残差=SDF 亚像素抗锯齿精度（F13 文档既有定性：需 TextCanvas 顶点格式改造的深水区）。
+- **F13 域重定性**：§379 justify 语义修复 + 本轮取证 → **text-anchor 放置链（justify/anchor offset/垂直基线）对齐完成**；剩余两支：①SDF AA 精度（bottom 2067 系，全 258 用例的共同近失源）；②§379 清单的 per-line 变高行（仅影响 formatted 多行变尺寸用例）。**下会话 ROI**：SDF AA = text 域最大解锁面，但工程深（TextCanvas 顶点/SDF gamma）；per-line 变高行=中等工程。建议下会话以 SDF AA 取证开题（gamma/边缘斜率对拍 mgl text.fragment.glsl 的 u_gamma 与 SDF 阈值）。
+- **并行顺位**：raster-array 终局取证（全量 draw 采样+纹理对象唯一化）、error-overlap RTT 合成长线——均按记档待新会话。
+- **终态**：零代码变更（§379 修复已入库）、工作树=提交态。
