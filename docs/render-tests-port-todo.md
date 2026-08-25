@@ -4485,3 +4485,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **第二层【缺口定位，回退】**：层匹配 evaluate 需要 `source-layer`（precipitations 层为 'Total Precip'），而组合源 provider 要素走 GeoJSON 适配器传 ''——`bySL.get('')` 空 → matched=0 → 层被丢。实验 fallback（provider 要素匹配该源全部 source-layer）：**层开始渲染**（MRT-PROBE enter×8 / ok×6：2-3-1.mrt 514×514 band 纹理解码附着成功）——但 default 输出逐位不变（层渲染贡献不可见=RASTER_ARRAY shader 值域/uv 问题），no-raster-color 10525→63630 劣化（unbound-ramp 黑语义未对齐）。fallback 已回退（无净收益+回归风险）。
 - **下会话单点**：①source-layer fallback 的**正确层选择**语义（mgl：raster-array 层按 source-layer 选 band——loadRasterArrayTexture 已读 sourceLayer，匹配应传层 id 而非 concat 全部）；②raster-array 渲染贡献不可见的 shader 取证（RASTER_ARRAY 分支 rcT/ramp/uMBArr* 逐值打点 vs 期望 (192,2,4) 渐变）；③no-raster-color 的 unbound-ramp 黑（§824 已有 1×1 黑 DataTexture 路径，未触发原因待查）。
 - **终态**：源接线修复入库（零行为差）、fallback/探针全清、raster-array+raster 族基线复现 ✓、工作树=提交态+接线修复。
+
+**§359. raster-array 三单点执行——band 解码健康离线确证 + alpha=数据字节根因修复（入库）+ 不可见性收敛到最后唯一嫌疑=ramp/rcCol 路径（2026-08-25 二百五十）**：
+
+- **②band 值域离线取证（不占 karma）**：vendor mrt.js 离线解码 2-3-1.mrt——'Total Precip' 层、tileSize 512/buffer 1/scale 0.1/offset −100000，264196 纹元中 nodata 233408（精确 255）、有效值 p50=0.0015/max 23.7 → raster-color-range [0,1] → ramp t≈0 → rgba(255,0,0,1) 红系=期望 (192,2,4) ✓ **解码完全健康**。**alpha 字节分布：nodata=255、有效=0**（数据编码非透明度）。
+- **②alpha 根因修复（入库，mgl 语义）**：RASTER_ARRAY 分支的 `mbRasT.a *= rcCol.a·mask` 把原始 alpha 数据字节当透明度累积（有效纹元 alpha=0 → 全层透明）——改为 `mbRasT.a = rcCol.a·mask`（mgl：array 的 alpha=NODATA 掩码）。
+- **①source-layer fallback（再回退）**：重新应用（层发射/材质/纹理 attach 全链路探针验证通过：MRT-EMIT×8、MRT-PATCH attach 含捕获时同 uuid 材质）后层仍不可见（cur 零红色像素 vs 期望 25924），且 no-raster-color 单独劣化 10525→63630——单独特不可入库，再回退。
+- **不可见性最终收敛**：对象树（visible/parent/几何/willRender 路径——对象经 rootNode.add 确证入渲染）全部排除后，唯一存活嫌疑=**rcCol/ramp 采样路径返回 (0,0,0,0)**（real-blend alpha=0 不可见、opaque 路径回退 base=图像不变，与全部观测自洽）。下会话单点：ramp DataTexture 的 GPU 侧有效性（256×1 过滤器/上传）与 uMBRasRamp uniform 绑定链打点（renderer.readRenderTargetPixels 或 1 纹元 ramp 换 2×2 红色 DataTexture 二分验证）。
+- **终态**：alpha 修复入库、fallback/探针全清、raster-array+raster 族基线复现（10525 等）✓、工作树=提交态+alpha 修复。

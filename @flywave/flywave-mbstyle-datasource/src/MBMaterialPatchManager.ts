@@ -1117,7 +1117,11 @@ export class MBMaterialPatchManager {
                      float rcT = (mbArrVal.x - ${rasRange[0].toFixed(6)}) / ${Math.max(rasRange[1]-rasRange[0],1e-6).toFixed(6)};
                      vec4 rcCol = texture2D(uMBRasRamp, vec2(clamp(rcT, 0.0, 1.0), 0.5));
                      mbR = rcCol.rgb;
-                     mbRasT.a *= rcCol.a * mbArrVal.y;` : `
+                     // mgl raster_array: alpha is the NODATA MASK, never the
+                     // raw alpha channel — the band bytes encode DATA there
+                     // (valid texels carry alpha 0 in the fixtures, which made
+                     // the whole layer invisible via the multiply-accumulate).
+                     mbRasT.a = rcCol.a * mbArrVal.y;` : `
                      float rcT = (${rasMix[3].toFixed(6)} + dot(mbSrgbEnc(mbRasT.rgb), vec3(${rasMix[0].toFixed(6)}, ${rasMix[1].toFixed(6)}, ${rasMix[2].toFixed(6)})) - ${rasRange[0].toFixed(6)}) / ${Math.max(rasRange[1]-rasRange[0],1e-6).toFixed(6)};
                      vec4 rcCol = texture2D(uMBRasRamp, vec2(clamp(rcT, 0.0, 1.0), 0.5));
                      mbR = rcCol.rgb;

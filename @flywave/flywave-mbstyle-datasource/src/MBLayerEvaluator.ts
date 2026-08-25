@@ -552,6 +552,7 @@ export class MBLayerEvaluator {
             candidates = bySL.get('') ?? [];
         }
 
+
         const results: EvaluatedLayer[] = [];
 
         const ctx: MBExpressionContext = { zoom, pitch, feature, featureState, _config: this.m_config, brightness, worldview, center } as any;
