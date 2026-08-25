@@ -63,5 +63,11 @@
 - [x] 批次 1.3 front-cutoff（15aa2877）：底部裁剪带 fragment discard
   （常量 + 屏宽三点 stops）；indicator-cutout 被 skip-test(web) 跳过、
   nyc 系列依赖 HD 管线，独立验证受阻
-- [ ] 批次 2.4 PMTiles
-- [ ] 批次 2.5 cluster
+- [x] 批次 2.4 PMTiles（见最新 feat commit）：v3 读取器 + vector/raster/
+  hillshade 接线；tile-providers 7 夹具 0→3 PASS；sparse 近达标
+  (111k→10.7k)；raster-dem 剩余差距=hillshade 全家族既有问题
+- [x] 批次 2.5 cluster（8b7da3b1）：supercluster 语义层级贪心聚类；
+  geojson/clustered → PASS，filter/properties 大幅收敛（剩余为期望图
+  半高/黑底合成语义，非聚类问题）
+- 后续: vector overscale/sparse 需引擎级父级保留（mgl
+  updateRetainedTiles 等价物）、hillshade 家族精度、无背景层黑底合成
