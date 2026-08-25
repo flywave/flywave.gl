@@ -5072,3 +5072,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **守卫**：text 七族+regressions 148+122 例基线**零回归**（regressions 54→54）。
 - **附带方法学**：harness fixture 对（双侧目录）保留 `mbstyle-harness/glyph-t` 作后续文字域对拍基准；mgl 侧 pr=2 扰动保留（其 expected 缺失即落 actual 的特性复用）。
 - **终态**：MBTileDataEmitter 单行级修复 + 索引重建，随记档提交。
+
+**§435. halo 修复联动面全量复测——批量 2 净增 104 例（geojson 全族 + runtime-styling 全族翻盘），baseline7-pass.txt 落盘 461 例（较 baseline6 +160，剔除 22 项已证陈旧项）；bottom 剩余 632 归因初步（非 dedup，候选=引擎 text 碰撞/mayOverlap 链）（2026-08-26 三百二十七）**：
+
+- **联动复测（§434 修复波及面）**：text 十二族 63 例零回归；批量 2（runtime-styling/geojson/symbol-placement/variable-anchor 225 例）**净增 104**——geojson 全族（~20，含 inline-*/external-* 全线）与 runtime-styling 全族（~84，filter/layout/paint-property 变换全族）因默认标签底色消除而集体翻盘；零回归。
+- **baseline7-pass.txt 落盘 461 例**（§434h/§435a/b + §436a/b 五轮运行聚合 + baseline6 未重跑项继承，剔除 22 项 §412–§418 已证陈旧项）。注：baseline6 实际未含 runtime-styling 条目（§418 聚合目录遗漏），461 为当前真实通过集。
+- **bottom 剩余 632 归因初步**：缺失像素 268 个聚 5 簇，形态=字形内部白色横带（部分标签整块缺失）；排除引擎 dedup（§429 已层域化 featureId 且 getFeatureId 读 $id ✓）；候选=引擎 ScreenCollisions 对 text 的 mayOverlap 链（props.mayOverlap 已设但 textMayOverlap 传播路径待查）或 our PlacementEngine 的 text 分支——下会话 probe placeText 决策。
+- **终态**：baseline7 落盘 + 记档提交。
