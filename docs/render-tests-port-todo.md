@@ -4394,3 +4394,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **全组合复测（offset+1 + LOD 因子 + mixedLevelDelivery + multiLevelCoverage）**：204111（单位修正前）→**199673**（修正后，stop 生效），仍差于 offset-0 基线 158939。两残差源：①**stop 数 2/6**——distToSplitScale 需逐瓦片计算（mgl 用 max(closestElevation, cameraHeight) 为 dz，含地形高程；我们恒 camH），阈值再缩可补齐 4 个 stop；②**z15+z16 同屏合成次序未校准**（mgl 用 depthModeForSublayer(overscaledZ−minZ) 防重叠双画）。
 - **终态**：引擎公式修正入库（flag 默认关，基线复现 158939/199086/202317 ✓）、组合回退关闭、探针全清、tsc 双包绿。datasource mocha 因 test-utils `setReferenceImageResolver` 既有环境问题不可跑（与本次改动无关，改动仅在 flag 分支内）。
 - **下会话两点**：①distToSplitScale 逐瓦片 dz（含 elevation）补齐 6/6 stop——以 mgl-covering-tiles-ref.js 为规格离线对拍；②z15/z16 同屏渲染序（renderOrder 或 depth 隔离）校准后组合转默认开。
+
+**§348. LOD 层 6/6 逐瓦片对齐达成（§347"2/6"系探针去重伪影）+ 残域转移定案：近地 z16 带 49k 白区=交付不渲染（2026-08-25 二百三十七，里程碑+残域转移记档）**：
+
+- **6/6 stop 逐瓦片对齐【里程碑】**：修正探针输出处理（此前 `sort -u -k2` 按列去重损坏了表格，"2 stop"为伪影）——引擎全量 z15 评估表 22 瓦片，stop 6 个 = (16379,16378)(16379,16379)(16380,16377)(16380,16378)(16380,16379)(16381,16378)，**与 mgl-covering-tiles-ref.js 参照的 6 个 z15 stop 逐瓦片完全一致**（d 8227/7478 > 7338 阈值）。§347 待办①（distToSplitScale 逐瓦片 dz）**无需实施**——mgl 在 2D 无 elevation 时 dz=max(closestElevation, cameraHeight)=cameraHeight，与我们恒 camH 等价（源码确证 transform.ts:1520 `distanceXyz[2] = cameraHeight` 非 elevation 分支）。LOD 公式（§347 单位修正版）即为最终形态。
+- **残域转移定案**：组合全开下 error-overlap 仍 199673>基线 158939，但失败形态已变——中部色调大幅改善（橙 246,91,14 系出现=新 z15 内容），**唯一大残差=底部 1/3 恒定 49k 纯白：近地 z16 带瓦片已交付（census 47）但不上屏**。这与 §339"renderedTiles 0→47 增长但 218893 恒定"同源——z16 瓦片渲染为不可见/白（候选：z16 四边形材质 baseSrgb 默认白 [1,1,1]（无 bg 层时）+ 纹理未达；或 TileObjectsRenderer 对非 dataZoom 层级的剔除；或 z16 全屏大四边形 near-plane 裁剪）。下会话单点：z16 瓦片对象树探针（visible/geometry/material/frustum 各层逐一断点）。
+- **终态**：TEMP 组合与探针全清（git checkout 复原）、公式保持 §347 提交态（flag 默认关）、基线复现 158939/199086/202317 ✓、工作树=提交态。
