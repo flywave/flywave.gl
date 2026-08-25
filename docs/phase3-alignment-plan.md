@@ -55,8 +55,13 @@
 ## 四、进度记录
 
 - [x] 状态盘点（本文档第一节）
-- [ ] 批次 1.1 roof-shape
-- [ ] 批次 1.2 terrarium
-- [ ] 批次 1.3 front-cutoff
+- [x] 批次 1.1 roof-shape（e20d1d40）：六种屋顶几何落地 + 修正 building
+  高度未烤入（原 rawHeight=0 → 1m 几何）；50 个 building 夹具全量对比
+  显著收敛（gabled 14758→12310 等）；剩余差距为 building 家族共有明暗问题
+- [x] 批次 1.2 terrarium（8d355985）：encoding 从 raster-dem source 贯通
+  至 decodeDemImage（替换硬编码 'mapbox'）；[P3ENC] 探针确认到达
+- [x] 批次 1.3 front-cutoff（15aa2877）：底部裁剪带 fragment discard
+  （常量 + 屏宽三点 stops）；indicator-cutout 被 skip-test(web) 跳过、
+  nyc 系列依赖 HD 管线，独立验证受阻
 - [ ] 批次 2.4 PMTiles
 - [ ] 批次 2.5 cluster
