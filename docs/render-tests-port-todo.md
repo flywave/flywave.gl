@@ -4522,3 +4522,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **编译层确证**：onBeforeCompile 打点（uMBRasMap 唯一锚点）——**MRT-COMPILE×8**：注入 shader 确实编译进 program，且与 364 次 draw 同材质。至此 raster-array 不可见性证据链完备：几何✓（§362 纠错）、编译✓、draw✓、attach✓、stencil/深度/ramp/强制红全试无效——**残案唯一存活解释=引擎渲染管线把该材质的 draw 输出合成掉了（RTT/pass/排序层，疑透明对象进入未被合成的 pass 或 stableSort 排序后于屏幕 pass）**。cached-update+fallback 组合也无效（28753/63630）。
 - **下会话攻坚（换打法）**：不再逐层二分——直接对照卫星四边形（同 attach 同管线、可见）与 mrt 四边形（不可见）的 **renderer 层差异 dump**（两者 material/program/renderItem 完整属性对照，WebGLRenderingContext.getError + renderTarget 绑定状态），或最小重放（单层 .mrt style 独立用例）。
 - **终态**：cached-update 修复入库、探针/fallback 清除、raster-array+raster 族基线复现 ✓、工作树=提交态+该修复。
+
+**§363. 换打法首击（DoubleSide 剔除假设否定）+ 环境非确定性发现（karma webpack 缓存 staleness 疑点）——raster-array 攻坚暂停记档（2026-08-25 二百五十五）**：
+
+- **DoubleSide 实验（否定）**：mrt 材质 side=DoubleSide（裁剪翻转环绕向被 FrontSide 剔除假设）——28753 不变。
+- **环境非确定性【重要】**：本轮 fallback+DoubleSide 组合下 no-raster-color 报 **10525**（此前两轮 fallback 单独报 63630）——同代码不同结果，结合多轮 "Executed 0 of 1" 陈旧捕获，**疑 karma webpack 文件系统缓存 staleness**（karma.options 备忘已有 `HARP_NO_HARD_SOURCE_CACHE=true` 调试旋钮；§363 建议下会话攻坚前先清缓存并复跑 fallback 基线，确认 63630/10525 哪个是真值——此前基于 63630 的"fallback 劣化"结论可能失真）。
+- **raster-array 不可见性残案状态**：DoubleSide 后排除清单再添一项（几何/编译/draw/attach/stencil/深度/ramp/强制红/背面剔除全否定），存活解释仍为引擎 RTT/pass 合成层——但**在环境非确定性解决前继续二分会产生误导性结论**，攻坚暂停。
+- **下会话顺序**：①清 karma webpack 缓存（rm 缓存目录或 HARP_NO_HARD_SOURCE_CACHE=true）复跑 raster-array 基线 + fallback 单变量，校准真值；②若 fallback 真值非劣化则直接入库并重估不可见性；③再续 RTT 对照攻坚。
+- **终态**：全部 TEMP 清除、基线复现 28753/10525 ✓、工作树=提交态。
