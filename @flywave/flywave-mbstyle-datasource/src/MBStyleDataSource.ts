@@ -684,65 +684,112 @@ class GeoJSONDataProvider extends DataProvider {
         }
         const zoom = tileKey.level;
         if (zoom >= this.m_clusterMaxZoom) return this.m_geoJsonData;
-        const roundedZoom = Math.floor(zoom / 2) * 2;
-        if (!this.m_clusteredCache.has(roundedZoom)) {
-            const clustered = this.clusterAtZoom(roundedZoom);
-            this.m_clusteredCache.set(roundedZoom, clustered);
+        if (!this.m_clusteredCache.has(zoom)) {
+            const clustered = this.clusterAtZoom(zoom);
+            this.m_clusteredCache.set(zoom, clustered);
         }
-        return this.m_clusteredCache.get(roundedZoom)!;
+        return this.m_clusteredCache.get(zoom)!;
     }
 
+    /**
+     * supercluster-equivalent hierarchical clustering.
+     *
+     * Points project to the 512-unit extent (supercluster's z0 world size);
+     * from clusterMaxZoom down to the requested level one greedy pass per
+     * level merges every unclustered neighbour within
+     * `clusterRadius / 2^z` (a fixed screen radius halves its world
+     * footprint each level up). A level's clusters become the next level's
+     * input points, so clusters merge hierarchically with numPoints-
+     * weighted centroids — matching supercluster's per-zoom trees.
+     */
     private clusterAtZoom(zoom: number): string {
         try {
             const geo = JSON.parse(this.m_geoJsonData);
             const features = geo.features ?? [];
-            const points = features.filter((f: any) => f.geometry?.type === 'Point');
             const nonPoints = features.filter((f: any) => f.geometry?.type !== 'Point');
-            if (points.length === 0) return this.m_geoJsonData;
+            const sourcePoints = features.filter((f: any) => f.geometry?.type === 'Point');
+            if (sourcePoints.length === 0) return this.m_geoJsonData;
 
-            const gridSize = this.m_clusterRadius * 2;
-            const grid = new Map<string, any[]>();
-            for (const pt of points) {
-                const [lng, lat] = pt.geometry.coordinates;
-                const cx = Math.floor(((lng + 180) / 360) * gridSize * Math.pow(2, zoom));
-                const cy = Math.floor(((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2) * gridSize * Math.pow(2, zoom));
-                const key = `${cx}:${cy}`;
-                if (!grid.has(key)) grid.set(key, []);
-                grid.get(key)!.push(pt);
+            interface ClusterNode {
+                x: number; y: number;
+                numPoints: number;
+                leaves: any[];
+                feature: any;
             }
+            const lngX = (lng: number) => (lng / 360 + 0.5) * 512;
+            const latY = (lat: number) => {
+                const sin = Math.sin((lat * Math.PI) / 180);
+                const y = 0.5 - 0.25 * Math.log((1 + sin) / (1 - sin)) / Math.PI;
+                return y * 512;
+            };
+            let current: ClusterNode[] = sourcePoints.map((f: any) => {
+                const [lng, lat] = f.geometry.coordinates;
+                return { x: lngX(lng), y: latY(lat), numPoints: 1, leaves: [f], feature: f };
+            });
 
-            const clusteredFeatures: any[] = [];
-            for (const [, group] of grid) {
-                if (group.length === 1) {
-                    clusteredFeatures.push(group[0]);
-                } else {
-                    let sumLng = 0, sumLat = 0;
-                    for (const f of group) {
-                        sumLng += f.geometry.coordinates[0];
-                        sumLat += f.geometry.coordinates[1];
+            let nextId = 1;
+            for (let z = this.m_clusterMaxZoom - 1; z >= zoom; z--) {
+                const r2 = (this.m_clusterRadius / Math.pow(2, z)) ** 2;
+                const visited = new Array(current.length).fill(false);
+                const next: ClusterNode[] = [];
+                for (let i = 0; i < current.length; i++) {
+                    if (visited[i]) continue;
+                    visited[i] = true;
+                    const group: ClusterNode[] = [current[i]];
+                    for (let j = i + 1; j < current.length; j++) {
+                        if (visited[j]) continue;
+                        const dx = current[j].x - current[i].x;
+                        const dy = current[j].y - current[i].y;
+                        if (dx * dx + dy * dy <= r2) {
+                            visited[j] = true;
+                            group.push(current[j]);
+                        }
                     }
+                    if (group.length === 1) {
+                        next.push(group[0]);
+                        continue;
+                    }
+                    let num = 0, wx = 0, wy = 0;
+                    for (const g of group) {
+                        num += g.numPoints;
+                        wx += g.x * g.numPoints;
+                        wy += g.y * g.numPoints;
+                    }
+                    const leaves = group.flatMap((g) => g.leaves);
                     const props: Record<string, any> = {
                         cluster: true,
-                        cluster_id: `${zoom}:${group.length}`,
-                        point_count: group.length,
+                        cluster_id: nextId++,
+                        point_count: num,
+                        point_count_abbreviated: num >= 10000
+                            ? `${Math.floor(num / 1000)}k`
+                            : num >= 1000
+                                ? `${Math.round(num / 100) / 10}k`
+                                : num,
                     };
-                    // Compute each declared clusterProperty by mapping every
-                    // source feature through the property's expression and
-                    // aggregating the resulting values.
                     for (const [name, spec] of Object.entries(this.m_clusterProperties)) {
-                        props[name] = aggregateClusterProperty(spec, group);
+                        props[name] = aggregateClusterProperty(spec, leaves);
                     }
-                    clusteredFeatures.push({
-                        type: 'Feature',
-                        geometry: { type: 'Point', coordinates: [sumLng / group.length, sumLat / group.length] },
-                        properties: props,
+                    const cx = wx / num, cy = wy / num;
+                    const lng = (cx / 512 - 0.5) * 360;
+                    const lat = (2 * Math.atan(Math.exp((0.5 - cy / 512) * 2 * Math.PI))
+                        - Math.PI / 2) * 180 / Math.PI;
+                    next.push({
+                        x: cx, y: cy,
+                        numPoints: num,
+                        leaves,
+                        feature: {
+                            type: 'Feature',
+                            geometry: { type: 'Point', coordinates: [lng, lat] },
+                            properties: props,
+                        },
                     });
                 }
+                current = next;
             }
 
             return JSON.stringify({
                 ...geo,
-                features: [...nonPoints, ...clusteredFeatures],
+                features: [...nonPoints, ...current.map((n) => n.feature)],
             });
         } catch {
             return this.m_geoJsonData;
