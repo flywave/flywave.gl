@@ -4538,3 +4538,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **方法论入库**：后续 raster-array 攻坚与关键单变量对比一律 `MB_NO_WEBPACK_CACHE=1`（会话内多次陈旧捕获/不复现教训的终极预防）。
 - **下会话（环境已可信）**：卫星 vs mrt 四边形 renderer 层属性对照（material/program/renderItem/renderTarget）或单层 .mrt 最小重放，定位合成层丢弃点；fallback 须与 no-raster-color unbound-ramp 黑语义（§824）一起评估。
 - **终态**：fallback 回退、清缓存基线复现 ✓、工作树=提交态。
+
+**§365. renderer 层对照破案——glErr=1282（NPOT DataTexture 被 attach 通用滤镜强加 mipmap）修复入库 + 材质状态跨代不一致新残案（2026-08-25 二百五十七）**：
+
+- **draw-state 对照（清缓存环境）**：mrt 材质 draw 时 **glErr=1282（GL_INVALID_OPERATION）×94**（卫星恒 0）——attach() 的通用滤镜路径对 .mrt 的 514×514（tileSize+2buffer，**非 2 的幂**）DataTexture 覆盖设置 mipmap filter+generateMipmaps → GL 拒绝 → 纹理不完整。
+- **修复（入库）**：attach 对 `__mbIsRasterArray` 纹理跳过 mipmap 路径（保持 loadRasterArrayTexture 的 NEAREST——mgl 对 array 源本就强制 NEAREST）。no-raster-color 63630→63501（小改善）；default 仍 28753（不可见性另有残因）。
+- **新残案【材质状态跨代不一致】**：修复后 RAS-STATE 取样显示 mrt 材质 draw 状态混杂——transp true/false、blend 1(Normal)/5(**Custom**) 并存、glErr 仍 696 次——**多 patcher/多代材质互相改写**（CustomBlending 来自 extrusion translucent 路径的泄漏？），这是不可见性的最新头号嫌疑。下会话单点：材质创建时间线审计（uuid→各属性变更打点），锁定 CustomBlending/mipmap 残余 1282 的写入者。
+- **终态**：NPOT 修复入库、探针/fallback 清除、清缓存基线复现（raster-array+raster 族零回退）✓、工作树=提交态+NPOT 修复。

@@ -556,6 +556,7 @@ export class MBLayerEvaluator {
 
 
 
+
         const results: EvaluatedLayer[] = [];
 
         const ctx: MBExpressionContext = { zoom, pitch, feature, featureState, _config: this.m_config, brightness, worldview, center } as any;

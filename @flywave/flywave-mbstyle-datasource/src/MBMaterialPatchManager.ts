@@ -925,11 +925,18 @@ export class MBMaterialPatchManager {
             // mgl mipmapped raster tiles — keep the mipmap min filter here
             // too (this ran AFTER applyRasterFilters and silently reset it,
             // voiding the mipmap parity fix).
-            texture.minFilter = filterType === THREE.NearestFilter
-                ? THREE.NearestMipmapNearestFilter
-                : THREE.LinearMipmapLinearFilter;
-            texture.magFilter = filterType;
-            texture.generateMipmaps = true;
+            // §365: raster-ARRAY DataTextures are exempt — their size is
+            // tileSize+2*buffer (514, NON-power-of-two); requesting mipmaps
+            // on them raises GL_INVALID_OPERATION (1282, probed at draw time)
+            // and leaves the texture incomplete (whole layer invisible). mgl
+            // forces NEAREST for array sources anyway.
+            if (!(texture as any).__mbIsRasterArray) {
+                texture.minFilter = filterType === THREE.NearestFilter
+                    ? THREE.NearestMipmapNearestFilter
+                    : THREE.LinearMipmapLinearFilter;
+                texture.magFilter = filterType;
+                texture.generateMipmaps = true;
+            }
             // NOTE: premultiplyAlpha + CustomBlending(ONE, …) was tried to
             // match mgl's raster upload, but the premultiplied upload path
             // blanks the tiles entirely (raster-* ~110k full-image mismatch,
