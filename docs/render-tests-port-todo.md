@@ -5086,3 +5086,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **新候选（形态学）**：缺失像素为**字形内部白色横带**/整词错位——与 text-max-width=5 的**词换行断点差**吻合（mgl "Test Test|Test" vs 我们不同拆分 → 局部墨迹分布错位，形成带状 diff）。下会话：shapeText 断行逻辑与 mgl shaping.ts 的 word-break 对拍（mgl 以 maxWidth=5em 在词边界断行）。
 - **补扫**：text-emphasis/justify/tracking + sort-key + symbol-spacing/crosses-tile 等 37 例零回归，**circle-sort-key/cross-tile-sort 收回 PASS**（§419 点重复方案的连带收益）。
 - **终态**：baseline7 增至 462；探针全清（tsc 绿），随记档提交。
+
+**§437. bottom 632 换行断点假设证伪（harness 扩展对拍）——mgl 与我们的 'Test Test Test'/maxWidth5 断行 band 逐值一致（y33-55/y72-94、x 同域），残差 151px=首行 1px 垂直偏移+边缘；§436"白带"形态系密集重叠标签误读，真残差=多行首行 1px 垂直偏移类（2026-08-26 三百二十九）**：
+
+- **对拍（harness 扩展）**：fixture 扩为 'Test Test Test'+text-max-width 5 双侧渲染——**两行 band 完全一致**（mgl y34-56/72-94，我们 y33-55/72-94，x 域相同）——mgl 的 Knuth-Pass 断行与我们的 greedy 在此语料下**同解**，断行差异假设证伪。残差 151px 分解：首行 1px 垂直偏移（y33 vs 34）+ 字形边缘微差。
+- **bottom 632 重分解**：§436 的"白带缺失"实为密集重叠标签区的形态误读；真残差与 harness 同类=**多行标签的首行 ~1px 垂直偏移 + 边缘**（§396 per-line 变高时代的邻近域，lineHeight/top 度量的 px 级差）。修复候选：shaping.top/首行 y 基准与 mgl shaping.ts top 计算对拍（-0.5px 级）。
+- **harness 基准恢复**：双侧 fixture 恢复单字母 T 版（彩底），索引重建，作文字域长期对拍基准。
+- **终态**：双侧无生产代码变更（harness 探索性 fixture 改动已复位），纯 docs 提交。
