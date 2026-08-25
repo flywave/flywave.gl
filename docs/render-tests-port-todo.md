@@ -4992,3 +4992,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复方向（工程评估）**：动态图集按 1:1 存原始字形位图、以 quad 缩放呈现（mgl 同构）——涉及 GlyphData/TextGeometry/纹理生命期，属 TextCanvas 架构级改动，独立任务记档；短期替代候选=图集放入时用 NEAREST 采样（保持场值，代价是位图粒度可见）。
 - **SDF AA 域三层排除总结**：图集字节 ✓（§423）、边缘公式 ✓（§423）、阈值/宽度/bias ✗（§381/382/385/424）——唯余动态图集场降解，域收敛完成。
 - **终态**：实验代码全清（tsc 绿），纯 docs 提交。
+
+**§425. §424 根因定位实验两轮——RT NEAREST 显著劣化（1976→9127）实锤终绘存在 16/24 minification；拷贝源 mag 滤波无感（1:1 拷贝本就精确）——降解锁定在 GlyphTextureCache RT 内容或终绘 minification 欠采样，短滤波实验排除闭合（2026-08-26 三百一十七）**：
+
+- **实验一（RT 纹理双 NEAREST）**：1976→9127（bottom-left 10268→14391）显著劣化且成块状——证实①终绘 quad 确以 fontSize(16)/catalogSize(24) <1 采样 RT 条目（minification 存在）；②RT 内容含亚阈值（<0.75）纹元（NEAREST 直接暴露）。
+- **实验二（拷贝源 page magFilter NEAREST）**：1976 不变——GlyphTextureCache 的 1:1 整数平移拷贝本就精确（transform scale=1、坐标整对齐），源页面滤波无关。
+- **域内定位收敛**：字节忠实（§423）→ 拷贝精确（本节）→ **降解在 ①RT 条目内容生成（FontCatalog/MBFontCatalogBuilder 的页面打包链，待 readRenderTargetPixels 直接 dump RT 条目对拍）或 ②终绘 16/24 欠采样（mgl 同样 minify 但内区均值≥0.75 保持纯黑——我们 RT 内区若忠实则不应斑点，故主嫌疑仍是 ①）**。下会话首项：readRenderTargetPixels dump 单字形 RT 条目，与源字节直接 diff。
+- **方法论**：TextCanvas 两条滤波通路（拷贝源/RT 终采）均已单变量实验并复位。
+- **终态**：实验代码全清（tsc 绿），纯 docs 提交。
