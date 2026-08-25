@@ -5139,3 +5139,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **审计**：ScreenProjector 全链浮点（projectVector→ndcToScreen 无 round/floor）；TextElementsRenderer addPoiLabel→addPointLabel→placeIcon 亦无取整——px 批"取整链"假设弱化，剩余候选：①emitter `projectWorld`（GeoJSON lng/lat→世界坐标换算的精度/方向差）；②icon 盒中心（computeIconScreenBox fitCenter 构成，可能差 iconXOffset 默认值半像素）。
 - **下会话首项**：dump 我们 label 图标的 screenBox.x/中心 与 mgl symbol 顶点 x（MBDBG 探针 v_pos_offset 或 expected 质心反推）对拍，定位 +1px 的产生层（世界坐标 vs 盒构成）。
 - **终态**：纯 docs 提交。
+
+**§445. §443 测量误纠正 + 双端 dump 定案——质心函数 Bug（返回式混入 x0 常量）修正后重测：直缘 y31 对齐至 0.015px、角区 y19 差 0.24px，**无系统性 +1px 平移**（screenBox dump [-38,38] 中心 0 亦证）；icon-text-fit 残差终形态=**仅圆角 AA 级差**（~30 级 × ~40 角部像素 = 21px）——px 对齐批"平移"前提作废，§444 双候选均不成立（2026-08-26 三百三十七）**：
+
+- **测量 Bug 记档（方法论）**：§443 质心函数 `return x0 + Σ(x0+i−1)·w` 将搜索起点混入返回式——修正为 `Σ(x−1+i)·w` 后 y31 直缘 cur 11.500 vs exp 11.515（**0.015px**）、y19 角区 0.24px。**任何"平移"结论发布前必须用直缘（非角区）行复核**。
+- **screenBox dump**：label icon box=(-38,-19,76,38) 中心 (0,0)=画布中心 ✓ 与期望逐位对齐（源艺术 x0 即有墨，无内边距假象）。
+- **终态重定性**：icon-text-fit 残差=**纯圆角 AA 级差**（源艺术圆角在 1:1 下的边缘带重采样差），21px/阈 7 的最后一段只能靠纹理内容级或 AA 重采样精度——ROI 极低记档冻结；§438 基线链条（text-anchor/bottom 首行 1px）不受本节影响（那是 TEXT 行盒，测量独立）。
+- **终态**：探针全清（tsc 绿），纯 docs 提交。
