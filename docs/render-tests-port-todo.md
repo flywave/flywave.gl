@@ -4595,3 +4595,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **GPU 侧三修正全部零像素变化（21560 恒定）**：①材质 precision='highp'（three 默认已 highp，理论否定）；②__mbArrMix 预乘 255（归一化采样补偿——**mgl 用 RGBA8 归一化 + mix [s,256s,...] 原始量纲**，其 configureRaster 应在 CPU 侧重标定 mix/offset 到 range 归一域，需读源确认）；③§370 un-flip。三连零变化强烈提示 **lib/bundle 改动未生效**（karma webpack 走 src、MB_NO_WEBPACK_CACHE=1 已设——build 链首查项）。
 - **下会话顺序**：①先验证 bundle 生效性（改一处必现变化的哨兵，如 fragment 强制色）；②读 mgl draw_raster configureRaster 的 mix/offset 重标定式对拍；③数据已备齐（CPU 值精确），一次定位。
 - **终态**：实验全回退、提交态复现 21560 ✓、工作树干净。
+
+**§373. bundle 生效性哨兵——双确证（bundle 链完好 ✓、ramp 纹理正确 ✓）+ 哨兵3 疑 GLSL 编译失败复用旧 program（§372"零变化"的部分解释）（2026-08-25 二百六十五）**：
+
+- **哨兵1【bundle 生效 ✓】**：array 分支注入强制绿 return——全屏 65536 绿、mismatch 60676——**karma webpack bundle 链完好**，§372"零变化"非 bundle 问题。
+- **哨兵2【ramp 正确 ✓】**：输出 `texture2D(uMBRasRamp, vec2(0.4,0.5))` = 全屏 **(51,204,0) 绿**（red→green 插值 t=0.4 精确）——**ramp 纹理内容正确**，§360 纯红 ramp 二分的"零变化"确系层不可见期误判。
+- **哨兵3【存疑】**：输出 clamp(mbArrVal.x/y) 得到与哨兵2 **逐位相同的 (51,204,0)**（清端口重跑复现）——强烈提示哨兵3 的 shader **编译失败**（three 复用上一个可用 program=哨兵2 的）——这同时提示：**§372 部分零变化实验可能是 GLSL 编译失败的静默复用**（哨兵3 的 value=0.2/mask=0.8 恰等于 ramp@0.4 的 (51,204,0) 是巧合假象）。**方法论新增：每次 shader 改动后必须检查 karma console 的 three shader 编译错误日志**（此前从未查过——头号流程盲区）。
+- **下会话首查项**：①跑基线并 grep three 编译错误日志（正常渲染的 array program 可能本身就在报错！——若 21560 状态的 program 是"失败复用"的旧版本，真 program 从未跑过，一切自洽）；②修正后 CPU 值（0.40/0.50/0.60）与 ramp（已证正确）之间只剩 mbArrVal 计算一环。
+- **终态**：哨兵全清、基线复现 21560 ✓、工作树=提交态。
