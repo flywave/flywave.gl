@@ -180,7 +180,14 @@ const sdfTextFragmentSource: string = `
         if (color.a < 0.05) {
             discard;
         }
-        gl_FragColor = color;
+        // §386: vColor arrives as sRGB numerics; decode with the EXACT
+        // sRGB transfer function so the framebuffer blend + final encode
+        // round-trip (approximate 2.2 gamma left residual mid-tone error).
+        vec3 mbT = color.rgb;
+        gl_FragColor = vec4(
+            mix(mbT / 12.92, pow((mbT + 0.055) / 1.055, vec3(2.4)),
+                step(vec3(0.04045), mbT)),
+            color.a);
     }`;
 
 interface RendererMaterialParameters {
