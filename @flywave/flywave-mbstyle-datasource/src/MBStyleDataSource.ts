@@ -27,6 +27,7 @@ import { SpriteAtlas } from './materials/MapIconMaterial';
 import { MBStyleRuntime } from './MBStyleRuntime';
 import { MBEnvironmentManager } from './MBEnvironmentManager';
 import { MBMaterialPatchManager } from './MBMaterialPatchManager';
+import { openPMTilesUrl, openPMTilesBlobIndex, PMTilesBlobIndex } from './PMTiles';
 
 export interface MBStyleDataSourceParameters {
     style: StyleSpecification | string;
@@ -70,13 +71,22 @@ class RasterTileDataProvider extends DataProvider {
     /** §350: source tileSize (mgl distToSplit uses ccd/tileSize; was hardcoded 512). */
     m_sourceTileSize = 512;
 
+    /** Optional URL factory override (PMTiles blob URLs). */
+    private m_urlFactory?: (z: number, x: number, y: number) => string;
+    /** Optional tile-existence override (PMTiles: blob URL presence). */
+    private m_existsFn?: (url: string) => Promise<boolean>;
+
     constructor(tileUrlTemplate: string, minZoom: number = 0, maxZoom: number = 22,
-        idealLevel?: () => number) {
+        idealLevel?: () => number,
+        urlFactory?: (z: number, x: number, y: number) => string,
+        existsFn?: (url: string) => Promise<boolean>) {
         super();
         this.m_tileUrlTemplate = tileUrlTemplate;
         this.m_minZoom = minZoom;
         this.m_maxZoom = maxZoom;
         this.m_idealLevel = idealLevel;
+        this.m_urlFactory = urlFactory;
+        this.m_existsFn = existsFn;
     }
 
     ready(): boolean { return true; }
@@ -191,10 +201,12 @@ class RasterTileDataProvider extends DataProvider {
         }
 
         const tileUrl = (zz: number, xx: number, yy: number) =>
-            this.m_tileUrlTemplate
-                .replace('{z}', String(zz))
-                .replace('{x}', String(xx))
-                .replace('{y}', String(yy));
+            this.m_urlFactory
+                ? this.m_urlFactory(zz, xx, yy)
+                : this.m_tileUrlTemplate
+                    .replace('{z}', String(zz))
+                    .replace('{x}', String(xx))
+                    .replace('{y}', String(yy));
 
         // mgl overzooms from the closest available ancestor when a raster
         // tile 404s (render-test satellite fixtures live at a lower level
@@ -210,7 +222,7 @@ class RasterTileDataProvider extends DataProvider {
                 const ax = Math.floor(xx / Math.pow(2, shift));
                 const ay = Math.floor(yy / Math.pow(2, shift));
                 // eslint-disable-next-line no-await-in-loop
-                if (await RasterTileDataProvider.tileExists(tileUrl(a, ax, ay))) {
+                if (await (this.m_existsFn ?? RasterTileDataProvider.tileExists)(tileUrl(a, ax, ay))) {
                     return { srcZ: a, srcX: ax, srcY: ay };
                 }
             }
@@ -261,12 +273,13 @@ class RasterTileDataProvider extends DataProvider {
         // cover the quad with the four child tiles instead — per child,
         // falling back to that child's deepest ancestor exactly like mgl's
         // per-tile parent overzoom. Never descend past maxzoom.
-        if (z < this.m_maxZoom && !(await RasterTileDataProvider.tileExists(tileUrl(z, x, y)))) {
+        const tileExists = this.m_existsFn ?? RasterTileDataProvider.tileExists;
+        if (z < this.m_maxZoom && !(await tileExists(tileUrl(z, x, y)))) {
             const childExists = await Promise.all([
-                RasterTileDataProvider.tileExists(tileUrl(z + 1, 2 * x, 2 * y)),
-                RasterTileDataProvider.tileExists(tileUrl(z + 1, 2 * x + 1, 2 * y)),
-                RasterTileDataProvider.tileExists(tileUrl(z + 1, 2 * x, 2 * y + 1)),
-                RasterTileDataProvider.tileExists(tileUrl(z + 1, 2 * x + 1, 2 * y + 1)),
+                tileExists(tileUrl(z + 1, 2 * x, 2 * y)),
+                tileExists(tileUrl(z + 1, 2 * x + 1, 2 * y)),
+                tileExists(tileUrl(z + 1, 2 * x, 2 * y + 1)),
+                tileExists(tileUrl(z + 1, 2 * x + 1, 2 * y + 1)),
             ]);
             if (childExists.some((e) => e)) {
                 const features = [];
@@ -342,6 +355,46 @@ class RasterTileDataProvider extends DataProvider {
 }
 
 /**
+ * PMTiles vector source: serves decoded MVT bytes from a single-file
+ * archive. Overzoom walks to the archive's maxzoom ancestor (mgl reuses
+ * the parent tile); below minzoom nothing is drawn (mgl semantics).
+ */
+class PMTilesVectorDataProvider extends DataProvider {
+    private m_url: string;
+    constructor(url: string) { super(); this.m_url = url; }
+    ready(): boolean { return true; }
+    async getTile(tileKey: TileKey, abortSignal?: AbortSignal): Promise<ArrayBufferLike | {}> {
+        const archive = await openPMTilesUrl(this.m_url);
+        let z = tileKey.level;
+        let x = tileKey.column;
+        let y = tileKey.row;
+        // Below minzoom nothing is drawn (mgl); a missing tile at/below
+        // maxzoom REJECTS like OmvRestClient's 404 — the engine then falls
+        // back to the retained parent tile (mgl updateRetainedTiles).
+        if (z < archive.minZoom) return {};
+        while (z > archive.maxZoom) { z--; x >>= 1; y >>= 1; }
+        let bytes = await archive.getTile(z, x, y);
+        if (!bytes && z > archive.minZoom) {
+            // Sparse-archive overzoom: serve the closest ancestor's bytes.
+            // The MVT's tile-local coordinates then land scaled inside this
+            // tile's extent — exact for uniform content (open-water cells),
+            // approximate otherwise.
+            let az = z, ax = x, ay = y;
+            while (az > archive.minZoom) {
+                az--; ax >>= 1; ay >>= 1;
+                // eslint-disable-next-line no-await-in-loop
+                bytes = await archive.getTile(az, ax, ay);
+                if (bytes) break;
+            }
+        }
+        if (!bytes) throw new Error(`PMTiles: no tile ${tileKey.level}/${tileKey.column}/${tileKey.row}`);
+        return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    }
+    protected async connect(): Promise<void> {}
+    protected dispose(): void {}
+}
+
+/**
  * TMS scheme wrapper: flips the y (row) coordinate before delegating.
  * TMS uses y from bottom; flywave uses XYZ (y from top).
  * yTms = 2^z - 1 - yXyz
@@ -404,11 +457,15 @@ class BoundsFilteredDataProvider extends DataProvider {
 class HillshadeTileDataProvider extends DataProvider {
     private m_demUrlTemplate: string;
     private m_tileSize: number;
+    /** Optional per-tile URL factory (PMTiles blob URLs). */
+    private m_urlFactory?: (z: number, x: number, y: number) => string;
 
-    constructor(demUrlTemplate: string, tileSize: number = 256) {
+    constructor(demUrlTemplate: string, tileSize: number = 256,
+        urlFactory?: (z: number, x: number, y: number) => string) {
         super();
         this.m_demUrlTemplate = demUrlTemplate;
         this.m_tileSize = tileSize;
+        this.m_urlFactory = urlFactory;
     }
 
     ready(): boolean { return true; }
@@ -434,10 +491,12 @@ class HillshadeTileDataProvider extends DataProvider {
         const latN = this.tile2lat(y, z);
         const latS = this.tile2lat(y + 1, z);
 
-        const demUrl = this.m_demUrlTemplate
-            .replace('{z}', String(demZ))
-            .replace('{x}', String(demX))
-            .replace('{y}', String(demY));
+        const demUrl = this.m_urlFactory
+            ? this.m_urlFactory(demZ, demX, demY)
+            : this.m_demUrlTemplate
+                .replace('{z}', String(demZ))
+                .replace('{x}', String(demX))
+                .replace('{y}', String(demY));
 
         const geojson = {
             type: 'FeatureCollection',
@@ -906,6 +965,8 @@ export class MBStyleDataSource extends TileDataSource {
     /** DEM encoding of the raster-dem source (mgl: encoding lives on the
      * source spec, not on the terrain object). */
     private m_demEncoding: 'mapbox' | 'terrarium' = 'mapbox';
+    /** DEM tiles live in a PMTiles archive (blob-URL serving). */
+    private m_demIsPmtiles = false;
     private m_rasterTileUrl: string | null = null;
     /**
      * Cached mapbox glyph metrics (font→char→metrics), shared with the worker
@@ -1121,6 +1182,19 @@ export class MBStyleDataSource extends TileDataSource {
             // makes dataZoom = cameraZoom-2 (request z-1 tiles) while the
             // decoder evaluates zoom expressions at mapbox zoom (=level+1).
             const rawSpec = (style.sources as any)?.[bestVectorSourceId] as any;
+            // PMTiles vector archive: serve MVT bytes from the single file.
+            if (typeof rawSpec?.url === 'string' && /\.pmtiles(\?|$)/.test(rawSpec.url)) {
+                const pmUrl = rawSpec.url.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
+                // Open once (cached) so the zoom range is known before wiring.
+                await openPMTilesUrl(pmUrl);
+                this.m_delegatingProvider.delegate = new PMTilesVectorDataProvider(pmUrl);
+                this.m_currentSourceId = bestVectorSourceId;
+                await this.decoder.configure(undefined, {
+                    mbStyle: style,
+                    currentSourceId: bestVectorSourceId,
+                } as any);
+                return true;
+            }
             const tileSize = rawSpec?.tileSize ?? (source as any).tileSize ?? 256;
             const desiredOffset = tileSize > 256 ? -2 : -1;
             // TileDataSource.connect() later forwards storageLevelOffset to the
@@ -1194,11 +1268,27 @@ export class MBStyleDataSource extends TileDataSource {
                 hasRasterSource = true;
                 const rasterSpec = (style.sources as any)[sourceId];
                 const tiles = rasterSpec?.tiles ?? [];
-                const tileUrl = tiles[0] ?? source.tileUrls[0] ?? '';
+                const tileUrl = tiles[0] ?? source.tileUrls[0] ?? rasterSpec?.url ?? '';
                 if (tileUrl) {
                     const resolvedUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
-                    const rasterProvider = new RasterTileDataProvider(resolvedUrl,
-                        rasterSpec?.minzoom ?? 0, rasterSpec?.maxzoom ?? 22);
+                    let rasterProvider: RasterTileDataProvider;
+                    if (/\.pmtiles(\?|$)/.test(resolvedUrl)) {
+                        // PMTiles archive: expand tiles to blob URLs once and
+                        // serve per-tile lookups through the URL factory —
+                        // the ancestor/child coverage logic is unchanged.
+                        const idx = await openPMTilesBlobIndex(resolvedUrl);
+                        rasterProvider = new RasterTileDataProvider(
+                            resolvedUrl,
+                            rasterSpec?.minzoom ?? idx.minZoom,
+                            rasterSpec?.maxzoom ?? idx.maxZoom,
+                            undefined,
+                            (z, x, y) => idx.urlFor(z, x, y) ?? '',
+                            async (u) => u !== '',
+                        );
+                    } else {
+                        rasterProvider = new RasterTileDataProvider(resolvedUrl,
+                            rasterSpec?.minzoom ?? 0, rasterSpec?.maxzoom ?? 22);
+                    }
                     // §350: mgl default raster tileSize is 512; the spec may
                     // override (error-overlap color source uses 256).
                     if (typeof rasterSpec?.tileSize === 'number' && rasterSpec.tileSize > 0) {
@@ -1295,7 +1385,15 @@ export class MBStyleDataSource extends TileDataSource {
                 (l: any) => l.type === 'hillshade',
             ) as any;
             const hillshadeSourceId: string = hillshadeLayer?.source ?? 'hillshade-dem';
-            composite.add(hillshadeSourceId, new HillshadeTileDataProvider(this.m_demTileUrl, this.m_demTileSize));
+            let hillshadeFactory: ((z: number, x: number, y: number) => string) | undefined;
+            if (this.m_demIsPmtiles) {
+                try {
+                    const idx = await openPMTilesBlobIndex(this.m_demTileUrl);
+                    hillshadeFactory = (z, x, y) => idx.urlFor(z, x, y) ?? '';
+                } catch {}
+            }
+            composite.add(hillshadeSourceId, new HillshadeTileDataProvider(
+                this.m_demTileUrl, this.m_demTileSize, hillshadeFactory));
             if (!currentSourceId) currentSourceId = hillshadeSourceId;
         }
 
@@ -1413,9 +1511,10 @@ export class MBStyleDataSource extends TileDataSource {
             if (source.type === 'raster-dem') {
                 const demSpec = (style.sources as any)[sourceId];
                 const tiles = demSpec?.tiles ?? [];
-                const tileUrl = tiles[0] ?? source.tileUrls[0] ?? '';
+                const tileUrl = tiles[0] ?? source.tileUrls[0] ?? demSpec?.url ?? '';
                 if (tileUrl) {
                     this.m_demTileUrl = tileUrl.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
+                    this.m_demIsPmtiles = /\.pmtiles(\?|$)/.test(this.m_demTileUrl);
                     this.m_demTileSize = demSpec?.tileSize ?? 256;
                     this.m_demMaxZoom = demSpec?.maxzoom ?? source.maxzoom ?? 22;
                     this.m_demEncoding = demSpec?.encoding === 'terrarium' ? 'terrarium' : 'mapbox';
