@@ -4666,3 +4666,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **试验**：getOpacity 的 `−0.5→−0.25`（边缘 0.5→0.75 对齐 mgl buff）——**7 例全部 10× 劣化**（bottom 2067→23126、center 10323→21582、justify/left 16032→22711）——**否定**：我们的 PBF 构建图集 SDF 边缘确在 0.5；mgl 的 0.75 阈值绑定其自有字形编码/度量约定，不可直接移植。已回退，基线复现（bottom 2027 ✓ 与 §379 基线 2067 差异为运行噪声级）。
 - **SDF AA 残差收敛态**：gamma 形状（§381 break-even）与边缘阈值（本节否定）两大候选均排除——bottom 2067 级残差的下一候选=**字形位图本身**（PBF 解码的 SDF 场与 mgl 渲染的 SDF 场逐纹元对拍——离线可做：同一 glyph pbf 双路径解码 diff）或 AA ramp 宽度（toPixels 导数路径 vs mgl 常数）。下会话：字形位图离线对拍开题。
 - **终态**：试验回退、基线复现、工作树=提交态。
+
+**§383. 字形位图对拍破案——图集 -64 clamp 毁掉外半段 SDF 斜坡：原始字节+0.75 阈值配对修复入库（2026-08-25 二百七十五）**：
+
+- **破案**：buildGlyphAtlas 曾以 `max(0, byte−64)` 重映射把 0.75 边缘搬到 0.5 适配原生 shader——**钳位把 byte<64（外半段距离斜坡）全归零**，AA 斜坡减半（±1-2 边缘值残差的根因）；§382 单改 shader 失败因图集仍带重映射（且首版符号反：−0.25 使边缘外扩，10× 劣化两次）。
+- **修复（入库）**：图集保留 RAW mapbox 字节 + shader `d=dist−0.75`（mgl buff 精确配对，符号修正后）。**text-anchor/justify 7 例净改善 −190**（bottom 2067→2009、center −22、bottom-left/right −38/−38、justify/right −20）；text 域广谱回归 3 PASS/80 FAIL 无新增异常（icon-text-fit/scale-factor 等族为既有失败）。
+- **残差**：bottom 2009 级仍远超阈值——AA 斜坡已全宽，下一候选=**AA ramp 宽度标定**（我们 derivative toPixels vs mgl gamma 常数——§381 gamma 旗标 break-even 是在旧半斜坡图集上测的，**值得在全斜坡图集上重测**）。
+- **终态**：配对修复入库、工作树=提交态。
