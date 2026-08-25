@@ -4975,3 +4975,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复（语义有据的等效）**：PoiBatch 纹理 **magnification 对非 SDF 图标用 NearestFilter**（复现 mgl 的 ~1:1 采样锐度；SDF 图标保留 LINEAR——距离场必须插值，首轮未分流的实验致 6 例 SDF 回归实证）。minification/mipmap 链不变。
 - **验收**：icon-image-cross-fade 4 例 **218→56/66**（残差=周界 ~56 边缘像素的相位差——像素级收口需移植 mgl 的 sx 光栅化变体管线，记档后续）；icon-anchor/size/image/halo/color 86 例 + appearance 全族 20 例基线**零回归**（SDF 分流后）。
 - **终态**：PoiRenderer 单文件（纹理 filter 分流），tsc 绿，随记档提交。
+
+**§423. SDF AA 域开题双证伪——字形位图离线逐位对拍通过（189/191 字节级相同，2 例空白字形语义等价）+ 边缘公式审计恒等（catalogSize=24/fontScale 同构、pr1 下 gamma 分支与 mgl 逐项一致）——残差收敛至字形 quad 定位/子像素相位（2026-08-26 三百一十五）**：
+
+- **对拍方法（§384 记档项兑现，纯 node 离线）**：mgl `parse_glyph_pbf.ts` 与我们 `GlyphPBFParser.parseGlyphPBF` 同源解析同一 `Open Sans Semibold/0-255.pbf`，逐字形比对 bitmap 字节与 metrics——**189 例字节级相同**，仅 2 例为 width=0 空白字形（mgl 补 6×6 空位图、我们空数组，渲染语义等价）。§384"字形位图本身差异"假设**证伪**。
+- **公式审计（TextMaterials）**：我们的 mgl gamma 分支 `d = dist − 0.75, rampW = 0.105/fontScale, smoothstep` 与 mgl symbol.fragment.glsl `smoothstep(buff−γ·γscale, buff+γscale, dist)`（buff=0.75、EDGE_GAMMA=0.105/dpr、fontScale=size/24、γscale 顶点侧抵消、render test pr=1）**逐项恒等**；catalogSize 默认 24 = mgl ONE_EM ✓。
+- **域收敛**：图集字节 ✓、边缘公式 ✓ → text-anchor/bottom 2009 族残差剩余候选 = **字形 quad 的定位/子像素相位**（TextGeometry 顶点取整 vs mgl 浮点 quad 布局）与 TextCanvas 渲染目标分辨率——下会话从 TextGeometry 顶点生成与 mgl symbol_layout 的 glyph quad 坐标对拍入手（mgl 参照渲染器可插桩 dump 顶点）。
+- **工具落档**：双解析器离线 diff 脚本模式（tsx 从 mapbox-gl-js 目录跨包 import 双方 src）可复用于任意字体/字形范围。
+- **终态**：纯 docs 提交（零代码变更）。
