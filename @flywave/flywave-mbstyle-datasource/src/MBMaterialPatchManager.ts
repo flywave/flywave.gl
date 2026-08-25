@@ -1167,6 +1167,9 @@ export class MBMaterialPatchManager {
         const cached = rasterTextureCache.get(url);
         if (cached) {
             attach(cached);
+            try {
+                (this.m_dataSource as any).mapView?.update?.();
+            } catch {}
             return;
         }
 

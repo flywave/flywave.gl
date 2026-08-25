@@ -4515,3 +4515,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **footprint+fallback 组合复测**：28753/63630（与 §360 相同）——确认几何非因。
 - **残案证据链汇总**（raster-array default 不可见）：几何正确（z3 足迹+位置✓）、draw 364 次✓、材质 patched+纹理 attach（含缓存路径）✓、stencil 排除、强制红片元无效、对象树✓。**新头号线索：rasterTextureCache 命中路径缺 `mapView.update()` 调用**（异步 PNG 路径有——§1218 注释"静态帧序列必须显式触发新帧"；重建材质走缓存路径后 needsUpdate 触发的重编译可能永远没有下一帧绘制）。下会话单点：cached attach 路径补 `mapView.update()`（一行，与 PNG 路径对齐）+ fallback 组合复测；若仍不可见则 renderer.getContext 直接 WebGL 层取证。
 - **终态**：全部实验回退、基线复现 ✓、工作树=提交态。
+
+**§362 补遗. cached-update 一行修复入库（零行为差）+ 编译层确证（MRT-COMPILE×8）+ 残案终态收敛=引擎 RTT/pass 合成层（2026-08-25 二百五十四）**：
+
+- **cached attach 补 mapView.update()（入库）**：rasterTextureCache 命中路径与异步 PNG 路径对齐（§1218"静态帧序列需显式新帧"）——语义正确、实测零行为差（28753 不变），保留。
+- **编译层确证**：onBeforeCompile 打点（uMBRasMap 唯一锚点）——**MRT-COMPILE×8**：注入 shader 确实编译进 program，且与 364 次 draw 同材质。至此 raster-array 不可见性证据链完备：几何✓（§362 纠错）、编译✓、draw✓、attach✓、stencil/深度/ramp/强制红全试无效——**残案唯一存活解释=引擎渲染管线把该材质的 draw 输出合成掉了（RTT/pass/排序层，疑透明对象进入未被合成的 pass 或 stableSort 排序后于屏幕 pass）**。cached-update+fallback 组合也无效（28753/63630）。
+- **下会话攻坚（换打法）**：不再逐层二分——直接对照卫星四边形（同 attach 同管线、可见）与 mrt 四边形（不可见）的 **renderer 层差异 dump**（两者 material/program/renderItem 完整属性对照，WebGLRenderingContext.getError + renderTarget 绑定状态），或最小重放（单层 .mrt style 独立用例）。
+- **终态**：cached-update 修复入库、探针/fallback 清除、raster-array+raster 族基线复现 ✓、工作树=提交态+该修复。
