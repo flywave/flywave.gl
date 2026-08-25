@@ -5007,3 +5007,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **源字节梯度特性（离线 PBF dump）**：Open Sans Semibold 的 'T' 字干内区值仅 180-231（0.706-0.906），'e'/'s' 同级——**Semibold 细笔画 SDF 本来就不饱和**，0.75 阈值下覆盖率天然 <1；'T' 峰值 231=0.906 恰在 ramp 上沿（0.75+0.157）边际黑。
 - **域内最终收敛**：字节 ✓、公式 ✓、拷贝 ✓ → 残差唯一来源 = **终绘 16/24 minification 的覆盖率数学**（细字干 2px 场在 16px 呈现下采样平均 ~207=0.81 → mgl 公式 alpha≈0.74，而期望图呈纯黑）——**期望图纯黑与"同公式同字节应得灰"矛盾**，指向 mgl 实际 size/fontScale 取值与我们推导不同（size 或为 device-px/24 字径而非 16）。下会话：用 mgl 参照渲染器插桩 `v_gamma_scale_size_fade_opacity.y`（size）实测值定案。
 - **终态**：RT dump 探针全清（含一次探针删除误删闭括号的修复），tsc 绿，纯 docs 提交。
+
+**§427. mgl size/gamma 实测定案——插桩读数 size=16.06、u_gamma_scale=0.996（与我们的推导逐项一致）：覆盖率数学恒等证毕，text-anchor 族残差终定性=字形 quad 子像素相位（§423 原假设回归定案）（2026-08-26 三百一十九）**：
+
+- **插桩方法（mgl 参照渲染器首次定量 uniform dump）**：symbol.fragment 增 `#ifdef MBDBG` 早退分支把 `v_gamma_scale_size_fade_opacity[1]/64` 与 `u_gamma_scale/2` 编码进 RG 通道，draw_symbol 文本 pass 注入 MBDBG define，扰动 fixture pixelRatio 强制落盘 actual.png——读数全图恒定 **(64,127,0) = size 16.06、gamma_scale 0.996**（首版探针引用未声明 size 致 program 编译失败整帧空白，方法论：探针须用 varying 直读）。
+- **定案**：mgl text 绘制 size=16（=text-size）、u_gamma_scale=1（平视）→ fontScale=16/24、γ'=0.105/0.667——**与我们 TextMaterials 的 mgl gamma 分支逐项相同**。§426 的"期望纯黑 vs 同公式应得灰"矛盾的唯一解释剩 **glyph quad 采样点相位**（mgl 浮点布局使采样落点命中字干峰值纹元 231；我们整数取整布局使落点跨峰平均 ~0.81→灰）。
+- **修复方向（终案记档）**：我们的 TextGeometry/Placement 链在 glyph quad 布局处整数化（待定位具体取整点），改为保留浮点位置（mgl symbol_layout 同构）。这同时是 §415/§424 全链条排查的终点收敛：字节✓ 公式✓ 拷贝✓ 滤波✓ 数学✓ → 唯余相位。
+- **mgl 参照插桩能力升级记档**：shader define+早退分支+pr 扰动落盘三件套可复用于任意 uniform/varying 定量取证（本轮 size/gamma 即首批产出）。
+- **终态**：mgl 侧插桩全清（shader/program/draw_symbol/fixture pr 四处），重建后 text-anchor/bottom 复跑 PASS ✓，主仓纯 docs 提交。
