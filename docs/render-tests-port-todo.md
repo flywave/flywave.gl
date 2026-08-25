@@ -4568,3 +4568,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **回归**：raster 全族（opacity/alpha/masking/color/zoomed/retina/brightness/contrast/saturation/hue/visibility/extent）与 terrain/error-overlap 三例全部维持既有值——**零回退** ✓。
 - **残差**：default 21560 等仍远超阈值（66/263）——层已可见，剩颜色/uv/ramp 值域校准（常规像素域）+ several-layers 双混合劣化。
 - **终态**：三项入库、工作树=提交态。
+
+**§369. raster-array 像素域残差取证——红色覆盖 96%、残差=空间错位（非平移），收敛到 band uv inset/马赛克子矩形映射（2026-08-25 二百六十一，取证记档）**：
+
+- **取证（default 21560）**：cur 红 24940 vs exp 25924（**覆盖 96%**）——层渲染正确面积；残差分类：exp-red-cur-not 12204 + cur-red-exp-not 10612（互抵≈**空间错位**）+ other 501。行/列互相关均无简单平移解（列相关全部边界化）——非整体 offset，疑 **array band uv inset（mbArrUv 的 buffer/tileSize 分数）或马赛克子矩形（uvRect）映射**的局部错位（斜向梯度带边界不吻合，期望 (192,2,3)/(2,192,3)/(40,154,3) 渐变过渡区错位）。
+- **下会话校准轮（攒批测试）**：①mbArrUv 公式逐项对拍 mgl `_prelude_raster_array` 的 raTexture2D uv inset（buffer 内缩方向/0.5 纹元中心）；②马赛克 uvRect 与 array 采样的组合验证（z3 请求→z2 祖先 1/4 子矩形 × band buffer 双重 inset）；③several-layers 33884 双混合劣化同轮校准。
+- **长线工程项并行记档**：terrain/error-overlap RTT 合成域（155635/162153/188406 → 阈值 263）需地形形变精确合成，工程量大，维持长线；F13 text 精度域（hAlignment/vAlignment+基线，258 用例解锁面最大）列为下一转战候选。
+- **终态**：零代码变更、工作树=提交态。
