@@ -4680,3 +4680,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **rampW 公式修正（入库，休眠）**：gamma 分支的 `×(64/255)` 遗留因子移除（精确 mgl `0.105/fontScale`，flat gamma_scale=1）——旗标关时零行为。
 - **text 残差收敛态**：bottom 2009 的候选剩余=AA ramp 宽度的 derivative 标定（非 gamma 常数）与 halo/双 pass——下会话：垂直锚系专项取证（bottom vs center 的差异分解——为何垂直锚劣化只出现在 gamma 模式下）。
 - **终态**：旗标回退、公式修正入库、基线复现（bottom 2009 ✓）、工作树=提交态。
+
+**§385. AA 宽度双向扫描——1.5×/0.75× 均劣化（4084/7212 vs 2009）：derivative 宽度已是局部最优，宽度假设否定；新线索=边缘混合色域（2026-08-25 二百七十七）**：
+
+- **双向单变量**：rampW×1.5（更软）→ bottom 4084、×0.75（更硬）→ 7212，**均劣化**——native derivative 宽度已是局部最优，AA 宽度不是 2009 级残差驱动（"fatter 3:1"分类系本人 loose 阈值伪影）。
+- **新线索（边缘灰度对）**：残差主导对 (17,17,18)vs(32,32,32)（我们更暗）与 (246,250,253)vs(236,236,236)（我们更亮且带蓝偏）——**中间调混合值系统性偏离**，与 mgl 的 sRGB 数值域文本混合 vs 我们 linear 帧缓冲的色域差吻合（raster-alpha 曾同款破案）。下会话单点：文本材质的 alpha 混合域对拍（TextMaterials 输出走 colorspace_fragment 前的数值域 vs mgl out_color·alpha 的 sRGB 数值直写）。
+- **终态**：实验回退、基线复现（bottom 1969 噪声级 ✓）、工作树=提交态。
