@@ -4463,3 +4463,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **staleness 排除【方法论】**：强制 rasRealBlend=false（try 后重赋值）→ 222890 变化 ✓——捕获有效，四实验确为"真实无影响"而非 stale（注意：探针注入须在变量最终赋值之后，此前一处顺序错误导致伪 no-op 的教训记档）。
 - **新头号嫌疑**：底部近带可见图案色 (83,115,212)、远带（rows 6-8）绿瓦下方黑——若全局图案 quad（renderOrder −10000 全屏）存在，黑必来自其**之上**的遮挡面：**terrain 网格（rgbterrain DEM mesh）无纹理时黑面覆盖远带**。mgl 语义：terrain 上 background/raster 经 RTT drape；我们的 terrain mesh 直接遮图案。下会话单点：terrain mesh 材质/可见性探针（error-overlap 远带），确认后按 mgl 语义让 drape 管线接管或 mesh 透明化。
 - **终态**：全部实验回退、基线复现 162902/202254/205979 ✓、工作树=提交态。
+
+**§356. terrain mesh 遮挡假设【实验确证】——禁用 terrain 三例全改善，raster 混合底=terrain 表面（黑）而非图案的链条闭合（2026-08-25 二百四十七，根因确证记档）**：
+
+- **实验确证**：applyTerrain 早退（terrain mesh/controller 全禁）→ **162902→155636、202254→197399、202317→178847**（transparent −23.5k）——§355 头号嫌疑成立。全链条闭合：全屏图案 quad（renderOrder −10000）→ terrain mesh 不透明盖住图案 → raster quads 带 injectTerrainDrape 贴在 terrain 表面之上 → 0.208 绿瓦 blend **over terrain 表面（MapTerrainMaterial 底色黑）** = (0,52,0)；期望 = over 图案 (68,143,168)。mgl 语义：terrain 下 background/raster 经 RTT drape（内容 framebuffer 含 background）。
+- **修复方向（下会话工程项，二选一）**：①**图案底注入 raster shader**——terrain 激活且样式含 background-pattern 时，把图案 atlas 纹理+子矩形（复用 bg quad 的 uMBPatOrigin/Size/Count/Phase uniforms）注入 raster 材质，baseSrgb 替换为图案屏幕平铺采样（精确复刻 RTT 内容近似）；②**terrain mesh 图案化**——无 drape 内容时 terrain 表面直接采样图案（更粗近似，快）。禁用 terrain 不可入库（期望含地形形变，155636 仍远超阈值）。
+- **终态**：实验回退、基线复现 ✓、工作树=提交态。
