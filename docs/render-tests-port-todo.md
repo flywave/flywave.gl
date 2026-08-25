@@ -4875,3 +4875,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **工程入库**：flushIconBlends 重构出 registerIconBlend 共用体 + `preRegisterIconBlends`（loadSpriteAtlas 尾部预扫 layer.layout/appearances 的字面量 ["image",a,b] + cross-fade paint 提前注册，赶在 tile 解码前；token/表达式对仍走 AfterRender 后备路径）。回归：icon-image/anchor/size、text-size、icon-text-fit 132 例，基线通过 21 例零回归。
 - **下会话候选（记档移交）**：图标 40:38 尺寸差的来源——PoiRenderer computeIconScreenBox 的 imageTexture 尺寸语义（22px@pr1 sprite 在 DPR2 下应为 19 CSS px？mgl getScaledImageVariant/rasterization 尺寸链需对拍）；注意 plain 图标在 DPR1 fixture（icon-image/literal）尺寸是吻合的，疑为 DPR2 缩放因子差，全局改动需防回归。
 - **终态**：MBStyleDataSource 单文件重构（净 +73/−35），tsc 绿，PoiRenderer 探针已清，随记档提交。
+
+**§411. `#` 目录名 URL 截断修复——regressions 全族 122 例解锁，40 例直接转 PASS（2026-08-25 三百零三）**：
+
+- **根因**：`setReferenceImageResolver` 直接把 fixture 名拼进 URL——`regressions/mapbox-gl-js#11769/expected.png` 中的 `#` 被浏览器当 fragment 截断，路径退化为 `/regressions/mapbox-gl-js` → expected.png **永久 404**（result JSON 无 mismatchedPixels、karma 报 "Reference image not found"）。该族 **122 个 `#` 名 fixture 从未被真正对比过**，全部恒红。
+- **修复（测试 resolver 一行级）**：fixture 名按 `/` 分段 `encodeURIComponent` 后拼接（`#`→`%23`），其余路径语义不变。
+- **验收（regressions 全族 122 例）**：**40 例直接 PASS**（含 #3320/#3426/#3548/#5953 等 gl-js 与 gl-native 名单，见 `rendering-test-results/mbstyle-s411-regress/`）；其余 82 例获得真实 mismatch 数值进入正常对齐轨道（如 #3365/#3623 仅 418px 近失族）。此前基线该族 0 通过 → **零回归，净增 40 PASS**。
+- **连带定性**：GC 展开（§409）在 regressions 族的增益从此可测量（此前被 404 掩盖）；globe/clip/scale-factor/imports 族复测仍为各自引擎域失败因（投影/裁剪/DPR 缩放），与 GC 无关。
+- **终态**：MBStyleCompatRenderTest.ts 单文件改动，随记档提交。

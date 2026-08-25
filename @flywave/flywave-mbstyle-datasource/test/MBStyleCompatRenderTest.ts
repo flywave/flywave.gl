@@ -31,7 +31,11 @@ import { MBStyleDecoder } from "../src/MBStyleDecoder";
 // default `/reference-image?` endpoint which needs an external result server.
 setReferenceImageResolver((imageProps) => {
     const name = imageProps.name ?? "";
-    return `/base/@flywave/flywave-mbstyle-datasource/test/render-tests/${name}/expected.png`;
+    // Path segments may contain URL-hostile characters (regression fixtures
+    // are named e.g. "mapbox-gl-js#11769") — '#' would truncate the URL at
+    // the fragment and the expected.png fetch 404s forever.
+    const encoded = name.split("/").map(encodeURIComponent).join("/");
+    return `/base/@flywave/flywave-mbstyle-datasource/test/render-tests/${encoded}/expected.png`;
 });
 
 const INCOMPATIBLE_TYPES = new Set([
