@@ -5127,3 +5127,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实验记录**：PoiBatch 增 m_pixelRatio 构造参数 + filter 分流；实测（a）icon-text-fit/none 21→21 不变——圆角 AA 差与 filter 无关（NEAREST/LINEAR 同值）；（b）cross-fade 56→218——pixelRatio 取值链断在 PoiBatchRegistry 无 renderer 引用（默认 1 → 全 LINEAR = §422 前）。已全部回退。
 - **圆角 AA 终定性**：icon quad 屏幕位置为分数像素时任何 filter 都会重采样圆角 AA 带（~30 级差）——修复=quad 顶点半像素对齐（screenBox 取整到 0.5 网格或渲染前 snap），与 §438 基线制同属 px 级对齐工程，合并为下会话「px 级对齐批」（§438 四级链条 + quad snap）。
 - **终态**：mapview 工作树恢复 §422 态（tsc 绿），纯 docs 提交。
+
+**§443. px 级对齐批开题实测——icon-text-fit/none 的 label 图标左缘质心实测：cur 21.50 vs exp 20.53（**整 icon x +0.97px 平移**，§441"非平移"结论修正为"亚像素边缘测量下确为 ~1px 平移+圆角 AA 混合"）；text-anchor/bottom 632 与 icon-text-fit 阈值边界的统一修复面=符号锚点屏幕坐标的取整链（screenBox/screenPosition snap ±0.5px）（2026-08-26 三百三十五）**：
+
+- **质心测量（加权边缘质心法）**：y=31 左缘 ramp 质心 cur 21.50 / exp 20.53——我们的 label 图标整体右移 ~1px（此前 §441 以阈值二值 bbox 误判"非平移"）。修正后：残差=**icon 屏幕位置 +1px**（+角部 AA 混合）。
+- **统一修复面**：icon/text 符号的屏幕锚点坐标在投影→screenBox 链上的取整差（±0.5~1px）——与 §438 首行 y +1px（harness y33 vs 34）同族=**px 级对齐批的公共断点候选=投影/屏幕坐标换算链**（tempPoiScreenPosition 计算 vs mgl transform.project）。下会话从 `TextElementsRenderer` 投影换算与 mgl `symbol_projection` 的坐标取整对拍入手（一处修好可联动 text-anchor/bottom 632、icon-text-fit 全族、icon-anchor 族）。
+- **终态**：纯 docs 提交（零代码变更，测量方法记档：加权边缘质心）。
