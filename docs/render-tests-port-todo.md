@@ -4455,3 +4455,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **手算对照（16-32765-32762/32764，y-down fwd）**：两瓦片逐级 d/distToSplit——z13 父 8872<29352 split、z14 父 10370<14676 split、z15 父 11119/10370 > 7338·0.88=6446 **stop**——修正公式正确降层至 z15（与无 elevation mgl 规格一致），公式链验证通过，§347 候选残差（ccdPx/tilt 边界/层映射）全部排除。
 - **绿瓦残差终极数值破案**：const 瓦片带 **alpha 通道**——z14-8191-8191 绿瓦 alpha=106/255=0.416！期望 (68,143,168) = 绿瓦 × (0.5·0.416=0.208) over **airport 图案 (86,115,212)**：0.208·250+0.792·115=143.0 ✓ 精确吻合。cur (0,52,0) = 同瓦 over **黑**（250·0.208=52）——rasRealBlend 探针显示 true（材质配置正确），但该屏幕区域的**帧缓存底是黑而非背景图案**——残差收敛为：绿瓦区四边形下方背景图案缺失（疑 '__mb_background__' 逐瓦片注入在该覆盖层级/区域未生效，或多请求四边形叠放次序）。下会话单点：bg-pattern 四边形注入的层级覆盖核查（探针：该区域 z15 瓦片的 objects 是否含 _mbBgTile 四边形）。
 - **终态**：探针清除、零代码变更、基线复现、工作树=提交态。
+
+**§355. 绿瓦区黑底单点——四候选实验全部无影响 + staleness 排除 + 新头号嫌疑=terrain 网格黑面（2026-08-25 二百四十六，排除法记档）**：
+
+- **bg 注入核查（BG-PROBE）**：error-overlap 每瓦片 objs=1、**bgQuads=0**——per-tile '__mb_background__' 注入被 `m_emitBackgroundTiles = hasBg && (hasGeo||isGlobe)` 门控排除（raster 源不注入，§236 设计如此，背景走全局 quad 管线）。**实验扩展注入（hasBgPattern 也开）→ 227856 大幅劣化**（全局 quad + per-tile quad 双背景叠加），已回退。
+- **四候选逐一实验（全部零像素变化，162902 恒定）**：①depthTest=false（同瓦片 bg/raster 深度互斥假设）；②real-blend 材质配置移出 'opacity' in material 守卫（raster 族回归零差）；③far-plane 裁剪分支禁用（该分支在本 fixture 不触发）；④环境 applyRasterSource 单瓦 quad 禁用（该路径本 fixture 未画）。全部回退。
+- **staleness 排除【方法论】**：强制 rasRealBlend=false（try 后重赋值）→ 222890 变化 ✓——捕获有效，四实验确为"真实无影响"而非 stale（注意：探针注入须在变量最终赋值之后，此前一处顺序错误导致伪 no-op 的教训记档）。
+- **新头号嫌疑**：底部近带可见图案色 (83,115,212)、远带（rows 6-8）绿瓦下方黑——若全局图案 quad（renderOrder −10000 全屏）存在，黑必来自其**之上**的遮挡面：**terrain 网格（rgbterrain DEM mesh）无纹理时黑面覆盖远带**。mgl 语义：terrain 上 background/raster 经 RTT drape；我们的 terrain mesh 直接遮图案。下会话单点：terrain mesh 材质/可见性探针（error-overlap 远带），确认后按 mgl 语义让 drape 管线接管或 mesh 透明化。
+- **终态**：全部实验回退、基线复现 162902/202254/205979 ✓、工作树=提交态。
