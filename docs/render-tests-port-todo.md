@@ -5015,3 +5015,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复方向（终案记档）**：我们的 TextGeometry/Placement 链在 glyph quad 布局处整数化（待定位具体取整点），改为保留浮点位置（mgl symbol_layout 同构）。这同时是 §415/§424 全链条排查的终点收敛：字节✓ 公式✓ 拷贝✓ 滤波✓ 数学✓ → 唯余相位。
 - **mgl 参照插桩能力升级记档**：shader define+早退分支+pr 扰动落盘三件套可复用于任意 uniform/varying 定量取证（本轮 size/gamma 即首批产出）。
 - **终态**：mgl 侧插桩全清（shader/program/draw_symbol/fixture pr 四处），重建后 text-anchor/bottom 复跑 PASS ✓，主仓纯 docs 提交。
+
+**§428. §427 终案修复尝试两轮负结果+区域可视化终证——整链无整数化取整点（代码审计）；glyph RT mipmap 负收益（1976→3931，跨条目平均破坏场）；区域 ASCII 可视化确认：icon 圆盘两图吻合、噪声全在文字（我们斑点+更宽 vs mgl 干净瘦削）——mgl 抗摩尔纹机制待其图集 UV 布局 dump（2026-08-26 三百二十）**：
+
+- **取整点审计（§427 终案执行）**：TextGeometry/TextCanvas/Placement/TextElementsRenderer/TextShaping 全链 grep 无 glyph 位置整数化（仅 UV 镜像索引的 floor）——"改浮点"修复点不存在，§427 终案的字形 quad 取整假设证伪。
+- **mipmap 实验**：glyph cache RT 开 generateMipmaps+LinearMipmapLinear → 1976→**3931 劣化**——低 mip 级跨相邻字形条目平均破坏 SDF 场（条目化图集不适合整体 mipmap）；回退。
+- **区域 ASCII 可视化（228-262×24-48）终证**：dot.sdf 圆盘两图结构吻合（黑盘 f 区一致）；差异全在文字区——我们呈斑点噪声且笔画更宽/延伸更长，mgl 干净瘦削或无墨。**噪声定性=文字字形采样摩尔纹+覆盖率溢出**。
+- **mgl 抗摩尔纹机制候选（下会话）**：①mgl 图集 UV 布局 dump（每字形独立条目+padding 的 LINEAR 采样在 1.5× 下的行为与我们的条目布局对比）；②mgl 是否对 text 也走 sx 光栅化变体（getScaledImageVariant 仅 icon 调用，text 布局链未见——需二次确认）；③mgl glyph quad 的实际屏幕尺寸实测（size=16.06 已知，但 quad 像素尺寸未测）。
+- **SDF AA 域会话总结**：五层排除+三修复尝试（bias/mipmap/滤波）后，域内已证字节/公式/拷贝/数学全同构，残差为 mgl 尚未知的抗摩尔纹采样机制——继续域内攻坚 ROI 下降，建议下会话转向收割面更大的域（regressions 剩余 67 例按值排序/ icon-text-fit 族），SDF AA 保持记档。
+- **终态**：实验全清（tsc 绿），纯 docs 提交。
