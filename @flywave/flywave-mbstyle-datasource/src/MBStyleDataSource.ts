@@ -1056,7 +1056,13 @@ export class MBStyleDataSource extends TileDataSource {
                     }));
                     if (!currentSourceId) currentSourceId = sourceId;
                 }
-            } else if (source.type === 'raster') {
+            } else if (source.type === 'raster'
+                || (source.type as string) === 'raster-array') {
+                // §358: 'raster-array' (.mrt band sources, mgl raster_array_
+                // tile_source) serves tiles the same way — the emitter/patcher
+                // carry the band-view/raster-color decode. Dropping the type
+                // here silently removed the whole layer (raster-array fixtures
+                // rendered ONLY the satellite base).
                 hasRasterSource = true;
                 const rasterSpec = (style.sources as any)[sourceId];
                 const tiles = rasterSpec?.tiles ?? [];

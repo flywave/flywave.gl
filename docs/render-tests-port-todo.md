@@ -4477,3 +4477,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **回归**：raster 全族 30 PASS/8 FAIL 失败集不变零回退；raster-masking/terrain/overlapping-zoom **13px→PASS**（连带转正）；208 项 terrain 套件无新增失败（error-overlap 三例在列改善）。
 - **残差**：155635/162153/188406 仍远超阈值 263——剩余为 terrain 几何/高度域（期望含地形形变与 RTT 内容精确合成），见 §336 terrain 域既有记档。
 - **终态**：修复入库、工作树=提交态+本修复。
+
+**§358. raster-array 族批次——三层链路打通取证：源接线缺失修复（入库）+ 层匹配缺口定位（source-layer）+ .mrt 解码端到端验证（附纹成功、渲染贡献不可见）（2026-08-25 二百四十九，链路取证记档）**：
+
+- **静态取证**：7 例 current 全部=仅 satellite 底层（调色板逐例相同），期望含 raster-color 渐变层——.mrt 层整体缺失。
+- **第一层【修复入库】**：wireTileSources 的 `src.type === 'raster'` 漏掉 **`raster-array`** 源类型（fixture 的 precipitations 源被整体丢弃）——已补（行为无差：见下）。
+- **第二层【缺口定位，回退】**：层匹配 evaluate 需要 `source-layer`（precipitations 层为 'Total Precip'），而组合源 provider 要素走 GeoJSON 适配器传 ''——`bySL.get('')` 空 → matched=0 → 层被丢。实验 fallback（provider 要素匹配该源全部 source-layer）：**层开始渲染**（MRT-PROBE enter×8 / ok×6：2-3-1.mrt 514×514 band 纹理解码附着成功）——但 default 输出逐位不变（层渲染贡献不可见=RASTER_ARRAY shader 值域/uv 问题），no-raster-color 10525→63630 劣化（unbound-ramp 黑语义未对齐）。fallback 已回退（无净收益+回归风险）。
+- **下会话单点**：①source-layer fallback 的**正确层选择**语义（mgl：raster-array 层按 source-layer 选 band——loadRasterArrayTexture 已读 sourceLayer，匹配应传层 id 而非 concat 全部）；②raster-array 渲染贡献不可见的 shader 取证（RASTER_ARRAY 分支 rcT/ramp/uMBArr* 逐值打点 vs 期望 (192,2,4) 渐变）；③no-raster-color 的 unbound-ramp 黑（§824 已有 1×1 黑 DataTexture 路径，未触发原因待查）。
+- **终态**：源接线修复入库（零行为差）、fallback/探针全清、raster-array+raster 族基线复现 ✓、工作树=提交态+接线修复。
