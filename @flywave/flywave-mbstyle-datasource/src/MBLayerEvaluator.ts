@@ -551,6 +551,14 @@ export class MBLayerEvaluator {
         if (candidates.length === 0) {
             candidates = bySL.get('') ?? [];
         }
+        // §368: provider-synthesized features (raster/raster-array quads)
+        // carry NO source-layer — the tile source serves the whole source and
+        // the layer selects its band at texture level
+        // (loadRasterArrayTexture reads the style layer's own source-layer).
+        // Match every layer of this source for such features.
+        if (candidates.length === 0 && (sourceLayer === '' || sourceLayer === 'geojson')) {
+            for (const cands of bySL.values()) candidates = candidates.concat(cands);
+        }
 
 
 

@@ -4560,3 +4560,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **效果（texfix+fallback 组合，清缓存）**：**default 28753→21560、band→20232、default-range→21864、terrain→34990（四例净改善 −26.5k，层首次可见）**；several-layers +5k（颜色/双混合域，另案）；no-raster-color 63501 不变（unbound-ramp 黑语义未对齐）。texfix 单独（无 fallback）与基线逐位一致（层不渲染时零影响）——入库零回归。
 - **fallback 入库条件（仍未满足）**：需先修 no-raster-color——§824 已有 1×1 黑 DataTexture 路径但 RASTER_COLOR 分支在 hasRasterColor=false 时未注入（fragment 分支以 rasRampTex 非空为前提，黑兜底赋值时机在分支判定之后）——下会话单点：把黑兜底提前到分支判定前使其生效，期望恢复 mgl 的"无 raster-color=大面积黑"语义后 fallback+texfix 一并入库。
 - **终态**：texfix 入库、fallback 维持关、raster-array/raster 族基线复现 ✓、工作树=提交态+texfix。
+
+**§368. raster-array 组合入库【整族首次净改善】——.mrt 强制真混合（nodata 透明）+ source-layer fallback 正式化（2026-08-25 二百六十，入库记档）**：
+
+- **no-raster-color 终修**：§367 组合下该 fixture 渲染为**全白 65536**（nodata 区走 opaque 路径 mix(base=白,·,0)=不透明白盖掉卫星）——修复：.mrt 材质**强制 rasRealBlend=true**（真 alpha 混合，nodata alpha=0 全透）→ **63501→6112**（优于无 fallback 基线 10525）。§367 记档的"黑兜底时序"假设不成立（841 兜底本就在 attach 前、分支已注入），真因是不透明合成无法表达透明。
+- **组合入库（三项：texfix 已入库 + 强制真混合 + fallback 正式化）**：清缓存复测整族——**default 21560（−7.2k）/no-raster-color 6112（−4.4k）/band 20232（−8.5k）/default-range 21864（−7.0k）/terrain 34990（−3.9k）/semi-transparent-icon 1580（持平）**，several-layers 33884（+5.2k 劣化，颜色/双混合域另案记档）——**整族净改善 −25.8k**。
+- **回归**：raster 全族（opacity/alpha/masking/color/zoomed/retina/brightness/contrast/saturation/hue/visibility/extent）与 terrain/error-overlap 三例全部维持既有值——**零回退** ✓。
+- **残差**：default 21560 等仍远超阈值（66/263）——层已可见，剩颜色/uv/ramp 值域校准（常规像素域）+ several-layers 双混合劣化。
+- **终态**：三项入库、工作树=提交态。

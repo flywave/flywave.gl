@@ -780,6 +780,13 @@ export class MBMaterialPatchManager {
             : null;
         const patBase = bgPat !== null && bgPat !== undefined;
         if (patBase) rasRealBlend = false;
+        // §368: raster-ARRAY layers ALWAYS real-blend — the NODATA mask
+        // (alpha) must show the layers beneath; the opaque composite's base
+        // color cannot represent transparency (no-raster-color rendered a
+        // solid white sheet covering the satellite).
+        if (String(technique._rasterTileUrl ?? '').endsWith('.mrt')) {
+            rasRealBlend = true;
+        }
         if ('opacity' in material) {
             if (rasRealBlend) {
                 (material as any).opacity = 1;
