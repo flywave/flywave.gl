@@ -12,6 +12,10 @@ export interface ParsedFontstack {
     name: string;
     range: string;
     glyphs: Map<number, ParsedGlyph>;
+    /** Fontstack ascender/descender (proto fields 4/5, sint32) — mgl shapes
+     * glyphs against the font baseline (glyphOffset = -ascender*scale etc). */
+    ascender?: number;
+    descender?: number;
 }
 
 function readVarint(data: Uint8Array, offset: number): [number, number] {
@@ -117,6 +121,26 @@ function parseFontstack(data: Uint8Array, fontstack: ParsedFontstack): void {
                     offset = newPos;
                     const glyph = parseGlyph(glyphBytes);
                     if (glyph) fontstack.glyphs.set(glyph.id, glyph);
+                } else {
+                    offset = skipField(data, offset, wireType);
+                }
+                break;
+            }
+            case 4: {
+                if (wireType === 0) {
+                    const [v, np] = readSVarint(data, offset);
+                    fontstack.ascender = v;
+                    offset = np;
+                } else {
+                    offset = skipField(data, offset, wireType);
+                }
+                break;
+            }
+            case 5: {
+                if (wireType === 0) {
+                    const [v, np] = readSVarint(data, offset);
+                    fontstack.descender = v;
+                    offset = np;
                 } else {
                     offset = skipField(data, offset, wireType);
                 }

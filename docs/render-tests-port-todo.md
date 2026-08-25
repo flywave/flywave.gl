@@ -5146,3 +5146,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **screenBox dump**：label icon box=(-38,-19,76,38) 中心 (0,0)=画布中心 ✓ 与期望逐位对齐（源艺术 x0 即有墨，无内边距假象）。
 - **终态重定性**：icon-text-fit 残差=**纯圆角 AA 级差**（源艺术圆角在 1:1 下的边缘带重采样差），21px/阈 7 的最后一段只能靠纹理内容级或 AA 重采样精度——ROI 极低记档冻结；§438 基线链条（text-anchor/bottom 首行 1px）不受本节影响（那是 TEXT 行盒，测量独立）。
 - **终态**：探针全清（tsc 绿），纯 docs 提交。
+
+**§446. §438 四级链条重大简化定案——实测全部测试 glyph PBF 的 fontstack **不含 fields 4/5（ascender/descender 为空**，逐字节扫描至 submessage 末尾仅 1/2/3 域）→ mgl 自身走 `SHAPING_DEFAULT_OFFSET = −17`（24px em 下的默认基线，shaping.ts:22/627）回退分支——四级链条坍缩为**一级**：在 TextShaping 行 y 中实现 mgl 默认基线公式（glyph top = i·lineHeight + off(−17 at 24em) + align，H/2 居中）（2026-08-26 三百三十八）**：
+
+- **证据**：①解析器已增 fields 4/5 提取（保留入库，运行时对含基线的字体生效）；②离线 dump Open Sans Semibold 0-255：ascender/descender undefined；③原始 wire 扫描至 subEnd 确认仅 name/range/glyphs 三域；④mgl 源码回退分支（无 baseline 时 glyphOffset = −17 + (lineMaxScale−sectionScale)·24）。
+- **工程重估**：修复 bottom 首行 1px = 把 TextShaping 的行盒中线制 y 换成 mgl 默认基线制（一行级公式：lineTop_i = −H/2 + i·lh；glyphTop += (−17·s + lh 中线差)·fontSize/24），无需动 GlyphPBFParser/FontCatalog 链。harness glyph-t（单 'T'）首行 y33→34 为直接验收信号。
+- **终态**：GlyphPBFParser fields 4/5 提取入库（tsc 绿，对现有资产零行为变化）；公式实施为下会话单点。
