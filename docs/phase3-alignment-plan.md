@@ -1,0 +1,62 @@
+# Phase 3 大型工程对齐计划
+
+> 基于 2026-08-26 全仓探查（@flywave/* 引擎本体 vs mapbox-gl-js 参照 + 渲染测试夹具）。
+> 目标：确认 18 个 P3 大项实现状态，按"夹具就绪度 × 实现集中度 × 风险"排序，依次代码级对齐。
+
+## 一、实现状态盘点
+
+| # | 任务 | 状态 | 关键证据 |
+|---|------|------|---------|
+| P3.1 | fill-extrusion-terrain | 部分 | 3×3 DEM 网格 + 真实 exaggeration（shader+CPU 一致含 secLat）已实现；proxy-tile drape/depth occlusion/morphing 为 T4–T7 deferred（`TerrainController.ts`） |
+| P3.2 | terrain 进阶 | 大部分未实现 | dynamic-exaggeration 仅整体 rebuild；terrarium 解码器存在但主路径硬编码 `'mapbox'`（`TerrainController.ts:411`）；raycast 在 terrain-datasource 有（`DemTree.ts`）未接入 mbstyle；globe+terrain 完全未实现（`TerrainDraping.ts:96` 禁用） |
+| P3.3 | fog 精度 | 基本已实现 | horizon-blend/vertical-range 按 mgl 公式；pitch 渐入为两点标定近似（`MBBackgroundFogRenderer.ts:21`） |
+| P3.4 | sky cubemap + atmosphere | 已实现 | mgl skybox 逐面 capture 严格移植（rayleigh/mie + tonemap）；另有 SkyCubemapTexture/SkyAtmosphereMaterial |
+| P3.5 | lighting 作用 2D 层 | 已实现 | `injectGroundLighting()` 覆盖 fill/line/circle/raster/pattern；direction/intensity/measure-light 支持；缺 intensity/color 通用表达式 |
+| P3.6 | building roof-shape | **未实现** | paint key 已解析（默认 'flat'）但无消费者；hipped/gabled/mansard/pyramidal/skillion/parapet 几何零代码；夹具 6 组就位 |
+| P3.7 | 3d-intersections | 部分 | z-offset/elevation-reference 已实现；ElevatedStructures 简化版；elevation graph 拓扑未实现 |
+| P3.8 | model-layer | 部分 | model 图层（GLTF 实例化+阴影）与 3D Tiles LOD(SSE) 已实现；BVH 未实现 |
+| P3.9 | color-theme | 已实现 | LUT 三线性 + config 表达式 + CLI + 20+ 测试 |
+| P3.10 | raster 三件套 | 部分 | raster-elevation ✅、raster-array(.mrt) ✅；raster-particle 未实现 |
+| P3.11 | custom-layer-js / video | **未实现** | src 零匹配，INCOMPATIBLE_TYPES 列表 |
+| P3.12 | PMTiles tile-providers | **未实现** | 无解码代码；7 组夹具（`local://tiles/*.pmtiles`）就位 |
+| P3.13 | 多源 / cluster | 部分 | 多源 ✅；cluster 为自研网格聚合（每 2 级 zoom 重算、无 KD-tree、无 cluster_id/expansionZoom），非 supercluster |
+| P3.14 | imports / slots | 部分 | mergeImports + config 表达式 ✅；slots 排序无消费者；运行时重 merge 靠 setStyle 全量 |
+| P3.15 | front-cutoff / cross-source / occlusion symbol | 大部分未实现 | front-cutoff 仅透传无消费者；cross-source 靠夹具 filter；icon/text-occlusion-opacity 仅默认值 |
+| P3.16 | sd-hd-conflation / transition | 未实现（引擎级） | src 零命中；SD 隐藏靠夹具数据侧 filter |
+| P3.17 | map-mode / tile-mode | **未实现** | 测试桩 `__mapMode` 无消费者 |
+| P3.18 | free-camera / setPadding | **未实现** | 无 API；测试用 setPrincipalPoint 近似 |
+
+**基本不需专项投入**：P3.3 / P3.4 / P3.5 / P3.9（已按 mgl 语义实现，仅剩标定微调，以渲染对拍驱动）。
+
+## 二、对齐批次（执行顺序）
+
+### 批次 1：夹具就绪 + 改动集中（纯欠账）
+1. **P3.6 roof-shape**：在 `MBTileDataEmitter.ts` building 分支实现 6 种屋顶几何（hipped/gabled/mansard/pyramidal/skillion/parapet + flat），paint 属性 `building-roof-shape`（含数据驱动表达式）由 `MBLayerEvaluator` 求值传入 emitter。验证：`test/render-tests/building/{gabled,hipped,mansard,parapet,pyramidal,skillion}`。
+2. **P3.2a terrarium 接线**：`MBStyleSpec.ts` terrain.encoding → `MBEnvironmentManager.applyTerrain` → `TerrainController.decodeDemImage`（去掉 `TerrainController.ts:411` 硬编码 'mapbox'）。验证：`terrain/terrarium` 夹具。
+3. **P3.15a front-cutoff**：为 `fill-extrusion-front-cutoff` 实现消费者（相机侧近距裁剪，mgl 语义：投影后按 cutoff 平面丢弃/截断顶点）。验证：`test/render-tests/front-cutoff/*` 6 组。
+
+### 批次 2：独立子系统（低耦合）
+4. **P3.12 PMTiles**：实现 pmtiles 归档读取（目录/varint/zstd-if-needed 解码），注册 `local://` 或 pmtiles:// 协议 handler 接入 `MBStyleDataSource.resolveSources`。验证：`tile-providers/*` 7 组。注意夹具 URL 为 `local://`——需确认 harness 的 local 资源映射路径。
+5. **P3.13 cluster**：以层级 KD-tree（supercluster 算法移植）替换 `MBStyleDataSource.ts` 内 `GeoJSONDataProvider.clusterAtZoom()`，补 cluster_id 稳定寻址、getClusterExpansionZoom/leaves 语义。
+
+### 批次 3：引擎级新架构（单独立项）
+6. P3.10 raster-particle（流场粒子管线）
+7. P3.11 custom-layer-js / video
+8. P3.17 map-mode、P3.18 free-camera/setPadding
+9. P3.16 sd-hd-conflation 引擎级 coverage/淡出
+10. P3.14 slots 排序消费、P3.2 globe-terrain / dynamic-exaggeration / raycast 接入
+11. P3.7 elevation graph、P3.8 BVH
+
+## 三、验证基线
+
+- 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
+- 回归底线：既有 baseline（baseline7-pass.txt）不劣化。
+
+## 四、进度记录
+
+- [x] 状态盘点（本文档第一节）
+- [ ] 批次 1.1 roof-shape
+- [ ] 批次 1.2 terrarium
+- [ ] 批次 1.3 front-cutoff
+- [ ] 批次 2.4 PMTiles
+- [ ] 批次 2.5 cluster

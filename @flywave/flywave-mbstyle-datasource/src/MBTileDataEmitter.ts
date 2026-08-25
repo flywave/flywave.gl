@@ -1567,8 +1567,19 @@ export class MBTileDataEmitter {
         if (this.m_terrainSampler) {
             (this.m_techniques[techniqueIdx] as any)._mbTerrainLifted = true;
         }
-        const rawHeight = layer.paint['fill-extrusion-height'] as number ?? 0;
-        const rawFloor = layer.paint['fill-extrusion-base'] as number ?? 0;
+        // Building layers carry their height/base under building-* layout /
+        // paint keys (style-spec v8 building layer), not fill-extrusion-*.
+        const isBuildingLayer = layer.type === 'building';
+        const rawHeight = (isBuildingLayer
+            ? ((layer.layout as any)['building-height']
+                ?? (layer.paint as any)['building-height']
+                ?? properties?.height ?? properties?.['building-height'] ?? properties?.['height'] ?? 10)
+            : layer.paint['fill-extrusion-height']) as number ?? 0;
+        const rawFloor = (isBuildingLayer
+            ? ((layer.layout as any)['building-base']
+                ?? (layer.paint as any)['building-base']
+                ?? properties?.base ?? properties?.['building-base'] ?? 0)
+            : layer.paint['fill-extrusion-base']) as number ?? 0;
         // §294: mgl's effective vertical scale for style meters carries
         // sec(lat) TWICE on the flat-height path (scan optimum K=1.27 =
         // secLat@37.75°) but once on the per-vertex terrain path — apply the
@@ -1684,9 +1695,22 @@ export class MBTileDataEmitter {
                 if (isPatternExtrusion) geo.uvs.push(edgeDists[i], topGround + height);
             }
 
-            // Roof triangles reference the TOP vertices (or, for pattern
-            // extrusions, roof-dedicated copies with xy pattern UVs).
-            if (isPatternExtrusion) {
+            // Shaped building roofs (mgl 3D buildings building-roof-shape):
+            // replace the flat top with the shaped roof mesh; walls stay at
+            // eave height (the shaped pass emits gable-end / rim walls itself).
+            const roofShape = layer.type === 'building'
+                ? ((layer.layout as any)['building-roof-shape']
+                    ?? (layer.paint as any)['building-roof-shape']
+                    ?? 'flat')
+                : 'flat';
+            if (roofShape !== 'flat') {
+                this.emitShapedBuildingRoof(
+                    geo, rings[0], grounds, baseVertex,
+                    height, floorHeight, roofShape,
+                    rawHeight, rawFloor, extraScale,
+                    heightAlign, centroidElev,
+                );
+            } else if (isPatternExtrusion) {
                 const roofBase = geo.positions.length / 3;
                 for (let i = 0; i < ringCount; i++) {
                     const w = this.project(
@@ -1743,6 +1767,222 @@ export class MBTileDataEmitter {
             });
             geo.featureStarts.push(featureStart);
             geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
+        }
+    }
+
+    /**
+     * Emit a shaped roof for a `building` layer (mgl 3D buildings
+     * `building-roof-shape`: pyramidal / hipped / gabled / skillion /
+     * mansard / parapet). Footprints are treated as quads (the common
+     * building footprint); non-quad rings fall back to a pyramidal fan.
+     *
+     * All heights are the already-scaled world values matching
+     * emitExtrudedPolygon; the roof rise follows mgl's proportional look
+     * (ridge ≈ 1.3× wall height for a 10m building → rise = 0.3×wall).
+     *
+     * Winding: every triangle is oriented OUTWARD in world space —
+     * near-horizontal faces up, near-vertical faces away from the footprint
+     * centroid — so FrontSide culling keeps only exterior surfaces.
+     */
+    private emitShapedBuildingRoof(
+        geo: AccumulatedGeometry,
+        ring: { x: number; y: number }[],
+        grounds: number[],
+        baseVertex: number,
+        height: number,
+        floorHeight: number,
+        roofShape: string,
+        rawHeight: number,
+        rawFloor: number,
+        extraScale: number,
+        heightAlign: string,
+        centroidElev: number,
+    ): void {
+        // Dedup closing point.
+        const pts = ring.slice();
+        if (pts.length > 1) {
+            const a = pts[0], b = pts[pts.length - 1];
+            if (Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9) pts.pop();
+        }
+        if (pts.length < 3) return;
+
+        const rise = 0.3 * Math.max(rawHeight - rawFloor, 0) * this.m_terrainHeightScale * extraScale;
+        const groundAt = (i: number) =>
+            this.m_terrainSampler ? (heightAlign === 'flat' ? centroidElev : (grounds[i] ?? 0)) : 0;
+        const topZ = (i: number) => groundAt(i) + height;
+
+        const axisW = height - floorHeight;
+        const addWorldVert = (wx: number, wy: number, z: number): number => {
+            const idx = geo.positions.length / 3;
+            geo.positions.push(wx, wy, z);
+            geo.extrusionAxis.push(0, 0, axisW, 1);
+            return idx;
+        };
+
+        // Footprint centroid in world coords, for the outward test.
+        let ccx = 0, ccy = 0;
+        for (const p of pts) { ccx += p.x; ccy += p.y; }
+        ccx /= pts.length; ccy /= pts.length;
+        const cw = this.project(new THREE.Vector2(ccx, ccy));
+        const midZ = (this.m_terrainSampler ? centroidElev : 0) + height + 0.5 * rise;
+
+        // pushTri takes tile-local xy + z; winding is fixed to outward.
+        const pushTri = (
+            ax: number, ay: number, az: number,
+            bx: number, by: number, bz: number,
+            cx: number, cy: number, cz: number,
+        ) => {
+            const aw = this.project(new THREE.Vector2(ax, ay));
+            const bw = this.project(new THREE.Vector2(bx, by));
+            const cwx = this.project(new THREE.Vector2(cx, cy));
+            const ux = bw.x - aw.x, uy = bw.y - aw.y, uz = bz - az;
+            const vx = cwx.x - aw.x, vy = cwx.y - aw.y, vz = cz - az;
+            const nx = uy * vz - uz * vy;
+            const ny = uz * vx - ux * vz;
+            const nz = ux * vy - uy * vx;
+            const nl = Math.hypot(nx, ny, nz) || 1;
+            const gx = (aw.x + bw.x + cwx.x) / 3, gy = (aw.y + bw.y + cwx.y) / 3;
+            let keep = true;
+            if (Math.abs(nz) > 0.7 * nl) {
+                keep = nz > 0; // horizontal face → up
+            } else {
+                keep = nx * (gx - cw.x) + ny * (gy - cw.y) > 0; // vertical face → away
+            }
+            const ia = addWorldVert(aw.x, aw.y, az);
+            const ib = addWorldVert(bw.x, bw.y, bz);
+            const ic = addWorldVert(cwx.x, cwx.y, cz);
+            if (keep) geo.indices.push(ia, ib, ic);
+            else geo.indices.push(ia, ic, ib);
+        };
+        // Top vertex of wall ring vertex i (shared with the eaves).
+        const wallTop = (i: number) => baseVertex + i * 2 + 1;
+        // Emit a vertical quad between two ring vertices (eaves z0) and two
+        // raised copies (z1) — used for parapet rims / skillion wall fills.
+        const pushWallQuad = (
+            i: number, j: number, z1i: number, z1j: number,
+        ) => {
+            // Read the ring vertices' world positions from the wall tops.
+            const pi = geo.positions[wallTop(i) * 3], pj = geo.positions[wallTop(j) * 3];
+            const qi = geo.positions[wallTop(i) * 3 + 1], qj = geo.positions[wallTop(j) * 3 + 1];
+            const zi = geo.positions[wallTop(i) * 3 + 2], zj = geo.positions[wallTop(j) * 3 + 2];
+            const iUp = addWorldVert(pi, qi, z1i);
+            const jUp = addWorldVert(pj, qj, z1j);
+            const iTop = wallTop(i), jTop = wallTop(j);
+            // Orientation fixed by the outward test on the vertical quad.
+            const ux = pj - pi, uy = qj - qi;
+            const outX = -(uy), outY = ux; // rotate edge dir -90°
+            const gx = (pi + pj) / 2, gy = (qi + qj) / 2;
+            const flip = outX * (gx - cw.x) + outY * (gy - cw.y) < 0;
+            if (!flip) geo.indices.push(iTop, jTop, jUp, jUp, iUp, iTop);
+            else geo.indices.push(iTop, iUp, jUp, jUp, jTop, iTop);
+        };
+
+        if (roofShape === 'parapet') {
+            // Flat roof recessed slightly below a raised perimeter rim.
+            const rp = Math.min(1.0, 0.1 * (height - floorHeight));
+            for (let i = 0; i < pts.length; i++) {
+                pushWallQuad(i, (i + 1) % pts.length, topZ(i) + rp, topZ((i + 1) % pts.length) + rp);
+            }
+            // Rim top face: outer ring at height + rp to inner ring at eaves.
+            const outerUp: number[] = [], innerAt: number[] = [];
+            for (let i = 0; i < pts.length; i++) {
+                const w = this.project(new THREE.Vector2(pts[i].x, pts[i].y));
+                outerUp.push(addWorldVert(w.x, w.y, topZ(i) + rp));
+                const ix = ccx + (pts[i].x - ccx) * 0.97, iy = ccy + (pts[i].y - ccy) * 0.97;
+                const wi = this.project(new THREE.Vector2(ix, iy));
+                innerAt.push(addWorldVert(wi.x, wi.y, topZ(i)));
+            }
+            for (let i = 0; i < pts.length; i++) {
+                const j = (i + 1) % pts.length;
+                geo.indices.push(outerUp[i], outerUp[j], innerAt[j]);
+                geo.indices.push(outerUp[i], innerAt[j], innerAt[i]);
+            }
+            // Inner flat roof (quad fan to centroid).
+            const cIdx = addWorldVert(cw.x, cw.y, topZ(0));
+            for (let i = 0; i < pts.length; i++) {
+                const j = (i + 1) % pts.length;
+                geo.indices.push(innerAt[i], innerAt[j], cIdx);
+            }
+            return;
+        }
+
+        // Quad-based shapes: order corners so p0→p1 is a LONG edge.
+        let quad: { x: number; y: number }[] | null = null;
+        if (pts.length === 4) {
+            let longest = -1, start = 0;
+            for (let i = 0; i < 4; i++) {
+                const a = pts[i], b = pts[(i + 1) % 4];
+                const len = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+                if (len > longest) { longest = len; start = i; }
+            }
+            quad = [pts[start], pts[(start + 1) % 4], pts[(start + 2) % 4], pts[(start + 3) % 4]];
+        }
+
+        const ridgeZ = (this.m_terrainSampler ? centroidElev : 0) + height + rise;
+
+        if (roofShape === 'pyramidal' || !quad) {
+            for (let i = 0; i < pts.length; i++) {
+                const j = (i + 1) % pts.length;
+                pushTri(pts[i].x, pts[i].y, topZ(i), pts[j].x, pts[j].y, topZ(j), ccx, ccy, ridgeZ);
+            }
+            return;
+        }
+
+        const [p0, p1, p2, p3] = quad; // p0→p1 long edge, p3→p2 the opposite
+        const ux = p1.x - p0.x, uy = p1.y - p0.y;
+        const uLen = Math.hypot(ux, uy) || 1;
+
+        if (roofShape === 'hipped' || roofShape === 'gabled') {
+            const inset = roofShape === 'hipped' ? Math.min(rise, 0.45 * uLen) : 0;
+            const mid = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+                ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+            const mA = mid(p0, p3), mB = mid(p1, p2);
+            const ra = { x: mA.x + (ux / uLen) * inset, y: mA.y + (uy / uLen) * inset };
+            const rb = { x: mB.x - (ux / uLen) * inset, y: mB.y - (uy / uLen) * inset };
+            // Two long slopes (each split into two triangles along the ridge).
+            pushTri(p0.x, p0.y, topZ(0), p1.x, p1.y, topZ(1), rb.x, rb.y, ridgeZ);
+            pushTri(p0.x, p0.y, topZ(0), rb.x, rb.y, ridgeZ, ra.x, ra.y, ridgeZ);
+            pushTri(p3.x, p3.y, topZ(3), p2.x, p2.y, topZ(2), rb.x, rb.y, ridgeZ);
+            pushTri(p3.x, p3.y, topZ(3), rb.x, rb.y, ridgeZ, ra.x, ra.y, ridgeZ);
+            // End walls: gable triangles (gabled) or hip slopes (hipped).
+            pushTri(p1.x, p1.y, topZ(1), p2.x, p2.y, topZ(2), rb.x, rb.y, ridgeZ);
+            pushTri(p0.x, p0.y, topZ(0), p3.x, p3.y, topZ(3), ra.x, ra.y, ridgeZ);
+            return;
+        }
+
+        if (roofShape === 'skillion') {
+            // Monopitch: p0/p1 side stays at eaves, p3/p2 side rises.
+            const hi = (i: number) => topZ(i) + rise;
+            pushTri(p0.x, p0.y, topZ(0), p1.x, p1.y, topZ(1), p2.x, p2.y, hi(2));
+            pushTri(p0.x, p0.y, topZ(0), p2.x, p2.y, hi(2), p3.x, p3.y, hi(3));
+            // Vertical wall fill on the high side (p3→p2 edge rises).
+            pushTri(p3.x, p3.y, topZ(3), p2.x, p2.y, topZ(2), p2.x, p2.y, hi(2));
+            pushTri(p3.x, p3.y, topZ(3), p2.x, p2.y, hi(2), p3.x, p3.y, hi(3));
+            return;
+        }
+
+        if (roofShape === 'mansard') {
+            // Steep lower slope (wall-like) to an inset ring, flat cap.
+            const insetFrac = 0.05;
+            const innerZ = (this.m_terrainSampler ? centroidElev : 0) + height + 0.75 * rise;
+            const q = quad.map(p => ({ x: ccx + (p.x - ccx) * (1 - insetFrac), y: ccy + (p.y - ccy) * (1 - insetFrac) }));
+            for (let i = 0; i < 4; i++) {
+                const j = (i + 1) % 4;
+                const k = (i + 2) % 4;
+                pushTri(quad[i].x, quad[i].y, topZ(i), quad[j].x, quad[j].y, topZ(j), q[k].x, q[k].y, innerZ);
+                pushTri(quad[i].x, quad[i].y, topZ(i), q[k].x, q[k].y, innerZ, q[i].x, q[i].y, innerZ);
+            }
+            // Flat cap (quad fan to center).
+            const cIdx = addWorldVert(cw.x, cw.y, innerZ);
+            const qIdx = q.map(p => {
+                const w = this.project(new THREE.Vector2(p.x, p.y));
+                return addWorldVert(w.x, w.y, innerZ);
+            });
+            for (let i = 0; i < 4; i++) {
+                const j = (i + 1) % 4;
+                geo.indices.push(qIdx[i], qIdx[j], cIdx);
+            }
+            return;
         }
     }
 
