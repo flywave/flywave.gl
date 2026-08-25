@@ -3136,7 +3136,7 @@ export class MBTileDataEmitter {
                     }
                     if (tech.name === 'text' && tech.text) {
                         this.emitTextGeometry(techniqueIdx, ww, tech.text as string,
-                            { ...properties, $id: this.symbolFeatureId(featureId, properties, ww) });
+                            { ...properties, $id: `${layer.id}:${this.symbolFeatureId(featureId, properties, ww)}` });
                     } else if (tech.name === 'labeled-icon') {
                         const iconName = tech.imageTexture as string;
                         const caption = (layer.layout['text-field'] && mode === 'icon')
@@ -3144,7 +3144,12 @@ export class MBTileDataEmitter {
                         this.emitPoiGeometry(techniqueIdx, ww,
                             iconName ?? '',
                             caption || undefined,
-                            { ...properties, $id: this.symbolFeatureId(featureId, properties, ww) });
+                            // Layer-scoped feature id: the engine's label cache
+                            // deduplicates by featureId — two style layers
+                            // rendering the SAME feature (mgl draws both,
+                            // e.g. regressions/mapbox-gl-native#11451 blue
+                            // under red) must not collapse into one label.
+                            { ...properties, $id: `${layer.id}:${this.symbolFeatureId(featureId, properties, ww)}` });
                     }
                 }
 

@@ -5024,3 +5024,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **mgl 抗摩尔纹机制候选（下会话）**：①mgl 图集 UV 布局 dump（每字形独立条目+padding 的 LINEAR 采样在 1.5× 下的行为与我们的条目布局对比）；②mgl 是否对 text 也走 sx 光栅化变体（getScaledImageVariant 仅 icon 调用，text 布局链未见——需二次确认）；③mgl glyph quad 的实际屏幕尺寸实测（size=16.06 已知，但 quad 像素尺寸未测）。
 - **SDF AA 域会话总结**：五层排除+三修复尝试（bias/mipmap/滤波）后，域内已证字节/公式/拷贝/数学全同构，残差为 mgl 尚未知的抗摩尔纹采样机制——继续域内攻坚 ROI 下降，建议下会话转向收割面更大的域（regressions 剩余 67 例按值排序/ icon-text-fit 族），SDF AA 保持记档。
 - **终态**：实验全清（tsc 绿），纯 docs 提交。
+
+**§429. regressions 低残差带收割重开——#11451 根因破案（引擎标签缓存按 featureId 跨层去重丢弃第二层图标）+ 层域化 featureId 修复：67→9px，全族与宽域零回归（2026-08-26 三百二十一）**：
+
+- **失败清单刷新（s429-full，54/122）**：低残差带 #4564(9,line AA 已知)/#3614(13,raster)/#9009(26,线宽边缘 AA 相位)/#6820(59,text)/#6233(62,line AA)/#3394(66)/#11451(67)/#6649(68)。
+- **#11451 四级探针链定案**：PoiRenderer.addIcon 仅 1 次 → placeIcon 仅蓝 → addPoiLabel 仅层 a → **PoiBuilder 两层都建**（a/blue + b/red 均存在）→ 断点在 TextElementsRenderer.prepareTextElementGroup 的 **`TextElementStateCache.deduplicateElement`：引擎按 `getCacheKey = featureId` 去重标签**——两层样式渲染同一 feature 的图标被判"重复"丢弃第二层（mgl 语义：两层都画）。#11451 期望=红(size1)叠蓝(size2)，我们只剩蓝 ✓ 全链对上。
+- **修复（emitter 层域化 featureId）**：text/labeled-icon 两处 emit 的 `$id` 从 `symbolFeatureId(...)` 改为 `` `${layer.id}:${symbolFeatureId(...)}` `` ——跨层不再共享 cacheKey；我们自己的 PlacementEngine 键本就是 `layerId:featureId` 不受影响，pick 身份仍稳定（层域化后唯一）。
+- **验收**：#11451 **67→9px**（结构全同：红心蓝环两图一致，残差=图标边缘 AA 强度，9>5 阈值未过但量级收敛）；regressions 全族 A/B 54→54 **零回归**；runtime-styling+text-variable-anchor+icon 族 199 例守卫基线 46 通过项**零回归**。
+- **低残差带剩余归因（下会话按序）**：#9009 线宽边缘相位（26px）、#6820 NotoCJK text（59px）、#3394/#6233/#6649 line/text AA 域、#4564/#3614 已记档。
+- **终态**：MBTileDataEmitter 单文件（两处 $id 层域化），四级探针全清（tsc 双包绿），随记档提交。
