@@ -1,6 +1,7 @@
 import { StyleSpecification, LayerSpecification } from './MBStyleSpec';
-import { MBLayerEvaluator } from './MBLayerEvaluator';
+import { MBLayerEvaluator, PAINT_DEFAULTS } from './MBLayerEvaluator';
 import { loadColorTheme } from './MBColorTheme';
+import * as THREE from 'three';
 
 interface ActiveTransition {
     layerId: string;
@@ -35,6 +36,11 @@ export class MBStyleRuntime {
         return this.m_evaluator;
     }
 
+    /** True while a paint transition is mid-flight (capture-latency guard). */
+    get hasActiveTransitions(): boolean {
+        return this.m_transitions.length > 0;
+    }
+
     get style(): StyleSpecification {
         return this.m_style;
     }
@@ -44,9 +50,15 @@ export class MBStyleRuntime {
         if (!layer) return;
         if (!layer.paint) (layer as any).paint = {};
 
-        const oldValue = (layer as any).paint[prop];
+        let oldValue = (layer as any).paint[prop];
+        if (oldValue === undefined) {
+            // Transitioning away from an UNSET property starts at the
+            // property's spec default (mgl: #2769 black→red halfway check).
+            oldValue = PAINT_DEFAULTS[layer.type]?.[prop];
+        }
+        // mgl style-spec default transition: {duration: 300, delay: 0}.
         const transition = (this.m_style as any).transition;
-        const duration = transition?.duration ?? 0;
+        const duration = transition?.duration ?? 300;
         const delay = transition?.delay ?? 0;
 
         if (duration > 0 && this.canInterpolate(oldValue, value)) {
@@ -67,10 +79,23 @@ export class MBStyleRuntime {
 
     private canInterpolate(a: any, b: any): boolean {
         if (typeof a === 'number' && typeof b === 'number') return true;
-        if (typeof a === 'string' && typeof b === 'string' &&
-            (a.startsWith('#') || a.startsWith('rgb')) &&
-            (b.startsWith('#') || b.startsWith('rgb'))) return true;
+        if (typeof a === 'string' && typeof b === 'string') {
+            return MBStyleRuntime.isColorString(a) && MBStyleRuntime.isColorString(b);
+        }
         return false;
+    }
+
+    /** CSS color forms THREE.Color parses (hex, rgb()/hsl(), common names). */
+    private static readonly COLOR_NAMES = new Set([
+        'black', 'white', 'red', 'green', 'blue', 'yellow', 'orange', 'purple',
+        'gray', 'grey', 'pink', 'brown', 'cyan', 'magenta', 'lime', 'navy',
+        'teal', 'gold', 'violet', 'indigo', 'silver', 'beige', 'maroon',
+        'olive', 'aqua', 'fuchsia', 'skyblue', 'steelblue', 'transparent',
+    ]);
+
+    private static isColorString(s: string): boolean {
+        if (s.startsWith('#') || /^(rgb|hsl)a?\(/i.test(s)) return true;
+        return MBStyleRuntime.COLOR_NAMES.has(s.toLowerCase());
     }
 
     private interpolate(a: any, b: any, t: number): any {
@@ -84,21 +109,13 @@ export class MBStyleRuntime {
     }
 
     private interpolateColor(a: string, b: string, t: number): string {
-        const parse = (c: string) => {
-            const h = c.replace('#', '');
-            return {
-                r: parseInt(h.substring(0, 2), 16) || 0,
-                g: parseInt(h.substring(2, 4), 16) || 0,
-                b: parseInt(h.substring(4, 6), 16) || 0,
-            };
-        };
         try {
-            const ca = parse(a);
-            const cb = parse(b);
-            const r = Math.round(ca.r + (cb.r - ca.r) * t);
-            const g = Math.round(ca.g + (cb.g - ca.g) * t);
-            const bl = Math.round(ca.b + (cb.b - ca.b) * t);
-            return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
+            // THREE.Color parses hex/rgb()/named CSS; lerp is per-channel
+            // linear (matches mgl's Color interpolation for transitions).
+            const ca = new THREE.Color(a);
+            const cb = new THREE.Color(b);
+            const out = ca.clone().lerp(cb, t);
+            return `#${out.getHexString()}`;
         } catch {
             return t > 0.5 ? b : a;
         }
@@ -132,8 +149,8 @@ export class MBStyleRuntime {
                 continue;
             }
             const t = Math.min(1, elapsed / tr.duration);
-            const eased = t * t * (3 - 2 * t);
-            const value = this.interpolate(tr.from, tr.to, eased);
+            // mgl paint transitions are LINEAR by default (no easing).
+            const value = this.interpolate(tr.from, tr.to, t);
 
             const layer = this.findLayer(tr.layerId);
             if (layer) {

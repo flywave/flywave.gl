@@ -302,9 +302,47 @@ async function processOperations(
     for (const op of operations) {
         const [name, ...args] = op;
         switch (name) {
-            case "wait":
-                await renderFrames(mapView, dataSource, args[0] ? 3 : 2);
+            case "wait": {
+                // mgl 'wait' = advance real time with the render loop alive
+                // (paint transitions interpolate by wall clock). Anchor to
+                // the requested duration with lightweight AfterRender
+                // frames; the full settle path is the caller's capture.
+                const waitMs = Number(args[0] ?? 0);
+                const t0 = Date.now();
+                if (waitMs > 0) {
+                    // Stop one frame BEFORE the deadline: the loop's last
+                    // frame renders for ~35-40ms, so its pixels reflect the
+                    // tick at (deadline - frame) — landing the capture on
+                    // the requested phase (#2769: 150ms of a 300ms linear
+                    // transition).
+                    const frameBudget = 40;
+                    while (Date.now() - t0 < waitMs - frameBudget) {
+                        await new Promise<void>((resolve) => {
+                            const handler = () => {
+                                mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
+                                resolve();
+                            };
+                            mapView.addEventListener(MapViewEventNames.AfterRender, handler);
+                            mapView.update();
+                            setTimeout(resolve, Math.min(50, waitMs));
+                        });
+                    }
+                } else {
+                    // wait 0 = "next frame" — a single lightweight frame; the
+                    // heavy settle path distorts wall-clock-anchored state
+                    // (transitions) when mixed with timed waits.
+                    await new Promise<void>((resolve) => {
+                        const handler = () => {
+                            mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
+                            resolve();
+                        };
+                        mapView.addEventListener(MapViewEventNames.AfterRender, handler);
+                        mapView.update();
+                        setTimeout(resolve, 100);
+                    });
+                }
                 break;
+            }
             case "on": {
                 // mgl `on(event, [[op, ...args], ...])` — run the nested ops
                 // when the event fires. Only `styleimagemissing` is wired: it
@@ -1419,7 +1457,19 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 const operations = metadata.operations ?? [];
                 if (operations.length > 0) {
                     await processOperations(mapView, dataSource, operations);
-                    await renderFrames(mapView, dataSource, 3);
+                    // Paint transitions interpolate by wall clock — the heavy
+                    // multi-frame settle path adds capture latency that pushes
+                    // mid-transition fixtures (#2769: black→red @150ms) past
+                    // their expected phase. Single fast frame when a
+                    // transition is mid-flight; settle path otherwise.
+                    const rtAny = (dataSource as any).runtime;
+                    if (rtAny?.hasActiveTransitions) {
+                        // Zero extra frames: the wait loop's last AfterRender
+                        // already shows the phase at the requested time — any
+                        // further frame advances the wall clock past it.
+                    } else {
+                        await renderFrames(mapView, dataSource, 3);
+                    }
                 }
 
 

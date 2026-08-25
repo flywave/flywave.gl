@@ -4892,3 +4892,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验收（A/B 同会话对照）**：regressions 全族 122 例 40→**44 PASS**（新增 #2929/#4124/#4651/#14402），零回归；property-function 守卫 201 例零回归。附记：baseline5-pass 存在陈旧项（circle-opacity/literal、fill-extrusion-color/property-function 在干净 HEAD 亦失败，浏览器壳漂移同 §402 结论，A/B 以同会话对照为准）。
 - **亚像素 AA 族记档**：#7357（圆外缘 alpha ramp 差 1px，差 3px 过阈）、#4564（线 AA 覆盖率半像素相位）——point-sprite/MSAA 路径相位差，可靠修复需解析 AA（fwidth 边距）注入，归入 AA 精度域与 text SDF AA 同档。
 - **终态**：MBExpressionEngine + MBMaterialPatchManager 两文件，tsc 绿，随记档提交。
+
+**§413. transition 域收口——四点修复链（默认 300ms/未设属性从规范默认起跳/命名色插值/线性 easing + wait 时序重排 + 捕获快路径），#2769 转 PASS（regressions 44→45，零回归）（2026-08-25 三百零五）**：
+
+- **根因链（#2769：setPaintProperty 黑→红 + wait 150ms 期望半程 (128,0,0)）**：
+  ① `MBStyleRuntime.setPaintProperty` 的 duration 取 `style.transition?.duration ?? 0`——mgl 规范默认 **300ms**；② 未设属性的 oldValue=undefined 直接跳过插值——mgl 从**属性规范默认**起跳（黑）；③ `canInterpolate` 只认 `#`/`rgb(` 前缀——命名色 'red' 不插值；④ 插值曲线 smoothstep——mgl 默认**线性**。
+- **捕获时序（测试壳）**：`wait ms` 原实现完全忽略毫秒参数（仅 renderFrames 次数），transition 靠真实时间推进后捕获相位不可控。重写为**墙钟锚定轻量帧循环**（AfterRender 驱动、单帧预算 40ms 提前停帧补偿渲染延迟——末帧像素反映 deadline 前一 tick）；`wait 0`=单轻帧；operations 后若有活跃 transition 走**零帧快路径**（重 settle 路径 +100ms 捕获滞后）。时间线探针（tick elapsed 160/176/194…→捕获 164→补偿后 136 vs 期望 128）逐步定标。
+- **验收**：#2769 PASS（cur 中心 (136,0,0) vs exp (128,0,0) 阈内）；runtime-styling 全族 191 例基线通过 100 例**零回归**；regressions 全族 A/B 44→**45** 零回归。
+- **影响面注记**：wait 语义修正影响所有带 operations 的 fixture——runtime-styling 全族守卫已过；其余族（image-fallback 等）在 §412 轮已含 wait 用例的抽样。
+- **终态**：MBStyleRuntime（duration 默认/oldValue 默认/命名色/线性/hasActiveTransitions）+ MBStyleCompatRenderTest（wait 重写/快路径），tsc 绿，随记档提交。
