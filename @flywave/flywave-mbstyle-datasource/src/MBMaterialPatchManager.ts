@@ -135,11 +135,77 @@ export class MBMaterialPatchManager {
             this.patchMaterial(material, tech, obj);
             this.applyIconTextFit(obj, tech);
             this.patchIconObject(obj, tech);
+            this.patchSymbolOcclusion(obj, tech);
             this.generateGuardrails(obj, tech, tile);
             this.registerAdditiveRibbon(obj, tech);
             this.setupTranslucentExtrusionDualPass(obj, tech);
             this.registerShadowCaster(obj, tech);
         }
+    }
+
+    /**
+     * icon-occlusion-opacity / text-occlusion-opacity (mgl symbol
+     * DEPTH_OCCLUSION define, draw_symbol.js setOcclusionDefines): with
+     * terrain depth occlusion active, fade fragments behind the terrain
+     * depth buffer toward the occlusion opacity. The evaluated default is 0,
+     * matching mgl's "absent value = full occlusion against terrain".
+     *
+     * Injection runs after patchIconObject's SDF block in the same
+     * onBeforeCompile chain: the SDF branch overwrites gl_FragColor at
+     * `#include <colorspace_fragment>`, so the fade is appended at
+     * `#include <dithering_fragment>` (later in three's fragment chain) or,
+     * when absent, after the last colorspace marker.
+     */
+    private patchSymbolOcclusion(obj: THREE.Object3D, technique: any): void {
+        if (!this.m_depthOcclusion || !this.m_depthTexture) return;
+        if (technique?.name !== 'labeled-icon' && technique?.name !== 'text') return;
+        const material = (obj as any).material as THREE.Material | undefined;
+        if (!material || (material as any).__mbOcclusionPatched) return;
+        (material as any).__mbOcclusionPatched = true;
+
+        const depthTex = this.m_depthTexture;
+        const canvas = (this.m_dataSource as any).mapView?.canvas;
+        const invSize = new THREE.Vector2(
+            1 / Math.max(1, canvas?.width ?? 1),
+            1 / Math.max(1, canvas?.height ?? 1),
+        );
+        const key = technique.name === 'text'
+            ? 'text-occlusion-opacity' : 'icon-occlusion-opacity';
+        // Zoom-stop / data-driven expressions are not per-fragment here —
+        // constants only, otherwise fall back to the evaluated default 0.
+        const rawOcclusion = technique._paint?.[key];
+        const occlusionOpacity = typeof rawOcclusion === 'number' ? rawOcclusion : 0;
+
+        const origOnCompile = material.onBeforeCompile;
+        material.onBeforeCompile = (shader: any) => {
+            if (origOnCompile) origOnCompile.call(material, shader);
+            shader.uniforms.u_terrainDepth = { value: depthTex };
+            shader.uniforms.u_terrainDepthInvSize = { value: invSize };
+            shader.uniforms.uMBOcclusionOpacity = { value: occlusionOpacity };
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <common>',
+                '#include <common>\nuniform sampler2D u_terrainDepth;\nuniform vec2 u_terrainDepthInvSize;\nuniform float uMBOcclusionOpacity;'
+            );
+            const block = `
+             {
+                 float mbTz = texture2D(u_terrainDepth, gl_FragCoord.xy * u_terrainDepthInvSize).r;
+                 float mbOcclude = smoothstep(-0.002, 0.002, gl_FragCoord.z - mbTz);
+                 gl_FragColor.a *= mix(1.0, uMBOcclusionOpacity, mbOcclude);
+             }`;
+            const dither = '#include <dithering_fragment>';
+            if (shader.fragmentShader.includes(dither)) {
+                shader.fragmentShader = shader.fragmentShader.replace(dither, dither + block);
+            } else {
+                const marker = '#include <colorspace_fragment>';
+                const idx = shader.fragmentShader.lastIndexOf(marker);
+                if (idx >= 0) {
+                    const after = idx + marker.length;
+                    shader.fragmentShader =
+                        shader.fragmentShader.slice(0, after) + block + shader.fragmentShader.slice(after);
+                }
+            }
+        };
+        material.needsUpdate = true;
     }
 
     /**

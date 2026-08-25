@@ -52,6 +52,7 @@ export class MBStyleManager {
         // their sources/layers/lights/etc. alongside inline imports.
         await this.fetchUrlImports();
         this.mergeImports();
+        this.applySlotOrdering();
         await this.resolveSources();
     }
 
@@ -182,6 +183,103 @@ export class MBStyleManager {
         (this.m_style as any)._config = configMap;
         // Per-import color themes (null = no theme for that import).
         (this.m_style as any)._importThemes = importThemes;
+    }
+
+    /**
+     * Resolve `slot` layers (mgl style.ts mergeLayers, ~line 1442): layers of
+     * type 'slot' mark named positions; layers carrying a `slot` property that
+     * names an already-registered slot are moved to that position (relative
+     * order kept), and the slot layers themselves are dropped from the final
+     * order. Duplicate slot names: the first occurrence wins, later ones are
+     * skipped entirely (mgl `if (slots[slotName]) continue`).
+     *
+     * Additionally, when any layer is 3D, mgl reorders with a stable priority
+     * sort: occlusion-opacity symbol layers before the last 3D layer are
+     * placed tight after it (priority 2), other pre-3D layers keep priority 0,
+     * the last 3D layer gets 1, and everything after stays last (4).
+     */
+    private applySlotOrdering(): void {
+        if (!this.m_style) return;
+        const layers = (this.m_style.layers ?? []) as any[];
+        if (!layers.some(l => l.type === 'slot' || l.slot)) return;
+
+        const slots: Record<string, any[]> = {};
+        const mergedOrder: any[] = [];
+        for (const layer of layers) {
+            if (layer.type === 'slot') {
+                if (slots[layer.id]) continue;
+                slots[layer.id] = [];
+            }
+            if (layer.slot && slots[layer.slot]) {
+                slots[layer.slot].push(layer);
+                continue;
+            }
+            mergedOrder.push(layer);
+        }
+        const ordered: any[] = [];
+        const sort = (list: any[]) => {
+            for (const layer of list) {
+                if (layer.type === 'slot') {
+                    if (slots[layer.id]) sort(slots[layer.id]);
+                } else {
+                    ordered.push(layer);
+                }
+            }
+        };
+        sort(mergedOrder);
+
+        // 3D / occlusion priority reorder (mgl style.ts ~1505). is3D mirrors
+        // the per-type StyleLayer.is3D overrides; raw spec values approximate
+        // the evaluated property reads (defaults match the style-spec).
+        const hasTerrain = !!(this.m_style as any).terrain;
+        const is3D = (layer: any): boolean => {
+            const paint = layer.paint ?? {};
+            const layout = layer.layout ?? {};
+            switch (layer.type) {
+                case 'fill-extrusion':
+                case 'clip':
+                case 'custom':
+                    return layer.type !== 'custom' || layer.renderingMode === '3d';
+                case 'background':
+                    return paint['background-pitch-alignment'] === 'viewport';
+                case 'circle':
+                    // mgl: with terrain enabled circles are never 3D.
+                    if (hasTerrain) return false;
+                    return layout['circle-elevation-reference'] !== 'none';
+                case 'fill': {
+                    // mgl fill: z-offset non-zero (constantOr(1) for data
+                    // driven), or elevation-reference active without terrain.
+                    const zOffset = paint['fill-z-offset'];
+                    if (zOffset !== undefined && zOffset !== 0) return true;
+                    return !hasTerrain && layout['fill-elevation-reference'] !== 'none';
+                }
+                case 'raster': {
+                    const elev = paint['raster-elevation'];
+                    return typeof elev === 'number' && elev > 0;
+                }
+                default:
+                    return false;
+            }
+        };
+        const last3DIdx = ordered.reduce((acc, l, i) => (is3D(l) ? i : acc), -1);
+        if (last3DIdx >= 0) {
+            const priority = ordered.map((layer, i) => {
+                if (i === last3DIdx) return 1;
+                if (i < last3DIdx) {
+                    const paint = layer.paint ?? {};
+                    const hasOcclusion =
+                        'icon-occlusion-opacity' in paint || 'text-occlusion-opacity' in paint;
+                    return hasOcclusion ? 2 : 0;
+                }
+                return 4;
+            });
+            ordered
+                .map((layer, i) => ({ layer, i }))
+                .sort((a, b) => priority[a.i] - priority[b.i])
+                .forEach(({ layer }, j) => { ordered[j] = layer; });
+        }
+
+        this.m_style.layers = ordered;
     }
 
     /**
