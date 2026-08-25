@@ -4732,3 +4732,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **真地面路径**：`MBBackgroundFogRenderer`（AfterRender 全屏 far-plane quad、LESS 深度只填未渲染区）——**经验 per-pitch fog-space scale 表 [[70,0.735],[85,0.10]]**（§fog/horizon-blend 族拟合）——pitch 85 取 0.10 → 雾带过窄/过弱 = 78px 亮带缺失的直接来源。
 - **下会话正解（已定档）**：把该 renderer 的经验 scale 替换为 **mgl 精确式**——每像素 ray∩ground 深度 → `fogT=(shift·d/distCam−(r0+shift))/(r1−r0)`（§389 已对拍同构的公式），删除 per-pitch 表。这将同时惠及 fog/color 族全套标定。
 - **终态**：探针清除、零代码变更、工作树=提交态。fog 域排查链（§387→§392 六轮）完整闭环。
+
+**§393. 精确式替换实验（76–89 扩展 + uScale=1）——fog 域净劣化 +104k：高.pitch 族依赖"无 quad"状态，扩门控整体负收益，回退（2026-08-25 二百八十五）**：
+
+- **实验**：gate 扩至 89.9 + pitch>76 用精确式（uScale=1）——**fog 域净 +103,979**：zoom-expression ±+40k/+37k、2d/basic +23k、equal-range +16k、3d-intersections +16k（少数改善：2d/background-pattern −9.3k、inverted −18k、terrain/zero-exag −3.4k 不抵）。已全量回退。
+- **结论**：76° 以上的既有期望匹配依赖 **quad 不画**（§181 的门控是对的），§392 的"pitch85 取 0.10 过窄"仅对 fog/space-color 单例成立——**per-pitch 表不是普适可替换项**，fog/space-color 78 需 per-fixture 判别（如仅 background-only style + fog 时启用高.pitch 路径）——下会话：门控加 `hasBackground && !hasContentLayers` 条件再测 space-color 单族。
+- **终态**：全量回退、fog 基线复现（16/70）、工作树=提交态。
