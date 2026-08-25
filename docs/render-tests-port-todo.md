@@ -5115,3 +5115,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **守卫**：text-anchor/text-color/text-field/icon-anchor/symbol-placement/geojson/runtime-styling 七族 245 例基线 114 通过项**零回归**（130 pass 为超集）。
 - **§438 基线链条工程**：session 时间盒未启动（§439/§440 两连破案占用），规范在档为下会话主项。
 - **终态**：MBTileDataEmitter 单行级修复（mayOverlap 覆盖点）+ 探针全清（双包 tsc 绿），随记档提交。
+
+**§441. icon 盒 ±1px 定位精化——非整盒平移，而是 label 图标圆角边缘的 AA 级差（角落像素 212/180 vs 244/213，~30 级）；与 §422 NEAREST 放大修复在 1:1 缩放场景的副作用候选；icon-text-fit 全族维持阈值边界（none 21/阈 7）记档（2026-08-26 三百三十三）**：
+
+- **形态精化**：diff 像素全部位于 'label' 图标的圆角/边缘渐变带（对称分布四角与两腰），**非整盒 ±1px 平移**——是圆角 AA 渲染级差。候选：§422 对非 SDF 图标 magnification 用 NEAREST 在该 fixture 的图标缩放（可能 1:1 或缩小）下不适配（NEAREST 丢源艺术自带 AA），需按缩放条件分流（纹理 filter 为逐 batch 属性，batch=逐 imageItem，需把 technique iconScale 传入 PoiBatch 或在 preparePoi 时按 quad/纹理 texel 比选择 filter——GL 限制下需双 batch 方案）。
+- **验证边界**：icon-text-fit 全族维持 §440 态（none 21/阈 7、both 45、height 22）——发之距但需圆角 AA 级修。§438 基线链条工程仍未启动（session 时间盒）。
+- **终态**：纯 docs 提交。
