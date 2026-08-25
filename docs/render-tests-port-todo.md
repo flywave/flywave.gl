@@ -4508,3 +4508,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **stencil/强制红排除**：①材质 stencilWrite=false/Always——28753 不变（瓦片 stencil 假设排除）；②fragment 强制 `mbR=红/alpha=1`——**仍 28753 逐位不变**——注入 program 之外的片元级丢弃。
 - **几何破案【根因定位】**：mrt 对象几何 bbox=±2504689m（**z2 全瓦片尺寸**，z3 请求应为 ±626km）——**mglLodLevel 把 z3 请求降层 z2 后 buildFeature 以 z2 足迹建面**（4× 尺寸错位），四边形几何与瓦片位置错配 → 不覆盖预期屏幕区。卫星四边形不受影响（其 mglLodLevel 判定不同）。修复方向（下会话单点）：demote 后仍以**请求层足迹**建四边形（纹理从祖先取、uv 子矩形），即 buildFeature 的 zz 用 zReq 而非 demoted z（与引擎 z15/z16 混合集语义一致）；随后重试 source-layer fallback（§359）配 unbound-ramp 黑语义。
 - **终态**：TEMP 全清（draw/stencil/强制红/几何探针/fallback/签名改动）、基线复现 28753/10525 ✓、工作树=提交态。
+
+**§362. §361 几何结论撤回（算术纠错）——mrt 四边形本就是 z3 正确足迹；不可见性残案汇总与新线索（cached 路径缺 mapView.update）（2026-08-25 二百五十三，纠错记档）**：
+
+- **§361 撤回**：bbox ±2504689m = C/2³/2 = **z3 瓦片半尺寸**（此前误算为 z2 全瓦片）——几何本来就是请求层正确足迹，"4× 错位"结论作废；buildFeature 的 zz 改 zReq 实验（组合 fallback）28753 不变后已回退。§361 的"一行修复"判断撤销。
+- **footprint+fallback 组合复测**：28753/63630（与 §360 相同）——确认几何非因。
+- **残案证据链汇总**（raster-array default 不可见）：几何正确（z3 足迹+位置✓）、draw 364 次✓、材质 patched+纹理 attach（含缓存路径）✓、stencil 排除、强制红片元无效、对象树✓。**新头号线索：rasterTextureCache 命中路径缺 `mapView.update()` 调用**（异步 PNG 路径有——§1218 注释"静态帧序列必须显式触发新帧"；重建材质走缓存路径后 needsUpdate 触发的重编译可能永远没有下一帧绘制）。下会话单点：cached attach 路径补 `mapView.update()`（一行，与 PNG 路径对齐）+ fallback 组合复测；若仍不可见则 renderer.getContext 直接 WebGL 层取证。
+- **终态**：全部实验回退、基线复现 ✓、工作树=提交态。
