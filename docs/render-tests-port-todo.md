@@ -4712,3 +4712,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **对拍**：mgl `fog_apply` = `mix(color, fogColor, α·min(1,1.00747·falloff³) × α·exp(−3t²))`——与我们 fog_fragment 注入**逐项同构**（falloff=1−exp(−6t) 立方、1.00747、horizon-blending 的 exp(−3t²) 与负 z→t=0 全等）。mgl range=[r0+shift, r1+shift]（shift=0.5/tan(fov/2)）与我们 fogMglRange+shift 相同。
 - **残差收敛**：78px 亮带差的最后一层=**深度单位换算标定**——我们的 `shift·(vFogDepth·0.15)/distCamM` 把引擎米制深度折到 mgl fog 单位（0.15 为 §248 经验折叠），地平线紧下方行的 fogT 在我们这里略低于 mgl（ramp 未饱和）。**下会话方法（已定档）**：fogDebugT=1 探针模式读该行实际 fogT，对照 mgl 期望（该行应 ≥1），单点校准 0.15→精确式（distCamM 的推导含 camToCenter/worldSize·EarthC 与 sin(90−pitch) 两级近似）。
 - **终态**：零代码变更、工作树=提交态。
+
+**§390. fogDebugT 探针轮——诊断修正：地面/背景四边形完全未经 fog chunk（探针模式下仍输出纯背景色非灰度），78px 亮带=地面雾未生效（非 0.15 标定问题）（2026-08-25 二百八十二）**：
+
+- **探针数据（mode 1，t-profile）**：y0.38 (247,247,252)≈灰度 t≈0.97（该行为 fog chunk 覆盖——疑 dome 边界 AA）；**y≥0.40 地面区恒 (245,245,220)=纯背景色非灰度**——背景四边形的像素未走共享 fog chunk 的 debug 分支（无 USE_FOG 或 chunk 未注入该材质）。
+- **§389 修正**："0.15 折叠标定"前提作废——地面雾**根未生效**，我们看到的渐变全来自 dome（天空侧），mgl 期望的白行=背景瓦片雾（fog_apply on draw_background）。§244 注释声称的 bg 四边形 mgl 雾公式路径未覆盖此 fixture（该路径可能仅 raster 材质 `MB_RASTER_MGL_FOG` 生效，fill/background 材质未挂 USE_FOG+chunk）。
+- **下会话单点**：背景四边形（fill 材质）挂接 fog chunk（USE_FOG 或注入与 raster 同款 MB_RASTER_MGL_FOG 分支）——一处材质接线 + fog 域复测（预期连带修复 star-intensity 84 同族）。
+- **终态**：探针回退、工作树=提交态。
