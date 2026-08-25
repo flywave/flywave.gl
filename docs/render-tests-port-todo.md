@@ -4952,3 +4952,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验收**：circle-sort-key/cross-tile-sort **PASS**；守卫 #6655/#8026 + 透明 combinations 2 例全过（去重收益未回退）；sort-key 族其余 13 例为 §418 已证基线陈旧/前存失败（long-key-values 系 pre-§417 同败）。
 - **边界注记**：sort-key + 半透明 + 跨瓦片三条件同时满足时叠画仍会重现（理论残余，当前 fixture 集无此组合；真解仍是逐 feature 全局 renderOrder，维持 §418 工程记档）。
 - **终态**：MBStyleDataSource 单文件，tsc 绿，随记档提交。
+
+**§420. mgl 参照渲染器本地打通（重大基建）+ cross-fade 40:38 初步标定：mgl 图标 19 CSS px 恒定（pr1=pr2），我们 pr2 多 1 CSS px——0.864 因子系 sprite 内圆与 quad 几何差，非缩放系数（2026-08-25 三百一十二）**：
+
+- **mgl 参照渲染器可用（本地配方记档）**：mapbox-gl-js（未入库引用目录）可跑官方 render-test——①`NODE_OPTIONS="--import tsx" npx rollup -c rollup.config.esm.ts --environment BUILD:dev`（node22 直接加载 .ts 配置报错，tsx import hook 解决）；②`test/util/html_generator.js` 是陈旧 CJS 编译产物遮蔽同目录 .ts 源，改名移走否则 ESM 命名导入炸；③`vitest.config.base.ts` 本地补丁 `CHROMIUM_EXECUTABLE` env 走系统 Edge（playwright chromium 下载被墙）；④`CHROMIUM_EXECUTABLE=/usr/bin/microsoft-edge npx vitest run --config vitest.config.render.ts --testNamePattern '<fixture>'`。**产出 actual.png 的技巧**：临时改 fixture `pixelRatio` 使与 expected 失配 → 失败即落盘 actual.png（pr 扫描利器）。插桩主线程 draw_symbol 可 console（worker console 不上浮）。
+- **cross-fade 40:38 标定进展**：mgl 插桩实证 bucket pixelRatio=2、layoutSize/uSize=1、zoom=0；pr 扫描（改 pr 致败落盘 actual）实测 **mgl 图标 19 CSS px 恒定（pr1 与 pr2 同为 19）**——0.864=19/22 是 sprite 内圆直径与 quad 的几何关系（非 DPR 缩放系数，§410 记档的"0.864 因子"定性修正）。我们 pr1=19 ✓、pr2=20（恰多 1 CSS px）；探针 computeIconScreenBox：computedWidth=22、scale=1、screenBox 仅作碰撞用——**绘制 quad 另有来源（PoiBuffer/TextBufferObject 链），pr2 下多 1px 的断点待查**（时间盒到，下会话从 TextElement.textBufferObject 构建链继续）。
+- **事故记录**：清理时 `rm s42*.log s41*.log` 误删已提交的 s418/s419 日志（git 恢复无损）；mapbox-gl-js 目录未入库，本地改动（探针/pr 改动/配置补丁）保留作参照基建。
+- **终态**：主仓工作树=§419 态 + 本记档（零代码变更），随记档提交。
