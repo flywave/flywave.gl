@@ -397,6 +397,22 @@ export class MBLayerEvaluator {
                 return;
             }
             if (type === 'background') {
+                // An EMPTY resolved background-pattern ("": e.g.
+                // ["step",["zoom"],"",5,"cemetery"] below the stop, #9518)
+                // makes mgl skip the background entirely (transparent) —
+                // no fill quad, no clear color.
+                const rawPattern = (layer as any).paint?.['background-pattern'];
+                if (rawPattern !== undefined && typeof rawPattern !== 'string') {
+                    try {
+                        const ev = MBExpressionEngine.evaluate(rawPattern, {
+                            zoom: (style as any).zoom ?? 0,
+                            feature: undefined,
+                        } as any);
+                        if (ev === '') {
+                            return;
+                        }
+                    } catch {}
+                }
                 // §236: register the background layer as a synthetic FILL
                 // layer under a reserved source key — the decoder injects a
                 // full-tile rectangle feature per decoded tile (mgl

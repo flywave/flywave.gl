@@ -4917,3 +4917,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **终定性**：#3365/#3623 = 字形边缘 AA 强度差——**真 SDF AA 域成员**（§380–§386 族的 bearing 相机子集），§414 的"TextElementsRenderer 元素生命周期域移交"**撤回**。引擎 text 生命周期经此取证确认无恙（元素单份、fade 状态正常）。
 - **SDF AA 域现状（合并记档）**：已证伪候选——gamma 形状（§381 break-even）、边缘阈值 0.75 vs 0.5（§382/§383 已修图集 -64 clamp）、AA 宽度缩放（§385 双向劣化）、色域往返（§386 量级小）。本域剩余候选：SDF 场逐纹元离线对拍（§384 记档未做）与 TextCanvas 顶点级边缘处理——工程深，保持 §380 记档的"最大解锁面"排序不变。
 - **终态**：mapview 探针全清（工作树=§414 态 + 本记档），纯 docs 提交。
+
+**§416. 中带收割四根因——NaN interpolate→默认值、filter $id、空 background-pattern 跳过、removeFeatureState({source}) 全清（regressions A/B 45→50，零回归）（2026-08-25 三百零八）**：
+
+- **根因一（NaN interpolate/step）**：`["/",0,0]`=NaN 输入下 mgl stops.ts 抛 RuntimeError → 属性落规范默认（#4172 的 NaN 圆以默认 radius 5 渲染）；我们产出 NaN 直接丢元素。interpolate/step 两 case 增非有限输入→undefined（下游 `??` 取默认）。
+- **根因二（filter `$id`）**：legacy filter 编译器一律读 `properties[key]`，`["==","$id",1]` 恒 false（#7792 整层被滤空）。增 `featureValue` 帮助函数：`$id`→feature.id、`$type`→geometry type，其余走 properties（10 处调用点统一替换）。
+- **根因三（空 background-pattern）**：`["step",["zoom"],"",5,"cemetery"]` 低于 stop 时求值 ''——mgl **完全不画背景**（透明，#9518）；我们原走黑底填充。三处对齐：evaluator 预处理跳过合成 fill 层、applyBackgroundColor 跳过 clear color、datasource 环境模式路径求值后判空（该处顺手把表达式求值从直接传 raw 改为先解析）。
+- **根因四（removeFeatureState 无 id 形式）**：mgl `{source}` 无 id = 清除该源全部 state（#8026 终态黑）；我们只删单键且原样传对象。测试壳分流 + datasource 增 `clearFeatureStates()`。
+- **验收**：regressions 全族 A/B **45→50**（新增 #7792/#4172/#9518/#8026/#4235 连带），零回归；filter+circle-stroke 守卫 73 例基线通过项零回归。
+- **留档**：#6655（setFeatureState hover→数据驱动 circle-stroke-width 后 stroke/fill 分界异常：期望内区纯 fill (255,127,127)，我们内区暗红）——patchCircleMaterial 的 color_t 分界在数据驱动 stroke 场景待查，52px。
+- **终态**：MBExpressionEngine/MBFilterCompiler/MBLayerEvaluator/MBStyleDataSource/MBStyleCompatRenderTest 五文件，tsc 绿，随记档提交。

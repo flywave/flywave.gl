@@ -411,9 +411,19 @@ async function processOperations(
             case "setFeatureState":
                 dataSource.setFeatureState(args[0] ?? args[1], args[1] ?? args[2]);
                 break;
-            case "removeFeatureState":
-                dataSource.removeFeatureState(args[0]);
+            case "removeFeatureState": {
+                // mgl: {source} without id removes ALL feature states of the
+                // source; {source, id} removes one property set.
+                const spec = args[0];
+                if (spec && typeof spec === "object" && spec.id === undefined) {
+                    (dataSource as any).clearFeatureStates?.();
+                } else {
+                    dataSource.removeFeatureState(
+                        typeof spec === "object" ? spec.id : spec,
+                    );
+                }
                 break;
+            }
             case "setZoom": {
                 // MapView has no direct setZoom — use zoomOnTargetPosition to
                 // zoom while keeping the screen-center anchored.

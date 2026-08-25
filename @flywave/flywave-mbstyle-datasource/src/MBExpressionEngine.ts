@@ -504,6 +504,12 @@ export class MBExpressionEngine {
 
             case 'step': {
                 const input = this.exec(args[0], ctx) as number;
+                // mgl stops.ts: a non-finite input throws RuntimeError at
+                // evaluation, which lands the property on its spec DEFAULT
+                // (e.g. NaN circle-radius renders at 5, regressions/#4172).
+                if (typeof input !== 'number' || !Number.isFinite(input)) {
+                    return undefined;
+                }
                 const defaultValue = this.exec(args[1], ctx);
                 let lastOutput = defaultValue;
                 for (let i = 2; i < args.length; i += 2) {
@@ -522,6 +528,11 @@ export class MBExpressionEngine {
                 const modeArr = args[0] as string[];
                 const mode = modeArr[0];
                 const input = this.exec(args[1], ctx) as number;
+                // Non-finite input → property default (mgl RuntimeError path,
+                // see case 'step').
+                if (typeof input !== 'number' || !Number.isFinite(input)) {
+                    return undefined;
+                }
                 const stops: Array<[number, any]> = [];
                 for (let i = 2; i < args.length - 1; i += 2) {
                     stops.push([args[i] as number, this.exec(args[i + 1], ctx)]);

@@ -44,6 +44,13 @@ export class MBFilterCompiler {
         ].includes(op) && typeof filter[1] === 'string';
     }
 
+    /** Legacy-filter operand: `$id` reads the feature id, `$type` the geometry type. */
+    private static featureValue(ctx: any, key: string): any {
+        if (key === '$id') return ctx.feature?.id;
+        if (key === '$type') return ctx.feature?.type;
+        return ctx.feature?.properties?.[key];
+    }
+
     private static compileLegacy(filter: any[]): CompiledFilter {
         const op = filter[0] as string;
 
@@ -51,69 +58,69 @@ export class MBFilterCompiler {
             case 'has': {
                 const key = filter[1] as string;
                 return (ctx) => {
-                    return ctx.feature?.properties?.[key] !== undefined;
+                    return MBFilterCompiler.featureValue(ctx, key) !== undefined;
                 };
             }
             case '!has': {
                 const key = filter[1] as string;
                 return (ctx) => {
-                    return ctx.feature?.properties?.[key] === undefined;
+                    return MBFilterCompiler.featureValue(ctx, key) === undefined;
                 };
             }
             case '==': {
                 const key = filter[1] as string;
                 const val = filter[2];
                 return (ctx) => {
-                    return ctx.feature?.properties?.[key] === val;
+                    return MBFilterCompiler.featureValue(ctx, key) === val;
                 };
             }
             case '!=': {
                 const key = filter[1] as string;
                 const val = filter[2];
                 return (ctx) => {
-                    return ctx.feature?.properties?.[key] !== val;
+                    return MBFilterCompiler.featureValue(ctx, key) !== val;
                 };
             }
             case '>': {
                 const key = filter[1] as string;
                 const val = filter[2] as number;
                 return (ctx) => {
-                    return (ctx.feature?.properties?.[key] as number) > val;
+                    return (MBFilterCompiler.featureValue(ctx, key) as number) > val;
                 };
             }
             case '>=': {
                 const key = filter[1] as string;
                 const val = filter[2] as number;
                 return (ctx) => {
-                    return (ctx.feature?.properties?.[key] as number) >= val;
+                    return (MBFilterCompiler.featureValue(ctx, key) as number) >= val;
                 };
             }
             case '<': {
                 const key = filter[1] as string;
                 const val = filter[2] as number;
                 return (ctx) => {
-                    return (ctx.feature?.properties?.[key] as number) < val;
+                    return (MBFilterCompiler.featureValue(ctx, key) as number) < val;
                 };
             }
             case '<=': {
                 const key = filter[1] as string;
                 const val = filter[2] as number;
                 return (ctx) => {
-                    return (ctx.feature?.properties?.[key] as number) <= val;
+                    return (MBFilterCompiler.featureValue(ctx, key) as number) <= val;
                 };
             }
             case 'in': {
                 const key = filter[1] as string;
                 const vals = filter.slice(2);
                 return (ctx) => {
-                    return vals.includes(ctx.feature?.properties?.[key]);
+                    return vals.includes(MBFilterCompiler.featureValue(ctx, key));
                 };
             }
             case '!in': {
                 const key = filter[1] as string;
                 const vals = filter.slice(2);
                 return (ctx) => {
-                    return !vals.includes(ctx.feature?.properties?.[key]);
+                    return !vals.includes(MBFilterCompiler.featureValue(ctx, key));
                 };
             }
             case 'within': {

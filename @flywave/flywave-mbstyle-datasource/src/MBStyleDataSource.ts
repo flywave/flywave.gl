@@ -1354,8 +1354,20 @@ export class MBStyleDataSource extends TileDataSource {
             const bgLayer = (style.layers ?? []).find((l: any) => l.type === 'background');
             if (bgLayer) {
                 const bgPaint = (bgLayer as any).paint ?? {};
-                const pattern = bgPaint['background-pattern'];
                 const pitchAlign = bgPaint['background-pitch-alignment'] ?? 'map';
+                // Resolve the pattern expression first: an EMPTY string (e.g.
+                // ["step",["zoom"],"",5,"cemetery"] below the stop, #9518)
+                // means no pattern — mgl falls back to background-color.
+                let pattern: any = bgPaint['background-pattern'];
+                if (pattern && typeof pattern !== 'string') {
+                    try {
+                        const { MBExpressionEngine } = require('./MBExpressionEngine');
+                        pattern = MBExpressionEngine.evaluate(pattern, {
+                            zoom: style.zoom ?? 0,
+                            feature: undefined,
+                        } as any);
+                    } catch {}
+                }
                 if (pattern && this.m_spriteAtlas) {
                     await this.m_environment.applyBackgroundPattern(
                         pattern,
@@ -2639,6 +2651,20 @@ export class MBStyleDataSource extends TileDataSource {
         } as any);
     }
 
+    /** Remove ALL feature states (mgl removeFeatureState({source}) form). */
+    clearFeatureStates(): void {
+        const states = (this as any).m_featureStates as Map<any, any> | undefined;
+        if (states) states.clear();
+        if (this.mapView) {
+            this.mapView.markTilesDirty(this);
+        }
+        this.decoder.configure(undefined, {
+            mbStyle: this.m_styleManager.getStyle(),
+            currentSourceId: this.m_currentSourceId,
+            featureStates: states ?? new Map(),
+        } as any);
+    }
+
     override removeFeatureState(featureId: number | string): void {
         const normalizedKey = this.normalizeFeatureStateKey(featureId);
         super.removeFeatureState(normalizedKey);
@@ -2770,6 +2796,22 @@ export class MBStyleDataSource extends TileDataSource {
                     return;
                 }
                 const paint = (layer as any).paint ?? {};
+                // An EMPTY resolved background-pattern (e.g.
+                // ["step",["zoom"],"",5,…] below the stop) skips the
+                // background entirely in mgl (#9518) — leave the canvas
+                // transparent (no clear color either).
+                const rawPat = paint['background-pattern'];
+                if (rawPat !== undefined && typeof rawPat !== 'string') {
+                    try {
+                        const { MBExpressionEngine } = require('./MBExpressionEngine');
+                        if (MBExpressionEngine.evaluate(rawPat, {
+                            zoom: style.zoom ?? 0,
+                            feature: undefined,
+                        } as any) === '') {
+                            return;
+                        }
+                    } catch {}
+                }
                 const rawColor = paint['background-color'];
                 const opacity = paint['background-opacity'] ?? 1;
                 // Resolve zoom functions / expressions for the background color
