@@ -5172,3 +5172,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实验**：FontCatalog lineHeight = 24×1.2（mgl default text-line-height 烘焙）→ bottom **632→11403**、text-max-width/literal 1963、text-offset 全族 9-17k 全面劣化——已回退。结论：现有 lineHeight=24（行进=textSize）与期望更贴，mgl 1.2 在此链路已被他处补偿（疑：style.fontSize 传法或 layout 换算含 1.2），**常量假设路径全部关闭**（§448 yOffset ±、§449 lineHeight）。
 - **正确方法（终案）**：LineTypesetter 逐行 position.y 数值 dump（多行 fixture 2 行各 y）vs mgl align 后 y（i·lh·scale − H·vAlign·scale）数值对拍——一次运行定 Δ 公式，不再常量猜测。
 - **终态**：实验回退（tsc 绿），纯 docs 提交。
+
+**§450. LineTypesetter 逐行 y dump 首轮（text-max-width/literal 4 行）——**行间距实测 19.2px = 1.2×fontSize(16) 与 mgl 逐值一致**（−63.267/−44.067/−24.867/−5.667 等差 19.2；§449 回退正确：1.2 已在 leading/style 链等效作用）——**行距假设排除**，bottom 632 残差不在线距；vOff=3、fontLH=24 基准值记档；下一候选=首行基线原点（position.y 初值 vs mgl −H·vAlign）与 glyph 内 y 构成（2026-08-26 三百四十二）**：
+
+- **方法兑现（§449 终案）**：LineTypesetter verticalOffset 处探针 dump 每行 position.y——4 行等差 **19.2px（=1.2em@16px，mgl 同值）**，行距全对；§449 的"1.2 已他处补偿"猜测获数值证实。
+- **bottom 632 排除项累计**：线距 ✓（本节）、全局平移 ✗（§448）、lineHeight 常量 ✗（§449）、断行 ✗（§437）、mayOverlap ✗（§436）→ 剩余候选收敛至**首行原点 + glyph 内偏移构成**（vOff=24−17−4=3 与 mgl glyph 位图顶 −17+top−border 的差）——即单行也差的 0.5px（harness y33 vs 34）。下会话：harness 单 'T' 上做 glyph 最终屏幕 y 两端对拍（一次定首行原点 Δ）。
+- **终态**：探针全清（mapview+text-canvas 双包 tsc 绿），纯 docs 提交。
