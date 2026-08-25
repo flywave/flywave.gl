@@ -4857,3 +4857,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **顺带观察（非回归，均为基线已红域）**：icon-image-cross-fade 4 例（845-867px）、icon-text-fit 全族大值差、symbol-spacing line 族 13-21 万级——cross-fade 域与 §406 记档的"icon-image cross-fade 半引擎链"候选吻合，列为下轮代码对齐首项。
 - **方法论**：`pkill -f RenderingTestResultServer` 会自匹配杀掉含该串的当前 shell（两次静默无输出失败的根因）——后续一律用 `pkill -f 'RenderingTestResult[S]erver'`。
 - **终态**：结果落盘 `rendering-test-results/mbstyle-s407-head/`，本节随记档提交。
+
+**§409. icon-image cross-fade 链 + GeometryCollection 上游断点——GC 展开（真正的根因修复）+ ["image",a,b] 双候选捕获 + userImageCache CPU 合成注册；867→218/277 收敛（2026-08-25 三百零一）**：
+
+- **根因一（GC 断点，本次最大发现）**：cross-fade 四例 fixture 的 geojson data 是 `GeometryCollection`——`MBStyleDecoder.normalizeGeoJson` 从不展开 `geometry.geometries`，整 feature 被静默丢弃 → 图标整体空白（867px）、evaluate/appearance 链根本未进入。新增 `expandGeometryCollections`（FeatureCollection 与裸几何两路内联展开，子几何共享父 properties/id）——**此前所有使用 GeometryCollection 的 fixture 均为特征级全丢**，此修复为普适增益。
+- **根因二（双候选丢失）**：mgl `["image", a, b]` 求值为 primary+secondary 两个 ImageVariant（image.ts parse），`icon-image-cross-fade` paint 以 `out = A·(1−t) + B·t` 混合（symbol.fragment.glsl ICON_TRANSITION）；我们的 evaluate 只返回首候选。`MBLayerEvaluator` 增 `imageSecondaryCandidate`（memo 解包），layout 循环与 appearance 覆盖两处捕获 `icon-image-secondary` 侧通道（appearance 覆盖时替换/清除基值）。
+- **接线（渲染侧考古）**：patchIconObject/patchTile 对 POI 精灵**从不生效**（POI 对象不在 tile.objects，探针实证零调用）——icon 渲染真管线 = `mapView.userImageCache` 按名查找（loadSpriteAtlas 逐名注册 canvas）。故 emitter 对 (primary, secondary, t) 生成合成名 `mbblend:a|b|t` 记入 static pendingIconBlends（worker 侧无 DOM），`MBStyleDataSource.flushIconBlends`（AfterRender 每帧排空）从 sprite atlas 提取两子图 CPU 逐通道 A·(1−t)+B·t 合成注册。
+- **验收**：one-to-two/two-to-two/zero-to-two 867→218、two-to-one 845→277；邻域回归（icon-image/anchor/size、text-size/max-width、symbol-z-order，101 例）**基线通过 22 例零回归**。
+- **残差定性（记档移交）**：mgl 期望图字形呈近二值边缘（暗蓝描边+白高光，候选合成对拍 MSE ~14k 全不匹配），非任何 A/B 线性组合可表达——疑 mgl 对该 fixture 的图标经过 SDF 化/双重绘制路径，需 mgl 运行时截图取证（当前环境无 mgl 参照渲染器）；两-to-one 语义（appearance 单图覆盖基对）亦待 mgl 实测确认（期望≠纯 music）。
+- **终态**：MBLayerEvaluator/MBStyleDecoder/MBTileDataEmitter/MBStyleDataSource 四文件 + 文档，tsc 绿，随记档提交。

@@ -778,6 +778,8 @@ export class MBStyleDataSource extends TileDataSource {
     private m_themedIconCanvases: HTMLCanvasElement[] = [];
     /** Pristine (pre-theme) pixels of each themed icon canvas. */
     private m_iconCanvasPristine = new WeakMap<HTMLCanvasElement, ImageData>();
+    /** Icon cross-fade blends already registered in userImageCache. */
+    private m_registeredIconBlends = new Set<string>();
     private m_runtime: MBStyleRuntime | null = null;
     private m_currentSourceId: string = '';
     private m_demTileUrl: string | null = null;
@@ -1476,6 +1478,9 @@ export class MBStyleDataSource extends TileDataSource {
             });
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
                 patcher.patchTileMaterials();
+                // Icon cross-fade blends decoded tiles requested — register
+                // them before placement/PoiRenderer material creation.
+                self.flushIconBlends();
                 // §273: per-frame fog uniform sync (globe center / alpha) —
                 // materials snapshot UniformsLib.fog at creation.
                 self.m_environment?.syncFogUniforms();
@@ -2174,6 +2179,58 @@ export class MBStyleDataSource extends TileDataSource {
     removeImage(name: string): boolean {
         MBExpressionEngine.removeAvailableImage(name);
         return this.m_spriteAtlas?.removeIcon(name) ?? false;
+    }
+
+    /**
+     * Register pending icon cross-fade blends (["image", a, b] +
+     * icon-image-cross-fade) in mapView.userImageCache. The emitter requests
+     * blends under a synthetic name (worker side has no DOM); here the two
+     * sprite sub-images are composited CPU-side with mgl's ICON_TRANSITION
+     * formula out = A·(1−t) + B·t (straight RGBA, per channel incl. alpha).
+     */
+    flushIconBlends(): void {
+        const pending = (MBTileDataEmitter as any).pendingIconBlends as Map<string, { a: string; b: string; t: number }>;
+        if (!pending || pending.size === 0) return;
+        const atlas = this.m_spriteAtlas;
+        const userImageCache = (this.mapView as any)?.userImageCache;
+        if (!atlas || !userImageCache || typeof userImageCache.addImage !== 'function') return;
+        const atlasImage = (atlas.texture as any).image as any;
+        for (const [name, { a, b, t }] of pending) {
+            if (this.m_registeredIconBlends.has(name)) continue;
+            const infoA = atlas.icons.get(a);
+            const infoB = atlas.icons.get(b);
+            if (!infoA || !infoB || typeof document === 'undefined') continue;
+            const w = Math.max(infoA.width, infoB.width);
+            const h = Math.max(infoA.height, infoB.height);
+            const cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            const ctx = cv.getContext('2d')!;
+            const px = (info: any): ImageData => {
+                const tmp = document.createElement('canvas');
+                tmp.width = info.width; tmp.height = info.height;
+                const tctx = tmp.getContext('2d')!;
+                tctx.drawImage(atlasImage, info.x, info.y, info.width, info.height, 0, 0, info.width, info.height);
+                return tctx.getImageData(0, 0, info.width, info.height);
+            };
+            const da = px(infoA).data;
+            const db = px(infoB).data;
+            const out = ctx.createImageData(w, h);
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const ia = (y < infoA.height && x < infoA.width) ? (y * infoA.width + x) * 4 : -1;
+                    const ib = (y < infoB.height && x < infoB.width) ? (y * infoB.width + x) * 4 : -1;
+                    const o = (y * w + x) * 4;
+                    for (let c = 0; c < 4; c++) {
+                        const va = ia >= 0 ? da[ia + c] : 0;
+                        const vb = ib >= 0 ? db[ib + c] : 0;
+                        out.data[o + c] = va * (1 - t) + vb * t;
+                    }
+                }
+            }
+            ctx.putImageData(out, 0, 0);
+            userImageCache.addImage(name, cv);
+            this.m_registeredIconBlends.add(name);
+        }
     }
 
     /** Toggle tile-boundary debug overlay (metadata.test.debug). */

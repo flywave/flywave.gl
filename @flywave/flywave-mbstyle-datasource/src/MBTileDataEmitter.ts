@@ -342,6 +342,19 @@ function tessellateForSphere(
 }
 
 export class MBTileDataEmitter {
+    /**
+     * Icon cross-fade blends requested by decoded tiles, keyed by the
+     * synthetic image name. The MAIN thread drains this registry and
+     * registers the blended canvases in mapView's userImageCache
+     * (MBStyleDataSource.flushIconBlends) — the decode side has no DOM.
+     */
+    static readonly pendingIconBlends: Map<string, { a: string; b: string; t: number }> = new Map();
+
+    /** Synthetic userImageCache name for an A/B cross-fade blend. */
+    static iconBlendName(a: string, b: string, t: number): string {
+        return `mbblend:${a}|${b}|${t.toFixed(4)}`;
+    }
+
     private m_geometries: Map<string, AccumulatedGeometry> = new Map();
     private m_techniqueIndex = 0;
     private m_techniques: IndexedTechnique[] = [];
@@ -825,6 +838,23 @@ export class MBTileDataEmitter {
                     props.imageTexture = typeof l['icon-image'] === 'string'
                         ? resolveTextField(l['icon-image'], properties ?? {})
                         : l['icon-image'];
+                    // ["image", a, b] + icon-image-cross-fade: mgl blends the
+                    // primary/secondary pair (out = A·(1−t) + B·t,
+                    // symbol.fragment.glsl ICON_TRANSITION). Icons render via
+                    // mapView.userImageCache by name, so the blend is baked
+                    // CPU-side into a synthetic image the datasource registers
+                    // (see MBStyleDataSource.flushIconBlends).
+                    const iconFade = Number(p['icon-image-cross-fade'] ?? 0);
+                    const iconSecondary = (l as any)['icon-image-secondary'];
+                    if (iconSecondary && Number.isFinite(iconFade) && iconFade > 0
+                        && typeof props.imageTexture === 'string') {
+                        const blendName = MBTileDataEmitter.iconBlendName(
+                            props.imageTexture, iconSecondary, iconFade);
+                        MBTileDataEmitter.pendingIconBlends.set(blendName, {
+                            a: props.imageTexture, b: iconSecondary, t: iconFade,
+                        });
+                        props.imageTexture = blendName;
+                    }
                     // PoiBuilder reads `iconColor` (it ignores `color`).
                     props.iconColor = p['icon-color'] ?? '#000000';
                     props.opacity = p['icon-opacity'] ?? 1;

@@ -659,6 +659,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     f.properties = {};
                 }
             }
+            MBStyleDecoder.expandGeometryCollections(data);
             return data;
         }
         if (data.type === 'Feature') {
@@ -669,11 +670,37 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             'Polygon', 'MultiPolygon', 'GeometryCollection',
         ]);
         if (geometryTypes.has(data.type)) {
-            return {
+            const fc = {
                 type: 'FeatureCollection',
                 features: [{ type: 'Feature', geometry: data, properties: {} }],
             };
+            MBStyleDecoder.expandGeometryCollections(fc);
+            return fc;
         }
         return data;
+    }
+
+    /**
+     * GeoJSON GeometryCollection features carry their geometries in
+     * `geometry.geometries` — the tile adapters only understand the plain
+     * types, so a collection feature would be silently dropped (mgl expands
+     * them; fixtures like appearance/icon-image-cross-fade use this form).
+     * Inline expansion: each sub-geometry becomes its own feature sharing
+     * the parent's properties/id.
+     */
+    private static expandGeometryCollections(fc: any): void {
+        if (!fc || !Array.isArray(fc.features)) return;
+        const out: any[] = [];
+        for (const f of fc.features) {
+            if (f && typeof f === 'object' && f.geometry?.type === 'GeometryCollection'
+                && Array.isArray(f.geometry.geometries)) {
+                for (const g of f.geometry.geometries) {
+                    out.push({ ...f, geometry: g });
+                }
+            } else {
+                out.push(f);
+            }
+        }
+        fc.features = out;
     }
 }

@@ -619,6 +619,14 @@ export class MBLayerEvaluator {
                 } else {
                     layout[key] = raw;
                 }
+                // ["image", a, b]: mgl resolves a primary AND a secondary
+                // icon variant (image.ts parse); the pair is blended by the
+                // icon-image-cross-fade paint. Stash the second candidate as
+                // a side channel — the plain evaluation keeps only the first.
+                if (key === 'icon-image') {
+                    const secondary = MBLayerEvaluator.imageSecondaryCandidate(raw);
+                    if (secondary) (layout as any)['icon-image-secondary'] = secondary;
+                }
             }
 
             // Apply appearances: conditional property overrides. Each appearance
@@ -638,6 +646,14 @@ export class MBLayerEvaluator {
                                     paint[key] = ev;
                                 } else {
                                     layout[key] = ev;
+                                }
+                                if (key === 'icon-image') {
+                                    const secondary = MBLayerEvaluator.imageSecondaryCandidate(val);
+                                    // An appearance overrides the base icon
+                                    // entirely — replace (or clear) the base
+                                    // secondary candidate.
+                                    if (secondary) (layout as any)['icon-image-secondary'] = secondary;
+                                    else delete (layout as any)['icon-image-secondary'];
                                 }
                             }
                         }
@@ -671,5 +687,19 @@ export class MBLayerEvaluator {
             result.set(source, Array.from(bySL.keys()));
         }
         return result;
+    }
+
+    /**
+     * Second candidate of an `["image", a, b]` expression (mgl
+     * image.ts keeps primary + secondary variants; the pair is blended by
+     * the cross-fade paints). Returns undefined for single-image values.
+     */
+    private static imageSecondaryCandidate(raw: unknown): string | undefined {
+        let expr: any = raw;
+        while (Array.isArray(expr) && expr[0] === 'memo') expr = expr[1];
+        if (Array.isArray(expr) && expr[0] === 'image' && typeof expr[2] === 'string') {
+            return expr[2];
+        }
+        return undefined;
     }
 }
