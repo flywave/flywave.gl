@@ -3576,9 +3576,6 @@ export class MapView extends EventDispatcher {
         }
     }
 
-    // updateLookAtSettings 是否已有一次可用值（GPU miss 时沿用旧值的前提）。
-    private m_lookAtInitialized: boolean = false;
-
     /**
      * Derive the look at settings (i.e. target, zoom, ...) from the current camera.
      */
@@ -3616,18 +3613,11 @@ export class MapView extends EventDispatcher {
         if (gpuTargetUsed) {
             final = true;
             altitude = undefined;
-        } else if (this.m_lookAtInitialized) {
-            // GPU miss（冷槽/天空/贴面退化）：零 CPU 碰撞。目标点沿用
-            // 上一次的值（不落到数学地面），但距离/朝向/zoomLevel 用当前
-            // 相机位姿重算（纯数学）——保证与运动中的相机一致，不冻结
-            // 控制器的反馈环。
-            target = this.m_targetWorldPos.clone();
-            distance = this.camera.position.distanceTo(target);
-            final = true;
-            altitude = undefined;
         } else {
-            // 首次运行（还没有旧值可用）：纯数学初始化一次，不传
-            // collidables，不对数据源执行任何 raycast。
+            // GPU miss（冷槽/天空/贴面退化——全球级下中心常对着天空或
+            // 背景球，pickId=0 会清空深度槽，每帧都会走到这里）：纯数学
+            // 地面/球面求交，不传 collidables（零数据源碰撞）。每帧新鲜，
+            // 不沿用旧值——冻结的中心目标会和拖拽中的相机互相拉扯振荡。
             const result = MapViewUtils.getTargetAndDistance(
                 this.projection,
                 this.camera,
@@ -3661,8 +3651,6 @@ export class MapView extends EventDispatcher {
         this.m_yaw = yaw;
         this.m_pitch = pitch;
         this.m_roll = roll;
-
-        this.m_lookAtInitialized = true;
     }
 
     /**

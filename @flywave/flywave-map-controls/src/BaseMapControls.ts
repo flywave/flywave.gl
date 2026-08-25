@@ -348,6 +348,10 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         const isWheel = mouseZ !== this.mouseState.z;
 
         if (isWheel || isClick) {
+            if (isClick) {
+                // 左键手势不继承右键旋转的过期支点
+                this.m_rotatePivotDistance = -1;
+            }
             const target = new Vector3();
             this.cameraTransform.unprojectToWorld(target, mouseX, mouseY, -1);
 
@@ -459,6 +463,12 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         } else {
             this.inertialDeltaX += (0 - this.inertialDeltaX) * rotationDamping * 0.75;
             this.inertialDeltaY += (0 - this.inertialDeltaY) * rotationDamping * 0.75;
+            // 惯性收敛后清除支点，避免过期支点泄漏进后续手势
+            if (!mouseDown[2] && Math.abs(this.inertialDeltaX) < 1e-3 && Math.abs(this.inertialDeltaY) < 1e-3) {
+                this.inertialDeltaX = 0;
+                this.inertialDeltaY = 0;
+                this.m_rotatePivotDistance = -1;
+            }
         }
 
         if (
