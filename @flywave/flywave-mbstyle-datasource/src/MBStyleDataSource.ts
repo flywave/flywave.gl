@@ -112,7 +112,11 @@ class RasterTileDataProvider extends DataProvider {
             const sinT = Math.sin(tiltRad), cosT = Math.cos(tiltRad);
             const fwd = [
                 -Math.sin(yawRad) * sinT,
-                Math.cos(yawRad) * sinT,
+                // mercator frame here is y-DOWN (south positive — camera
+                // probe: heading -45 puts the camera SE of center looking
+                // NW, fwd.y must be negative), so the engine-side (y-up)
+                // fwd.y term flips sign.
+                -Math.cos(yawRad) * sinT,
                 -cosT,
             ];
             // distToSplitScale (mgl transform.ts): acute-angle adaptive stretch
