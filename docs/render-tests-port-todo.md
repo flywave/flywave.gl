@@ -4959,3 +4959,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **cross-fade 40:38 标定进展**：mgl 插桩实证 bucket pixelRatio=2、layoutSize/uSize=1、zoom=0；pr 扫描（改 pr 致败落盘 actual）实测 **mgl 图标 19 CSS px 恒定（pr1 与 pr2 同为 19）**——0.864=19/22 是 sprite 内圆直径与 quad 的几何关系（非 DPR 缩放系数，§410 记档的"0.864 因子"定性修正）。我们 pr1=19 ✓、pr2=20（恰多 1 CSS px）；探针 computeIconScreenBox：computedWidth=22、scale=1、screenBox 仅作碰撞用——**绘制 quad 另有来源（PoiBuffer/TextBufferObject 链），pr2 下多 1px 的断点待查**（时间盒到，下会话从 TextElement.textBufferObject 构建链继续）。
 - **事故记录**：清理时 `rm s42*.log s41*.log` 误删已提交的 s418/s419 日志（git 恢复无损）；mapbox-gl-js 目录未入库，本地改动（探针/pr 改动/配置补丁）保留作参照基建。
 - **终态**：主仓工作树=§419 态 + 本记档（零代码变更），随记档提交。
+
+**§421. pr2 图标 +3px 断点全链取证——绘制链逐环验证全部正确而内容仍 +3px，疑云收窄至纹理内容/滤波层（时间盒三倍超，记档移交）（2026-08-26 三百一十三）**：
+
+- **精确基线**：sprite cell 22px 内圆直径 **19px**（ink bbox 2..20）；mgl quad 22 CSS（44 device）→ 圆 38 device（14..51，中心 32.5）；我们 41 device（13..53，中心 33）——**宽 +3、中心偏 +0.5 CSS**。
+- **逐环探针（全绿）**：①addBox screenBox=(-11,-11,22,22)（computedWidth=22×scale=1）；②uvBox=[0,0.688]（=22/32，MipMapGenerator ceilPowerOfTwo 填充 32）；③ImageItem 22×22、mipMaps[0] 32×32（copyImageWithPadding 原位拷贝+padding，非缩放）；④文本/POI 相机 frustum=[-16,16]、canvas device 64/CSS 32（1 unit=2 device）——几何换算圆应在 [14,50] device，与 mgl 一致；**实测 [13,53] 超出几何预测 1.5px/侧**。
+- **排除项**：IconMaterial 顶点着色器无缩放；BoxBuffer 顶点直通；blend canvas（22px 精确）与 plain 图标（two-to-one 同 41px）同症；全局画布缩放排除（背景/地图内容与 mgl 对齐）。
+- **剩余候选（下会话）**：①纹理上传/基态 mipmap 层内容逐像素 dump（WebGL readPixels 或把 mipMaps[0] 画回 canvas 对拍 sprite）——疑 canvas2d drawImage 提取在圆边缘引入 ~1px 半透明 fringe（a>10 阈值下计入 bbox，mgl 的 fringe 更窄）；②中心 +0.5 CSS 偏移独立小项（screenPosition 投影取整）。
+- **终态**：全部探针清除（tsc 绿双包），工作树=§420 态 + 本记档，纯 docs 提交。
