@@ -2197,6 +2197,17 @@ export class MBMaterialPatchManager {
     }
 
     private patchCircleMaterial(material: THREE.Material, paint: any): void {
+        // CirclePointsMaterial is a RawShaderMaterial writing gl_FragColor
+        // directly (no colorspace_fragment encode): three's default color
+        // conversion to linear working space darkens mid-tones (green
+        // #008000 renders as (0,55,0), regressions/mapbox-gl-js#4651).
+        // Interpret the CSS channels as-is so the raw output matches mgl.
+        const circleColor = paint['circle-color'];
+        if (typeof circleColor === 'string' && (material as any).color) {
+            try {
+                (material as any).color.setStyle(circleColor, THREE.LinearSRGBColorSpace);
+            } catch {}
+        }
         const translate = this.resolveTranslate(paint['circle-translate'], paint['circle-translate-anchor']);
         // Circle points are NOT baked with translate in the emitter (the point
         // path only bakes for symbols), so the shader uniform is the sole

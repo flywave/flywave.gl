@@ -4883,3 +4883,12 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **验收（regressions 全族 122 例）**：**40 例直接 PASS**（含 #3320/#3426/#3548/#5953 等 gl-js 与 gl-native 名单，见 `rendering-test-results/mbstyle-s411-regress/`）；其余 82 例获得真实 mismatch 数值进入正常对齐轨道（如 #3365/#3623 仅 418px 近失族）。此前基线该族 0 通过 → **零回归，净增 40 PASS**。
 - **连带定性**：GC 展开（§409）在 regressions 族的增益从此可测量（此前被 404 掩盖）；globe/clip/scale-factor/imports 族复测仍为各自引擎域失败因（投影/裁剪/DPR 缩放），与 GC 无关。
 - **终态**：MBStyleCompatRenderTest.ts 单文件改动，随记档提交。
+
+**§412. regressions 82 例近失归因 + 两根因修复——遗留函数 `default` 语义 + CirclePointsMaterial sRGB 直写（regressions 40→44 PASS，A/B 零回归）（2026-08-25 三百零四）**：
+
+- **82 例分层归因（按差值排序+逐域抽样）**：①circle 色彩/默认值族（45px 带：#2769/#4124/#4651/#2929）=本节两根因；②亚像素 AA 相位族（#7357=8px 圆边缘 ramp 缺 1px、#4564=9px 线 AA 覆盖率、位移扫描证明非整体偏移）=AA 精度域，逐例 ROI 低记档；③遗留 transition 半程族（#2769 desc="halfway through the transition"）=transition 域；④SDF AA 族（#3365/#3623=418px）。
+- **根因一（遗留 function `default` 未实现）**：mgl function-convert 语义=property-function 无匹配 stop → `default`，否则属性规范默认；我们错误返回末 stop（#4651：期望 default green、我们渲染 red）。修复三处：identity 缺属性→`default`；property-function categorical 无匹配→`default`/undefined（数值函数超界仍 clamp）；{value,zoom} 网格 categorical（字符串值）精确匹配+default 回退（原数值强转 NaN 后错 clamp 首 stop）。
+- **根因二（circle 色彩 sRGB 暗化）**：CirclePointsMaterial 是 RawShaderMaterial 直写 gl_FragColor（无 colorspace_fragment 编码），three 默认把 CSS 色转 linear 工作域→中间调整体变暗（green #008000 渲染为 (0,55,0)，linear(0.5)≈0.216 精确对上）。patchCircleMaterial 增 setStyle(css, LinearSRGBColorSpace) 保持原值通道。#2929 的"zoom crossfade"初判被证伪——实为此色彩 bug（(0,55,0) vs (0,128,0)）。
+- **验收（A/B 同会话对照）**：regressions 全族 122 例 40→**44 PASS**（新增 #2929/#4124/#4651/#14402），零回归；property-function 守卫 201 例零回归。附记：baseline5-pass 存在陈旧项（circle-opacity/literal、fill-extrusion-color/property-function 在干净 HEAD 亦失败，浏览器壳漂移同 §402 结论，A/B 以同会话对照为准）。
+- **亚像素 AA 族记档**：#7357（圆外缘 alpha ramp 差 1px，差 3px 过阈）、#4564（线 AA 覆盖率半像素相位）——point-sprite/MSAA 路径相位差，可靠修复需解析 AA（fwidth 边距）注入，归入 AA 精度域与 text SDF AA 同档。
+- **终态**：MBExpressionEngine + MBMaterialPatchManager 两文件，tsc 绿，随记档提交。

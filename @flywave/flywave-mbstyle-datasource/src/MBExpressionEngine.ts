@@ -124,7 +124,10 @@ export class MBExpressionEngine {
                 (raw as any).type === 'identity' &&
                 typeof (raw as any).property === 'string'
             ) {
-                return ctx.feature?.properties?.[(raw as any).property] ?? null;
+                // Missing property → the function's `default` (mgl
+                // function-convert identity semantics), else null.
+                const v = ctx.feature?.properties?.[(raw as any).property];
+                return v !== undefined ? v : ((raw as any).default ?? null);
             }
             return raw;
         }
@@ -164,8 +167,17 @@ export class MBExpressionEngine {
             for (const [k, v] of stops) {
                 if (String(k) === String(input)) return v;
             }
-            const last = stops[stops.length - 1];
-            return last?.[1];
+            // mgl function-convert: no matching stop → the function's
+            // `default`, else the property's spec default (undefined lets
+            // the emitter's `??` pick the paint default). Categorical stops
+            // NEVER clamp to the last stop; numeric property functions
+            // outside the stop range clamp (mgl semantics).
+            const numericStops = stops.every(([k]) => typeof k === 'number' && Number.isFinite(k));
+            if (numericStops && typeof input === 'number' && Number.isFinite(input)) {
+                const last = stops[stops.length - 1];
+                return last?.[1];
+            }
+            return 'default' in raw ? raw.default : undefined;
         }
 
         const input = ctx.zoom;
@@ -222,6 +234,17 @@ export class MBExpressionEngine {
         const base = raw.base ?? 1;
         const input = ctx.feature?.properties?.[property];
         const propInput = typeof input === 'number' ? input : Number(input ?? 0);
+
+        // Categorical (string) property values never interpolate: exact
+        // match only, no match → the function `default` (mgl semantics —
+        // e.g. regressions/mapbox-gl-js#4651 renders the default green).
+        const numericStops = stops.every(([key]) => typeof key.value === 'number' && Number.isFinite(key.value));
+        if (!numericStops) {
+            for (const [key, value] of stops) {
+                if (String(key.value) === String(input)) return value;
+            }
+            return 'default' in raw ? raw.default : undefined;
+        }
         const zoomInput = ctx.zoom;
 
         // Group stops by zoom level (they appear consecutively in the list).
