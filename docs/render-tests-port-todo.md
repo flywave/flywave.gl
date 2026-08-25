@@ -5062,3 +5062,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **域终态**：字节✓ 公式✓ 拷贝✓ 数学✓ 边界✓ 光栅化路径✓ —— **六大层全部同构而输出仍异**，残差机制在更深处（疑 GL 实现/驱动级纹理采样差异，或我们链路中某个未审计的中间变换，如 TextCanvas 渲染目标分辨率或 DPI 变换）。**下会话方法（定案级）：最小 GL 复现 harness**——同一 SDF 位图、同一 quad 变换、同一 shader，分别在 mgl 上下文与我们的 TextCanvas 上下文离屏渲染，逐像素 diff 直接定位分叉层（不再逐层猜测）。
 - **域内投入评估（终案）**：本域本日累计 §423–§433 十一节、五层假设证伪 + 三候选排除 + 三修复尝试，边际收益已清零——除非最小 harness 一次定案，否则此域冻结，产能转向 regressions 66 例与 symbol-spacing/icon-rotation 等结构性缺失大域。
 - **终态**：纯 docs 提交（零代码变更）。
+
+**§434. 最小 GL 复现 harness 一次定案（§433 方法兑现）——SDF 文字"抗摩尔纹"谜底=引擎默认文字标签底色 #f7fbfd@0.5！白底 fixture 双侧逐位近同（415px ±4-8 级微差）、彩底 fixture 即爆（16101px）；mgl 无任何默认背景。emitter 置 backgroundOpacity=0 修复：text-anchor/bottom 1976→632、harness glyph-t PASS，晕圈 transect 吻合（2026-08-26 三百二十六）**：
+
+- **harness 方法（三步兑现）**：①双侧同构最小 fixture（单字母 T/64×64/pr2/白底→彩底 #7fb2d9 双版本）；②mgl 侧 pr 扰动落盘 actual；③灌入我方套件（注意：render-tests-index 内嵌 style JSON，fixture 改动必须 `node scripts/generate-mbstyle-test-index.js` 重建，本节一次 0 匹配教训）。
+- **定案链**：白底孤立字形我们与 mgl **逐位近同**（415px 全为 ±4-8 级 AA 微差，§423–§433 六层"全同构却输出异"之谜的答案=差异根本不在字形链而在背景合成）；彩底即爆 16101——**首跑伪影 15899px 全域系 fixture 未同步（我方 style 仍旧白色），同步后真残差 181px 且形态=0.35 白晕**；定位 `TextStyleCache.defaultTextRenderStyle` 的 `backgroundColor #f7fbfd + backgroundOpacity 0.5`（引擎默认标签底），mgl 无默认背景。
+- **修复**：emitter text 技术显式 `backgroundOpacity = 0`（一处，不改引擎默认）。**text-anchor/bottom 1976→632、bottom-left 10268→7663、bottom-right 10721→7945、harness glyph-t PASS**；晕圈消除后 transect 与 mgl 逐值吻合（58/63、229/231、42/45）。
+- **剩余 632 定性**：(255 vs 0)×224 主导=部分字形像素缺失/移位（非晕圈），为常规对齐残差（文字放置/覆盖率细节），域内下一步。
+- **守卫**：text 七族+regressions 148+122 例基线**零回归**（regressions 54→54）。
+- **附带方法学**：harness fixture 对（双侧目录）保留 `mbstyle-harness/glyph-t` 作后续文字域对拍基准；mgl 侧 pr=2 扰动保留（其 expected 缺失即落 actual 的特性复用）。
+- **终态**：MBTileDataEmitter 单行级修复 + 索引重建，随记档提交。

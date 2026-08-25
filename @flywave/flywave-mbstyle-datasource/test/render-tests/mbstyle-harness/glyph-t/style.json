@@ -1,0 +1,55 @@
+{
+ "version": 8,
+ "metadata": {
+  "test": {
+   "width": 64,
+   "height": 64,
+   "pixelRatio": 2
+  }
+ },
+ "center": [
+  0,
+  0
+ ],
+ "zoom": 0,
+ "sources": {
+  "pt": {
+   "type": "geojson",
+   "data": {
+    "type": "Feature",
+    "properties": {},
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      0,
+      0
+     ]
+    }
+   }
+  }
+ },
+ "glyphs": "local://glyphs/{fontstack}/{range}.pbf",
+ "layers": [
+  {
+   "id": "bg",
+   "type": "background",
+   "paint": {
+    "background-color": "#7fb2d9"
+   }
+  },
+  {
+   "id": "t",
+   "type": "symbol",
+   "source": "pt",
+   "layout": {
+    "text-field": "T",
+    "text-font": [
+     "Open Sans Semibold"
+    ],
+    "text-size": 16,
+    "text-allow-overlap": true,
+    "text-ignore-placement": true
+   }
+  }
+ ]
+}

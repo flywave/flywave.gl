@@ -960,6 +960,11 @@ export class MBTileDataEmitter {
                     if (l.visibility === 'none') props.enabled = false;
                 } else if (symbolMode === 'text' || (symbolMode === undefined && l['text-field'])) {
                     props.technique = 'text';
+                    // mgl text has NO default label background — the engine's
+                    // default text style draws #f7fbfd @ 0.5 behind every
+                    // label (a light halo over any non-white basemap,
+                    // minimal-harness glyph-t proven). Zero it explicitly.
+                    props.backgroundOpacity = 0;
                     // Resolve text field with token replacement using feature properties
                     const rawText = typeof l['text-field'] === 'string'
                         ? l['text-field']
