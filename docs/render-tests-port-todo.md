@@ -4377,3 +4377,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **LOD 四件组合定量复测=空操作（§339 结论在真混合修复后依然成立）**：mglDistanceLod+mixedLevelDelivery+m_multiLevelCoverage 全开 + 探针——分支激活 4758 次（maxZ=15）、**0 stop**；eval 取样 z13 d=8976<29352、z14 d=5980<14676——**可见带内没有任何瓦片距离超过 distToSplit**，LOD 从不触发，像素逐位不变。探针全清、开关回退保持关。§334 census 的 z15/z16 覆盖差与 LOD 停止带无关，祖先层级挑选的残域另寻（候选：覆盖 zoom round 语义 vs floor 的 8-23 瓦片差 §333）。
 - **error-overlap 剩余差异分类（158939）**：①底部 1/3 纯白 49k=**应有近地大瓦片处完全没画**（期望 z 级大色块 86,115,212；此域=§333 z15/z16 覆盖差候选）；②中部 23.7k (0,52,0)=**失败/黑纹理瓦片画 50% 黑**（mgl 语义=skip 不画，候选修复=load error → material.visible=false）；③其余已对齐（中色调 raster 与期望色吻合）。两候选均为下会话单点。
 - **终态**：commit e7175835（real-blend 修复+门控收窄+探针清除+文档）、libs 重建、工作树干净。
+
+**§346. §345 两单点定量分辨——双双否定（负结果记档）（2026-08-25 二百三十五，单点分辨记档）**：
+
+- **单点②（覆盖 zoom round 语义 +1）否定**：offset 0→+1（mgl coveringZoom = round(zoom+log2(512/256)) = 16，正对 §333 的 23 z16 瓦片）在 §345 双修复（真混合+skip）落地后重测——**158939→208252 劣化 49k**。机理：统一 z16 交付 + datasource 逐请求祖先回走 ≠ mgl 混合覆盖集——z16 404-walk 会用"最近祖先"替换 mgl 直接从 z15 瓦片供给的内容，每瓦片层级挑选（§339 原判）在 z16 全量请求下反而更偏离。**结论：round 语义必须以引擎侧混合层级交付实现（近地带 z16 子瓦片 + 远带 z15 停止瓦片同屏），单一层级偏移不可达**。§310 平台期结论部分维持（层级不是充分解），但其"形状差"表述精确化为"逐瓦片层级挑选"。
+- **单点①（失败纹理 skip 语义）否定**：rasterTextureLoader 错误回调 → material.visible=false（mgl draw_raster `continue` 语义）单独测——**三例一致 +3.2k~+4.1k 劣化**（163074/202298/206371），与 §341 空返回劣化同向同量级。机理：所谓"失败纹理瓦片画黑"的四边形实际携带**有益内容**（其 URL 可解析或部分采样有效），hide 后露出纯背景反而更远。mgl skip 语义的前提（tile 无纹理）在我们管线里不成立——我们的四边形纹理几乎总能加载（datasource 只对 tileExists 探测通过的 URL 建四边形）。已回退，基线复现 158939/199086/202317 ✓。
+- **残余 158939 的真域收敛**：排除层级偏移与纹理缺失两候选后，残域唯一存活假设=**引擎混合层级交付**（§336 基础设施已就绪、§343 LOD 公式精确）：需要的是"覆盖集逐瓦片层级"（近 z16/远 z15 同屏），datasource 侧需配合 multiLevelCoverage=真多级放行 + resolveAncestor 从请求层级起走（已满足）。实施点：VisibleTileSet 对近地带（d<distToSplit 的瓦片）细分到 dataZoom+1 并追加 z16 条目——与 lodStoppedEntries（远带低层级）互补成完整 mgl covering 复刻。
+- **终态**：零代码变更入库（skip 已回退、offset 保持 0 并附 §346 注记）、工作树=提交态基线复现。

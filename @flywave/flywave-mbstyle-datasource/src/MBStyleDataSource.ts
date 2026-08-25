@@ -1053,6 +1053,12 @@ export class MBStyleDataSource extends TileDataSource {
             // plateau (the residual is the covering SET SHAPE vs mgl's 3D
             // AABB traversal, not the level) while +1 net-regressed the
             // circle fixtures (+664). Offset 0 stays.
+            // §346: +1 re-tested post-§345 (real-blend + skip semantics):
+            // WORSE (158939→208252) — uniform z16 delivery + per-request
+            // ancestor mosaic does NOT approximate mgl's mixed covering set
+            // (the z16 404-walk replaces content mgl serves from z15 tiles
+            // directly). Offset 0 stays; round semantics need engine-side
+            // mixed-level delivery instead.
             this.storageLevelOffset = 0;
         }
 
