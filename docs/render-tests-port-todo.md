@@ -4738,3 +4738,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实验**：gate 扩至 89.9 + pitch>76 用精确式（uScale=1）——**fog 域净 +103,979**：zoom-expression ±+40k/+37k、2d/basic +23k、equal-range +16k、3d-intersections +16k（少数改善：2d/background-pattern −9.3k、inverted −18k、terrain/zero-exag −3.4k 不抵）。已全量回退。
 - **结论**：76° 以上的既有期望匹配依赖 **quad 不画**（§181 的门控是对的），§392 的"pitch85 取 0.10 过窄"仅对 fog/space-color 单例成立——**per-pitch 表不是普适可替换项**，fog/space-color 78 需 per-fixture 判别（如仅 background-only style + fog 时启用高.pitch 路径）——下会话：门控加 `hasBackground && !hasContentLayers` 条件再测 space-color 单族。
 - **终态**：全量回退、fog 基线复现（16/70）、工作树=提交态。
+
+**§394. bg-only 判别实验——仍净劣化 +70.7k：zoom-expression 族同为 background-only（判别条件不足），space-color 的真判别子=非默认 fog paint（space-color/high-color/star-intensity 显式设置）（2026-08-25 二百八十六）**：
+
+- **实验**：gate 加 `hasBackground && !hasContentLayers && !hasSky`（76–89.9 启用 uScale=1 精确式）——**净 +70,713**：zoom-expression 双例仍 +40k/+37k（它们**同为 background-only**，判别失败）、default/empty +892；改善不抵。已回退。
+- **判别子更新**：fog/space-color 与 zoom-expression 的结构差异=**非默认 fog paint**（space-color/high-color/star-intensity 显式设置 vs zoom-expression 仅 range zoom 表达式 + 默认色）——下会话单点：backgroundFogState 增 `hasExplicitFogPaint` 字段（检查 fog 对象含 space-color/high-color/star-intensity 键）作高 pitch 门控判别子，单测 space-color/star-intensity 后 fog 域复测。
+- **终态**：回退、基线复现、工作树=提交态。
