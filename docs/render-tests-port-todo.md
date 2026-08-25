@@ -4581,3 +4581,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **对拍结论**：mgl `_prelude_raster_array`（floor−0.5/纹元中心/+0.5、NODATA 掩码混合、value.x/=mask.y）与 raster.vertex 的 `u_texture_offset.x+y·uv`（buffer inset）均与我们实现**逐项同构**；MRT-RECT 探针确证四分块 [0/0.5]² 正确。zReq footprint 重试（texfix 后）与 DataTexture un-flip 均**零行为差**（后者因四分块集合 y 对称；un-flip 以语义正确保留入库——DataTexture flipY=false 不该带 PNG 翻转补偿）。
 - **残差收敛（下一层）**：错位在**值域/掩码边界**——期望中带值 ~0.4 的过渡区（绿系 (2,192,3)）我们为 nodata（露卫星）。候选：①band 选择（fixture 多 band 时间序列，我们恒取 bands[0]，mgl 按时间戳/默认选带）；②raster-color-range [0,1] 与 view scale/offset 的组合（offset −100000 的值分布 vs range 映射）；③fade_t 双纹理混合（mgl u_image0/1 混合，我们单纹理）。下会话单点：band 选择对拍（mgl raster_array_tile_source 的 timestamp/band 解析 vs bands[0]）。
 - **终态**：un-flip 入库、footprint/探针清除、清缓存基线复现 ✓、工作树=提交态+un-flip。
+
+**§371. band 选择对拍——93 band 值分布几乎相同（p50=0.001/max 3.3-3.7/nodata 恒 233408），band 选择定量排除（2026-08-25 二百六十三）**：
+
+- **离线取证**（/tmp/mrt-bands.mjs 可复用工具）：2-3-1.mrt 'Total Precip' 层共 **93 band**（时间序列，含重复时间戳），各 band nodata 恒 233408、p50=0.001、p99≈3.3-3.7、in[0,1]≈28.9k——**band 间分布几乎一致，选择哪个 band 不是残差差异源**（§370 头号嫌疑排除）。
+- **残差候选更新**：①raster-color-range 映射细节（mgl 是 ramp 纹元中心采样 vs 我们端点含尽 §21 已校准——但 array 值→ramp t 的 mid-range 值（期望绿系 t≈0.4-0.5，对应 value 0.4-0.5）在 93 band 的 in[0,1] 集合中占比待查）；②u_fade_t 双纹理混合（mgl image0/1 mix，我们单纹理——fade 边界）；③线性插值分支的掩码混合边界（§370 公式同构但实现细节如 ivec4→texture2D 的越界 clamp）。下会话单点：屏幕点级值追踪（取 3 个错位像素反推 uv→band 值→ramp t 与期望色对照）。
+- **顺位更新**：F13 text 精度域（hAlignment/vAlignment+基线，258 用例）与 error-overlap RTT 合成长线维持记档顺位，raster-array 校准以像素级值追踪为最后单点。
+- **终态**：零代码变更、离线工具入库 /tmp（下会话移 scripts/）、工作树=提交态。
