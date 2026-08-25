@@ -1049,7 +1049,9 @@ export class MBTileDataEmitter {
                     props.vAlignment = anchor.startsWith('top') ? 'Below'
                         : anchor.startsWith('bottom') ? 'Above' : 'Center';
                     if (typeof l['symbol-sort-key'] === 'number') props.priority = l['symbol-sort-key'];
-                    props.mayOverlap = l['text-allow-overlap'] === true;
+                    // Same-symbol icon+text never collide in mgl (one
+                    // placement unit) — text-allow-overlap OR own icon.
+                    props.mayOverlap = l['text-allow-overlap'] === true || !!l['icon-image'];
                     // Mapbox labels keep a constant screen size regardless of
                     // distance — disable flywave's perspective distance scaling
                     // (default 0.5 shrinks off-center labels by up to ~25%).

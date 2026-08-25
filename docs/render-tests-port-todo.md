@@ -5107,3 +5107,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **入库改动（语义正确保留）**：symbol 层 text 技术 renderOrder +0.5（mgl draw_symbol 先 icon 后 text；composeRenderOrder(base×1e7+offset) 语义下无可见影响但方向正确）。**text-anchor/text-color/geojson/symbol-placement/icon-anchor 宽域守卫零回归**。
 - **§438 基线链条工程未启动**（session 时间盒）；§439 重测 + 提升入库为本节产出。
 - **终态**：MBTileDataEmitter（textLift）单文件，随记档提交。
+
+**§440. icon-text-fit ABC 缺失根因破案——同 symbol 的 text 被引擎碰撞拒收（自身 icon 占位）：textRej 探针实证 + mayOverlap 覆盖点定位（1047 行覆盖 962 行先行赋值）；修复后 none 117→21、both 141→45、height 118→22（全族至阈值边界 7-19px），宽域 245 例零回归（2026-08-26 三百三十二）**：
+
+- **根因链**：ABC 元素创建（buildText ✓）→ placeText **Rejected**（textRej 探针）——同 symbol 的 icon 先占屏、text 与自身 icon 碰撞被引擎拒收；mgl 语义=一个 placement 单位，自身 icon/text 互不碰撞。首修（962 行区 mayOverlap=true）无效因 **1057 行 `props.mayOverlap = l['text-allow-overlap']` 覆盖**——正解落在覆盖点：`|| !!l['icon-image']`。
+- **战果**：icon-text-fit/none **117→21**（阈值 7）、height **118→22**、height-padding **123→27**、both **141→45**、both-padding **142→46**、data-driven 344→174——**全族推进至阈值边界**（残差=icon 盒 ±1px 边缘，§410 同类）；0 例翻盘但已一发之距。
+- **守卫**：text-anchor/text-color/text-field/icon-anchor/symbol-placement/geojson/runtime-styling 七族 245 例基线 114 通过项**零回归**（130 pass 为超集）。
+- **§438 基线链条工程**：session 时间盒未启动（§439/§440 两连破案占用），规范在档为下会话主项。
+- **终态**：MBTileDataEmitter 单行级修复（mayOverlap 覆盖点）+ 探针全清（双包 tsc 绿），随记档提交。
