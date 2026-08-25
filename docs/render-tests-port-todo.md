@@ -4660,3 +4660,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **单变量（清缓存 vs §379 基线）**：text-anchor/justify 17 例——**净 +395**（7 改善 9 劣化；bottom 2067→2146、justify/left −44/right −63/property-function 双改善）——**break-even 偏负，回退**（旗标维持默认关）。gamma 形状不是主导残差源。
 - **新静态差异（下会话单点）**：mgl 边缘阈值 **buff=(256−64)/256=0.75**（symbol.fragment.glsl:122，SDF 图集 64px padding 约定），我们 getOpacity 的 `d = dist + weight − 0.5` 以 **0.5** 为心——若图集编码同源（64px padding SDF），**边缘阈值差 0.25** 才是 AA 差的主导候选（对 2067 级近失，0.25 阈值差在边缘带 ±1-2 值的观测吻合）。下会话：getOpacity 的 −0.5 改 −0.25 试验 + gamma_scale 透视因子（平面=1 无影响）核对。
 - **终态**：旗标启用回退、基线复现、工作树=提交态。
+
+**§382. 边缘阈值单变量——0.25 偏移 10× 劣化（2067→23126），mgl buff=0.75 假设否定：我们图集边缘确在 0.5（2026-08-25 二百七十四）**：
+
+- **试验**：getOpacity 的 `−0.5→−0.25`（边缘 0.5→0.75 对齐 mgl buff）——**7 例全部 10× 劣化**（bottom 2067→23126、center 10323→21582、justify/left 16032→22711）——**否定**：我们的 PBF 构建图集 SDF 边缘确在 0.5；mgl 的 0.75 阈值绑定其自有字形编码/度量约定，不可直接移植。已回退，基线复现（bottom 2027 ✓ 与 §379 基线 2067 差异为运行噪声级）。
+- **SDF AA 残差收敛态**：gamma 形状（§381 break-even）与边缘阈值（本节否定）两大候选均排除——bottom 2067 级残差的下一候选=**字形位图本身**（PBF 解码的 SDF 场与 mgl 渲染的 SDF 场逐纹元对拍——离线可做：同一 glyph pbf 双路径解码 diff）或 AA ramp 宽度（toPixels 导数路径 vs mgl 常数）。下会话：字形位图离线对拍开题。
+- **终态**：试验回退、基线复现、工作树=提交态。
