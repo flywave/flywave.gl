@@ -4588,3 +4588,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **残差候选更新**：①raster-color-range 映射细节（mgl 是 ramp 纹元中心采样 vs 我们端点含尽 §21 已校准——但 array 值→ramp t 的 mid-range 值（期望绿系 t≈0.4-0.5，对应 value 0.4-0.5）在 93 band 的 in[0,1] 集合中占比待查）；②u_fade_t 双纹理混合（mgl image0/1 mix，我们单纹理——fade 边界）；③线性插值分支的掩码混合边界（§370 公式同构但实现细节如 ivec4→texture2D 的越界 clamp）。下会话单点：屏幕点级值追踪（取 3 个错位像素反推 uv→band 值→ramp t 与期望色对照）。
 - **顺位更新**：F13 text 精度域（hAlignment/vAlignment+基线，258 用例）与 error-overlap RTT 合成长线维持记档顺位，raster-array 校准以像素级值追踪为最后单点。
 - **终态**：零代码变更、离线工具入库 /tmp（下会话移 scripts/）、工作树=提交态。
+
+**§372. 像素级值追踪——CPU 值域精确证实（绿像素位 band 值 0.4015/0.5015/0.6015、CPU 公式复算分毫不差），GPU 侧三修正零变化→改动未生效疑云（2026-08-25 二百六十四）**：
+
+- **CPU 侧全自洽【取证完成】**：期望绿系像素 → 世界坐标 → z2 纹元 (245,213) 等 → band 值 **0.4015/0.5015/0.6015**（rgba 68,66,15,0 精确复算 offset −100000 + dot ✓）——数据、uv 映射、decode 公式在 CPU 层全部正确，ramp t≈0.4-0.6 → 绿 ✓ 与 mgl 期望完全一致。
+- **GPU 侧三修正全部零像素变化（21560 恒定）**：①材质 precision='highp'（three 默认已 highp，理论否定）；②__mbArrMix 预乘 255（归一化采样补偿——**mgl 用 RGBA8 归一化 + mix [s,256s,...] 原始量纲**，其 configureRaster 应在 CPU 侧重标定 mix/offset 到 range 归一域，需读源确认）；③§370 un-flip。三连零变化强烈提示 **lib/bundle 改动未生效**（karma webpack 走 src、MB_NO_WEBPACK_CACHE=1 已设——build 链首查项）。
+- **下会话顺序**：①先验证 bundle 生效性（改一处必现变化的哨兵，如 fragment 强制色）；②读 mgl draw_raster configureRaster 的 mix/offset 重标定式对拍；③数据已备齐（CPU 值精确），一次定位。
+- **终态**：实验全回退、提交态复现 21560 ✓、工作树干净。
