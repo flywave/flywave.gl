@@ -802,64 +802,6 @@ importers:
         specifier: 'catalog:'
         version: 5.8.2
 
-  '@flywave/flywave-draped-draw':
-    dependencies:
-      '@flywave/flywave-geoutils':
-        specifier: workspace:*
-        version: link:../flywave-geoutils
-      '@flywave/flywave-mapview':
-        specifier: workspace:*
-        version: link:../flywave-mapview
-      earcut:
-        specifier: 'catalog:'
-        version: 2.2.4
-      three:
-        specifier: ^0.185.0
-        version: 0.185.1
-    devDependencies:
-      '@flywave/flywave-test-utils':
-        specifier: workspace:*
-        version: link:../flywave-test-utils
-      '@types/chai':
-        specifier: 'catalog:'
-        version: 4.3.20
-      '@types/earcut':
-        specifier: 'catalog:'
-        version: 2.1.4
-      '@types/mocha':
-        specifier: 'catalog:'
-        version: 10.0.10
-      '@types/node':
-        specifier: 'catalog:'
-        version: 16.18.126
-      '@types/three':
-        specifier: 'catalog:'
-        version: 0.185.0
-      chai:
-        specifier: 'catalog:'
-        version: 4.5.0
-      copyfiles:
-        specifier: 'catalog:'
-        version: 2.4.1
-      cross-env:
-        specifier: 'catalog:'
-        version: 7.0.3
-      eslint-plugin-simple-import-sort:
-        specifier: ^12.1.1
-        version: 12.1.1(eslint@8.57.1)
-      mocha:
-        specifier: 'catalog:'
-        version: 11.7.5
-      sinon:
-        specifier: 'catalog:'
-        version: 9.2.4
-      source-map-support:
-        specifier: 'catalog:'
-        version: 0.5.21
-      typescript:
-        specifier: 'catalog:'
-        version: 5.8.2
-
   '@flywave/flywave-draw-controls':
     devDependencies:
       '@flywave/flywave-test-utils':
@@ -2208,9 +2150,6 @@ importers:
       '@flywave/flywave-datasource-protocol':
         specifier: workspace:*
         version: link:../flywave-datasource-protocol
-      '@flywave/flywave-draped-draw':
-        specifier: workspace:*
-        version: link:../flywave-draped-draw
       '@flywave/flywave-draw-controls':
         specifier: workspace:*
         version: link:../flywave-draw-controls

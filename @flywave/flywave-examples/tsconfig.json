@@ -9,7 +9,6 @@
         "paths": {
             "@flywave/flywave.gl": ["../flywave.gl/src"],
             "@flywave/flywave.gl/*": ["../flywave.gl/src/*"],
-            "@flywave/flywave-draped-draw": ["../flywave-draped-draw/src"],
             "@flywave/flywave-mapview": ["../flywave-mapview/src"],
             "@flywave/flywave-mapview/*": ["../flywave-mapview/src/*"],
             "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
@@ -37,9 +36,6 @@
     "references": [
         {
             "path": "../flywave.gl"
-        },
-        {
-            "path": "../flywave-draped-draw"
         },
         {
             "path": "../flywave-geometry"
