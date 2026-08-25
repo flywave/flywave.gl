@@ -1199,7 +1199,12 @@ export class MBMaterialPatchManager {
         // and the ramp maps [raster-color-range] over it. NODATA = vec4(1)
         // renders transparent (raTexture2D mask semantics).
         if (url.endsWith('.mrt')) {
-            this.loadRasterArrayTexture(url, technique, material, attach, rect);
+            // §370: DataTextures (raster-array) upload WITHOUT flipY — the
+            // uvRect from buildFeature carries the PNG y-flip compensation
+            // (1-fy0-fw); un-flip it for array sampling (y-inverted band
+            // values were the spatial misalignment).
+            this.loadRasterArrayTexture(url, technique, material, attach,
+                [rect[0], 1 - rect[1] - rect[3], rect[2], rect[3]]);
             return;
         }
 

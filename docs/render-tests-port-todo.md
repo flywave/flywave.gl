@@ -4575,3 +4575,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **下会话校准轮（攒批测试）**：①mbArrUv 公式逐项对拍 mgl `_prelude_raster_array` 的 raTexture2D uv inset（buffer 内缩方向/0.5 纹元中心）；②马赛克 uvRect 与 array 采样的组合验证（z3 请求→z2 祖先 1/4 子矩形 × band buffer 双重 inset）；③several-layers 33884 双混合劣化同轮校准。
 - **长线工程项并行记档**：terrain/error-overlap RTT 合成域（155635/162153/188406 → 阈值 263）需地形形变精确合成，工程量大，维持长线；F13 text 精度域（hAlignment/vAlignment+基线，258 用例解锁面最大）列为下一转战候选。
 - **终态**：零代码变更、工作树=提交态。
+
+**§370. 像素域校准轮——mgl 公式对拍全一致（mbArrUv=texture_offset 同构、texel 中心同构）、uvRect 四分块正确、un-flip 语义修正入库（零行为差）（2026-08-25 二百六十二）**：
+
+- **对拍结论**：mgl `_prelude_raster_array`（floor−0.5/纹元中心/+0.5、NODATA 掩码混合、value.x/=mask.y）与 raster.vertex 的 `u_texture_offset.x+y·uv`（buffer inset）均与我们实现**逐项同构**；MRT-RECT 探针确证四分块 [0/0.5]² 正确。zReq footprint 重试（texfix 后）与 DataTexture un-flip 均**零行为差**（后者因四分块集合 y 对称；un-flip 以语义正确保留入库——DataTexture flipY=false 不该带 PNG 翻转补偿）。
+- **残差收敛（下一层）**：错位在**值域/掩码边界**——期望中带值 ~0.4 的过渡区（绿系 (2,192,3)）我们为 nodata（露卫星）。候选：①band 选择（fixture 多 band 时间序列，我们恒取 bands[0]，mgl 按时间戳/默认选带）；②raster-color-range [0,1] 与 view scale/offset 的组合（offset −100000 的值分布 vs range 映射）；③fade_t 双纹理混合（mgl u_image0/1 混合，我们单纹理）。下会话单点：band 选择对拍（mgl raster_array_tile_source 的 timestamp/band 解析 vs bands[0]）。
+- **终态**：un-flip 入库、footprint/探针清除、清缓存基线复现 ✓、工作树=提交态+un-flip。
