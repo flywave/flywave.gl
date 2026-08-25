@@ -4545,3 +4545,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **修复（入库）**：attach 对 `__mbIsRasterArray` 纹理跳过 mipmap 路径（保持 loadRasterArrayTexture 的 NEAREST——mgl 对 array 源本就强制 NEAREST）。no-raster-color 63630→63501（小改善）；default 仍 28753（不可见性另有残因）。
 - **新残案【材质状态跨代不一致】**：修复后 RAS-STATE 取样显示 mrt 材质 draw 状态混杂——transp true/false、blend 1(Normal)/5(**Custom**) 并存、glErr 仍 696 次——**多 patcher/多代材质互相改写**（CustomBlending 来自 extrusion translucent 路径的泄漏？），这是不可见性的最新头号嫌疑。下会话单点：材质创建时间线审计（uuid→各属性变更打点），锁定 CustomBlending/mipmap 残余 1282 的写入者。
 - **终态**：NPOT 修复入库、探针/fallback 清除、清缓存基线复现（raster-array+raster 族零回退）✓、工作树=提交态+NPOT 修复。
+
+**§366. 材质时间线审计——patcher 层零泄漏（仅自身 rasRealBlend 写入），blend=5 系引擎 enforceBlending 合法路径（"CustomBlending 泄漏"嫌疑解除）（2026-08-25 二百五十八）**：
+
+- **审计（uuid 属性 setter 栈打点）**：.mrt 材质的 transparent/opacity/blending 写入仅有 patcher 自身的 rasRealBlend 分支（transparent=true/opacity=1 ×8），**无任何外部写入者**——"CustomBlending 泄漏"嫌疑解除：blend=5 来自引擎 `enforceBlending/enableBlending`（flywave-materials Utils.ts，**同 NormalBlending 参数**的合法 alpha 混合路径，opacity<1 时引擎启用），非泄漏。
+- **残案收敛（最终态）**：不可见性在排除 材质写入污染 后，与 §365 残余 glErr=696 并存——下一层为引擎 blending+DataTexture 上传的 GL 时序（材质被 WebGL 缓存后再改 filter 不生效？`enableBlending` 注释明确"Blending mode change does not require material update"但 **texture filter 同样绕过 needsUpdate**——attach 后改的 NEAREST 若在上传后才设 → 旧 mipmap 状态残留）。下会话单点：DataTexture 创建时即定型 filter（loadRasterArrayTexture 里 minFilter/magFilter 已设但被旧 attach 覆盖后…… §365 修复后应已定型——需确认 696 次 glErr 的具体 GL 调用（getParameter 断点级）。
+- **终态**：审计探针/fallback 清除、清缓存基线复现 ✓、工作树=提交态。
+- **会话终盘点（§344–§366，23 轮）**：入库修复 13 项（real-blend/LOD 公式链×2/null→空/图案底注入/raster-array×4/cached-update/NPOT mipmap 等），error-overlap 218k→155k；负结果定量排除 6 项；结论纠错 3 次（几何算术/缓存伪影/泄漏误判）；环境校准方法论（MB_NO_WEBPACK_CACHE）入库。
