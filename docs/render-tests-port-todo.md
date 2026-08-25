@@ -5152,3 +5152,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **证据**：①解析器已增 fields 4/5 提取（保留入库，运行时对含基线的字体生效）；②离线 dump Open Sans Semibold 0-255：ascender/descender undefined；③原始 wire 扫描至 subEnd 确认仅 name/range/glyphs 三域；④mgl 源码回退分支（无 baseline 时 glyphOffset = −17 + (lineMaxScale−sectionScale)·24）。
 - **工程重估**：修复 bottom 首行 1px = 把 TextShaping 的行盒中线制 y 换成 mgl 默认基线制（一行级公式：lineTop_i = −H/2 + i·lh；glyphTop += (−17·s + lh 中线差)·fontSize/24），无需动 GlyphPBFParser/FontCatalog 链。harness glyph-t（单 'T'）首行 y33→34 为直接验收信号。
 - **终态**：GlyphPBFParser fields 4/5 提取入库（tsc 绿，对现有资产零行为变化）；公式实施为下会话单点。
+
+**§447. mgl 默认基线公式全文摘档（§446 一级实施规范）——glyph 最终 y = i·lineHeight + glyphOffset(−17) + shiftY(−blockHeight·vAlign)（24px-em 像素域，后按 fontSize/24 缩放）；align() 全文已读（shiftY=−H·vAlign，center=0.5）；我们的等价改造点=TextShaping yOffsets（行中线制→mgl 行参考制）+ GlyphData top 相对量换算（harness y33→34=0.5 CSS px 定标位）（2026-08-26 三百三十九）**：
+
+- **mgl 公式（终版摘档）**：`y_glyph = i·lh + (−17 + (lineMaxScale−sectionScale)·24) − H·vAlign`（无 baseline 资产）；H = Σ lh·lineMaxScale；justify 横向同构。
+- **实施映射**：TextShaping 均匀分支的 `yOffsets[i] = startY + i·lh`（startY=−H/2+lh/2）替换为 mgl 行参考制（yOffsets 以 glyph-top 锚点表达），TextGeometry 侧 GlyphData top（=lineHeight−offsetY）换算差一并在下会话推导（harness 单 'T' 可 10 分钟内迭代定标）。
+- **本节产出**：公式与 align() 全文摘档（防 mgl 参照目录漂移），实施留待下会话（session 时间盒尽）。
+- **终态**：纯 docs 提交。
