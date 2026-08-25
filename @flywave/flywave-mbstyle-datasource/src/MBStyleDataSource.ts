@@ -272,12 +272,18 @@ class RasterTileDataProvider extends DataProvider {
         // masking fixtures — the deep chain stays until the full retain/
         // ascent logic is ported.
         const anc = await resolveAncestor(z, x, y);
-        const srcZ = anc ? anc.srcZ : Math.min(Math.max(z, this.m_minZoom), this.m_maxZoom);
-        const srcX = anc ? anc.srcX : Math.floor(x / Math.pow(2, z - srcZ));
-        const srcY = anc ? anc.srcY : Math.floor(y / Math.pow(2, z - srcZ));
+        if (!anc) {
+            // §351: no existing ancestor at ANY level — mgl draws NOTHING for
+            // this tile (draw_raster `continue`); the background layer/pattern
+            // shows through (error-overlap: expected east band is the raw
+            // airport pattern (86,115,212), pixel-map-verified). The former
+            // requested-z fallback produced a guaranteed-404 URL → failed
+            // texture → un-textured white quad (49k px).
+            return JSON.stringify({ type: 'FeatureCollection', features: [] });
+        }
         return JSON.stringify({
             type: 'FeatureCollection',
-            features: [buildFeature(z, x, y, srcZ, srcX, srcY)],
+            features: [buildFeature(z, x, y, anc.srcZ, anc.srcX, anc.srcY)],
         });
     }
 
