@@ -5048,3 +5048,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **ROI 重排（终案）**：mgl 抗摩尔纹机制（§428 三候选：图集 UV 布局 dump / text sx 光栅化二次确认 / glyph quad 像素尺寸实测）成为**最大剩余解锁面**——一旦破案，text-anchor 2009 族 + icon-text-fit 30+ 例 + 全部文字近失族（§380 记录 bottom 2009 为全 258 用例共同近失源）联动翻盘。下会话首选。
 - **本日收割带总结**：§429 #11451（67→9）为带内最后快赢；#9009/#6820 深域单例记档；icon-text-fit/symbol-placement/variable-anchor 大域均以文字 AA 或结构性工程为门槛。
 - **终态**：纯 docs 提交。
+
+**§432. 抗摩尔纹候选②③执行——text 无 sx 光栅化变体（源码确认 scaleSelf 仅 icon/文字内嵌 icon 两处调用）；γ' 含 dpr 公式实测吻合（0.0787=0.105/2/0.667）；texel-ratio 探针因 v_tex 空间未知不结论——候选①（图集 UV dump）为下会话唯一剩余（2026-08-26 三百二十四）**：
+
+- **候选②定案（源码）**：`scaleSelf` 全库仅 symbol_layout.ts:471（icon 主路径）与 symbol_bucket.ts:1090（文字内嵌 image section）两处——**纯文字 glyph 不走 sx 光栅化变体**，mgl 与我们同样以 24px 位图 minified 采样。
+- **候选③半定案（插桩）**：γ' 实测 0.0787 = (0.105/dpr2)/fontScale0.667 ✓ 公式含 dpr 与推导完全吻合（pr1 时 §427 已证恒等）；texel-ratio 探针（1/fwidth(v_tex_a.x)）读数 61.2 但 v_tex_a 的 UV 空间（图集归一/纹元/字形局部）未确证，比值不可解释——探针方法记档（需先 dump v_tex 边界值定空间）。
+- **域状态**：三候选排除其二半，唯余候选①（mgl 图集 UV 布局 dump——glyph 在图集中的 rect/padding 与 UV 映射，验证其 LINEAR 采样为何在 0.667 缩放下不摩尔纹）。下会话直接 dump glyph atlas 纹理对比局部采样行为。
+- **终态**：mgl 插桩全清（复跑 PASS），主仓纯 docs 提交。
