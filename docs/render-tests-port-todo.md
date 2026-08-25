@@ -5121,3 +5121,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **形态精化**：diff 像素全部位于 'label' 图标的圆角/边缘渐变带（对称分布四角与两腰），**非整盒 ±1px 平移**——是圆角 AA 渲染级差。候选：§422 对非 SDF 图标 magnification 用 NEAREST 在该 fixture 的图标缩放（可能 1:1 或缩小）下不适配（NEAREST 丢源艺术自带 AA），需按缩放条件分流（纹理 filter 为逐 batch 属性，batch=逐 imageItem，需把 technique iconScale 传入 PoiBatch 或在 preparePoi 时按 quad/纹理 texel 比选择 filter——GL 限制下需双 batch 方案）。
 - **验证边界**：icon-text-fit 全族维持 §440 态（none 21/阈 7、both 45、height 22）——发之距但需圆角 AA 级修。§438 基线链条工程仍未启动（session 时间盒）。
 - **终态**：纯 docs 提交。
+
+**§442. §441 分流实验定案——DPR 条件分流（pixelRatio>1→NEAREST）实测：icon-text-fit 21 不变（圆角 AA 差非 filter 所致）且 cross-fade 56→218 回归（pixelRatio 管道落在默认 1，等效全 LINEAR）——实验回退，§422 NEAREST 原样保留；圆角 AA 残差定性为 quad 子像素位置的 LINEAR 重采样级差（非纹理 filter），修复需 quad 顶点半像素对齐（§438 基线制同类 px 级工程）（2026-08-26 三百三十四）**：
+
+- **实验记录**：PoiBatch 增 m_pixelRatio 构造参数 + filter 分流；实测（a）icon-text-fit/none 21→21 不变——圆角 AA 差与 filter 无关（NEAREST/LINEAR 同值）；（b）cross-fade 56→218——pixelRatio 取值链断在 PoiBatchRegistry 无 renderer 引用（默认 1 → 全 LINEAR = §422 前）。已全部回退。
+- **圆角 AA 终定性**：icon quad 屏幕位置为分数像素时任何 filter 都会重采样圆角 AA 带（~30 级差）——修复=quad 顶点半像素对齐（screenBox 取整到 0.5 网格或渲染前 snap），与 §438 基线制同属 px 级对齐工程，合并为下会话「px 级对齐批」（§438 四级链条 + quad snap）。
+- **终态**：mapview 工作树恢复 §422 态（tsc 绿），纯 docs 提交。
