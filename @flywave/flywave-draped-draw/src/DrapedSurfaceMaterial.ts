@@ -253,12 +253,15 @@ export class DrapedCurtainMaterial extends DrapedVolumeMaterialBase {
         const aEndN = customAttribute("aEndPlaneNormal", "vec3");
         const aRightN = customAttribute("aRightNormal", "vec3");
         const aSideSign = customAttribute("aSideSign", "float");
+        const aBottomFlag = customAttribute("aBottomFlag", "float");
 
         // Eye-space endpoints and frame vectors. Direction vectors ride
         // modelViewMatrix with w=0; `modelNormalMatrix` stays zero on basic
         // materials without normals.
         const ecStart = modelViewMatrix.mul(vec4(aStartPos, 1.0)).xyz;
-        const ecEnd = ecStart.add(modelViewMatrix.mul(vec4(aEndPos.sub(aStartPos), 0)).xyz);
+        const segmentOffset = modelViewMatrix.mul(vec4(aEndPos.sub(aStartPos), 0)).xyz;
+        const ecEnd = ecStart.add(segmentOffset);
+        const forwardEc = segmentOffset.normalize();
 
         const startNormalEc = modelViewMatrix.mul(vec4(aStartN, 0)).xyz;
         const endNormalEc = modelViewMatrix.mul(vec4(aEndN, 0)).xyz;
@@ -285,19 +288,32 @@ export class DrapedCurtainMaterial extends DrapedVolumeMaterialBase {
         const upOrDown = normalize(cross(rightNormalEc, planeDirection));
         const normalEC = normalize(cross(planeDirection, upOrDown));
 
-        // Full pixel width in meters at this vertex divided by the plain
-        // miter/right cosine — no abs, no clamp, as in the original.
-        const pushDistance = metersPerPixel(baseEC, this.pixelsPerMeterFactor)
-            .mul(this.halfWidthPx.mul(2))
-            .div(normalEC.dot(rightNormalEc));
-        const expandedEC = baseEC.add(normalEC.mul(sign(aSideSign)).mul(pushDistance));
+        // Subtle adjustment #1: drop the floor vertices by roughly two
+        // pixel-sizes at their own range along the line-forward x push
+        // direction, so terrain relief can never poke through the curtain
+        // floor under grazing views. Clamped by the globe radius magnitude.
+        const downDir = cross(forwardEc, normalEC).normalize();
+        const toleranceMeters = this.pixelsPerMeterFactor
+            .mul(baseEC.length())
+            .mul(float(2.0))
+            .min(float(6378137.0));
+        const droppedBase = baseEC.add(downDir.mul(toleranceMeters).mul(aBottomFlag));
 
-        // Half band width in meters evaluated AT THE VOLUME and interpolated
-        // (width is anchored at the line): never recompute it from the
-        // reconstructed surface point, whose distance inflates the band and
-        // lets far terrain leak into the acceptance region.
-        const vHalfWidthMeters = varying(
-            this.pixelsPerMeterFactor.mul(baseEC.z.abs()).mul(this.halfWidthPx)
+        // Full pixel width in meters at this vertex divided by the plain
+        // miter/right cosine — no abs, no clamp, as in the original, with
+        // the negative-meters-per-pixel guard of the reference stage.
+        // Subtle adjustment #2: the shell is deliberately oversized (double
+        // width plus a one-meter unit push, the conservative fit of the
+        // reference vertex stage): membership boundaries stay pixel-crisp
+        // while rasterization noise can never expose the shared joint
+        // planes or the open end caps.
+        const pushDistance = metersPerPixel(droppedBase, this.pixelsPerMeterFactor)
+            .max(float(0.0))
+            .mul(this.halfWidthPx.mul(2))
+            .mul(float(2.0))
+            .div(normalEC.dot(rightNormalEc));
+        const expandedEC = droppedBase.add(
+            normalEC.mul(sign(aSideSign)).mul(pushDistance.add(float(1.0)))
         );
 
         this.expandedEc = expandedEC;
@@ -319,7 +335,13 @@ export class DrapedCurtainMaterial extends DrapedVolumeMaterialBase {
             const viewH = reconProjInvLocal.mul(vec4(ndc, 1));
             const groundView = viewH.div(viewH.w).xyz;
 
-            const halfMaxWidth = vHalfWidthMeters;
+            // Band half-width recomputed PER FRAGMENT from the reconstructed
+            // surface point's own distance (reference semantics): keeps the
+            // band width correct under oblique views where the volume shell
+            // sits far above/below the actual terrain fragment.
+            const halfMaxWidth = this.halfWidthPx
+                .mul(this.pixelsPerMeterFactor)
+                .mul(groundView.z.abs());
             const widthDist = abs(vRightPlane.xyz.dot(groundView).add(vRightPlane.w));
             const dFromStart = vStartPlane.xyz.dot(groundView).add(vStartPlane.w);
             const dFromEnd = vEndPlane.xyz.dot(groundView).add(vEndPlane.w);
@@ -358,6 +380,11 @@ export class DrapedCurtainMaterial extends DrapedVolumeMaterialBase {
      * and writing disabled, matching the blend-only
      * output, so no FS depth compensation is required.
      */
+    public setupModelViewProjection(): any {
+        const proj: any = cameraProjectionMatrix;
+        const clip = proj.mul(this.expandedEc);
+        return vec4(clip.x, clip.y, clip.w.mul(0.5), clip.w);
+    }
 }
 
 /**
