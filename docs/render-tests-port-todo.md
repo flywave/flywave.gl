@@ -4625,3 +4625,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **决定性矛盾与收敛**：四环（CPU 值/uniform/采样/ramp）逐一验证通过，真实渲染仍 24940 红 0 绿——剩余唯一未**同运行**验证的组合段=**rcT 计算 → ramp 采样 → finalComposite（含 far-clip/enforceBlending/colorspace 后处理链）**。下会话方法（已定档）："同运行双哨兵二分"——同一探针先在 rcT 行 return 绿、再前移一行（ramp 采样后/finalComposite 前）逐步二分，一次运行定位组合段中的变色点；候选：far-clip 分支误触发（rasFar 无效小时输出黑而非红——但需排除）、CustomBlending 参数、colorspace 双重转换。
 - **mix×255 回退**：哨兵5 证其送达生效但真实输出不变（四环正确前提下不改变红）——为保持与 mgl 源码字面一致（mgl RGBA8+原 mix+configureRaster 重标定）回退，待 configureRaster 重标定式读源后一并定夺。
 - **终态**：全部实验回退、基线复现 21560 ✓、工作树=提交态。
+
+**§377. 同运行双哨兵二分——哨兵A 插错分支（else/非 array）自纠：全屏纯红实为 else 分支输出（array 子分支未执行）+ URL 键参数注册表强修复仍零变化（2026-08-25 二百六十九，诚实记档）**：
+
+- **自纠**：哨兵A2 的 replace 命中 **else（非 array）分支**的 rcCol（与 array 分支同名不同串）——"ramp 后全屏红"实为 else 分支（rasMix 原始公式）输出 → **渲染材质的 arrTex=null、array 子分支未执行**（§372–§377 全部"零变化"的统一终解释）。但哨兵1（mbArrUv 行、array 分支内）当年全屏绿 → **同锚点不同运行结论矛盾**（多代材质主导屏面不稳定）。
+- **强修复尝试（无效）**：URL 键 array 参数注册表（attach 时 texture 丢 flag 也能强制 array 公式+uniform）+ mix×255——**仍 21560 恒定**。结合全部证据，最终未解矛盾=**绘制的材质可能根本不含我们的 RASTER_COLOR 注入**（哨兵绿那代≠常驻渲染代）。
+- **下会话（换新会话清醒打法）**：onBeforeRender（draw 时）触发时 dump **该材质 uuid 对应的最终 fragment shader 全文**（uuid 关联消除多代歧义）——一次运行定谳"绘制 program 里到底有没有 array 分支"；有→单步值打印；无→追踪该材质 attach 链断裂点。
+- **终态**：全部实验回退（mix×255/注册表/哨兵）、基线复现 21560/6112 ✓、工作树=提交态。raster-array 残案跨 §358–§377 二十轮，六项修复已入库（整族净改善 25.8k），最后一环需 uuid 关联的 shader 全文取证（方法已定档）。
