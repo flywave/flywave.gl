@@ -4686,3 +4686,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **双向单变量**：rampW×1.5（更软）→ bottom 4084、×0.75（更硬）→ 7212，**均劣化**——native derivative 宽度已是局部最优，AA 宽度不是 2009 级残差驱动（"fatter 3:1"分类系本人 loose 阈值伪影）。
 - **新线索（边缘灰度对）**：残差主导对 (17,17,18)vs(32,32,32)（我们更暗）与 (246,250,253)vs(236,236,236)（我们更亮且带蓝偏）——**中间调混合值系统性偏离**，与 mgl 的 sRGB 数值域文本混合 vs 我们 linear 帧缓冲的色域差吻合（raster-alpha 曾同款破案）。下会话单点：文本材质的 alpha 混合域对拍（TextMaterials 输出走 colorspace_fragment 前的数值域 vs mgl out_color·alpha 的 sRGB 数值直写）。
 - **终态**：实验回退、基线复现（bottom 1969 噪声级 ✓）、工作树=提交态。
+
+**§386. 文本混合色域往返修复入库——vColor sRGB 数值精确传递函数解码（§385 假设确认，方向正确但量级小）（2026-08-25 二百七十八）**：
+
+- **确认与修复**：TextMaterials 为 RawShaderMaterial（`gl_FragColor=color` 直写、无自动色域处理），vColor 的 sRGB 数值被当 linear 混合 → 最终编码使中间调偏暗（(17,17,18)vs(32,32,32) 观测吻合）。**方向实验**（pow 2.2 近似：净 −150）→ **精确 sRGB 传递函数入库**：bottom 2009→1937、top 11471→11293（−178）、center −90、全例一致微改善；广谱回归（text-anchor/justify/color/size/opacity/icon-image 94 例）7 PASS/87 FAIL 无新增异常。
+- **残差定态**：bottom ~1937 的主导=放置/AA 微差的累积（每字形 ±0.5px 级）——非单一大根因，属 F13 深水区的逐项像素工程（mgl 与我们的 subpixel glyph 定位、atlas 重采样差异）。**建议**：text 域此层挂起，转 fog 域（63 例）或 icon-text-fit（§385 前记档 P 清单顺位）。
+- **终态**：色域修复入库、工作树=提交态。
