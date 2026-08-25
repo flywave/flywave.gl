@@ -4692,3 +4692,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **确认与修复**：TextMaterials 为 RawShaderMaterial（`gl_FragColor=color` 直写、无自动色域处理），vColor 的 sRGB 数值被当 linear 混合 → 最终编码使中间调偏暗（(17,17,18)vs(32,32,32) 观测吻合）。**方向实验**（pow 2.2 近似：净 −150）→ **精确 sRGB 传递函数入库**：bottom 2009→1937、top 11471→11293（−178）、center −90、全例一致微改善；广谱回归（text-anchor/justify/color/size/opacity/icon-image 94 例）7 PASS/87 FAIL 无新增异常。
 - **残差定态**：bottom ~1937 的主导=放置/AA 微差的累积（每字形 ±0.5px 级）——非单一大根因，属 F13 深水区的逐项像素工程（mgl 与我们的 subpixel glyph 定位、atlas 重采样差异）。**建议**：text 域此层挂起，转 fog 域（63 例）或 icon-text-fit（§385 前记档 P 清单顺位）。
 - **终态**：色域修复入库、工作树=提交态。
+
+**§387. fog 域开题——当前基线 16 PASS/70 FAIL，最近失 space-color 78 定性=horizon-blend 过渡带偏窄（缺 y0.35-0.45 亮带）（2026-08-25 二百七十九）**：
+
+- **fog 域基线（清缓存，本会话各修复后）**：16 PASS/70 FAIL——最近失梯队：space-color 78、star-intensity 84、globe/high-color 213、horizon-blend/gradient 266、2d/fill-outline 345、2d/line-gradient 404、2d/fill-color 422（§12.27 旧值 space-color-use-theme 39 已不在列，基线已变动）。
+- **space-color 78 取证**：垂直剖面——space 区 (15,15,81) ✓ 逐位一致、地面米色 ✓ 一致；**唯一差异=y0.3-0.45 过渡带**：期望经 (29,28,126)→(254,254,250) 亮带→(245,246,221) 三段，我们 (28,28,126)→直达 (245,245,220)——**缺 horizon-blend 亮带**（high-color/horizon-blend 0.05 的中间发光带宽度不足）。fixture：color white/high-color blue/space (15,15,80)/horizon-blend 0.05/pitch 85。
+- **下会话单点**：horizon-blend 带宽公式对拍（mgl sky_style_layer/fog 的 horizon-blend 几何 vs 我们 MBEnvironmentManager 的雾带渐变宽度——star-intensity 84 同族疑共享该带）。
+- **终态**：零代码变更、fog 基线入库、工作树=提交态。
