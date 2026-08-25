@@ -4618,3 +4618,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **哨兵6【无效实验】**：本人插入时造成 `mbArrUv` 重复声明 → GLSL 编译错 → 回退旧 program → 输出正常图（非探针结果）。**"编译失败静默回退"模式本会话已三次咬人（哨兵3/4/6）——后续一切 shader 探针必须先过编译错误 grep 再读结果（方法论固化）**。
 - **下会话终局单点**：修正哨兵6（删原行）验证采样是否恒 0；若是 → 修复 DataTexture 上传链（候选：texture.needsUpdate 时序、unpackAlignment、rasterTextureCache 命中的旧纹理对象未带新 needsUpdate）——CPU 值/uniform/ramp/分支四环已全部验证，只差采样一环。
 - **终态**：全部实验回退、基线复现 21560/6112 ✓、工作树=提交态。
+
+**§376. 终局单点——四环同运行验证全通过（采样 ✓/uniform ✓/ramp ✓/分支 ✓）而真实合成仍红，残案收敛到 rcT→ramp→finalComposite 组合段（2026-08-25 二百六十八）**：
+
+- **哨兵6b（修正版，零编译错误）**：输出采样原色——数据区纹元 rgba≈(0.05,0.055,~0)（decode≈0.4 ✓）、NODATA 区 (1,1,1) ✓——**采样完全正确**（"采样恒 0"假设否定，§375 记档修正）。同时 40596 像素采样到 NODATA=uv 越界 clamp 区（正常渲染中透明 ✓ 卫星可见 ✓ 自洽）。
+- **决定性矛盾与收敛**：四环（CPU 值/uniform/采样/ramp）逐一验证通过，真实渲染仍 24940 红 0 绿——剩余唯一未**同运行**验证的组合段=**rcT 计算 → ramp 采样 → finalComposite（含 far-clip/enforceBlending/colorspace 后处理链）**。下会话方法（已定档）："同运行双哨兵二分"——同一探针先在 rcT 行 return 绿、再前移一行（ramp 采样后/finalComposite 前）逐步二分，一次运行定位组合段中的变色点；候选：far-clip 分支误触发（rasFar 无效小时输出黑而非红——但需排除）、CustomBlending 参数、colorspace 双重转换。
+- **mix×255 回退**：哨兵5 证其送达生效但真实输出不变（四环正确前提下不改变红）——为保持与 mgl 源码字面一致（mgl RGBA8+原 mix+configureRaster 重标定）回退，待 configureRaster 重标定式读源后一并定夺。
+- **终态**：全部实验回退、基线复现 21560 ✓、工作树=提交态。
