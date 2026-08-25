@@ -712,7 +712,9 @@ export class MBTileDataEmitter {
                     props._patternCrossFade = p['fill-pattern-cross-fade'] ?? 1;
                     // ["image", a, b] + cross-fade: resolve the second
                     // candidate for two-texture blending (same as the ribbon
-                    // line-pattern-cross-fade path).
+                    // line-pattern-cross-fade path). Scoped to fade ∈ (0,1):
+                    // always resolving regressed uneven-pattern/start-fade
+                    // fixtures whose endpoint semantics differ (§403).
                     const fade = Number(p['fill-pattern-cross-fade'] ?? 1);
                     if (Number.isFinite(fade) && fade > 0 && fade < 1) {
                         let rawPat: any = (layer as any).paintDefs?.['fill-pattern']?.value;
@@ -865,6 +867,7 @@ export class MBTileDataEmitter {
                             writingMode: l['text-writing-mode'] as ('horizontal' | 'vertical')[],
                             glyphLookup: this.m_glyphLookup as any,
                             fontName: Array.isArray(l['text-font']) ? l['text-font'].join(',') : l['text-font'],
+                            sectionScales: (l as any)['text-field-section-scales'],
                         });
                         props._iconTextFit = iconTextFit;
                         props._iconTextFitPadding = l['icon-text-fit-padding'] ?? [0, 0, 0, 0];
@@ -957,6 +960,11 @@ export class MBTileDataEmitter {
                         writingMode: l['text-writing-mode'] as ('horizontal' | 'vertical')[],
                         glyphLookup: this.m_glyphLookup as any,
                         fontName: Array.isArray(l['text-font']) ? l['text-font'].join(',') : l['text-font'],
+                        // mgl format font-scale sections (§396): only the
+                        // per-line max is consumed, so the pre-transform
+                        // alignment is safe (casing is code-point 1:1 for
+                        // the Latin corpus).
+                        sectionScales: (l as any)['text-field-section-scales'],
                     });
                     props._shaped = shaped;
                     props._textWidth = shaped.right - shaped.left;
@@ -1079,6 +1087,23 @@ export class MBTileDataEmitter {
                 if (p['fill-extrusion-pattern']) {
                     props._patternName = p['fill-extrusion-pattern'];
                     props._patternCrossFade = p['fill-extrusion-pattern-cross-fade'] ?? 1;
+                    // ["image", a, b]: resolve the second candidate for
+                    // two-texture blending (same as the fill-pattern path
+                    // above) — mgl blends at ANY fade value (t=0 → A,
+                    // t=1 → B), not only inside (0,1).
+                    let rawXPat: any = (layer as any).paintDefs?.['fill-extrusion-pattern']?.value;
+                    if (!Array.isArray(rawXPat) && typeof rawXPat === 'object') {
+                        try { rawXPat = JSON.parse(JSON.stringify(rawXPat)); } catch { rawXPat = undefined; }
+                    }
+                    while (Array.isArray(rawXPat) && rawXPat[0] === 'memo') rawXPat = rawXPat[1];
+                    if (Array.isArray(rawXPat) && rawXPat[0] === 'image') {
+                        for (const cand of rawXPat.slice(1)) {
+                            if (typeof cand === 'string' && cand !== props._patternName) {
+                                props._patternName2 = cand;
+                                break;
+                            }
+                        }
+                    }
                 }
                 if (l.visibility === 'none') props.enabled = false;
                 break;
@@ -1569,6 +1594,34 @@ export class MBTileDataEmitter {
                 }
             }
             const baseVertex = geo.positions.length / 3;
+            // mgl wall pattern mapping (fill_extrusion_pattern.vertex.glsl:
+            // pos = normal.z==1 ? pos_nx.xy : vec2(edgedistance,
+            // z×height_factor)) — walls tile the pattern by PERIMETER
+            // distance × height, not position.xy (which smears vertically).
+            // Roof and wall share vertices here, so for pattern extrusions
+            // emit roof-dedicated vertex copies carrying uv=(world x, world
+            // y) while wall vertices carry uv=(edge distance, z) — the
+            // patcher's mglComposite branch then reads uv directly.
+            const isPatternExtrusion =
+                !!(this.m_techniques[techniqueIdx] as any)?._patternName;
+            const edgeDists: number[] = new Array(ringCount).fill(0);
+            if (isPatternExtrusion) {
+                for (let r = 0; r < rings.length; r++) {
+                    const ring = rings[r];
+                    const ringStart = r === 0 ? 0 : holeIndices[r - 1];
+                    let acc = 0;
+                    let prevW: THREE.Vector3 | null = null;
+                    for (let i = 0; i < ring.length; i++) {
+                        const vi = ringStart + i;
+                        const w = this.project(
+                            new THREE.Vector2(allVerts[vi * 2], allVerts[vi * 2 + 1])
+                        );
+                        if (prevW) acc += Math.hypot(w.x - prevW.x, w.y - prevW.y);
+                        edgeDists[vi] = acc;
+                        prevW = w;
+                    }
+                }
+            }
             for (let i = 0; i < ringCount; i++) {
                 const w = this.project(
                     new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1])
@@ -1579,14 +1632,34 @@ export class MBTileDataEmitter {
                 // bottom vertex
                 geo.positions.push(w.x, w.y, baseGround + floorHeight);
                 geo.extrusionAxis.push(0, 0, 0, 0);
+                if (isPatternExtrusion) geo.uvs.push(edgeDists[i], baseGround + floorHeight);
                 // top vertex
                 geo.positions.push(w.x, w.y, topGround + height);
                 geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
+                if (isPatternExtrusion) geo.uvs.push(edgeDists[i], topGround + height);
             }
 
-            // Roof triangles reference the TOP vertices.
-            for (let i = 0; i < triIndices.length; i++) {
-                geo.indices.push(baseVertex + triIndices[i] * 2 + 1);
+            // Roof triangles reference the TOP vertices (or, for pattern
+            // extrusions, roof-dedicated copies with xy pattern UVs).
+            if (isPatternExtrusion) {
+                const roofBase = geo.positions.length / 3;
+                for (let i = 0; i < ringCount; i++) {
+                    const w = this.project(
+                        new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1])
+                    );
+                    const ground = this.m_terrainSampler ? grounds[i] : 0;
+                    const topGround = heightAlign === 'flat' ? centroidElev : ground;
+                    geo.positions.push(w.x, w.y, topGround + height);
+                    geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
+                    geo.uvs.push(w.x, w.y);
+                }
+                for (let i = 0; i < triIndices.length; i++) {
+                    geo.indices.push(roofBase + triIndices[i]);
+                }
+            } else {
+                for (let i = 0; i < triIndices.length; i++) {
+                    geo.indices.push(baseVertex + triIndices[i] * 2 + 1);
+                }
             }
 
             // Walls: a quad per ring edge (two triangles).

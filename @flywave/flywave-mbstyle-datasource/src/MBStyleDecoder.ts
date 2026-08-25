@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBTileDataEmitter } from './MBTileDataEmitter';
 import { StyleSpecification } from './MBStyleSpec';
+import { findPoleOfInaccessibility } from './PoleOfInaccessibility';
 
 class MBStyleDataProcessor implements IGeometryProcessor {
     private m_emitter: MBTileDataEmitter | undefined;
@@ -218,19 +219,32 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_emitter.processPointFeature(layer, extents, pts, properties, featureId, circleLayers);
         }
 
-        if (symbolLayers.length > 0 && geometry.length > 0 && geometry[0].positions.length > 1) {
-            const linePts: THREE.Vector3[] = [];
-            const positions = geometry[0].positions;
-            const step = Math.max(1, Math.floor(positions.length / 20));
-            for (let i = 0; i < positions.length; i += step) {
-                linePts.push(new THREE.Vector3(positions[i].x, positions[i].y, 0));
-            }
-            if (linePts.length >= 2) {
-                const midIdx = Math.floor(linePts.length / 2);
-                const midPt = linePts[midIdx];
+        if (symbolLayers.length > 0) {
+            // mgl symbol_layout.ts: POINT placement on a LineString anchors
+            // ONE symbol per line at its FIRST vertex (issue #3808) — not
+            // the midpoint; MultiLineString gets one anchor per line.
+            // 'line'/'line-center' placements consume the sampled path
+            // (_linePath → TextPathGeometry) for text, but an accompanying
+            // ICON still uses the anchor point and mgl keeps it along the
+            // line (iconAlongLine) — so those keep the midpoint anchor.
+            const pointOnly = symbolLayers.every(
+                (l) => (l.layout['symbol-placement'] ?? 'point') === 'point',
+            );
+            for (const lg of geometry) {
+                const positions = lg.positions;
+                if (!positions || positions.length === 0) continue;
+                const linePts: THREE.Vector3[] = [];
+                const step = Math.max(1, Math.floor(positions.length / 20));
+                for (let i = 0; i < positions.length; i += step) {
+                    linePts.push(new THREE.Vector3(positions[i].x, positions[i].y, 0));
+                }
                 const transformedPts = this.transformPoints(linePts);
+                const anchorPt = pointOnly
+                    ? new THREE.Vector3(positions[0].x, positions[0].y, 0)
+                    : linePts[Math.floor(linePts.length / 2)];
                 this.m_emitter.processPointFeature(
-                    layer, extents, this.transformPoints([midPt]),
+                    layer, extents,
+                    this.transformPoints([anchorPt]),
                     { ...properties, _linePath: transformedPts.map(p => [p.x, p.y]) },
                     featureId, symbolLayers,
                 );
@@ -292,9 +306,28 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             }
         }
 
-        const fillLayers = visible.filter(l => l.type !== 'circle');
+        const fillLayers = visible.filter(l => l.type !== 'circle' && l.type !== 'symbol');
         if (fillLayers.length > 0) {
             this.m_emitter.processFillFeature(layer, extents, this.transformPolygonGeometry(geometry), properties, featureId, fillLayers);
+        }
+
+        // Symbol layers on polygon features: mgl places one point-placement
+        // symbol per polygon at its pole of inaccessibility
+        // (symbol_layout.ts: classifyRings → findPoleOfInaccessibility(
+        // polygon, 16) — 16 tile units = 2 px at extent 8192).
+        const symbolLayers = visible.filter(l => l.type === 'symbol');
+        if (symbolLayers.length > 0) {
+            const precision = 16 * extents / 8192;
+            for (const polygon of geometry) {
+                const rings = polygon.rings;
+                if (!rings || rings.length === 0 || rings[0].length < 3) continue;
+                const poi = findPoleOfInaccessibility(
+                    rings.map((ring) => ring.map((pt) => ({ x: pt.x, y: pt.y }))),
+                    precision,
+                );
+                const pts = this.transformPoints([new THREE.Vector3(poi.x, poi.y, 0)]);
+                this.m_emitter.processPointFeature(layer, extents, pts, properties, featureId, symbolLayers);
+            }
         }
     }
 }

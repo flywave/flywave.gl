@@ -608,6 +608,14 @@ export class MBLayerEvaluator {
             for (const [key, raw] of Object.entries(pl.layoutDefs)) {
                 if (isExpr(raw) && ctx) {
                     layout[key] = MBExpressionEngine.evaluate(raw, ctx);
+                    if (key === 'text-field') {
+                        // mgl format sections carry font-scale → per-line
+                        // maxScale in shaping (shaping.ts getMaxScale). Stash
+                        // the per-char scales for the emitter's shapeText
+                        // call (§396 mechanism producer).
+                        const fmt = MBExpressionEngine.evaluateFormatWithScales(raw, ctx);
+                        if (fmt?.scales) (layout as any)['text-field-section-scales'] = fmt.scales;
+                    }
                 } else {
                     layout[key] = raw;
                 }

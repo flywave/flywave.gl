@@ -2461,9 +2461,11 @@ export class MBMaterialPatchManager {
         }
 
         // Apply pattern as a base texture (tiles across the footprint). The fill
-        // pattern patcher also handles pattern-cross-fade mixing.
+        // pattern patcher also handles pattern-cross-fade mixing. Extrusions
+        // use the mgl translucent-pass alpha composite (§403): transparent
+        // sprite texels must blend, not overwrite (white-buildings defect).
         if (patternTex) {
-            this.patchFillPatternMaterial(material, technique);
+            this.patchFillPatternMaterial(material, technique, true);
         }
 
         // NOTE: fill-extrusion-partial-rendering (render only buildings within a
@@ -3464,7 +3466,7 @@ export class MBMaterialPatchManager {
      * fill-pattern / fill-extrusion-pattern: tile a sprite image across the
      * polygon by deriving UVs from world-space position.
      */
-    private patchFillPatternMaterial(material: THREE.Material, technique: any): void {
+    private patchFillPatternMaterial(material: THREE.Material, technique: any, mglComposite = false): void {
         const tex = this.extractPatternTexture(technique._patternName);
         if (!tex) return;
         // Terrain draping: make patterned fill conform to the terrain surface.
@@ -3474,11 +3476,21 @@ export class MBMaterialPatchManager {
 
         (material as any).map = tex;
         (material as any).color = new THREE.Color('#ffffff');
-        (material as any).transparent = (technique.opacity ?? 1) < 1;
+        // mglComposite (fill-extrusion): mgl draws patterned extrusions in
+        // the translucent pass with alpha blending (draw_fill_extrusion.ts:
+        // 104-129) — transparent sprite texels composite over the content
+        // below; opacity=1 + transparent pattern must NOT go through the
+        // opaque pass (the texel RGB would replace the background — the
+        // white-buildings defect on fill-extrusion-pattern/literal).
+        // The 2D fill path keeps the calibrated opaque-pass approximation
+        // (its near-miss band was fitted on it; the translucent pass
+        // regresses it, §403).
+        (material as any).transparent = mglComposite || (technique.opacity ?? 1) < 1;
 
-        // Pattern cross-fade: modulate pattern contribution by the fade factor
-        // (0 = no pattern/base color, 1 = full pattern). With a second
-        // candidate (["image", a, b]) the two tiles blend by the fade.
+        // Pattern cross-fade: with a second candidate (["image", a, b]) mgl
+        // blends the two tiles in the PREMULTIPLIED domain by the fade
+        // factor (fill_extrusion_pattern FILL_EXTRUSION_PATTERN_TRANSITION:
+        // out = A×(1−transition) + B×transition — t=0 shows A, t=1 shows B).
         const crossFade = technique._patternCrossFade ?? 1;
         const tex2 = technique._patternName2
             ? this.extractPatternTexture(technique._patternName2)
@@ -3505,7 +3517,13 @@ export class MBMaterialPatchManager {
             );
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
-                '#include <begin_vertex>\nvMBPatternUv = position.xy * uMBPatternScale;'
+                mglComposite
+                    // Extrusion: uv carries the mgl pattern coords baked by
+                    // the emitter — roof copies (world x, world y), wall
+                    // vertices (perimeter edge distance, z height)
+                    // (fill_extrusion_pattern.vertex.glsl pos branch).
+                    ? '#include <begin_vertex>\nvMBPatternUv = uv * uMBPatternScale;'
+                    : '#include <begin_vertex>\nvMBPatternUv = position.xy * uMBPatternScale;'
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
@@ -3513,7 +3531,23 @@ export class MBMaterialPatchManager {
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <opaque_fragment>',
-                `#include <opaque_fragment>
+                mglComposite
+                    ? `#include <opaque_fragment>
+                 vec4 mbPat = texture2D(uMBPatternTex, vMBPatternUv);${tex2 ? `
+                 vec4 mbPat2 = texture2D(uMBPatternTex2, vMBPatternUv);
+                 // mgl premultiplied cross-fade: A×(1−t) + B×t.
+                 mbPat = vec4(mbPat.rgb * mbPat.a, mbPat.a) * (1.0 - uMBPatternCrossFade)
+                       + vec4(mbPat2.rgb * mbPat2.a, mbPat2.a) * uMBPatternCrossFade;
+                 mbPat.rgb = mbPat.a > 0.0001 ? mbPat.rgb / mbPat.a : vec3(0.0);` : ''}
+                 // mgl: out = pattern × v_lighting × u_opacity — the base
+                 // color is NOT mixed in; the pattern's own alpha composites
+                 // over the content below (translucent pass). No lighting
+                 // factor: the gl_FragColor/mbPat ratio experiment (§405)
+                 // regressed everything (the standard material's lit map
+                 // sample does not decompose into a per-fragment v_lighting
+                 // analog) — wall shading stays an open gap.
+                 gl_FragColor = vec4(mbPat.rgb, mbPat.a * opacity);`
+                    : `#include <opaque_fragment>
                  vec4 mbPat = texture2D(uMBPatternTex, vMBPatternUv);${tex2 ? `
                  mbPat = mix(mbPat, texture2D(uMBPatternTex2, vMBPatternUv), uMBPatternCrossFade);` : ''}
                  float mbPatAlpha = mbPat.a * opacity * uMBPatternCrossFade;

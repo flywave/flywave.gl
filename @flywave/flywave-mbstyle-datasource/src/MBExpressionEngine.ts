@@ -38,6 +38,61 @@ export class MBExpressionEngine {
         MBExpressionEngine.availableImages = names;
     }
 
+    /**
+     * Evaluate a TOP-LEVEL `format` expression and additionally return the
+     * per-character `font-scale` factors of its sections (mgl format.ts: an
+     * options object applies to the PRECEDING section — `lastExpression.scale
+     * = scale`, format.ts:73-79 — and shaping.ts consumes the per-line max
+     * via TaggedString.getMaxScale). Returns null when `raw` is not a
+     * top-level format expression; `scales` is null when every section has
+     * the default scale 1 (callers keep the flat fast path). The returned
+     * `text` concatenation mirrors the `format` exec case exactly, and only
+     * the per-line MAX of the scales is consumed downstream (TextShaping
+     * `sectionScales`), so code-point reordering by the RTL shaper is
+     * harmless. Nested format expressions and text-field wrappers
+     * (coalesce/let) are not unwrapped — flat fast path there.
+     */
+    static evaluateFormatWithScales(
+        raw: any,
+        ctx: MBExpressionContext
+    ): { text: string; scales: number[] | null } | null {
+        if (!Array.isArray(raw) || raw[0] !== 'format') return null;
+        let text = '';
+        const scales: number[] = [];
+        let lastSectionStart = 0;
+        let hasNonUnit = false;
+        for (const arg of raw.slice(1)) {
+            if (arg && typeof arg === 'object' && !Array.isArray(arg)) {
+                // Section options object — applies to the PRECEDING section.
+                // Only font-scale affects shaping; text-font/text-color don't.
+                const s = (arg as any)['font-scale'];
+                if (s !== undefined) {
+                    const scale = Number(MBExpressionEngine.evaluate(s, ctx)) || 1;
+                    if (scale !== 1) {
+                        hasNonUnit = true;
+                        for (let i = lastSectionStart; i < scales.length; i++) scales[i] = scale;
+                    }
+                }
+                continue;
+            }
+            let part: string | null = null;
+            if (typeof arg === 'string') {
+                part = arg;
+            } else if (Array.isArray(arg) && arg[0] === 'image') {
+                // Inline image — skip (same as the format exec case).
+            } else if (Array.isArray(arg)) {
+                const v = this.exec(arg, ctx);
+                if (typeof v === 'string') part = v;
+                else if (typeof v === 'number') part = String(v);
+            }
+            lastSectionStart = scales.length;
+            if (part === null) continue;
+            text += part;
+            for (let i = 0; i < Array.from(part).length; i++) scales.push(1);
+        }
+        return { text, scales: hasNonUnit ? scales : null };
+    }
+
     static addAvailableImage(name: string): void {
         if (MBExpressionEngine.availableImages) {
             MBExpressionEngine.availableImages.add(name);

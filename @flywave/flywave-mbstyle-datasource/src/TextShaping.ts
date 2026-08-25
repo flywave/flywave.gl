@@ -8,6 +8,12 @@ export interface ShapedLine {
     text: string;
     width: number;
     position: [number, number];
+    /**
+     * Max section scale on this line (mgl TaggedString.getMaxScale).
+     * Plain text has no sections, so this is 1 unless the caller passed
+     * per-character `sectionScales` to shapeText.
+     */
+    maxScale: number;
 }
 
 export interface ShapedText {
@@ -427,6 +433,13 @@ export function shapeText(
         writingMode?: ('horizontal' | 'vertical')[];
         glyphLookup?: GlyphLookup;
         fontName?: string;
+        /**
+         * Optional per-character section scales (mgl FormattedSection.scale),
+         * aligned with `Array.from(text)` AFTER text-transform. Wrapped lines
+         * inherit the max scale of their characters, which scales their line
+         * height (mgl shaping.ts shapeLines: lineHeight * lineMaxScale).
+         */
+        sectionScales?: number[];
     },
 ): ShapedText {
     const {
@@ -455,24 +468,68 @@ export function shapeText(
     // Break into lines
     const rawLines = wrapText(transformed, maxWidth, letterSpacing, glyphLookup, fontName);
 
+    // Per-line max section scale (mgl shaping.ts shapeLines: lineMaxScale =
+    // line.getMaxScale(), and each line's height is lineHeight * lineMaxScale).
+    // Wrapped lines form an ordered subsequence of the input text (wrapText
+    // only drops break separators), so a forward cursor matches each line's
+    // characters back to their scales.
+    const lineMaxScales: number[] = new Array(rawLines.length).fill(1);
+    if (options.sectionScales && options.sectionScales.length > 0) {
+        const chars = Array.from(transformed);
+        const scales = options.sectionScales;
+        let cursor = 0;
+        for (let li = 0; li < rawLines.length; li++) {
+            let maxScale = 0;
+            for (const ch of rawLines[li]) {
+                while (cursor < chars.length && chars[cursor] !== ch) cursor++;
+                if (cursor >= chars.length) break;
+                const s = scales[cursor];
+                if (s !== undefined && s > maxScale) maxScale = s;
+                cursor++;
+            }
+            // Empty lines advance by an unscaled lineHeight in mgl (shapeLines:
+            // "Still need a line feed after empty line"), so they get scale 1.
+            lineMaxScales[li] = maxScale > 0 ? maxScale : 1;
+        }
+    }
+
     // Measure lines
     const lines: ShapedLine[] = [];
     let maxLineWidth = 0;
 
-    const lineHeightEm = lineHeight; // in em units
-    const totalHeight = rawLines.length * lineHeightEm;
-    const startY = -totalHeight / 2 + lineHeightEm / 2; // center vertically
+    const yOffsets: number[] = new Array(rawLines.length);
+    let totalHeight: number;
+    if (lineMaxScales.every(s => s === 1)) {
+        // Uniform line height — kept bit-identical to the pre-scale behavior.
+        const lineHeightEm = lineHeight; // in em units
+        totalHeight = rawLines.length * lineHeightEm;
+        const startY = -totalHeight / 2 + lineHeightEm / 2; // center vertically
+        for (let i = 0; i < rawLines.length; i++) {
+            yOffsets[i] = startY + i * lineHeightEm;
+        }
+    } else {
+        // mgl shaping.ts shapeLines: y advances by lineHeight * lineMaxScale
+        // per line, so lines with larger sections are taller.
+        totalHeight = 0;
+        for (const s of lineMaxScales) totalHeight += lineHeight * s;
+        let y = -totalHeight / 2; // center vertically
+        for (let i = 0; i < rawLines.length; i++) {
+            const lineHeightEm = lineHeight * lineMaxScales[i]; // mgl: currentLineHeight = lineHeight * lineMaxScale
+            yOffsets[i] = y + lineHeightEm / 2;
+            y += lineHeightEm;
+        }
+    }
 
     for (let i = 0; i < rawLines.length; i++) {
         const lineText = rawLines[i];
         const lineWidth = measureTextWidth(lineText, letterSpacing, glyphLookup, fontName);
         maxLineWidth = Math.max(maxLineWidth, lineWidth);
 
-        const yOffset = startY + i * lineHeightEm;
         lines.push({
             text: lineText,
             width: lineWidth,
-            position: [0, yOffset] as [number, number],
+            position: [0, yOffsets[i]] as [number, number],
+            maxScale: lineMaxScales[i],
         });
     }
 
@@ -818,6 +875,7 @@ function shapeVerticalText(
             text: colText,
             width: colWidth,
             position: [startX + col * colWidth, startY] as [number, number],
+            maxScale: 1, // vertical mode has no per-section scale support
         });
     }
 

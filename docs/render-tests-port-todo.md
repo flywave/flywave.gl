@@ -4744,3 +4744,107 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **实验**：gate 加 `hasBackground && !hasContentLayers && !hasSky`（76–89.9 启用 uScale=1 精确式）——**净 +70,713**：zoom-expression 双例仍 +40k/+37k（它们**同为 background-only**，判别失败）、default/empty +892；改善不抵。已回退。
 - **判别子更新**：fog/space-color 与 zoom-expression 的结构差异=**非默认 fog paint**（space-color/high-color/star-intensity 显式设置 vs zoom-expression 仅 range zoom 表达式 + 默认色）——下会话单点：backgroundFogState 增 `hasExplicitFogPaint` 字段（检查 fog 对象含 space-color/high-color/star-intensity 键）作高 pitch 门控判别子，单测 space-color/star-intensity 后 fog 域复测。
 - **终态**：回退、基线复现、工作树=提交态。
+
+**§395. §394 定档落地（代码对齐批，测试延后）——`hasExplicitFogPaint` 判别子入库：backgroundFogState 增字段（fog 对象含 space-color/high-color/star-intensity 显式键），MBBackgroundFogRenderer 高 pitch 门控改由它判别（76–89.9° 且 explicit paint → quad 启用 + uScale=1 精确式；其余 >76° 一律不画维持 §181/§393 结论）（2026-08-25 二百八十七，代码入库测试攒批）**：
+
+- **改动**（两文件，行为面=仅显式 paint 样式的高 pitch 族）：①`MBEnvironmentManager` 解析 fog 时置 `m_hasExplicitFogPaint`（三键 presence 检查，fog 清除时复位），经 `backgroundFogState.hasExplicitFogPaint` 暴露；②`MBBackgroundFogRenderer.run()` 门控从 `pitch>76 return` 改为 `>76 时仅 explicitPaint 且 ≤89.9 放行`，且 pitch>76 分支 uScale 取 1.0（mgl 精确式，弃 per-pitch 表——§393 证表不可普适替换）。
+- **依据链**：§392（space-color 78px=精确式可解）→ §393（扩门控无判别净劣化 +104k，76°+ 既有期望依赖"无 quad"）→ §394（bg-only 判别仍劣化 +70.7k，真判别子=显式 fog paint 键）。本次按 §394 终判落地，60–76° 标定路径零变化。
+- **测试状态**：按"代码对齐先行、攒批测试"方针**未跑渲染测试**——待与 F13 text 批（§396）合并测：space-color/star-intensity 单族 + zoom-expression（应零变化）+ fog 域复测。
+- **终态**：tsc --build 绿、工作树含本批代码变更。
+
+**§396. F13 清单① 落地（代码对齐批，测试延后）——TextShaping 逐行变高机制对齐 mgl shapeLines：ShapedLine 增 maxScale（≡TaggedString.getMaxScale），多行布局在存在 scale≠1 的行时改走 mgl 语义（totalHeight=Σ lineHeight·s_i、y 逐行累加 lineHeight·lineMaxScale、空行不缩放 ≡shaping.ts:552/701）；scale=1 恒等走原公式逐位不变（2026-08-25 二百八十八，机制入库暂眠）**：
+
+- **差异分析（mgl shaping.ts shapeLines 逐项对照）**：①行高推进——mgl `y += lineHeight·lineMaxScale + lineOffset`（lineOffset 仅 image section 超高产生，我方 format 表达式丢 image section 无此场景，未实现）——**本次已修**；②glyph 垂直基线 `SHAPING_DEFAULT_OFFSET + (lineMaxScale−sectionScale)·ONE_EM`（shaping.ts:627）——我方行级模型无 per-section glyph 定位，需 quad 级 scale 数据+渲染链改造，记档未修；③justifyLine halfLineHeight 有/无 baseline 两径（692/696）——整行同字号时与我方行中点等价，baseline 径不模拟；④空行不缩放——已一致；⑤垂直模式——我方 shapeVerticalText 为独立简化模型，仅补接口字段未改行为。
+- **改动**（仅 TextShaping.ts）：`ShapedLine.maxScale` 必填字段 + `shapeText` 可选 `sectionScales`（逐字符 scale，对齐 transform 后文本；行构建处以前向游标把 wrap 输出行匹配回输入取行内 max，空行/未匹配归一 1）+ 布局双分支（全 1 → 原公式；有 ≠1 → mgl 变高）。`shapeVerticalText` 补 `maxScale:1`。
+- **恒等论证**：现有全部调用方（MBTileDataEmitter:857/949、MBStyleSymbolPlacement:208）不传 sectionScales → 走原公式分支，浮点运算式与旧码逐字符相同（node 对编译产物验证 identity=true + 三组 sanity 通过）。tsc --build 绿。**机制暂眠**——`MBExpressionEngine` 的 `format` 分支（648-672）拼接时丢弃 font-scale，无生产者传 sectionScales；激活需 format section 求值贯通 emitter→shapeText，并配合差异点②的 quad 级 per-section 渲染（记为后续项）。
+- **§379 清单②③ 分析定案**：② shaping.top/bottom（mgl 把 anchor 烘焙进 shaping 盒 top=−vAlign·height）——我方永远居中盒、anchor 在下游（TextTechnique hAlignment/vAlignment + placement 碰撞盒）单独应用，**系统级等价**，改 mgl 语义需同步拆两处下游，联动风险>收益，记档不改；③ vertical placement left 特例（mgl symbol_layout.ts:405-413 竖排恒 textJustify='left'）——确认是差异（我方列永远居中、不消费 justify），但我方垂直模型整体简化（列方向/字朝向），单改 justify 收益有限且可能动既有 vertical 通过例，记档待主会话定夺。
+- **测试状态**：按攒批方针未跑渲染测试——待与 §395 fog 批合并测（fog 域 + formatted 多行变尺寸用例 + text-anchor/justify 回归）。
+- **终态**：tsc 绿、工作树含 §395+§396 两批代码变更。
+
+**§397. §396 激活链落地（代码对齐批，测试延后）——format 表达式 font-scale 贯通 emitter→shapeText：新增 `MBExpressionEngine.evaluateFormatWithScales`（顶层 format → {text, 逐字符 scales}，选项对象按 mgl format.ts:73-79 修饰**前一个** section），MBLayerEvaluator 求值 text-field 时附挂 `text-field-section-scales` 侧通道，emitter 两处 shapeText 调用（主文本路径 + icon-text-fit）传入 sectionScales（2026-08-25 二百八十九，生产者接线入库）**：
+
+- **差异核对（mgl 源码级）**：①format.ts:56 选项键为 `font-scale`（非 text-scale）；②选项对象作用域=**前置** section（`lastExpression.scale = scale`），初稿按"后置"假设已纠正；③FormattedSection scale null→默认 1；④mgl toString 任意 value——保持与既有 format exec 分支完全相同的拼接规则（string/number），保证双路径 text 逐位一致（node 验证 viaEval===viaNew.text ✓）。
+- **改动**（三文件）：①`MBExpressionEngine.evaluateFormatWithScales`——非顶层 format 返回 null（coalesce/let 包装不解包，走原平坦路径）；全 unit scale 时 scales=null（调用方零成本）；image section 跳过与 format 分支一致；②`MBLayerEvaluator` layout 循环 key==='text-field' 时附挂侧通道（appearances 覆盖路径不处理，最小侵入）；③`MBTileDataEmitter` 两处 shapeText 传 sectionScales——只消费行内 max，故 pre-transform 对齐安全（Latin 大小写码点 1:1、RTL 重排不影响 max）。
+- **影响面**：仅 text-field 为顶层 format 且含 font-scale≠1 section 的样式（formatted 多行变尺寸用例族）——多行总高/行距改走 mgl 变高语义；其余一切样式 scales=null 走原公式零变化。残余缺口维持 §396 记档：per-section glyph 基线/字号渲染（差异点②）未实现，字形本体仍统一字号，行高先行对齐。
+- **验证**：tsc --build 绿；node 五组单测全过（前置选项语义/全 unit→null/双路径 text 恒等/非 format→null/image 跳过）。渲染测试按攒批方针未跑——与 §395/§396 合并测：formatted 变尺寸族 + text-anchor/justify 回归 + fog 域。
+- **终态**：工作树含 §395–§397 三批代码变更（6 文件），未提交。
+
+**§398. fill-extrusion-pattern-cross-fade 链路补齐（代码对齐批，测试延后）——emitter extrusion 段移植 fill 段同款 `["image", a, b]` 第二候选解析（`_patternName2`），patcher `patchFillPatternMaterial` 的 tex2 混合本就泛化（extrusion 经 `:2466` 路由进入），唯一断点=emitter 未发射第二候选（2026-08-25 二百九十，一处移植入库）**：
+
+- **差异定位**：§2 表旧记 "fill-extrusion-pattern-cross-fade ❌ `_patternCrossFade` 从不被读" 已部分过时——`_patternCrossFade` 现有消费者（patcher `:3482/3500`），真残链=emitter extrusion 段（`:1085`）只发 `_patternName`/`_patternCrossFade`、缺 fill 段（`:713-731`）的 `["image", a, b]` 候选解析 → `uMBPatternCrossFade` 永远作用在单纹理上（mix 无第二纹理=alpha 衰减而非双图混合）。
+- **fixture 对拍**：fill-extrusion-pattern-cross-fade 4 例（start/mid/end-fade/feature-expression）正是 `fill-extrusion-pattern: ["image","golf-dark","bicycle-dark"]` + zoom 插值 cross-fade——`image` exec 分支取 args[0] 得 `_patternName=golf-dark`，移植逻辑从 paintDefs 原始值取 `bicycle-dark` 为 `_patternName2`，patcher `mix(mbPat, tex2, crossFade)` 语义自洽。
+- **改动**（一文件一块）：`MBTileDataEmitter.ts` extrusion case 增补候选解析块（键名替换为 fill-extrusion-*，逻辑与 fill 段逐行同构，贴合文件既有重复风格）。
+- **附带核查**：§2 表另两项旧 ❌ 已证过时——background-visibility 已接线（`MBStyleDataSource.ts:2672`）、`_patternCrossFade` fill/line 均有消费者；stretch 九宫格（F7）确认无消费者且渲染在引擎 PoiRenderer 域，维持冻结。
+- **验证**：tsc --build 绿。渲染测试攒批未跑——fill-extrusion-pattern-cross-fade 4 例 + fill-extrusion-pattern 15 例回归列入待测清单。
+- **终态**：工作树含 §395–§398 四批代码变更（6 源文件 + 文档），未提交。
+
+**§399. symbol-geometry polygon 质心标签落地（代码对齐批，测试延后）——移植 mgl polylabel：新文件 `PoleOfInaccessibility.ts`（find_pole_of_inaccessibility.ts 忠实移植，无依赖版：plain point + 内联二叉堆替代 tinyqueue），`MBStyleDecoder.processPolygonFeature` 把 symbol 层从 fill 路径拆出，逐多边形求 polylabel 锚点经 `processPointFeature` 发射（2026-08-25 二百九十一，功能补齐入库）**：
+
+- **差异定位**：mgl `symbol_layout.ts:1030-1035`——Polygon 特征按 `classifyRings` 逐多边形 `findPoleOfInaccessibility(polygon, 16)`（16 tile 单位=extent 8192 下 2px）放 point-placement 符号；我方 `processPolygonFeature` 旧码把 symbol 层并入 `processFillFeature`（fill 几何路径，text/icon technique 无法消费）→ polygon/multipolygon 符号整体不出（§2 表 ❌ 实证仍成立）。
+- **改动**（两文件）：①新 `PoleOfInaccessibility.ts`——逐行对照移植（centroid 首猜、cell.max 优先队列、pointToPolygonDist 带洞符号距离、distToSegmentSquared），Point/tinyqueue 依赖替换为内联实现；②`MBStyleDecoder.processPolygonFeature`——`symbolLayers` 拆出，逐 IPolygonGeometry（≈classifyRings 的逐多边形语义，rings[0]=外环余为洞）以 `16·extents/8192` 精度求 polylabel，`transformPoints` 复用 MVT y-flip 链后发射；MultiPolygon → 每多边形一锚点（mgl 同）。
+- **fixture 对拍**：symbol-geometry/polygon（单多边形）与 /multipolygon（双多边形各一标签）正是 point placement + geojson 源，语义对口；line/multilinestring 维持既有中点近似（另案）。
+- **验证**：tsc --build 绿；node 四组 sanity 全过（方形→中心 (50,50)、矩形→ (200,50)、带洞→推离洞 (76.6,23.4)、退化零尺寸→安全返回）。渲染测试攒批未跑——symbol-geometry 6 例列入待测清单。
+- **终态**：工作树含 §395–§399 五批代码变更（8 源文件 + 文档），未提交。
+
+**§400. symbol-geometry line 锚点对齐（代码对齐批，测试延后）——point placement on LineString 锚点从"采样中点"改为 mgl 语义的**每线首顶点**（symbol_layout.ts:1036-1040，issue #3808），MultiLineString 从"仅首线一锚"补齐为逐线一锚（2026-08-25 二百九十二，decoder 一处入库）**：
+
+- **差异定位**：mgl 分支结构（symbol_layout.ts:993-1047）——placement 'line'→clipLines+getAnchors 重采样、'line-center'→getCenterAnchor（长度中点+max-angle 窗）、**point on LineString→`new Anchor(line[0].x, line[0].y, ...)` 首顶点**、point on Polygon→polylabel（§399 已落地）、point on Point→逐顶点。我方 `MBStyleDecoder.processLineFeature` 旧码：~20 点采样后取 `linePts[midIdx]` 中点作锚、且只处理 `geometry[0]`（多线特征丢后续线）。
+- **fixture 对拍**：symbol-geometry/linestring（两点竖线 [0,−25]→[0,25]，point placement）——mgl 期望标签在南端首顶点，我方旧码在中点，差异即此；/multilinestring（2 线×2 点）期望两线各一标签。
+- **改动**（一文件一块）：`processLineFeature` symbol 段改为**逐 ILineGeometry 循环**——锚点=`positions[0]` 首顶点（transformPoints 复用同一 y-flip 链），`_linePath` 采样路径逻辑不变继续供 line/line-center placement。emitter 侧核查：line-placement 分支（`MBTileDataEmitter.ts:2965-3006`）只消费 `_linePath` 不消费锚点，本改动对 line/line-center 零影响。
+- **附带记档（未动）**：mgl `addSymbolAtAnchor:957` 的瓦片边界过滤（锚点出 [0,EXTENT) 丢弃防跨瓦片重绘）我方无显式等价物——单瓦片 fixture 无影响，跨瓦片重标场景待引擎侧核查记档。
+- **验证**：tsc --build 绿。渲染测试攒批未跑——symbol-geometry 6 例（polygon §399 + line 本节）+ line placement 回归列入待测清单。
+- **终态**：工作树含 §395–§400 六批代码变更（8 源文件 + 文档），未提交。
+
+**§401. §395–§400 攒批测试验收（mbstyle-s395-400，8 分类 127 例 + 三轮归因复测）——§395 证伪回退、§398/§399/§400(修正后) 验收通过、§396/§397 机制激活达标（2026-08-25 二百九十三，测试轮收官）**：
+
+- **§395【证伪回退】**：zoom-expression fixture 实测**带显式 `high-color` + `star-intensity:0.0` 键**——§394"仅 range 表达式+默认色"前提事实错误，判别子触发 → +40137/+37368（与 §393/§394 实验同值三次复现）；且 space-color/star-intensity（pitch 85）在 uScale=1 quad 下**逐位不变**（78/84 +0）——§392"精确式修复 78px 亮带"假设证伪，高 pitch quad 扩展整体死亡，§181 门控（>76° 不画）为终局。两文件 git checkout 复原，复测 zoom-expression 6920/6487 精确复原 ✓。fog 域全 62 例 +0 零回归 ✓。
+- **§398【验收通过】**：cross-fade 4 例全改善（end 20242→18027、feature 18576→16725、mid 18364→16600、start 17036→16877，仍未过阈值）；fill-extrusion-pattern/opacity +6794（8109→14903）经 **HEAD stash 归因**=已提交回归（fet-baseline 系 08-24 陈旧基线，HEAD 同测 14903 复现），非本批——独立记档待查（嫌疑：§368 raster-array 组合入库的共享 attach/混合路径）。
+- **§399【验收通过】**：symbol-geometry polygon 373/multipolygon 756——目检标签居中于多边形 ✓ polylabel 生效，残余与 point 373 同带（glyph AA 域）；symbol-placement/point-polygon 855→763 连带改善 ✓。
+- **§400【修正后验收】**：初版首顶点锚点致 symbol-placement/line +3047、line-overscaled +2161——根因=placement 'line' 的 **icon 锚点**被连带移动（mgl iconAlongLine 语义）；修正为 `pointOnly` 判别（全部 symbol 层为 point placement 才用首顶点，含 line/line-center 时恢复中点）后：overscaled **6643 精确复原**、line 86468≈85299（该重型用例方差域）、linestring 384 保持（目检首顶点南端锚定 ✓）、line-center 双例 +0 ✓；line-multilinestring 2538→2799（+261，逐线发射 mgl 语义）记档观察。
+- **§396/§397【机制激活达标】**：text-field/formatted 2848——目检变高行距已生效，残余=per-section glyph 字号未实现（"NaplesItaly" 同字号 vs 期望 1.5×/0.5×，即 §396 差异点②，quad 级改造域）；text-anchor/justify 全域 ±58 内零回归 ✓；formatted-images 系 +0 ✓。
+- **基建记档**：①chunked runner fog chunk 停滞（24min 无进展，收割 127/135 后 TaskStop）——单测 runner（run-mbstyle-render-tests.js + filter）全程稳定，后续验证优先单测批；②symbol-placement/point 1645/1971 跨代码态 flip-flop 确认偶发（harness 竞态带）；③HEAD 归因法（git stash -u + 重建 + 单测）两轮定案，方法论固化。
+- **终态**：§395 已回退（2 文件复原）、§396–§400 保留（6 源文件 + PoleOfInaccessibility.ts 新文件）、tsc 绿、工作树=待提交态。
+
+**§402. fill-extrusion-pattern/opacity "回归" 六步 bisect 终案——非代码回归，系 ChromeHeadless↔Edge 浏览器环境差：基线提交 b93cc14b 在 Edge 上复测同得 14903，§401 记档的嫌疑链（§368 时代共享路径）整体销案（2026-08-25 二百九十四，归因收官）**：
+
+- **bisect 链**（单测 runner + `git checkout <sha> -- src` 逐点，均 Edge 151）：1881b057(#21)=14903 → 5877e48c(#11)=14903 → 94829ec0(#5)=14903 → 16e5afb1(#2)=14903 → 16f1565b(#1, baseline 后首提交)=14903 → **b93cc14b（fet-baseline 本基）=14903**——基线提交自身在 Edge 上即 14903，代码侧无任何回退点。
+- **真因定性**：fet-baseline 的 8109 产自 `web-ChromeHeadless-151`，本批与 bisect 均产自 `web-Edge-151`——两 Chromium 壳的 SwiftShader 纹理上传/混合路径差异（08-24 图=浅灰半透明、Edge 图=深灰图案缺失），与 §12.85 记录的环境噪声同类但跨浏览器壳。**方法论固化：结果对比只允许同 `web-*` 目录名（同浏览器壳）的基线之间进行；fet-baseline（ChromeHeadless）不可再作 Edge 轮次的对照基线**。
+- **附带产物**：extrusion pattern 在两种壳下**图案纹理均未上屏**（expected 为图案半透明建筑，两壳均为纯色灰块）——`patchFillPatternMaterial` 注入对 extrusion 的实际生效性存疑（编译静默回退模式 §375 同族嫌疑），记为独立待查项（非本次回归域）。
+- **终态**：bisect 结果目录已清、工作树恢复（§396–§400 + 文档）、tsc 绿。
+
+**§403. fill-extrusion pattern mgl 合成公式落地（四轮定向迭代 §403a→d 收敛）——extrusion 专用 mglComposite 路径：透明 sprite 纹素 alpha 合成（修白楼缺陷），fill 域保持标定旧式零回归（2026-08-25 二百九十五，验收入库）**：
+
+- **开题（§402 附带产物）**：extrusion pattern 在两种浏览器壳下图案纹理均不上屏（literal/opacity 纯色灰块）。根因链：①`patchFillPatternMaterial` 旧式 `mix(diffuse, mbPat.rgb, crossFade)` 把底色/纹理 RGB 直写且 opacity=1 时走不透明 pass——information 类**透明底 sprite** 的透明纹素 RGB（白）直接覆盖背景=白楼；②mgl 语义（draw_fill_extrusion.ts:104-129）=**永远 translucent pass + alpha 混合**，输出 `pattern × v_lighting × u_opacity`（无底色混合），cross-fade 为**预乘域** `A×(1−t)+B×t`。
+- **四轮迭代**：§403a 全量新公式+shade 比值——shade=gl_FragColor.rgb/diffuse 踩 material.map 已在基础着色采样图案之坑（shade=图案→pattern² 双倍变暗，moire +20k）→ §403b 去 shade 简式 `vec4(mbPat.rgb, mbPat.a×opacity)`——extrusion 全改善但 fill 域 translucent pass 副作用（边缘混合/排序，uneven/moire/@2x 等 +62~+18.7k）→ §403c 调用点分流（extrusion=true / fill=false）fill 回 HEAD、extrusion 保持 → §403d 门控分流（fill 第二候选解析回 (0,1) 区间，uneven +16k 溯源=门控放宽所致；extrusion 保持全量解析净收益 −3.5k）。
+- **终态公式**：`patchFillPatternMaterial(material, technique, mglComposite)`——extrusion（`:2466` 传 true）：transparent=true + `gl_FragColor=vec4(mbPat.rgb, mbPat.a×opacity)`（tex2 时预乘混合后反预乘）；fill（`:668` 默认 false）：旧标定式原样。
+- **验收（Edge，vs HEAD 同壳）**：extrusion——literal/function 16068→**14254**、opacity 14903→**14561**、feature-expression 16747→**16117**、function-2 61778→**60171**、cross-fade end 18027→**14868**/feature →**15716**/mid →**15697**（start +1586、2x +653 记档）；目检 literal 屋顶 information 图案平铺上屏 ✓ 白楼缺陷修复。fill 域全例 HEAD 逐位复原 ✓。
+- **基建记档**：uneven-pattern 同代码双跑 102684↔118748 摆荡=异步纹理时序方差（raster 竞态同族），大基数应力 fixture 对比须双跑定谳；§403 方法论（调用点分流+门控分流）为共享 patcher 改动建立了"域隔离验收"范式。
+- **终态**：工作树含 §396–§400 + §403（7 源文件 + PoleOfInaccessibility.ts），tsc 绿，未提交。
+
+**§404. extrusion pattern 墙面 UV 对齐 mgl（pos 分支移植）——墙面图案坐标从 position.xy（竖向涂抹）改为 (周长距离, z 高度)，屋顶/墙面共享顶点拆分（2026-08-25 二百九十六，验收入库）**：
+
+- **mgl 规格**（fill_extrusion_pattern.vertex.glsl:150-154）：`pos = normal.z==1 ? pos_nx.xy : vec2(edgedistance, z×u_height_factor)`——墙面以**沿环周长距离×高度**平铺图案，屋顶用 tile xy；`get_pattern_pos` 再加瓦片像素偏移保跨瓦片连续（我方世界米制坐标天然连续，等价）。
+- **实现**（两文件）：①emitter `emitExtrudedPolygon`——pattern 技术（`_patternName`）时每环累计周长距离（世界米），墙顶点 uv=(edgeDist, position.z)，**屋顶改发专用顶点副本** uv=(world x, world y)（拆分后屋顶/墙面顶点不再共享——顺带获得纯 (0,0,1) 屋顶法线与水平墙面法线，替代此前的平均法线）；非 pattern extrusion 零变化；②patcher mglComposite 顶点分支改 `vMBPatternUv = uv × uMBPatternScale`（fill 旧支保持 position.xy）。
+- **法线通道核查记档**：`normal.z` 判别不可用（引擎 `computeVertexNormals` 对索引几何取平均，共享顶点混合）；mgl 用 normal.z 因其 bucket 屋顶/墙面顶点本即分离——屋顶副本方案与其同构。
+- **验收（Edge vs §403d）**：literal/function 14254→**14193**、opacity →**14439**、function-2 →**59555**、2x →**54614**、fog/2d 38799→**37541**、lighting-3d-mode →**60932**；cross-fade 四例 +584~+1087（屋顶法线纯化致屋顶明度微移，记档）；目检墙面 information 图案平铺上屏 ✓ 竖向涂抹消除。净 −0.8k + 形态正确。
+- **终态**：工作树含 §396–§400/§403/§404（7 源文件 + PoleOfInaccessibility.ts），tsc 绿，未提交。
+
+**§405. extrusion pattern 墙面光照实验——gl_FragColor/mbPat 比值法全劣化回退（lighting-3d-mode 60932→82978、literal +1.7k、opacity +2.2k），标准材质的 lit map 采样不可分解为逐纹元 v_lighting 类比（2026-08-25 二百九十七，证伪记档）**：
+
+- **假设**：§404 后 uv==图案坐标，标准材质 gl_FragColor≈lighting×mbPat → 比值=光照因子（mgl v_lighting 类比，墙面应随朝向变暗贴近期望）。
+- **实测**：全 16 例劣化（clamp [0,1.5] 亦无效）——比值含 AO/阴影/多光源等 mgl v_lighting 没有的项，且 map 采样通道（vMapUv 变换/过滤）与 vMBPatternUv 不严格一致，比值噪声放大暗纹元。已回退，复测 literal 14193/opacity 14439 精确复原 ✓。
+- **定论**：extrusion pattern 墙面明度差（期望墙面随 NdotL 变暗）为**开放缺口**——正解需顶点侧 NdotL 注入（mgl legacy `mix(1−intensity, max(0.5+intensity,1), NdotL)`，顶点 normal 在 §404 屋顶/墙面顶点拆分后已纯净可用）或 LIGHTING_3D 链对接，记为下轮候选单点；本次证伪"片元比值"捷径。
+- **终态**：工作树=§404 态（§396–§400/§403/§404，7 源文件 + PoleOfInaccessibility.ts），tsc 绿。
+
+**§406. extrusion pattern 墙面光照定案修正——光照**已在下游**（§405 劣化实锤双重照明），墙面残差分解入库，域移交（2026-08-25 二百九十八，定性收官）**：
+
+- **关键事实（§405 复盘中发现）**：legacy 光照注入（patcher `:2659-2695`）锚在 `#include <colorspace_fragment>`——**晚于** pattern 覆写的 `#include <opaque_fragment>`（three 片元链顺序 opaque→tonemapping→colorspace→fog）——§403 的 pattern 输出**已被 NdotL 照明**；§405 比值实验劣化的真因=在已照明结果上二次照明。§405 记档的"正解=顶点侧 NdotL 注入"作废。
+- **墙面残差分解**（literal，PIL 采样 cur vs exp）：roof-R (194,215,224) vs (217,225,229) ≈吻合；wall-front (96,96,96) vs (74,93,103) 明度同级、**色相缺蓝**（光照链 uMBLightColor/色域差）；roof-L 略亮；个别面片结构性差（疑绕向/剔除，mgl 本体为 backCCW 剔除非双面，未深挖）。
+- **域定性**：extrusion-pattern 从 16k（白楼）收敛至 14.2k（literal）——结构项（透明合成/墙面 UV/双候选）已闭环，残余=光照色相微差 + 尺度/相位 + 异步方差带，边际收益递减，**域移交**；下轮候选回到 text per-section glyph（§396 差异点②）或 icon-image cross-fade 半引擎链。
+- **终态**：工作树=§404 态（7 源文件 + PoleOfInaccessibility.ts），tsc 绿。
+
+**§407. §396–§404 邻域回归扫描（text-size/color/offset、icon-image/anchor/size、symbol-z-order/spacing、icon-text-fit、text-max-width ~80 例）——WIP 跑完成落盘（mbstyle-s407-sweep-wip），HEAD 对照跑中断未获得；逐域验收（§401/§403d/§404 各轮）已覆盖全部改动面，扫描为增量保险（2026-08-25 二百九十九，提交前状态记档）**：
+
+- **覆盖分析**：本批 7 项改动的行为面——①§396/§397 text shaping/format scale（text-field/text-anchor/text-justify 已验 §401）；②§398/§403/§404 pattern/extrusion（fill/fill-extrusion pattern 全族已验 §403d/§404）；③§399/§400 decoder symbol 路径（symbol-geometry/symbol-placement 已验 §401）；④§397 的 MBLayerEvaluator 侧通道仅作用于顶层 format text-field（其余键零路径变化）、§399/§400 仅 symbol 层 line/polygon 特征——邻域扫描针对③④的宽泛外溢面。
+- **状态**：WIP 数值已落盘 `rendering-test-results/mbstyle-s407-sweep-wip/`（Edge）；HEAD 对照跑中断（stash 已安全恢复，工作树完整）。扫描收口=下会话首项（HEAD 同过滤器对照跑 + 数值 diff）；其余引擎域/长链候选按 §406 记档排序。
+- **终态**：工作树=§396–§404 七批（7 源文件 + PoleOfInaccessibility.ts 新文件 + 文档），tsc 绿，本批随本记档提交。
