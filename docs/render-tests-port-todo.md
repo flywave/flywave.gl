@@ -4408,3 +4408,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **mgl-skip 修复两端测劣化（负结果）**：null→空 FeatureCollection（mgl `continue` 语义）——组合开 203814（劣化）、组合关 163074/202298/206371（与 §345① skip 测试同数，+3.2~4.1k）。结论：白四边形（0.5 不透明度白洗）比露背景**更接近期望**——期望底带蓝色内容来自**存在且已正确贴图的 15-16380-16380**（探针 tex on ✓），残差是它与白/null 四边形的**z 序与覆盖形态**问题，非纹理问题。
 - **新收敛线索**：引擎在 pitch 60 下只枚举 ~9 个 z16 请求（karma 404 日志）vs mgl 参照 47——FrustumIntersection 的 `tileEntry.area < targetTileArea && pitch > π/3` 面积停止门在 60° 边界吞掉近地细分（瓦片以其低层形态交付，恰落入 null-ancestor 带）。下会话单点：该面积门的 pitch 边界与交付层级核查（停止时应以当前层入 levelEntries 而非静默丢细分）。
 - **终态**：全部实验回退（datasource/patcher 探针与组合）、基线复现 158939/199086/202317 ✓、工作树=提交态。
+
+**§350. 面积门核查——"9 vs 47 z16"前提证伪 + dz 地形语义忠实移植（行为无差）+ 白区期望溯源（2026-08-25 二百三十九，核查记档）**：
+
+- **面积门证伪**：SPLIT-PROBE（停止原因直方图 + 交付层级统计）——pitch 恰 60° 时 `pitch > π/3` 严格比较不触发，**areaGate 停止 0 次**；引擎交付 **z16:52 条目**（≈mgl 参照 53）。§349 的"9 vs 47"系 karma 404 日志 grep 采样误读（多数 z16 条目被 datasource mglLodLevel 降层，不以 z16 URL 发请求）。交付侧自始完好。
+- **dz 地形语义忠实移植（入库，无行为差）**：LOD 的 dz 由恒 camH 改为 mgl 语义 `max(closestElevation, cameraHeight)`（closest-corner |z| ≈ TileKeyEntry.elevationRange.maxElevation）。实测该 fixture 地形仅 66m vs camH 2576 → 输出逐位不变（199673），保留为语义正确项（真实 mgl 亦如此——offline 覆盖工具无 elevation 近似在此 fixture 有效）。
+- **白区期望溯源**：白区期望主导色 (86,115,212) = **0.5×z13-4095 青 (0,253,255) + 背景图案**混合——白区（近地带 x≥32770 东缘）的 z16 祖先链全 404（z13-4096 不存在，仅 4095），期望内容由**西侧 x≤32767 的青色祖先马赛克**延展覆盖；我们该区域被 null-fallback 白四边形占据。结合 §349 的 mgl-skip 劣化负结果，最终修复方向=**null-fallback 四边形不应纯白**：mgl 对无纹理瓦片 skip 后由更低层覆盖瓦片兜底显示（retain/parent 层级），我们需要的是"null 时不建独立四边形、让相邻/祖先已有覆盖自然显示"——即 fallback 直接返回空 + 但同时**取消 mglLodLevel 对该带的降层**使西侧祖先马赛克延展覆盖（§349 空返回劣化的正解=降层把西侧也降没了）。下会话单点：mglLodLevel 的 zoomSplitTiles 硬编码 512 修正为 source tileSize（256），配合 null→空。
+- **终态**：dz 移植入库（flag 分支内）、SPLIT/DZ 探针全清、组合回退、基线 158939/199086/202317 + raster 族回归集不变 ✓、工作树=提交态+dz 改动。

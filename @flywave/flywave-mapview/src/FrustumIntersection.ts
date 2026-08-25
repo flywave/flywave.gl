@@ -332,7 +332,16 @@ export class FrustumIntersection {
                             centerWorld.x >= box.min.x && centerWorld.x <= box.max.x &&
                             centerWorld.y >= box.min.y && centerWorld.y <= box.max.y;
                         if (!containsCenter && d > 0) {
-                            const dz = Math.max(camH, 1e-6);
+                            // mgl distToSplitScale dz = max(closestElevation,
+                            // cameraHeight) — with terrain the tile's
+                            // elevation (TileKeyEntry.elevationRange) raises
+                            // dz, shrinking the scale factor and stopping MORE
+                            // tiles at lower levels (the error-overlap near
+                            // band must stop down to the z13/z14 const tiles).
+                            // closest-corner |z| ≈ tile maxElevation (bound).
+                            const tileMaxElev =
+                                Math.abs(tileEntry.elevationRange?.maxElevation ?? 0);
+                            const dz = Math.max(camH, tileMaxElev, 1e-6);
                             const sT = 0.707, stretch = 1.1;
                             let scaleF = 1.0;
                             if (d * sT >= dz) {
