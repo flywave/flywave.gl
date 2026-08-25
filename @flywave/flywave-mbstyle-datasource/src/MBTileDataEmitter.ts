@@ -1265,11 +1265,19 @@ export class MBTileDataEmitter {
             this.m_layerToTechniqueIndex.set(cacheKey, idx);
             const props = this.paintToTechniqueProps(layer, properties, symbolMode);
             const preExtruded = props.technique === 'solid-line';
+            // mgl draws a symbol layer's TEXT above its ICON (draw_symbol:
+            // icons first, then text). The engine renders text below POI
+            // layers of equal renderOrder, so lift the text technique by
+            // half a style-index step — above its own icon, below the next
+            // style layer (icon-text-fit/* fixtures showed text swallowed
+            // by the label icon otherwise).
+            const textLift = (layer.type === 'symbol' && symbolMode === 'text'
+                && layer.layout['icon-image']) ? 0.5 : 0;
             const technique: any = {
                 name: props.technique,
                 _index: idx,
-                _renderOrder: layer.renderOrder,
-                renderOrder: layer.renderOrder, // Standard flywave property read by TileGeometryCreator
+                _renderOrder: layer.renderOrder + textLift,
+                renderOrder: layer.renderOrder + textLift, // Standard flywave property read by TileGeometryCreator
                 _layerId: layer.id,
                 _paint: layer.paint,
                 _layout: layer.layout,

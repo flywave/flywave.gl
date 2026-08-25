@@ -5100,3 +5100,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **缺口**：我们的 ParsedFontstack 无 ascender/descender（解析器未读 fields 4/5）；FontMetrics.lineHeight=size 近似；TextShaping 行 y=行盒中线。修复需四级联动：GlyphPBFParser 提取 → MBFontCatalogBuilder FontMetrics → TextShaping 基线制 y → TextGeometry 字形 y（或 catalog 距离换算）。harness（§434 基准）可逐级验收（首行 y33→34 的 1px 偏移为目标信号）。
 - **ROI 备注**：bottom 632（未过阈）/多行族文字位置精调的中期工程；session 已记档完整规范。短期收益更大的候选仍为 icon-text-fit 全族（§431 门控已解一半——halo 修复后需重测其翻盘面！）。
 - **终态**：纯 docs 提交（零代码变更）。
+
+**§439. icon-text-fit 全族 halo 后重测——残差已大幅收敛（both 11878→141、both-2x→11878?见注）但 0 翻盘；"text 在 icon 上" +0.5 renderOrder 提升语义正确入库但零可见变化（A/B 逐例同值）；true 残差=ABC 文本整体缺失（非 z 序）+ icon 盒 ±1px 边缘（§410 同类）（2026-08-26 三百三十一）**：
+
+- **重测量化**：halo 修复已使 icon-text-fit 全族大幅收敛（both 141、width/height 118-184、none 117——§431 时代 both-2x 曾 11878）；但 0 例翻盘，残差形态两类：①`none` 的 ABC **文本整体缺失**（icon 内区恒 154 无墨，exp 有深色字）——非 z 序（+0.5 提升 A/B 逐例同值实证 composeRenderOrder 带内偏移不改变 POI/text 相对序，文本缺失根因待查——疑 icon-text-fit 路径下 text 技术未发射或被 fit 分支吞掉）；②icon 盒边缘 ±1px（§410 40:38 同类）。
+- **入库改动（语义正确保留）**：symbol 层 text 技术 renderOrder +0.5（mgl draw_symbol 先 icon 后 text；composeRenderOrder(base×1e7+offset) 语义下无可见影响但方向正确）。**text-anchor/text-color/geojson/symbol-placement/icon-anchor 宽域守卫零回归**。
+- **§438 基线链条工程未启动**（session 时间盒）；§439 重测 + 提升入库为本节产出。
+- **终态**：MBTileDataEmitter（textLift）单文件，随记档提交。
