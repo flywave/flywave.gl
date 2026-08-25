@@ -5093,3 +5093,10 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **bottom 632 重分解**：§436 的"白带缺失"实为密集重叠标签区的形态误读；真残差与 harness 同类=**多行标签的首行 ~1px 垂直偏移 + 边缘**（§396 per-line 变高时代的邻近域，lineHeight/top 度量的 px 级差）。修复候选：shaping.top/首行 y 基准与 mgl shaping.ts top 计算对拍（-0.5px 级）。
 - **harness 基准恢复**：双侧 fixture 恢复单字母 T 版（彩底），索引重建，作文字域长期对拍基准。
 - **终态**：双侧无生产代码变更（harness 探索性 fixture 改动已复位），纯 docs 提交。
+
+**§438. 首行 y 基准对拍（源码级）——真架构缺口定案：mgl 字形 y = 行盒中线 + baselineOffset(ascender/descender)（glyphOffset=−ascender×scale，shaping.ts:612-620），行高=lineHeight×lineMaxScale，整块 align(−vAlign×height)；我们=行盒中线 ± halfLineHeight（无字体基线概念），且 GlyphPBFParser 根本未解析 fontstack 的 ascender/descender 字段（mgl fields 4/5 svarint）——bottom 632 修复=解析器+catalog+shaping+TextGeometry 四级链条（2026-08-26 三百三十）**：
+
+- **mgl 语义摘录（对齐规范）**：每行 biggestHeight=(ascender+descender)×scale、baselineOffset=(ascender−descender)/2×scale、glyphOffset=−ascender×scale；y 从 0 累加 lineHeight×lineMaxScale；shaping.top += −vAlign×height。字形相对**字体基线**放置而非行盒几何中心。
+- **缺口**：我们的 ParsedFontstack 无 ascender/descender（解析器未读 fields 4/5）；FontMetrics.lineHeight=size 近似；TextShaping 行 y=行盒中线。修复需四级联动：GlyphPBFParser 提取 → MBFontCatalogBuilder FontMetrics → TextShaping 基线制 y → TextGeometry 字形 y（或 catalog 距离换算）。harness（§434 基准）可逐级验收（首行 y33→34 的 1px 偏移为目标信号）。
+- **ROI 备注**：bottom 632（未过阈）/多行族文字位置精调的中期工程；session 已记档完整规范。短期收益更大的候选仍为 icon-text-fit 全族（§431 门控已解一半——halo 修复后需重测其翻盘面！）。
+- **终态**：纯 docs 提交（零代码变更）。
