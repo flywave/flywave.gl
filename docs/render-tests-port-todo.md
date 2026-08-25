@@ -4706,3 +4706,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **dome 角度原点实验（回退）**：horizonAngle 原点移至 uHorizonRefElev（mgl 屏幕视平线语义）——**零像素变化**（dome 在该 fixture 与期望已吻合，证实差异不在此）。
 - **下会话单点**：地面雾 chunk（fogMgl* uniforms/ramp）近端边界对拍——mgl fog 公式的 near/起点 vs 我们（§244 mix(bgColor,fogColor,α²) 链），目标让地平线紧下方第一行达到全雾色。
 - **终态**：实验回退、工作树=提交态。
+
+**§389. 地面雾公式级对拍——mgl fog_apply 结构逐项同构（双 alpha/ramp/horizon-blending 全一致），残差收敛到深度单位标定（§248 的 0.15 折叠）（2026-08-25 二百八十一）**：
+
+- **对拍**：mgl `fog_apply` = `mix(color, fogColor, α·min(1,1.00747·falloff³) × α·exp(−3t²))`——与我们 fog_fragment 注入**逐项同构**（falloff=1−exp(−6t) 立方、1.00747、horizon-blending 的 exp(−3t²) 与负 z→t=0 全等）。mgl range=[r0+shift, r1+shift]（shift=0.5/tan(fov/2)）与我们 fogMglRange+shift 相同。
+- **残差收敛**：78px 亮带差的最后一层=**深度单位换算标定**——我们的 `shift·(vFogDepth·0.15)/distCamM` 把引擎米制深度折到 mgl fog 单位（0.15 为 §248 经验折叠），地平线紧下方行的 fogT 在我们这里略低于 mgl（ramp 未饱和）。**下会话方法（已定档）**：fogDebugT=1 探针模式读该行实际 fogT，对照 mgl 期望（该行应 ≥1），单点校准 0.15→精确式（distCamM 的推导含 camToCenter/worldSize·EarthC 与 sin(90−pitch) 两级近似）。
+- **终态**：零代码变更、工作树=提交态。
