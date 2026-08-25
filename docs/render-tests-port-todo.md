@@ -4552,3 +4552,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - **残案收敛（最终态）**：不可见性在排除 材质写入污染 后，与 §365 残余 glErr=696 并存——下一层为引擎 blending+DataTexture 上传的 GL 时序（材质被 WebGL 缓存后再改 filter 不生效？`enableBlending` 注释明确"Blending mode change does not require material update"但 **texture filter 同样绕过 needsUpdate**——attach 后改的 NEAREST 若在上传后才设 → 旧 mipmap 状态残留）。下会话单点：DataTexture 创建时即定型 filter（loadRasterArrayTexture 里 minFilter/magFilter 已设但被旧 attach 覆盖后…… §365 修复后应已定型——需确认 696 次 glErr 的具体 GL 调用（getParameter 断点级）。
 - **终态**：审计探针/fallback 清除、清缓存基线复现 ✓、工作树=提交态。
 - **会话终盘点（§344–§366，23 轮）**：入库修复 13 项（real-blend/LOD 公式链×2/null→空/图案底注入/raster-array×4/cached-update/NPOT mipmap 等），error-overlap 218k→155k；负结果定量排除 6 项；结论纠错 3 次（几何算术/缓存伪影/泄漏误判）；环境校准方法论（MB_NO_WEBPACK_CACHE）入库。
+
+**§367. raster-array 不可见性【终破案】——texelFetch（需 GLSL ES 3.00/WebGL2）致 program 编译失败，texture2D 纹元中心采样替换后层可见（2026-08-25 二百五十九，破案+修复入库）**：
+
+- **根因**：RASTER_ARRAY_LINEAR 分支的 `texelFetch(uMBRasMap, …)` 在 WebGL1 GLSL ES 1.00 不存在 → program 编译失败 → draw 报 glErr=1282（§365 残余 696 次的真身）且材质无输出=不可见；卫星路径无 texelFetch ✓ 全部观测自洽（含 §365 NPOT 修复仅消除部分 1282——同一 program 失败的连带错误）。
+- **修复（入库）**：texelFetch → `texture2D` 纹元中心采样（`(floor坐标+0.5)/res`，NEAREST 过滤下采样纹元恒等、WebGL1 兼容）。
+- **效果（texfix+fallback 组合，清缓存）**：**default 28753→21560、band→20232、default-range→21864、terrain→34990（四例净改善 −26.5k，层首次可见）**；several-layers +5k（颜色/双混合域，另案）；no-raster-color 63501 不变（unbound-ramp 黑语义未对齐）。texfix 单独（无 fallback）与基线逐位一致（层不渲染时零影响）——入库零回归。
+- **fallback 入库条件（仍未满足）**：需先修 no-raster-color——§824 已有 1×1 黑 DataTexture 路径但 RASTER_COLOR 分支在 hasRasterColor=false 时未注入（fragment 分支以 rasRampTex 非空为前提，黑兜底赋值时机在分支判定之后）——下会话单点：把黑兜底提前到分支判定前使其生效，期望恢复 mgl 的"无 raster-color=大面积黑"语义后 fallback+texfix 一并入库。
+- **终态**：texfix 入库、fallback 维持关、raster-array/raster 族基线复现 ✓、工作树=提交态+texfix。

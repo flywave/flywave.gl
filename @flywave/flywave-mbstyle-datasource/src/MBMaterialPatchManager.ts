@@ -1099,12 +1099,16 @@ export class MBMaterialPatchManager {
                      vec2 mbLf = fract(mbLc);
                      mbLc = floor(mbLc);
                      mbLc = clamp(mbLc, vec2(0.0), vec2(uMBArrRes - 2.0));
-                     ivec2 mbLi = ivec2(mbLc);
+                     // §367: texel-center texture2D sampling instead of
+                     // texelFetch — texelFetch requires GLSL ES 3.00 (WebGL2);
+                     // with the array texture's NEAREST filtering the sampled
+                     // texel is identical and the shader compiles on WebGL1.
+                     #define MB_FETCH(dx, dy) texture2D(uMBRasMap, (mbLc + vec2(dx, dy) + 0.5) / uMBArrRes)
                      vec4 mbLT[4];
-                     mbLT[0] = texelFetch(uMBRasMap, mbLi);
-                     mbLT[1] = texelFetch(uMBRasMap, mbLi + ivec2(1, 0));
-                     mbLT[2] = texelFetch(uMBRasMap, mbLi + ivec2(0, 1));
-                     mbLT[3] = texelFetch(uMBRasMap, mbLi + ivec2(1, 1));
+                     mbLT[0] = MB_FETCH(0.0, 0.0);
+                     mbLT[1] = MB_FETCH(1.0, 0.0);
+                     mbLT[2] = MB_FETCH(0.0, 1.0);
+                     mbLT[3] = MB_FETCH(1.0, 1.0);
                      vec2 mbLV[4];
                      for (int mbI = 0; mbI < 4; mbI++) {
                          vec4 mbT = mbLT[mbI];
