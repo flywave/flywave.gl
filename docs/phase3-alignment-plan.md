@@ -122,6 +122,14 @@
     census 对象置 visible=false 看画面是否变化（决定性）
   - 保留资产：renderUntilSettled+trailing frames（AfterRender 补丁
     off-by-one 语义正确）、tile.objects/材质数组防护
+- [x] 重大修复：表达式 match label 字面量——所有 data-driven match
+  此前静默走 fallback（exec 误析 ['restaurant'] 类 label 集）；
+  修复后 circle-color/default PASS、单测 268/0 零回归。影响面待全量
+  批测重估（categorical 配色/occlusion/filter match 族普遍受益）
+- icons 不可见取证现状：POI 走引擎管线（PoiManager→PoiBuilder→批次，
+  不在 tile.objects），31 批次已注册带纹理（restaurant-12 等）、
+  poi_label/maki/sprite 数据链全通——剩余疑点=引擎 ScreenCollisions
+  放置或 PoiBuffer 可见性，下会话入口
 ## 三、验证基线
 
 - 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
