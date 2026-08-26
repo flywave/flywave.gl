@@ -167,7 +167,18 @@
   分裂未解。**附带收获**：追查中实锤并修复引擎 BoxBuffer.reset()
   不清 count 的真实缺陷（stale count × 空 array → computeBoundingSphere
   越界 NaN，即日志中 'radius is NaN' 报错源）；修复后该报错消除但
-  icons 仍不可见——根因仍在 array 归属/帧时序层
+  icons 仍不可见——根因仍在 array 归属/帧时序层。**终局夹逼（29 层）**：
+  AfterRender 监听器内（渲染同帧、紧随 POI pass）采样 31 mesh array
+  **仍全空**——渲染帧内几何即空=icons 确实未画；结合写入点回读有限、
+  mesh.userData 标记可达（同一 mesh 对象）——**写入的 attribute 与
+  渲染的 geometry 分裂**，头号嫌疑=BoxBuffer.resize() 每帧重建
+  BufferGeometry（dispose 旧+setAttribute 新）路径中 newSize 条件
+  不触发时以空 attributes 建新 geometry、或 addBox 写入被后续
+  resize 覆盖。**devtools 断点清单**：① BoxBuffer.resize（每次
+  触发的 newSize/forceResize/mesh.geometry 换新后 attributes 状态）
+  ② addBox 尾部 m_positionAttribute.count vs mesh.geometry.attributes
+  .position.count ③ PoiRenderer.render 时该 mesh geometry attribute
+  count/array len——三个断点一轮即可定位分裂点
 ## 三、验证基线
 
 - 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
