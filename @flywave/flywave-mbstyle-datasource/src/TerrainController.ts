@@ -483,6 +483,7 @@ export class TerrainController {
             mesh.frustumCulled = false;
             this.m_meshes.push(mesh);
             this.m_scene.add(mesh);
+            if ((globalThis as any).__mbOccDbg) (globalThis as any).__mbGeoProbe = true;
             if ((globalThis as any).__mbOccDbg && !(mesh as any).__mbGeoProbe) {
                 (mesh as any).__mbGeoProbe = true;
                 const geo: any = mesh.geometry;
