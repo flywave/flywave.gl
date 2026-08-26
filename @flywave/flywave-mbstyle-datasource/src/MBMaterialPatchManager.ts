@@ -783,6 +783,17 @@ export class MBMaterialPatchManager {
         if ((material as any).__mbPatched) return;
         (material as any).__mbPatched = true;
 
+        // three's default program cache key is the OUTERMOST
+        // onBeforeCompile.toString(). Wrapping an already-wrapped handler
+        // can restore the same outer source (e.g. patchExtrusionMaterial
+        // re-wraps after the 3D-lighting injection), making three treat the
+        // modified chain as the original program and NEVER recompile — the
+        // fill-extrusion "3D lighting never applies" root cause. A nonce in
+        // the custom key forces a recompile whenever the chain changed.
+        (material as any).__mbKeyNonce = ((material as any).__mbKeyNonce ?? 0) + 1;
+        const nonce = (material as any).__mbKeyNonce;
+        (material as any).customProgramCacheKey = () => `mbpatch-${nonce}`;
+
         // §273: materials clone UniformsLib.fog at class-definition time —
         // before our module-load additions (fogGlobe*/fogMgl*) — so the GLSL
         // uniforms exist but stay at their 0 defaults. Share the live lib
