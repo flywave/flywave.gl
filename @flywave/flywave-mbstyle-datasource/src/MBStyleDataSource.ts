@@ -3325,6 +3325,10 @@ export class MBStyleDataSource extends TileDataSource {
             (this.decoder as any).configure?.(undefined, {
                 mapboxZoom: mbZoom,
             } as any);
+            // mgl dynamic terrain exaggeration: re-evaluate the (possibly
+            // zoom-interpolated) exaggeration at the live zoom — in-place
+            // uniform refresh, no rebuild.
+            (this.m_environment as any)?.updateTerrainExaggeration?.(mbZoom);
         } catch {}
     }
 

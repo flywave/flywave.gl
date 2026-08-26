@@ -205,6 +205,20 @@ export class TerrainController {
     get meshes(): readonly THREE.Mesh[] { return this.m_meshes; }
 
     /**
+     * mgl dynamic exaggeration: update the exaggeration in place — the grid
+     * geometry is flat (heights displace in the shader) and the CPU sampler
+     * scales by m_exaggeration, so a uniform refresh per mesh is enough; no
+     * DEM reload or grid rebuild.
+     */
+    setExaggeration(exaggeration: number): void {
+        this.m_exaggeration = exaggeration;
+        for (const mesh of this.m_meshes) {
+            const mat = (mesh as any).material as any;
+            mat?.setExaggeration?.(exaggeration);
+        }
+    }
+
+    /**
      * Terrain elevation (meters, exaggeration applied) at a WORLD x/y
      * position — mgl `getElevationForLngLatZoom` semantics. Used to lift
      * tile content onto the terrain surface.

@@ -470,6 +470,9 @@ export class MBEnvironmentManager {
     }
     private m_terrainMesh: THREE.Mesh | null = null;
     private m_terrainController: TerrainController | null = null;
+    /** Raw terrain.exaggeration spec (number or zoom expression). */
+    private m_terrainExaggerationSpec: any = 1.0;
+    private m_lastExaggeration = 1.0;
     private m_terrainRteListener: (() => void) | null = null;
 
     /** Multi-tile terrain controller (null if no terrain or single-tile fallback). */
@@ -2352,8 +2355,43 @@ export class MBEnvironmentManager {
         (this.m_mapView as any).update?.();
     }
 
+    /** Evaluate the raw exaggeration spec (number or zoom expression). */
+    private evaluateExaggeration(zoom: number): number {
+        const spec = this.m_terrainExaggerationSpec;
+        if (typeof spec === 'number' && Number.isFinite(spec)) {
+            this.m_lastExaggeration = spec;
+            return spec;
+        }
+        if (Array.isArray(spec)) {
+            try {
+                const { MBExpressionEngine } = require('./MBExpressionEngine');
+                const v = MBExpressionEngine.evaluate(spec, { zoom } as any);
+                if (typeof v === 'number' && Number.isFinite(v)) {
+                    this.m_lastExaggeration = v;
+                    return v;
+                }
+            } catch {}
+        }
+        this.m_lastExaggeration = 1.0;
+        return 1.0;
+    }
+
+    /**
+     * mgl dynamic exaggeration: re-evaluate the (possibly zoom-dependent)
+     * exaggeration at the new zoom and update the terrain in place — the grid
+     * geometry is flat and exaggeration is a material uniform + CPU sampler
+     * scalar, so no rebuild is needed. No-op when the value did not change.
+     */
+    updateTerrainExaggeration(zoom: number): void {
+        if (!this.m_terrainController) return;
+        const prev = this.m_lastExaggeration;
+        const next = this.evaluateExaggeration(zoom);
+        if (Math.abs(next - prev) < 1e-9) return;
+        this.m_terrainController.setExaggeration(next);
+    }
+
     async applyTerrain(
-        terrain: { source: string; exaggeration?: number; encoding?: 'mapbox' | 'terrarium' } | undefined,
+        terrain: { source: string; exaggeration?: any; encoding?: 'mapbox' | 'terrarium' } | undefined,
         demTileUrl: string | null,
         zoom: number = 8,
         center: [number, number] = [0, 0],
@@ -2396,12 +2434,18 @@ export class MBEnvironmentManager {
             Math.min(Math.floor(zoom) - tileSizeOffset, demMaxZoom),
         );
         try {
+            // mgl dynamic exaggeration: `terrain.exaggeration` may be a
+            // zoom-interpolated expression — evaluate at the current zoom for
+            // the initial build and keep the raw spec for re-evaluation on
+            // zoom change (updateTerrainExaggeration).
+            this.m_terrainExaggerationSpec = terrain.exaggeration ?? 1.0;
+            const ex0 = this.evaluateExaggeration(zoom);
             this.m_terrainController = new TerrainController(this.m_scene);
             await this.m_terrainController.build(
                 demTileUrl,
                 terrainZoom,
                 center,
-                terrain.exaggeration ?? 1.0,
+                ex0,
                 1, // radius → 3×3 grid around center
                 terrain.encoding === 'terrarium' ? 'terrarium' : 'mapbox',
             );
@@ -2456,7 +2500,7 @@ export class MBEnvironmentManager {
 
             const material = new MapTerrainMaterial();
             material.setDemTexture(demTexture);
-            material.setExaggeration(terrain.exaggeration ?? 1.0);
+            material.setExaggeration(this.m_lastExaggeration);
 
             const geom = createTerrainGrid(
                 EarthConstants.EQUATORIAL_CIRCUMFERENCE,
