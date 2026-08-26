@@ -124,8 +124,13 @@
     off-by-one 语义正确）、tile.objects/材质数组防护
 - [x] 重大修复：表达式 match label 字面量——所有 data-driven match
   此前静默走 fallback（exec 误析 ['restaurant'] 类 label 集）；
-  修复后 circle-color/default PASS、单测 268/0 零回归。影响面待全量
-  批测重估（categorical 配色/occlusion/filter match 族普遍受益）
+  修复后单测 268/0 零回归。**影响面实测修正（同日）**：worldview 6 例
+  与 circle-color/default pre/post 逐值不变（filter 侧 match 走
+  MBFilterCompiler 独立路径本就正确；circle-color PASS 实为 harness
+  帧修复之功，此前归因有误）——match 修复的渲染效果当前仅在 occlusion
+  per-feature 批次值正确性上兑现（待 icons 解锁后可见），大宗收益
+  在 model-layer(88)/3d-intersections(73) 等 match-paint 密集域
+  （均数据阻塞/其他域先决）
 - icons 不可见取证（**根因浮出**）：POI 管线全通（批次 31/纹理/21330
   索引/render pass 正常），BoxBuffer position 全 NaN → 逐级上溯：
   worldPos=[11798726,25007855,0]（NYC mercator 正确！）→ screenPos=
