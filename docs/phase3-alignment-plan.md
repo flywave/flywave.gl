@@ -77,8 +77,17 @@
   仅 ~5 帧后停滞，extrusion 上传在 ~15/306 处停止=**引擎 upload 调度
   缺陷（§3930 既有问题）**；④ harness 侧 waitFrameReady 恒 2 帧 + 无 ops
   夹具恒 5 帧加剧了截断（已修：尊重 N + 场景网格静默收敛）。
-  **下一层：引擎 upload 停滞根因**（TileGeometryLoader 配额/delayRendering
-  与 mapView.update() 请求的交互——需引擎侧源码追查）
+  **下一层终局定位（同会话续拍）**：harness 帧数修复后捕获时
+  attached=153/306、patched=153、lit=153（管线全通）但像素仍全白——
+  可见性×program 交叉普查：**visProg=0 / visNoProg=153**，即全部可见
+  extrusion 材质没有 three 编译的 program：引擎对 MapMeshStandardMaterial
+  走**自绘管线，完全绕过 three 材质编译**，onBeforeCompile 天然失效
+  （最小复现正常=裸 three 路径无此问题；fill/circle 材质类走 three
+  路径故历史补丁有效）。**修法方向**：① 找到引擎自绘管线的 shader
+  组装点（RenderObject/材质 adapter），在那里挂 mgl 光照公式；
+  ② 或改用全局 THREE.ShaderChunk 输出片元替换（若自绘路径仍解析
+  three chunk）；③ 或向引擎报告并请自绘路径透传 onBeforeCompile。
+  306 中未挂载的另一半待此层解开后再查（疑双份对象列表）
   ② icons 仍不可见（sprite/poi_label 数据已在，待 ① 后复测——
   PoiRenderer 批次路径与 extrusion 无关，可独立排查 SpriteAtlas 图名
   {maki}-12 解析）
