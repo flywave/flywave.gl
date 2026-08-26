@@ -1275,14 +1275,15 @@ export class MBMaterialPatchManager {
             (material as any).color = new THREE.Color(0xffffff);
             if ((material as any).__mbRasterSampled) return;
             (material as any).__mbRasterSampled = true;
+            // §490: cache key must be mode-dependent BEFORE three computes
+            // it (assigning inside onBeforeCompile is too late — the first
+            // compile uses the default key and the flag toggle never forks
+            // a new program).
+            (material as any).customProgramCacheKey = () =>
+                'mbRas' + ((material as any).__mbRasBake ? 'B' : 'N');
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
-                // §490: bake mode widens the raster far cutoff; force a
-                // distinct program cache key per mode so toggling
-                // __mbRasBake actually recompiles.
-                (material as any).customProgramCacheKey = () =>
-                    'mbRas' + ((material as any).__mbRasBake ? 'B' : 'N');
                 shader.uniforms.uMBRasMap = { value: texture };
                 shader.uniforms.uMBRasUvOff = { value: [rect[0], rect[1]] };
                 shader.uniforms.uMBRasUvScl = { value: [rect[2], rect[3]] };
