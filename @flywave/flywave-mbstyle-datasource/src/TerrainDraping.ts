@@ -223,8 +223,16 @@ export class TerrainDraping {
         if (terrainMeshes.size === 0) return;
 
         // Re-show the rasters hidden for the main render — the bake IS the
-        // raster's rendering path under terrain (material-level gate).
-        for (const m of this.m_rasterHidden) m.visible = true;
+        // raster's rendering path under terrain (material-level gate). Also
+        // widen the raster far-plane cutoff (bake ortho camera sits 6000
+        // above the surface; the main-render far test would paint black).
+        for (const m of this.m_rasterHidden) {
+            m.visible = true;
+            if (!(m as any).__mbRasBake) {
+                (m as any).__mbRasBake = true;
+                m.needsUpdate = true;
+            }
+        }
 
         const tiles = this.m_terrain.allDemTiles;
         const meshes = this.m_terrain.meshes;
@@ -504,7 +512,13 @@ export class TerrainDraping {
             // next main render frame.
             for (const obj of hidden) obj.visible = true;
             for (const [mesh, pos] of shifted) mesh.position.copy(pos);
-            for (const m of this.m_rasterHidden) m.visible = false;
+            for (const m of this.m_rasterHidden) {
+                m.visible = false;
+                if ((m as any).__mbRasBake) {
+                    (m as any).__mbRasBake = false;
+                    m.needsUpdate = true;
+                }
+            }
         }
     }
 

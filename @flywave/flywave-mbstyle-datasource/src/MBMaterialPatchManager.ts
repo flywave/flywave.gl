@@ -1278,6 +1278,11 @@ export class MBMaterialPatchManager {
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
+                // §490: bake mode widens the raster far cutoff; force a
+                // distinct program cache key per mode so toggling
+                // __mbRasBake actually recompiles.
+                (material as any).customProgramCacheKey = () =>
+                    'mbRas' + ((material as any).__mbRasBake ? 'B' : 'N');
                 shader.uniforms.uMBRasMap = { value: texture };
                 shader.uniforms.uMBRasUvOff = { value: [rect[0], rect[1]] };
                 shader.uniforms.uMBRasUvScl = { value: [rect[2], rect[3]] };
@@ -1383,7 +1388,7 @@ export class MBMaterialPatchManager {
                     `#include <opaque_fragment>
                      // Map the tile UV into the padded texture: the unpadded
                      // image occupies [1/W .. 1-1/W] of the padded canvas.
-                     if (vMBRasEyeDist > uMBRasFar) {
+                     if (vMBRasEyeDist > uMBRasFar${(material as any).__mbRasBake ? ' * 1e6' : ''}) {
                          // Beyond mgl's far plane the reference shows the
                          // transparent (black) background.
                          gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
