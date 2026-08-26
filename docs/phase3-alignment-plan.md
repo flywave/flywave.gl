@@ -47,6 +47,17 @@
 10. P3.14 slots 排序消费、P3.2 globe-terrain / dynamic-exaggeration / raycast 接入
 11. P3.7 elevation graph、P3.8 BVH
 
+- [x] P3.17 map-mode 终定性=不适用（2026-08-26）：map-mode/{tile,static,
+  tile-avoid-edges} 与 tile-mode/streets-v11 四例全部为上游
+  skip-test(web)（『Mapbox-gl-js does not support tile-mode』/issue #5649）
+  ——mgl web 端本身不支持 tile/static map mode，web 对齐无需实现，
+  __mapMode 桩维持现状；测试索引已重生成（3027 例，四例入册即上游跳过）
+- [x] 单测门禁全绿（80659fdb）：268 passing / 0 failing——
+  setPaintProperty 立即回写目标值（mgl getPaintProperty 语义）代码修复
+  + 5 处陈旧断言经 mgl 源码核对后随实现语义更新
+- [x] occlusion/terrain 夹具数据离线入库（595deb5a）：用户 token 拉取
+  z16 NYC streets-v8 mvt 1200+ 块、terrain-dem-v1、satellite、glyphs；
+  渲染对拍按用户指示延后
 ## 三、验证基线
 
 - 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
