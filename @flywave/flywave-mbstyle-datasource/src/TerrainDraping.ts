@@ -329,7 +329,21 @@ export class TerrainDraping {
                             quadPos = o.position.x.toFixed(0) + ',' + o.position.y.toFixed(0);
                         }
                     });
-                    if (meshes[0]) terrainPos = meshes[0].position.x.toFixed(0) + ',' + meshes[0].position.y.toFixed(0);
+                    if (meshes[0]) {
+                        const m0: any = meshes[0];
+                        terrainPos = m0.position.x.toFixed(0) + ',' + m0.position.y.toFixed(0)
+                            + ' vis=' + m0.visible + ' culled=' + m0.frustumCulled
+                            + ' parent=' + (m0.parent?.type ?? 'none')
+                            + ' inScene=' + this.m_mapView.scene.children.includes(m0.parent ?? m0)
+                            + ' renderOrder=' + m0.renderOrder
+                            + ' scale=' + m0.scale.x.toFixed(4);
+                    }
+                    const mv: any = this.m_mapView;
+                    // eslint-disable-next-line no-console
+                    console.log('[MBScene] scene===m_scene:' + (mv.scene === mv.m_scene)
+                        + ' root===' + (mv.scene === (mv as any).m_sceneRoot)
+                        + ' sceneChildren=' + (mv.scene?.children?.length ?? -1)
+                        + ' mSceneChildren=' + (mv.m_scene?.children?.length ?? -1));
                     const sceneRoot = (this.m_mapView as any).m_sceneRoot;
                     const rootPos = sceneRoot ? sceneRoot.position.x.toFixed(0) + ',' + sceneRoot.position.y.toFixed(0) : '?';
                     const camPos2 = this.m_mapView.camera.position.x.toFixed(0) + ',' + this.m_mapView.camera.position.y.toFixed(0);

@@ -5470,3 +5470,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **链路定性（全链澄清）**：主视图卫星 quad 渲染正常（有细节）；缺的是 **DEM 位移+drape+光照** 三件套——而承载这三件套的 TerrainController mesh（MapTerrainMaterial：DEM 纹理位移/drape 混合/USE_DRAPE）**从未渲染**（§472 onBeforeCompile 零调用，原因未明：visible/frustum/场景挂载细节待查）。drape 烘焙管线（§471-472 三级修复后）已就绪，只等真渲染面。
 
 **下会话单点**：TerrainController mesh 不渲染的根因（一行可见性/挂载断点即判）——修通后 DEM 位移+我们的悬垂（drape）管线即刻生效，四件套进入可校准区间。
+
+**§474. 会话续记——TerrainController mesh 不渲染根因夹逼至渲染管理器（单点收窄）**：
+
+**三轮红旗夹逼**：① 创建即染红（9 mesh）→ 主视图 0 红像素=确证从未光栅化；② 场景身份核验 scene===m_scene（14 children 同一实例，§473 疑"挂错场景"证伪）；③ mesh visible/挂载/不裁剪均正常。**渲染入口真身**：MapView 主渲染走 `mapRenderingManager.render()`（MapView:3653）+ `m_tileObjectRenderer.render()`（:3583），非裸 `renderer.render(scene)`——**渲染管理器自有遍历**，直接 add 进 scene 的 mesh 是否被渲染取决于其内部逻辑（卫星 quad 能渲染而地形 mesh 不能——差异待读 MapRenderingManager/TileObjectsRenderer 源码定位，下会话单点）。
+
+**探针方法记档**：bake 时 vis=false/inScene=false 均为伪影（bake 自身隐藏 + includes 参数错误），创建点染红是可靠法。
+
+**下会话 ROI**：① MapRenderingManager.render 遍历逻辑 → 地形 mesh 接入真渲染面（DEM 位移+drape 管线已就绪）；② 锚点 verdict BOTH 15→67；③ 3 例基线采样回归。
