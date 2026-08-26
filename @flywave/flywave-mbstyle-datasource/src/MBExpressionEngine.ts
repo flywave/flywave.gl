@@ -473,12 +473,21 @@ export class MBExpressionEngine {
 
             case 'match': {
                 const val = this.exec(args[0], ctx);
+                // mgl semantics (expression/definitions/match): the LABELS
+                // are compile-time LITERALS — a bare primitive or an ARRAY
+                // OF LITERALS (a label set). exec()ing them mis-parses e.g.
+                // ['restaurant'] as an (unknown) operator expression, which
+                // silently failed EVERY match (data-driven occlusion,
+                // categorical colors, … all fell to the fallback).
+                const strVal = typeof val === 'number' ? val : String(val);
                 for (let i = 1; i < args.length - 1; i += 2) {
-                    const label = this.exec(args[i], ctx);
-                    if (label === val) {
-                        return this.exec(args[i + 1], ctx);
-                    }
-                    if (Array.isArray(label) && (label as any[]).includes(val)) {
+                    const raw = args[i];
+                    if (!Array.isArray(raw)) {
+                        if (raw === val || String(raw) === strVal) {
+                            return this.exec(args[i + 1], ctx);
+                        }
+                    } else if ((raw as any[]).some(l =>
+                        l === val || (typeof l === 'string' && typeof val === 'string' && l === val))) {
                         return this.exec(args[i + 1], ctx);
                     }
                 }
