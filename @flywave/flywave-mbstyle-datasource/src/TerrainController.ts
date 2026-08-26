@@ -266,16 +266,17 @@ export class TerrainController {
      * every frame before render.
      */
     updateCameraRelative(camPos: THREE.Vector3): void {
-        // §475: the render frame is ABSOLUTE (the satellite quad at world
-        // coords ~7.4e6 renders fine via the RTE camera). Subtracting camPos
-        // here placed the terrain ~10 km off-frustum — the TerrainController
-        // meshes never rasterized. Keep meshes at their absolute positions
-        // (float32 at 7.4e6 loses ~0.5 m precision — same as the quad).
-        void camPos;
+        // §476: the main render uses the RTE camera (m_rteCamera — a copy of
+        // the camera with position at the ORIGIN); tile objects and map
+        // anchors are placed camera-relative by the engine each frame.
+        // Terrain meshes must do the same (the §475 "absolute frame" reading
+        // was wrong — the satellite quad renders via mapAnchors, which
+        // repositions it camera-relative).
         for (const mesh of this.m_meshes) {
             const world = mesh.userData.__mbWorldPos as THREE.Vector3 | undefined;
             if (!world) continue;
-            mesh.position.set(world.x, world.y, world.z - this.m_elevationOrigin);
+            mesh.position.set(world.x - camPos.x, world.y - camPos.y,
+                world.z - camPos.z - this.m_elevationOrigin);
         }
     }
 
