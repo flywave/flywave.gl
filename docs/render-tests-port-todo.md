@@ -5496,3 +5496,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **地形不可见问题状态**：相对系 ✓、网格 ✓、visible ✓、材质编译零调用仍是核心矛盾——**下一断点 = 用原点 RTE 相机投影中芯 tile**（一次 NDC 数值即判 frustum 内外；若在内则嫌疑收窄至 geometry/scale/顶点数）。
 
 **下会话 ROI**：① RTE 相机投影断点（getRteCamera 可见性/直接 m_rteCamera 字段）——地形不可见终审；② 锚点 verdict BOTH 15→67；③ 3 例基线采样回归。
+
+**§477. 会话续记——mesh 级全排除，地形不可见收敛至 renderer 提交层**：
+
+**双相机投影定案**：中芯 tile 相对位 (−1631,668) 与**卫星 anchor 完全相同**（地理重叠 ✓）——位置/frustum 假设终结（RTE 相机 NDC 同样偏画外但卫星能渲染，投影参考时刻差异，非判据）。**MBGeo 几何普查**：16641 顶点/98304 索引/drawRange Infinity/scale 0.000977/groups 0/材质 MeshStandardMaterial（MapTerrainMaterial 基类）——**geometry 完全健康**。
+
+**排除法终态**：visible ✓ / frustumCulled=false ✓ / 位置与卫星重叠 ✓ / 几何健康 ✓ / 场景身份 ✓ / 相对化 ✓ —— **mesh 级原因全部排除**，矛盾（onBeforeCompile 零调用=从未提交 GL）收敛至 **renderer 提交层**：layers 掩码/sortObjects 次序/材质静默失败/或场景遍历时刻差异。**下会话单点 = karma --debug 断 WebGLRenderer.render 的 projectObject 对该 mesh 的分支**（为何被跳过）。
+
+**下会话 ROI**：① karma --debug 渲染列表断点（§452 曾用同法终局 extrusion 悬案）；② 锚点 verdict BOTH 15→67；③ 3 例基线采样回归。
