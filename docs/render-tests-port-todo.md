@@ -5632,3 +5632,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **实施**：__mbRasBake 常驻（时序类一步消除）——**第五态仍逐位 17562**。**MBBake 计数**：bake **每帧运行（241 次）**——排除"bake 不再执行"假设；内容恒 uniform 的缺口在**材质可见性/重显示链之外的渲染器层**（fill 对象可见、材质重显、仍零片元入 RT）。**下会话断点（draw-call 级）**：bake 前后 `renderer.info.render.calls` delta——一行即判 fill 是否真的提交了绘制调用。
 
 **会话终收束**：41 阶段（§454-§493）。
+
+**§494. 会话终记——draw-call delta 告破（几何确在渲染）**：
+
+**MBDC 探针**：bake 期间 `renderer.info.render.calls` delta=**6**、triangles=**589k**——fill 几何确实提交并绘制进 RT。**§493 决策树左支确证**：问题在**片元输出/帧缓冲格式**（着色器输出透明或黑，或 RT 读写格式错配），提交链（材质可见/透明排序/渲染列表）全部排除。
+
+**下会话首步（唯一残余断点）**：bake 期间临时以 `material.onBeforeCompile` 尾部追加 `gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);`（常量红）重编译——RT 变红=着色器输出值问题（real-blend alpha 路径）；仍黑=帧缓冲/格式/读写错配。一步二分。
+
+**会话终收束**：42 阶段（§454-§494）。
