@@ -5205,3 +5205,21 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 3. cross-fade 残差 56/66（移植 mgl sx 光栅化变体管线）
 4. globe/terrain 域（各自引擎级缺口）
 5. 冻结域再进条件：全局 quad 半像素 snap 工程（bottom 632/icon 圆角共同天花板）
+
+**§452. 会话总记——mbstyle 批次 3 对齐推进 + harness 机理双破案（2026-08-26 三百四十三）**：
+
+**功能对齐（批次 3）**：
+- P3.14 slots 排序（1777ff5f）：mergeLayers 忠实移植 + 3D/occlusion 优先级稳定排序；set-layer-slot 31→15 改善零回归
+- P3.15b/c symbol occlusion（1777ff5f/54e15519）：icon/text-occlusion-opacity 消费者 + 建筑深度 pre-pass（TerrainDepthOcclusion includeExtrusions）+ PoiBatchRegistry 按 occlusion 值分批的引擎级链路（emitter→PoiBuilder→PoiInfo→batch→patcher）
+- P3.2b 动态 exaggeration（33ab1054）：表达式求值 + zoom 联动原地 uniform 刷新；fog/terrain/basic 28760→13766
+- P3.17 map-mode 终定性=不适用（四例全部上游 skip-test(web)）
+- 单测门禁 268/0 全绿（3ea25630+80659fdb）：mocha→lib/test + setPaintProperty 立即回写（mgl 语义）+ 5 处陈旧断言经 mgl 源码核对修正
+- 夹具数据离线入库（595deb5a/83ca7b54）：用户 token 拉取 z16 NYC mvt 1200+、terrain-dem-v1、satellite、glyphs
+
+**harness 机理双破案（全局价值）**：
+- 帧语义（b29b41a0）：waitFrameReady(N) 原恒 2 帧（mgl=等 N 帧）；无 ops 夹具原恒 5 帧→renderUntilSettled（场景网格静默+trailing frames，修 AfterRender 补丁 off-by-one）
+- three cache-key（a6c79c83）：默认 program cache key=最外层 onBeforeCompile.toString()，后包 handler 复原外层源码→programs map 命中→修改链永不编译；customProgramCacheKey nonce 防御
+
+**extrusion 白建筑悬案（七层证伪收敛，未终）**：blank→数据缺→upload 停滞→自绘管线(废)→绘制对象≠插桩(半否)→LineSegments 定性另一半→cache-key(修)——现收敛为：材质链完整+patched 153/153+version 增长+nonce，handler 仍零执行、像素跨一切扰动逐位不变。残余嫌疑二选一：引擎按需渲染补丁后不再绘制对象 / 引擎每帧重同步 onBeforeCompile（color 同步已证实）。**下会话单点=live devtools**（karma --debug 断 WebGLRenderer.js:2087）。
+
+**下会话 ROI 排序**：① devtools 终结 extrusion 悬案（解锁 lighting-3d/fill-extrusion 37 例+occlusion 族外观）；② icons 不可见独立排查（{maki}-12 图名解析）；③ 两者收敛后 occlusion 24 例+lighting-3d 大域批测；④ cross-source-elevation 数据阻塞（hd-road 瓦片，token 可拉）。
