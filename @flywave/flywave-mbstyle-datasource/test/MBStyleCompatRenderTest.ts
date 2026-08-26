@@ -64,6 +64,13 @@ function discoverTests(): TestEntry[] {
 }
 
 (globalThis as any).__mbDiagNoFlat = true;
+// Wall-lighting azimuth probe (§454): enable via karma client arg
+// "lightdbg=1" — the extrusion 3D-lighting shader writes R=NdotL, G/B=dir.xy.
+{
+    const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("lightdbg="))?.slice("lightdbg=".length);
+    if (dbg === "1") (globalThis as any).__mbLightDbg = true;
+}
 const ALL_TESTS = discoverTests();
 console.log(`[MBStyleCompat] ${ALL_TESTS.length} compatible tests loaded`);
 

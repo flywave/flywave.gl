@@ -567,27 +567,48 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMB3DDir = { value: ls ? ls.dir : [0, 0, 1] };
             shader.uniforms.uMB3DViewToWorld = { value: viewToWorld };
             shader.uniforms.uMB3DEmissive = { value: ls ? emissiveStrength : 0 };
+            shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbLightDbg ? 1 : 0 };
             shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
                 `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
-                 uniform mat3 uMB3DViewToWorld; uniform float uMB3DEmissive;
+                 uniform mat3 uMB3DViewToWorld; uniform float uMB3DEmissive; uniform float uMB3DDbg;
+                 vec3 mbBaseColor = vec3(1.0);
                  void main() {`
+            );
+            // Capture the UNLIT material color before three's lighting pass —
+            // the scene DirectionalLight (added by applyLights) shades the
+            // standard material with three's own model; the mapbox
+            // LIGHTING_3D_MODE formula must REPLACE that, not multiply onto it
+            // (the double-shading produced wall NdotL factors 2× mapbox's).
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <color_fragment>',
+                `#include <color_fragment>
+                 mbBaseColor = diffuseColor.rgb;`
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <opaque_fragment>',
                 `#include <opaque_fragment>
                  {
-                     #ifdef FLAT_SHADED
-                         vec3 mbN3 = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
-                     #else
-                         vec3 mbN3 = normalize(vNormal);
-                     #endif
-                     mbN3 = normalize(uMB3DViewToWorld * mbN3);
-                     float mbNdotL = dot(mbN3, uMB3DDir);
+                     // Face normal from screen-space derivatives of the view
+                     // position — the true geometric normal of the rendered
+                     // triangle regardless of the (smoothed/unreliable) vertex
+                     // normals the engine extruded-polygon geometry carries.
+                     // Same technique as the engine's own flat-shaded path.
+                     vec3 mbN3 = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+                     // uMB3DDir is WORLD-space (x east, y north, z up); the
+                     // surface normal here is VIEW-space. Transform the light
+                     // dir and the world up axis into view space with three's
+                     // built-in viewMatrix uniform — the renderer updates it
+                     // EVERY frame, so a stale compile-time camera snapshot
+                     // (the §455 azimuth bug: wall normals rotated 60° at
+                     // bearing 90) can never desynchronize the dot product.
+                     vec3 mbDirView = normalize((viewMatrix * vec4(uMB3DDir, 0.0)).xyz);
+                     vec3 mbUpView = normalize((viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
+                     float mbNdotL = dot(mbN3, mbDirView);
                      float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
                      float mbDirFactorMin = 1.0 - 0.3 * min(mbDirLum, 1.0);
                      float mbAmbDir = mix(mbDirFactorMin, 1.0, min(mbNdotL + 1.0, 1.0));
-                     float mbVert = mix(0.92, 1.0, mbN3.z * 0.5 + 0.5);
+                     float mbVert = mix(0.92, 1.0, dot(mbN3, mbUpView) * 0.5 + 0.5);
                      float mbADF = mbVert * mbAmbDir;
                      vec3 mbK = uMB3DAmb * mbADF + uMB3DDirColor * max(mbNdotL, 0.0);
                      // mapbox linearProduct(color, k) = color·k^(1/2.2) with
@@ -596,8 +617,13 @@ export class MBMaterialPatchManager {
                      // color by k yields (color_lin·k)^(1/2.2) =
                      // color_srgb·k^(1/2.2) — the mapbox result. Applying
                      // pow(k,1/2.2) directly would double the exponent.
-                     vec3 mbLit = gl_FragColor.rgb * mbK;
-                     gl_FragColor.rgb = mix(mbLit, gl_FragColor.rgb, uMB3DEmissive);
+                     vec3 mbLit = mbBaseColor * mbK;
+                     gl_FragColor.rgb = mix(mbLit, mbBaseColor, uMB3DEmissive);
+                     if (uMB3DDbg > 0.5) {
+                         // Debug readback: R = NdotL (signed 0.5+0.5*n),
+                         // G/B = dir.x/dir.y (0.5+0.5*v) — wall azimuth probe.
+                         gl_FragColor.rgb = vec3(0.5 + 0.5 * mbNdotL, 0.5 + 0.5 * mbDirView.x, 0.5 + 0.5 * mbDirView.z);
+                     }
                  }`
             );
         };

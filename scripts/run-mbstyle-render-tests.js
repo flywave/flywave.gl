@@ -78,7 +78,8 @@ function main() {
             "--browsers", "ChromeHeadlessNoSandbox",
         ];
         // karma client args -> KARMA_ARGS env (space separated).
-        const karmaClientArgs = [...filters.map((f) => `filter=${f}`), `feedback-url=http://localhost:${port}`];
+        const karmaClientArgs = [...filters.map((f) => `filter=${f}`), `feedback-url=http://localhost:${port}`,
+            ...(process.env.MBSTYLE_LIGHTDBG ? ["lightdbg=1"] : [])];
         const result = spawnSync(
             "npx",
             karmaArgs,

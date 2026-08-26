@@ -398,8 +398,12 @@ export class MBEnvironmentManager {
         // properties_light_directional.direction default).
         const direction = this.m_3DDirectional?.direction ?? [210, 30];
 
-        // sphericalDirectionToCartesian (util.ts): a = az+90°, p = polar°
-        const a = (direction[0] + 90) * Math.PI / 180;
+        // mgl's `direction` azimuth is COMPASS-style (0 = north, positive
+        // clockwise): dir_xy = (sin az, cos az)·sin(polar) in the north-up
+        // math frame, i.e. θ = 90 − az. The earlier az+90 form (math CCW)
+        // lit the wrong wall set (§455: az 150 resolved to θ 240 instead of
+        // mgl's empirical θ 300, wall NdotL factor exactly 2× off).
+        const a = (90 - direction[0]) * Math.PI / 180;
         const p = direction[1] * Math.PI / 180;
         const dirVec: [number, number, number] = [
             Math.cos(a) * Math.sin(p),
@@ -683,7 +687,8 @@ export class MBEnvironmentManager {
      * `sphericalDirectionToCartesian` in mapbox-gl-js util.ts.
      */
     private directionalVec(direction: [number, number]): [number, number, number] {
-        const a = (direction[0] + 90) * Math.PI / 180;
+        // Compass azimuth (0 = north, clockwise) — see lighting3DState.
+        const a = (90 - direction[0]) * Math.PI / 180;
         const p = direction[1] * Math.PI / 180;
         return [
             Math.cos(a) * Math.sin(p),
