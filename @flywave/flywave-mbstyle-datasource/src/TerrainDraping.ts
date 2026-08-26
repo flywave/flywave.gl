@@ -408,7 +408,13 @@ export class TerrainDraping {
                 // the whole tile to the clear color, the §472 black-field).
                 renderer.setClearColor(0x000000, 0);
                 renderer.clear();
+                const __mbCalls0 = renderer.info.render.calls;
                 renderer.render(scene, camera);
+                if ((globalThis as any).__mbOccDbg && (globalThis as any).__mbBakeCount === 5) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBDC] bake draw-calls delta=' + (renderer.info.render.calls - __mbCalls0)
+                        + ' triangles=' + renderer.info.render.triangles);
+                }
                 // Feed the baked texture to the terrain material — but ONLY
                 // when the bake actually rasterized content. The ortho bake
                 // is currently blocked at the renderer level (a plain mesh
