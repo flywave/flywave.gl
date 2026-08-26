@@ -5462,3 +5462,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **终极定性（MBMat 编译探针）**：TerrainController 的 9 个 MapTerrainMaterial **onBeforeCompile 零调用=mesh 从未渲染**——四件套可见地形来自**引擎原生路径**（flywave-terrain-datasource），我们的 drape/dem/depth 机制从未触及真渲染面——历次 drape 实验"逐位不变"的完整解释。**下会话单点：确认引擎原生地形渲染面（VectorMaterialProvider/Tile 材质）并将 drape 纹理接到该材质**（TerrainController mesh 疑与引擎地形双轨，或被原生路径覆盖）。
 
 **下会话 ROI**：① 引擎原生地形材质定位与 drape 接驳（四件套真断点）；② 锚点 verdict BOTH 15→67（before-3d 冲刺，真深度已通）；③ 3 例基线采样回归。
+
+**§473. 会话续记——setProperty 四件套终极画像（全链反转澄清）**：
+
+**双图直方图/视觉对比**：exp = 浅色平滑地形（mean 177/std 23，162/176/190/206 阶梯色调 = DEM 位移+环境光照下的悬垂卫星）；cur = 深色噪点（mean 108/std 39）= **平面卫星 quad 直渲（无地形位移）**。残差 16.2k/20k = 整图外观差（非局部特征）。
+
+**链路定性（全链澄清）**：主视图卫星 quad 渲染正常（有细节）；缺的是 **DEM 位移+drape+光照** 三件套——而承载这三件套的 TerrainController mesh（MapTerrainMaterial：DEM 纹理位移/drape 混合/USE_DRAPE）**从未渲染**（§472 onBeforeCompile 零调用，原因未明：visible/frustum/场景挂载细节待查）。drape 烘焙管线（§471-472 三级修复后）已就绪，只等真渲染面。
+
+**下会话单点**：TerrainController mesh 不渲染的根因（一行可见性/挂载断点即判）——修通后 DEM 位移+我们的悬垂（drape）管线即刻生效，四件套进入可校准区间。
