@@ -1780,6 +1780,17 @@ export class MBStyleDataSource extends TileDataSource {
                 }
             });
             this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
+                // The depth occlusion target is created lazily on the first
+                // WillRender — at connect() time depthTexture was still null
+                // and the patcher never received it (icon occlusion fade
+                // silently never armed). Re-check every frame (idempotent).
+                const dt = (self as any).m_depthOcclusion?.depthTexture;
+                if (dt && (patcher as any).m_depthTexture !== dt) {
+                    if ((globalThis as any).__mbOccDbg) // eslint-disable-next-line no-console
+                        console.log('[MBOcc] depth texture armed ' + dt.uuid);
+                    patcher.setDepthTexture(dt);
+                    patcher.invalidate();
+                }
                 patcher.patchTileMaterials();
                 // Icon cross-fade blends decoded tiles requested — register
                 // them before placement/PoiRenderer material creation.

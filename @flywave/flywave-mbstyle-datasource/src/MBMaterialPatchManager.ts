@@ -203,6 +203,16 @@ export class MBMaterialPatchManager {
             1 / Math.max(1, canvas?.width ?? 1),
             1 / Math.max(1, canvas?.height ?? 1),
         );
+        if ((globalThis as any).__mbOccDbg) {
+            const occs = [...batchMap.values()].map((b: any) => b?.m_material?.userData?.mbOcclusionOpacity);
+            const sig = batchMap.size + ':' + occs.join(',');
+            if (sig !== (this as any).__mbOccSig) {
+                (this as any).__mbOccSig = sig;
+                // eslint-disable-next-line no-console
+                console.log('[MBOcc] batches=' + batchMap.size + ' occlusions=' + JSON.stringify(occs)
+                    + ' patchedFlags=' + [...batchMap.values()].map((b: any) => !!b?.m_material?.__mbPoiOcclusionPatched).join(','));
+            }
+        }
         for (const batch of batchMap.values()) {
             const material = (batch as any).m_material as THREE.Material | undefined;
             if (!material || (material as any).__mbPoiOcclusionPatched) continue;
@@ -215,6 +225,29 @@ export class MBMaterialPatchManager {
                 shader.uniforms.u_terrainDepth = { value: depthTex };
                 shader.uniforms.u_terrainDepthInvSize = { value: invSize };
                 shader.uniforms.uMBPoiOcclusionOpacity = { value: occlusionOpacity };
+                shader.uniforms.uMBPoiOccDbg = { value: (globalThis as any).__mbOccDbg ? 1 : 0 };
+                // The engine renders with a logarithmic depth buffer — the
+                // depth texture holds LOG2-encoded z (three logdepthbuf chunk:
+                // log2(1 + w) * logDepthBufFC * 0.5, logDepthBufFC =
+                // 2/(ln(far+1)/ln2)). IconMaterial's raw GLSL never writes
+                // gl_FragDepth, so its gl_FragCoord.z is STANDARD NDC z —
+                // comparing the two encodings made every icon appear in
+                // front (occlusion never fired). Carry gl_Position.w and
+                // compute the log z the scene materials would write.
+                const cam = mapView?.camera as any;
+                const far = cam?.far ?? 2000;
+                const near = cam?.near ?? 0.1;
+                const logDepthBufFC = 2.0 / (Math.log(far + 1.0) / Math.LN2);
+                shader.uniforms.uMBLogDepthBufFC = { value: logDepthBufFC };
+                shader.uniforms.uMBNearFar = { value: new (require('three').Vector2)(near, far) };
+                shader.vertexShader = shader.vertexShader.replace(
+                    'varying vec2 vUv;',
+                    'varying vec2 vUv;\nvarying float mbW;'
+                );
+                shader.vertexShader = shader.vertexShader.replace(
+                    'gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xyz, 1.0);',
+                    'gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xyz, 1.0);\n    mbW = gl_Position.w;'
+                );
                 // IconMaterial is a RawShaderMaterial with plain GLSL (no
                 // three includes): declare uniforms + a fade helper before
                 // main() and call it at both gl_FragColor writes.
@@ -223,10 +256,53 @@ export class MBMaterialPatchManager {
                     `uniform sampler2D u_terrainDepth;
                      uniform vec2 u_terrainDepthInvSize;
                      uniform float uMBPoiOcclusionOpacity;
+                     uniform float uMBPoiOccDbg;
+                     uniform float uMBLogDepthBufFC;
+                     uniform vec2 uMBNearFar;
+                     varying float mbW;
+                     // mgl occlusionFadeMultiSample (symbol.vertex.glsl +
+                     // _prelude_terrain.vertex.glsl): 3x4 taps within a
+                     // +/-16px neighborhood of the symbol point, each tap
+                     // visible = 1 - clamp(300 * (z - 0.0001 - depth));
+                     // visibility = clamp(2*avg - 0.5, 0, 1); opacity *=
+                     // mix(occlusion_opacity, 1, visibility). Per-pixel here
+                     // (mgl evaluates once per symbol at its projected point).
+                     // mgl's occlusion ramp (300x slope) is defined in
+                     // STANDARD D24 z; the engine's depth texture is LOG2-
+                     // encoded (world-scale far plane collapses standard z).
+                     // Compare in log space with the equivalent slope: the
+                     // derivative dz_std/dz_log at this fragment's view
+                     // distance w converts the 300x ramp between spaces.
+                     float mbOccVisibility() {
+                         float myZlog = log2(1.0 + mbW) * uMBLogDepthBufFC * 0.5;
+                         // mgl's ramp width (1/300 in std z) converts via the
+                         // std/log derivative ratio, but the engine's
+                         // log space, but with the engine's world-scale far
+                         // world-scale far plane (1e7 m) collapses std z — the
+                         // literal conversion never occludes. Use a fixed
+                         // log-space threshold ~1e-4 (≈1-2 m at test camera
+                         // distances) so occlusion fires on real geometry
+                         // overlap like mgl's tight near/far does.
+                         float mbEps = 1e-4;
+                         vec2 df = 16.0 * u_terrainDepthInvSize;
+                         vec2 oneStep = 2.0 * df / vec2(2.0, 3.0);
+                         float res = 0.0;
+                         for (int y = 0; y < 4; ++y) {
+                             for (int x = 0; x < 3; ++x) {
+                                 float d = texture2D(u_terrainDepth,
+                                     gl_FragCoord.xy * u_terrainDepthInvSize - df
+                                     + vec2(float(x) * oneStep.x, float(y) * oneStep.y)).r;
+                                 res += 1.0 - clamp((myZlog - d) / mbEps, 0.0, 1.0);
+                             }
+                         }
+                         return clamp(2.0 * res / 12.0 - 0.5, 0.0, 1.0);
+                     }
                      void mbPoiOccFade() {
-                         float mbTz = texture2D(u_terrainDepth, gl_FragCoord.xy * u_terrainDepthInvSize).r;
-                         float mbOcclude = smoothstep(-0.002, 0.002, gl_FragCoord.z - mbTz);
-                         gl_FragColor.a *= mix(1.0, uMBPoiOcclusionOpacity, mbOcclude);
+                         float mbVis = mbOccVisibility();
+                         gl_FragColor.a *= mix(uMBPoiOcclusionOpacity, 1.0, mbVis);
+                         if (uMBPoiOccDbg > 0.5) {
+                             gl_FragColor = vec4(1.0 - mbVis, mbVis, 0.0, 1.0);
+                         }
                      }
                      void main() {`
                 );

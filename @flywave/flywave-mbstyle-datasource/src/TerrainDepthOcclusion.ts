@@ -194,6 +194,24 @@ export class TerrainDepthOcclusion {
             }
         });
 
+        if ((globalThis as any).__mbOccDbg) {
+            if ((this as any).__mbDpLogged === undefined || (this as any).__mbDpLogged > 30) {
+                (this as any).__mbDpLogged = 0;
+            let occluders = 0, total = 0;
+            scene.traverse((o: any) => { if (o.isMesh && o.visible) { total++; } });
+            scene.traverse((o: any) => {
+                if (o.isMesh && o.visible) {
+                    let occ = false;
+                    const tech = o.userData?.technique;
+                    if (tech?.name === 'extruded-polygon') occ = true;
+                    if (occ) occluders++;
+                }
+            });
+            // eslint-disable-next-line no-console
+                console.log('[MBOcc] depthPass meshes=' + total + ' occluders=' + occluders + ' hidden=' + hidden.length);
+            }
+            (this as any).__mbDpLogged++;
+        }
         const prevTarget = renderer.getRenderTarget();
         try {
             renderer.setRenderTarget(this.m_depthTarget);

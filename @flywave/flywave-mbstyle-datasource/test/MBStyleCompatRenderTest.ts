@@ -71,6 +71,11 @@ function discoverTests(): TestEntry[] {
         a.startsWith("lightdbg="))?.slice("lightdbg=".length);
     if (dbg === "1") (globalThis as any).__mbLightDbg = true;
 }
+{
+    const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("occdbg="))?.slice("occdbg=".length);
+    if (dbg === "1") (globalThis as any).__mbOccDbg = true;
+}
 const ALL_TESTS = discoverTests();
 console.log(`[MBStyleCompat] ${ALL_TESTS.length} compatible tests loaded`);
 
