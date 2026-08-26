@@ -5446,3 +5446,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **剩余两级（定性，未修）**：① baked 样本仅黑白（255/0）无卫星色彩——bake 内容疑非 raster quad（黑=未知来源，待查 bake 场景对象集/顶点色路径）；② drape 上屏经 MapTerrainMaterial（MeshStandard）PBR 照明——§114 E1 结论：unlit 注入是 redistribute 非收敛，需逐子族校准。四件套转绿=两级 + 逐族外观，非单点。
 
 **下会话 ROI**：① bake 内容源排查（卫星 quad 是否入 bake 场景、黑白来源）；② §114 E1 路径重开（drape 激活后 unlit/照明再评估——前提已变）；③ 锚点 verdict 对齐（BOTH 15→67，before-3d 冲刺）；④ 3 例基线采样回归。
+
+**§471. 会话续记——bake 内容源定位：lit 材质无灯黑毯（一级告破，应用路径为次级）**：
+
+**MBDrap 网格探针**：bake 5×5 网格 **24/25 黑**（1 白=clear 角）——根因一级：**MeshStandardMaterial 在 bake 中无灯渲染=黑**（灯被 isEnvironmentObject 隐藏），黑毯覆盖卫星 quad（场景普查 4 可见：2 ShaderMaterial/1 MeshStandard/1 MeshBasic=卫星）。
+
+**修复**：bake 隐藏 isMeshStandardMaterial 对象。**实测四件套值持平（16273-16845）**——次级嫌疑浮出：**drape 应用路径**（setDrapeTexture+USE_DRAPE 后地形外观未变——疑材质克隆/needsUpdate 重编译链/或卫星 quad 本身未入 bake 视锥（quad 覆盖全视口 vs bake 相机单 tile 的坐标对齐））。
+
+**下会话 ROI**：① drape 应用路径断点（setDrapeTexture 后 USE_DRAPE 编译与 vMapUv 采样是否实际生效——shader 插桩一行即判）；② 卫星 quad-bake 视锥对齐（quad 世界坐标 vs tile 相机相对系）；③ 锚点 verdict BOTH 15→67；④ 3 例基线采样回归。
