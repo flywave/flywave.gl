@@ -5478,3 +5478,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **探针方法记档**：bake 时 vis=false/inScene=false 均为伪影（bake 自身隐藏 + includes 参数错误），创建点染红是可靠法。
 
 **下会话 ROI**：① MapRenderingManager.render 遍历逻辑 → 地形 mesh 接入真渲染面（DEM 位移+drape 管线已就绪）；② 锚点 verdict BOTH 15→67；③ 3 例基线采样回归。
+
+**§475. 会话续记——渲染帧绝对系定性 + 地形 mesh 放置修正（commit 待续）**：
+
+**渲染管理器源码定案**：直渲路径（composer 空闲时 `renderer.render(scene, camera)`）**包含** scene 直挂 mesh——与红旗探针矛盾 → 解矛盾：**渲染帧为绝对系**（卫星 quad 世界坐标 7.4e6 经 RTE 相机 m_rteCamera 渲染正常），而 TerrainController 的 `updateCameraRelative` 每帧把地形挪到相对系（−11k）→ **视锥外 ~10km = 从未光栅化**（raw 红材质零像素复核）。与 §469 深度 pass 需零位相机并存不悖（不同 pass 的 RTE 约定不同——深度 pass 零位相机 + 相对对象；主渲染绝对相机 + 绝对对象）。
+
+**修正**：updateCameraRelative 停用 camPos 减法（保持绝对位）。**实测**：setProperty 四件套仍持平——绝对系下地形 tile（世界 7411335,24337550）与相机（7422750,24327098）相距 ~13km，zoom 12.2 视野内但 tile 网格/缩放对齐疑为下一层（DEM z 与卫星 z 差一级的候选）。**回归**：terrain 基线 3/3 零回归。
+
+**下会话 ROI**：① 地形 tile 网格对齐断点（world pos vs 相机视野数值核对——一号嫌疑 DEM terrainZoom 与卫星 z 差级致 tile 错位）；② 锚点 verdict BOTH 15→67；③ 3 例基线采样回归。
