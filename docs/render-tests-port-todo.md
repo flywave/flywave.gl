@@ -5327,3 +5327,15 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **实测与震荡记录**：data-driven 在 85905（显式 sortKey）/86509（碰撞常开初版）/88653（严格拒绝+设备像素盒）间震荡——碰撞集合仍非 mgl 精确子集；no-occlusion 对 44151/75461 稳定。**回归**：采样 5 已过夹具（icon-color/default、icon-image/literal、text-max-width/force-newline、text-size/composite-function、text-visibility/none）5/5 保持，零回归。
 
 **残余 ~86k 定性（未终）**：残差签名稳定为"cur 渲染 0.25/0.7 alpha 图标于 exp 无图标处"——碰撞淘汰子集逐图标不一致。已知未对齐点：mgl 碰撞盒的 anchor/offset 语义（icon-offset、textPixelRatio 变换后的盒位置）、tile 内 bucket 实例序、跨瓦片 dedupe（crossTileID）时机。**下会话 ROI**：① 逐图标对拍（occdbg dump 每图标放置坐标+盒，与 expected 图标位置集合做差）定位盒位置差；② setProperty 16.3k 族残差定位；③ 全量 462 基线复核。
+
+**§460. 会话续记——图标透视缩放对齐（commit 01014e25，对拍工具落地）**：
+
+**对拍工具（occdbg 扩展）**：MBCollDUMP 分块输出（karma 截断超长 console，20 条/块）每图标 {x,y,w,h,vis,icon}；Python 端与 expected 局部对比度检测对拍。**教训**：对比度>12 的 presence 启发式无法区分"0.25 alpha 遮蔽图标"与"无图标"（expOnly=66 恒定疑似该伪影），子集度量噪声大，但像素残差是硬指标。
+
+**代码端定案（collision_index.ts placeCollisionBox + TextElementsRenderer.getDistanceScalingFactor）**：
+1. **图标渲染尺寸**：mgl 符号按 perspectiveRatio=0.5+0.5·(centerDist/pointDist) 缩放（vertex w 除法）；引擎 factor=1+(lookAt/d−1)·distanceScale 在 **distanceScale=0.5 恰等于该曲线**（原 icon 恒 0=恒定屏幕尺寸，pitch 68 远图标全尺寸渲染——视觉残差主源之一）。
+2. **碰撞盒**：mgl 盒 extents 乘 textPixelRatio·perspectiveRatio（远盒缩至 ~0.55×、近盒放大）——原常数盒双向错判。
+
+**实测（01014e25）**：occlusion/data-driven 88653→**71107**、no-occlusion-after 43058→**26171**、before 75461→70589。icon 域回归 14/16 保持（icon-color/use-theme 119、icon-opacity/icon-only 1802 均原有失败，后者还微降）。本会话 occlusion 累计（§455 起）：555k→71k（−87%）。
+
+**剩余**：data-driven 71.1k 与 setProperty 16.3k——mgl 遮蔽图标在暗底上近似无图标，presence 启发式无法进一步分辨碰撞子集差；需 dump exp 侧真实图标集合（mgl 参照渲染器 pr 落盘 §420 配方）或碰撞盒 anchor/offset 语义逐点核对。**下会话 ROI**：① mgl 参照渲染器落盘 icon 位置集合做精确对拍；② text distanceScale 同样试点 0.5（text 域 pitch>0 夹具）；③ 全量 462 基线复核（distanceScale 影响面）。
