@@ -811,16 +811,24 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBDrapeOrigin = { value: new THREE.Vector2(dem.originX, dem.originY) };
             shader.uniforms.uMBDrapeSize = { value: dem.size };
             shader.uniforms.uMBDrapeZScale = { value: this.demZScale };
+            const camAbs = (this.m_dataSource as any).mapView?.camera?.position;
+            shader.uniforms.uMBRteCamPos = { value: new (require('three').Vector2)(camAbs?.x ?? 0, camAbs?.y ?? 0) };
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
-                `uniform sampler2D uMBDrapeDem;\nuniform vec2 uMBDrapeOrigin;\nuniform float uMBDrapeSize;\nuniform float uMBDrapeZScale;\nvoid main() {`
+                `uniform sampler2D uMBDrapeDem;\nuniform vec2 uMBDrapeOrigin;\nuniform float uMBDrapeSize;\nuniform float uMBDrapeZScale;\nuniform vec2 uMBRteCamPos;\nvoid main() {`
             );
             // Sample DEM at the vertex's world position and offset Z so the
             // geometry follows the terrain surface.
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <project_vertex>',
                 `{
-                     vec2 mbWP = (modelMatrix * vec4(transformed, 1.0)).xy;
+                     // Scene objects are camera-relative (RTE) while the DEM
+                     // origin/size are world-ABSOLUTE. three's built-in
+                     // cameraPosition is the RENDERING camera (origin for
+                     // the RTE main camera, tile-relative for bake cameras)
+                     // — neither carries the absolute world offset. Use the
+                     // dedicated uMBRteCamPos uniform (mapView.camera).
+                     vec2 mbWP = (modelMatrix * vec4(transformed, 1.0)).xy + uMBRteCamPos.xy;
                      vec2 mbDU = (mbWP - uMBDrapeOrigin) / uMBDrapeSize;
                      mbDU = clamp(mbDU, vec2(0.0), vec2(1.0));
                      transformed.z += texture2D(uMBDrapeDem, mbDU).r * uMBDrapeZScale;
@@ -860,9 +868,11 @@ export class MBMaterialPatchManager {
                 tileData[i * 3 + 2] = tiles[i].size;
             }
             shader.uniforms.uMBDrapeTiles = { value: tileData };
+            const camAbs2 = (this.m_dataSource as any).mapView?.camera?.position;
+            shader.uniforms.uMBRteCamPos = { value: new (require('three').Vector2)(camAbs2?.x ?? 0, camAbs2?.y ?? 0) };
 
             // Build sampler / uniform declarations.
-            let decl = `uniform int uMBDrapeTileCount;\nuniform vec3 uMBDrapeTiles[${N}];\nuniform float uMBDrapeZScale;\n`;
+            let decl = `uniform int uMBDrapeTileCount;\nuniform vec3 uMBDrapeTiles[${N}];\nuniform float uMBDrapeZScale;\nuniform vec2 uMBRteCamPos;\n`;
             for (let i = 0; i < N; i++) decl += `uniform sampler2D uMBDrapeDem${i};\n`;
 
             shader.vertexShader = shader.vertexShader.replace(
@@ -887,7 +897,10 @@ export class MBMaterialPatchManager {
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <project_vertex>',
                 `{
-                     vec2 mbWP = (modelMatrix * vec4(transformed, 1.0)).xy;
+                     // RTE→absolute conversion (§483): uMBRteCamPos is the
+                     // absolute world camera (NOT three's cameraPosition,
+                     // which is the rendering camera).
+                     vec2 mbWP = (modelMatrix * vec4(transformed, 1.0)).xy + uMBRteCamPos.xy;
                      float mbElev = 0.0;
                      int idx = -1;
                      for (int i = 0; i < ${N}; i++) {
