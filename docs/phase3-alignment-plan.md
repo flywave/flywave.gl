@@ -86,9 +86,13 @@
   调用；最小复现（裸 renderer+同材质类）正常执行。真实管线中
   handler 链完整（外层 translate handler 的 orig 链含 3D 光照
   handler）、version 正常增长，但 MBRUN 探针零执行、像素跨一切
-  扰动逐位不变——终极嫌疑=**被绘制的白建筑并非插桩的 census 对象**
-  （layers 掩码/另一半未挂载对象/双列表）。决定性实验（下会话
-  单点）：对 census 对象置 visible=false，若画面不变即证实
+  扰动逐位不变——终极嫌疑=被绘制的白建筑并非插桩的 census 对象。
+  **决定性实验已做**：对 census 153 对象置 visible=false 后失配
+  217192→197646（降 19.5k）：① census 对象确实被绘制；② 但期望图
+  在它们的位置上没有建筑——**挂载的一半是错位/多余几何，期望建筑=
+  未挂载的另一半**。下会话入口：比对挂载 153 vs 未挂载 153 的 tile
+  归属/几何 bbox（疑：双份对象列表中第一代 stale 几何被挂载、正确的
+  新几何停在列表里——与 §3930 引擎挂载时序缺陷同源）
   ② icons 仍不可见（sprite/poi_label 数据已在，待 ① 后复测——
   PoiRenderer 批次路径与 extrusion 无关，可独立排查 SpriteAtlas 图名
   {maki}-12 解析）
