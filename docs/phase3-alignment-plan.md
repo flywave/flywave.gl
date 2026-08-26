@@ -138,7 +138,13 @@
   ready=38/notReady=13/invisible=9——**38 个 icon 实际已放置**；NaN
   结论撤回（仅采样 2 个空批次 mesh，31 批次各自 BoxBuffer 需全量
   普查 drawRange/写入量）。下会话：逐 mesh drawRange 普查→若写入在，
-  则疑点转移到渲染混合/材质 uniform（IconMaterial map/opacity）
+  则疑点转移到渲染混合/材质 uniform。终证（同日续）：31 mesh **全部
+  有数据**（drawRange=Infinity 即全量绘制，此前 NaN=探针访问器误用
+  撤回）；disableFading=true 无像素变化（fade 排除）——**疑点唯一
+  收敛到 IconMaterial 渲染本身**（atlas map 绑定/UV/SDF 路径/混合
+  状态）。下会话单点：浏览器 devtools 对 layer.scene 手动
+  renderer.render 或对 IconMaterial 单测级渲染一帧（飞梭定位 map
+  是否为空纹理）
 ## 三、验证基线
 
 - 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
