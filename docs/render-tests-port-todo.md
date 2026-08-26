@@ -5384,3 +5384,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **防御性修正**：碰撞可见性仅变化时赋值（每帧重赋 el.visible 重启引擎 fade-in）。
 
 **下会话 ROI**：① before-3d 剩余 7492（13×）——front-of-building 图标集与 mgl anchor-cull 语义差迭代；② raster-on-terrain draping 评估（DEM 表面纹理映射，解锁 4 件套，大工程）；③ depth-occlusion line-pattern 1181（18×）次近转绿目标；④ 全量 462 基线复核。
+
+**§465. 会话续记——before-3d 真值对拍 + CPU 深度回读基建（commit 0d2ed743）**：
+
+**真值量化（MBGLIconDump）**：before-3d mgl **190 实例 67 placed（35%）**；我方 133 条目（跨瓦片去重差异）79 visible；**BOTH 仅 15 / curOnly 68 / mglOnly 52**——碰撞子集仍大幅错位。curOnly 68 = mgl `isClipped` 无条件锚点淘汰（pitch>0）未实施的幽灵图标（占碰撞空间并错杀 mglOnly 52）。**取证坑记档**：MBCollDUMP 门槛 ≥200 使小夹具（133 实例）静默不 dump；summary 日志 tail 取到早期 0 帧曾误判"configure 破坏坐标"（A/B 复验无差，虚警）。
+
+**新基建（0d2ed743）**：① `TerrainDepthOcclusion.readDepthBuffer`——WebGL2 `gl.readPixels(DEPTH_COMPONENT, UNSIGNED_SHORT)` 回读（framebuffer 从 three properties 表取，直接挂 target 上恒 null）；② before-3d 样式激活挤出深度 pass（供 CPU 锚点淘汰与既有 GPU 深度测试共用）；③ CPU 锚点淘汰管线接通但**实测过杀暂禁用**（street 图标被误杀，data-driven 67.5k→71.4k）——需深度 pass 与主渲染的采样/视口一致性标定后启用。
+
+**实测**：before-3d 稳定 7492-7555；data-driven 67-71k 噪声带；icon 回归保持。
+
+**下会话 ROI**：① CPU 锚点淘汰标定（readDepthBuffer 采样与主渲染 viewport/翻转一致性、near/far 来源核对——当前 camNear/Far 取 mapView.camera 与深度 pass 相机可能不同）；② 标定后 before-3d 冲刺（BOTH 15→67 即转绿在望）；③ raster-on-terrain draping 评估；④ 全量 462 基线复核。
