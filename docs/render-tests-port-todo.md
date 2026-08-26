@@ -5404,3 +5404,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **实测**：全族值在历史带内（before 7492 / after 26171 / dd 67-72k / setProperty 16239）——零回归，编码管线作为基建落地。
 
 **下会话 ROI**：① override 渲染断点（黑屏回读根因）；② POI 可见性真实门控点（TextElementsRenderer 放置链）——这是碰撞/锚点淘汰生效的前提；③ 之后 before-3d BOTH 15→67 冲刺；④ 全量 462 基线复核。
+
+**§467. 会话续记——深度管线端到端打通（commit c6a6556b，§466 双断点闭环）**：
+
+**断点①闭环（黑屏根因）**：缺 `renderer.clear()`——autoClear=false 下渲染目标永不清除，TerrainDraping:256 先例（clear 后 render）一翻即中。恒红探针+同帧回读两轮定位。此前"raw FBO 读到 0"亦为无效读残留（1280），旧证据链一并作废。overrideMaterial 深度编码（此前赋值行因断言失败从未落地——已补）。
+
+**断点②闭环（POI 门控）**：`TextElement.visible` 仅在 `checkReadyForPlacement`（首次放置）读取；**已放置元素由 `TextElementState.visible`（状态缓存）门控**——元素级 visible 翻转对已放置 POI 无效（CPU 锚点淘汰全 occ=true 而渲染逐位不变的完整解释）。**GPU 侧绕过**：深度测试批材质（symbols-before-3D）注入锚点 fade（occlusionOpacity=0 → alpha×=vis 二值隐藏），不依赖放置缓存。
+
+**实测**：真实深度首次到达 fade（data-driven 73253，移出 67-72k 历史带——fade 行为已变，需按真深度重新校准 eps/near-far）；before-3d 7492→7800（GPU 锚点隐藏生效，mgl 67 placed 对齐待校准）；icon 回归 14/15 保持（use-theme 原有）。
+
+**下会话 ROI**：① 真深度下的 fade/锚点 verdict 校准（near/far 实源=viewRanges.maximum、eps 按距离换算）——before-3d 冲刺（GPU 隐藏已生效，差的是 verdict 精度）；② data-driven fade 重校（真实深度下的 multisample 语义）；③ 全量 462 基线复核（深度管线改动面大）。
