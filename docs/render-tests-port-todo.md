@@ -5504,3 +5504,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **排除法终态**：visible ✓ / frustumCulled=false ✓ / 位置与卫星重叠 ✓ / 几何健康 ✓ / 场景身份 ✓ / 相对化 ✓ —— **mesh 级原因全部排除**，矛盾（onBeforeCompile 零调用=从未提交 GL）收敛至 **renderer 提交层**：layers 掩码/sortObjects 次序/材质静默失败/或场景遍历时刻差异。**下会话单点 = karma --debug 断 WebGLRenderer.render 的 projectObject 对该 mesh 的分支**（为何被跳过）。
 
 **下会话 ROI**：① karma --debug 渲染列表断点（§452 曾用同法终局 extrusion 悬案）；② 锚点 verdict BOTH 15→67；③ 3 例基线采样回归。
+
+**§478. 会话续记——渲染提交层悬念告破（PO 探针）+ 卫星真身定性**：
+
+**重大反转**：直插 three `projectObject`（临时补丁 node_modules，已完整还原 pristine——中途三处手工清除致文件损坏，npm pack 0.178.0 重取修复，事故记档：硬链接连坐殃及 sibling 项目同 inode）实证：**地形 mesh 每帧 4464 次通过 projectObject 提交（frustumPass=true / matVisible=true / 16641 verts / matrixOK）——§477 "从未提交 GL" 定性推翻，地形一直都在渲染**！onBeforeCompile 零调用系探针时序伪影。
+
+**卫星真身**：隐藏平面 quad（同平面覆盖假设）四件套不变——卫星主源为 **composite raster tile 管线**（TileObjectsRenderer 逐瓦片），非单 quad。**地形可见性问题重定性：DEM 面渲染但被 raster tiles 覆盖（或 z-fight）——修复方向 = 地形激活时 raster 层走 drape（隐藏 raster tiles，drape bake 承载卫星）**。
+
+**环境健康复核**：three pristine 还原后 6 passed（icon-color/default、literal、image-expression 等），已知失败值带不变（use-theme 119 / dd 71009 / before 7799 / setProperty 16278）。
+
+**下会话 ROI**：① 地形激活时 gate raster tile 层（drape 承载卫星）——四件套外观差主攻；② 锚点 verdict BOTH 15→67；③ 3 例基线采样回归。
