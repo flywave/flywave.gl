@@ -302,6 +302,44 @@ export class TerrainDraping {
                 const camera = buildTileCamera(tile, (this.m_mapView as any).camera?.position);
                 if (!camera) continue;
 
+                // §488 fix (route 1): raster fill geometry carries LARGE
+                // tile-local coordinates on top of object.position (double
+                // offset) — the tile-aligned camera misses it by ~1.5 tiles.
+                // Widen the ortho window to the fills' ACTUAL matrixWorld
+                // bounds (union with the tile) so the bake captures them.
+                const camAbs3 = this.m_mapView.camera.position;
+                if ((this as any).__mbFillBounds === undefined) {
+                    const bb = new (require('three')).Box3();
+                    const V3b = (require('three')).Vector3;
+                    this.m_mapView.scene.traverse((o: any) => {
+                        if (!o.isMesh || !o.visible || !o.userData?.technique?._isRaster) return;
+                        o.geometry.computeBoundingBox?.();
+                        const gbb = o.geometry.boundingBox;
+                        if (!gbb) return;
+                        bb.union(gbb.clone().applyMatrix4(o.matrixWorld));
+                    });
+                    (this as any).__mbFillBounds = bb.isEmpty()
+                        ? null
+                        : { minX: bb.min.x + camAbs3.x, maxX: bb.max.x + camAbs3.x,
+                            minY: bb.min.y + camAbs3.y, maxY: bb.max.y + camAbs3.y };
+                }
+                const fb = (this as any).__mbFillBounds as
+                    { minX: number; maxX: number; minY: number; maxY: number } | null;
+                if (fb) {
+                    // World-absolute fill bounds → camera-relative frame.
+                    const relMinX = Math.min(camera.left, fb.minX - camAbs3.x);
+                    const relMaxX = Math.max(camera.right, fb.maxX - camAbs3.x);
+                    const relMinY = Math.min(camera.bottom, fb.minY - camAbs3.y);
+                    const relMaxY = Math.max(camera.top, fb.maxY - camAbs3.y);
+                    camera.left = relMinX; camera.right = relMaxX;
+                    camera.bottom = relMinY; camera.top = relMaxY;
+                    const cx2 = (relMinX + relMaxX) / 2;
+                    const cy2 = (relMinY + relMaxY) / 2;
+                    camera.position.set(cx2, cy2, 6000);
+                    camera.lookAt(cx2, cy2, 0);
+                    camera.updateProjectionMatrix();
+                }
+
                 if ((globalThis as any).__mbOccDbg && !(globalThis as any).__mbFillProj) {
                     (globalThis as any).__mbFillProj = 1;
                     const V3 = (require('three')).Vector3;
