@@ -706,6 +706,21 @@ export class MBTileDataEmitter {
         const l = layer.layout;
         const props: Record<string, any> = {};
 
+        // mgl hasOcclusionOpacityProperties: the layer EXPLICITLY set an
+        // occlusion-opacity property (raw paint presence — the evaluated
+        // paint always carries the default 0). paintDefs distinguishes the
+        // two: a defaulted key is {type:'constant', value === default}; an
+        // explicit constant or expression differs.
+        {
+            const defs = (layer as any).paintDefs ?? {};
+            const explicit = (k: string) =>
+                defs[k] !== undefined &&
+                (defs[k].type === 'expression' || defs[k].value !== defs[k].default);
+            props._occlusionExplicit =
+                explicit('icon-occlusion-opacity') || explicit('text-occlusion-opacity') ||
+                explicit('line-occlusion-opacity') || explicit('circle-occlusion-opacity');
+        }
+
         switch (layer.type) {
             case 'background':
                 props.technique = 'fill';
@@ -944,6 +959,14 @@ export class MBTileDataEmitter {
                     }
                     props._iconHaloWidth = p['icon-halo-width'] ?? 0;
                     props._iconHaloBlur = p['icon-halo-blur'] ?? 0;
+                    // icon-occlusion-opacity (per-feature evaluated; 1 = no
+                    // fade for layers that never set the property — the
+                    // evaluated paint default is 0, which would hide every
+                    // icon). PoiBuilder → PoiInfo.iconOcclusionOpacity →
+                    // per-value batch split → patcher fade uniform.
+                    props._iconOcclusionOpacity = props._occlusionExplicit
+                        && typeof p['icon-occlusion-opacity'] === 'number'
+                        ? p['icon-occlusion-opacity'] : 1;
                     // Mapbox `icon-rotate` (degrees, clockwise). The PoiRenderer
                     // rotates the icon quad corners around the symbol point.
                     props._iconRotate = l['icon-rotate'] ?? 0;

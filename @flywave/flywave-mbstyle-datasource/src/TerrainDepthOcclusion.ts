@@ -3,23 +3,27 @@ import { MapView, MapViewEventNames } from '@flywave/flywave-mapview';
 import { TerrainController } from './TerrainController';
 
 /**
- * Soft depth occlusion for terrain (design-terrain-draping.md Scheme A).
+ * Soft depth occlusion for terrain + 3D structures (design-terrain-draping.md
+ * Scheme A, extended to building depth).
  *
- * Each frame, before the main draw (WillRender event), renders the terrain
- * meshes only to a WebGLRenderTarget whose DepthTexture captures the terrain's
- * depth. That depth texture is then sampled in circle/symbol fragment shaders
- * so labels behind hills fade out smoothly instead of popping.
+ * Each frame, before the main draw (WillRender event), renders the occluder
+ * meshes only — terrain meshes (when present) plus extruded-polygon/building
+ * tile objects — to a WebGLRenderTarget whose DepthTexture captures their
+ * depth. That depth texture is then sampled in circle/symbol/line fragment
+ * shaders so content behind hills or buildings fades out smoothly instead of
+ * popping.
  *
  * Uses only public MapView APIs: WillRender event + renderer/scene/camera
  * getters + three.js native DepthTexture. No engine source changes required.
  *
- * Reference: mapbox-gl-js Painter.blitDepth() + _prelude_terrain isOccluded().
+ * Reference: mapbox-gl-js Painter.blitDepth() + _prelude_terrain
+ * isOccluded(); symbol DEPTH_OCCLUSION against the 3D depth buffer.
  */
 export class TerrainDepthOcclusion {
     private m_depthTarget: THREE.WebGLRenderTarget | null = null;
     private m_depthTexture: THREE.DepthTexture | null = null;
     private m_mapView: MapView;
-    private m_terrain: TerrainController;
+    private m_terrain: TerrainController | null;
     private m_active = false;
     private m_width = 0;
     private m_height = 0;
@@ -28,7 +32,8 @@ export class TerrainDepthOcclusion {
     private m_consumerMaterials: Set<THREE.Material> = new Set();
     private m_uniformName: string;
 
-    constructor(mapView: MapView, terrain: TerrainController, uniformName = 'u_terrainDepth') {
+    constructor(mapView: MapView, terrain: TerrainController | null, uniformName = 'u_terrainDepth',
+                private m_includeExtrusions = false) {
         this.m_mapView = mapView;
         this.m_terrain = terrain;
         this.m_uniformName = uniformName;
@@ -144,21 +149,41 @@ export class TerrainDepthOcclusion {
         if (!renderer || !this.m_depthTarget) return;
         this.ensureTarget();
 
-        // Collect terrain meshes from the scene. They live under mapView.scene
-        // (sceneRoot children). We temporarily hide non-terrain objects, render
-        // terrain-only depth, then restore visibility.
+        // Collect occluder meshes from the scene: terrain meshes (live under
+        // mapView.scene) plus extruded-polygon/building tile objects. mgl's
+        // occlusion depth buffer (blitDepth) covers terrain AND 3D structures,
+        // so symbols/lines/circles fade behind buildings too. We temporarily
+        // hide every other tile object, render occluder-only depth, then
+        // restore visibility.
         const scene = this.m_mapView.scene;
         const camera = this.m_mapView.camera;
 
-        const terrainSet = new Set<THREE.Object3D>(this.m_terrain.meshes);
+        const terrainSet = new Set<THREE.Object3D>(this.m_terrain?.meshes ?? []);
+        const isOccluder = (obj: THREE.Object3D): boolean => {
+            if (terrainSet.size > 0) {
+                let p: THREE.Object3D | null = obj;
+                while (p) {
+                    if (terrainSet.has(p)) return true;
+                    p = p.parent;
+                }
+            }
+            // 3D extrusions/buildings: the same technique the patcher's
+            // registerShadowCaster / extrusion patches key off. Only in the
+            // building-occlusion mode (no terrain): mgl's terrain-mode symbol
+            // occlusion samples terrain depth only, so terrain mode keeps the
+            // historical terrain-only pass.
+            if (!this.m_includeExtrusions) return false;
+            const tech = (obj as any).userData?.technique;
+            return tech?.name === 'extruded-polygon';
+        };
         const hidden: THREE.Object3D[] = [];
         scene.traverse((obj: THREE.Object3D) => {
-            if ((obj as any).isMesh && !terrainSet.has(obj) && obj.visible) {
+            if ((obj as any).isMesh && obj.visible && !isOccluder(obj)) {
                 // Walk up: only hide top-level tile objects, not lights/cameras.
                 let isTileObject = false;
                 let p: THREE.Object3D | null = obj;
                 while (p) {
-                    if (terrainSet.has(p)) { isTileObject = false; break; }
+                    if (isOccluder(p)) { isTileObject = false; break; }
                     p = p.parent;
                     if (p === scene) { isTileObject = true; break; }
                 }

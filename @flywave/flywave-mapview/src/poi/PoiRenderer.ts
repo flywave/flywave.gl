@@ -316,12 +316,22 @@ export class PoiBatchRegistry {
             };
         }
 
+        // Mapbox icon-occlusion-opacity (private-prefixed technique prop from
+        // the mbstyle emitter, evaluated per feature): split the batch per
+        // occlusion value so each batch's shared IconMaterial can carry its
+        // own occlusion fade uniform. 1 = no occlusion fade (default).
+        const iconOcclusionOpacity = typeof (poiInfo as any).iconOcclusionOpacity === "number"
+            ? (poiInfo as any).iconOcclusionOpacity
+            : 1;
+        batchKey += `#o${iconOcclusionOpacity.toFixed(3)}`;
+
         let batch = this.m_batchMap.get(batchKey);
 
         if (batch === undefined) {
             batch = new PoiBatch(this.m_rendererCapabilities, imageItem, () => {
                 this.deleteBatch(batchKey);
             }, haloParams);
+            (batch as any).m_material.userData.mbOcclusionOpacity = iconOcclusionOpacity;
             this.m_batchMap.set(batchKey, batch);
         }
 

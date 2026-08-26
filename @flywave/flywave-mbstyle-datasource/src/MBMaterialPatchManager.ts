@@ -38,9 +38,22 @@ export class MBMaterialPatchManager {
     private m_depthOcclusion = false;
     /** Depth texture from terrain (Scheme A soft fade); null = Scheme C only. */
     private m_depthTexture: THREE.DepthTexture | null = null;
+    /**
+     * Building-only occlusion mode (no terrain): the depth texture carries
+     * extrusion/building depth, and — per mgl draw_symbol setOcclusionDefines —
+     * only layers that EXPLICITLY set an occlusion-opacity property consume
+     * the fade (technique._occlusionExplicit). Without this flag every
+     * symbol would hide behind buildings, which mgl never does by default.
+     */
+    private m_buildingOcclusion = false;
 
     constructor(dataSource: MBStyleDataSource) {
         this.m_dataSource = dataSource;
+    }
+
+    /** Enable building-only occlusion mode (no terrain; occlusion props present). */
+    setBuildingOcclusion(active: boolean): void {
+        this.m_buildingOcclusion = active;
     }
 
     /**
@@ -119,6 +132,8 @@ export class MBMaterialPatchManager {
             this.patchTile(tile);
             this.m_patchedTiles.set(tile, { patched: true, objectCount: tile.objects.length });
         }
+
+        this.patchPoiBatchMaterials();
     }
 
     private patchTile(tile: any): void {
@@ -144,6 +159,67 @@ export class MBMaterialPatchManager {
     }
 
     /**
+     * icon-occlusion-opacity on POI batch materials. Icons render through the
+     * engine's PoiRenderer (one IconMaterial per icon batch, NOT tile
+     * objects), so patchTile never sees them. The batch registry splits
+     * batches per occlusion value (PoiBatchRegistry.registerPoi); each
+     * material's userData.mbOcclusionOpacity carries its fade target
+     * (1 = layer never set the property → no fade, matching mgl's
+     * absent-value semantics for building occlusion).
+     */
+    private patchPoiBatchMaterials(): void {
+        if (!this.m_depthOcclusion || !this.m_depthTexture) return;
+        const mapView = (this.m_dataSource as any).mapView;
+        const registry = mapView?.textElementsRenderer?.m_poiRenderer?.m_poiBatchRegistry;
+        const batchMap: Map<string, any> | undefined = registry?.m_batchMap;
+        if (!batchMap) return;
+        const depthTex = this.m_depthTexture;
+        const canvas = mapView?.canvas;
+        const invSize = new THREE.Vector2(
+            1 / Math.max(1, canvas?.width ?? 1),
+            1 / Math.max(1, canvas?.height ?? 1),
+        );
+        for (const batch of batchMap.values()) {
+            const material = (batch as any).m_material as THREE.Material | undefined;
+            if (!material || (material as any).__mbPoiOcclusionPatched) continue;
+            (material as any).__mbPoiOcclusionPatched = true;
+            const occlusionOpacity = (material as any).userData?.mbOcclusionOpacity;
+            if (typeof occlusionOpacity !== 'number' || occlusionOpacity >= 1) continue;
+            const origOnCompile = material.onBeforeCompile;
+            material.onBeforeCompile = (shader: any) => {
+                if (origOnCompile) origOnCompile.call(material, shader);
+                shader.uniforms.u_terrainDepth = { value: depthTex };
+                shader.uniforms.u_terrainDepthInvSize = { value: invSize };
+                shader.uniforms.uMBPoiOcclusionOpacity = { value: occlusionOpacity };
+                // IconMaterial is a RawShaderMaterial with plain GLSL (no
+                // three includes): declare uniforms + a fade helper before
+                // main() and call it at both gl_FragColor writes.
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'void main() {',
+                    `uniform sampler2D u_terrainDepth;
+                     uniform vec2 u_terrainDepthInvSize;
+                     uniform float uMBPoiOcclusionOpacity;
+                     void mbPoiOccFade() {
+                         float mbTz = texture2D(u_terrainDepth, gl_FragCoord.xy * u_terrainDepthInvSize).r;
+                         float mbOcclude = smoothstep(-0.002, 0.002, gl_FragCoord.z - mbTz);
+                         gl_FragColor.a *= mix(1.0, uMBPoiOcclusionOpacity, mbOcclude);
+                     }
+                     void main() {`
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'gl_FragColor = color;',
+                    'gl_FragColor = color; mbPoiOccFade();'
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'gl_FragColor = vec4(rgb, alpha);',
+                    'gl_FragColor = vec4(rgb, alpha); mbPoiOccFade();'
+                );
+            };
+            material.needsUpdate = true;
+        }
+    }
+
+    /**
      * icon-occlusion-opacity / text-occlusion-opacity (mgl symbol
      * DEPTH_OCCLUSION define, draw_symbol.js setOcclusionDefines): with
      * terrain depth occlusion active, fade fragments behind the terrain
@@ -159,6 +235,9 @@ export class MBMaterialPatchManager {
     private patchSymbolOcclusion(obj: THREE.Object3D, technique: any): void {
         if (!this.m_depthOcclusion || !this.m_depthTexture) return;
         if (technique?.name !== 'labeled-icon' && technique?.name !== 'text') return;
+        // Building-only mode: fade only when the layer explicitly set an
+        // occlusion property (mgl hasOcclusionOpacityProperties).
+        if (this.m_buildingOcclusion && !technique._occlusionExplicit) return;
         const material = (obj as any).material as THREE.Material | undefined;
         if (!material || (material as any).__mbOcclusionPatched) return;
         (material as any).__mbOcclusionPatched = true;
@@ -743,7 +822,7 @@ export class MBMaterialPatchManager {
                 if (technique._isHeatmap) {
                     this.patchHeatmapMaterial(material, technique);
                 } else {
-                    this.patchCircleMaterial(material, paint);
+                    this.patchCircleMaterial(material, paint, technique);
                 }
                 break;
             case 'extruded-polygon':
@@ -2079,7 +2158,11 @@ export class MBMaterialPatchManager {
         // line-occlusion-opacity (see the emitter's renderOrder lift for the
         // mgl re-draw semantics).
         const lineOcclusionOpacity = Number(paint['line-occlusion-opacity'] ?? 0);
-        const hasOcclusion = this.m_depthOcclusion && this.m_depthTexture && lineOcclusionOpacity >= 0;
+        // Building-only mode: only layers that explicitly set an occlusion
+        // property fade (mgl gates line occlusion the same way as symbols).
+        const occlusionAllowed = !this.m_buildingOcclusion || !!technique?._occlusionExplicit;
+        const hasOcclusion = this.m_depthOcclusion && this.m_depthTexture
+            && occlusionAllowed && lineOcclusionOpacity >= 0;
         if (hasTranslate || hasGradient || hasBorderGradient || patternTex || hasEmissive || hasTrim || hasOcclusion) {
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
@@ -2262,7 +2345,7 @@ export class MBMaterialPatchManager {
         }
     }
 
-    private patchCircleMaterial(material: THREE.Material, paint: any): void {
+    private patchCircleMaterial(material: THREE.Material, paint: any, technique?: any): void {
         // CirclePointsMaterial is a RawShaderMaterial writing gl_FragColor
         // directly (no colorspace_fragment encode): three's default color
         // conversion to linear working space darkens mid-tones (green
@@ -2297,7 +2380,7 @@ export class MBMaterialPatchManager {
 
         // Terrain depth occlusion: test circles against terrain depth so those
         // behind hills are hidden (terrain renders first, writes depth).
-        if (this.m_depthOcclusion) {
+        if (this.m_depthOcclusion && (!this.m_buildingOcclusion || !!technique?._occlusionExplicit)) {
             (material as any).depthTest = true;
             modified = true;
         }
@@ -2335,7 +2418,8 @@ export class MBMaterialPatchManager {
         // Scheme A: soft depth fade. When a terrain DepthTexture is available,
         // sample it at the fragment's screen position and fade alpha when behind
         // terrain. Falls back to Scheme C (hard depthTest) when no texture.
-        if (this.m_depthOcclusion && this.m_depthTexture) {
+        if (this.m_depthOcclusion && this.m_depthTexture
+            && (!this.m_buildingOcclusion || !!technique?._occlusionExplicit)) {
             const depthTex = this.m_depthTexture;
             const canvas = (this.m_dataSource as any).mapView?.canvas;
             const invSize = new THREE.Vector2(

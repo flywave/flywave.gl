@@ -223,7 +223,14 @@ export class PoiBuilder {
             iconMinZoomLevel: this.m_iconMinZoomLevel,
             iconMaxZoomLevel: this.m_iconMaxZoomLevel,
             textMinZoomLevel: this.m_textMinZoomLevel,
-            textMaxZoomLevel: this.m_textMaxZoomLevel
+            textMaxZoomLevel: this.m_textMaxZoomLevel,
+            // Mapbox icon-occlusion-opacity (mbstyle emitter private prop,
+            // per-feature evaluated). PoiBatchRegistry splits batches per
+            // value; the mbstyle patcher injects the depth fade uniform.
+            iconOcclusionOpacity:
+                typeof getPropertyValue((technique as any)._iconOcclusionOpacity, env) === "number"
+                    ? (getPropertyValue((technique as any)._iconOcclusionOpacity, env) as number)
+                    : 1
         };
 
         return poiInfo;

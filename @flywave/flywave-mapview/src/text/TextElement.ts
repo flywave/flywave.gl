@@ -153,6 +153,13 @@ export interface PoiInfo {
     iconMaxZoomLevel?: number;
 
     /**
+     * Mapbox `icon-occlusion-opacity` (per-feature evaluated, mbstyle).
+     * Splits POI batches by value; the mbstyle patcher turns it into a depth
+     * fade uniform on the batch material. 1 = no occlusion fade (default).
+     */
+    iconOcclusionOpacity?: number;
+
+    /**
      * Minimum zoomLevel at which to display the label text. No default.
      */
     textMinZoomLevel?: number;

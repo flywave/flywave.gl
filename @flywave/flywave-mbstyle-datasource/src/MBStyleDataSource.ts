@@ -1908,6 +1908,34 @@ export class MBStyleDataSource extends TileDataSource {
             }
         }
 
+        // Building depth occlusion without terrain (mgl draw_symbol
+        // setOcclusionDefines: a layer carrying an occlusion-opacity property
+        // gets DEPTH_OCCLUSION even without terrain — its symbols/lines fade
+        // against the 3D building depth). Render an extrusions-only depth
+        // texture and expose it to consumers; only layers that explicitly set
+        // an occlusion property consume the fade (see the patcher's
+        // _occlusionExplicit gate), so plain fixtures stay pixel-identical.
+        if (this.mapView && !style.terrain && this.m_materialPatcher) {
+            const hasOcclusionProps = (style.layers ?? []).some((l: any) => l.paint &&
+                ('icon-occlusion-opacity' in l.paint || 'text-occlusion-opacity' in l.paint ||
+                 'line-occlusion-opacity' in l.paint || 'circle-occlusion-opacity' in l.paint));
+            if (hasOcclusionProps) {
+                try {
+                    const { TerrainDepthOcclusion } = await import('./TerrainDepthOcclusion');
+                    this.m_depthOcclusion?.dispose();
+                    this.m_depthOcclusion = new TerrainDepthOcclusion(
+                        this.mapView, null, 'u_terrainDepth', true);
+                    this.m_depthOcclusion.start();
+                    this.m_materialPatcher.setBuildingOcclusion(true);
+                    this.m_materialPatcher.setDepthOcclusion(true);
+                    if (this.m_depthOcclusion.depthTexture) {
+                        this.m_materialPatcher.setDepthTexture(this.m_depthOcclusion.depthTexture);
+                    }
+                    this.m_materialPatcher.invalidate();
+                } catch {}
+            }
+        }
+
         if (this.m_environment && this.m_rasterTileUrl) {
             const rasterLayer = (style.layers ?? []).find((l: any) => l.type === 'raster');
             const rasterPaint = (rasterLayer as any)?.paint ?? {};
