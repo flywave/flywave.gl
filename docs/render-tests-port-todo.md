@@ -5339,3 +5339,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **实测（01014e25）**：occlusion/data-driven 88653→**71107**、no-occlusion-after 43058→**26171**、before 75461→70589。icon 域回归 14/16 保持（icon-color/use-theme 119、icon-opacity/icon-only 1802 均原有失败，后者还微降）。本会话 occlusion 累计（§455 起）：555k→71k（−87%）。
 
 **剩余**：data-driven 71.1k 与 setProperty 16.3k——mgl 遮蔽图标在暗底上近似无图标，presence 启发式无法进一步分辨碰撞子集差；需 dump exp 侧真实图标集合（mgl 参照渲染器 pr 落盘 §420 配方）或碰撞盒 anchor/offset 语义逐点核对。**下会话 ROI**：① mgl 参照渲染器落盘 icon 位置集合做精确对拍；② text distanceScale 同样试点 0.5（text 域 pitch>0 夹具）；③ 全量 462 基线复核（distanceScale 影响面）。
+
+**§461. 会话续记——mgl 真值对拍 + 锚点级 occlusion 硬淘汰（commit aa5ab965）**：
+
+**mgl 参照渲染器复活**：§420 配方遇全树陈旧编译 .js 遮蔽 .ts（不止 html_generator）——批量移出 src/ 479 个 + test/ 3 个 js/d.ts（有同名 .ts 者，备份 /tmp/mgl-stale-js）+ rollup dev 重建后 vitest 可跑。插桩 placeIconFeature（placement_algorithms/default.ts）+ Placement.commit 尾部 dump → `[MBGLIconDump]`（per tile/feature：屏幕盒+placeIcon 判定）。
+
+**真值对拍（data-driven 夹具）**：mgl **305 实例仅 80 placed（74% 淘汰）**；位置匹配混淆矩阵 BOTH=39 / mglOnly=41 / curOnly≈98。**根因**：mgl `placeCollisionBox` 的 `isClipped`（pitch>0 时 projectAndGetPerspectiveRatio 对锚点做遮挡测试）——**锚点被建筑遮挡的符号整体淘汰**（连 occlusion-opacity 都不fade）；我们按 0.25/0.7 alpha 渲染这些幽灵图标（curOnly 98），且它们的碰撞盒又错杀 mgl 显示的图标（mglOnly 41 的 blocker 分析：5/6 blocker 是 mgl 不显示的幽灵）。
+
+**修复（aa5ab965）**：fade 判定采样点移至图标中心（`fwidth(vUv)` 把 UV 中心投影回屏幕，全 fragment 一致 = mgl per-symbol 顶点级语义）；vis=0（锚点全遮）→ alpha=0 硬淘汰。实测 data-driven 71107→**70097**；no-occlusion-after 26171→28418（回退观察，该族或涉 before/after-3d 时序）；before/setProperty/terrain 持平。icon 域回归 15/16 保持（唯一失败=原有 icon-color/use-theme 119）。
+
+**下会话 ROI**：① no-occlusion-after 回退排查（锚点淘汰 vs 该族 mgl 行为的出入）；② mglOnly=41 残余（blocker 语义/盒 anchor-offset 精确对齐，现真值管线已打通可迭代）；③ occlusion 24 例全批 + 转绿冲刺（当前最优 70097/28418/70589/16278）。
