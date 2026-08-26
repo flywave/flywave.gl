@@ -5514,3 +5514,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **环境健康复核**：three pristine 还原后 6 passed（icon-color/default、literal、image-expression 等），已知失败值带不变（use-theme 119 / dd 71009 / before 7799 / setProperty 16278）。
 
 **下会话 ROI**：① 地形激活时 gate raster tile 层（drape 承载卫星）——四件套外观差主攻；② 锚点 verdict BOTH 15→67；③ 3 例基线采样回归。
+
+**§479. 会话续记——raster gate 首试超时回退（WIP 入 stash）**：
+
+**实施**：TerrainDraping 双事件栅格门控——WillRender 隐藏 `_isRaster` tile 对象（主渲染不画平面 raster），bakeAll 复显烘入 drape、finally 重隐。**实测超时回退**：单测 36s（正常 2-5s）175s 仅完成 1/4——疑隐藏对象触发引擎 tile 重解码循环（不可见→视为失败→重试），或 bake 每帧化。WIP stash（stash@{0}），代码已验证编译通过。
+
+**稳定态复核**：stash 后 5 passed（icon-color 全族 + literal）/ 5 failed 均已知值带（use-theme 119、dd 72938、before 7799、setProperty 16278、terrain 16277）——环境健康。
+
+**下会话 ROI**：① gate 换路由——不动对象可见性（避重解码循环），改 patcher 端 raster 材质 `visible=false`+`needsUpdate` 或 tileVisibilityFilter 域内过滤；② 锚点 verdict；③ 3 例基线回归。
