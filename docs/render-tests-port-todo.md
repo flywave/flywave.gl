@@ -5556,3 +5556,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **主渲染为何曾正常**（§480 前）：主渲染相机 far=1e6，位移后仍在范围内。**修复方向**：injectTerrainDrape 的 mbWP 需转绝对系（顶点着色器无相机位 uniform，可经 mapView.camera.position 每帧注入或 origin 改用相对基准）——一次换算即通。
 
 **下会话 ROI**：① injectTerrainDrape 坐标系修复 → bake 含卫星 → USE_DRAPE 上屏验证；② 外观基调校准（mean 249 vs 177）；③ 锚点 verdict BOTH 15→67；④ 3 例基线回归。
+
+**§484. 会话续记——RTE 换算 uniform 修正（bake 仍黑，回归零损失）**：
+
+**修正**：`cameraPosition`（three 内建）实证为**渲染相机**——主渲染 RTE 相机在原点、bake 相机在 tile 相对位，均非绝对世界偏移 → 改专用 `uMBRteCamPos`（mapView.camera.position，编译期注入）。单/多 tile 两变体同步。
+
+**实测**：bake 仍 9/9 黑（fill 可见 5 个但零输出）——**坐标系修正必要但不充分**。下一断点收窄至：fill 在 bake ortho 相机下的实际投影位置（顶点被 DEM 位移后出窗 or modelMatrix 错位），一行投影插桩即判。
+
+**回归**：7 passed（icon 全族/literal/terrain/fog），use-theme 119、dd 71928、before 7799 均已知值带——零回归。
+
+**下会话 ROI**：① fill bake 投影断点（buildTileCamera 下 fill 包围盒 NDC）；② 通后外观校准；③ 锚点 verdict；④ 3 例基线回归。
