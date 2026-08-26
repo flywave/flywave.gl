@@ -5548,3 +5548,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **会话规模提醒**：本会话已 29 阶段（§454-§482），25k+ 秒。建议下会话从本记档冷启动，优先完成此一断点（fill bake 输出）后即进入四件套外观校准。
 
 **下会话 ROI**：① fill bake 输出断点（材质插桩一行：fragment 颜色/alpha 输出值）；② 外观基调校准；③ 锚点 verdict；④ 3 例基线回归。
+
+**§483. 会话续记——fill bake 全黑头号嫌疑定位（顶点 DEM-drape 坐标系错配）**：
+
+**代码链分析**：raster fill 材质带 `injectTerrainDrape`（顶点级 DEM 位移）——`mbWP = modelMatrix * transformed` 为**相机相对系**（RTE，~±15k），而 `uMBDrapeOrigin/Size` 为**世界绝对系**（~7.4e6）——`(mbWP − origin)/size` 恒为巨大负值 → clamp 到 (0,0) 边缘 → 采样边缘 DEM 值 × exaggeration 位移 z。在 bake 的 ortho 相机（z=6000 窗口 1..12000）下，错误位移大概率把 fill 顶出视锥 → **9/9 bake 全黑**。
+
+**主渲染为何曾正常**（§480 前）：主渲染相机 far=1e6，位移后仍在范围内。**修复方向**：injectTerrainDrape 的 mbWP 需转绝对系（顶点着色器无相机位 uniform，可经 mapView.camera.position 每帧注入或 origin 改用相对基准）——一次换算即通。
+
+**下会话 ROI**：① injectTerrainDrape 坐标系修复 → bake 含卫星 → USE_DRAPE 上屏验证；② 外观基调校准（mean 249 vs 177）；③ 锚点 verdict BOTH 15→67；④ 3 例基线回归。
