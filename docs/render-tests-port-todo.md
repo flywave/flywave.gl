@@ -5317,3 +5317,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **实测**：occlusion/data-driven 87896→**86509**、no-occlusion-after 46470→**44151**、before 77780→**75461**（碰撞生效：206 图标条目隐藏 69）。setProperty/terrain 16.3k 持平——该族疑设 allow-overlap（碰撞惰性），残差另源。**回归**：采样 7 个已过 text/icon 夹具 7/7 保持（icon-color/default、icon-image/literal 等仍 PASS）。
 
 **残余定性**：碰撞集合已接近但逐图标位置差仍在——mgl 放置顺序（viewport-y bucket 序 + tile/feature 序 + symbol-sort-key）与我方 priority=el.priority+数组序不同，同密度下淘汰的具体子集不同。**下会话 ROI**：① 放置顺序对齐（placement.getPlacementOrder/viewport-y bucket 复刻）；② setProperty 16.3k 族残差定位（非碰撞）；③ 全量 462 基线复核（碰撞常开的面影响）。
+
+**§459. 会话续记——碰撞放置顺序 mgl 化（commit 72fbc74a）**：
+
+**mgl 顺序链定案（pauseable_placement.ts + default.ts 源码）**：① 图层**逆序**（`_currentPlacementIndex = order.length−1` 递减，后层先放置先占位）；② bucket parts 按 symbol-sort-key **升序**（未设置时保持桶内 feature 序）；③ tile 序 = overscaledZ 降序（Y 序仅 z-elevate/viewport-y 路径）；④ placeCollisionBox **任意相交即拒**——无优先级闯入，顺序即胜负。
+
+**落地（72fbc74a）**：entries 排序 = 层逆序（`floor(_renderOrder)`，textLift 不扰动）→ 显式 `_symbolSortKey` 升序（technique 暂存；弃 el.priority——引擎 TextElement 有非零默认值污染序）；canPlace 改任意相交即拒；图标碰撞盒补 devicePixelRatio（fixture 无 @2x sprite 时 mgl 以 ImageVariant sx=dpr 光栅化，1x JSON 尺寸半幅）。
+
+**实测与震荡记录**：data-driven 在 85905（显式 sortKey）/86509（碰撞常开初版）/88653（严格拒绝+设备像素盒）间震荡——碰撞集合仍非 mgl 精确子集；no-occlusion 对 44151/75461 稳定。**回归**：采样 5 已过夹具（icon-color/default、icon-image/literal、text-max-width/force-newline、text-size/composite-function、text-visibility/none）5/5 保持，零回归。
+
+**残余 ~86k 定性（未终）**：残差签名稳定为"cur 渲染 0.25/0.7 alpha 图标于 exp 无图标处"——碰撞淘汰子集逐图标不一致。已知未对齐点：mgl 碰撞盒的 anchor/offset 语义（icon-offset、textPixelRatio 变换后的盒位置）、tile 内 bucket 实例序、跨瓦片 dedupe（crossTileID）时机。**下会话 ROI**：① 逐图标对拍（occdbg dump 每图标放置坐标+盒，与 expected 图标位置集合做差）定位盒位置差；② setProperty 16.3k 族残差定位；③ 全量 462 基线复核。
