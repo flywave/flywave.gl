@@ -5374,3 +5374,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **实测**：before-3d 69250→**7492**（−89%）；data-driven 70097→**67509** 新低；after 26-31k 噪声带；setProperty 族 16.3k 持平。回归 16/17 保持（use-theme 原有）。occlusion 会话累计：555k→67.5k（−88%）。
 
 **下会话 ROI**：① occlusion 24 例全批（新值带下重估转绿距离）；② setProperty/terrain 16.3k 族（无 occlusion 属性残差定位——疑碰撞/放置差）；③ mglOnly 碰撞盒精确对齐（真值管线）；④ 全量 462 基线复核。
+
+**§464. 会话续记——occlusion 全批重估 + setProperty 族定性（raster-on-terrain 悬垂缺失）**：
+
+**全批 24 例（新值带）**：before-3d **7492**（阈值 577，13×，最接近）；depth-occlusion/line-pattern-no-terrain 1181（阈值 65，18×）；multiline-shadow 2931（阈值 13，225×）；data-driven 68428；after-3d 26171；setProperty/terrain/-terrain-depth/under-depth-occlusion-lines 16.3-16.8k 四件套；model-layer 149k；depth-occlusion line 族 3-19k 持平。
+
+**setProperty 族根因（非碰撞）**：200×100 小图整片灰底——satellite raster + raster-dem terrain 组合，我方 raster 是平面 quad（applyRasterSource）被其上方的灰色 terrain 网格整体覆盖；mgl 将 raster 悬垂到 terrain 表面。**raster-on-terrain draping 引擎级缺口**（卫星纹理→DEM 表面映射），4 件套同根因。卫星瓦片齐全（z9-14 齐备），非数据问题。
+
+**防御性修正**：碰撞可见性仅变化时赋值（每帧重赋 el.visible 重启引擎 fade-in）。
+
+**下会话 ROI**：① before-3d 剩余 7492（13×）——front-of-building 图标集与 mgl anchor-cull 语义差迭代；② raster-on-terrain draping 评估（DEM 表面纹理映射，解锁 4 件套，大工程）；③ depth-occlusion line-pattern 1181（18×）次近转绿目标；④ 全量 462 基线复核。
