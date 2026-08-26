@@ -5590,3 +5590,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **会话终局**：35 阶段（§454-§487）。setProperty 链条最后断点=fill 顶点级投影（非包围球）；occlusion/icon 成果与全部工具管线（occdbg/MBGLIconDump/MBFillProj 等）在库。
 
 **下会话 ROI**：① fill 前 4 顶点 matrixWorld 投影（一行）；② 通后 bake→drape→外观；③ 锚点 verdict；④ 3 例基线回归。
+
+**§488. 会话续记——顶点级终审定案（双重偏移实锤）**：
+
+**MBVtx 探针**（前 4 实际顶点 matrixWorld→bake 相机）：全部 NDC(4.3-5.3, −4.1..−5.1) **真出窗**（z=0.208 在窗）——fill 跨度 ≈1 tile（NDC 宽 1.0≈9784m ✓）但整体位于 o.position 声称位置的 (+12k,−13k) 之外。**定案：fill geometry 局部大坐标（tile-局部构建）与 object.position（tile 中心）双重偏移**——渲染依赖某侧归零才对齐，bake 相机与主渲染对同一 matrixWorld 的解释不同（主渲染有额外 uniform/sceneRoot 补偿）。
+
+**修复方向（二选一）**：① bake 相机 bounds 扩至 fill 实际 matrixWorld 范围（保留 UV 由 fill 内插）；② fill 几何居中化（构建时平移到原点，position 承载全偏移）——②语义更正但动渲染管线的几何约定，①为 bake 局部改动。
+
+**会话终局**：36 阶段（§454-§488）。下会话冷启动：按①实施（bake 相机适配 fill 实际范围）→ bake 含卫星 → USE_DRAPE → 外观校准。
