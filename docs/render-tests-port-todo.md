@@ -5307,3 +5307,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **实测**：data-driven 87896（不触发态）↔90644（触发态），阈值敏感；no-occlusion 对 46470/77780 持平。**残差再定性**：exp29 vs cur78 逐值核算 = cur 图标 0.25 alpha（fade 已生效）而 **mgl 侧该位置根本未放置图标**——残差主源=符号放置/碰撞差异（mgl 碰撞淘汰密集 POI，我方 §440 全放行），非 occlusion 公式。setProperty 16.3k 族同理。
 
 **下会话 ROI**：① 符号放置/碰撞对齐（icon-allow-overlap 缺省时 mgl collision 淘汰，对照 collision_index.js——解锁 occlusion 剩余与 setProperty 族）；② occdbg 阈值 1e-4 微标定（触发态 90644 vs 不触发 87896 的中间值扫描）；③ regressions 剩余 66 例。
+
+**§458. 会话续记——符号碰撞淘汰常开（commit 66c7d740）**：
+
+**结构发现**：`applyMglCollisionVisibility`（§171 建的 mgl 等价碰撞）**只在 collisionDebug 调试模式运行**——常规夹具走引擎宽容放置全放行，正是 §457 定性的"我方全放行"根因。另发现 `run()` 的 `symbols.length===0` 提前 return 旁路了 POI-only 夹具（occlusion 族无 tile 符号对象，碰撞块在其后永不执行）。
+
+**修复（66c7d740）**：碰撞块移至提前 return 之前并常开（碰撞框线绘制仍 debug-only）；碰撞盒 = 真实 sprite 尺寸（atlas 查询）×icon-size + 2×icon-padding(2)（原硬编码 32px）；icon/text 盒各自 allow-overlap（icon-allow-overlap / text-allow-overlap，mgl placement.place.item 语义）。
+
+**实测**：occlusion/data-driven 87896→**86509**、no-occlusion-after 46470→**44151**、before 77780→**75461**（碰撞生效：206 图标条目隐藏 69）。setProperty/terrain 16.3k 持平——该族疑设 allow-overlap（碰撞惰性），残差另源。**回归**：采样 7 个已过 text/icon 夹具 7/7 保持（icon-color/default、icon-image/literal 等仍 PASS）。
+
+**残余定性**：碰撞集合已接近但逐图标位置差仍在——mgl 放置顺序（viewport-y bucket 序 + tile/feature 序 + symbol-sort-key）与我方 priority=el.priority+数组序不同，同密度下淘汰的具体子集不同。**下会话 ROI**：① 放置顺序对齐（placement.getPlacementOrder/viewport-y bucket 复刻）；② setProperty 16.3k 族残差定位（非碰撞）；③ 全量 462 基线复核（碰撞常开的面影响）。
