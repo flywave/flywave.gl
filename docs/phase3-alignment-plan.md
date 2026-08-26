@@ -78,5 +78,23 @@
   注：text 技术若不产生带材质的 tile 对象则不生效（TextCanvas 共享
   材质路径的 per-layer occlusion 为后续项）；cross-source-elevation
   仍未实现。测试按批次延后策略攒批
+- [x] 批次验证（2026-08-26，逐 filter karma 逐字对拍 pre/post）：
+  - slots/ 8 例：3 PASS（missing-slot、inner-slot-before-outer、
+    inner-slot-without-outer）+ 3 FAIL 既有残差（dynamic-insert 12px、
+    layer-without-slot-before-layer-with-slot 52px 前后不变；**set-layer-slot
+    31→15px 改善**）+ 2 skip——零回归、一项改善
+  - occlusion 族 24 例（filter=occlusion，含 depth-occlusion/、
+    occlusion/、occlusion-terrain-depth、debug/terrain 等）：pre/post
+    逐例逐值**完全一致**（24 FAIL 同像素数）——symbol occlusion 消费者
+    零像素效果，根因：这些夹具的遮挡源是 **3D 建筑深度**而
+    TerrainDepthOcclusion 只产地形深度纹理（且多数例无 terrain）。
+    symbol-occlusion 收敛的真正缺口 = 建筑深度 pre-pass（复用
+    MBShadowRenderer/DepthPrePass 基建画 extrusion 深度进遮挡纹理），
+    记为下一批工程项
+  - 单测门禁恢复（3ea25630）：mocha 改指 lib/test 编译产物 + pretest
+    构建；当前 259 passing / 9 failing，9 例经 worktree 对照确认全部
+    为既有漂移（MBMaterialFactory RawShaderMaterial 断言、
+    MBStyleRuntime setPaintProperty、TerrainController 相机、TextShaping
+    justify 等），与 slots/occlusion 批次无关——修复清单另立
 - 后续: vector overscale/sparse 需引擎级父级保留（mgl
   updateRetainedTiles 等价物）、hillshade 家族精度、无背景层黑底合成
