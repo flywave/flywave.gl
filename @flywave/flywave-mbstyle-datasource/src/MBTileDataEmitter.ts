@@ -996,8 +996,12 @@ export class MBTileDataEmitter {
                     // (NOT `mayOverlap`/`reserveSpace`); map `icon-allow-overlap` /
                     // `icon-ignore-placement` onto the native prop names.
                     props.iconMayOverlap = l['icon-allow-overlap'] === true;
-                    // Constant screen size, see the text technique above.
-                    props.distanceScale = 0;
+                    // mgl scales symbols by perspectiveRatio = 0.5 +
+                    // 0.5*(centerDist/pointDist) (symbol.vertex gl_Position w
+                    // division). The engine's factor = 1 + (lookAt/d - 1) *
+                    // distanceScale equals that curve exactly at 0.5. The old
+                    // constant 0 made far icons full-size at high pitch.
+                    props.distanceScale = 0.5;
                     props.mayOverlap = l['icon-allow-overlap'] === true;
                     props.iconReserveSpace = l['icon-ignore-placement'] !== true;
                     props.reserveSpace = l['icon-ignore-placement'] !== true;

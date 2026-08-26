@@ -287,6 +287,16 @@ export class MBStyleSymbolPlacement {
                     if (seen.has(key)) continue;
                     seen.add(key);
 
+                    // mgl placeCollisionBox: every collision box extent is
+                    // scaled by `textPixelRatio * perspectiveRatio`, where
+                    // perspectiveRatio = 0.5 + 0.5 * (cameraToCenter /
+                    // distanceToPoint) — at high pitch far boxes shrink to
+                    // ~0.55x while near ones grow. A constant box size
+                    // mis-judges collisions in BOTH directions.
+                    const camDist = camera.position.distanceTo(el.position);
+                    const centerDist = camera.position.length() || camDist || 1;
+                    const pr = 0.5 + 0.5 * Math.min(2, Math.max(0.5, centerDist / Math.max(camDist, 1e-6)));
+
                     // mgl anchors align the box EDGE to the anchor point plus
                     // text-offset (engine enums: Horizontal Left=0/Center=-0.5/
                     // Right=-1 left-edge fraction; Vertical Above=0/Center=-0.5/
@@ -304,6 +314,8 @@ export class MBStyleSymbolPlacement {
                         else top = sy + dy - h / 2;
                         return [left + w / 2, top + h / 2, w, h];
                     };
+                    const rectScale = (r: [number, number, number, number], f: number) =>
+                        [r[0], r[1], r[2] * f, r[3] * f] as [number, number, number, number];
 
                     let iconRect: [number, number, number, number] | null = null;
                     let textRect: [number, number, number, number] | null = null;
@@ -347,6 +359,8 @@ export class MBStyleSymbolPlacement {
                         ? (poiInfo.technique as any)?._layout?.['icon-allow-overlap'] === true
                           || el.iconMayOverlap === true
                         : false;
+                    if (iconRect && pr !== 1) iconRect = rectScale(iconRect, pr);
+                    if (textRect && pr !== 1) textRect = rectScale(textRect, pr);
                     entries.push({
                         el,
                         sx, sy,
@@ -428,9 +442,29 @@ export class MBStyleSymbolPlacement {
                 if (e.iconRect) withIcon++;
                 if (e.iconRect || e.textRect) { if (!e.el.visible) hidden++; }
             }
+            (globalThis as any).__mbCollFrames = ((globalThis as any).__mbCollFrames ?? 0) + 1;
             // eslint-disable-next-line no-console
             console.log('[MBColl] entries=' + entries.length + ' withIcon=' + withIcon
                 + ' hidden=' + hidden);
+            // Per-icon dump at a late frame (camera static, placements
+            // settled): screen pos, box size, verdict, icon name.
+            if (entries.length >= 200 && !(globalThis as any).__mbCollDumped) {
+                (globalThis as any).__mbCollDumped = true;
+                // eslint-disable-next-line no-console
+                console.log('[MBColl] DUMPING entries=' + entries.length);
+                const dump = entries.map((e) => ({
+                    x: Math.round(e.sx), y: Math.round(e.sy),
+                    w: e.iconRect ? Math.round(e.iconRect[2]) : 0,
+                    h: e.iconRect ? Math.round(e.iconRect[3]) : 0,
+                    vis: !!e.el.visible,
+                    icon: e.el.poiInfo?.technique?.imageTexture ?? '',
+                }));
+                for (let i = 0; i < dump.length; i += 20) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBCollDUMP ' + (i / 20) + '] '
+                        + JSON.stringify(dump.slice(i, i + 20)));
+                }
+            }
         }
         if (this.m_collisionDebug) {
             this.drawCollisionBoxes(renderer, placedBoxes, hiddenBoxes, canvasW, canvasH);
