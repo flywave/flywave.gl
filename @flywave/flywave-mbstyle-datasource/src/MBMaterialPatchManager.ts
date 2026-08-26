@@ -2598,11 +2598,10 @@ export class MBMaterialPatchManager {
         const lightState = (this.m_dataSource as any).m_environment?.extrusionLightState;
         const use3DLights = lightState?.use3DLights === true;
         const emissiveStrength = Number(paint['fill-extrusion-emissive-strength'] ?? 0);
-        if (use3DLights) {
-            // LIGHTING_3D_MODE: mapbox `apply_lighting_with_emission` with the
-            // world-space flat normal (replaces the simple Lambert fallback).
-            this.injectExtrusion3DLighting(material, emissiveStrength);
-        }
+        // (3D lighting injection moved to the END of this method: earlier
+        // placement let later onBeforeCompile assignments in this function
+        // capture a pre-injection chain snapshot, silently dropping the
+        // lighting handler from the final chain.)
         // Viewport-anchored light: mapbox rotates the light position by -bearing
         // (`anchor: viewport`) but never by pitch. The per-fragment flat normal is
         // computed from view-space position derivatives, so we pass both the
@@ -2990,6 +2989,12 @@ export class MBMaterialPatchManager {
                 );
             }
         };
+        // LIGHTING_3D_MODE last: wrapping HERE guarantees the lighting handler
+        // is the OUTERMOST onBeforeCompile — nothing later in this method can
+        // capture a chain snapshot without it.
+        if (use3DLights) {
+            this.injectExtrusion3DLighting(material, emissiveStrength);
+        }
         material.needsUpdate = true;
     }
 
