@@ -94,10 +94,14 @@
   残余谜题收敛为唯一一点：材质链完整（外层 translate handler、
   orig 链含 3D 光照 handler）、version 增长、cache key 变化、
   three 源码证实 cache miss 必调 onBeforeCompile——但执行探针
-  零输出、画面全白。**需 live devtools 断点**（karma --debug 或
-  本地 dev server 手动复现，在 WebGLRenderer.js:2087
-  material.onBeforeCompile 断点观此材质为何绕行）；远程 console
-  取证已穷尽
+  零输出、画面全白。**补充机理发现（本轮）**：three 默认 cache key
+  =最外层 onBeforeCompile.toString()——后包 handler 可复原外层源码
+  使 programs map 命中、修改链永不编译（已加 customProgramCacheKey
+  nonce 防御，见提交）；但 nonce 后 handler 仍零执行——残余嫌疑=
+  引擎按需渲染下对象在补丁后从未再被绘制（或引擎每帧重同步
+  onBeforeCompile/customProgramCacheKey）。**远程 console 取证穷尽，
+  需 live devtools**（karma --debug / 本地 dev server，断点
+  WebGLRenderer.js:2087 + patchMaterial 后材质属性 watch）
   ② icons 仍不可见（sprite/poi_label 数据已在，待 ① 后复测——
   PoiRenderer 批次路径与 extrusion 无关，可独立排查 SpriteAtlas 图名
   {maki}-12 解析）
