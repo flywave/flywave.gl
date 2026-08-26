@@ -1587,6 +1587,25 @@ export class MBStyleDataSource extends TileDataSource {
         // swaps). MUST run BEFORE wireTileSources: tiles decode with the
         // scale baked in. (The terrain branch later in connect() overrides
         // with the DEM-matched factor and its §294 sec² flat path.)
+        // mgl "symbols before 3D": when a symbol layer PRECEDES a
+        // fill-extrusion layer in style order, mgl's painter draws it before
+        // the extrusions and the buildings cover it (depth). Icons render
+        // last here, so the equivalent is depth-testing them against the
+        // buildings' depth. Only when NO occlusion-opacity props exist —
+        // those fixtures use the fade path instead.
+        {
+            const layers = (style.layers ?? []) as any[];
+            const firstSymbol = layers.findIndex(l => l.type === 'symbol');
+            const hasOcclusion = layers.some(l => l.paint &&
+                ('icon-occlusion-opacity' in l.paint || 'text-occlusion-opacity' in l.paint));
+            const extrusionAfter = layers.some((l, i) =>
+                (l.type === 'fill-extrusion' || l.type === 'building') && i > firstSymbol);
+            try {
+                this.decoder.configure(undefined, {
+                    iconDepthTest: firstSymbol >= 0 && extrusionAfter && !hasOcclusion,
+                } as any);
+            } catch {}
+        }
         if (!style.terrain) {
             try {
                 const lat = style.center?.[1] ?? 0;

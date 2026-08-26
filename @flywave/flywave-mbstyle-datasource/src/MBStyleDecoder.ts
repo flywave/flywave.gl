@@ -353,6 +353,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     /** Terrain elevation sampler (world x/y -> meters, exaggeration applied). */
     private m_terrainSampler: ((x: number, y: number) => number) | null = null;
     private m_terrainHeightScale = 1;
+    private m_iconDepthTest = false;
     private m_heightScaleScaleFromTerrainFlag = false;
     private get m_heightScaleFromTerrain(): boolean { return this.m_heightScaleScaleFromTerrainFlag; }
     private set m_heightScaleFromTerrain(v: boolean) { this.m_heightScaleScaleFromTerrainFlag = v; }
@@ -467,6 +468,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
         // §289: sec(lat) factor for style meters → world-z (same scale the
         // sampler bakes into ground elevations).
+        if (customOptions?.iconDepthTest !== undefined) {
+            this.m_iconDepthTest = customOptions.iconDepthTest === true;
+        }
         if (customOptions?.terrainHeightScale !== undefined) {
             this.m_terrainHeightScale = customOptions.terrainHeightScale as number;
             this.m_heightScaleFromTerrain = customOptions.terrainHeightScaleFromTerrain === true;
@@ -559,6 +563,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         // The sec(lat) height factor applies WITHOUT terrain too (mgl
         // meters/tileToMeter) — only the DEM sampler is terrain-gated.
         emitter.setTerrainHeightScale(this.m_terrainHeightScale, this.m_heightScaleFromTerrain);
+        emitter.setIconDepthTest(this.m_iconDepthTest);
         if (this.m_terrainSampler) {
             emitter.setTerrainSampler(this.m_terrainSampler);
         }

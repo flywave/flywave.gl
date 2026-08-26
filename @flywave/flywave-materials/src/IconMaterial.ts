@@ -23,10 +23,13 @@ uniform mat4 projectionMatrix;
 varying vec4 vColor;
 varying vec2 vUv;
 
+varying float vW;
+
 void main() {
     vUv = uv;
     vColor = color;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xyz, 1.0);
+    vW = gl_Position.w;
 }`;
 
 const fragmentSource: string = `
@@ -44,8 +47,16 @@ uniform float uHaloBlur;
 
 varying vec4 vColor;
 varying vec2 vUv;
+varying float vW;
+uniform float uLogDepthBufFC;
 
 void main() {
+#ifdef MB_ICON_DEPTH_TEST
+    // Engine logarithmic depth buffer: write the same encoding the scene
+    // materials produce so depthTest against building depth compares
+    // like-for-like (three logdepthbuf chunk formula).
+    gl_FragDepth = log2(1.0 + vW) * uLogDepthBufFC * 0.5;
+#endif
 
     vec4 tex = texture2D(map, vUv.xy);
 
@@ -95,6 +106,11 @@ export interface IconMaterialParameters extends RendererMaterialParameters {
      * Enable the SDF rendering path (texture alpha = distance field).
      */
     sdf?: boolean;
+    /**
+     * Depth-test icons against the scene depth (mgl "symbols before 3D" —
+     * buildings cover them). Default false (always on top).
+     */
+    depthTest?: boolean;
     /**
      * SDF edge value in the texture (mapbox sprites use 0.75).
      */
@@ -149,9 +165,11 @@ export class IconMaterial extends RawShaderMaterial {
                       uHaloColor: new THREE.Uniform(params.haloColor ?? new THREE.Color(0, 0, 0)),
                       uHaloAlpha: new THREE.Uniform(params.haloAlpha ?? 1),
                       uHaloWidth: new THREE.Uniform(params.haloWidth ?? 0),
-                      uHaloBlur: new THREE.Uniform(params.haloBlur ?? 0)
+                      uHaloBlur: new THREE.Uniform(params.haloBlur ?? 0),
+                      uLogDepthBufFC: new THREE.Uniform(1.0)
                   },
-                  depthTest: false,
+                  defines: params?.depthTest === true ? { MB_ICON_DEPTH_TEST: "" } : undefined,
+                  depthTest: params?.depthTest === true,
                   depthWrite: false,
                   transparent: true,
 

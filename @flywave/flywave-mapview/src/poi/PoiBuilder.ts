@@ -230,7 +230,11 @@ export class PoiBuilder {
             iconOcclusionOpacity:
                 typeof getPropertyValue((technique as any)._iconOcclusionOpacity, env) === "number"
                     ? (getPropertyValue((technique as any)._iconOcclusionOpacity, env) as number)
-                    : 1
+                    : 1,
+            // mgl "symbols before 3D" semantics: a symbol layer placed BEFORE
+            // fill-extrusion layers in style order is covered by the buildings
+            // (depth-tested). The emitter sets the technique flag per style.
+            iconDepthTest: (technique as any)._iconDepthTest === true
         };
 
         return poiInfo;

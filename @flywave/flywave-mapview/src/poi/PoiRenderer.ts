@@ -114,7 +114,8 @@ class PoiBatch {
         private readonly m_rendererCapabilities: THREE.WebGLCapabilities,
         readonly imageItem: ImageItem,
         private readonly m_onDispose: () => void,
-        haloParams?: { haloColor?: THREE.Color; haloAlpha?: number; haloWidth?: number; haloBlur?: number }
+        haloParams?: { haloColor?: THREE.Color; haloAlpha?: number; haloWidth?: number; haloBlur?: number },
+        depthTest: boolean = false
     ) {
         // Texture images should be generated with premultiplied alpha
         const premultipliedAlpha = true;
@@ -147,6 +148,7 @@ class PoiBatch {
             rendererCapabilities: this.m_rendererCapabilities,
             map: texture,
             sdf: this.imageItem.sdf === true,
+            depthTest,
             haloColor: haloParams?.haloColor,
             haloAlpha: haloParams?.haloAlpha,
             haloWidth: haloParams?.haloWidth,
@@ -324,13 +326,15 @@ export class PoiBatchRegistry {
             ? (poiInfo as any).iconOcclusionOpacity
             : 1;
         batchKey += `#o${iconOcclusionOpacity.toFixed(3)}`;
+        const iconDepthTest = (poiInfo as any).iconDepthTest === true;
+        if (iconDepthTest) batchKey += '#d';
 
         let batch = this.m_batchMap.get(batchKey);
 
         if (batch === undefined) {
             batch = new PoiBatch(this.m_rendererCapabilities, imageItem, () => {
                 this.deleteBatch(batchKey);
-            }, haloParams);
+            }, haloParams, iconDepthTest);
             (batch as any).m_material.userData.mbOcclusionOpacity = iconOcclusionOpacity;
             this.m_batchMap.set(batchKey, batch);
         }
@@ -742,6 +746,14 @@ export class PoiRenderer {
      * @param layer - The Layer to be rendered.
      */
     render(camera: THREE.OrthographicCamera, layer: PoiLayer) {
+        // Depth-tested icon batches write the engine's logarithmic depth
+        // encoding; keep the conversion factor fresh for the active camera.
+        const far = (camera as any).far ?? 2000;
+        const logDepthBufFC = 2.0 / (Math.log(far + 1.0) / Math.LN2);
+        for (const batch of (this.m_poiBatchRegistry as any).m_batchMap.values()) {
+            const u = (batch as any).m_material?.uniforms?.uLogDepthBufFC;
+            if (u && u.value !== logDepthBufFC) u.value = logDepthBufFC;
+        }
         this.m_renderer.render(layer.scene, camera);
     }
 

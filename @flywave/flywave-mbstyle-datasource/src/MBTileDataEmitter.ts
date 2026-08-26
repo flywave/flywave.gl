@@ -405,6 +405,13 @@ export class MBTileDataEmitter {
      * (mercatorZfromAltitude) — the same factor sampleElevation bakes into
      * ground heights — so building heights must use it too (§289).
      */
+    /** Style-level: any symbol layer precedes any fill-extrusion layer. */
+    private m_iconDepthTest = false;
+
+    setIconDepthTest(enabled: boolean): void {
+        this.m_iconDepthTest = enabled;
+    }
+
     setTerrainHeightScale(scale: number, fromTerrain: boolean): void {
         this.m_terrainHeightScale =
             Number.isFinite(scale) && scale > 0.2 ? scale : 1;
@@ -996,6 +1003,10 @@ export class MBTileDataEmitter {
                     // (NOT `mayOverlap`/`reserveSpace`); map `icon-allow-overlap` /
                     // `icon-ignore-placement` onto the native prop names.
                     props.iconMayOverlap = l['icon-allow-overlap'] === true;
+                    // mgl "symbols before 3D": symbol layers preceding
+                    // fill-extrusion layers are depth-covered by the
+                    // buildings (static per-style flag from the decoder).
+                    if (this.m_iconDepthTest) props._iconDepthTest = true;
                     // mgl scales symbols by perspectiveRatio = 0.5 +
                     // 0.5*(centerDist/pointDist) (symbol.vertex gl_Position w
                     // division). The engine's factor = 1 + (lookAt/d - 1) *
