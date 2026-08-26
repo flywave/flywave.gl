@@ -217,8 +217,17 @@ export class MBMaterialPatchManager {
             const material = (batch as any).m_material as THREE.Material | undefined;
             if (!material || (material as any).__mbPoiOcclusionPatched) continue;
             (material as any).__mbPoiOcclusionPatched = true;
-            const occlusionOpacity = (material as any).userData?.mbOcclusionOpacity;
-            if (typeof occlusionOpacity !== 'number' || occlusionOpacity >= 1) continue;
+            let occlusionOpacity = (material as any).userData?.mbOcclusionOpacity;
+            if (typeof occlusionOpacity !== 'number' || occlusionOpacity >= 1) {
+                // "Symbols before 3D" batches (depthTest materials): hide the
+                // whole icon when its anchor is occluded (mgl isClipped) —
+                // occlusionOpacity 0 makes the fade binary (alpha *= vis).
+                // GPU-side hiding works around the engine's placement-state
+                // cache (per-element `visible` flips are ignored once
+                // placed).
+                if ((material as any).depthTest !== true) continue;
+                occlusionOpacity = 0;
+            }
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);

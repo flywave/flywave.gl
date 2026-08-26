@@ -98,14 +98,15 @@ export class TerrainDepthOcclusion {
         // (16-bit split). The DepthTexture attachment route never delivered
         // content to samplers (texture always sampled 1.0 while a raw FBO
         // read saw real depth) — RGBA readback and sampling always work.
-        this.m_depthTexture = new THREE.Texture();
-        this.m_depthTexture.minFilter = THREE.NearestFilter;
-        this.m_depthTexture.magFilter = THREE.NearestFilter;
+        // The target's OWN texture is the color attachment — do not replace
+        // it with a bare Texture (breaks the FBO, render silently no-ops).
         this.m_depthTarget = new THREE.WebGLRenderTarget(w, h, {
             depthBuffer: true,
             stencilBuffer: false,
         });
-        (this.m_depthTarget as any).texture = this.m_depthTexture;
+        this.m_depthTexture = this.m_depthTarget.texture;
+        this.m_depthTexture.minFilter = THREE.NearestFilter;
+        this.m_depthTexture.magFilter = THREE.NearestFilter;
         if (!this.m_encodeMat) {
             const encode = new THREE.MeshBasicMaterial();
             encode.onBeforeCompile = (shader: any) => {
@@ -185,6 +186,14 @@ export class TerrainDepthOcclusion {
             const buf = new Uint32Array(w * h);
             for (let i = 0; i < w * h; i++) {
                 buf[i] = px[i * 4] * 256 + px[i * 4 + 1];
+            }
+            if ((globalThis as any).__mbOccDbg && !(this as any).__mbRbLogged) {
+                (this as any).__mbRbLogged = 1;
+                let nz = 0;
+                for (let i = 0; i < buf.length; i += 31) { if (buf[i] !== 0) nz++; }
+                // eslint-disable-next-line no-console
+                console.log('[MBRB] read nz=' + nz + ' px0=' + px[0] + ',' + px[1]
+                    + ' pxMid=' + px[(w * h / 2 | 0) * 4] + ',' + px[(w * h / 2 | 0) * 4 + 1]);
             }
             this.m_cpuDepth = buf;
             this.m_cpuDepthFrame = frame ?? -2;
@@ -271,7 +280,10 @@ export class TerrainDepthOcclusion {
         const prevTarget = renderer.getRenderTarget();
         try {
             renderer.setRenderTarget(this.m_depthTarget);
-            renderer.clearDepth();
+            // Full clear (TerrainDraping precedent): with autoClear=false an
+            // uncleared color buffer left the target reading black forever.
+            renderer.clear();
+            scene.overrideMaterial = this.m_encodeMat!;
             renderer.render(scene, camera);
             if ((globalThis as any).__mbOccDbg && !(this as any).__mbRawLogged) {
                 (this as any).__mbRawLogged = 1;
@@ -287,13 +299,27 @@ export class TerrainDepthOcclusion {
                     console.log('[MBDepth] raw read failed ' + (e as Error).message);
                 }
             }
-        } catch {
-            // Rendering the depth pass failed — skip this frame (hard occlusion
-            // via depthTest still applies from Scheme C).
+        } catch (err) {
+            if ((globalThis as any).__mbOccDbg && !(this as any).__mbPassErr) {
+                (this as any).__mbPassErr = 1;
+                // eslint-disable-next-line no-console
+                console.log('[MBPass] ERROR ' + (err as Error)?.message + ' ' + (err as Error)?.stack?.slice(0, 200));
+            }
         } finally {
             // ALWAYS restore the previous render target — an exception between
             // bind and restore used to leave the depth target bound, so the
             // engine's main render silently went into it instead of the canvas.
+            // Same-tick probe: read a few pixels NOW — distinguishes "render
+            // no-ops" from "main render clobbers the target later".
+            if ((globalThis as any).__mbOccDbg && !(this as any).__mbTickLogged) {
+                (this as any).__mbTickLogged = 1;
+                try {
+                    const probe = new Uint8Array(16);
+                    renderer.readRenderTargetPixels(this.m_depthTarget, 512, 512, 2, 2, probe);
+                    // eslint-disable-next-line no-console
+                    console.log('[MBTick] same-tick px=' + Array.from(probe.slice(0, 8)).join(','));
+                } catch {}
+            }
             scene.overrideMaterial = null;
             renderer.setRenderTarget(prevTarget);
             for (const obj of hidden) obj.visible = true;
