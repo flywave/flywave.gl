@@ -79,15 +79,16 @@
   夹具恒 5 帧加剧了截断（已修：尊重 N + 场景网格静默收敛）。
   **下一层终局定位（同会话续拍）**：harness 帧数修复后捕获时
   attached=153/306、patched=153、lit=153（管线全通）但像素仍全白——
-  可见性×program 交叉普查：**visProg=0 / visNoProg=153**，即全部可见
-  extrusion 材质没有 three 编译的 program：引擎对 MapMeshStandardMaterial
-  走**自绘管线，完全绕过 three 材质编译**，onBeforeCompile 天然失效
-  （最小复现正常=裸 three 路径无此问题；fill/circle 材质类走 three
-  路径故历史补丁有效）。**修法方向**：① 找到引擎自绘管线的 shader
-  组装点（RenderObject/材质 adapter），在那里挂 mgl 光照公式；
-  ② 或改用全局 THREE.ShaderChunk 输出片元替换（若自绘路径仍解析
-  three chunk）；③ 或向引擎报告并请自绘路径透传 onBeforeCompile。
-  306 中未挂载的另一半待此层解开后再查（疑双份对象列表）
+  可见性×program 交叉普查 visProg=0/153——**此结论后被推翻**：
+  material.program 在 three r178 已非公开属性（存 renderer 内部
+  WeakMap），该普查测的是不存在的属性，"自绘管线"假说不成立。
+  three 源码核实：onBeforeCompile 在 program cache miss 时必然被
+  调用；最小复现（裸 renderer+同材质类）正常执行。真实管线中
+  handler 链完整（外层 translate handler 的 orig 链含 3D 光照
+  handler）、version 正常增长，但 MBRUN 探针零执行、像素跨一切
+  扰动逐位不变——终极嫌疑=**被绘制的白建筑并非插桩的 census 对象**
+  （layers 掩码/另一半未挂载对象/双列表）。决定性实验（下会话
+  单点）：对 census 对象置 visible=false，若画面不变即证实
   ② icons 仍不可见（sprite/poi_label 数据已在，待 ① 后复测——
   PoiRenderer 批次路径与 extrusion 无关，可独立排查 SpriteAtlas 图名
   {maki}-12 解析）
