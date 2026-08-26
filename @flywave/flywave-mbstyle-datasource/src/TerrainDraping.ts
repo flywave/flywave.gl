@@ -341,10 +341,11 @@ export class TerrainDraping {
                     const mv: any = this.m_mapView;
                     if (meshes[0]) {
                         const V3 = (require('three')).Vector3;
-                        const rte = mv.getRteCamera ? mv.getRteCamera() : null;
+                        const rte = (typeof mv.getRteCamera === 'function')
+                            ? mv.getRteCamera() : mv.m_rteCamera;
                         const center = meshes[Math.floor(meshes.length / 2)] ?? meshes[0];
-                        for (const [tag, cam] of [['main', mv.camera], ['rte', rte]] as const) {
-                            if (!cam) continue;
+                        const proj = (tag: string, cam: any) => {
+                            if (!cam) { console.log('[MBProj] cam=' + tag + ' MISSING'); return; }
                             const v = new V3().copy(center.position);
                             v.project(cam);
                             // eslint-disable-next-line no-console
@@ -352,7 +353,9 @@ export class TerrainDraping {
                                 + center.position.x.toFixed(0) + ',' + center.position.y.toFixed(0)
                                 + ' NDC=' + v.x.toFixed(2) + ',' + v.y.toFixed(2) + ',' + v.z.toFixed(3)
                                 + ' nearFar=' + cam.near + ',' + cam.far);
-                        }
+                        };
+                        proj('main', mv.camera);
+                        proj('rte', rte);
                     }
                     // eslint-disable-next-line no-console
                     console.log('[MBScene] scene===m_scene:' + (mv.scene === mv.m_scene)

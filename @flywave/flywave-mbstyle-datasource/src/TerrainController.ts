@@ -483,6 +483,18 @@ export class TerrainController {
             mesh.frustumCulled = false;
             this.m_meshes.push(mesh);
             this.m_scene.add(mesh);
+            if ((globalThis as any).__mbOccDbg && !(mesh as any).__mbGeoProbe) {
+                (mesh as any).__mbGeoProbe = true;
+                const geo: any = mesh.geometry;
+                const pos: any = geo.getAttribute?.('position');
+                // eslint-disable-next-line no-console
+                console.log('[MBGeo] verts=' + (pos?.count ?? -1)
+                    + ' idx=' + (geo.index?.count ?? -1)
+                    + ' drawRange=' + geo.drawRange.count
+                    + ' scale=' + mesh.scale.x.toFixed(4)
+                    + ' groups=' + (geo.groups?.length ?? 0)
+                    + ' mat=' + (mesh.material as any).type);
+            }
 
 
         } catch {
