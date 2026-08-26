@@ -218,12 +218,9 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             });
         });
 
-        // The lit base mesh ALWAYS exists with the stable key "base": without
-        // imagery loaded it renders the solid fallback color, and the first
-        // available imagery upgrades it in place (setImagery — zero rebuild).
-        // A base that pops in/out would rebuild materials in a loop during
-        // the eviction/reload cycle.
-        if (!baseAssigned) {
+        // 未配置任何卫星图层数据源：直接不渲染地形 mesh。已配置图层但
+        // 本瓦片纹理未就绪时仍保留 base 兜底（渐进加载连续性不受影响）。
+        if (!baseAssigned && providers.length > 0) {
             targets.push({ key: "base", kind: "base" });
         }
 

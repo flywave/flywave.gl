@@ -247,7 +247,7 @@ try {
         blendMode: "normal"
     });
 
-    addPillars(mapView, demTerrain, halfBox);
+    addPillars(mapView, demTerrain as DEMTerrainSource, halfBox);
 
     (window as any).mapView = mapView;
     (window as any).overlayManager = overlayManager;
