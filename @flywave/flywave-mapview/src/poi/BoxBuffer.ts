@@ -185,10 +185,22 @@ export class BoxBuffer {
      */
     reset() {
         if (this.m_positionAttribute !== undefined) {
+            // Swap in empty arrays AND reset the counts: addBox advances
+            // count as it writes, so a stale count over an empty array makes
+            // computeBoundingSphere/render read past the end (NaN positions,
+            // "radius is NaN" errors, invisible POIs).
             this.m_positionAttribute.array = new Float32Array(0);
+            //@ts-ignore — count is advanced by addBox the same way.
+            this.m_positionAttribute.count = 0;
             this.m_colorAttribute!.array = new Float32Array(0);
+            //@ts-ignore — count is advanced by addBox the same way.
+            this.m_colorAttribute!.count = 0;
             this.m_uvAttribute!.array = new Float32Array(0);
+            //@ts-ignore — count is advanced by addBox the same way.
+            this.m_uvAttribute!.count = 0;
             this.m_indexAttribute!.array = new Float32Array(0);
+            //@ts-ignore — count is advanced by addBox the same way.
+            this.m_indexAttribute!.count = 0;
             this.m_pickInfos!.length = 0;
         }
     }
@@ -347,6 +359,17 @@ export class BoxBuffer {
 
         this.m_pickInfos.push(pickInfo);
 
+        {
+            const c = (globalThis as any).__mbPw = (globalThis as any).__mbPw ?? { n: 0, nan: 0 };
+            c.n++;
+            const base = baseVertex;
+            for (let vi = 0; vi < NUM_VERTICES_PER_ELEMENT; vi++) {
+                const px = positionAttribute.array[(base + vi) * positionAttribute.itemSize];
+                const py = positionAttribute.array[(base + vi) * positionAttribute.itemSize + 1];
+                if (!Number.isFinite(px) || !Number.isFinite(py)) { c.nan++; break; }
+            }
+            if (c.n === 100) console.log('[MBPW] writes=' + c.n + ' nanWritten=' + c.nan);
+        }
         return true;
     }
 
