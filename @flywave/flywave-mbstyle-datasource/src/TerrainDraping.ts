@@ -202,6 +202,12 @@ export class TerrainDraping {
             } else if (this.isEnvironmentObject(obj)) {
                 obj.visible = false;
                 hidden.push(obj);
+            } else if ((obj as any).isMesh && (obj as any).material?.isMeshStandardMaterial) {
+                // Lit materials render BLACK in the bake (lights are hidden
+                // as environment objects) and blanket-cover the satellite
+                // imagery below — exclude them from the drape bake.
+                obj.visible = false;
+                hidden.push(obj);
             } else if ((obj as any).isMesh || (obj as any).isSprite || (obj as any).isPoints) {
                 // Found a visible non-terrain renderable object — there's
                 // content worth draping.
@@ -275,8 +281,31 @@ export class TerrainDraping {
                 }
                 if ((globalThis as any).__mbOccDbg && !(globalThis as any).__mbDrapLogged) {
                     (globalThis as any).__mbDrapLogged = 1;
+                    let vis = 0; const kinds: Record<string, number> = {};
+                    this.m_mapView.scene.traverse((o: any) => {
+                        if (o.visible && (o.isMesh || o.isSprite || o.isPoints)) {
+                            vis++;
+                            const t = o.userData?.technique?.name ?? o.material?.type ?? '?';
+                            kinds[t] = (kinds[t] ?? 0) + 1;
+                        }
+                    });
+                    // Sample a coarse grid of the bake to characterize content.
+                    const S = this.m_bakeSize;
+                    const grid = new Uint8Array(4 * 25);
+                    for (let gy = 0; gy < 5; gy++) {
+                        for (let gx = 0; gx < 5; gx++) {
+                            renderer.readRenderTargetPixels(rt,
+                                Math.floor((gx + 0.5) * S / 5), Math.floor((gy + 0.5) * S / 5), 1, 1,
+                                grid, gy * 5 * 4 + gx * 4);
+                        }
+                    }
+                    const cells: string[] = [];
+                    for (let k = 0; k < 25; k++) {
+                        cells.push(grid[k * 4] + ',' + grid[k * 4 + 1] + ',' + grid[k * 4 + 2]);
+                    }
                     // eslint-disable-next-line no-console
-                    console.log('[MBDrap] bake uniform=' + uniform + ' sample=' + Array.from(sample.slice(0, 8)).join(','));
+                    console.log('[MBDrap] bake uniform=' + uniform + ' grid=' + cells.join(' | ')
+                        + ' | visibles=' + vis + ' kinds=' + JSON.stringify(kinds));
                 }
                 const mat = mesh.material as any;
                 // Content gate: only enable the drape when the bake actually
