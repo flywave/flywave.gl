@@ -92,6 +92,18 @@
   PoiRenderer 批次路径与 extrusion 无关，可独立排查 SpriteAtlas 图名
   {maki}-12 解析）
 - 数据侧：z13-14 satellite + glyphs 5 range 补齐（83ca7b54）
+- [~] extrusion 光照 no-op 取证续（2026-08-26 深挖）：
+  - handler 替换证据：捕获时 153 材质的 onBeforeCompile 外层=自家
+    translate handler（链上应含 3D 光照 handler）但 MBRUN 零执行；
+    version 1→4 正常增长、锚点 opaque_fragment 在 three r178 存在、
+    three 源码核实 onBeforeCompile 在 program cache miss 时必然调用
+  - settle+trailing frames 修复后像素仍逐位一致（dark=0%/white=92.32%
+    跨所有扰动不变）→ 终极嫌疑：**被绘制的白建筑并非插桩的 153 个
+    census 对象**（layers 掩码/另一半未挂载对象集/双列表）——
+    下会话单点：绘制时 renderer.info.render.calls 对象清点，或对
+    census 对象置 visible=false 看画面是否变化（决定性）
+  - 保留资产：renderUntilSettled+trailing frames（AfterRender 补丁
+    off-by-one 语义正确）、tile.objects/材质数组防护
 ## 三、验证基线
 
 - 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
