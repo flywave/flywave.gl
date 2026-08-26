@@ -126,10 +126,11 @@
   此前静默走 fallback（exec 误析 ['restaurant'] 类 label 集）；
   修复后 circle-color/default PASS、单测 268/0 零回归。影响面待全量
   批测重估（categorical 配色/occlusion/filter match 族普遍受益）
-- icons 不可见取证现状：POI 走引擎管线（PoiManager→PoiBuilder→批次，
-  不在 tile.objects），31 批次已注册带纹理（restaurant-12 等）、
-  poi_label/maki/sprite 数据链全通——剩余疑点=引擎 ScreenCollisions
-  放置或 PoiBuffer 可见性，下会话入口
+- icons 不可见取证（已收敛至坐标一点）：POI 管线全通——批次 31 注册
+  带纹理、layer scene 31 mesh 全 visible 共 21330 索引、
+  TextElementsRenderer.render 正常执行（ortho ±256）——**疑点唯一
+  收敛=盒子屏幕坐标**（放置可能产出 NaN/越界）。下会话单点：dump
+  首个 BoxBuffer position 属性 min/max 即终结
 ## 三、验证基线
 
 - 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
