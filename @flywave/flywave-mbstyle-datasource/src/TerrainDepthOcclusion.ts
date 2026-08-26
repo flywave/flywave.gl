@@ -283,8 +283,18 @@ export class TerrainDepthOcclusion {
             // Full clear (TerrainDraping precedent): with autoClear=false an
             // uncleared color buffer left the target reading black forever.
             renderer.clear();
-            scene.overrideMaterial = this.m_encodeMat!;
+            // scene.overrideMaterial silently drew nothing on this engine
+            // build — swap materials per occluder mesh instead (guaranteed
+            // path), restore after.
+            const swapped: Array<[THREE.Mesh, THREE.Material | THREE.Material[]]> = [];
+            scene.traverse((o: any) => {
+                if (o.isMesh && o.visible && isOccluder(o)) {
+                    swapped.push([o, o.material]);
+                    o.material = this.m_encodeMat;
+                }
+            });
             renderer.render(scene, camera);
+            for (const [mesh, mat] of swapped) mesh.material = mat;
             if ((globalThis as any).__mbOccDbg && !(this as any).__mbRawLogged) {
                 (this as any).__mbRawLogged = 1;
                 try {
@@ -320,7 +330,6 @@ export class TerrainDepthOcclusion {
                     console.log('[MBTick] same-tick px=' + Array.from(probe.slice(0, 8)).join(','));
                 } catch {}
             }
-            scene.overrideMaterial = null;
             renderer.setRenderTarget(prevTarget);
             for (const obj of hidden) obj.visible = true;
         }
