@@ -163,7 +163,11 @@
   重加、31 mesh 全空，早期曾见 62 mesh 双 layer 线索）——**确需
   devtools 单步 placeTextElements/addPoi 的 buffer 归属**。硬事实链
   齐备：数据✓/match✓(已修)/批次✓/mesh✓/pass✓/addBox✓(单测)/
-  identity✓/opacity=1✓/每帧 add✓ —— 唯 array 归属分裂未解
+  identity✓/opacity=1✓/每帧 add✓/写入点回读有限✓ —— array 归属
+  分裂未解。**附带收获**：追查中实锤并修复引擎 BoxBuffer.reset()
+  不清 count 的真实缺陷（stale count × 空 array → computeBoundingSphere
+  越界 NaN，即日志中 'radius is NaN' 报错源）；修复后该报错消除但
+  icons 仍不可见——根因仍在 array 归属/帧时序层
 ## 三、验证基线
 
 - 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
