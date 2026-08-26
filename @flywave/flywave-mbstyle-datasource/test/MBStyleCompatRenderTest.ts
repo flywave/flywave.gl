@@ -109,6 +109,29 @@ function localizeStyle(style: any): any {
     return s;
 }
 
+async function renderUntilSettled(
+    mapView: MapView,
+    dataSource: MBStyleDataSource,
+    maxFrames: number,
+): Promise<void> {
+    let lastCount = -1;
+    let stable = 0;
+    for (let i = 0; i < maxFrames && stable < 3; i++) {
+        await renderFrames(mapView, dataSource, 1);
+        // Count meshes actually ATTACHED to the scene: tile.objects lists
+        // populate early, but the engine uploads geometry on a per-frame
+        // quota — scene attachment is the signal that content is drawable.
+        let count = 0;
+        (mapView as any).scene?.traverse?.((o: any) => { if (o.isMesh) count++; });
+        if (count === lastCount) {
+            stable++;
+        } else {
+            stable = 0;
+            lastCount = count;
+        }
+    }
+}
+
 async function renderFrames(
     mapView: MapView,
     dataSource: MBStyleDataSource,
@@ -358,7 +381,13 @@ async function processOperations(
             }
             case "waitFrameReady":
             case "frameReady":
-                await renderFrames(mapView, dataSource, 2);
+                // mgl semantics: wait for N RENDERED frames — the engine
+                // uploads tile geometry on a per-frame quota, so async
+                // content (large extrusion sets, POIs) needs the full N
+                // frames to attach. A fixed 2 left most objects unloaded
+                // (the lighting-3d / occlusion "unlit white extrusions"
+                // root cause).
+                await renderFrames(mapView, dataSource, Math.max(2, Number(args[0]) || 2));
                 break;
             case "sleep":
                 await new Promise((r) => setTimeout(r, args[0] ?? 0));
@@ -1461,7 +1490,12 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     (dataSource as any).__mapMode = metadata.mapMode;
                 }
 
-                await renderFrames(mapView, dataSource, 5);
+                // mgl captures after the render loop settles: the engine
+                // uploads tile geometry on a per-frame quota, so a fixed
+                // 5-frame wait left large async content (300+ extrusion
+                // objects, POIs) unattached — render until the decoded tile
+                // object count is stable across frames (bounded).
+                await renderUntilSettled(mapView, dataSource, 60);
 
 
                 const operations = metadata.operations ?? [];

@@ -103,7 +103,7 @@ export class MBMaterialPatchManager {
         if (sig !== this.m_lastLightSig) {
             this.m_lastLightSig = sig;
             for (const tile of tiles) {
-                for (const obj of tile.objects) {
+                for (const obj of tile.objects ?? []) {
                     const m = (obj as any).material as THREE.Material | undefined;
                     if (m && (m as any).__mbGroundLitHandler) {
                         (m as any).needsUpdate = true;
@@ -125,28 +125,47 @@ export class MBMaterialPatchManager {
             // setImportColorTheme, §12.76-55).
             let allPatched = true;
             for (const obj of tile.objects ?? []) {
-                if (!(obj as any).material?.__mbPatched) { allPatched = false; break; }
+                if (!MBMaterialPatchManager.isFullyPatched(obj)) { allPatched = false; break; }
             }
-            if (state !== undefined && state.objectCount === tile.objects.length && allPatched) continue;
+            if (state !== undefined && state.objectCount === (tile.objects ?? []).length && allPatched) continue;
 
             this.patchTile(tile);
-            this.m_patchedTiles.set(tile, { patched: true, objectCount: tile.objects.length });
+            this.m_patchedTiles.set(tile, { patched: true, objectCount: (tile.objects ?? []).length });
         }
 
         this.patchPoiBatchMaterials();
+    }
+
+    /**
+     * Extrusions with roof geometry upload as multi-material GROUPS: the
+     * engine replaces the initial single material with a material ARRAY
+     * once the chunked geometry attaches. Every patch gate and injection
+     * must therefore handle arrays — checking flags on the array itself
+     * (or injecting into it) is a silent no-op (the §fill-extrusion
+     * "3D lighting never applies" root cause).
+     */
+    private static isFullyPatched(obj: any): boolean {
+        const m = obj?.material;
+        if (Array.isArray(m)) return m.length > 0 && m.every((x: any) => x?.__mbPatched);
+        return !!m?.__mbPatched;
     }
 
     private patchTile(tile: any): void {
         // NOTE: do not gate on tile.decodedTile here — Tile.removeDecodedTile()
         // clears it as soon as geometry loading finishes, which made this whole
         // patcher a silent no-op. Everything needed is on obj.userData.technique.
-        for (const obj of tile.objects) {
+        let noTech = 0, withTech = 0;
+        for (const obj of tile.objects ?? []) {
             const tech = obj.userData?.technique;
-            if (!tech) continue;
+            if (!tech) { noTech++; continue; }
+            withTech++;
 
-            const material = (obj as any).material as THREE.Material;
-            if (!material) continue;
+            const rawMaterial = (obj as any).material;
+            const materials: THREE.Material[] = Array.isArray(rawMaterial)
+                ? rawMaterial : (rawMaterial ? [rawMaterial] as any : []);
+            if (materials.length === 0) continue;
 
+            for (const material of materials) {
             this.patchMaterial(material, tech, obj);
             this.applyIconTextFit(obj, tech);
             this.patchIconObject(obj, tech);
@@ -155,6 +174,11 @@ export class MBMaterialPatchManager {
             this.registerAdditiveRibbon(obj, tech);
             this.setupTranslucentExtrusionDualPass(obj, tech);
             this.registerShadowCaster(obj, tech);
+            }
+            if ((noTech > 0) && !(MBMaterialPatchManager as any).__ntk) {
+                (MBMaterialPatchManager as any).__ntk = 1;
+                console.log('[MBDBG] patchTile noTech=' + noTech + ' withTech=' + withTech);
+            }
         }
     }
 
