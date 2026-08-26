@@ -144,8 +144,15 @@
   layer.scene 到画布**也无图标**；逐 mesh 普查 62 mesh **顶点 alpha
   全 0**——但 **addPoi 入参 opacity=1（min=max=1）**！矛盾唯一解释
   =每帧 clean→rebuild 时序缺口（末帧清空几何后未重建即捕获）。
-  **下会话单点：BoxBuffer.clean/addBox 调用时序打点**（update 清空
-  与放置重建的帧内顺序 + 捕获时刻状态），一步终结
+  时序打点（同日终证）：**单一 PoiRenderer 实例**（无双实例）、
+  addPoi 每帧稳定 ~87 次（reset→重建循环健康，40 帧 3350 次）、
+  addBox 单测级 CPU 复现**完全正确**（alpha=1/pos 正确）——与
+  census 读到全 0 的最后矛盾收于 **attribute 对象生命周期**：
+  reset/clearAttributes 每帧重建 BufferAttribute，若 addBox 持有的
+  内部引用与 geometry.setAttribute 后对象错位（或 Float32/Uint8
+  normalized 类型错位），写入丢失。**下会话单点=devtools 断点
+  addBox 内 m_colorAttribute 与 geometry.attributes.color 的
+  对象同一性**（一行判断），icons 悬案至此只剩这一层
 ## 三、验证基线
 
 - 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
