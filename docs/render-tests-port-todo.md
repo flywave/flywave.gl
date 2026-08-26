@@ -5606,3 +5606,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **次级嫌疑（记档）**：fill 在 bake 中的**片元输出**——patcher 产物材质的不透明合成/in-shader composite 在 alpha=0 清底下可能输出全透明或黑；下一断点 = fill fragment 一行插桩（bake 期间 gl_FragColor 输出值）。另注意扩窗破坏 UV 1:1（drape 像素↔tile 世界对齐）——方向②（fill 几何居中化）仍是语义正解。
 
 **会话终局**：37 阶段（§454-§489）。冷启动指引：fill fragment 插桩 → 方向②评估。
+
+**§490. 会话续记——far 截断 bake 模式实施（零增量，重编译时序嫌疑）**：
+
+**实施**：`vMBRasEyeDist > uMBRasFar` 截断（§489 定位的片元候选）加 `__mbRasBake` 旗标旁路（×1e6）+ customProgramCacheKey 分离；bake 前置旗标+needsUpdate、后复原。**实测**：四件套**逐位不变**（17562/17585/17559/16913）——重编译未发生或截断非黑源：**嫌疑一**：customProgramCacheKey 在 onBeforeCompile 内赋值，晚于 three 的 key 计算（首编译已用默认 key，旗标翻转不触发新程序）；**嫌疑二**：黑源在别处（材质 blending 到 alpha-0 底）。回归零损失（含 raster/opacity）。
+
+**修复路线（下会话冷启动首步）**：把 cache-key 赋值移到 attach() 顶层（onBeforeCompile 之外）——一行上移即验证嫌疑一。
+
+**会话终局**：38 阶段（§454-§490）。
