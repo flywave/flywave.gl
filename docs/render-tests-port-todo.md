@@ -5359,3 +5359,18 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **③ 回归**：icon 域 14/16 保持（use-theme 原有）；occlusion 最优值带 data-driven 69178 / after 26171 / before ~70k / setProperty 16278。
 
 **下会话 ROI**：① BoxBuffer 逐 POI 世界深度属性（解锁 before-3d 收口，复用已铺机制）；② mglOnly=41 碰撞盒 anchor/offset 精确对齐（MBGLIconDump 管线迭代）；③ occlusion 24 例全批转绿冲刺；④ 全量 462 基线复核（累计八阶段改动面）。
+
+**§463. 会话续记——深度编码总纠正：log 假设推翻，before-3d 收口（commit 69c7fe85）**：
+
+**决定性发现**：harness `logarithmicDepthBuffer: false`（MBStyleCompatRenderTest:1362）——§457 以来的全部 log 深度编码假设（fade mbLogToStd/斜率换算/IconMaterial log 写入）建立在错误前提上。引擎测试态实际为**标准透视深度**。
+
+**收口三件（69c7fe85）**：
+1. `vW = position.z`——BoxBuffer.addBox 早已把**世界视距**存进屏幕空间 quad 的 position.z（§462 计划的"逐 POI 世界深度 varying 手术"根本不需要，数据已在）；
+2. IconMaterial 深度写入改标准公式 `z=0.5+0.5((f+n)/(f−n) − 2fn/((f−n)·d))`（uDepthNF 每帧按 farPlane 刷新）；
+3. occlusion fade 同公式（uMBNearFar 已有），mbEps 改回 mgl 1/300。
+
+**探针方法记档**：恒远探针（gl_FragDepth=1.0）一次运行即证明链路通+exp 语义（before-3d 69250→7492）——比公式推理快一个量级。
+
+**实测**：before-3d 69250→**7492**（−89%）；data-driven 70097→**67509** 新低；after 26-31k 噪声带；setProperty 族 16.3k 持平。回归 16/17 保持（use-theme 原有）。occlusion 会话累计：555k→67.5k（−88%）。
+
+**下会话 ROI**：① occlusion 24 例全批（新值带下重估转绿距离）；② setProperty/terrain 16.3k 族（无 occlusion 属性残差定位——疑碰撞/放置差）；③ mglOnly 碰撞盒精确对齐（真值管线）；④ 全量 462 基线复核。
