@@ -28,7 +28,8 @@ export function bumpThemeGeneration(): void {
     s_generation++;
 }
 
-function parseCssColor(c: string): [number, number, number, number] | null {
+/** Parse a CSS color (hex/rgba()/named) to sRGB 0-255 + alpha. */
+export function parseCssColor(c: string): [number, number, number, number] | null {
     if (typeof c !== 'string') return null;
     const hex = c.replace('#', '');
     if (/^[0-9a-fA-F]{6}$/.test(hex)) {
@@ -40,9 +41,20 @@ function parseCssColor(c: string): [number, number, number, number] | null {
     }
     const m = c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/);
     if (m) return [+m[1], +m[2], +m[3], m[4] !== undefined ? +m[4] : 1];
-    // Named CSS colors (violet/blue/white/...): THREE.Color parses them to
-    // LINEAR components under ColorManagement — convert back to sRGB 0-255.
+    // Named CSS colors (violet/blue/white/...). Prefer the browser's own
+    // parser via a canvas fillStyle roundtrip (exact sRGB values — a
+    // THREE.Color linear roundtrip loses ~4/255 precision); fall back to
+    // THREE outside a DOM context.
     try {
+        if (typeof document !== 'undefined') {
+            const ctx = document.createElement('canvas').getContext('2d')!;
+            ctx.fillStyle = '#000'; // ensure the assignment below actually changes it
+            ctx.fillStyle = c;
+            const m2 = ctx.fillStyle.match(/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/);
+            if (m2) {
+                return [parseInt(m2[1], 16), parseInt(m2[2], 16), parseInt(m2[3], 16), 1];
+            }
+        }
         const named = new (require('three').Color)(c);
         named.convertLinearToSRGB();
         return [Math.round(named.r * 255), Math.round(named.g * 255), Math.round(named.b * 255), 1];

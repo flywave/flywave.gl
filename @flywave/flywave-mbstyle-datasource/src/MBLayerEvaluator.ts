@@ -336,7 +336,7 @@ function isExpr(v: any): v is ExpressionSpecification {
     );
 }
 
-import { applyColorTheme, ColorThemeLut } from './MBColorTheme';
+import { applyColorTheme, parseCssColor, ColorThemeLut } from './MBColorTheme';
 
 export class MBLayerEvaluator {
     private m_layersBySource: Map<string, Map<string, PreprocessedLayer[]>> = new Map();
@@ -642,6 +642,12 @@ export class MBLayerEvaluator {
                 if (key === 'icon-image') {
                     const secondary = MBLayerEvaluator.imageSecondaryCandidate(raw);
                     if (secondary) (layout as any)['icon-image-secondary'] = secondary;
+                    // ["image", name, {params:{fill}}] → recolored variant
+                    // (mgl ImageVariant.params; materialized by the host).
+                    if (typeof layout[key] === 'string' && layout[key]) {
+                        layout[key] = MBLayerEvaluator.resolveImageParams(
+                            raw, layout[key], pl, this.lutFor(pl), ctx);
+                    }
                 }
             }
 
@@ -670,6 +676,10 @@ export class MBLayerEvaluator {
                                     // secondary candidate.
                                     if (secondary) (layout as any)['icon-image-secondary'] = secondary;
                                     else delete (layout as any)['icon-image-secondary'];
+                                    if (typeof layout[key] === 'string' && layout[key]) {
+                                        layout[key] = MBLayerEvaluator.resolveImageParams(
+                                            val, layout[key], pl, this.lutFor(pl), ctx);
+                                    }
                                 }
                             }
                         }
@@ -709,13 +719,70 @@ export class MBLayerEvaluator {
      * Second candidate of an `["image", a, b]` expression (mgl
      * image.ts keeps primary + secondary variants; the pair is blended by
      * the cross-fade paints). Returns undefined for single-image values.
+     * With image options (`{params}`) the secondary name sits at index 3.
      */
     private static imageSecondaryCandidate(raw: unknown): string | undefined {
         let expr: any = raw;
         while (Array.isArray(expr) && expr[0] === 'memo') expr = expr[1];
-        if (Array.isArray(expr) && expr[0] === 'image' && typeof expr[2] === 'string') {
-            return expr[2];
+        if (Array.isArray(expr) && expr[0] === 'image') {
+            if (typeof expr[2] === 'string') return expr[2];
+            if (typeof expr[3] === 'string') return expr[3];
         }
         return undefined;
+    }
+
+    /**
+     * Resolve `["image", name, {params: {fill: <color>}}]` image params
+     * (mgl ImageVariant.params): evaluates each param color, applies the
+     * color-theme LUT unless the layer's `icon-image-use-theme` is 'none'
+     * (mgl default themes recolored images), and asks the host for a
+     * registered recolored-variant icon name. Returns the icon name to use
+     * (variant when materialized, else the plain evaluated name).
+     */
+    private static resolveImageParams(
+        raw: unknown,
+        evaluatedName: string,
+        pl: PreprocessedLayer,
+        lut: ColorThemeLut | null,
+        ctx: MBExpressionContext,
+    ): string {
+        let expr: any = raw;
+        while (Array.isArray(expr) && expr[0] === 'memo') expr = expr[1];
+        if (!Array.isArray(expr) || expr[0] !== 'image') return evaluatedName;
+        const options = [expr[2], expr[3]].find(o => o !== null && typeof o === 'object' && !Array.isArray(o)) as
+            { params?: Record<string, unknown> } | undefined;
+        const rawParams = options?.params;
+        if (!rawParams || typeof rawParams !== 'object' || Object.keys(rawParams).length === 0) {
+            return evaluatedName;
+        }
+        const useTheme = pl.layoutDefs?.['icon-image-use-theme'];
+        const params: Record<string, [number, number, number, number]> = {};
+        for (const [key, value] of Object.entries(rawParams)) {
+            let color: unknown = value;
+            if (isExpr(value)) {
+                try { color = MBExpressionEngine.evaluate(value, ctx); } catch { continue; }
+            }
+            if (typeof color !== 'string') continue;
+            const themed: string = (lut && useTheme !== 'none')
+                ? applyColorTheme(lut, color) : color;
+            const parsed = parseCssColor(themed);
+            if (parsed) params[key] = [parsed[0], parsed[1], parsed[2], parsed[3]];
+        }
+        if (Object.keys(params).length === 0) return evaluatedName;
+        return MBLayerEvaluator.imageParamsName(evaluatedName, params);
+    }
+
+    /**
+     * Synthetic userImageCache/atlas name for an image-params recolor
+     * variant (["image", name, {params:{fill}}] → mgl ImageVariant).
+     * Deterministic so the worker-side evaluator and the main-thread
+     * pre-registration (which rasterizes the variant into userImageCache
+     * BEFORE tile decode — late registration restarts the POI fade-in)
+     * agree on the name.
+     */
+    static imageParamsName(name: string, params: Record<string, [number, number, number, number]>): string {
+        const suffix = Object.entries(params)
+            .map(([k, v]) => `${k}:${v.join(',')}`).sort().join(';');
+        return `mbimg:${name}|${suffix}`;
     }
 }

@@ -143,7 +143,16 @@ export interface DecodedIcon {
     contentArea?: { left: number; top: number; width: number; height: number };
     stretchX: number[][];
     stretchY: number[][];
+    /** IconMetadata.variables — recolorable color slots (mgl readVariable). */
+    variables?: { name: string; rgb: [number, number, number] }[];
 }
+
+/**
+ * Registry of decoded icon-set icons by name, so image params variants
+ * (["image", name, {params: {fill}}]) can re-rasterize with color
+ * replacements long after the sprite load discarded the raw PBF.
+ */
+export const IconSetRegistry = new Map<string, DecodedIcon>();
 
 // ─── Color helper ───
 
@@ -345,6 +354,7 @@ function readIconEntry(pbf: PbfReader, end: number): DecodedIcon {
     let contentArea: DecodedIcon['contentArea'];
     let stretchX: number[] = [];
     let stretchY: number[] = [];
+    let variables: DecodedIcon['variables'];
     let field: number;
     while ((field = pbf.nextField(end))) {
         switch (field) {
@@ -356,6 +366,32 @@ function readIconEntry(pbf: PbfReader, end: number): DecodedIcon {
                     switch (mf) {
                         case 1: pbf.readPackedVarint(stretchX); break;
                         case 2: pbf.readPackedVarint(stretchY); break;
+                        case 3: { // content_area (NonEmptyArea: 1 left, 2 width, 3 top, 4 height)
+                            const __l = pbf.readVarint(); const ce = pbf.pos + __l;
+                            let left = 0, width = 0, top = 0, height = 0, cf: number;
+                            while ((cf = pbf.nextField(ce))) {
+                                if (cf === 1) left = pbf.readVarint();
+                                else if (cf === 2) width = pbf.readVarint();
+                                else if (cf === 3) top = pbf.readVarint();
+                                else if (cf === 4) height = pbf.readVarint();
+                                else pbf.skipField(cf);
+                            }
+                            contentArea = { left, top, width, height };
+                            break;
+                        }
+                        case 4: { // variables (Variable: 1 name, 2 rgb_color)
+                            const __l = pbf.readVarint(); const ve = pbf.pos + __l;
+                            let vname = ''; let vrgb: [number, number, number] | undefined; let vf: number;
+                            while ((vf = pbf.nextField(ve))) {
+                                if (vf === 1) vname = pbf.readString();
+                                else if (vf === 2) vrgb = decodeColor(pbf.readVarint());
+                                else pbf.skipField(vf);
+                            }
+                            if (vname && vrgb) {
+                                (variables ??= []).push({ name: vname, rgb: vrgb });
+                            }
+                            break;
+                        }
                         default: pbf.skipField(mf);
                     }
                 }
@@ -365,16 +401,52 @@ function readIconEntry(pbf: PbfReader, end: number): DecodedIcon {
             default: pbf.skipField(field);
         }
     }
-    return { name, width: tree.width, height: tree.height, tree, contentArea, stretchX: [], stretchY: [] };
+    const icon: DecodedIcon = { name, width: tree.width, height: tree.height, tree, contentArea, stretchX: [], stretchY: [] };
+    if (variables) icon.variables = variables;
+    IconSetRegistry.set(name, icon);
+    return icon;
 }
 
 // ─── Canvas2D rasterizer ───
 
 /**
+ * Active image-params color replacements (mgl ColorReplacements): maps the
+ * ORIGINAL fill color "r,g,b" of a variable slot to the replacement
+ * [r, g, b, alpha-0..1] (mgl getStyleColor honors the replacement's alpha).
+ * Rendering is synchronous, so a module-level slot is safe.
+ */
+let g_colorReplacements: Map<string, [number, number, number, number]> | null = null;
+
+function replaced(r: number, g: number, b: number): [number, number, number, number] {
+    if (g_colorReplacements) {
+        const hit = g_colorReplacements.get(`${r},${g},${b}`);
+        if (hit) return hit;
+    }
+    return [r, g, b, 1];
+}
+
+/**
  * Rasterize a decoded icon to a canvas at the given pixel ratio.
  * Returns an HTMLCanvasElement ready for use as a sprite texture.
+ *
+ * `params` mirrors mgl ImageVariant.params (["image", name, {params: {fill}}]):
+ * each key matching an IconMetadata variable replaces that variable's color
+ * everywhere it is used (fills, strokes, gradient stops).
  */
-export function renderIconToCanvas(icon: DecodedIcon, dpr: number = 1): HTMLCanvasElement {
+export function renderIconToCanvas(
+    icon: DecodedIcon,
+    dpr: number = 1,
+    params?: Record<string, [number, number, number, number]>,
+): HTMLCanvasElement {
+    g_colorReplacements = null;
+    if (params && icon.variables) {
+        const replacements = new Map<string, [number, number, number, number]>();
+        for (const v of icon.variables) {
+            const p = params[v.name];
+            if (p) replacements.set(v.rgb.join(','), p);
+        }
+        if (replacements.size > 0) g_colorReplacements = replacements;
+    }
     const w = icon.width * dpr;
     const h = icon.height * dpr;
     const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
@@ -384,6 +456,7 @@ export function renderIconToCanvas(icon: DecodedIcon, dpr: number = 1): HTMLCanv
     const ctx = canvas.getContext('2d')!;
     ctx.scale(dpr, dpr);
     renderTree(ctx, icon.tree);
+    g_colorReplacements = null;
     return canvas;
 }
 
@@ -467,7 +540,10 @@ function applyFillStyle(ctx: CanvasRenderingContext2D, fill: Fill, tree: UsvgTre
     // gradient's own transform is applied to the context so the gradient
     // coordinates resolve in the correct user space.
     const alpha = fill.opacity / 255;
-    const stopCss = (s: Stop): string => `rgba(${s.r},${s.g},${s.b},${(s.opacity / 255) * alpha})`;
+    const stopCss = (s: Stop): string => {
+        const [r, g, b, ra] = replaced(s.r, s.g, s.b);
+        return `rgba(${r},${g},${b},${ra * (s.opacity / 255) * alpha})`;
+    };
     if (fill.paint === 'linear_gradient_idx' && tree.linearGradients[fill.linearIdx]) {
         const g = tree.linearGradients[fill.linearIdx];
         if (g.transform) applyGradientTransform(ctx, g.transform);
@@ -489,7 +565,8 @@ function applyFillStyle(ctx: CanvasRenderingContext2D, fill: Fill, tree: UsvgTre
             ctx.fillStyle = grad;
         }
     } else {
-        ctx.fillStyle = `rgba(${fill.r},${fill.g},${fill.b},${alpha})`;
+        const [r, g, b, ra] = replaced(fill.r, fill.g, fill.b);
+        ctx.fillStyle = `rgba(${r},${g},${b},${ra * alpha})`;
     }
 }
 
@@ -505,24 +582,39 @@ function applyStrokeStyle(ctx: CanvasRenderingContext2D, s: Stroke, tree: UsvgTr
         const g = tree.linearGradients[s.linearIdx];
         if (g.transform) applyGradientTransform(ctx, g.transform);
         if (g.stops.length === 1) {
-            ctx.strokeStyle = `rgba(${g.stops[0].r},${g.stops[0].g},${g.stops[0].b},${(g.stops[0].opacity / 255) * alpha})`;
+            {
+                const [r, gg, b, ra] = replaced(g.stops[0].r, g.stops[0].g, g.stops[0].b);
+                ctx.strokeStyle = `rgba(${r},${gg},${b},${ra * (g.stops[0].opacity / 255) * alpha})`;
+            }
         } else {
             const grad = ctx.createLinearGradient(g.x1, g.y1, g.x2, g.y2);
-            for (const st of g.stops) grad.addColorStop(st.offset, `rgba(${st.r},${st.g},${st.b},${(st.opacity / 255) * alpha})`);
+            for (const st of g.stops) {
+                const [r, gg, b, ra] = replaced(st.r, st.g, st.b);
+                grad.addColorStop(st.offset, `rgba(${r},${gg},${b},${ra * (st.opacity / 255) * alpha})`);
+            }
             ctx.strokeStyle = grad;
         }
     } else if (s.paint === 'radial_gradient_idx' && tree.radialGradients[s.radialIdx]) {
         const g = tree.radialGradients[s.radialIdx];
         if (g.transform) applyGradientTransform(ctx, g.transform);
         if (g.stops.length === 1) {
-            ctx.strokeStyle = `rgba(${g.stops[0].r},${g.stops[0].g},${g.stops[0].b},${(g.stops[0].opacity / 255) * alpha})`;
+            {
+                const [r, gg, b, ra] = replaced(g.stops[0].r, g.stops[0].g, g.stops[0].b);
+                ctx.strokeStyle = `rgba(${r},${gg},${b},${ra * (g.stops[0].opacity / 255) * alpha})`;
+            }
         } else {
             const grad = ctx.createRadialGradient(g.fx, g.fy, g.fr, g.cx, g.cy, g.r);
-            for (const st of g.stops) grad.addColorStop(st.offset, `rgba(${st.r},${st.g},${st.b},${(st.opacity / 255) * alpha})`);
+            for (const st of g.stops) {
+                const [r, gg, b, ra] = replaced(st.r, st.g, st.b);
+                grad.addColorStop(st.offset, `rgba(${r},${gg},${b},${ra * (st.opacity / 255) * alpha})`);
+            }
             ctx.strokeStyle = grad;
         }
     } else {
-        ctx.strokeStyle = `rgba(${s.r},${s.g},${s.b},${alpha})`;
+        {
+            const [r, g, b, ra] = replaced(s.r, s.g, s.b);
+            ctx.strokeStyle = `rgba(${r},${g},${b},${ra * alpha})`;
+        }
     }
     ctx.lineWidth = s.width;
     ctx.lineCap = (['', 'butt', 'round', 'square'][s.linecap] ?? 'butt') as CanvasLineCap;

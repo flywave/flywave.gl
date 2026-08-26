@@ -20,6 +20,7 @@ import {
 import * as THREE from 'three';
 
 import { MBStyleManager, ResolvedSource } from './MBStyleManager';
+import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { MBTileDataEmitter } from './MBTileDataEmitter';
 import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
@@ -2552,6 +2553,77 @@ export class MBStyleDataSource extends TileDataSource {
     }
 
     /**
+     * Pre-register literal `["image", name, {params:{fill: <literal>}}]`
+     * recolor variants so tiles decode against an existing userImageCache
+     * entry (worker + main thread share the deterministic synthetic name).
+     */
+    private preRegisterImageParams(): void {
+        const style = this.m_styleManager.getStyle();
+        const lut = this.m_colorThemeLut ?? null;
+        const { applyColorTheme, parseCssColor } = require('./MBColorTheme');
+        for (const layer of (style?.layers ?? []) as any[]) {
+            if (layer.type !== 'symbol') continue;
+            const useTheme = layer.layout?.['icon-image-use-theme'];
+            const candidates: unknown[] = [layer.layout?.['icon-image']];
+            for (const app of layer.appearances ?? []) {
+                candidates.push(app.properties?.['icon-image']);
+            }
+            for (const raw of candidates) {
+                let expr: any = raw;
+                while (Array.isArray(expr) && expr[0] === 'memo') expr = expr[1];
+                if (!Array.isArray(expr) || expr[0] !== 'image'
+                    || typeof expr[1] !== 'string') continue;
+                const options = [expr[2], expr[3]].find(
+                    o => o !== null && typeof o === 'object' && !Array.isArray(o)) as any;
+                const rawParams = options?.params;
+                if (!rawParams || typeof rawParams !== 'object') continue;
+                const params: Record<string, [number, number, number, number]> = {};
+                let allLiteral = true;
+                for (const [key, value] of Object.entries(rawParams)) {
+                    if (typeof value !== 'string') { allLiteral = false; break; }
+                    let color: string = value;
+                    if (lut && useTheme !== 'none') color = applyColorTheme(lut, color);
+                    const parsed = parseCssColor(color);
+                    if (parsed) params[key] = [parsed[0], parsed[1], parsed[2], parsed[3]];
+                }
+                if (!allLiteral || Object.keys(params).length === 0) continue;
+                this.registerImageParamsVariant(expr[1], params);
+            }
+        }
+    }
+
+    /**
+     * Materialize a recolored icon variant for `["image", name, {params}]`
+     * (mgl ImageVariant.params → ImageRasterizer color replacements).
+     * Re-rasterizes the uSVG icon from the IconSetRegistry with the param
+     * colors and registers the canvas under a synthetic name in
+     * userImageCache (POI rendering) + the sprite atlas. Returns null for
+     * legacy raster sprites (no recolorable variables).
+     */
+    private registerImageParamsVariant(
+        name: string,
+        params: Record<string, [number, number, number, number]>,
+    ): string | null {
+        const atlas = this.m_spriteAtlas;
+        const userImageCache = (this.mapView as any)?.userImageCache;
+        if (!atlas || !userImageCache || typeof userImageCache.addImage !== 'function') return null;
+        if (typeof document === 'undefined') return null;
+        const variant = MBLayerEvaluator.imageParamsName(name, params);
+        if (atlas.icons.has(variant)) return variant;
+        try {
+            const { IconSetRegistry, renderIconToCanvas } = require('./IconSetPBFDecoder');
+            const icon = IconSetRegistry.get(name);
+            if (!icon || !(icon.variables?.length)) return null;
+            const canvas = renderIconToCanvas(icon, 1, params);
+            userImageCache.addImage(variant, canvas);
+            atlas.addIcon(variant, canvas, false);
+            return variant;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
      * Pre-register icon cross-fade blends straight after the sprite atlas
      * loads, BEFORE any tile decodes — a late (AfterRender) registration
      * restarts the POI fade-in animation and the icon is captured mid-fade
@@ -2767,6 +2839,12 @@ export class MBStyleDataSource extends TileDataSource {
         // Icon cross-fade blends must exist in userImageCache BEFORE tiles
         // decode — a late registration restarts the POI fade-in (§410).
         this.preRegisterIconBlends();
+
+        // Same pre-registration requirement for ["image", name, {params}]
+        // recolor variants (literal params only — data-driven params
+        // resolve per-feature in the worker and use the same deterministic
+        // synthetic name, but their canvas cannot be pre-rasterized).
+        this.preRegisterImageParams();
 
         // The color-theme may have decoded before the sprite atlas finished
         // loading — bake it now so late atlases are themed too.
