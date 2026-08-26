@@ -5532,3 +5532,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **回归**：terrain cache-invalidation 2/2、unsupported-fog、icon 域全部保持——**零回归**。
 
 **下会话 ROI**：① drape 内容对齐（bake 已含卫星但未上屏/错位——MBDrap 网格探针迭代 UV/flipY/视锥）；② 地形外观校准（光照/颜色 vs mgl 浅色平滑基调 mean 177）；③ 锚点 verdict；④ 3 例基线回归。
+
+**§481. 会话续记——drape 内容对齐首轮取证**：
+
+**MBDrap 探针（门控后）**：bake[0]（3×3 网格的 dx=−1 邻块）uniform 黑——**相机世界位不在该 DEM 块内**（cam 7422750 vs 块 x 7406442..7416226），raster tiles 在相机邻域 (0,0) 相对位、不在该块 bake 视锥——**属正常**（探针只采样首块）；中芯块 bake 应含卫星。**当前图 lum 249 近均匀**（无卫星细节）= drape 纹理未实际混入或混入错位——下一断点：探针改采样中芯块 + USE_DRAPE 编译后 vMapUv 采样路径。
+
+**会话终态快照**（§454-§481，28 阶段）：occlusion dd 555k→67-74k / before-3d 69k→7492-7799；icon +4 PASS；setProperty 四件套 17.5k（DEM 已上屏、drape 校准中）；两大引擎悬案告破 + 双反转定性；基线抽样 95% 保持。
+
+**下会话 ROI**：① 中芯块 bake 探针 + USE_DRAPE 上屏链断点；② 地形外观基调（249 vs 177）；③ 锚点 verdict；④ 3 例基线回归；⑤ 存量域（regressions 66 等）。
