@@ -219,12 +219,13 @@ export class MBMaterialPatchManager {
             (material as any).__mbPoiOcclusionPatched = true;
             let occlusionOpacity = (material as any).userData?.mbOcclusionOpacity;
             if (typeof occlusionOpacity !== 'number' || occlusionOpacity >= 1) {
-                // "Symbols before 3D" anchor hiding (mgl isClipped) is parked:
-                // the depth RT bake hits the engine's zero-fragment FBO issue
-                // (§12.76-58, same blocker as the terrain drape) and the
-                // sampled "depth" is the constant clear color — the binary
-                // hide would blanket-hide every icon (before-3d 7492→7800).
-                continue;
+                // "Symbols before 3D" batches (depthTest materials): hide the
+                // whole icon when its anchor is occluded (mgl isClipped) —
+                // occlusionOpacity 0 makes the fade binary (alpha *= vis).
+                // The depth RT now bakes real content (RTE camera zeroing,
+                // §469).
+                if ((material as any).depthTest !== true) continue;
+                occlusionOpacity = 0;
             }
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {

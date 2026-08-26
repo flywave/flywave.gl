@@ -293,8 +293,46 @@ export class TerrainDepthOcclusion {
                     o.material = this.m_encodeMat;
                 }
             });
-            renderer.render(scene, camera);
+            // RTE precedent (VectorMaterialProvider.renderFrameBuffer): the
+            // scene objects are placed camera-relative, so the render camera
+            // must sit at the origin — with its real (world-scale) position
+            // the view matrix loses float32 precision and NOTHING
+            // rasterizes (the §12.76-58 zero-fragment mystery).
+            const rtCam = camera.clone();
+            rtCam.position.set(0, 0, 0);
+            rtCam.updateMatrixWorld(true);
+            renderer.render(scene, rtCam);
             for (const [mesh, mat] of swapped) mesh.material = mat;
+            // Diagnostic: a raw triangle with an engine-independent material
+            // into the SAME target — separates "FBO rendering broken" from
+            // "engine scene fails to rasterize" (§12.76-58).
+            if ((globalThis as any).__mbOccDbg && !(this as any).__mbTriLogged) {
+                (this as any).__mbTriLogged = 1;
+                try {
+                    const triScene = new THREE.Scene();
+                    const triMat = new THREE.RawShaderMaterial({
+                        vertexShader: 'attribute vec3 position; void main(){ gl_Position = vec4(position, 1.0); }',
+                        fragmentShader: 'precision mediump float; void main(){ gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0); }',
+                        depthTest: false, depthWrite: false,
+                    });
+                    const geo = new THREE.BufferGeometry();
+                    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+                        -1, -1, 0, 3, -1, 0, -1, 3, 0,
+                    ]), 3));
+                    const tri = new THREE.Mesh(geo, triMat);
+                    tri.frustumCulled = false;
+                    triScene.add(tri);
+                    renderer.render(triScene, new THREE.Camera());
+                    const probe = new Uint8Array(4);
+                    renderer.readRenderTargetPixels(this.m_depthTarget, 0, 0, 1, 1, probe);
+                    // eslint-disable-next-line no-console
+                    console.log('[MBTri] probe=' + Array.from(probe).join(','));
+                    triMat.dispose();
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBTri] err ' + (e as Error).message);
+                }
+            }
             if ((globalThis as any).__mbOccDbg && !(this as any).__mbRawLogged) {
                 (this as any).__mbRawLogged = 1;
                 try {
