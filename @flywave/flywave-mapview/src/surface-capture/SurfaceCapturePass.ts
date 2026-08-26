@@ -43,6 +43,13 @@ export class SurfaceCapturePass {
     private m_capturedAny = false;
     private readonly m_scratchSize = new THREE.Vector2();
 
+    /**
+     * Inverse of the projection ACTUALLY used by the latest capture render.
+     * Reconstruction must use THIS — per-context projection adjustments in
+     * the renderer would otherwise desynchronize depth and main pass.
+     */
+    readonly reconProjInv = new THREE.Matrix4();
+
     constructor(mapView: MapView) {
         this.m_mapView = mapView;
         this.m_willRenderListener = () => this.render();
@@ -122,7 +129,10 @@ export class SurfaceCapturePass {
                 depthBuffer: true,
                 stencilBuffer: false
             });
-            const depthTexture = new THREE.DepthTexture(width, height);
+            // 32-bit float depth: reconstruction from this buffer must stay
+            // metrically accurate at kilometers, where 16/24-bit quantization
+            // alone displaces narrow draped bands by tens of meters.
+            const depthTexture = new THREE.DepthTexture(width, height, THREE.FloatType);
             depthTexture.minFilter = THREE.NearestFilter;
             depthTexture.magFilter = THREE.NearestFilter;
             target.depthTexture = depthTexture;
@@ -213,6 +223,8 @@ export class SurfaceCapturePass {
             renderer.render(scene, camera);
             renderer.autoClear = previousAutoClear;
             renderer.setRenderTarget(null);
+            // Exact inverse of what rasterized the depth we hand out.
+            this.reconProjInv.copy(camera.projectionMatrix).invert();
         } finally {
             scene.overrideMaterial = overrideMaterial;
             camera.layers.mask = previousMask;
