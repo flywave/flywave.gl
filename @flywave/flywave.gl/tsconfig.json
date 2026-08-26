@@ -7,7 +7,6 @@
         "rootDir": "./src",
         "paths": {
             "@flywave/flywave-mapview": ["../flywave-mapview/src"],
-            "@flywave/flywave-draped-draw": ["../flywave-draped-draw/src"],
             "@flywave/flywave-mapview-decoder": ["../flywave-mapview-decoder/src"],
             "@flywave/flywave-terrain-datasource": ["../flywave-terrain-datasource/src"],
             "@flywave/flywave-map-controls": ["../flywave-map-controls/src"],
@@ -33,9 +32,6 @@
     "references": [
         {
             "path": "../flywave-mapview"
-        },
-        {
-            "path": "../flywave-draped-draw"
         },
         {
             "path": "../flywave-mapview-decoder"

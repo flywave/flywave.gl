@@ -9,13 +9,6 @@
         "paths": {
             "@flywave/flywave.gl": ["../flywave.gl/src"],
             "@flywave/flywave.gl/*": ["../flywave.gl/src/*"],
-            "@flywave/flywave-draped-draw": ["../flywave-draped-draw/src"],
-            "@flywave/flywave-mapview": ["../flywave-mapview/src"],
-            "@flywave/flywave-mapview/*": ["../flywave-mapview/src/*"],
-            "@flywave/flywave-geoutils": ["../flywave-geoutils/src"],
-            "@flywave/flywave-geoutils/*": ["../flywave-geoutils/src/*"],
-            "@flywave/flywave-terrain-datasource": ["../flywave-terrain-datasource/src"],
-            "@flywave/flywave-3dtile-datasource": ["../flywave-3dtile-datasource/src"],
             "@flywave/flywave-map-controls": ["../flywave-map-controls/src"],
             "@flywave/flywave-map-controls/*": ["../flywave-map-controls/src/*"],
             "@flywave/flywave-draw-controls": ["../flywave-draw-controls/src"],
@@ -39,10 +32,10 @@
             "path": "../flywave.gl"
         },
         {
-            "path": "../flywave-draped-draw"
+            "path": "../flywave-geometry"
         },
         {
-            "path": "../flywave-geometry"
+            "path": "../flywave-heightmap-painter"
         },
         {
             "path": "../flywave-heightmap-painter"
