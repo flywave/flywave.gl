@@ -5574,3 +5574,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **修复方向**：bake 相机 bounds 补 fill 实际锚偏移，或 bake 前 forcing TileObjectRenderer 重放置（render(tile, zoom, zoom, camera.position, sceneRoot) 一调用）——后者语义更正。
 
 **下会话 ROI**：① bake 前重放置 fills（一行 TileObjectRenderer.render 调用）→ bake 含卫星；② 外观校准；③ 锚点 verdict；④ 3 例基线回归。
+
+**§486. 会话续记——fill 锚差数值定案（两 tile 偏移特征）**：
+
+**数值核算**：MBFillProj fill 心相对位 (+12.2k, −15.3k) ≈ **1.5-2 个 z12 tile** 的偏移（tile 9784m）——非相机锚快照差（静态相机下应重合），而像 **raster fill tile 索引/层级与相机 tile 差**（如 z11 vs z12 或 x/y 索引偏 1-2）——与 §475 tile 网格核对（当时只核 DEM 侧）互补，**下一断点：dump fill 的 tileKey/worldAnchor 与相机 tile 索引对照**（一行即判索引还是锚差）。
+
+**会话规模**：34 阶段（§454-§486），26.6k 秒。setProperty 链条断点已收敛至"fill tile 索引对照"一处，建议下会话冷启动直取。
+
+**下会话 ROI**：① fill tileKey vs 相机 tile 对照；② 修正后 bake→drape→外观校准冲刺；③ 锚点 verdict；④ 3 例基线回归。
