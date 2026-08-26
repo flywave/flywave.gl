@@ -5394,3 +5394,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **实测**：before-3d 稳定 7492-7555；data-driven 67-71k 噪声带；icon 回归保持。
 
 **下会话 ROI**：① CPU 锚点淘汰标定（readDepthBuffer 采样与主渲染 viewport/翻转一致性、near/far 来源核对——当前 camNear/Far 取 mapView.camera 与深度 pass 相机可能不同）；② 标定后 before-3d 冲刺（BOTH 15→67 即转绿在望）；③ raster-on-terrain draping 评估；④ 全量 462 基线复核。
+
+**§466. 会话续记——深度管线 RGBA 编码化 + POI 门控新发现（commit 6654a820）**：
+
+**DepthTexture 附件路线穷尽**：构造选项/显式赋值后纹理仍恒采 1.0，而绑定期间 raw `gl.readPixels(DEPTH_COMPONENT, UNSIGNED_INT)` 见真实深度（0）——纹理与 FBO 深度附件脱钩（孤儿）实锤；直接深度 readPixels 亦被 GL 拒（glErr 1280，UNSIGNED_SHORT/INT 均）。**改道 RGBA 编码 pass**：深度 pass 用 `scene.overrideMaterial`（MeshBasic + opaque_fragment 注入 `z16=hi*256+lo` 写 RG）渲入 RGBA 目标，颜色回读 + fade 采样双处解码同步。
+
+**两个新发现（未闭环）**：① override 渲染疑似异常（回读全 0，无 shader 报错——下一断点：直接主 canvas 对拍或 material.needsUpdate 强制）；② **POI 图标不受 el.visible 门控**（锚点淘汰全 occ=true 而 before-3d 渲染逐位不变）——text 专属门控，§458 碰撞隐藏对 POI 的生效路径需复审（此前改善或来自 text/其它机制）。
+
+**实测**：全族值在历史带内（before 7492 / after 26171 / dd 67-72k / setProperty 16239）——零回归，编码管线作为基建落地。
+
+**下会话 ROI**：① override 渲染断点（黑屏回读根因）；② POI 可见性真实门控点（TextElementsRenderer 放置链）——这是碰撞/锚点淘汰生效的前提；③ 之后 before-3d BOTH 15→67 冲刺；④ 全量 462 基线复核。
