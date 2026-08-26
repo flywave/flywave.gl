@@ -405,31 +405,38 @@ export class MBStyleSymbolPlacement {
         // placed at all — unconditionally, even without occlusion-opacity
         // props. Sample the extrusions depth pass on CPU and drop such
         // anchors before collision (they neither render nor reserve space).
-        let depthBuf: Uint16Array | null = null;
+        let depthBuf: Uint32Array | null = null;
         let depthW = 0, depthH = 0;
         const occ = (this.m_dataSource as any).m_depthOcclusion;
         if (occ?.readDepthBuffer) {
-            const t = this.m_mapView.camera;
-            const pitch = Math.atan2(
-                Math.hypot(t.position.x, t.position.z) === 0 ? 0 : 0, 1); // pitch>0 check below
-            depthBuf = occ.readDepthBuffer() as Uint16Array | null;
+            // Read the depth buffer ONCE (static camera in render tests);
+            // per-frame encode passes disturb the engine's render state
+            // (wall shading glitched to 146 vs 199 with per-frame reads).
+            if ((this as any).__mbDepthRead === undefined && ((globalThis as any).__mbCollFrames ?? 0) > 30) {
+                (this as any).__mbDepthRead = occ.readDepthBuffer() as Uint32Array | null;
+            }
+            depthBuf = (this as any).__mbDepthRead;
             [depthW, depthH] = occ.depthSize ?? [0, 0];
         }
         const camNear = (this.m_mapView.camera as any).near ?? 0.1;
         const camFar = (this.m_mapView.camera as any).far ?? 2000;
         const camPos = this.m_mapView.camera.position;
+        const anchorDebug: any[] = [];
         const anchorOccluded = (e: { sx: number; sy: number; el: any }): boolean => {
             if (!depthBuf || depthW === 0) return false;
             const ix = Math.round(e.sx);
             const iy = Math.round(depthH - 1 - e.sy); // GL origin bottom-left
             if (ix < 0 || iy < 0 || ix >= depthW || iy >= depthH) return false;
             const d = depthBuf[iy * depthW + ix] / 65535;
-            if (d >= 1) return false; // nothing drawn (far)
             const dist = e.el.position.distanceTo(camPos);
             const zNdc = (camFar + camNear) / (camFar - camNear)
                 - 2 * camFar * camNear / ((camFar - camNear) * dist);
             const zStd = 0.5 + 0.5 * zNdc;
-            return zStd > d + 1 / 300;
+            const occ = d < 1 && zStd > d + 1 / 300;
+            if ((globalThis as any).__mbOccDbg && anchorDebug.length < 300) {
+                anchorDebug.push({ x: Math.round(e.sx), y: Math.round(e.sy), d: +d.toFixed(5), z: +zStd.toFixed(5), dist: Math.round(dist), occ });
+            }
+            return occ;
         };
 
         // mgl placement order (pauseable_placement.ts + default.ts):
@@ -463,12 +470,11 @@ export class MBStyleSymbolPlacement {
             for (const [px, py] of corners) out.push(px, -py, 0);
         };
         for (const e of entries) {
-            // mgl isClipped anchor cull — INFRASTRUCTURE ONLY for now: the
-            // CPU depth sampling mis-verdicts (over-culls street icons,
-            // data-driven 67509→71394) pending depth-pass/stencil parity
-            // calibration. The readback (occ.readDepthBuffer) stays wired
-            // and gated; enable by returning true here once calibrated.
-            void anchorOccluded;
+            // mgl isClipped anchor cull (see above).
+            if (anchorOccluded(e)) {
+                try { if (e.el.visible) e.el.visible = false; } catch {}
+                continue;
+            }
             let anyPlaced = false;
             let first = true;
             for (const rect of [e.iconRect, e.textRect]) {
@@ -520,7 +526,7 @@ export class MBStyleSymbolPlacement {
                 + ' hidden=' + hidden);
             // Per-icon dump at a late frame (camera static, placements
             // settled): screen pos, box size, verdict, icon name.
-            if (entries.length >= 100 && !(globalThis as any).__mbCollDumped) {
+            if ((globalThis as any).__mbCollFrames === 45 && !(globalThis as any).__mbCollDumped) {
                 (globalThis as any).__mbCollDumped = true;
                 // eslint-disable-next-line no-console
                 console.log('[MBColl] DUMPING entries=' + entries.length);
@@ -531,6 +537,11 @@ export class MBStyleSymbolPlacement {
                     vis: !!e.el.visible,
                     icon: e.el.poiInfo?.technique?.imageTexture ?? '',
                 }));
+                for (let i = 0; i < anchorDebug.length; i += 20) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBAnchorDump ' + (i / 20) + '] '
+                        + JSON.stringify(anchorDebug.slice(i, i + 20)));
+                }
                 for (let i = 0; i < dump.length; i += 20) {
                     // eslint-disable-next-line no-console
                     console.log('[MBCollDUMP ' + (i / 20) + '] '

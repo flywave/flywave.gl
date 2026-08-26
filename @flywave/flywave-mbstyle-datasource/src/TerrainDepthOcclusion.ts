@@ -21,7 +21,9 @@ import { TerrainController } from './TerrainController';
  */
 export class TerrainDepthOcclusion {
     private m_depthTarget: THREE.WebGLRenderTarget | null = null;
-    private m_depthTexture: THREE.DepthTexture | null = null;
+    private m_depthTexture: THREE.Texture | null = null;
+    /** Override material writing standard depth into RG (16-bit split). */
+    private m_encodeMat: THREE.Material | null = null;
     private m_mapView: MapView;
     private m_terrain: TerrainController | null;
     private m_active = false;
@@ -39,7 +41,7 @@ export class TerrainDepthOcclusion {
         this.m_uniformName = uniformName;
     }
 
-    get depthTexture(): THREE.DepthTexture | null {
+    get depthTexture(): THREE.Texture | null {
         return this.m_depthTexture;
     }
 
@@ -91,15 +93,35 @@ export class TerrainDepthOcclusion {
         if (this.m_depthTarget) {
             this.m_depthTarget.dispose();
         }
-        this.m_depthTexture = new THREE.DepthTexture(w, h);
-        this.m_depthTexture.type = THREE.UnsignedIntType;
+        // Depth-in-color encode target: rendering occluders with an override
+        // material that writes gl_FragCoord.z (standard depth) into RG
+        // (16-bit split). The DepthTexture attachment route never delivered
+        // content to samplers (texture always sampled 1.0 while a raw FBO
+        // read saw real depth) — RGBA readback and sampling always work.
+        this.m_depthTexture = new THREE.Texture();
         this.m_depthTexture.minFilter = THREE.NearestFilter;
         this.m_depthTexture.magFilter = THREE.NearestFilter;
         this.m_depthTarget = new THREE.WebGLRenderTarget(w, h, {
-            depthTexture: this.m_depthTexture,
             depthBuffer: true,
             stencilBuffer: false,
         });
+        (this.m_depthTarget as any).texture = this.m_depthTexture;
+        if (!this.m_encodeMat) {
+            const encode = new THREE.MeshBasicMaterial();
+            encode.onBeforeCompile = (shader: any) => {
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <opaque_fragment>',
+                    `#include <opaque_fragment>
+                     {
+                         float z16 = clamp(gl_FragCoord.z, 0.0, 1.0) * 65535.0;
+                         float hi = floor(z16 / 256.0);
+                         float lo = z16 - hi * 256.0;
+                         gl_FragColor = vec4(hi / 255.0, lo / 255.0, 0.0, 1.0);
+                     }`
+                );
+            };
+            this.m_encodeMat = encode;
+        }
         this.m_width = w;
         this.m_height = h;
 
@@ -145,29 +167,25 @@ export class TerrainDepthOcclusion {
 
     /**
      * Read the depth target back to CPU (WebGL2 DEPTH_COMPONENT readback).
-     * Returns a Uint16Array (normalized 0..65535) or null. Callers sample
+     * Returns a Uint32Array (normalized 0..1) or null. Callers sample
      * [y * width + x]. The buffer is refreshed at most once per frame.
      */
-    private m_cpuDepth: Uint16Array | null = null;
+    private m_cpuDepth: Uint32Array | null = null;
     private m_cpuDepthFrame = -1;
 
-    readDepthBuffer(frame?: number): Uint16Array | null {
+    readDepthBuffer(frame?: number): Uint32Array | null {
         if (frame !== undefined && frame === this.m_cpuDepthFrame) return this.m_cpuDepth;
         const renderer = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
-        if (!renderer || !this.m_depthTarget || !this.m_depthTexture) return null;
+        if (!renderer || !this.m_depthTarget) return null;
         try {
-            const gl = renderer.getContext() as WebGL2RenderingContext;
-            const w = this.m_depthTexture.width ?? this.m_width;
-            const h = this.m_depthTexture.height ?? this.m_height;
-            const buf = new Uint16Array(w * h);
-            // three keeps the WebGL framebuffer in its internal properties
-            // table (not on the render target object).
-            const fb = (renderer as any).properties?.get?.(this.m_depthTarget)?.__webglFramebuffer;
-            if (!fb) return null;
-            const prevFbo = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
-            gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-            gl.readPixels(0, 0, w, h, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT, buf);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, prevFbo);
+            const w = this.m_width, h = this.m_height;
+            const px = new Uint8Array(w * h * 4);
+            renderer.readRenderTargetPixels(this.m_depthTarget, 0, 0, w, h, px);
+            // Encode: z16 = hi*256 + lo with hi = px[r], lo = px[g].
+            const buf = new Uint32Array(w * h);
+            for (let i = 0; i < w * h; i++) {
+                buf[i] = px[i * 4] * 256 + px[i * 4 + 1];
+            }
             this.m_cpuDepth = buf;
             this.m_cpuDepthFrame = frame ?? -2;
             return buf;
@@ -255,6 +273,20 @@ export class TerrainDepthOcclusion {
             renderer.setRenderTarget(this.m_depthTarget);
             renderer.clearDepth();
             renderer.render(scene, camera);
+            if ((globalThis as any).__mbOccDbg && !(this as any).__mbRawLogged) {
+                (this as any).__mbRawLogged = 1;
+                try {
+                    const gl = renderer.getContext() as WebGL2RenderingContext;
+                    const buf = new Uint32Array(64);
+                    gl.readPixels(512, 512, 4, 4, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, buf);
+                    // eslint-disable-next-line no-console
+                    console.log('[MBDepth] raw bound read: ' + Array.from(buf.slice(0, 8)).join(',')
+                        + ' hex=' + buf[0].toString(16));
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBDepth] raw read failed ' + (e as Error).message);
+                }
+            }
         } catch {
             // Rendering the depth pass failed — skip this frame (hard occlusion
             // via depthTest still applies from Scheme C).
@@ -262,6 +294,7 @@ export class TerrainDepthOcclusion {
             // ALWAYS restore the previous render target — an exception between
             // bind and restore used to leave the depth target bound, so the
             // engine's main render silently went into it instead of the canvas.
+            scene.overrideMaterial = null;
             renderer.setRenderTarget(prevTarget);
             for (const obj of hidden) obj.visible = true;
         }

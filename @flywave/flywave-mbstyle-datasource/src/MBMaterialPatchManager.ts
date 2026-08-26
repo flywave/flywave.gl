@@ -298,9 +298,10 @@ export class MBMaterialPatchManager {
                          float res = 0.0;
                          for (int y = 0; y < 4; ++y) {
                              for (int x = 0; x < 3; ++x) {
-                                 float d = texture2D(u_terrainDepth,
+                                 vec2 enc = texture2D(u_terrainDepth,
                                      mbAnchor - df
-                                     + vec2(float(x) * oneStep.x, float(y) * oneStep.y)).r;
+                                     + vec2(float(x) * oneStep.x, float(y) * oneStep.y)).rg;
+                                 float d = (enc.r * 255.0 * 256.0 + enc.g * 255.0) / 65535.0;
                                  res += 1.0 - clamp((myZlog - d) / mbEps, 0.0, 1.0);
                              }
                          }
@@ -382,7 +383,8 @@ export class MBMaterialPatchManager {
             );
             const block = `
              {
-                 float mbTz = texture2D(u_terrainDepth, gl_FragCoord.xy * u_terrainDepthInvSize).r;
+                 vec2 mbEnc = texture2D(u_terrainDepth, gl_FragCoord.xy * u_terrainDepthInvSize).rg;
+                 float mbTz = (mbEnc.r * 255.0 * 256.0 + mbEnc.g * 255.0) / 65535.0;
                  float mbOcclude = smoothstep(-0.002, 0.002, gl_FragCoord.z - mbTz);
                  gl_FragColor.a *= mix(1.0, uMBOcclusionOpacity, mbOcclude);
              }`;
@@ -2441,7 +2443,8 @@ export class MBMaterialPatchManager {
                         '#include <colorspace_fragment>',
                         `#include <colorspace_fragment>
                          {
-                             float mbTz = texture2D(u_terrainDepth, gl_FragCoord.xy * u_terrainDepthInvSize).r;
+                             vec2 mbEnc = texture2D(u_terrainDepth, gl_FragCoord.xy * u_terrainDepthInvSize).rg;
+                 float mbTz = (mbEnc.r * 255.0 * 256.0 + mbEnc.g * 255.0) / 65535.0;
                              float mbOcc = smoothstep(-0.002, 0.002, gl_FragCoord.z - mbTz);
                              gl_FragColor.a *= mix(1.0, uMBLineOcclusion, mbOcc);
                          }`
@@ -2595,7 +2598,8 @@ export class MBMaterialPatchManager {
                     '#include <colorspace_fragment>',
                     `#include <colorspace_fragment>
                      {
-                         float mbTz = texture2D(u_terrainDepth, gl_FragCoord.xy * u_terrainDepthInvSize).r;
+                         vec2 mbEnc = texture2D(u_terrainDepth, gl_FragCoord.xy * u_terrainDepthInvSize).rg;
+                 float mbTz = (mbEnc.r * 255.0 * 256.0 + mbEnc.g * 255.0) / 65535.0;
                          float mbOcclude = smoothstep(-0.002, 0.002, gl_FragCoord.z - mbTz);
                          gl_FragColor.a *= mix(1.0, uMBOcclusionOpacity, mbOcclude);
                      }`
