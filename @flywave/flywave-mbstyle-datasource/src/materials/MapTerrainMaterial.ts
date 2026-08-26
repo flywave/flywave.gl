@@ -26,6 +26,16 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
         // the drape path is enabled by prepending the define here — with a
         // distinct program cache key so draped/undraped variants coexist.
         this.customProgramCacheKey = () => (self.m_drapeTexture ? 'mbDrape' : 'mbNoDrape');
+        if ((globalThis as any).__mbOccDbg) {
+            const origCompile = this.onBeforeCompile?.bind(this);
+            // eslint-disable-next-line no-console
+            console.log('[MBMat] terrain material created');
+            this.onBeforeCompile = (shader: any, rs: any) => {
+                // eslint-disable-next-line no-console
+                console.log('[MBMat] compile drape=' + !!self.m_drapeTexture);
+                if (origCompile) origCompile(shader, rs);
+            };
+        }
         this.onBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms) => {
             if (self.m_drapeTexture) {
                 shader.fragmentShader = '#define USE_DRAPE\n'

@@ -202,10 +202,11 @@ export class TerrainDraping {
             } else if (this.isEnvironmentObject(obj)) {
                 obj.visible = false;
                 hidden.push(obj);
-            } else if ((obj as any).isMesh && (obj as any).material?.isMeshStandardMaterial) {
-                // Lit materials render BLACK in the bake (lights are hidden
-                // as environment objects) and blanket-cover the satellite
-                // imagery below — exclude them from the drape bake.
+            } else if ((obj as any).isMesh
+                && ((obj as any).material?.isMeshStandardMaterial
+                    // Screen-space POI/text quads project as garbage under
+                    // the top-down ortho bake camera — exclude.
+                    || (obj as any).material?.isShaderMaterial)) {
                 obj.visible = false;
                 hidden.push(obj);
             } else if ((obj as any).isMesh || (obj as any).isSprite || (obj as any).isPoints) {
@@ -221,6 +222,21 @@ export class TerrainDraping {
             for (const obj of hidden) obj.visible = true;
             return;
         }
+
+        // The bake camera bounds are camera-RELATIVE (tile − camPos), but the
+        // raster quads sit at ABSOLUTE world coords — shift them into the
+        // relative frame for the bake, restore after.
+        const camAbs = this.m_mapView.camera.position;
+        const shifted: Array<[THREE.Mesh, THREE.Vector3]> = [];
+        scene.traverse((o: any) => {
+            if (o.isMesh && o.visible && !terrainMeshes.has(o) && Math.abs(o.position.x) > 1e5) {
+                shifted.push([o, o.position.clone()]);
+                o.position.set(
+                    o.position.x - camAbs.x,
+                    o.position.y - camAbs.y,
+                    o.position.z - camAbs.z);
+            }
+        });
 
         const prevTarget = renderer.getRenderTarget();
         const prevClearColor = renderer.getClearColor(new THREE.Color());
@@ -257,8 +273,11 @@ export class TerrainDraping {
                 // void areas show the (color-theme-aware) map background. Use
                 // the live clear color instead of white; alpha=1 keeps the
                 // "no drape content" blending semantics.
-                renderer.setClearColor(
-                    (this.m_mapView as any).clearColor ?? TerrainDraping.CLEAR_COLOR, 1.0);
+                // Clear with alpha 0: the terrain shader blends
+                // mix(base, drape.rgb, drape.a) — empty areas MUST carry
+                // alpha 0 to keep the terrain's own color (alpha 1 blanked
+                // the whole tile to the clear color, the §472 black-field).
+                renderer.setClearColor(0x000000, 0);
                 renderer.clear();
                 renderer.render(scene, camera);
                 // Feed the baked texture to the terrain material — but ONLY
@@ -303,9 +322,22 @@ export class TerrainDraping {
                     for (let k = 0; k < 25; k++) {
                         cells.push(grid[k * 4] + ',' + grid[k * 4 + 1] + ',' + grid[k * 4 + 2]);
                     }
+                    let quadPos = '';
+                    let terrainPos = '';
+                    this.m_mapView.scene.traverse((o: any) => {
+                        if (o.isMesh && o.material?.isMeshBasicMaterial && o.userData?.technique === undefined && !quadPos) {
+                            quadPos = o.position.x.toFixed(0) + ',' + o.position.y.toFixed(0);
+                        }
+                    });
+                    if (meshes[0]) terrainPos = meshes[0].position.x.toFixed(0) + ',' + meshes[0].position.y.toFixed(0);
+                    const sceneRoot = (this.m_mapView as any).m_sceneRoot;
+                    const rootPos = sceneRoot ? sceneRoot.position.x.toFixed(0) + ',' + sceneRoot.position.y.toFixed(0) : '?';
+                    const camPos2 = this.m_mapView.camera.position.x.toFixed(0) + ',' + this.m_mapView.camera.position.y.toFixed(0);
                     // eslint-disable-next-line no-console
-                    console.log('[MBDrap] bake uniform=' + uniform + ' grid=' + cells.join(' | ')
-                        + ' | visibles=' + vis + ' kinds=' + JSON.stringify(kinds));
+                    console.log('[MBDrap] bake uniform=' + uniform + ' grid=' + cells.slice(0, 3).join(' | ')
+                        + ' | visibles=' + vis + ' kinds=' + JSON.stringify(kinds)
+                        + ' quad=' + quadPos + ' terrain=' + terrainPos + ' root=' + rootPos + ' cam=' + camPos2
+                        + ' tileO=' + tile?.originX?.toFixed(0) + ',' + tile?.originY?.toFixed(0) + ' size=' + tile?.size?.toFixed(0));
                 }
                 const mat = mesh.material as any;
                 // Content gate: only enable the drape when the bake actually
@@ -322,8 +354,9 @@ export class TerrainDraping {
         } finally {
             renderer.setRenderTarget(prevTarget);
             renderer.setClearColor(prevClearColor, prevClearAlpha);
-            // Restore visibility.
+            // Restore visibility and positions.
             for (const obj of hidden) obj.visible = true;
+            for (const [mesh, pos] of shifted) mesh.position.copy(pos);
         }
     }
 
