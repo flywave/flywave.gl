@@ -166,18 +166,19 @@ describe('TextShaping', () => {
             expect(getJustifyOffset(5, 10, 'auto', 'center')).to.equal(2.5);
         });
 
-        it('auto justify right-justifies for left anchor', () => {
-            // Binary justify: 'auto' follows anchor direction.
-            expect(getJustifyOffset(5, 10, 'auto', 'left')).to.equal(5);
+        it('auto justify left-justifies for left anchor', () => {
+            // mgl getAnchorJustification: same-direction mapping
+            // (left/top-left/bottom-left → left).
+            expect(getJustifyOffset(5, 10, 'auto', 'left')).to.equal(0);
         });
 
-        it('auto justify left-justifies for right anchor', () => {
-            expect(getJustifyOffset(5, 10, 'auto', 'right')).to.equal(0);
+        it('auto justify right-justifies for right anchor', () => {
+            expect(getJustifyOffset(5, 10, 'auto', 'right')).to.equal(5);
         });
 
-        it('auto justify centers for top-left anchor', () => {
-            // Diagonal anchors use center.
-            expect(getJustifyOffset(5, 10, 'auto', 'top-left')).to.equal(5);
+        it('auto justify left-justifies for top-left anchor', () => {
+            // Diagonal anchors map by horizontal component (top-left → left).
+            expect(getJustifyOffset(5, 10, 'auto', 'top-left')).to.equal(0);
         });
 
         it('auto without anchor defaults to center', () => {

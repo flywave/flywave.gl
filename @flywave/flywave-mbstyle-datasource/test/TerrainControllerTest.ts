@@ -91,12 +91,19 @@ describe('Terrain algorithms', () => {
                 new THREE.PlaneGeometry(1, 1),
                 new THREE.MeshBasicMaterial(),
             );
-            mesh.position.set(5 * tileWorldSize + tileWorldSize / 2, 0, 7 * tileWorldSize + tileWorldSize / 2);
+            // z-up engine: x/y are the mercator plane, elevation on z.
+            mesh.position.set(
+                5 * tileWorldSize + tileWorldSize / 2,
+                7 * tileWorldSize + tileWorldSize / 2,
+                0);
             mesh.scale.set(1, 1, 1);
             const fakeTexture = new THREE.DataTexture(
                 new Float32Array([0]), 1, 1, THREE.RedFormat, THREE.FloatType,
             );
-            // Inject into the private fields the getter reads.
+            // Inject into the private fields the getter reads. §117: the
+            // getter reads the WORLD position from userData, not mesh.position
+            // (which is camera-relative at runtime).
+            mesh.userData.__mbWorldPos = mesh.position.clone();
             (tc as any).m_meshes.push(mesh);
             (tc as any).m_demTextures.push(fakeTexture);
             const tiles = tc.allDemTiles;
@@ -128,12 +135,15 @@ describe('Terrain algorithms', () => {
         });
 
         it('positions camera at tile center looking down', () => {
+            // §139/§280 semantics: camera-relative x/y center, fixed z=6000
+            // inside the 1..12000 frustum window, up = +Y (z-up scene).
             const tile = { originX: 0, originY: 0, size: 1000 };
             const cam = buildTileCamera(tile);
             if (!cam) return;
             assert.closeTo(cam.position.x, 500, 0.1);
-            assert.closeTo(cam.position.z, 500, 0.1);
-            assert.strictEqual(cam.up.z, 1);
+            assert.closeTo(cam.position.y, 500, 0.1);
+            assert.strictEqual(cam.position.z, 6000);
+            assert.strictEqual(cam.up.y, 1);
         });
 
         it('camera frustum matches the tile size', () => {

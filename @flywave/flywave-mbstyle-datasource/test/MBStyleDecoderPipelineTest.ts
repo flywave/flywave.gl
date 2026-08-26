@@ -161,7 +161,8 @@ describe('MBStyle decode pipeline', () => {
 
         const tech = decodedTile.techniques[0] as any;
         expect(tech.name).to.equal('circles');
-        expect(tech.size).to.equal(10);
+        // size = (radius + stroke) * 2 — stroke-inclusive quad sizing (emitter)
+        expect(tech.size).to.equal(20);
     });
 
     it('evaluates data-driven expressions during decode', () => {
@@ -357,11 +358,12 @@ describe('MBStyle decode pipeline', () => {
         const mgr = new MBEnvironmentManager({ m_scene: { add: () => {}, remove: () => {} } } as any);
 
         // color-ambient-directional: red ambient@1 + green directional@1 with
-        // default direction [0, 90] (polar 90 = horizon, z=0 → no directional
-        // ground contribution). Expected groundRadiance = [1, 0, 0].
+        // explicit horizon direction [0, 90] (polar 90 = horizon, z=0 → no
+        // directional ground contribution). Expected groundRadiance = [1, 0, 0].
+        // (The style-spec DEFAULT direction is [210, 30] — set explicitly.)
         mgr.applyLights([
             { type: 'ambient', id: 'a', properties: { color: 'rgba(255, 0, 0, 1)', intensity: 1 } },
-            { type: 'directional', id: 'd', properties: { color: 'rgba(0, 255, 0, 1)', intensity: 1 } },
+            { type: 'directional', id: 'd', properties: { color: 'rgba(0, 255, 0, 1)', intensity: 1, direction: [0, 90] } },
         ] as any);
         let st = mgr.lighting3DState;
         expect(st).not.to.be.null;

@@ -62,6 +62,10 @@ export class MBStyleRuntime {
         const delay = transition?.delay ?? 0;
 
         if (duration > 0 && this.canInterpolate(oldValue, value)) {
+            // mgl semantics: the property reads back its TARGET immediately
+            // (getPaintProperty returns the new value even mid-transition);
+            // only the rendered evaluation interpolates over time.
+            (layer as any).paint[prop] = value;
             this.m_transitions.push({
                 layerId, prop,
                 from: oldValue,
@@ -70,6 +74,7 @@ export class MBStyleRuntime {
                 duration,
                 delay,
             });
+            this.rebuildEvaluator();
             this.ensureTickLoop();
         } else {
             (layer as any).paint[prop] = value;
@@ -298,6 +303,11 @@ export class MBStyleRuntime {
      * Get a paint property value.
      */
     getPaintProperty(layerId: string, prop: string): any {
+        // mgl: the property reports its transition TARGET while a transition
+        // is running (the raw paint map holds the interpolated render value).
+        for (const tr of this.m_transitions) {
+            if (tr.layerId === layerId && tr.prop === prop) return tr.to;
+        }
         const layer = this.findLayer(layerId);
         return (layer as any)?.paint?.[prop];
     }

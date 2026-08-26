@@ -30,7 +30,11 @@ describe('MBMaterialFactory', () => {
             'line-width': 2,
             'line-opacity': 1,
         }, { rendererCapabilities: caps }) as any;
-        expect(mat.type).to.include('RawShaderMaterial');
+        // walk the prototype chain by NAME: engine packages may load a second
+        // THREE instance, so cross-instance instanceof / flags are unreliable.
+        let proto = Object.getPrototypeOf(mat); let found = false;
+        while (proto) { if (proto.constructor?.name === 'RawShaderMaterial') { found = true; break; } proto = Object.getPrototypeOf(proto); }
+        expect(found).to.equal(true);
         expect(mat.color.getHexString()).to.equal('ff0000');
     });
 
