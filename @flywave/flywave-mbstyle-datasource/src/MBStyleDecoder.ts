@@ -353,6 +353,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     /** Terrain elevation sampler (world x/y -> meters, exaggeration applied). */
     private m_terrainSampler: ((x: number, y: number) => number) | null = null;
     private m_terrainHeightScale = 1;
+    private m_heightScaleScaleFromTerrainFlag = false;
+    private get m_heightScaleFromTerrain(): boolean { return this.m_heightScaleScaleFromTerrainFlag; }
+    private set m_heightScaleFromTerrain(v: boolean) { this.m_heightScaleScaleFromTerrainFlag = v; }
     /**
      * Mapbox camera zoom (fractional, without the flywave +1 offset). Set by
      * the data source from the live camera so zoom/camera expressions
@@ -466,6 +469,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         // sampler bakes into ground elevations).
         if (customOptions?.terrainHeightScale !== undefined) {
             this.m_terrainHeightScale = customOptions.terrainHeightScale as number;
+            this.m_heightScaleFromTerrain = customOptions.terrainHeightScaleFromTerrain === true;
         }
         if (customOptions?.mapboxZoom !== undefined) {
             this.m_mapboxZoom = customOptions.mapboxZoom as number;
@@ -552,9 +556,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         if (this.m_glyphMetrics.size > 0) {
             emitter.setGlyphLookup(this.buildGlyphLookup());
         }
+        // The sec(lat) height factor applies WITHOUT terrain too (mgl
+        // meters/tileToMeter) — only the DEM sampler is terrain-gated.
+        emitter.setTerrainHeightScale(this.m_terrainHeightScale, this.m_heightScaleFromTerrain);
         if (this.m_terrainSampler) {
             emitter.setTerrainSampler(this.m_terrainSampler);
-            emitter.setTerrainHeightScale(this.m_terrainHeightScale);
         }
 
         const processor = new MBStyleDataProcessor(

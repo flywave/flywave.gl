@@ -355,6 +355,18 @@ export class MBTileDataEmitter {
         return `mbblend:${a}|${b}|${t.toFixed(4)}`;
     }
 
+    /**
+     * Synthetic userImageCache name for an image-params recolor variant
+     * (["image", name, {params:{fill}}] → mgl ImageVariant). Deterministic so
+     * the worker-side emitter and the main-thread pre-registration (which
+     * rasterizes the variant into userImageCache BEFORE tile decode) agree.
+     */
+    static imageParamsName(name: string, params: Record<string, [number, number, number]>): string {
+        const suffix = Object.entries(params)
+            .map(([k, v]) => `${k}:${v.join(',')}`).sort().join(';');
+        return `mbimg:${name}|${suffix}`;
+    }
+
     private m_geometries: Map<string, AccumulatedGeometry> = new Map();
     private m_techniqueIndex = 0;
     private m_techniques: IndexedTechnique[] = [];
@@ -393,11 +405,20 @@ export class MBTileDataEmitter {
      * (mercatorZfromAltitude) — the same factor sampleElevation bakes into
      * ground heights — so building heights must use it too (§289).
      */
-    setTerrainHeightScale(scale: number): void {
+    setTerrainHeightScale(scale: number, fromTerrain: boolean): void {
         this.m_terrainHeightScale =
             Number.isFinite(scale) && scale > 0.2 ? scale : 1;
+        this.m_heightScaleFromTerrain = fromTerrain;
     }
     private m_terrainHeightScale = 1;
+    /**
+     * Whether m_terrainHeightScale came from an ACTIVE terrain controller.
+     * mgl scales building heights by sec(lat) exactly ONCE (bucket height is
+     * meters/tileToMeter; mercator upVectorScale is 1). The §294 "sec²"
+     * calibration only holds with terrain (the DEM sample path already bakes
+     * one factor); without terrain the extra flat-path factor must NOT apply.
+     */
+    private m_heightScaleFromTerrain = false;
 
     /**
      * Mapbox camera bearing in degrees (style.bearing). Resolves
@@ -1608,7 +1629,8 @@ export class MBTileDataEmitter {
         // secLat@37.75°) but once on the per-vertex terrain path — apply the
         // extra factor per alignment below (flat 54761→48992, terrain stays).
         const extraScale =
-            ((layer.paint as any)['fill-extrusion-height-alignment'] ?? 'flat') === 'flat'
+            this.m_heightScaleFromTerrain
+            && ((layer.paint as any)['fill-extrusion-height-alignment'] ?? 'flat') === 'flat'
                 ? this.m_terrainHeightScale
                 : 1;
         const floorHeight = rawFloor * this.m_terrainHeightScale * extraScale;

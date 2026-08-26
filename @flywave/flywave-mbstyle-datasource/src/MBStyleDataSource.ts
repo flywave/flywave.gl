@@ -1580,6 +1580,23 @@ export class MBStyleDataSource extends TileDataSource {
             this.m_lastAppliedSprite = style.sprite;
         }
 
+        // mgl scales fill-extrusion heights by sec(lat) exactly once
+        // (bucket: meters/tileToMeter; mercator upVectorScale is 1). Without
+        // terrain the factor was missing entirely — buildings rendered
+        // sec(lat) (=1.32 at NYC) too short (§455 roof↔wall silhouette
+        // swaps). MUST run BEFORE wireTileSources: tiles decode with the
+        // scale baked in. (The terrain branch later in connect() overrides
+        // with the DEM-matched factor and its §294 sec² flat path.)
+        if (!style.terrain) {
+            try {
+                const lat = style.center?.[1] ?? 0;
+                const secLat = 1 / Math.cos(lat * Math.PI / 180);
+                this.decoder.configure(undefined, {
+                    terrainHeightScale: secLat,
+                    terrainHeightScaleFromTerrain: false,
+                } as any);
+            } catch {}
+        }
         // Wire the style's tile sources (vector priority, else a composite of
         // all GeoJSON-format sources). Sets m_currentSourceId and delegate.
         await this.wireTileSources(style, sources);
@@ -1855,9 +1872,17 @@ export class MBStyleDataSource extends TileDataSource {
                         terrainElevationSampler: (wx: number, wy: number) =>
                             ctl.sampleElevation(wx, wy),
                         terrainHeightScale: ctl.sampleSecLat ?? 1,
+                        terrainHeightScaleFromTerrain: true,
                     } as any);
                 }
             } catch {}
+            // mgl scales fill-extrusion heights by sec(lat) exactly once
+            // (bucket: meters/tileToMeter; mercator upVectorScale is 1).
+            // Without terrain the factor was missing entirely — buildings
+            // rendered sec(lat) (=1.32 at NYC) too short, producing the
+            // §455 roof↔wall silhouette swaps. Runs unconditionally (the
+            // terrain branch above only fires when the style HAS terrain).
+
             const terrainMax = (this.m_environment as any).terrainController?.maxElevation ?? 0;
             // The terrain meshes only exist now — re-run applyBackgroundColor
             // so their base color picks up the (themed, lit) background.
