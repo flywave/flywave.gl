@@ -178,7 +178,14 @@
   触发的 newSize/forceResize/mesh.geometry 换新后 attributes 状态）
   ② addBox 尾部 m_positionAttribute.count vs mesh.geometry.attributes
   .position.count ③ PoiRenderer.render 时该 mesh geometry attribute
-  count/array len——三个断点一轮即可定位分裂点
+  count/array len——**三断点已远程模拟并终局修复**：BPA 实测
+  writes=1000 时 geoArrLen=0（写入落 len-0 数组静默丢弃）、BPR 实测
+  newSize≤size 时 resize 仍以空 attributes 重建 geometry、BPD 实测
+  前几帧 nonEmptyPos=20 后归 0。根因=reset 换空 array 但保留
+  attribute 对象，addBox 容量检查过 stale size 直接写空数组。
+  修复=reset 改 clearAttributes 语义（attributes 置 undefined，
+  下次 addBox 走 resize 重建）。**效果：radius-NaN 消失、icons
+  首次上屏（564623→557198）、零回归**。悬案 30 层终结
 ## 三、验证基线
 
 - 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
