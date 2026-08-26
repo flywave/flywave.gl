@@ -315,7 +315,18 @@ export class TerrainDraping {
                         c.project(camera);
                         const mv: any = this.m_mapView;
                         const camW = mv.camera.position;
-                        const wcx = c.x, wcy = c.y; // pre-projection world-relative
+                        // VERTEX-LEVEL projection (bounding sphere center is
+                        // polluted by tile-local geometry offsets): project
+                        // the first 4 actual vertices through matrixWorld.
+                        const pos = o.geometry?.attributes?.position;
+                        if (pos) {
+                            const V = new V3();
+                            for (let vi = 0; vi < 4 && vi < pos.count; vi++) {
+                                V.fromBufferAttribute(pos, vi).applyMatrix4(o.matrixWorld).project(camera);
+                                // eslint-disable-next-line no-console
+                                console.log('[MBVtx] fill#' + n + ' v' + vi + ' NDC=' + V.x.toFixed(2) + ',' + V.y.toFixed(2) + ',' + V.z.toFixed(3));
+                            }
+                        }
                         const absX = (o.position.x ?? 0) + camW.x;
                         const absY = (o.position.y ?? 0) + camW.y;
                         // eslint-disable-next-line no-console
