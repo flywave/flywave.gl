@@ -273,6 +273,11 @@ export class TerrainDraping {
                 for (let k = 4; k < 20; k++) {
                     if (sample[k] !== sample[k % 4]) { uniform = false; break; }
                 }
+                if ((globalThis as any).__mbOccDbg && !(globalThis as any).__mbDrapLogged) {
+                    (globalThis as any).__mbDrapLogged = 1;
+                    // eslint-disable-next-line no-console
+                    console.log('[MBDrap] bake uniform=' + uniform + ' sample=' + Array.from(sample.slice(0, 8)).join(','));
+                }
                 const mat = mesh.material as any;
                 // Content gate: only enable the drape when the bake actually
                 // produced non-uniform content (auto-disables on empty bakes).
