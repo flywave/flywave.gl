@@ -336,8 +336,8 @@ export class TerrainDraping {
                 for (let k = 4; k < 20; k++) {
                     if (sample[k] !== sample[k % 4]) { uniform = false; break; }
                 }
-                if ((globalThis as any).__mbOccDbg && !(globalThis as any).__mbDrapLogged) {
-                    (globalThis as any).__mbDrapLogged = 1;
+                if ((globalThis as any).__mbOccDbg && ((globalThis as any).__mbDrapLogged ?? 0) < 9) {
+                    (globalThis as any).__mbDrapLogged = ((globalThis as any).__mbDrapLogged ?? 0) + 1;
                     let vis = 0; const kinds: Record<string, number> = {};
                     this.m_mapView.scene.traverse((o: any) => {
                         if (o.visible && (o.isMesh || o.isSprite || o.isPoints)) {
