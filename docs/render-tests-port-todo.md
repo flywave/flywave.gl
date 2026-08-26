@@ -5349,3 +5349,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **修复（aa5ab965）**：fade 判定采样点移至图标中心（`fwidth(vUv)` 把 UV 中心投影回屏幕，全 fragment 一致 = mgl per-symbol 顶点级语义）；vis=0（锚点全遮）→ alpha=0 硬淘汰。实测 data-driven 71107→**70097**；no-occlusion-after 26171→28418（回退观察，该族或涉 before/after-3d 时序）；before/setProperty/terrain 持平。icon 域回归 15/16 保持（唯一失败=原有 icon-color/use-theme 119）。
 
 **下会话 ROI**：① no-occlusion-after 回退排查（锚点淘汰 vs 该族 mgl 行为的出入）；② mglOnly=41 残余（blocker 语义/盒 anchor-offset 精确对齐，现真值管线已打通可迭代）；③ occlusion 24 例全批 + 转绿冲刺（当前最优 70097/28418/70589/16278）。
+
+**§462. 会话续记——after-3d 噪声证伪 + before-3d 引擎级定性（commit 035ba4e4）**：
+
+**① no-occlusion-after "回退"证伪**：26171→28418/30114 系跑动噪声——复测稳定回 26171（该族无 occlusion 属性，fade/锚点淘汰均不激活，理论无感 ✓ 与实测一致）。
+
+**② before-3d（~70k）根因升级为引擎级**：mgl 语义 = 符号层位于挤出层之前时按 painter 序先画、被建筑深度覆盖。我方 POI 图标经 `TextElementsRenderer.renderText` 的**屏幕空间正交相机**渲染——该 pass 无主场景世界深度，深度测试无从比对。**已落地完整链路**（035ba4e4）：style 级 iconDepthTest 判定 → decoder/emitter → PoiInfo.iconDepthTest → PoiBatchRegistry 批分裂（#d）→ IconMaterial depthTest 参数 + `gl_FragDepth=log2(1+w)·FC/2` 写入 + PoiRenderer 按相机 far 每帧刷新 FC。实证 52 个 depthTest=true 批次创建但屏幕空间路径下 vW 恒 1（正交），机制就绪而惰性——**收口需逐 POI 世界深度 varying**（BoxBuffer 顶点属性手术，下会话）。
+
+**③ 回归**：icon 域 14/16 保持（use-theme 原有）；occlusion 最优值带 data-driven 69178 / after 26171 / before ~70k / setProperty 16278。
+
+**下会话 ROI**：① BoxBuffer 逐 POI 世界深度属性（解锁 before-3d 收口，复用已铺机制）；② mglOnly=41 碰撞盒 anchor/offset 精确对齐（MBGLIconDump 管线迭代）；③ occlusion 24 例全批转绿冲刺；④ 全量 462 基线复核（累计八阶段改动面）。
