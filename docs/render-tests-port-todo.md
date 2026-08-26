@@ -5640,3 +5640,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **下会话首步（唯一残余断点）**：bake 期间临时以 `material.onBeforeCompile` 尾部追加 `gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);`（常量红）重编译——RT 变红=着色器输出值问题（real-blend alpha 路径）；仍黑=帧缓冲/格式/读写错配。一步二分。
 
 **会话终收束**：42 阶段（§454-§494）。
+
+**§495. 会话终记——常量红二分执行完毕（红未现=提交调用非 raster fill）**：
+
+**二分结果**：bake 模式下 raster fill 着色器**无条件写红**（`gl_FragColor=vec4(1,0,0,1); return;`）——**RT 仍 uniform 黑**（grid 0,0,0），且主渲染图像也不红。两种解释：① §494 的 6 次绘制调用**并非 raster fill**（是其它对象）；② bake 旗标重编译从未发生（materials 不在 m_rasterHidden 收集集——材质门与 technique 对象的对应关系待核）。**下会话首步**：MBDC 探针处同时打印每次 draw 的 material.userData 标识（renderer.info 无此信息，改为在 fill 材质 onBeforeCompile 计数探针——编译即计数）。
+
+**会话终收束**：43 阶段（§454-§495）。
