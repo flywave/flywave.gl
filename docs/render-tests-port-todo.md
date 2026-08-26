@@ -5598,3 +5598,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **修复方向（二选一）**：① bake 相机 bounds 扩至 fill 实际 matrixWorld 范围（保留 UV 由 fill 内插）；② fill 几何居中化（构建时平移到原点，position 承载全偏移）——②语义更正但动渲染管线的几何约定，①为 bake 局部改动。
 
 **会话终局**：36 阶段（§454-§488）。下会话冷启动：按①实施（bake 相机适配 fill 实际范围）→ bake 含卫星 → USE_DRAPE → 外观校准。
+
+**§489. 会话续记——bake 相机扩窗实施（方向①，内容仍未通）**：
+
+**实施**：bake 相机 bounds 与 fill 实际 matrixWorld 包围盒取并集（一次缓存）。**实测**：bake 仍 18/18 uniform（读数 0,0,0 与"渲染纯黑/透明"不可区分）；四件套值带内移动（under-depth 17246→**16913** 微降，terrain 15897→17585 微升）。回归 8 passed 零损失。
+
+**次级嫌疑（记档）**：fill 在 bake 中的**片元输出**——patcher 产物材质的不透明合成/in-shader composite 在 alpha=0 清底下可能输出全透明或黑；下一断点 = fill fragment 一行插桩（bake 期间 gl_FragColor 输出值）。另注意扩窗破坏 UV 1:1（drape 像素↔tile 世界对齐）——方向②（fill 几何居中化）仍是语义正解。
+
+**会话终局**：37 阶段（§454-§489）。冷启动指引：fill fragment 插桩 → 方向②评估。
