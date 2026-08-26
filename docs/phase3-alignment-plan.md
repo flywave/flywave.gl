@@ -58,6 +58,24 @@
 - [x] occlusion/terrain 夹具数据离线入库（595deb5a）：用户 token 拉取
   z16 NYC streets-v8 mvt 1200+ 块、terrain-dem-v1、satellite、glyphs；
   渲染对拍按用户指示延后
+- [~] occlusion 族数据补齐后首拍（2026-08-26）：24 例仍全 FAIL 但
+  **性质已变**——地图主体渲染出来了（建筑+道路），缺口收敛为两点：
+  ① **extrusion 3D 光照 no-op（重大发现，决定性证据链）**：
+  injectExtrusion3DLighting 安装正常（use3DLights=true、amb 正确、
+  handler 挂载、needsUpdate 置位），但 (a) handler 从未执行
+  （onBeforeCompile 体内置探针零输出）；(b) **material.color ×0.15
+  后渲染逐位不变（217192 完全一致）**——patchTile 拿到的
+  tile.objects[].material 并非实际渲染材质（引擎 TileGeometryCreator
+  createMaterial 按 techniqueIndex 缓存的材质另有实例，疑
+  animatedExtrusionHandler/对象重建路径克隆替换）。fill-extrusion 全族
+  的 AO/roof/fog 材质 shader 补丁可能同受影响（此前以像素收敛验证过的
+  补丁走的是别的路径）——**下一会话首要工程项：extrusion 渲染材质
+  寻址**（renderer.info / onBeforeCompile 全局钩子定位真实材质实例，
+  或改在 createMaterial 返回后挂钩）
+  ② icons 仍不可见（sprite/poi_label 数据已在，待 ① 后复测——
+  PoiRenderer 批次路径与 extrusion 无关，可独立排查 SpriteAtlas 图名
+  {maki}-12 解析）
+- 数据侧：z13-14 satellite + glyphs 5 range 补齐（83ca7b54）
 ## 三、验证基线
 
 - 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
