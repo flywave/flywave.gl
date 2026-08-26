@@ -5278,3 +5278,20 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **剩余残差定性（occfix7 协同分析）**：最大对 = exp29↔cur241（17k）与 exp240↔cur23（15k）——**双向屋顶↔墙互换 = 逐建筑高度标定差**（均匀高度缩放错误在建筑顶缘两侧同时产生两种互换；嫌疑 §294 flat 路径 sec(lat) 双乘系数在无 terrain 夹具的适用性，NYC sec=1.32）。次级：暗墙 23 vs 29（ambient 微差 k=0.0096 vs ~0.0127）。
 
 **下会话 ROI**：① 高度标定（sec(lat) 系数在无 terrain 夹具的再标定，解锁 occlusion 剩余 ~30k 墙缘互换 + lighting-3d 56.8k 收尾）；② occlusion icon 遮蔽（icon-occlusion-opacity 双 pass）剩余暗像素差；③ lighting-3d 域全量批测（127 例）量化方位角修复整体收益。
+
+**§456. 会话续记——高度标定专项落地（commit 89b8c71b）**：
+
+**mgl 代码端分析定案**：fill-extrusion 高度换算链 = bucket `meters/tileToMeter(canonical)`（mercator_coordinate.ts：周长·cos(lat)/(EXTENT·2^z)）→ 瓦片单位 → 顶点 `pos.z·u_tile_up_scale`，mercator 路径 `upVectorScale.metersToTile=1`（projection.ts:157）。**结论：sec(lat) 恰乘一次，与有无 terrain 无关。**
+
+**我方三处断链（连环修复）**：
+1. `terrainHeightScale` 只在 `terrainController` 存在时配置（connect() 的 `if (style.terrain)` 块内）→ 无 terrain 恒 1；
+2. 该配置点在 `wireTileSources` **之后**（瓦片已按旧 scale 解码）→ 移到之前，按 `style.center[1]` 算 secLat；
+3. `MBStyleDecoder` 中 `emitter.setTerrainHeightScale` 被 `if (m_terrainSampler)` 门控 → 改无条件；§294 terrain sec² flat 路径经新 `fromTerrain` 旗标原样保留。
+
+**实测（hfix4/5/6）**：
+- occlusion/symbol-occlusion-data-driven 386245（§455 末）→**87896**（本会话累计 555k→88k，−84%）；no-occlusion-after 359k→**46470**；no-occlusion-before 392k→**77780**（累计 533k/571k→46k/78k）
+- lighting-3d-mode/fill-extrusion/default 56757→**10432**（累计 217k→10.4k，−95%）
+- depth-occlusion line 族 3-19k 持平（独立小残差）；setProperty/terrain/-terrain-depth 16.3k 持平（残差=icon 遮蔽/occlusion-opacity pass，非高度）；model-layer 149k 持平
+- lighting-3d-mode/fill-extrusion 族批（37 例）1 PASS——flood-light/shadows/AO 为独立深水特性域（cast-shadows 阴影级联、flood-light 地面泛光），非本轮范围
+
+**下会话 ROI**：① occlusion 剩余 46-88k = icon-occlusion-opacity 双 pass 遮蔽（三大已从"不可比"进入可调试区间）；② setProperty 16.3k 族同为 icon 遮蔽；③ lighting-3d flood-light/shadows 域（引擎级阴影级联移植评估）；④ regressions 剩余 66 例（§451 记档）。
