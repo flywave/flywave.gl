@@ -246,7 +246,7 @@ export class MBMaterialPatchManager {
                 );
                 shader.vertexShader = shader.vertexShader.replace(
                     'gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xyz, 1.0);',
-                    'gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xyz, 1.0);\n    mbW = gl_Position.w;'
+                    'gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xyz, 1.0);\n    // Screen-space POI quads carry the world view distance in position.z.\n    mbW = position.z;'
                 );
                 // IconMaterial is a RawShaderMaterial with plain GLSL (no
                 // three includes): declare uniforms + a fade helper before
@@ -280,7 +280,9 @@ export class MBMaterialPatchManager {
                          // project the quad's UV center back to screen space
                          // via fwidth and sample there.
                          vec2 mbCenterOff = (vec2(0.5) - vUv) / max(fwidth(vUv), vec2(1e-6));
-                         float myZlog = log2(1.0 + mbW) * uMBLogDepthBufFC * 0.5;
+                         float n = uMBNearFar.x;
+                         float f = uMBNearFar.y;
+                         float myZlog = 0.5 + 0.5 * ((f + n) / (f - n) - 2.0 * f * n / ((f - n) * mbW));
                          // mgl's ramp width (1/300 in std z) converts via the
                          // std/log derivative ratio, but the engine's
                          // log space, but with the engine's world-scale far
@@ -289,7 +291,7 @@ export class MBMaterialPatchManager {
                          // log-space threshold ~1e-4 (≈1-2 m at test camera
                          // distances) so occlusion fires on real geometry
                          // overlap like mgl's tight near/far does.
-                         float mbEps = 1e-4;
+                         float mbEps = 1.0 / 300.0;
                          vec2 mbAnchor = (gl_FragCoord.xy + mbCenterOff) * u_terrainDepthInvSize;
                          vec2 df = 16.0 * u_terrainDepthInvSize;
                          vec2 oneStep = 2.0 * df / vec2(2.0, 3.0);

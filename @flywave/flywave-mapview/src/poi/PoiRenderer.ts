@@ -746,13 +746,13 @@ export class PoiRenderer {
      * @param layer - The Layer to be rendered.
      */
     render(camera: THREE.OrthographicCamera, layer: PoiLayer) {
-        // Depth-tested icon batches write the engine's logarithmic depth
-        // encoding; keep the conversion factor fresh for the active camera.
+        // Depth-tested icon batches write a standard perspective depth for
+        // their world view distance; keep near/far fresh for the active far
+        // plane (near 0.1 matches the mbstyle harness camera).
         const far = (camera as any).far ?? 2000;
-        const logDepthBufFC = 2.0 / (Math.log(far + 1.0) / Math.LN2);
         for (const batch of (this.m_poiBatchRegistry as any).m_batchMap.values()) {
-            const u = (batch as any).m_material?.uniforms?.uLogDepthBufFC;
-            if (u && u.value !== logDepthBufFC) u.value = logDepthBufFC;
+            const u = (batch as any).m_material?.uniforms?.uDepthNF;
+            if (u && u.value?.y !== far) u.value.set(0.1, far);
         }
         this.m_renderer.render(layer.scene, camera);
     }
