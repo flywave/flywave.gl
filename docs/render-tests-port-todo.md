@@ -5295,3 +5295,15 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 - lighting-3d-mode/fill-extrusion 族批（37 例）1 PASS——flood-light/shadows/AO 为独立深水特性域（cast-shadows 阴影级联、flood-light 地面泛光），非本轮范围
 
 **下会话 ROI**：① occlusion 剩余 46-88k = icon-occlusion-opacity 双 pass 遮蔽（三大已从"不可比"进入可调试区间）；② setProperty 16.3k 族同为 icon 遮蔽；③ lighting-3d flood-light/shadows 域（引擎级阴影级联移植评估）；④ regressions 剩余 66 例（§451 记档）。
+
+**§457. 会话续记——icon occlusion fade 深度编码悬案六轮夹逼（commit db5f88eb）**：
+
+**链路验证（occdbg 插桩，全部通过）**：批分裂（0.7/0.25 批在列）→ 材质 patch（patchedFlags=true）→ 深度 pass（530 遮挡物全数 extruded-polygon，11 隐藏）→ fade 执行（调试旗改变 31k 图标像素输出）。**教训**：前轮"深度相等"读数是误读——top-10 色彩直方图被场景本色淹没，图标调试像素必须按 R≠G 过滤或差分比对（occdbg3 vs occ2b 逐位比对才确认 debug 生效）。
+
+**根因（架构级）**：引擎开 logarithmicDepthBuffer，深度纹理持 **log2 编码 z**；IconMaterial 自定义 raw GLSL 不写 gl_FragDepth，其 gl_FragCoord.z 是**标准 NDC z**——编码错位使遮蔽判定恒"在前"，fade 从不触发（输出与无 fade 逐位相同，87896）。
+
+**修复（db5f88eb）**：IconMaterial 顶点注入 `mbW=gl_Position.w` varying，fade 计算 `log2(1+w)·logDepthBufFC/2` 与纹理同空间比较；公式换 mgl 精确版（occlusionFadeMultiSample：3×4 taps ±16px、tap=1−clamp(300Δ)、vis=clamp(2avg−0.5)、alpha×=mix(occ,1,vis)）。**斜率换算实证**：mgl 300 斜率定义在标准 D24 空间（紧凑 near/far），我们 far=1e7 世界尺度下标准 z 精度塌缩、字面换算永不触发——改语义等效 log 阈值 1e-4（测试距离 ≈1-2m 分辨）。另：AfterRender 惰性补挂深度纹理（原 connect 一次性检查时纹理未建，patcher 永远拿不到——此修为必要非充分）。
+
+**实测**：data-driven 87896（不触发态）↔90644（触发态），阈值敏感；no-occlusion 对 46470/77780 持平。**残差再定性**：exp29 vs cur78 逐值核算 = cur 图标 0.25 alpha（fade 已生效）而 **mgl 侧该位置根本未放置图标**——残差主源=符号放置/碰撞差异（mgl 碰撞淘汰密集 POI，我方 §440 全放行），非 occlusion 公式。setProperty 16.3k 族同理。
+
+**下会话 ROI**：① 符号放置/碰撞对齐（icon-allow-overlap 缺省时 mgl collision 淘汰，对照 collision_index.js——解锁 occlusion 剩余与 setProperty 族）；② occdbg 阈值 1e-4 微标定（触发态 90644 vs 不触发 87896 的中间值扫描）；③ regressions 剩余 66 例。
