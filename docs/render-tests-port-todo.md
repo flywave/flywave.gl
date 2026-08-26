@@ -5582,3 +5582,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **会话规模**：34 阶段（§454-§486），26.6k 秒。setProperty 链条断点已收敛至"fill tile 索引对照"一处，建议下会话冷启动直取。
 
 **下会话 ROI**：① fill tileKey vs 相机 tile 对照；② 修正后 bake→drape→外观校准冲刺；③ 锚点 verdict；④ 3 例基线回归。
+
+**§487. 会话续记——tile 索引差证伪 + 残差定性（bounding sphere 局部偏移）**：
+
+**tileKey 对照（一行插桩定案）**：fill posRel=(815,−1778) 相机相对 ✓、**z12tile=(758,1609) == camTile** ✓✓——**§486 tile 索引差假设证伪**（锚与索引全对）。NDC 4.83 反解位 (+12.2k,−13.6k) 与 o.position 差 ≈ geometry **bounding sphere 局部中心偏移**（fill 几何顶点在 tile-局部大坐标构建，bs.center ≠ 0）——**投影探针读数受局部偏移污染，不能直接判视锥内外**；但 bake 全黑仍是事实 → 真正的判定需 dump 实际顶点（geometry.attributes.position 前几个顶点的 matrixWorld 变换）而非包围球。
+
+**会话终局**：35 阶段（§454-§487）。setProperty 链条最后断点=fill 顶点级投影（非包围球）；occlusion/icon 成果与全部工具管线（occdbg/MBGLIconDump/MBFillProj 等）在库。
+
+**下会话 ROI**：① fill 前 4 顶点 matrixWorld 投影（一行）；② 通后 bake→drape→外观；③ 锚点 verdict；④ 3 例基线回归。

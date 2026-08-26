@@ -313,11 +313,19 @@ export class TerrainDraping {
                         if (!bs) return;
                         const c = new V3().copy(bs.center).applyMatrix4(o.matrixWorld);
                         c.project(camera);
+                        const mv: any = this.m_mapView;
+                        const camW = mv.camera.position;
+                        const wcx = c.x, wcy = c.y; // pre-projection world-relative
+                        const absX = (o.position.x ?? 0) + camW.x;
+                        const absY = (o.position.y ?? 0) + camW.y;
                         // eslint-disable-next-line no-console
                         console.log('[MBFillProj] fill#' + (n++) + ' NDC=' + c.x.toFixed(2) + ',' + c.y.toFixed(2) + ',' + c.z.toFixed(3)
-                            + ' radius=' + bs.radius.toFixed(0)
-                            + ' camLRTB=' + camera.left.toFixed(0) + ',' + camera.right.toFixed(0) + ',' + camera.top.toFixed(0) + ',' + camera.bottom.toFixed(0)
-                            + ' nearFar=' + camera.near + ',' + camera.far);
+                            + ' posRel=' + (o.position.x ?? 0).toFixed(0) + ',' + (o.position.y ?? 0).toFixed(0)
+                            + ' abs=' + absX.toFixed(0) + ',' + absY.toFixed(0)
+                            + ' camAbs=' + camW.x.toFixed(0) + ',' + camW.y.toFixed(0)
+                            + ' tileO=' + tile.originX.toFixed(0) + ',' + tile.originY.toFixed(0)
+                            + ' z12tile=' + Math.floor(absX / 9784) + ',' + Math.floor((40075017 - absY) / 9784)
+                            + ' camTile=' + Math.floor(camW.x / 9784) + ',' + Math.floor((40075017 - camW.y) / 9784));
                     });
                 }
 
