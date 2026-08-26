@@ -78,7 +78,18 @@
   注：text 技术若不产生带材质的 tile 对象则不生效（TextCanvas 共享
   材质路径的 per-layer occlusion 为后续项）；cross-source-elevation
   仍未实现。测试按批次延后策略攒批
-- [x] 批次验证（2026-08-26，逐 filter karma 逐字对拍 pre/post）：
+- [x] P3.15c 建筑深度 pre-pass（54e15519）：TerrainDepthOcclusion 支持
+  includeExtrusions 无 terrain 模式 + icon-occlusion-opacity 引擎级全链路
+  （emitter→PoiBuilder→PoiInfo→batch 按值分裂→patcher RawShaderMaterial
+  深度 fade）；mgl absent-value 语义门控（仅显式层 fade）
+  - **occlusion 族 24 例终定性=数据阻塞**：夹具所需 z16 NYC
+    mvt / terrain.png / satellite.png 在本仓与 vendored mgl 仓均缺失
+    （mgl CI 自有服务器供给），实测渲染全空白（actual dump 证实）——
+    本族任何实现改动都无法经渲染测试验证，需先补瓦片数据
+    （地图数据源：Mapbox API token 拉取或 fixture 服务器）
+  - 回归控制：occlusion 族 pre/post 逐值一致；geojson/clustered PASS、
+    tile-providers 3 PASS 不变；单测 259/9（9 既有）
+  - [x] 批次验证（2026-08-26，逐 filter karma 逐字对拍 pre/post）：
   - slots/ 8 例：3 PASS（missing-slot、inner-slot-before-outer、
     inner-slot-without-outer）+ 3 FAIL 既有残差（dynamic-insert 12px、
     layer-without-slot-before-layer-with-slot 52px 前后不变；**set-layer-slot
