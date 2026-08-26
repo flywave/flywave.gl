@@ -61,6 +61,7 @@ export class TerrainDraping {
         if (this.m_active) return;
         this.m_active = true;
         this.m_mapView.addEventListener(MapViewEventNames.AfterRender, this.onAfterRender);
+        this.m_mapView.addEventListener(MapViewEventNames.WillRender, this.onWillRender);
         this.requestBake();
     }
 
@@ -68,6 +69,7 @@ export class TerrainDraping {
         if (!this.m_active) return;
         this.m_active = false;
         this.m_mapView.removeEventListener(MapViewEventNames.AfterRender, this.onAfterRender);
+        this.m_mapView.removeEventListener(MapViewEventNames.WillRender, this.onWillRender);
         // Disable USE_DRAPE on all terrain materials so the terrain renders
         // without the drape overlay after stopping.
         for (const mesh of this.m_terrain.meshes) {
@@ -89,6 +91,38 @@ export class TerrainDraping {
 
     get isActive(): boolean { return this.m_active; }
     get bakeSize(): number { return this.m_bakeSize; }
+
+    /**
+     * mgl semantics: with terrain active the raster imagery is DRAPED onto
+     * the DEM surface, not drawn as flat tiles on top. Hide the raster tile
+     * objects from the main render; the AfterRender bake re-shows them and
+     * bakes their pixels into the terrain's drape texture.
+     */
+    /**
+     * Material-level raster gate (§480): setting object.visible=false made
+     * the tile engine treat the tiles as failed and re-decode them in a
+     * loop (36s/test). Instead flip the MATERIAL's visible flag — the
+     * object stays "rendered" for the engine's bookkeeping but the material
+     * renders nothing. The bake flips it back for its own render.
+     */
+    private m_rasterHidden: THREE.Material[] = [];
+
+    private onWillRender = (): void => {
+        for (const m of this.m_rasterHidden) m.visible = true; // idempotent
+        this.m_rasterHidden.length = 0;
+        const scene = this.m_mapView.scene;
+        scene.traverse((o: any) => {
+            if ((o.isMesh || o.isPoints) && o.userData?.technique?._isRaster) {
+                const mats = Array.isArray(o.material) ? o.material : [o.material];
+                for (const m of mats) {
+                    if (m && m.visible) {
+                        m.visible = false;
+                        this.m_rasterHidden.push(m);
+                    }
+                }
+            }
+        });
+    };
 
     private onAfterRender = (): void => {
         if (!this.m_active) return;
@@ -187,6 +221,10 @@ export class TerrainDraping {
         const scene = this.m_mapView.scene;
         const terrainMeshes = new Set<THREE.Object3D>(this.m_terrain.meshes);
         if (terrainMeshes.size === 0) return;
+
+        // Re-show the rasters hidden for the main render — the bake IS the
+        // raster's rendering path under terrain (material-level gate).
+        for (const m of this.m_rasterHidden) m.visible = true;
 
         const tiles = this.m_terrain.allDemTiles;
         const meshes = this.m_terrain.meshes;
@@ -386,9 +424,11 @@ export class TerrainDraping {
         } finally {
             renderer.setRenderTarget(prevTarget);
             renderer.setClearColor(prevClearColor, prevClearAlpha);
-            // Restore visibility and positions.
+            // Restore visibility and positions; re-hide the rasters for the
+            // next main render frame.
             for (const obj of hidden) obj.visible = true;
             for (const [mesh, pos] of shifted) mesh.position.copy(pos);
+            for (const m of this.m_rasterHidden) m.visible = false;
         }
     }
 
