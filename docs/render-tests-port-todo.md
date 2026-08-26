@@ -5626,3 +5626,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **代码审阅（嫌疑二预分析）**：raster fill 的 real-blend 分支输出 `vec4(color, opacity·tex.a)`（MBMaterialPatchManager:1486）——material transparent + NormalBlending 到 alpha-0 清底在数学上应正确填充（src.a=1 → dst=color）。嫌疑二减弱；**残余头号嫌疑回归旗标时序**：`__mbRasBake` 在 bakeAll 前置、finally 复原——同帧双翻转 needsUpdate 可能合并为无操作。**下会话首步建议**：bake 旗标不复原（常驻宽截断无害——主渲染相机距离远小于 1e6 阈值），一步消除时序类。
 
 **会话收束声明**：本会话 40 阶段（§454-§492）。战果：occlusion data-driven 555k→67-74k、before-3d 69k→7492-7799、icon +4 PASS、两大引擎悬案告破、raster 材质门控使 DEM 首次上屏、22+ 探针工具与 mgl 真值管线入库。**未竟**：occlusion 24 例 0 PASS、setProperty drape 上屏、锚点 verdict、3 例基线回归、存量域。所有断点与冷启动路线在 §483-§492。
+
+**§493. 会话终记——五态同值终判 + bake 计数实证**：
+
+**实施**：__mbRasBake 常驻（时序类一步消除）——**第五态仍逐位 17562**。**MBBake 计数**：bake **每帧运行（241 次）**——排除"bake 不再执行"假设；内容恒 uniform 的缺口在**材质可见性/重显示链之外的渲染器层**（fill 对象可见、材质重显、仍零片元入 RT）。**下会话断点（draw-call 级）**：bake 前后 `renderer.info.render.calls` delta——一行即判 fill 是否真的提交了绘制调用。
+
+**会话终收束**：41 阶段（§454-§493）。
