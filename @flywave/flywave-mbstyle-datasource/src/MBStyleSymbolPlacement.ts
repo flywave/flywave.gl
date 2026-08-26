@@ -59,6 +59,21 @@ export class MBStyleSymbolPlacement {
         const h = canvas.height;
         const bearing = (this.m_mapView as any).heading ?? 0;
 
+        // mgl-parity placement decisions on the engine text elements (see
+        // applyMglCollisionVisibility). mgl culls overlapping symbols
+        // whenever `*-allow-overlap` is false (collision_index.js) — the
+        // engine's own placement is far more permissive (§171), so the mgl
+        // verdicts must ALWAYS apply or dense fixtures (occlusion family)
+        // render icons mgl suppressed. Collision-box lines stay debug-only.
+        // Runs BEFORE the empty-symbols early return: POI-only fixtures have
+        // no tile symbol objects at all.
+        try {
+            this.applyMglCollisionVisibility(camera, w, h);
+        } catch (err) {
+            if ((globalThis as any).__mbOccDbg) // eslint-disable-next-line no-console
+                console.log('[MBColl] ERROR ' + (err as Error)?.message);
+        }
+
         // Collect all symbol objects
         const symbols = this.collectSymbols(camera, w, h);
         if (symbols.length === 0) return;
@@ -161,15 +176,6 @@ export class MBStyleSymbolPlacement {
             }
         }
 
-        // Collision-box debug overlay: mgl-parity placement decisions on the
-        // engine text elements (see applyMglCollisionVisibility) + box lines.
-        if (this.m_collisionDebug) {
-            try {
-                this.applyMglCollisionVisibility(camera, w, h);
-            } catch {
-                // best-effort debug overlay
-            }
-        }
     }
 
     /**
@@ -259,6 +265,7 @@ export class MBStyleSymbolPlacement {
             sx: number; sy: number;
             priority: number;
             allowOverlap: boolean;
+            iconAllowOverlap: boolean;
             iconRect: [number, number, number, number] | null; // cx, cy, w, h
             textRect: [number, number, number, number] | null;
         }
@@ -310,18 +317,37 @@ export class MBStyleSymbolPlacement {
                             const p = poiInfo.iconTextFitPadding ?? [0, 0, 0, 0];
                             iconRect = textRectOf(box.w + p[1] + p[3] + 4, box.h + p[0] + p[2] + 4);
                         } else {
-                            iconRect = [sx + dx, sy + dy, 32 * iconScale, 32 * iconScale];
+                            // mgl collision box = sprite size × icon-size × dpr
+                            // + 2 × icon-padding (default 2). Read the real
+                            // sprite dimensions from the atlas instead of a
+                            // hard-coded 32 px.
+                            let w = 32, h = 32;
+                            try {
+                                const info = (this.m_dataSource as any).spriteAtlas
+                                    ?.icons?.get(tech.imageTexture);
+                                if (info) { w = info.width; h = info.height; }
+                            } catch {}
+                            const pad = 2 * 2;
+                            iconRect = [sx + dx, sy + dy,
+                                w * iconScale + pad, h * iconScale + pad];
                         }
                     }
                     if (el.text) {
                         const box = shapeBox(String(el.text), fontSize, el.layoutParams, el.renderParams?.fontName);
                         textRect = textRectOf(box.w + 4, box.h + 4);
                     }
+                    // mgl tests text and icon boxes with their OWN
+                    // allow-overlap flags (placement.place.item).
+                    const iconAllow = poiInfo
+                        ? (poiInfo.technique as any)?._layout?.['icon-allow-overlap'] === true
+                          || el.iconMayOverlap === true
+                        : false;
                     entries.push({
                         el,
                         sx, sy,
                         priority: Number(el.priority ?? 0),
                         allowOverlap: el.textMayOverlap === true,
+                        iconAllowOverlap: iconAllow,
                         iconRect,
                         textRect,
                     });
@@ -347,18 +373,21 @@ export class MBStyleSymbolPlacement {
         };
         for (const e of entries) {
             let anyPlaced = false;
+            let first = true;
             for (const rect of [e.iconRect, e.textRect]) {
-                if (!rect) continue;
+                if (!rect) { first = false; continue; }
+                const allow = first ? e.iconAllowOverlap : e.allowOverlap;
+                first = false;
                 // CollisionIndex x/y are the TOP-LEFT corner.
                 const lx = rect[0] - rect[2] / 2;
                 const ly = rect[1] - rect[3] / 2;
                 const fits = index.canPlace(lx, ly, rect[2], rect[3],
-                    e.allowOverlap, e.priority);
+                    allow, e.priority);
                 if (fits) {
                     index.insert({
                         x: lx, y: ly, w: rect[2], h: rect[3],
                         featureId: String(e.el.featureId ?? e.el.text ?? ''),
-                        allowOverlap: e.allowOverlap,
+                        allowOverlap: allow,
                         priority: e.priority,
                     });
                     pushRect(rect, placedBoxes);
@@ -374,7 +403,19 @@ export class MBStyleSymbolPlacement {
             } catch {}
         }
 
-        this.drawCollisionBoxes(renderer, placedBoxes, hiddenBoxes, canvasW, canvasH);
+        if ((globalThis as any).__mbOccDbg) {
+            let hidden = 0, withIcon = 0;
+            for (const e of entries) {
+                if (e.iconRect) withIcon++;
+                if (e.iconRect || e.textRect) { if (!e.el.visible) hidden++; }
+            }
+            // eslint-disable-next-line no-console
+            console.log('[MBColl] entries=' + entries.length + ' withIcon=' + withIcon
+                + ' hidden=' + hidden);
+        }
+        if (this.m_collisionDebug) {
+            this.drawCollisionBoxes(renderer, placedBoxes, hiddenBoxes, canvasW, canvasH);
+        }
     }
 
     /**
