@@ -5223,3 +5223,20 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **extrusion 白建筑悬案（七层证伪收敛，未终）**：blank→数据缺→upload 停滞→自绘管线(废)→绘制对象≠插桩(半否)→LineSegments 定性另一半→cache-key(修)——现收敛为：材质链完整+patched 153/153+version 增长+nonce，handler 仍零执行、像素跨一切扰动逐位不变。残余嫌疑二选一：引擎按需渲染补丁后不再绘制对象 / 引擎每帧重同步 onBeforeCompile（color 同步已证实）。**下会话单点=live devtools**（karma --debug 断 WebGLRenderer.js:2087）。
 
 **下会话 ROI 排序**：① devtools 终结 extrusion 悬案（解锁 lighting-3d/fill-extrusion 37 例+occlusion 族外观）；② icons 不可见独立排查（{maki}-12 图名解析）；③ 两者收敛后 occlusion 24 例+lighting-3d 大域批测；④ cross-source-elevation 数据阻塞（hd-road 瓦片，token 可拉）。
+
+**§453. 会话续记——三大真 bug 修复 + 双悬案取证收敛（2026-08-26 三百四十四）**：
+
+**全局性真 bug（三件，均已修）**：
+1. **three cache-key nonce**（a6c79c83）：默认 program cache key=最外层 onBeforeCompile.toString()，后包 handler 可复原外层源码致 programs map 命中、修改链永不编译——所有补丁材质的潜在陷阱，防御性 nonce 已加
+2. **extrusion 3D 光照注入时序**（b2937d07）：注入原在 patchExtrusionMaterial 早期，函数内后续 translate 赋值以注入前链快照为 orig 把光照 handler 顶出链——移至函数末尾后 3D 光照首次上屏（default 217192→183126；lighting-3d/fill-extrusion 0→1 PASS；occlusion 三大 660k 残差各降 ~100k）
+3. **表达式 match label 字面量**（dd48ba0e）：mgl 语义 label=编译期字面量，原 exec() 解析使 ['restaurant'] 类 label 集求值失败——**所有 data-driven match 此前静默走 fallback**；修复后 circle-color/default PASS
+
+**harness 语义修复（两件）**：waitFrameReady(N) 尊重帧数参数（原恒 2 帧）；无 ops 夹具 renderUntilSettled（场景网格静默+trailing frames，修 AfterRender 补丁 off-by-one）
+
+**双悬案取证（extrusion 已终结 / icons 收敛至一行断点）**：
+- extrusion：七层证伪（数据缺→upload→自绘管线(废)→对象身份→LineSegments→cache-key→注入时序=真根因）
+- icons：二十一层排除法收敛——数据/sprite/match/批次/mesh/几何/pass/坐标/放置/fade/材质全排除或验证通过，addBox 单测 CPU 复现正确、每帧 87 次 add、单实例——最终矛盾（geometry 读 alpha=0 vs 写入 255）收于 attribute 对象生命周期错位，**下会话 devtools 一行断点**（addBox 内 m_colorAttribute===geometry.attributes.color）
+
+**基线快照（本会话末）**：occlusion 24 FAIL（残差结构已变：三大 560k 级待 icons 解锁）；lighting-3d/fill-extrusion 36F/1S；单测 268/0；slots 3 PASS
+
+**下会话 ROI**：① devtools 一行断点终结 icons（解锁 occlusion data-driven 转绿路径）；② match 修复全量影响面批测；③ lighting-3d 36 例逐域收敛（3D 光照已上屏，域内为公式/参数校准）
