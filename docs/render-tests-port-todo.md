@@ -5540,3 +5540,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **会话终态快照**（§454-§481，28 阶段）：occlusion dd 555k→67-74k / before-3d 69k→7492-7799；icon +4 PASS；setProperty 四件套 17.5k（DEM 已上屏、drape 校准中）；两大引擎悬案告破 + 双反转定性；基线抽样 95% 保持。
 
 **下会话 ROI**：① 中芯块 bake 探针 + USE_DRAPE 上屏链断点；② 地形外观基调（249 vs 177）；③ 锚点 verdict；④ 3 例基线回归；⑤ 存量域（regressions 66 等）。
+
+**§482. 会话续记——9 块 bake 全量取证**：
+
+**探针扩展**（每块逐采）：**9/9 bake 全 uniform 黑**——含相机所在的中芯块（tileO 7416226 含 cam 7422750 x 范围）。census 显示 bake 时仅 **1 个 raster fill 可见**（相机邻域），其相对位 ~(0,0) 落在中芯块 bake 视锥内却仍黑。**下一断点**：fill 渲染进 bake 的材质/混合路径——raster fill 材质为 patcher 产物（贴图 UV/混合模式/屏幕空间依赖），在 ortho bake 相机下的行为待插桩（fill fragment 输出或混合到 alpha-0 底为 0）。
+
+**会话规模提醒**：本会话已 29 阶段（§454-§482），25k+ 秒。建议下会话从本记档冷启动，优先完成此一断点（fill bake 输出）后即进入四件套外观校准。
+
+**下会话 ROI**：① fill bake 输出断点（材质插桩一行：fragment 颜色/alpha 输出值）；② 外观基调校准；③ 锚点 verdict；④ 3 例基线回归。
