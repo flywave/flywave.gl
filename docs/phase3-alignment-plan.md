@@ -152,7 +152,13 @@
   内部引用与 geometry.setAttribute 后对象错位（或 Float32/Uint8
   normalized 类型错位），写入丢失。**下会话单点=devtools 断点
   addBox 内 m_colorAttribute 与 geometry.attributes.color 的
-  对象同一性**（一行判断），icons 悬案至此只剩这一层
+  对象同一性。同日终证补：identity same=true（对象生命周期假说排除）；
+  census 时刻 color **array.length=0**（reset 清空态）——补一次
+  update 后 +30 add 仍 len 0（写入与 census mesh 集分裂：每帧仅 ~30
+  重加、31 mesh 全空，早期曾见 62 mesh 双 layer 线索）——**确需
+  devtools 单步 placeTextElements/addPoi 的 buffer 归属**。硬事实链
+  齐备：数据✓/match✓(已修)/批次✓/mesh✓/pass✓/addBox✓(单测)/
+  identity✓/opacity=1✓/每帧 add✓ —— 唯 array 归属分裂未解
 ## 三、验证基线
 
 - 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
