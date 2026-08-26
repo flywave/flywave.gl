@@ -184,25 +184,14 @@ export class BoxBuffer {
      * Clear's the `BoxBuffer` attribute buffers.
      */
     reset() {
-        if (this.m_positionAttribute !== undefined) {
-            // Swap in empty arrays AND reset the counts: addBox advances
-            // count as it writes, so a stale count over an empty array makes
-            // computeBoundingSphere/render read past the end (NaN positions,
-            // "radius is NaN" errors, invisible POIs).
-            this.m_positionAttribute.array = new Float32Array(0);
-            //@ts-ignore — count is advanced by addBox the same way.
-            this.m_positionAttribute.count = 0;
-            this.m_colorAttribute!.array = new Float32Array(0);
-            //@ts-ignore — count is advanced by addBox the same way.
-            this.m_colorAttribute!.count = 0;
-            this.m_uvAttribute!.array = new Float32Array(0);
-            //@ts-ignore — count is advanced by addBox the same way.
-            this.m_uvAttribute!.count = 0;
-            this.m_indexAttribute!.array = new Float32Array(0);
-            //@ts-ignore — count is advanced by addBox the same way.
-            this.m_indexAttribute!.count = 0;
-            this.m_pickInfos!.length = 0;
-        }
+        // Drop the attributes entirely (clearAttributes semantics): merely
+        // swapping in empty arrays leaves addBox writing into a length-0
+        // array (silently dropped — POIs vanish) whenever its capacity check
+        // passes against the stale logical size. With the attributes
+        // undefined, the next addBox goes through resize()/resizeBuffer()
+        // which rebuilds real backing arrays.
+        this.clearAttributes();
+        this.m_pickInfos!.length = 0;
     }
 
     /**
