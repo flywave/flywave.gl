@@ -5566,3 +5566,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **回归**：7 passed（icon 全族/literal/terrain/fog），use-theme 119、dd 71928、before 7799 均已知值带——零回归。
 
 **下会话 ROI**：① fill bake 投影断点（buildTileCamera 下 fill 包围盒 NDC）；② 通后外观校准；③ 锚点 verdict；④ 3 例基线回归。
+
+**§485. 会话续记——fill bake 投影断点告破（定位锚问题）**：
+
+**MBFillProj 探针**：raster fill 在 bake 相机下 **NDC=(4.83,−4.64)，z=0.208**——x/y 远出视锥、**深度在窗内**（DEM 位移无恙，§484 嫌疑排除）。fill 包围球心 matrixWorld 相对位 ~(+12k,−13k)（相机邻域应为 ~(0,0)）——**fill 的定位锚不是当前相机**（疑 TileObjectRenderer 放置时的相机位快照 / m_sceneRoot 偏移时刻差）。
+
+**修复方向**：bake 相机 bounds 补 fill 实际锚偏移，或 bake 前 forcing TileObjectRenderer 重放置（render(tile, zoom, zoom, camera.position, sceneRoot) 一调用）——后者语义更正。
+
+**下会话 ROI**：① bake 前重放置 fills（一行 TileObjectRenderer.render 调用）→ bake 含卫星；② 外观校准；③ 锚点 verdict；④ 3 例基线回归。
