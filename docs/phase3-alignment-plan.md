@@ -133,7 +133,12 @@
   与实际相机不一致（疑 TextElementsRenderer 投影未含 tilt/pitch 或
   y 翻转）——**下会话入口=getWorldPosition→投影链与 m_camera
   (pos=[0,0,1]) 的 pitch 语义核对**；修好后 occlusion data-driven
-  （icons+match 已就绪）有望转绿
+  （icons+match 已就绪）有望转绿。续证（同日）：ndcToScreen 为居中
+  坐标系（±256），首采样点其实在画布内（前判有误）；iconReady 普查
+  ready=38/notReady=13/invisible=9——**38 个 icon 实际已放置**；NaN
+  结论撤回（仅采样 2 个空批次 mesh，31 批次各自 BoxBuffer 需全量
+  普查 drawRange/写入量）。下会话：逐 mesh drawRange 普查→若写入在，
+  则疑点转移到渲染混合/材质 uniform（IconMaterial map/opacity）
 ## 三、验证基线
 
 - 每个批次完成后跑 mbstyle 渲染测试（`rendering-test-results/` 目录记录 diff），对比 mgl 期望图。
