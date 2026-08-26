@@ -176,6 +176,13 @@ export class TerrainDraping {
             this.m_needsBake = true;
         }
 
+        if ((globalThis as any).__mbOccDbg) {
+            (globalThis as any).__mbBakeCount = ((globalThis as any).__mbBakeCount ?? 0) + 1;
+            if ((globalThis as any).__mbBakeCount % 10 === 1) {
+                // eslint-disable-next-line no-console
+                console.log('[MBBake] runs=' + (globalThis as any).__mbBakeCount);
+            }
+        }
         if (!this.m_needsBake) return;
         // Skip bake while morphing — the DEM is mid-transition; bake after.
         if (morphing) return;
@@ -514,10 +521,11 @@ export class TerrainDraping {
             for (const [mesh, pos] of shifted) mesh.position.copy(pos);
             for (const m of this.m_rasterHidden) {
                 m.visible = false;
-                if ((m as any).__mbRasBake) {
-                    (m as any).__mbRasBake = false;
-                    m.needsUpdate = true;
-                }
+                // §492: the __mbRasBake flag stays set permanently — the
+                // widened far cutoff (×1e6) is harmless for the main render
+                // (camera distances are far below) and resetting it in the
+                // same frame coalesced the two needsUpdate flips into a
+                // no-op, so the bake program never compiled.
             }
         }
     }
