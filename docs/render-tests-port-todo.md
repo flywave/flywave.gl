@@ -5646,3 +5646,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **二分结果**：bake 模式下 raster fill 着色器**无条件写红**（`gl_FragColor=vec4(1,0,0,1); return;`）——**RT 仍 uniform 黑**（grid 0,0,0），且主渲染图像也不红。两种解释：① §494 的 6 次绘制调用**并非 raster fill**（是其它对象）；② bake 旗标重编译从未发生（materials 不在 m_rasterHidden 收集集——材质门与 technique 对象的对应关系待核）。**下会话首步**：MBDC 探针处同时打印每次 draw 的 material.userData 标识（renderer.info 无此信息，改为在 fill 材质 onBeforeCompile 计数探针——编译即计数）。
 
 **会话终收束**：43 阶段（§454-§495）。
+
+**§496. 会话终记——编译计数定案（编译但不绘制）**：
+
+**MBRasC 探针**：raster fill 材质**确有编译**且全部 bake=true（旗标链工作）。结合 §495 常量红未现：**定案 = 编译但不绘制**——§494 的 6 次绘制调用**不是 raster fill**。残余断点唯一：bake 渲染时刻 fill 材质的 `visible` 状态（材质门 WillRender 隐藏 → bakeAll 重显链的时序/收集集对应）。
+
+**下会话首步**：bake 渲染前一行打印 m_rasterHidden.length 与 census 中 fill 材质的 material.visible——一步判"收集集空"或"重显未及"。
+
+**会话终收束**：44 阶段（§454-§496）。
