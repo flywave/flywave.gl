@@ -274,6 +274,12 @@ export class MBMaterialPatchManager {
                      // derivative dz_std/dz_log at this fragment's view
                      // distance w converts the 300x ramp between spaces.
                      float mbOccVisibility() {
+                         // mgl evaluates occlusion ONCE PER SYMBOL at its
+                         // projected anchor (vertex-stage multisample). Every
+                         // fragment of the icon must reach the SAME verdict:
+                         // project the quad's UV center back to screen space
+                         // via fwidth and sample there.
+                         vec2 mbCenterOff = (vec2(0.5) - vUv) / max(fwidth(vUv), vec2(1e-6));
                          float myZlog = log2(1.0 + mbW) * uMBLogDepthBufFC * 0.5;
                          // mgl's ramp width (1/300 in std z) converts via the
                          // std/log derivative ratio, but the engine's
@@ -284,13 +290,14 @@ export class MBMaterialPatchManager {
                          // distances) so occlusion fires on real geometry
                          // overlap like mgl's tight near/far does.
                          float mbEps = 1e-4;
+                         vec2 mbAnchor = (gl_FragCoord.xy + mbCenterOff) * u_terrainDepthInvSize;
                          vec2 df = 16.0 * u_terrainDepthInvSize;
                          vec2 oneStep = 2.0 * df / vec2(2.0, 3.0);
                          float res = 0.0;
                          for (int y = 0; y < 4; ++y) {
                              for (int x = 0; x < 3; ++x) {
                                  float d = texture2D(u_terrainDepth,
-                                     gl_FragCoord.xy * u_terrainDepthInvSize - df
+                                     mbAnchor - df
                                      + vec2(float(x) * oneStep.x, float(y) * oneStep.y)).r;
                                  res += 1.0 - clamp((myZlog - d) / mbEps, 0.0, 1.0);
                              }
@@ -299,7 +306,13 @@ export class MBMaterialPatchManager {
                      }
                      void mbPoiOccFade() {
                          float mbVis = mbOccVisibility();
-                         gl_FragColor.a *= mix(uMBPoiOcclusionOpacity, 1.0, mbVis);
+                         // mgl placement CULLS a symbol outright when its anchor
+                         // is occluded (placeCollisionBox isClipped, pitch>0);
+                         // the multisample visibility hits 0 exactly then —
+                         // fully-hidden anchors disappear instead of fading to
+                         // the occlusion opacity, and they no longer render as
+                         // ghost icons mgl never shows.
+                         gl_FragColor.a *= mbVis <= 0.0 ? 0.0 : mix(uMBPoiOcclusionOpacity, 1.0, mbVis);
                          if (uMBPoiOccDbg > 0.5) {
                              gl_FragColor = vec4(1.0 - mbVis, mbVis, 0.0, 1.0);
                          }
