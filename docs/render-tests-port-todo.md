@@ -5620,3 +5620,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **验证**：cache-key 赋值上移 attach() 顶层——**仍逐位 17562**。**重要定性**：setProperty 在四个不同代码态（bb1 扩窗/rf1/rf2 far 截断/ck1 cache-key）**像素完全相同** = bake 内容自某点起不再影响渲染（uniform=true → 内容门关闭 drape → 地形纯色外观冻结）。**断点转正（嫌疑二）**：fill 片元 blending 至 alpha-0 清底——transparent+NormalBlending 下 fragment alpha=0 则全透明（读数与"未渲染"同像）。插桩：bake 期间 fill fragment alpha 一行。
 
 **会话终局**：39 阶段（§454-§491）。回归历轮零损失。
+
+**§492. 会话终记——blending 嫌疑代码审阅（未插桩）+ 会话收束**：
+
+**代码审阅（嫌疑二预分析）**：raster fill 的 real-blend 分支输出 `vec4(color, opacity·tex.a)`（MBMaterialPatchManager:1486）——material transparent + NormalBlending 到 alpha-0 清底在数学上应正确填充（src.a=1 → dst=color）。嫌疑二减弱；**残余头号嫌疑回归旗标时序**：`__mbRasBake` 在 bakeAll 前置、finally 复原——同帧双翻转 needsUpdate 可能合并为无操作。**下会话首步建议**：bake 旗标不复原（常驻宽截断无害——主渲染相机距离远小于 1e6 阈值），一步消除时序类。
+
+**会话收束声明**：本会话 40 阶段（§454-§492）。战果：occlusion data-driven 555k→67-74k、before-3d 69k→7492-7799、icon +4 PASS、两大引擎悬案告破、raster 材质门控使 DEM 首次上屏、22+ 探针工具与 mgl 真值管线入库。**未竟**：occlusion 24 例 0 PASS、setProperty drape 上屏、锚点 verdict、3 例基线回归、存量域。所有断点与冷启动路线在 §483-§492。
