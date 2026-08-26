@@ -431,8 +431,12 @@ export class MBStyleSymbolPlacement {
             }
             // Force engine visibility to the mgl verdict: hide the labels
             // mgl would have suppressed (the engine accepts more than mgl).
+            // Only touch the element when the verdict CHANGES — re-assigning
+            // visible every frame restarts the engine's fade-in and the
+            // capture catches icons mid-fade (partial alpha ghosts).
             try {
-                e.el.visible = e.iconRect || e.textRect ? anyPlaced : true;
+                const want = e.iconRect || e.textRect ? anyPlaced : true;
+                if (e.el.visible !== want) e.el.visible = want;
             } catch {}
         }
 
