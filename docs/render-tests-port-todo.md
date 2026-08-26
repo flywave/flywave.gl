@@ -5522,3 +5522,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **稳定态复核**：stash 后 5 passed（icon-color 全族 + literal）/ 5 failed 均已知值带（use-theme 119、dd 72938、before 7799、setProperty 16278、terrain 16277）——环境健康。
 
 **下会话 ROI**：① gate 换路由——不动对象可见性（避重解码循环），改 patcher 端 raster 材质 `visible=false`+`needsUpdate` 或 tileVisibilityFilter 域内过滤；② 锚点 verdict；③ 3 例基线回归。
+
+**§480. 会话续记——raster 材质级门控打通 drape 路由（commit 同批）**：
+
+**修复**：对象级 `visible=false` 触发 tile 重解码循环（36s/测）→ **材质级翻 flag**（对象簿记不变，材质渲染空）——WillRender 材质隐藏 / bakeAll 复显 / finally 重隐。
+
+**实测（无超时）**：**卫星平面层从主渲染消失，DEM 面首次上屏**（setProperty lum 108.1→249.2）；setProperty 16278→17561、terrain 16277→15897、occlusion-terrain-depth 16273→17554、under-depth 16845→17259——四件套全部进入可校准区间（残差构成已变为地形外观/drape 内容差）。
+
+**回归**：terrain cache-invalidation 2/2、unsupported-fog、icon 域全部保持——**零回归**。
+
+**下会话 ROI**：① drape 内容对齐（bake 已含卫星但未上屏/错位——MBDrap 网格探针迭代 UV/flipY/视锥）；② 地形外观校准（光照/颜色 vs mgl 浅色平滑基调 mean 177）；③ 锚点 verdict；④ 3 例基线回归。
