@@ -302,6 +302,25 @@ export class TerrainDraping {
                 const camera = buildTileCamera(tile, (this.m_mapView as any).camera?.position);
                 if (!camera) continue;
 
+                if ((globalThis as any).__mbOccDbg && !(globalThis as any).__mbFillProj) {
+                    (globalThis as any).__mbFillProj = 1;
+                    const V3 = (require('three')).Vector3;
+                    let n = 0;
+                    this.m_mapView.scene.traverse((o: any) => {
+                        if (n >= 3 || !o.isMesh || !o.visible || !o.userData?.technique?._isRaster) return;
+                        o.geometry.computeBoundingSphere?.();
+                        const bs = o.geometry.boundingSphere;
+                        if (!bs) return;
+                        const c = new V3().copy(bs.center).applyMatrix4(o.matrixWorld);
+                        c.project(camera);
+                        // eslint-disable-next-line no-console
+                        console.log('[MBFillProj] fill#' + (n++) + ' NDC=' + c.x.toFixed(2) + ',' + c.y.toFixed(2) + ',' + c.z.toFixed(3)
+                            + ' radius=' + bs.radius.toFixed(0)
+                            + ' camLRTB=' + camera.left.toFixed(0) + ',' + camera.right.toFixed(0) + ',' + camera.top.toFixed(0) + ',' + camera.bottom.toFixed(0)
+                            + ' nearFar=' + camera.near + ',' + camera.far);
+                    });
+                }
+
                 // Render: bake the non-terrain layers into the FBO.
                 // Clear to white opaque so empty areas (no layers) preserve
                 // the terrain color. The shader uses alpha-blend (mix), so
