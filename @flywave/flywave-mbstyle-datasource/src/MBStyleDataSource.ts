@@ -1016,6 +1016,8 @@ export class MBStyleDataSource extends TileDataSource {
     /** DEM tiles live in a PMTiles archive (blob-URL serving). */
     private m_demIsPmtiles = false;
     private m_rasterTileUrl: string | null = null;
+    /** Style uses "symbols before 3D" (symbol layer precedes extrusions). */
+    private m_iconDepthTestStyle = false;
     /**
      * Cached mapbox glyph metrics (font→char→metrics), shared with the worker
      * decoder so text shaping uses accurate advance widths. Filled lazily by
@@ -1593,6 +1595,7 @@ export class MBStyleDataSource extends TileDataSource {
         // last here, so the equivalent is depth-testing them against the
         // buildings' depth. Only when NO occlusion-opacity props exist —
         // those fixtures use the fade path instead.
+        let iconDepthTest = false;
         {
             const layers = (style.layers ?? []) as any[];
             const firstSymbol = layers.findIndex(l => l.type === 'symbol');
@@ -1600,11 +1603,14 @@ export class MBStyleDataSource extends TileDataSource {
                 ('icon-occlusion-opacity' in l.paint || 'text-occlusion-opacity' in l.paint));
             const extrusionAfter = layers.some((l, i) =>
                 (l.type === 'fill-extrusion' || l.type === 'building') && i > firstSymbol);
+            iconDepthTest = firstSymbol >= 0 && extrusionAfter && !hasOcclusion;
             try {
-                this.decoder.configure(undefined, {
-                    iconDepthTest: firstSymbol >= 0 && extrusionAfter && !hasOcclusion,
-                } as any);
+                this.decoder.configure(undefined, { iconDepthTest } as any);
             } catch {}
+            // The CPU anchor-occlusion cull below needs the extrusions depth
+            // pass for before-3D styles too (mgl placeCollisionBox isClipped
+            // applies unconditionally at pitch > 0).
+            this.m_iconDepthTestStyle = iconDepthTest;
         }
         if (!style.terrain) {
             try {
@@ -1974,7 +1980,8 @@ export class MBStyleDataSource extends TileDataSource {
         if (this.mapView && !style.terrain && this.m_materialPatcher) {
             const hasOcclusionProps = (style.layers ?? []).some((l: any) => l.paint &&
                 ('icon-occlusion-opacity' in l.paint || 'text-occlusion-opacity' in l.paint ||
-                 'line-occlusion-opacity' in l.paint || 'circle-occlusion-opacity' in l.paint));
+                 'line-occlusion-opacity' in l.paint || 'circle-occlusion-opacity' in l.paint))
+                || this.m_iconDepthTestStyle;
             if (hasOcclusionProps) {
                 try {
                     const { TerrainDepthOcclusion } = await import('./TerrainDepthOcclusion');

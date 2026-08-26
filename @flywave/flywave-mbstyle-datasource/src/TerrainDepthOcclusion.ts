@@ -143,6 +143,43 @@ export class TerrainDepthOcclusion {
         material.needsUpdate = true;
     }
 
+    /**
+     * Read the depth target back to CPU (WebGL2 DEPTH_COMPONENT readback).
+     * Returns a Uint16Array (normalized 0..65535) or null. Callers sample
+     * [y * width + x]. The buffer is refreshed at most once per frame.
+     */
+    private m_cpuDepth: Uint16Array | null = null;
+    private m_cpuDepthFrame = -1;
+
+    readDepthBuffer(frame?: number): Uint16Array | null {
+        if (frame !== undefined && frame === this.m_cpuDepthFrame) return this.m_cpuDepth;
+        const renderer = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
+        if (!renderer || !this.m_depthTarget || !this.m_depthTexture) return null;
+        try {
+            const gl = renderer.getContext() as WebGL2RenderingContext;
+            const w = this.m_depthTexture.width ?? this.m_width;
+            const h = this.m_depthTexture.height ?? this.m_height;
+            const buf = new Uint16Array(w * h);
+            // three keeps the WebGL framebuffer in its internal properties
+            // table (not on the render target object).
+            const fb = (renderer as any).properties?.get?.(this.m_depthTarget)?.__webglFramebuffer;
+            if (!fb) return null;
+            const prevFbo = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+            gl.readPixels(0, 0, w, h, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT, buf);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, prevFbo);
+            this.m_cpuDepth = buf;
+            this.m_cpuDepthFrame = frame ?? -2;
+            return buf;
+        } catch {
+            return null;
+        }
+    }
+
+    get depthSize(): [number, number] {
+        return [this.m_width, this.m_height];
+    }
+
     private onWillRender = (): void => {
         if (!this.m_active) return;
         const renderer = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
@@ -212,6 +249,7 @@ export class TerrainDepthOcclusion {
             }
             (this as any).__mbDpLogged++;
         }
+        this.m_cpuDepth = null; // invalidate CPU copy for this frame
         const prevTarget = renderer.getRenderTarget();
         try {
             renderer.setRenderTarget(this.m_depthTarget);

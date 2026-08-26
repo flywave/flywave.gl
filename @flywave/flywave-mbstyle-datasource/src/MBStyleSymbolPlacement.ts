@@ -272,17 +272,43 @@ export class MBStyleSymbolPlacement {
         const entries: Entry[] = [];
         const seen = new Set<string>();
         const v = new THREE.Vector3();
+        let dbgTiles = 0, dbgGroups = 0, dbgElems = 0;
         for (const tile of this.m_dataSource.getDecodedTiles()) {
             const groups = (tile as any).textElementGroups?.groups as
                 Map<number, { elements: any[] }> | undefined;
+            dbgTiles++;
+            if (groups) {
+                dbgGroups++;
+                for (const g of groups.values()) dbgElems += g.elements.length;
+            }
             if (!groups) continue;
             for (const group of groups.values()) {
                 for (const el of group.elements) {
-                    if (!el || !el.position) continue;
+                    if (!el || !el.position) {
+                        if ((globalThis as any).__mbCollFrames === 41) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBColl] skip el keys=' + Object.keys(el ?? {}).slice(0, 12).join(',')
+                                + ' pos=' + (el && el.position));
+                        }
+                        continue;
+                    }
                     v.copy(el.position).project(camera);
                     const sx = (v.x * 0.5 + 0.5) * canvasW;
                     const sy = (-v.y * 0.5 + 0.5) * canvasH;
-                    if (sx < -60 || sx > canvasW + 60 || sy < -60 || sy > canvasH + 60) continue;
+                    if (sx < -60 || sx > canvasW + 60 || sy < -60 || sy > canvasH + 60) {
+                        if ((globalThis as any).__mbCollFrames === 42 && !(globalThis as any).__mbSLogged) {
+                            (globalThis as any).__mbSLogged = 1;
+                            // eslint-disable-next-line no-console
+                            console.log('[MBColl] offscreen sx=' + sx + ' sy=' + sy + ' canvas=' + canvasW + 'x' + canvasH);
+                        }
+                        continue;
+                    }
+                    if ((globalThis as any).__mbCollFrames === 42 && (globalThis as any).__mbSLogged === undefined) {
+                        (globalThis as any).__mbSLogged = 1;
+                        // eslint-disable-next-line no-console
+                        console.log('[MBColl] onscreen sx=' + sx.toFixed(0) + ' sy=' + sy.toFixed(0)
+                            + ' canvas=' + canvasW + 'x' + canvasH);
+                    }
                     const key = `${el.featureId ?? ''}:${el.text}`;
                     if (seen.has(key)) continue;
                     seen.add(key);
@@ -374,6 +400,38 @@ export class MBStyleSymbolPlacement {
             }
         }
 
+        // mgl placeCollisionBox isClipped: at pitch > 0 a symbol whose
+        // anchor is occluded by 3D geometry (extrusions/terrain) is NOT
+        // placed at all — unconditionally, even without occlusion-opacity
+        // props. Sample the extrusions depth pass on CPU and drop such
+        // anchors before collision (they neither render nor reserve space).
+        let depthBuf: Uint16Array | null = null;
+        let depthW = 0, depthH = 0;
+        const occ = (this.m_dataSource as any).m_depthOcclusion;
+        if (occ?.readDepthBuffer) {
+            const t = this.m_mapView.camera;
+            const pitch = Math.atan2(
+                Math.hypot(t.position.x, t.position.z) === 0 ? 0 : 0, 1); // pitch>0 check below
+            depthBuf = occ.readDepthBuffer() as Uint16Array | null;
+            [depthW, depthH] = occ.depthSize ?? [0, 0];
+        }
+        const camNear = (this.m_mapView.camera as any).near ?? 0.1;
+        const camFar = (this.m_mapView.camera as any).far ?? 2000;
+        const camPos = this.m_mapView.camera.position;
+        const anchorOccluded = (e: { sx: number; sy: number; el: any }): boolean => {
+            if (!depthBuf || depthW === 0) return false;
+            const ix = Math.round(e.sx);
+            const iy = Math.round(depthH - 1 - e.sy); // GL origin bottom-left
+            if (ix < 0 || iy < 0 || ix >= depthW || iy >= depthH) return false;
+            const d = depthBuf[iy * depthW + ix] / 65535;
+            if (d >= 1) return false; // nothing drawn (far)
+            const dist = e.el.position.distanceTo(camPos);
+            const zNdc = (camFar + camNear) / (camFar - camNear)
+                - 2 * camFar * camNear / ((camFar - camNear) * dist);
+            const zStd = 0.5 + 0.5 * zNdc;
+            return zStd > d + 1 / 300;
+        };
+
         // mgl placement order (pauseable_placement.ts + default.ts):
         // 1. style layers in REVERSE order (`_currentPlacementIndex =
         //    order.length - 1`, decrementing — the LAST style layer places
@@ -405,6 +463,12 @@ export class MBStyleSymbolPlacement {
             for (const [px, py] of corners) out.push(px, -py, 0);
         };
         for (const e of entries) {
+            // mgl isClipped anchor cull — INFRASTRUCTURE ONLY for now: the
+            // CPU depth sampling mis-verdicts (over-culls street icons,
+            // data-driven 67509→71394) pending depth-pass/stencil parity
+            // calibration. The readback (occ.readDepthBuffer) stays wired
+            // and gated; enable by returning true here once calibrated.
+            void anchorOccluded;
             let anyPlaced = false;
             let first = true;
             for (const rect of [e.iconRect, e.textRect]) {
@@ -447,12 +511,16 @@ export class MBStyleSymbolPlacement {
                 if (e.iconRect || e.textRect) { if (!e.el.visible) hidden++; }
             }
             (globalThis as any).__mbCollFrames = ((globalThis as any).__mbCollFrames ?? 0) + 1;
+            if ((globalThis as any).__mbCollFrames === 40) {
+                // eslint-disable-next-line no-console
+                console.log('[MBColl] tiles=' + dbgTiles + ' withGroups=' + dbgGroups + ' elems=' + dbgElems);
+            }
             // eslint-disable-next-line no-console
             console.log('[MBColl] entries=' + entries.length + ' withIcon=' + withIcon
                 + ' hidden=' + hidden);
             // Per-icon dump at a late frame (camera static, placements
             // settled): screen pos, box size, verdict, icon name.
-            if (entries.length >= 200 && !(globalThis as any).__mbCollDumped) {
+            if (entries.length >= 100 && !(globalThis as any).__mbCollDumped) {
                 (globalThis as any).__mbCollDumped = true;
                 // eslint-disable-next-line no-console
                 console.log('[MBColl] DUMPING entries=' + entries.length);
