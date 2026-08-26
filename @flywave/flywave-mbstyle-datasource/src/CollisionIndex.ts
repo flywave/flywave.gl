@@ -59,7 +59,11 @@ export class CollisionIndex {
             for (const other of cell.boxes) {
                 if (other.allowOverlap) continue;
                 if (this.intersects(x, y, w, h, other.x, other.y, other.w, other.h)) {
-                    if (priority <= other.priority) return false;
+                    // mgl placeCollisionBox: ANY intersection with an
+                    // already-placed box rejects — placement order (sorted
+                    // before insertion) decides the winner, priority is not
+                    // consulted here.
+                    return false;
                 }
             }
         }

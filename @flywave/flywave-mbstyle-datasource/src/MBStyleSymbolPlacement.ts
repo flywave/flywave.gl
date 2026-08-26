@@ -327,9 +327,14 @@ export class MBStyleSymbolPlacement {
                                     ?.icons?.get(tech.imageTexture);
                                 if (info) { w = info.width; h = info.height; }
                             } catch {}
+                            // mgl rasterizes icons at devicePixelRatio
+                            // (ImageVariant.scaleSelf) — the sprite JSON is 1x
+                            // logical px, the collision box is device px.
+                            const pr = canvasW / Math.max(1,
+                                (this.m_mapView.canvas as any).clientWidth || canvasW);
                             const pad = 2 * 2;
                             iconRect = [sx + dx, sy + dy,
-                                w * iconScale + pad, h * iconScale + pad];
+                                w * iconScale * pr + pad, h * iconScale * pr + pad];
                         }
                     }
                     if (el.text) {
@@ -355,8 +360,22 @@ export class MBStyleSymbolPlacement {
             }
         }
 
-        // mgl placement order: higher priority first; later colliders lose.
-        entries.sort((a, b) => b.priority - a.priority);
+        // mgl placement order (pauseable_placement.ts + default.ts):
+        // 1. style layers in REVERSE order (`_currentPlacementIndex =
+        //    order.length - 1`, decrementing — the LAST style layer places
+        //    first and wins collisions),
+        // 2. bucket parts by symbol-sort-key ASC when set (all-equal keys
+        //    keep insertion order via the stable sort),
+        // 3. within a bucket: symbolInstance (= tile feature) order.
+        const layerOrderOf = (e: Entry) =>
+            Math.floor(Number(e.el.poiInfo?.technique?._renderOrder
+                ?? e.el.technique?._renderOrder ?? 0));
+        const sortKeyOf = (e: Entry) => {
+            const k = (e.el.poiInfo?.technique as any)?._symbolSortKey;
+            return typeof k === 'number' ? k : 0;
+        };
+        entries.sort((a, b) =>
+            (layerOrderOf(b) - layerOrderOf(a)) || (sortKeyOf(a) - sortKeyOf(b)));
         const index = new CollisionIndex();
         const placedBoxes: number[] = [];
         const hiddenBoxes: number[] = [];

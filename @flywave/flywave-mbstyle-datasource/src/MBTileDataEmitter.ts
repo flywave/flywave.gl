@@ -1324,6 +1324,10 @@ export class MBTileDataEmitter {
                 _index: idx,
                 _renderOrder: layer.renderOrder + textLift,
                 renderOrder: layer.renderOrder + textLift, // Standard flywave property read by TileGeometryCreator
+                // Explicit symbol-sort-key (mgl bucketParts sort) — undefined
+                // when the layer never set it (insertion order then, NOT the
+                // engine's internal default priority).
+                _symbolSortKey: layer.layout['symbol-sort-key'],
                 _layerId: layer.id,
                 _paint: layer.paint,
                 _layout: layer.layout,
