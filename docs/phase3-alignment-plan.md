@@ -97,11 +97,15 @@
   零输出、画面全白。**补充机理发现（本轮）**：three 默认 cache key
   =最外层 onBeforeCompile.toString()——后包 handler 可复原外层源码
   使 programs map 命中、修改链永不编译（已加 customProgramCacheKey
-  nonce 防御，见提交）；但 nonce 后 handler 仍零执行——残余嫌疑=
-  引擎按需渲染下对象在补丁后从未再被绘制（或引擎每帧重同步
-  onBeforeCompile/customProgramCacheKey）。**远程 console 取证穷尽，
-  需 live devtools**（karma --debug / 本地 dev server，断点
-  WebGLRenderer.js:2087 + patchMaterial 后材质属性 watch）
+  nonce 防御，见提交）；nonce 后 handler 仍零执行——**最终破案
+  （b2937d07，无需 devtools）**：手动链调用取证（uniforms=3、无
+  uMB3DAmb）证明 handler 不在链上——injectExtrusion3DLighting 原在
+  patchExtrusionMaterial 早期调用，函数内后续 translate 赋值以注入前
+  链快照为 orig 把光照 handler 顶出链（__mbExtrusion3DLit 标志阻止
+  重注入）。移至函数末尾后必在链上（手动链调用 hasAmb/fsHasLight
+  =true 复核）。**效果**：default 217192→183126 光照首次上屏；
+  lighting-3d/fill-extrusion 37 例 0→1 PASS；occlusion 三大 660k
+  残差各降 ~100k；部分中残差例白→亮校准性波动（±9k）待族内校准
   ② icons 仍不可见（sprite/poi_label 数据已在，待 ① 后复测——
   PoiRenderer 批次路径与 extrusion 无关，可独立排查 SpriteAtlas 图名
   {maki}-12 解析）
