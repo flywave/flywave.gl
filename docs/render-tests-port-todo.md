@@ -5454,3 +5454,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **修复**：bake 隐藏 isMeshStandardMaterial 对象。**实测四件套值持平（16273-16845）**——次级嫌疑浮出：**drape 应用路径**（setDrapeTexture+USE_DRAPE 后地形外观未变——疑材质克隆/needsUpdate 重编译链/或卫星 quad 本身未入 bake 视锥（quad 覆盖全视口 vs bake 相机单 tile 的坐标对齐））。
 
 **下会话 ROI**：① drape 应用路径断点（setDrapeTexture 后 USE_DRAPE 编译与 vMapUv 采样是否实际生效——shader 插桩一行即判）；② 卫星 quad-bake 视锥对齐（quad 世界坐标 vs tile 相机相对系）；③ 锚点 verdict BOTH 15→67；④ 3 例基线采样回归。
+
+**§472. 会话续记——drape 三级修复 + 终极定性：TerrainController mesh 从未渲染（commit 2e315189）**：
+
+**三级修复（管线正确性）**：① bake 相对系平移——卫星 quad 绝对坐标（7421118,24327766）− camPos（7422750,…）入 bake 相机相对系（坐标系全标定：quad 绝对 / terrain 相对 / root 0 / cam 绝对）；② clear alpha=0——mix(base, drape.rgb, drape.a) 语义下空区须 a=0（alpha=1 把整 tile 涂成 clear 色，§471"黑毯"的反转解释：黑=clear 而非 lit 无灯，白点=卫星内容！）；③ 排除 ShaderMaterial（屏幕空间 quad 在顶视 ortho 下投影为垃圾）。
+
+**终极定性（MBMat 编译探针）**：TerrainController 的 9 个 MapTerrainMaterial **onBeforeCompile 零调用=mesh 从未渲染**——四件套可见地形来自**引擎原生路径**（flywave-terrain-datasource），我们的 drape/dem/depth 机制从未触及真渲染面——历次 drape 实验"逐位不变"的完整解释。**下会话单点：确认引擎原生地形渲染面（VectorMaterialProvider/Tile 材质）并将 drape 纹理接到该材质**（TerrainController mesh 疑与引擎地形双轨，或被原生路径覆盖）。
+
+**下会话 ROI**：① 引擎原生地形材质定位与 drape 接驳（四件套真断点）；② 锚点 verdict BOTH 15→67（before-3d 冲刺，真深度已通）；③ 3 例基线采样回归。
