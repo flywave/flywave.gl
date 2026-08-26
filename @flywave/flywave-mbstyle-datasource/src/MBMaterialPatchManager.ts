@@ -1284,6 +1284,14 @@ export class MBMaterialPatchManager {
             const origOnCompile = material.onBeforeCompile;
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
+                if ((globalThis as any).__mbOccDbg) {
+                    (globalThis as any).__mbRasCompiles = ((globalThis as any).__mbRasCompiles ?? 0) + 1;
+                    if ((globalThis as any).__mbRasCompiles <= 4) {
+                        // eslint-disable-next-line no-console
+                        console.log('[MBRasC] compile#' + (globalThis as any).__mbRasCompiles
+                            + ' bake=' + !!(material as any).__mbRasBake);
+                    }
+                }
                 shader.uniforms.uMBRasMap = { value: texture };
                 shader.uniforms.uMBRasUvOff = { value: [rect[0], rect[1]] };
                 shader.uniforms.uMBRasUvScl = { value: [rect[2], rect[3]] };
