@@ -5438,3 +5438,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **实测**：occlusion 族 data-driven 72938 / before 7799 / after 26171 / setProperty 16278（带内）；icon 回归 14/15 保持。
 
 **下会话 ROI**：① TerrainDraping 相机零位化验证（setProperty 四件套冲刺）；② 锚点 verdict 精度对齐（mgl projectAndGetPerspectiveRatio 的 occluded 射线测试语义，BOTH 15→67）；③ 3 例基线采样回归定位（§468）。
+
+**§470. 会话续记——raster draping 激活验证 + 剩余两级定性（setProperty 四件套）**：
+
+**激活验证（MBDrap 探针）**：96fd14eb（RTE 零位化）后 TerrainDraping bake **已激活**（uniform=false，内容门通过）——§114 时代"bake 阻塞自禁用"已解除。setProperty 残差 16266 持平。
+
+**剩余两级（定性，未修）**：① baked 样本仅黑白（255/0）无卫星色彩——bake 内容疑非 raster quad（黑=未知来源，待查 bake 场景对象集/顶点色路径）；② drape 上屏经 MapTerrainMaterial（MeshStandard）PBR 照明——§114 E1 结论：unlit 注入是 redistribute 非收敛，需逐子族校准。四件套转绿=两级 + 逐族外观，非单点。
+
+**下会话 ROI**：① bake 内容源排查（卫星 quad 是否入 bake 场景、黑白来源）；② §114 E1 路径重开（drape 激活后 unlit/照明再评估——前提已变）；③ 锚点 verdict 对齐（BOTH 15→67，before-3d 冲刺）；④ 3 例基线采样回归。
