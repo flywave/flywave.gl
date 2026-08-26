@@ -5240,3 +5240,22 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **基线快照（本会话末）**：occlusion 24 FAIL（残差结构已变：三大 560k 级待 icons 解锁）；lighting-3d/fill-extrusion 36F/1S；单测 268/0；slots 3 PASS
 
 **下会话 ROI**：① devtools 一行断点终结 icons（解锁 occlusion data-driven 转绿路径）；② match 修复全量影响面批测；③ lighting-3d 36 例逐域收敛（3D 光照已上屏，域内为公式/参数校准）
+
+**§454. 会话续记——icons 修复批验收 + image params 重着色落地 + occlusion 域结构定性（2026-08-26 三百四十五）**：
+
+**icons 修复批验收（mbstyle-iconfix1，74 例）**：BoxBuffer clearAttributes 修复后 icon 域 **28 PASS / 46 FAIL**（此前全红），修复确认生效。lib 陈旧坑复现——karma 从 lib 解析，mapview/mbstyle 改动必须先 `tsc --build` 重建（本轮 mapview lib 曾停在 8-23 旧码）。
+
+**image 表达式 params 重着色落地（commit cbfb8fcd，mgl ImageVariant.params 同构）**：
+- **根因**：`["image", name, {params:{fill}}]` 的 params 重着色完全未实现——evaluate 只取 name，usvg 光栅化无 ColorReplacements，IconMetadata.variables（field 4）未解析。
+- **实现五件**：①IconSetPBFDecoder 解析 variables（field 4）/content_area（field 3）+ IconSetRegistry 留存解码树；②光栅化 g_colorReplacements 替换（fill/stroke/渐变 stop，替换 alpha 生效，mgl getStyleColor 语义）；③parseCssColor 命名色改 canvas fillStyle 精确解析（THREE 线性往返损失 4/255）；④evaluator resolveImageParams：求值 param 色 + LUT（`icon-image-use-theme:'none'` 跳过）+ 确定性合成名 `mbimg:name|fill:r,g,b,a`；⑤主线程 preRegisterImageParams 字面量预注册（worker/主线程同名约定，仿 §410 blend 模式防 fade 重启）+ registerImageParamsVariant（userImageCache + atlas.addIcon）。
+- **实测**：icon-image/params 4 例翻绿（transparent-color/image-expression/literal + icon-color/use-theme 差 119→119 不变）；color 4933→**197**、use-theme 4510→**461**、transparent-image 1205→**710**。icon 域回归零损失（icon-image/+icon-color 7 PASS 与基线一致）。
+- **残余定性**：color 197 = 变体画布边缘 AA 羽化（bbox 全图标边缘环、幅度 4/255 级）；use-theme 461 同类。候选跟进：mgl 按 devicePixelRatio 光栅化变体（renderIcon sx=dpr）vs 我们恒 dpr=1 的边缘质量差。
+
+**occlusion/lighting-3d 域批基线（mbstyle-occ1，24 全 FAIL）+ 结构定性（未修，取证完整）**：
+- 三大 data-driven 残差 55.5-57.1 万（icons 解锁未明显改善）；setProperty/terrain 族 ~1.6 万；depth-occlusion line 族 3-19k；model-layer 15 万。
+- **像素协同分析（co-occurrence histogram）**：屋顶(240↔241)、地面(199↔199)、背光墙(29↔25)**全匹配**——光照公式主体正确；错位集中在：①迎光墙 exp 136/137（NdotL≈0.244）vs cur 189（NdotL≈0.508≈sin30° 满值）——**墙面法线与光方位角的相对分布错位**（疑似 bearing=90 未补偿或方位角约定差 60°）；②exp 屋顶↔cur 背光墙成对互换 19k/10k px——**逐建筑高度或面分类差异**。
+- **下会话单点**：shader 定量插桩（§427/§432 三件套）dump uMB3DDir + 采样墙面 NdotL 分布，对照 mgl fill_extrusion.fragment 的 apply_lighting(color, normal)（无阴影路径）实值。
+
+**icon 域剩余 46 FAIL 分布（mbstyle-iconfix1）**：icon-opacity 全族 ~1.5-3.1k（分布式子像素相位+AA，§445/§451 冻结类，勿追）；icon-size property-function/rasterized 1-2k；scale-factor 族 3.4-4k；stretchable 144-1107；text-variable-anchor/icon-image 2.6-2.8k；measure-light global-brightness 1.3k。
+
+**下会话 ROI**：① occlusion 插桩终结墙面 NdotL 错位（解锁 24 例大域）；② icon 域次级残差（scale-factor/stretchable 结构性）；③ regressions 剩余 66 例（§451 记档）。
