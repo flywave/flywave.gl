@@ -70,9 +70,12 @@
   路径**：handler 已挂载+needsUpdate 已置位但从未执行——疑引擎 fork
   渲染器对 MapMeshStandardMaterial 的程序缓存绕过 onBeforeCompile，
   或材质 version 被引擎重置。**下一会话首要工程项：extrusion
-  onBeforeCompile 失效根因**（renderer.info.programs 对拍 /
-  WebGLProgram 断点 / needsUpdate 后 version 追踪）；fill-extrusion
-  全族的 AO/roof/fog shader 补丁同受此路径影响，需一并复核
+  onBeforeCompile 失效根因**——console 取证已达极限（两次普查互相
+  矛盾：uuid 同一性 overlap=153 vs 场景 mesh 标志位 vi=0，时序敏感），
+  需交互式 devtools 断点（acquireProgram / material.version watch）
+  或单测级最小复现（scene+MapMeshStandardMaterial+handler 断言）；
+  fill-extrusion 全族的 AO/roof/fog shader 补丁同受此路径影响，
+  需一并复核
   ② icons 仍不可见（sprite/poi_label 数据已在，待 ① 后复测——
   PoiRenderer 批次路径与 extrusion 无关，可独立排查 SpriteAtlas 图名
   {maki}-12 解析）
