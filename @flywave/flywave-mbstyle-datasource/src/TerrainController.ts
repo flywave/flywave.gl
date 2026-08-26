@@ -266,11 +266,16 @@ export class TerrainController {
      * every frame before render.
      */
     updateCameraRelative(camPos: THREE.Vector3): void {
+        // §475: the render frame is ABSOLUTE (the satellite quad at world
+        // coords ~7.4e6 renders fine via the RTE camera). Subtracting camPos
+        // here placed the terrain ~10 km off-frustum — the TerrainController
+        // meshes never rasterized. Keep meshes at their absolute positions
+        // (float32 at 7.4e6 loses ~0.5 m precision — same as the quad).
+        void camPos;
         for (const mesh of this.m_meshes) {
             const world = mesh.userData.__mbWorldPos as THREE.Vector3 | undefined;
             if (!world) continue;
-            mesh.position.set(world.x - camPos.x, world.y - camPos.y,
-                world.z - camPos.z - this.m_elevationOrigin);
+            mesh.position.set(world.x, world.y, world.z - this.m_elevationOrigin);
         }
     }
 
@@ -316,6 +321,7 @@ export class TerrainController {
      * Returns true while a morph is in progress.
      */
     updateMorphing(now: number): boolean {
+
         if (!this.m_morphActive) return false;
         const elapsed = now - this.m_morphStart;
         const t = Math.min(1, elapsed / TerrainController.MORPH_DURATION);
@@ -476,6 +482,8 @@ export class TerrainController {
             mesh.frustumCulled = false;
             this.m_meshes.push(mesh);
             this.m_scene.add(mesh);
+
+
         } catch {
             // tile failed to load — skip
         }
