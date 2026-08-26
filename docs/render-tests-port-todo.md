@@ -5259,3 +5259,22 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **icon 域剩余 46 FAIL 分布（mbstyle-iconfix1）**：icon-opacity 全族 ~1.5-3.1k（分布式子像素相位+AA，§445/§451 冻结类，勿追）；icon-size property-function/rasterized 1-2k；scale-factor 族 3.4-4k；stretchable 144-1107；text-variable-anchor/icon-image 2.6-2.8k；measure-light global-brightness 1.3k。
 
 **下会话 ROI**：① occlusion 插桩终结墙面 NdotL 错位（解锁 24 例大域）；② icon 域次级残差（scale-factor/stretchable 结构性）；③ regressions 剩余 66 例（§451 记档）。
+
+**§455. 会话续记——occlusion 墙面光照方位角悬案终结（六轮插桩夹逼，commit cd0dbd23）**：
+
+**取证链（离线直方图 + shader 定量插桩读屏七轮）**：
+1. mvt 足迹直方图脚本（/tmp 法）：注意负角 `%180` 会静默丢 bin——曼哈顿网格实为 −29° 旋转（单足迹边 az −15/−105 抽查可复核），首轮"轴向网格"结论是解析 bug。
+2. 插桩读屏法（`MBSTYLE_LIGHTDBG=1` + `lightdbg=1` karma arg → shader 以 0.5+0.5·v 编码 R/G/B，PIL 端按 sRGB ^2.2 解码）：七轮分别编码 dir uniform、世界法线、视图法线、viewToWorld 对角、vViewPosition、mbDirView、NdotL。
+3. **关键实证**：dir uniform 正确 (−0.25,−0.433,0.866)；roof/ground/背光墙全对齐；迎光墙 our NdotL=0.519 vs mgl 0.244。六轮夹逼排除：陈旧相机矩阵（viewMatrix 同结果）、顶点法线（derivative 同结果）、three 场景光叠加（基色覆写同结果）——最终用 camera 基底反解视图法线世界方位：墙 θ=240.8°，网格 −29° 下法线一直是对的，**唯一解释=dir 方位角约定错**：mgl 罗盘式（0=北顺时针）θ=90−az；az150 → mgl θ=300（Δ59°→0.244✓），我们 az+90 → θ=240（Δ1°→0.5✗）。因子恰 2× 是巧合（cos0 vs cos60×0.5/0.5）。
+
+**修复三件（cd0dbd23）**：
+1. **方位角**：lighting3DState + directionalVec 改 `a=(90−az)°`（罗盘→数学系）；legacy `light` 路径（§12.31 标定）不动。
+2. **法线与点乘健壮化**：derivative 面法线（`cross(dFdx,dFdy(vViewPosition))`，引擎 flat 同款）替代 vNormal（顶点法线平滑不可靠）；光方向经 three 内建 `viewMatrix`（渲染器每帧更新）变换到视图空间点乘，废除编译期 `uMB3DViewToWorld` 快照（陈旧矩阵 bug 类）。
+3. **双重光照中和**：`#include <color_fragment>` 后捕获 mbBaseColor，注入块用 mgl 公式**覆写**输出（three 场景 DirectionalLight 对标准材质的自身光照被整体丢弃，不再相乘叠加）。
+4. 插桩读屏探针保留（gated by lightdbg）——shader 定量取证工具资产 +1。
+
+**实测（mbstyle-occfix7/8）**：occlusion/symbol-occlusion-data-driven 555181→**386245**（墙面 138/137 与 exp 136/137 逐值对齐）；no-occlusion-after/before 533k/571k→**359k/392k**；lighting-3d-mode/fill-extrusion/default 217k（§453 基线）→**56757**（−74%）；terrain 16277→17605（微升，后续观察）。setProperty 16278 不变（无 directional 光，残差另源）。
+
+**剩余残差定性（occfix7 协同分析）**：最大对 = exp29↔cur241（17k）与 exp240↔cur23（15k）——**双向屋顶↔墙互换 = 逐建筑高度标定差**（均匀高度缩放错误在建筑顶缘两侧同时产生两种互换；嫌疑 §294 flat 路径 sec(lat) 双乘系数在无 terrain 夹具的适用性，NYC sec=1.32）。次级：暗墙 23 vs 29（ambient 微差 k=0.0096 vs ~0.0127）。
+
+**下会话 ROI**：① 高度标定（sec(lat) 系数在无 terrain 夹具的再标定，解锁 occlusion 剩余 ~30k 墙缘互换 + lighting-3d 56.8k 收尾）；② occlusion icon 遮蔽（icon-occlusion-opacity 双 pass）剩余暗像素差；③ lighting-3d 域全量批测（127 例）量化方位角修复整体收益。
