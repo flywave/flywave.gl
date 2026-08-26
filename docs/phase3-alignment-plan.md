@@ -107,5 +107,12 @@
     为既有漂移（MBMaterialFactory RawShaderMaterial 断言、
     MBStyleRuntime setPaintProperty、TerrainController 相机、TextShaping
     justify 等），与 slots/occlusion 批次无关——修复清单另立
+- [x] P3.2b 动态 exaggeration（33ab1054）：表达式求值（interpolate zoom）
+  + pushMapboxZoom 挂钩 + setExaggeration 原地 uniform 刷新（无重建）；
+  fog/terrain/basic 28760→13766 显著改善；exaggeration 族剩余 15 例
+  残差主体为 fog/terrain 合成域长线（error-overlap 等与记档逐值一致）
+- [~] occlusion 族数据补齐尝试：repo 内 demo token 全路由 401（v4 tileset/
+  styles static 均拒），真实 token 缺失——数据补齐挂起待用户提供 token
+  或替代数据源；cross-source-elevation 夹具同样 hd-road 瓦片缺失
 - 后续: vector overscale/sparse 需引擎级父级保留（mgl
   updateRetainedTiles 等价物）、hillshade 家族精度、无背景层黑底合成
