@@ -5614,3 +5614,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **修复路线（下会话冷启动首步）**：把 cache-key 赋值移到 attach() 顶层（onBeforeCompile 之外）——一行上移即验证嫌疑一。
 
 **会话终局**：38 阶段（§454-§490）。
+
+**§491. 会话续记——cache-key 时序验证完毕（嫌疑一排除，四态同值定性）**：
+
+**验证**：cache-key 赋值上移 attach() 顶层——**仍逐位 17562**。**重要定性**：setProperty 在四个不同代码态（bb1 扩窗/rf1/rf2 far 截断/ck1 cache-key）**像素完全相同** = bake 内容自某点起不再影响渲染（uniform=true → 内容门关闭 drape → 地形纯色外观冻结）。**断点转正（嫌疑二）**：fill 片元 blending 至 alpha-0 清底——transparent+NormalBlending 下 fragment alpha=0 则全透明（读数与"未渲染"同像）。插桩：bake 期间 fill fragment alpha 一行。
+
+**会话终局**：39 阶段（§454-§491）。回归历轮零损失。
