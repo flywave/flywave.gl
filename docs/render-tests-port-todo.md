@@ -5414,3 +5414,15 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **实测**：真实深度首次到达 fade（data-driven 73253，移出 67-72k 历史带——fade 行为已变，需按真深度重新校准 eps/near-far）；before-3d 7492→7800（GPU 锚点隐藏生效，mgl 67 placed 对齐待校准）；icon 回归 14/15 保持（use-theme 原有）。
 
 **下会话 ROI**：① 真深度下的 fade/锚点 verdict 校准（near/far 实源=viewRanges.maximum、eps 按距离换算）——before-3d 冲刺（GPU 隐藏已生效，差的是 verdict 精度）；② data-driven fade 重校（真实深度下的 multisample 语义）；③ 全量 462 基线复核（深度管线改动面大）。
+
+**§468. 会话续记——锚点校准终局定性 + 462 基线抽样复核（60 例）**：
+
+**校准终局**：深度 RT 烘焙命中引擎已知零渲染 FBO 问题（§12.76-58，与 terrain drape 同阻塞）——clear()+override/逐 mesh 置换均仅得常数 clearColor（0.78），AfterRender 迁移尝试反致 108k/174k 大回归（已回退 WillRender）。GPU 锚点隐藏停用（常数判决会全灭图标）。**before-3d 转绿前置 = 解阻塞引擎 FBO 零渲染**（下会话引擎单点）。稳定态全值恢复：before 7492 / after 26171 / dd 71324 / setProperty 16278。
+
+**462 基线抽样复核（seed=42 抽 60，分 3 批）**：**57/60 保持（95%）**。3 例采样回归：
+1. `appearance/icon-bbox/icon-with-offset-2`（621）——疑 §459 碰撞盒 offset/pr 缩放
+2. `combinations/hillshade-translucent--raster-translucent`（4063）
+3. `combinations/symbol-translucent--raster-translucent`（3210）——translucent+translucent 组合族，疑深度 pass clear() 或碰撞常开的次生效应
+（其余 5 个 FAIL 均为子串误入的非基线例，原有失败。）
+
+**下会话 ROI**：① 引擎 FBO 零渲染解阻塞（§12.76-58——解锁 before-3d 锚点淘汰收口 + raster-on-terrain draping 双线）；② 3 例采样回归逐一定位；③ regressions 66 例/symbol-spacing/cross-fade 等存量域。
