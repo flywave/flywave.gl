@@ -2480,6 +2480,7 @@ export class MBEnvironmentManager {
                 };
                 this.m_mapView.addEventListener(
                     MapViewEventNames.WillRender, this.m_terrainRteListener);
+                (this as any).__mbTerrainActive = true;
                 return;
             }
             this.m_terrainController.dispose();
@@ -2593,6 +2594,11 @@ export class MBEnvironmentManager {
             mesh.renderOrder = -100;
             mesh.frustumCulled = false;
             this.m_rasterQuad = mesh;
+            // With terrain active the flat quad is co-planar with the DEM
+            // surface and drawn after it (no depth write; depth test passes
+            // at equal z) — it blankets the terrain. The satellite must
+            // arrive via the drape bake instead.
+            if ((this as any).__mbTerrainActive) mesh.visible = false;
             this.m_scene.add(mesh);
         } catch {}
     }
