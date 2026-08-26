@@ -5426,3 +5426,15 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 （其余 5 个 FAIL 均为子串误入的非基线例，原有失败。）
 
 **下会话 ROI**：① 引擎 FBO 零渲染解阻塞（§12.76-58——解锁 before-3d 锚点淘汰收口 + raster-on-terrain draping 双线）；② 3 例采样回归逐一定位；③ regressions 66 例/symbol-spacing/cross-fade 等存量域。
+
+**§469. 会话续记——§12.76-58 引擎 FBO 零渲染悬案告破（commit 96fd14eb，全局级解锁）**：
+
+**根因（RTE 相机零位化缺失）**：引擎场景对象按 RTE（relative-to-eye）相对化放置，**渲染相机必须置于原点**——带真实世界坐标（1e6+ m）的相机其 view 矩阵 float32 精度塌缩，一切皆不栅化（§12.76-58"零 fragment"之谜完整解释，TerrainDraping 正交烘焙受挫同源）。**先例一直在**：`VectorMaterialProvider.renderFrameBuffer()`（flywave-terrain-datasource）`camera.position.set(0,0,0)` 后渲染——翻到即中。
+
+**取证链**：纯三角探针（RawShaderMaterial 全屏三角入同 FBO→绿色）证明 FBO 本身无恙 → 场景特异 → 对照两处工作先例（Draping ortho/VectorMaterialProvider）定位零位相机 → clone+set(0)+updateMatrixWorld → 深度 RT 真实入库（pxMid=255,156 编码深度实证）。
+
+**解锁面**：① occlusion fade/锚点淘汰首次运行在真实深度上（GPU 锚点隐藏已启用，before-3d 7492→7799——verdict 对齐 mgl 精度为收尾迭代）；② **raster-on-terrain draping（setProperty 四件套）同根因解锁**——TerrainDraping bake 相机零位化后应可激活（下会话验证）；③ 本会话历次"深度管线不工作"的观察（fade 空纹理等）全部溯源于此。
+
+**实测**：occlusion 族 data-driven 72938 / before 7799 / after 26171 / setProperty 16278（带内）；icon 回归 14/15 保持。
+
+**下会话 ROI**：① TerrainDraping 相机零位化验证（setProperty 四件套冲刺）；② 锚点 verdict 精度对齐（mgl projectAndGetPerspectiveRatio 的 occluded 射线测试语义，BOTH 15→67）；③ 3 例基线采样回归定位（§468）。
