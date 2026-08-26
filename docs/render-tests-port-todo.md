@@ -5486,3 +5486,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **修正**：updateCameraRelative 停用 camPos 减法（保持绝对位）。**实测**：setProperty 四件套仍持平——绝对系下地形 tile（世界 7411335,24337550）与相机（7422750,24327098）相距 ~13km，zoom 12.2 视野内但 tile 网格/缩放对齐疑为下一层（DEM z 与卫星 z 差一级的候选）。**回归**：terrain 基线 3/3 零回归。
 
 **下会话 ROI**：① 地形 tile 网格对齐断点（world pos vs 相机视野数值核对——一号嫌疑 DEM terrainZoom 与卫星 z 差级致 tile 错位）；② 锚点 verdict BOTH 15→67；③ 3 例基线采样回归。
+
+**§476. 会话续记——§475 绝对系定性修正（RTE 相机原点真相）+ tile 网格数值核对**：
+
+**§475 修正**：渲染相机 `m_rteCamera = m_camera.copy()` 后 **`position.setScalar(0)`（原点相机）**——主渲染帧确为**相对系**；卫星 quad 能渲染是因注册为 **mapAnchor**（`m_mapAnchors.update(camera.position, …)` 每帧相对化），非"绝对系渲染"。§475 的绝对系结论错误，updateCameraRelative 相对化语义**恢复**（terrain 基线 3/3 零回归）。
+
+**tile 网格数值核对（ROI①）**：z12 中心 tile (758,1609)、卫星 quad ✓ 同 tile、3×3 网格覆盖相机 ✓——**网格对齐无误**（DEM z 差级嫌疑排除）。中芯 tile 相对位 (−1631,668) 合理；main 相机投影 NDC (1.3,1.7,1.0)=画外是**参考系错误**（须用原点 RTE 相机投影——getRteCamera 探针未通，mv 上方法不可见待查）。
+
+**地形不可见问题状态**：相对系 ✓、网格 ✓、visible ✓、材质编译零调用仍是核心矛盾——**下一断点 = 用原点 RTE 相机投影中芯 tile**（一次 NDC 数值即判 frustum 内外；若在内则嫌疑收窄至 geometry/scale/顶点数）。
+
+**下会话 ROI**：① RTE 相机投影断点（getRteCamera 可见性/直接 m_rteCamera 字段）——地形不可见终审；② 锚点 verdict BOTH 15→67；③ 3 例基线采样回归。
