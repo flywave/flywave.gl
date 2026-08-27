@@ -30,6 +30,28 @@ export const DRACO_EXTERNAL_LIBRARY_URLS = {
     [DRACO_EXTERNAL_LIBRARIES.ENCODER]: `https://raw.githubusercontent.com/google/draco/${DRACO_ENCODER_VERSION}/javascript/${DRACO_EXTERNAL_LIBRARIES.ENCODER}`
 };
 
+/**
+ * Self-hosted decoder resolution.
+ *
+ * The engine-wide `FLYWAVE_BASE_URL` convention (see BundleMain's
+ * MapAssetsUriResolver precedence: webpack DefinePlugin > window override >
+ * unpkg fallback) applies to ALL external runtime assets, and the Draco
+ * decoder wasm is one of them — the bundle step ships the decoders under
+ * `<base>/resources/libs/` (see createAssetsConfig's threeDracoPath copy).
+ * Without this, deployments on intranets that cannot reach gstatic.com abort
+ * the wasm module mid-decode.
+ */
+function defaultLibraryPath(): string | undefined {
+    const globalWithBase = globalThis as { FLYWAVE_BASE_URL?: string; window?: { FLYWAVE_BASE_URL?: string } };
+    const base = globalWithBase.FLYWAVE_BASE_URL || globalWithBase.window?.FLYWAVE_BASE_URL;
+    if (!base) {
+        return undefined;
+    }
+    // three/examples/jsm/libs ships the decoders under a `draco/` sub-directory
+    // and createAssetsConfig copies that directory as-is to `resources/libs`.
+    return `${base.replace(/\/$/, "")}/resources/libs/draco`;
+}
+
 let loadDecoderPromise;
 let loadEncoderPromise;
 
@@ -69,12 +91,14 @@ async function loadDracoDecoder(options: DracoLoaderOptions) {
     let DracoDecoderModule;
     let wasmBinary;
 
-    const DRACO_EXTERNAL_LIBRARY_URLS_ = options.draco?.libraryPath
+    // Explicit per-call libraryPath wins; otherwise honor FLYWAVE_BASE_URL.
+    const libraryPath = options.draco?.libraryPath ?? defaultLibraryPath();
+    const DRACO_EXTERNAL_LIBRARY_URLS_ = libraryPath
         ? {
-              [DRACO_EXTERNAL_LIBRARIES.DECODER]: `${options.draco.libraryPath}/${DRACO_EXTERNAL_LIBRARIES.DECODER}`,
-              [DRACO_EXTERNAL_LIBRARIES.DECODER_WASM]: `${options.draco.libraryPath}/${DRACO_EXTERNAL_LIBRARIES.DECODER_WASM}`,
-              [DRACO_EXTERNAL_LIBRARIES.FALLBACK_DECODER]: `${options.draco.libraryPath}/${DRACO_EXTERNAL_LIBRARIES.FALLBACK_DECODER}`,
-              [DRACO_EXTERNAL_LIBRARIES.ENCODER]: `${options.draco.libraryPath}/${DRACO_EXTERNAL_LIBRARIES.ENCODER}`
+              [DRACO_EXTERNAL_LIBRARIES.DECODER]: `${libraryPath}/${DRACO_EXTERNAL_LIBRARIES.DECODER}`,
+              [DRACO_EXTERNAL_LIBRARIES.DECODER_WASM]: `${libraryPath}/${DRACO_EXTERNAL_LIBRARIES.DECODER_WASM}`,
+              [DRACO_EXTERNAL_LIBRARIES.FALLBACK_DECODER]: `${libraryPath}/${DRACO_EXTERNAL_LIBRARIES.FALLBACK_DECODER}`,
+              [DRACO_EXTERNAL_LIBRARIES.ENCODER]: `${libraryPath}/${DRACO_EXTERNAL_LIBRARIES.ENCODER}`
           }
         : DRACO_EXTERNAL_LIBRARY_URLS;
     switch (options.draco && options.draco.decoderType) {
@@ -127,8 +151,12 @@ function initializeDracoDecoder(DracoDecoderModule, wasmBinary) {
 // ENCODER
 
 async function loadDracoEncoder(options) {
+    const libraryPath = options.draco?.libraryPath ?? defaultLibraryPath();
+    const encoderUrl = libraryPath
+        ? `${libraryPath}/${DRACO_EXTERNAL_LIBRARIES.ENCODER}`
+        : DRACO_EXTERNAL_LIBRARY_URLS[DRACO_EXTERNAL_LIBRARIES.ENCODER];
     let DracoEncoderModule = await loadLibrary(
-        DRACO_EXTERNAL_LIBRARY_URLS[DRACO_EXTERNAL_LIBRARIES.ENCODER],
+        encoderUrl,
         "draco",
         options,
         DRACO_EXTERNAL_LIBRARIES.ENCODER
