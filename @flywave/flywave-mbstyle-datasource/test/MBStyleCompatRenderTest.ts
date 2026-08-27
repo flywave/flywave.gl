@@ -1610,19 +1610,26 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                             console.log('[MBCap] px=' + Array.from(px5)
                                 .map((v, k) => (k % 4 === 3) ? 'a' + v : v).join('/'));
                             // §506 full-frame dump at capture (4-bit hex rows).
-                            const full5 = new Uint8Array(w5 * h5 * 4);
-                            gl5.readPixels(0, 0, w5, h5, gl5.RGBA, gl5.UNSIGNED_BYTE, full5);
-                            const tag5 = String((globalThis as any).__mbFixture ?? '?');
-                            for (let row = h5 - 1; row >= 0; row -= 16) {
-                                let hex5 = row.toString(16).padStart(3, '0')
-                                    + '@' + tag5 + '@';
-                                for (let x5b = 0; x5b < w5; x5b += 2) {
-                                    const o7 = (row * w5 + x5b) * 4;
-                                    hex5 += (full5[o7] >> 4).toString(16)
-                                        + (full5[o7 + 1] >> 4).toString(16)
-                                        + (full5[o7 + 2] >> 4).toString(16);
+                            // §509: gated behind capfdump=1 — the unconditional
+                            // ~32KB-per-test console flood saturated the karma
+                            // socket and killed the result server mid-category
+                            // (globe/model-layer lost their per-test JSONs).
+                            if ((window as any).__karma__?.config?.args?.some?.(
+                                (a: string) => a === 'capfdump=1')) {
+                                const full5 = new Uint8Array(w5 * h5 * 4);
+                                gl5.readPixels(0, 0, w5, h5, gl5.RGBA, gl5.UNSIGNED_BYTE, full5);
+                                const tag5 = String((globalThis as any).__mbFixture ?? '?');
+                                for (let row = h5 - 1; row >= 0; row -= 16) {
+                                    let hex5 = row.toString(16).padStart(3, '0')
+                                        + '@' + tag5 + '@';
+                                    for (let x5b = 0; x5b < w5; x5b += 2) {
+                                        const o7 = (row * w5 + x5b) * 4;
+                                        hex5 += (full5[o7] >> 4).toString(16)
+                                            + (full5[o7 + 1] >> 4).toString(16)
+                                            + (full5[o7 + 2] >> 4).toString(16);
+                                    }
+                                    console.log('[MBCapF]' + hex5);
                                 }
-                                console.log('[MBCapF]' + hex5);
                             }
                             // §505b: same-moment toDataURL decode — the IBCT
                             // capture uses canvas.toBlob; if the two paths
