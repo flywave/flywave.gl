@@ -3650,6 +3650,9 @@ export class MapView extends EventDispatcher {
         }
 
         this.dispatchEvent(this.WILL_RENDER_EVENT);
+        if ((globalThis as any).__mbLiteDbg && (this.m_frameNumber % 60) === 0) {
+            this.m_renderer.info.reset();
+        }
         this.mapRenderingManager.render(
             this.m_renderer,
             this.m_scene,
@@ -3674,7 +3677,8 @@ export class MapView extends EventDispatcher {
                     + ',' + camera.position.z.toFixed(0)
                     + ' root=' + this.m_sceneRoot.children.length
                     + ' px=' + px8[0] + ',' + px8[1] + ',' + px8[2] + ',' + px8[3]
-                    + ' calls=' + this.m_renderer.info.render.calls);
+                    + ' calls=' + this.m_renderer.info.render.calls
+                    + ' tris=' + this.m_renderer.info.render.triangles);
             } catch {}
         }
 

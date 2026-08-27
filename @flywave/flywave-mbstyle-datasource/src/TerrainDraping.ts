@@ -41,6 +41,8 @@ export class TerrainDraping {
     private m_extraBakeFrames = 0;
     /** §504: bounded retry counter for placeholder→real drape convergence. */
     private m_contentRetries = 0;
+    /** §504: dedicated layer for raster meshes under terrain (unused repo-wide). */
+    static readonly RASTER_LAYER = 2;
     /** White opaque clear color for FBO (alpha=1 so empty areas preserve terrain color). */
     private static readonly CLEAR_COLOR = new THREE.Color(1, 1, 1);
     /** Master switch for the drape bake. */
@@ -121,140 +123,18 @@ export class TerrainDraping {
     private m_rasterHidden: THREE.Material[] = [];
 
     private onWillRender = (): void => {
-        const frN = ((globalThis as any).__mbFrProbe ?? 0) + 1;
-        (globalThis as any).__mbFrProbe = frN;
-        if ((globalThis as any).__mbLiteDbg && frN >= 300 && frN < 303) {
-            try {
-                const meshes = this.m_terrain.meshes;
-                const mv: any = this.m_mapView;
-                const rte = (typeof mv.getRteCamera === 'function')
-                    ? mv.getRteCamera() : (mv as any).m_rteCamera;
-                if (meshes.length && rte) {
-                    const V = new (require('three')).Vector3();
-                    const parts: string[] = [];
-                    meshes.forEach((mid: any, mi: number) => {
-                        V.copy(mid.position).project(rte);
-                        const dt = mid.material?.m_drapeTexture ?? null;
-                        parts.push('#' + mi + '(' + mid.position.x.toFixed(0) + ',' + mid.position.y.toFixed(0)
-                            + ';N' + V.x.toFixed(1) + ',' + V.y.toFixed(1)
-                            + ';D' + (dt ? '1' : '0') + ';v' + (mid.visible ? 1 : 0) + ')');
-                    });
-                    let eff = '?';
-                    try {
-                        const mrm = (this.m_mapView as any).mapRenderingManager ?? (this.m_mapView as any).m_mapRenderingManager;
-                        eff = 'any=' + (mrm as any).m_anyEffectEnabled
-                            + ' bloom=' + (mrm as any).bloom?.enabled
-                            + ' outline=' + (mrm as any).outline?.enabled
-                            + ' vign=' + (mrm as any).vignette?.enabled
-                            + ' sepia=' + (mrm as any).sepia?.enabled
-                            + ' sgr=' + (mrm as any).sunGodRays?.enabled;
-                    } catch {}
-                    // eslint-disable-next-line no-console
-                    console.log('[MBFr] frN=' + frN + ' eff[' + eff + '] ' + parts.join(' '));
-                    // §503: whole-scene settle render through the RTE camera
-                    // + shader-error hook — splits scene-draw loss vs canvas
-                    // post-pass loss, and surfaces program failures.
-                    if (frN === 302) {
-                        try {
-                            const renderer2 = this.m_mapView.renderer!;
-                            const prevT = renderer2.getRenderTarget();
-                            renderer2.debug = renderer2.debug || (renderer2 as any).debug || {};
-                            (renderer2 as any).debug.onShaderError = (
-                                gl: any, program: any, vs: any, fs: any) => {
-                                // eslint-disable-next-line no-console
-                                console.log('[MBShaderErr] program link/compile failure');
-                            };
-                            const scratch = new THREE.WebGLRenderTarget(64, 64);
-                            const rte = (this.m_mapView as any).getRteCamera
-                                ? (this.m_mapView as any).getRteCamera()
-                                : (this.m_mapView as any).m_rteCamera;
-                            renderer2.setRenderTarget(scratch);
-                            renderer2.setScissorTest(false);
-                            renderer2.setClearColor(0xff00ff, 1);
-                            renderer2.clear(true, true, false);
-                            renderer2.render(this.m_mapView.scene, rte);
-                            const buf = new Uint8Array(64 * 64 * 4);
-                            renderer2.readRenderTargetPixels(scratch, 0, 0, 64, 64, buf);
-                            renderer2.setRenderTarget(prevT);
-                            // sample 6x6 grid luminance + count non-magenta
-                            let nonMag = 0;
-                            const cells: string[] = [];
-                            for (let gy = 0; gy < 6; gy++) {
-                                for (let gx = 0; gx < 6; gx++) {
-                                    const q = ((5 - gy) * 10 + 5) * 64 + (gx * 10 + 5);
-                                    const o6 = q * 4;
-                                    const isMag = buf[o6] === 255 && buf[o6 + 2] === 255;
-                                    if (!isMag) nonMag++;
-                                    cells.push(((buf[o6] + buf[o6 + 1] + buf[o6 + 2]) / 3).toFixed(0));
-                                }
-                            }
-                            // eslint-disable-next-line no-console
-                            console.log('[MBSceneRT] nonMag=' + nonMag + '/36 grid=' + cells.join(','));
-                            scratch.dispose();
-                        } catch (e) {
-                            // eslint-disable-next-line no-console
-                            console.log('[MBSceneRT] ERR ' + e);
-                        }
-                    }
-                    // §502 dichotomy: render mesh #3 ALONE with its own
-                    // material into a scratch RT — material-renders-drape vs
-                    // main-canvas-path-loses-it.
-                    if (frN === 302) {
-                        try {
-                            const mid3: any = meshes[3];
-                            const renderer2 = this.m_mapView.renderer!;
-                            const prevT = renderer2.getRenderTarget();
-                            const prevSc = renderer2.getScissorTest();
-                            renderer2.setScissorTest(false);
-                            const scratch = new THREE.WebGLRenderTarget(64, 64);
-                            const sc = new THREE.Scene();
-                            sc.add(mid3);
-                            const cam2 = new THREE.OrthographicCamera(-6000, 6000, 6000, -6000, 1, 1e6);
-                            cam2.position.set(mid3.position.x, mid3.position.y, 12000);
-                            cam2.up.set(0, 1, 0);
-                            cam2.lookAt(mid3.position.x, mid3.position.y, 0);
-                            cam2.updateProjectionMatrix();
-                            renderer2.setRenderTarget(scratch);
-                            renderer2.setClearColor(0xff00ff, 1);
-                            renderer2.clear(true, true, false);
-                            renderer2.render(sc, cam2);
-                            const buf = new Uint8Array(64 * 64 * 4);
-                            renderer2.readRenderTargetPixels(scratch, 0, 0, 64, 64, buf);
-                            renderer2.setRenderTarget(prevT);
-                            renderer2.setScissorTest(prevSc);
-                            let visN = 0, sumL = 0;
-                            for (let q = 0; q < 64 * 64; q++) {
-                                const o5 = q * 4;
-                                if (buf[o5 + 3] > 32 && !(buf[o5] === 255 && buf[o5 + 2] === 255)) {
-                                    visN++;
-                                    sumL += (buf[o5] + buf[o5 + 1] + buf[o5 + 2]) / 3;
-                                }
-                            }
-                            // eslint-disable-next-line no-console
-                            console.log('[MBIso] mesh3 vis=' + visN + '/4096 meanL='
-                                + (visN ? (sumL / visN).toFixed(0) : '-'));
-                            sc.remove(mid3);
-                            scratch.dispose();
-                        } catch (e) {
-                            // eslint-disable-next-line no-console
-                            console.log('[MBIso] ERR ' + e);
-                        }
-                    }
-                }
-            } catch {}
-        }
-        for (const m of this.m_rasterHidden) m.visible = true; // idempotent
-        this.m_rasterHidden.length = 0;
+        // §504: LAYER-based raster exclusion. Raster meshes live on layer 2
+        // (unused repo-wide); the main layer-0 camera never draws them and
+        // the bake camera opts in — with NO per-frame visibility toggling.
+        // The old show/hide gate interleaved with the engine's per-frame
+        // scene rebuild and flip-flopped the canvas (the §503 flicker:
+        // calls 9↔18, px white/satellite/river lottery). Idempotent, and
+        // it re-tags meshes created by later tile rebuilds (setTerrain).
         const scene = this.m_mapView.scene;
         scene.traverse((o: any) => {
-            if ((o.isMesh || o.isPoints) && o.userData?.technique?._isRaster) {
-                const mats = Array.isArray(o.material) ? o.material : [o.material];
-                for (const m of mats) {
-                    if (m && m.visible) {
-                        m.visible = false;
-                        this.m_rasterHidden.push(m);
-                    }
-                }
+            if ((o.isMesh || o.isPoints) && o.userData?.technique?._isRaster
+                && o.layers.mask !== 2) {
+                o.layers.set(2);
             }
         });
     };
@@ -373,18 +253,11 @@ export class TerrainDraping {
         const terrainMeshes = new Set<THREE.Object3D>(this.m_terrain.meshes);
         if (terrainMeshes.size === 0) return;
 
-        // Self-healing re-show (§497): rebuild the hidden-material set by a
-        // FRESH traversal instead of trusting the cross-frame m_rasterHidden
-        // list. The scene graph is rebuilt every frame (MapView clears
-        // m_sceneRoot and TileObjectsRenderer re-adds tile objects with
-        // per-technique materials), so an async-loaded tile can carry fresh
-        // material instances the last WillRender snapshot never saw — those
-        // stayed visible in the main render yet missing here. The bake IS
-        // the raster's rendering path under terrain; also widen the far
-        // cutoff (the bake ortho camera sits 6000 above the surface).
+        // §504: layer-based exclusion — raster meshes are on layer 2 and
+        // always visible=true; the bake camera simply opts into layer 2.
+        // No cross-frame visibility state exists anymore.
         {
             const seen = new Set<THREE.Material>();
-            this.m_rasterHidden.length = 0;
             scene.traverse((o: any) => {
                 if ((o.isMesh || o.isPoints) && o.userData?.technique?._isRaster) {
                     const mats = Array.isArray(o.material) ? o.material : [o.material];
@@ -399,7 +272,6 @@ export class TerrainDraping {
                     }
                 }
             });
-            for (const m of this.m_rasterHidden) m.visible = true;
         }
 
         const tiles = this.m_terrain.allDemTiles;
@@ -456,7 +328,6 @@ export class TerrainDraping {
         // into the next main render frame (the bake/main visibility interleave).
         if (!hasDrapableContent) {
             for (const obj of hidden) obj.visible = true;
-            for (const m of this.m_rasterHidden) m.visible = false;
             return;
         }
 
@@ -556,6 +427,7 @@ export class TerrainDraping {
                 // Build orthographic top-down camera covering this tile.
                 const camera = buildTileCamera(tile, (this.m_mapView as any).camera?.position);
                 if (!camera) continue;
+                camera.layers.enable(TerrainDraping.RASTER_LAYER);
 
                 if ((globalThis as any).__mbOccDbg && !(globalThis as any).__mbFillProj) {
                     (globalThis as any).__mbFillProj = 1;
@@ -843,14 +715,9 @@ export class TerrainDraping {
             // next main render frame.
             for (const obj of hidden) obj.visible = true;
             for (const [mesh, pos] of shifted) mesh.position.copy(pos);
-            for (const m of this.m_rasterHidden) {
-                m.visible = false;
-                // §492: the __mbRasBake flag stays set permanently — the
-                // widened far cutoff (×1e6) is harmless for the main render
-                // (camera distances are far below) and resetting it in the
-                // same frame coalesced the two needsUpdate flips into a
-                // no-op, so the bake program never compiled.
-            }
+            // §504: raster materials stay visible=true permanently — their
+            // meshes live on layer 2, invisible to the main camera without
+            // any state flips (the §503 flicker source is gone).
         }
     }
 

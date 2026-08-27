@@ -5773,3 +5773,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **验证（s504 批）**：setProperty/terrain 15863/15881（=历史好带，优于 17562 冻结态）；terrain/raster 族 54634/61447/62130 恒定；cache-invalidation 171/173/9939 原值；icon/fog PASS——**零回归**。terrain/raster 白屏未随两项修复解锁，与 MBSceneRT 证据一致：**其白屏属主画布通路丢失（setTerrain toggle 后引擎级），drape 层已排除**——terrain/raster 的解锁跟随组合器根因修复，不再阻塞 drape 层迭代。
 
 **drape 层当前完成度**：bake 内容正确（线性域卫星）、apply 链路正确、白占位拒绝、收敛有界——drape 层在"主画布正常渲染地形"的夹具上（如 setProperty）已进入正确工作状态。
+
+**§504 尾注二（同 commit）——最终定性：无 draw 振荡，白屏 = drape RT 内容逐 pass 交替（活引用透传）**。info.reset 前置后：calls 恒 **9**、tris 恒 **294912**（=9 张 DEM 网格；卫星 quad 已被 layer 2 排除 ✓）——此前"calls 9↔18 振荡"系 info 未逐帧复位的累计伪影。像素三态（白/暗蓝河流/pale 卫星）= **drape RT 纹理内容本身逐 bake pass 交替**，且 setDrapeTexture 持有活引用（同一 RT 反复重渲），apply gate 拒绝也无法阻止地形显示最新 pass 内容。⇒ 病灶唯一收敛：**为什么 attach 完成后仍有整 pass 渲出占位白**（全 pass 级联：一个 pass 内 9 tile 全白或全真，非单 tile）。下会话单点：在 bakeAll 循环外记录 pass 级相位（首 tile midRow 即可代表），对照 attach/帧号定位白 pass 的触发条件（疑似纹理上传与多 RT 顺序渲染的交错）。
