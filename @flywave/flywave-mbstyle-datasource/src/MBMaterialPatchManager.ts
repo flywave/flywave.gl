@@ -1631,6 +1631,7 @@ export class MBMaterialPatchManager {
                         padded.needsUpdate = true;
                         rasterTextureCache.set(url, padded);
                         attach(padded);
+                        try { (this.m_dataSource as any).notifyRasterAttached?.(); } catch {}
                         try {
                             (this.m_dataSource as any).mapView?.update?.();
                         } catch {}
@@ -1659,6 +1660,10 @@ export class MBMaterialPatchManager {
             } catch {}
             rasterTextureCache.set(url, padded);
             attach(padded);
+            // §502: the drape bake must run AFTER this attach — request extra
+            // rebake frames so the final bake samples real imagery, never the
+            // pre-attach placeholder window.
+            try { (this.m_dataSource as any).notifyRasterAttached?.(); } catch {}
             // Async texture arrival must trigger a new frame — the render-test
             // model is a static frame sequence, so without an update the just-
             // attached texture is never drawn.

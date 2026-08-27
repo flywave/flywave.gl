@@ -5737,3 +5737,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **白斑/全白统一图景**：terrain/raster 全白 = 沉降地形（本案）；setProperty 左下白斑 = 邻接 tile 无卫星渲染瓦片的空白 apron（mgl 不渲染视格外 terrain）。
 
 **修复入库**：bakeAll `renderer.setScissorTest(false)`（hygiene，引擎 compositor scissor 残留防护）；compile-rebake 恢复（deferred setTimeout 唤醒版）；applyTerrain 吞错日志；MBLite/MBFr 探针。**scissor 理论与四时序机制的"settle 空 bake"结论作废**（中心 bake 实有内容）。
+
+**§502. 会话终记——uDem/uDrape 终审：apply 链路证实、白 drape 定格未破、attach-rebake 机制无效（第三败）**：
+
+**probe 升级**：MBFr 改为全 9 mesh 巡检（pos/NDC/drapeSet/visible 一行）。
+
+**实证**：terrain/raster settle 帧——**mesh#3（在屏中心左）drapeSet=true、D1**——setDrapeTexture apply 链路完全正常；其 drape 内容 = **白色占位 bake**（attach 前窗口的 placeholder MeshBasic 烘焙定格）。全屏白 = 白 drape × 白地形基色 + 卫星被 gate 隐藏。8 个 apron tile 空窗（gate 关→基色白）属 mgl 语义外多余网格（mgl 不渲染视格外 terrain，记为后续对齐项）。
+
+**attach-rebake 机制（第三败，已留树）**：patcher attach → notifyRasterAttached → m_extraBakeFrames=MAX + requestBake——rebake 确实运行但内容仍白/m17/m135 彩票。**重新定性：§500-§501 的"settle 空 bake"与"四机制无效"全部发生在 liteldbg 失明轮，机制从未被真正证伪过——但本轮（探针恢复后）attach-rebake 依旧无效，机制层面证伪成立**。残余嫌疑唯一收窄：**占位纹理→真实纹理的替换在 GPU 侧对 bake pass 不可见**（材质实例替换/mapObjectAdapter 重建/纹理对象 identity 变化——attach 创建 NEW padded CanvasTexture，若 bake 持有的 uMBRasMap 仍指旧 placeholder，rebake 永远白）。下会话单点：dump tile4 drape 的 GPU 采样（mini-render 已就绪）+ 对比 uMBRasMap.uuid——若 uuid 旧，则 bake 用的是旧 material 的 uniforms，修法=bake 取当前 scene 中 raster mesh 的 material 现值。
+
+**附带**：show-layer 899（attach-rebake churn 副作用，机制若保留需再校准）；terrain/raster 54634 恒定（该值是否早于 drape 时代未考，§302 基线 94 FAIL 内）。

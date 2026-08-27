@@ -57,6 +57,13 @@ export class TerrainDraping {
         this.m_needsBake = true;
     }
 
+    /** §502: a raster texture finished attaching — rebake for MAX frames so
+     * the drape converges to post-attach content. */
+    onRasterAttached(): void {
+        this.m_extraBakeFrames = TerrainDraping.MAX_EXTRA_BAKES;
+        this.m_needsBake = true;
+    }
+
     start(): void {
         if (this.m_active) return;
         this.m_active = true;
@@ -122,19 +129,16 @@ export class TerrainDraping {
                     ? mv.getRteCamera() : (mv as any).m_rteCamera;
                 if (meshes.length && rte) {
                     const V = new (require('three')).Vector3();
-                    const mid: any = meshes[4] ?? meshes[Math.floor(meshes.length / 2)];
-                    V.copy(mid.position).project(rte);
-                    const demTex: any = mid.material?.userData?.demTexture ?? null;
-                    let demInfo = '?';
-                    try {
-                        const img = (mid.material as any).m_demTexture?.image;
-                        demInfo = img ? (img.width + 'x' + img.height) : 'noimg';
-                    } catch {}
+                    const parts: string[] = [];
+                    meshes.forEach((mid: any, mi: number) => {
+                        V.copy(mid.position).project(rte);
+                        const dt = mid.material?.m_drapeTexture ?? null;
+                        parts.push('#' + mi + '(' + mid.position.x.toFixed(0) + ',' + mid.position.y.toFixed(0)
+                            + ';N' + V.x.toFixed(1) + ',' + V.y.toFixed(1)
+                            + ';D' + (dt ? '1' : '0') + ';v' + (mid.visible ? 1 : 0) + ')');
+                    });
                     // eslint-disable-next-line no-console
-                    console.log('[MBFr] mid pos=' + mid.position.x.toFixed(0) + ',' + mid.position.y.toFixed(0)
-                        + ',' + mid.position.z.toFixed(0) + ' NDC=' + V.x.toFixed(2) + ',' + V.y.toFixed(2)
-                        + ',' + V.z.toFixed(2) + ' visible=' + mid.visible + ' dem=' + demInfo
-                        + ' frN=' + frN);
+                    console.log('[MBFr] frN=' + frN + ' ' + parts.join(' '));
                 }
             } catch {}
         }

@@ -1029,6 +1029,12 @@ export class MBStyleDataSource extends TileDataSource {
     private m_depthOcclusion: any = null;
     /** FBO-based texture draping for terrain (per-tile lazy bake). */
     private m_terrainDraping: any = null;
+
+    /** §502: raster texture attached — rebake the drape for a few frames so
+     * the final bake postdates the last placeholder→real texture swap. */
+    notifyRasterAttached(): void {
+        this.m_terrainDraping?.onRasterAttached?.();
+    }
     /** §501: raster materials call this on their first draw (program
      * compile) — the earliest reliable signal that the tile's satellite
      * texture is on the GPU. Triggers a drape rebake; the render wake is
