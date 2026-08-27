@@ -1545,6 +1545,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 await renderUntilSettled(mapView, dataSource, 60);
 
 
+                (globalThis as any).__mbFixture = entry.name;
                 const operations = metadata.operations ?? [];
                 if (operations.length > 0) {
                     // §505: a setTerrain TOGGLE rebuilds the terrain controller
@@ -1573,8 +1574,10 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     }
                     // §505: never capture a terrain frame before the drape
                     // converged (satellite decode + attach + real bake).
-                    // Bounded; non-terrain fixtures report converged=true.
-                    for (let f = 0; f < 600; f++) {
+                    // Bounded by WALL CLOCK (SwiftShader frames run 100ms+);
+                    // non-terrain fixtures report converged=true.
+                    const convergeDeadline = Date.now() + 30000;
+                    while (Date.now() < convergeDeadline) {
                         try {
                             if ((dataSource as any).isDrapeConverged?.()) break;
                         } catch {}

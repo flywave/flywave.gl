@@ -1987,8 +1987,11 @@ export class MBStyleDataSource extends TileDataSource {
                 try {
                     const { TerrainDraping } = await import('./TerrainDraping');
                     this.m_terrainDraping?.dispose();
+                    // §505: pass the ENVIRONMENT (not the controller
+                    // instance) — applyTerrain swaps controller instances on
+                    // setTerrain toggles; the draping must follow the live one.
                     this.m_terrainDraping = new TerrainDraping(
-                        this.mapView, this.m_environment.terrainController);
+                        this.mapView, this.m_environment);
                     this.m_terrainDraping.start();
                 } catch {}
             }

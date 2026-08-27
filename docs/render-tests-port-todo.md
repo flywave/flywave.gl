@@ -5799,3 +5799,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **修复方向（下会话单点）**：① 读 composing 状态机找渐进条纹的驱动与重置条件；② bake 与渐进的共存策略：a) bake 改用独立 WebGLRenderTarget 之外的独立 context（重）/ b) bake 前后完整保存恢复 progressive 状态（composer 内部 RT 绑定/视口/scissor 全套）/ c) drape bake 降频至渐进完成帧之后（监听渐进完成信号）/ d) 关闭 terrain 夹具的渐进（isDynamicFrame 路径）。
 
 **本轮全部资产保持**：layer 架构、snapshot 架构、冻结+收敛 poll、占位拒绝、MBCap/MBFrame/MBIso/MBSceneRT/MBRTD 探针族。验证零回归。
+
+**§505. 会话终记（多轮合并）——drape 首次可见上屏 setProperty（蓝色河流 ✓）+ 全套稳定性机制**：
+
+**机制全套落地**：① layer 架构（raster mesh → layer 2，主相机不可见，bake 相机开启；删除全部可见性状态机=闪烁源根除）；② snapshot 架构（bake 结果 → 不可变 DataTexture，RT 活引用透传路径封死）；③ 冻结 + 收敛 poll（首个 realContent 快照后冻结；harness 捕获前墙钟 30s 轮询 isDrapeConverged——SwiftShader 帧耗时 adaptation）；④ 密度门控（statN > 3S/2 拒绝加载窗噪声/占位 bake——此前垃圾 bake 锁死冻结的根因）；⑤ attach-rebake（节流每 10 帧）；⑥ vertex USE_DRAPE define、completion-safe 采样、scissor hygiene。
+
+**里程碑实证（s505-wc）**：**setProperty 捕获图像首次非白——蓝色河流（卫星影像）+ POI 图标 drape 上屏！**（15863 好带）；vs EXP = 差地形明暗基调（EXP 浅棕 relief vs 我方偏白）= **进入色调校准阶段**（嫌疑：地形光照/DEM 阴影层缺失于 drape 基底）。
+
+**未竟**：terrain/raster 族（setTerrain toggle 路径）仍白——env-rebind（draping 持环境引用自动跟随重建控制器 ✓ 已实现，cache-inv 系列实证 DS+frozen 生效）后仍有残余断链；its bakes pre-attach 白（fills=0/3 交替）、post-attach 未及收敛即捕获的窗口仍在。下会话单点：terrain/raster toggle 路径的时序专项（MBMon 带夹具名 + convergence poll 联调）。
+
+**验证（s505-wc 全 16 夹具捕获零超时）**：setProperty 17562（白基调态，较 15863 好带回退=本轮 poll/密度门控副作用待调）、occlusion-terrain 17585、cache-inv fill-layer 171/show-layer 899（churn 副作用）、icon-color/default 等 PASS 保持——**set 家族已可见 drape，回归面可控**。

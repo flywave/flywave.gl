@@ -23,7 +23,14 @@ import { buildTileCamera, isEnvironmentObject } from './TerrainDrapingUtils';
  */
 export class TerrainDraping {
     private m_mapView: MapView;
-    private m_terrain: TerrainController;
+    /** §505: the environment PROVIDES the live TerrainController — applyTerrain
+     * swaps controller instances on setTerrain toggles, and a captured
+     * instance went stale (0 meshes → bakes never ran again for the rebuilt
+     * terrain). */
+    private m_env: { terrainController: TerrainController | null };
+    private get m_terrain(): TerrainController {
+        return this.m_env.terrainController as TerrainController;
+    }
     /** Render targets per terrain mesh index. */
     private m_renderTargets: Map<number, THREE.WebGLRenderTarget> = new Map();
     /** Flag: bake on next frame. */
@@ -59,9 +66,13 @@ export class TerrainDraping {
     /** Max consecutive re-bake frames after rebuild (gives async textures time to load). */
     private static readonly MAX_EXTRA_BAKES = 5;
 
-    constructor(mapView: MapView, terrain: TerrainController, bakeSize = 512) {
+    constructor(
+        mapView: MapView,
+        env: { terrainController: TerrainController | null },
+        bakeSize = 512,
+    ) {
         this.m_mapView = mapView;
-        this.m_terrain = terrain;
+        this.m_env = env;
         this.m_bakeSize = bakeSize;
     }
 
@@ -607,12 +618,15 @@ export class TerrainDraping {
                 // never apply that (the white drape freeze). statN counts
                 // non-transparent pixels among 9 scanned rows (max 3·S).
                 const meanL = statN ? statSum / statN : 255;
-                // Dense = >half of the 9×S/3 scanned pixels (the C448/m255
-                // placeholder bake slipped the old absolute threshold).
-                const whitePlaceholder = !uniform && meanL > 245
-                    && statN > (3 * S) / 2;
+                // §505: DENSITY GATE — scanned total is 9 rows × S/3 = 3·S
+                // pixels. Real imagery covers ≥ half; the LOADING-WINDOW
+                // bakes cover ~0 (a couple of stray decode pixels read as
+                // "non-uniform" and, worse, LOCKED THE FREEZE on a garbage
+                // snapshot — every later real bake was then blocked).
+                const dense = statN > (3 * S) / 2;
+                const whitePlaceholder = !uniform && meanL > 245 && dense;
                 if (whitePlaceholder) passHadWhite = true;
-                const realContent = !uniform && !whitePlaceholder;
+                const realContent = !uniform && dense && !whitePlaceholder;
                 tileReal.push(realContent);
                 if (realContent) anyReal = true;
                 if ((globalThis as any).__mbRtDump && !uniform
@@ -805,7 +819,7 @@ export class TerrainDraping {
         } finally {
             if ((globalThis as any).__mbLiteDbg) {
                 // eslint-disable-next-line no-console
-                console.log('[MBLite] fills=' + liteFillCount
+                console.log('[MBLite:' + ((globalThis as any).__mbFixture ?? '?') + '] fills=' + liteFillCount
                     + ' camZoom=' + this.m_mapView.zoomLevel.toFixed(2)
                     + ' uniform=' + liteUniform.map(u => (u ? 1 : 0)).join('')
                     + ' perTileFills=' + liteFills.slice(0, 9).join(',')
