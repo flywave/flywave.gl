@@ -93,6 +93,16 @@ function discoverTests(): TestEntry[] {
 }
 {
     const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("rtdump="))?.slice("rtdump=".length);
+    if (dbg === "1") (globalThis as any).__mbRtDump = true;
+}
+{
+    const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("rtdisable="))?.slice("rtdisable=".length);
+    if (dbg === "1") (globalThis as any).__mbRtDisable = true;
+}
+{
+    const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("rasuvdbg="))?.slice("rasuvdbg=".length);
     if (dbg === "1") (globalThis as any).__mbRasUvDbg = true;
 }

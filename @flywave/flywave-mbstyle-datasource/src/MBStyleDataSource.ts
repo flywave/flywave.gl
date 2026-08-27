@@ -1029,6 +1029,19 @@ export class MBStyleDataSource extends TileDataSource {
     private m_depthOcclusion: any = null;
     /** FBO-based texture draping for terrain (per-tile lazy bake). */
     private m_terrainDraping: any = null;
+    /** §501: raster materials call this on their first draw (program
+     * compile) — the earliest reliable signal that the tile's satellite
+     * texture is on the GPU. Triggers a drape rebake; the render wake is
+     * DEFERRED to a macro-task because update() called from inside the
+     * AfterRender pass can be coalesced by the in-progress frame. */
+    requestTerrainDrapeRebake(): void {
+        this.m_terrainDraping?.requestBake?.();
+        try {
+            const mv = this.mapView;
+            setTimeout(() => { try { mv?.update?.(); } catch {} }, 0);
+        } catch {}
+    }
+
     private m_symbolPlacement: any = null;
     private m_heatmapRenderer: any = null;
     /** Per-feature GLTF instantiation channel for `model` layers (mgl parity). */

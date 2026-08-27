@@ -2403,6 +2403,11 @@ export class MBEnvironmentManager {
         demMaxZoom: number = 22,
         demTileSize: number = 256,
     ): Promise<void> {
+        if ((globalThis as any).__mbLiteDbg) {
+            // eslint-disable-next-line no-console
+            console.log('[MBTerr] applyTerrain src=' + (terrain ? terrain.source : 'null')
+                + ' url=' + (demTileUrl ? 'yes' : 'NULL') + ' zoom=' + zoom);
+        }
         if (!this.m_scene) return;
         // Dispose previous terrain (legacy single mesh + multi-tile controller).
         if (this.m_terrainMesh) {
@@ -2481,11 +2486,21 @@ export class MBEnvironmentManager {
                 this.m_mapView.addEventListener(
                     MapViewEventNames.WillRender, this.m_terrainRteListener);
                 (this as any).__mbTerrainActive = true;
+                if ((globalThis as any).__mbLiteDbg) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBTerr] rebuilt meshCount=' + this.m_terrainController.meshCount
+                        + ' terrainZoom-ok');
+                }
                 return;
             }
             this.m_terrainController.dispose();
             this.m_terrainController = null;
-        } catch {}
+        } catch (e) {
+            if ((globalThis as any).__mbLiteDbg) {
+                // eslint-disable-next-line no-console
+                console.log('[MBTerr] rebuild threw: ' + e);
+            }
+        }
 
         // Legacy fallback: single center tile.
         const lat = degToRad(center[1]);

@@ -5723,3 +5723,17 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **白斑定性更新**：setProperty 左下白斑 = ①邻接 terrain tile 的 bake 窗内无卫星渲染瓦片（gate 关→白基色，mgl 根本不渲染视格外 terrain）+ ②中心 tile settle 空 bake。与 terrain/raster 全白同族。
 
 **新增探针资产**：liteldbg=1（每 bake 一行 + 中行 B/T/C alpha 直方图，近零失真）、rasuvdbg=1（vMBRasUv 梯度上屏）、MBTex（CPU 直读纹理源画布）、MBScene2（场景普查）；rasred=1 既有。**方法论重申：bake 取证禁用 occdbg 重探针宇宙。**
+
+**§501. 会话终记——RT dump 插桩落地 + terrain/raster 全白根因逼近（重建地形 DEM-GPU 黑纹理→下沉 12km）+ 一串方法论事故修复**：
+
+**工具资产（新）**：① rtdump=1——非均匀 bake 的 512² RT 降采样 64²、4/4/4/2 位打包 hex、分块过 karma 日志，配 /tmp 重建脚本出 PNG（本轮核心取证手段）；② rasuvdbg=1（vMBRasUv 梯度强制上屏）；③ rtdisable=1（drape A/B kill switch）；④ MBLite 增中行 B/T/C alpha 直方图 + MBTex（CPU 直读纹理源画布）+ MBScene2 + MBFr（settle 帧 terrain NDC/DEM 状态）+ applyTerrain 入口/异常日志。
+
+**probe 探针事故与修复（记档防再犯）**：runner 补 rasuvdbg/rtdump 行时 python 替换**误删 liteldbg 行**——三整轮探针静默（结论作废），靠 entry 探针零输出反查恢复。教训：改 runner 参数列表必须 grep 全量校验。
+
+**UV probe 定案**：非均匀 bake tile 的 64² dump = 四个 z12 子 quad 的 0..1 UV 梯度完整上屏（87.5% 覆盖，T64=窗口出界）——**栅格化/几何/coverage 全部正常**；正常模式 dump 同 tile = **真实卫星影像**（河流山体可见）。§500 的"settle 空 bake"对中心 tile 而言不成立——**bake 一直有内容**。
+
+**terrain/raster 全白根因（逼近终点）**：settle 帧 MBFr 探针——重建后中心地形网格 pos z=**−12104**（=RGB 分支解码黑纹理 −10000×secLat1.21），NDC(−0.48,−0.34) 在视锥内、visible=true、DEM JS 侧图像 256² 已载——**GPU 上的 uDem 绑定到黑/空纹理，地形"沉"到相机下方 12km 渲染**（屏幕白=背景）。该下沉只发生在 setTerrain 重建路径（applyTerrain→TerrainController 二次 build）；初建路径（setProperty）正常。下一断点：重建 material 的 uDem GPU 绑定（TextureLoader 首帧上传竞态/needsUpdate 时序）——一行 dump 即可终审。
+
+**白斑/全白统一图景**：terrain/raster 全白 = 沉降地形（本案）；setProperty 左下白斑 = 邻接 tile 无卫星渲染瓦片的空白 apron（mgl 不渲染视格外 terrain）。
+
+**修复入库**：bakeAll `renderer.setScissorTest(false)`（hygiene，引擎 compositor scissor 残留防护）；compile-rebake 恢复（deferred setTimeout 唤醒版）；applyTerrain 吞错日志；MBLite/MBFr 探针。**scissor 理论与四时序机制的"settle 空 bake"结论作废**（中心 bake 实有内容）。

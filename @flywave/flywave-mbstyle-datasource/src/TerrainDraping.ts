@@ -60,6 +60,10 @@ export class TerrainDraping {
     start(): void {
         if (this.m_active) return;
         this.m_active = true;
+        if ((globalThis as any).__mbLiteDbg) {
+            // eslint-disable-next-line no-console
+            console.log('[MBLiteEntry] draping started');
+        }
         this.m_mapView.addEventListener(MapViewEventNames.AfterRender, this.onAfterRender);
         this.m_mapView.addEventListener(MapViewEventNames.WillRender, this.onWillRender);
         this.requestBake();
@@ -108,6 +112,32 @@ export class TerrainDraping {
     private m_rasterHidden: THREE.Material[] = [];
 
     private onWillRender = (): void => {
+        const frN = ((globalThis as any).__mbFrProbe ?? 0) + 1;
+        (globalThis as any).__mbFrProbe = frN;
+        if ((globalThis as any).__mbLiteDbg && frN >= 300 && frN < 303) {
+            try {
+                const meshes = this.m_terrain.meshes;
+                const mv: any = this.m_mapView;
+                const rte = (typeof mv.getRteCamera === 'function')
+                    ? mv.getRteCamera() : (mv as any).m_rteCamera;
+                if (meshes.length && rte) {
+                    const V = new (require('three')).Vector3();
+                    const mid: any = meshes[4] ?? meshes[Math.floor(meshes.length / 2)];
+                    V.copy(mid.position).project(rte);
+                    const demTex: any = mid.material?.userData?.demTexture ?? null;
+                    let demInfo = '?';
+                    try {
+                        const img = (mid.material as any).m_demTexture?.image;
+                        demInfo = img ? (img.width + 'x' + img.height) : 'noimg';
+                    } catch {}
+                    // eslint-disable-next-line no-console
+                    console.log('[MBFr] mid pos=' + mid.position.x.toFixed(0) + ',' + mid.position.y.toFixed(0)
+                        + ',' + mid.position.z.toFixed(0) + ' NDC=' + V.x.toFixed(2) + ',' + V.y.toFixed(2)
+                        + ',' + V.z.toFixed(2) + ' visible=' + mid.visible + ' dem=' + demInfo
+                        + ' frN=' + frN);
+                }
+            } catch {}
+        }
         for (const m of this.m_rasterHidden) m.visible = true; // idempotent
         this.m_rasterHidden.length = 0;
         const scene = this.m_mapView.scene;
@@ -183,6 +213,13 @@ export class TerrainDraping {
                 console.log('[MBBake] runs=' + (globalThis as any).__mbBakeCount);
             }
         }
+        if ((globalThis as any).__mbLiteDbg && ((globalThis as any).__mbEntryCount ?? 0) < 6) {
+            (globalThis as any).__mbEntryCount = ((globalThis as any).__mbEntryCount ?? 0) + 1;
+            // eslint-disable-next-line no-console
+            console.log('[MBLiteEntry] afterRender needsBake=' + this.m_needsBake
+                + ' meshCount=' + meshCount + ' extra=' + this.m_extraBakeFrames
+                + ' children=' + childCount + '/' + this.m_lastSceneChildren);
+        }
         if (!this.m_needsBake) return;
         // Skip bake while morphing — the DEM is mid-transition; bake after.
         if (morphing) return;
@@ -220,6 +257,8 @@ export class TerrainDraping {
         // camera fixed in §12.76-58). The content gate below auto-disables
         // drape when the FBO comes out uniform (empty bake).
         if (!TerrainDraping.DRAPE_ENABLED) return;
+        // §501 A/B kill switch (rtdisable=1): render terrain undraped.
+        if ((globalThis as any).__mbRtDisable) return;
         // DRAPE_ALIGNMENT_CALIBRATION: dormant — see the gate at the
         // setDrapeTexture call below. Skip the bake entirely (its mid-frame
         // RT renders perturb engine GL state and regress fog/terrain).
@@ -367,9 +406,16 @@ export class TerrainDraping {
         // §499 LITE probe: per-tile one-liner (no readbacks). The heavy
         // occdbg probes distort bake timing; this one stays cheap enough
         // to keep the clean-universe behavior.
+        if ((globalThis as any).__mbLiteDbg) {
+            // eslint-disable-next-line no-console
+            console.log('[MBLiteEntry] bakeAll entered');
+        }
         const liteUniform: boolean[] = [];
         const liteFills: number[] = [];
         const liteAlpha: string[] = [];
+        const bakeSeq = ++(globalThis as any).__mbBakeSeqCounter || 1;
+        (globalThis as any).__mbBakeSeqCounter = bakeSeq;
+        const tileOKey = (tiles[0]?.originX?.toFixed(0) ?? '?') + '_' + (tiles[0]?.originY?.toFixed(0) ?? '?');
 
 
         try {
@@ -443,6 +489,13 @@ export class TerrainDraping {
                 // the terrain color. The shader uses alpha-blend (mix), so
                 // alpha=1 on clear = "no drape content" = keep terrain color.
                 renderer.setRenderTarget(rt);
+                // §501: the engine's progressive compositor leaves a SCISSOR
+                // rect + scissorTest enabled on the shared renderer; our
+                // offscreen pass inherited it and every draw was clipped to
+                // a thin stale band (the RT-dump "rows 38-43 black strip") —
+                // vanishing entirely once that geometry left the rect.
+                // Scissor state is re-set by the engine on its own passes.
+                renderer.setScissorTest(false);
                 // mgl renders the background INTO the terrain drape pass, so
                 // void areas show the (color-theme-aware) map background. Use
                 // the live clear color instead of white; alpha=1 keeps the
@@ -498,6 +551,50 @@ export class TerrainDraping {
                     }
                 }
                 const uniform = seenColors.size < 2;
+                if ((globalThis as any).__mbRtDump && !uniform
+                    && ((globalThis as any).__mbRtDumpCount ?? 0) < 6) {
+                    (globalThis as any).__mbRtDumpCount = ((globalThis as any).__mbRtDumpCount ?? 0) + 1;
+                    // §501 full-RT dump: nearest-sample the 512² RT down to
+                    // 64² and ship it over the karma console in chunked
+                    // base64 (MBCollDUMP precedent). Reconstruction script
+                    // reassembles rows into a PNG offline.
+                    try {
+                        const full = new Uint8Array(S * S * 4);
+                        renderer.readRenderTargetPixels(rt, 0, 0, S, S, full);
+                        const D = 64;
+                        const small = new Uint8Array(D * D * 4);
+                        for (let dy = 0; dy < D; dy++) {
+                            const sy = Math.min(S - 1, Math.floor((dy + 0.5) * S / D));
+                            for (let dx = 0; dx < D; dx++) {
+                                const sx = Math.min(S - 1, Math.floor((dx + 0.5) * S / D));
+                                const so = (sy * S + sx) * 4;
+                                const dt = (dy * D + dx) * 4;
+                                small[dt] = full[so];
+                                small[dt + 1] = full[so + 1];
+                                small[dt + 2] = full[so + 2];
+                                small[dt + 3] = full[so + 3];
+                            }
+                        }
+                        // PPM-style payload: one byte per channel, rows
+                        // top-down (flip: GL y is bottom-up).
+                        const rows: string[] = [];
+                        for (let dy = D - 1; dy >= 0; dy--) {
+                            let hex = '';
+                            for (let dx = 0; dx < D; dx++) {
+                                const t = (dy * D + dx) * 4;
+                                hex += (small[t] >> 4).toString(16) + (small[t + 1] >> 4).toString(16)
+                                    + (small[t + 2] >> 4).toString(16) + (small[t + 3] >> 6).toString(16);
+                            }
+                            rows.push(dy.toString(16).padStart(2, '0') + hex);
+                        }
+                        // 2 rows per chunk keeps every line < 1KB.
+                        for (let c = 0; c < rows.length; c += 2) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBRTD]' + tileOKey + '|' + i + '|' + bakeSeq
+                                + '|' + rows[c] + (rows[c + 1] ?? ''));
+                        }
+                    } catch {}
+                }
                 liteUniform.push(uniform);
                 liteFills.push(liteFillCount);
                 if ((globalThis as any).__mbLiteDbg) {

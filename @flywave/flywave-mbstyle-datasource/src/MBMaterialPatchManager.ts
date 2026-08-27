@@ -1292,6 +1292,14 @@ export class MBMaterialPatchManager {
                             + ' bake=' + !!(material as any).__mbRasBake);
                     }
                 }
+                // §501: first draw = the raster texture is on the GPU. Ask
+                // the data source for a drape rebake (deferred to a macro-
+                // task so the wake is never swallowed by the in-progress
+                // render pass).
+                try {
+                    const ds = this.m_dataSource as any;
+                    if (ds?.requestTerrainDrapeRebake) ds.requestTerrainDrapeRebake();
+                } catch {}
                 shader.uniforms.uMBRasMap = { value: texture };
                 shader.uniforms.uMBRasUvOff = { value: [rect[0], rect[1]] };
                 shader.uniforms.uMBRasUvScl = { value: [rect[2], rect[3]] };
