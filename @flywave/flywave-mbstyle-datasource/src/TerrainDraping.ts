@@ -264,8 +264,10 @@ export class TerrainDraping {
         // Single pass: hide terrain meshes + environment objects together.
         const hidden: THREE.Object3D[] = [];
         let hasDrapableContent = false;
+        let liteFillCount = 0;
         scene.traverse((obj: THREE.Object3D) => {
             if (!obj.visible) return;
+            if ((obj as any).isMesh && (obj as any).userData?.technique?._isRaster) liteFillCount++;
             if (terrainMeshes.has(obj)) {
                 obj.visible = false;
                 hidden.push(obj);
@@ -361,6 +363,14 @@ export class TerrainDraping {
             console.log('[MBScene2] visibles=' + visN + ' rasterMeshes=' + rasN
                 + ' hiddenList=' + this.m_rasterHidden.length + ' | ' + parts.join(' || '));
         }
+
+        // §499 LITE probe: per-tile one-liner (no readbacks). The heavy
+        // occdbg probes distort bake timing; this one stays cheap enough
+        // to keep the clean-universe behavior.
+        const liteUniform: boolean[] = [];
+        const liteFills: number[] = [];
+        const liteAlpha: string[] = [];
+
 
         try {
             for (let i = 0; i < meshes.length && i < tiles.length; i++) {
@@ -488,6 +498,46 @@ export class TerrainDraping {
                     }
                 }
                 const uniform = seenColors.size < 2;
+                liteUniform.push(uniform);
+                liteFills.push(liteFillCount);
+                if ((globalThis as any).__mbLiteDbg) {
+                    // One-row alpha/RGB histogram: opaque-black rows = the
+                    // far-cutoff branch fired; transparent = never covered;
+                    // colored = real content. Plus: CPU-read the first fill's
+                    // texture SOURCE canvas center-row mean — what the GPU
+                    // texture was uploaded from.
+                    const lr = new Uint8Array(S * 4);
+                    renderer.readRenderTargetPixels(rt, 0, S >> 1, S, 1, lr);
+                    let opBlack = 0, transp = 0, colored = 0, colSum = 0;
+                    for (let q = 0; q < S; q++) {
+                        const o4 = q * 4;
+                        if (lr[o4 + 3] === 0) transp++;
+                        else if (lr[o4] + lr[o4 + 1] + lr[o4 + 2] === 0) opBlack++;
+                        else { colored++; colSum += (lr[o4] + lr[o4 + 1] + lr[o4 + 2]) / 3; }
+                    }
+                    liteAlpha.push('B' + opBlack + '/T' + transp + '/C' + colored
+                        + (colored ? '/m' + (colSum / colored).toFixed(0) : ''));
+                    if (i === 0 && liteAlpha.length === 1) {
+                        scene.traverse((o: any) => {
+                            if (!o.isMesh || !o.userData?.technique?._isRaster) return;
+                            const tex: any = (Array.isArray(o.material) ? o.material[0] : o.material)?.__mbRasMapTex;
+                            try {
+                                const imgC: any = tex?.image;
+                                const cw = imgC?.width ?? 0, ch = imgC?.height ?? 0;
+                                const ctx2 = imgC?.getContext?.('2d');
+                                let m = -1;
+                                if (ctx2 && cw > 0) {
+                                    const d = ctx2.getImageData(cw >> 1, ch >> 1, 1, 1).data;
+                                    m = (d[0] + d[1] + d[2]) / 3;
+                                }
+                                // eslint-disable-next-line no-console
+                                console.log('[MBTex] ' + (tex?.__mbPadPx ? 'padded' : (tex?.__mbNoPad ? 'nopad' : 'raw'))
+                                    + ' ' + cw + 'x' + ch + ' centerPx=' + (m >= 0 ? m.toFixed(0) : 'n/a')
+                                    + ' uuid=' + tex?.uuid);
+                            } catch { /* tainted */ }
+                        });
+                    }
+                }
                 if ((globalThis as any).__mbOccDbg && !uniform
                     && ((globalThis as any).__mbDrapContentful ?? 0) < 6) {
                     (globalThis as any).__mbDrapContentful =
@@ -551,6 +601,14 @@ export class TerrainDraping {
                 }
             }
         } finally {
+            if ((globalThis as any).__mbLiteDbg) {
+                // eslint-disable-next-line no-console
+                console.log('[MBLite] fills=' + liteFillCount
+                    + ' camZoom=' + this.m_mapView.zoomLevel.toFixed(2)
+                    + ' uniform=' + liteUniform.map(u => (u ? 1 : 0)).join('')
+                    + ' perTileFills=' + liteFills.slice(0, 9).join(',')
+                    + ' midRow=' + liteAlpha.slice(0, 9).join(' '));
+            }
             renderer.setRenderTarget(prevTarget);
             renderer.setClearColor(prevClearColor, prevClearAlpha);
             // Restore visibility and positions; re-hide the rasters for the

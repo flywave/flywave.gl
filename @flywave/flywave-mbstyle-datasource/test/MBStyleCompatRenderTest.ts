@@ -84,6 +84,18 @@ function discoverTests(): TestEntry[] {
         a.startsWith("rasred="))?.slice("rasred=".length);
     if (dbg === "1") (globalThis as any).__mbRasRed = true;
 }
+// §499 LITE bake probe: ONE console line per bakeAll (no readbacks, no
+// traverses) — diagnostics with negligible frame-timing distortion.
+{
+    const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("liteldbg="))?.slice("liteldbg=".length);
+    if (dbg === "1") (globalThis as any).__mbLiteDbg = true;
+}
+{
+    const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("rasuvdbg="))?.slice("rasuvdbg=".length);
+    if (dbg === "1") (globalThis as any).__mbRasUvDbg = true;
+}
 const ALL_TESTS = discoverTests();
 console.log(`[MBStyleCompat] ${ALL_TESTS.length} compatible tests loaded`);
 

@@ -5707,3 +5707,19 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 2. **MapTerrainMaterial unlit 覆写**（mgl 语义）：USE_DRAPE 下 opaque_fragment 后 `gl_FragColor.rgb = mix(lit, drape.rgb, drape.a)`——PBR 光照不再乘悬垂部分。A/B 实测当前场景无像素差（光照≈恒等），保留为语义正确项。
 3. **bake 相机 far 12000→1e6**（TerrainDrapingUtils）：防 DEM 位移顶点越远裁剪；正交俯视下 z 位移不影响 x/y，深度仅排序。A/B 无差，保留为防御项。
 4. **rasred=1 红probe**（patch manager + test 映射 + runner 传参）与 MBScene2/MBDrapC 探针（occdbg 门）入库为工具。
+
+**§500. 会话终记——drape 色调校准战役：zoom 语义实证 + 影像 vintage 定性 + settle 空 bake 悬案（四机制无解已回滚）**：
+
+**实证一：flywave zoomLevel = style zoom + 1**（lite 探针：setProperty style 12.2 → MapView.zoomLevel **13.20**）。一切 zoom 对照必须换算；此前各会话的"z12/z13"叙述按 style zoom 理解仍成立。
+
+**实证二：mgl raster covering = z+1（指纹级）**：terrain/raster（style zoom 11）EXP 全图均值 (197,194,178) ≈ **本地 z12 卫星瓦片 (196,194,180) 几乎逐位吻合**（z11 暗 112/z13 暗 117 皆非）——与 transform.coveringZoomLevel = round(zoom + scaleZoom(512/tileSize)) 完全一致。**我方代码注释"+1"方向正确**。
+
+**实证三：setProperty 色调差 = 影像 vintage 漂移（数据域）**：EXP 悬垂区 lum 192.8 ≈ 本地 **z12**（198-206 浅色）；我方 drape 120.3 ≈ 本地 **z13**（116-120 暗色）——z12/z13 是**不同期影像**。mgl covering=13（12.2+1）若 expected 渲染时代 CDN z13 缺失/未更新 → 父 z12 overzoom → pale。本地镜像与 expected 时代的 CDN 状态不可互证——**该族色调精确对齐受数据漂移阻塞，非代码可解**。锐度差（gradE 61 vs 27）同源（z13 vs 父 overzoom）。
+
+**反 mgl child-route 定性（未删，待 settle 案破后一并验证）**：MBStyleDataSource.getTile 在请求级 404 时**向下找 z+1 子瓦片**补覆盖——mgl 对 raster 缺块**只向上父 overzoom**。该路线是锐度/色调错的第二来源（z14 子瓦片 vs z12 父）。删除前需先破下案，否则收益无法度量。
+
+**settle 空 bake 悬案（未破，本会话头号未竟）**：settle 后 fill 可见、纹理 CPU 验证良好（MBTex：5 张 pad 画布中心像素 147-219 = 真实影像）、几何可栅格化（rasred 整屏红/rasuvdbg 梯度上屏）——但 settle 后的 bake 中行直方图恒 **T512/C0（零覆盖）**，唯一非空 tile 内容白/暗随机（m17/m57/m135/m255 跨轮彩票）。四机制逐次落地均无效：① compile-rebake（onBeforeCompile→requestBake）② __mbRasterSampled readiness gate ③ attach 后 500ms 静默窗 ④ mapView.update() 唤醒渲染循环——**已全部回滚**（恢复确定性基线：terrain/raster 54634 原值、cache-invalidation 171/173 原值、icon/fog PASS）。疑点收窄：settle 后的渲染路径本身（compositor FBO 状态/mapAnchors 停更/纹理单元状态），下会话单点 = 全 RT dump 插桩（karma 报告通道落盘 PNG）+ settled 帧单步对照。
+
+**白斑定性更新**：setProperty 左下白斑 = ①邻接 terrain tile 的 bake 窗内无卫星渲染瓦片（gate 关→白基色，mgl 根本不渲染视格外 terrain）+ ②中心 tile settle 空 bake。与 terrain/raster 全白同族。
+
+**新增探针资产**：liteldbg=1（每 bake 一行 + 中行 B/T/C alpha 直方图，近零失真）、rasuvdbg=1（vMBRasUv 梯度上屏）、MBTex（CPU 直读纹理源画布）、MBScene2（场景普查）；rasred=1 既有。**方法论重申：bake 取证禁用 occdbg 重探针宇宙。**

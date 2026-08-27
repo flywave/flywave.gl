@@ -1410,6 +1410,13 @@ export class MBMaterialPatchManager {
                      gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
                      return;
                      ` : ''}
+                     ${(globalThis as any).__mbRasUvDbg ? `
+                     // §500 UV PROBE: paint the interpolated tile UV — a clean
+                     // 0..1 gradient across each quad proves UVs; streaks prove
+                     // geometry/UV mismatch.
+                     gl_FragColor = vec4(vMBRasUv, 0.0, 1.0);
+                     return;
+                     ` : ''}
                      vec2 mbRasUV = uMBRasUvOff + vMBRasUv * uMBRasUvScl;
                      vec2 mbRasSmp = mix(mbRasUV, (vec2(1.0) + mbRasUV * uMBRasFullPx) / (uMBRasFullPx + 2.0), uMBRasPadOn);
                      vec4 mbRasT = texture2D(uMBRasMap, mbRasSmp);
