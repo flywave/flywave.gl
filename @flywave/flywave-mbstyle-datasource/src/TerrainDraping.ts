@@ -137,8 +137,18 @@ export class TerrainDraping {
                             + ';N' + V.x.toFixed(1) + ',' + V.y.toFixed(1)
                             + ';D' + (dt ? '1' : '0') + ';v' + (mid.visible ? 1 : 0) + ')');
                     });
+                    let eff = '?';
+                    try {
+                        const mrm = (this.m_mapView as any).mapRenderingManager ?? (this.m_mapView as any).m_mapRenderingManager;
+                        eff = 'any=' + (mrm as any).m_anyEffectEnabled
+                            + ' bloom=' + (mrm as any).bloom?.enabled
+                            + ' outline=' + (mrm as any).outline?.enabled
+                            + ' vign=' + (mrm as any).vignette?.enabled
+                            + ' sepia=' + (mrm as any).sepia?.enabled
+                            + ' sgr=' + (mrm as any).sunGodRays?.enabled;
+                    } catch {}
                     // eslint-disable-next-line no-console
-                    console.log('[MBFr] frN=' + frN + ' ' + parts.join(' '));
+                    console.log('[MBFr] frN=' + frN + ' eff[' + eff + '] ' + parts.join(' '));
                     // §503: whole-scene settle render through the RTE camera
                     // + shader-error hook — splits scene-draw loss vs canvas
                     // post-pass loss, and surfaces program failures.

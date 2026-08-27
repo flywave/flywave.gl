@@ -5761,3 +5761,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **下会话单点**：读 mapRenderingManager/composing 源码的 progressive 状态机（何时重置 dirty/重新渐进），找 setTerrain 重建后组合器不重绘的根因；或 harness 侧在 setTerrain op 后强制 composer 重置。修复后 terrain/raster 全链（地形+z12 drape）即刻生效——bake 内容正确性已由 §502 尾注证实。
 
 **探针资产新增**：uvtdbg=1（terrain vMapUv 可视化）、MBSceneRT（整场景 scratch RT 渲染 + 6×6 网格直方图 + onShaderError 钩子）、rtdisable/MBAtt 时序标记（§502）。
+
+**§503 尾注（同 commit）——composer/pointOfView/effects 全部排除，收束帧内取证方案**：探针实证 m_anyEffectEnabled=false（bloom/outline/vignette/sepia/sgr 全 false）→ 直渲路径；m_pointOfView 仅示例使用。至此：场景内容 ✓、RTE 相机 ✓、直渲路径 ✓、材质 ✓——**唯余帧内差异**：引擎 render() 时刻的 scene/camera 状态与我 AfterRender 探针时刻的差异（场景 root 每帧重建时机/mapAnchors 停更帧）。下会话单点：在 MapView.render 的 mapRenderingManager.render 调用前后各插一行（camera 指针/scene.children 数/renderer.info.calls + 8px canvas readPixels），定位引擎帧内"渲染了什么"；若引擎帧本身白 → 场景 root 重建/锚点帧序问题；若有色 → 捕获时机/覆盖问题。
