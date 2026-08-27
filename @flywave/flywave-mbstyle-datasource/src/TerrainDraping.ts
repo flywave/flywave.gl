@@ -179,7 +179,7 @@ export class TerrainDraping {
         // what does the canvas actually show.
         const frN = ((globalThis as any).__mbMonProbe ?? 0) + 1;
         (globalThis as any).__mbMonProbe = frN;
-        if ((globalThis as any).__mbLiteDbg && frN % 150 === 0) {
+        if ((globalThis as any).__mbLiteDbg && frN % 45 === 0) {
             try {
                 const mv: any = this.m_mapView;
                 const rte = (typeof mv.getRteCamera === 'function')
@@ -206,7 +206,7 @@ export class TerrainDraping {
                 // §506: LIT isolated rerender of the drape-holding mesh with
                 // the scene's lights (main-canvas conditions) — A: original
                 // material, B: drape-direct (diffuseColor=drape.rgb forced).
-                if ((globalThis as any).__mbLiteDbg && frN % 300 === 150) {
+                if ((globalThis as any).__mbLiteDbg && frN % 135 === 90) {
                     try {
                         const snapMesh = meshes.find((m: any) => m.material?.m_drapeTexture);
                         if (snapMesh) {
@@ -248,6 +248,83 @@ export class TerrainDraping {
                     } catch (e) {
                         // eslint-disable-next-line no-console
                         console.log('[MBIsoLit] ERR ' + e);
+                    }
+                }
+                // §507 zero-rasterization isolate: with no drape snapshot yet
+                // (hillshade-buffer family: every bake T512/C0), re-render the
+                // CONTENT quads alone through the bake camera — per-mesh NDC
+                // of the world bbox center + single-mesh coverage in a scratch
+                // RT. Splits far-clip / window-mapping / layer-attribution.
+                if ((globalThis as any).__mbLiteDbg && frN % 135 === 90
+                    && this.m_snapshots.size === 0) {
+                    try {
+                        const tiles = this.m_terrain.allDemTiles;
+                        const isoMeshes = this.m_terrain.meshes;
+                        if (tiles.length && isoMeshes.length) {
+                        const camB = buildTileCamera(tiles[0], (this.m_mapView as any).camera?.position);
+                        if (camB) {
+                            camB.layers.enable(TerrainDraping.RASTER_LAYER);
+                            camB.updateMatrixWorld(true);
+                            camB.updateProjectionMatrix();
+                            const terrSet = new Set<any>(isoMeshes);
+                            const contents: any[] = [];
+                            this.m_mapView.scene.traverse((o: any) => {
+                                if (!o.isMesh || terrSet.has(o) || !o.visible) return;
+                                if (contents.length >= 3) return;
+                                if (o.userData?.technique?._isRaster
+                                    || typeof o.material?.setDemTexture === 'function'
+                                    || o.userData?.technique) {
+                                    contents.push(o);
+                                }
+                            });
+                            const renderer2 = this.m_mapView.renderer!;
+                            const prevT = renderer2.getRenderTarget();
+                            const V = new THREE.Vector3();
+                            const parts: string[] = [];
+                            for (const cm of contents) {
+                                cm.geometry.computeBoundingSphere?.();
+                                const bs = cm.geometry.boundingSphere;
+                                const world = new THREE.Vector3();
+                                cm.getWorldPosition(world);
+                                let ndc = '?';
+                                if (bs) {
+                                    V.copy(bs.center).applyMatrix4(cm.matrixWorld).project(camB);
+                                    ndc = V.x.toFixed(2) + ',' + V.y.toFixed(2) + ',' + V.z.toFixed(3);
+                                }
+                                const scratch = new THREE.WebGLRenderTarget(32, 32);
+                                const sc = new THREE.Scene();
+                                sc.add(cm);
+                                renderer2.setRenderTarget(scratch);
+                                renderer2.setScissorTest(false);
+                                renderer2.setClearColor(0xff00ff, 1);
+                                renderer2.clear(true, true, false);
+                                renderer2.render(sc, camB);
+                                const buf = new Uint8Array(32 * 32 * 4);
+                                renderer2.readRenderTargetPixels(scratch, 0, 0, 32, 32, buf);
+                                renderer2.setRenderTarget(prevT);
+                                sc.remove(cm);
+                                scratch.dispose();
+                                let vis = 0;
+                                for (let q = 0; q < 32 * 32; q++) {
+                                    const o8 = q * 4;
+                                    if (buf[o8 + 3] > 32 && !(buf[o8] === 255 && buf[o8 + 2] === 255)) vis++;
+                                }
+                                parts.push('L' + cm.layers.mask + 'pos' + world.x.toFixed(0) + ',' + world.y.toFixed(0)
+                                    + ' ndc=' + ndc + ' cov=' + vis + '/1024');
+                            }
+                            // eslint-disable-next-line no-console
+                            console.log('[MBIsoBake] tile0=' + tiles[0].originX.toFixed(0) + ','
+                                + tiles[0].originY.toFixed(0) + ' sz=' + tiles[0].size.toFixed(0)
+                                + ' win=[' + camB.left.toFixed(0) + '..' + camB.right.toFixed(0)
+                                + ',' + camB.bottom.toFixed(0) + '..' + camB.top.toFixed(0) + ']'
+                                + ' camPos=' + ((this.m_mapView as any).camera?.position.x ?? 0).toFixed(0)
+                                + ',' + ((this.m_mapView as any).camera?.position.y ?? 0).toFixed(0)
+                                + ' | ' + parts.join(' | '));
+                        }
+                        }
+                    } catch (e) {
+                        // eslint-disable-next-line no-console
+                        console.log('[MBIsoBake] ERR ' + e);
                     }
                 }
             } catch {}

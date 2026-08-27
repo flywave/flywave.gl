@@ -1229,12 +1229,16 @@ export class MBTileDataEmitter {
                 props._isHillshade = true;
                 props._hillshadeDemUrl = properties?._hillshadeDemUrl ?? '';
                 // Carry the source tileSize so the patcher can compute the DEM
-                // border/buffer from the loaded image dimensions.
+                // border/buffer from the loaded image dimensions. Tile row/zoom
+                // feed the mgl hillshade uniforms (latrange for the mercator
+                // cos correction, overscaled zoom for the slope divisor).
                 props._hillshadeTileSize = properties?._tileSize ?? 256;
+                props._tileRow = properties?._tileRow ?? 0;
+                props._tileZoom = properties?._tileZoom ?? 11;
                 props.color = p['hillshade-shadow-color'] ?? '#000000';
                 props.opacity = 1;
                 props._hillshadeIntensity = p['hillshade-exaggeration'] ?? 0.5;
-                props._hillshadeAccent = p['hillshade-accent-color'] ?? '#ffffff';
+                props._hillshadeAccent = p['hillshade-accent-color'] ?? '#000000';
                 props._hillshadeHighlight = p['hillshade-highlight-color'] ?? '#ffffff';
                 if (l.visibility === 'none') props.enabled = false;
                 break;
@@ -1451,14 +1455,17 @@ export class MBTileDataEmitter {
                     }
                 }
 
-                // Raster tile quads carry GLOBAL tile y (e.g. ~1.8e8 at
-                // level 17) — dividing by `extents` yields uv values whose
-                // fractional part is constant, collapsing the texture to
-                // horizontal bands. Normalize UVs by the feature's own bbox
-                // (each raster feature is exactly one tile quad, so the bbox
-                // maps 1:1 onto [0,1]²).
+                // Raster / hillshade tile quads carry GLOBAL tile coordinates
+                // (e.g. raster y ~1.8e8 at level 17; hillshade quads decode to
+                // global-row frames too — uv.y landed at 439..440 and clamped
+                // the DEM into vertical stripes) — dividing by `extents`
+                // yields uv values whose fractional part is constant,
+                // collapsing the texture to horizontal bands. Normalize UVs by
+                // the feature's own bbox (both providers emit exactly one
+                // tile-covering quad per feature, so the bbox maps 1:1 onto
+                // [0,1]²).
                 let rbMinX = Infinity, rbMinY = Infinity, rbMaxX = -Infinity, rbMaxY = -Infinity;
-                if (needsUv && (tech as any)._isRaster) {
+                if (needsUv) {
                     for (let i = 0; i < allVerts.length; i += 2) {
                         if (allVerts[i] < rbMinX) rbMinX = allVerts[i];
                         if (allVerts[i] > rbMaxX) rbMaxX = allVerts[i];
@@ -1495,7 +1502,7 @@ export class MBTileDataEmitter {
                     const rasElev = Number((tech as any)._rasterElevation ?? 0);
                     geo.positions.push(w.x, w.y, w.z + rasElev);
                     if (needsUv) {
-                        if ((tech as any)._isRaster && rbMaxX > rbMinX && rbMaxY > rbMinY) {
+                        if (rbMaxX > rbMinX && rbMaxY > rbMinY) {
                             geo.uvs.push(
                                 (outVerts[i * 2] - rbMinX) / (rbMaxX - rbMinX),
                                 (outVerts[i * 2 + 1] - rbMinY) / (rbMaxY - rbMinY),

@@ -981,7 +981,7 @@ export class MBMaterialPatchManager {
                     // them to the fill-pattern patcher renders a black line).
                     this.patchFillMaterial(material, paint, technique);
                 } else if (technique._isHillshade) {
-                    this.patchHillshadeMaterial(material, technique);
+                    this.patchHillshadeMaterial(material, technique, obj as THREE.Mesh);
                 } else if (technique._rasterTileUrl) {
                     this.patchRasterMaterial(material, technique);
                 } else if (technique._patternName) {
@@ -3493,18 +3493,17 @@ export class MBMaterialPatchManager {
     }
 
     /**
-     * Hillshade: load the per-tile raster-DEM texture and apply a hillshade
-     * shader (slope/aspect from finite differences, lambertian dot with a light
-     * direction). DEM PNGs encode elevation in (r*256*256 + g*256 + b) - 65536.
+     * Hillshade: load the per-tile raster-DEM texture and apply the mgl
+     * hillshade shader (8-neighbour slope/aspect → atan reshape → accent/shade
+     * blend; see the GLSL block below for the vendor reference). DEM PNGs
+     * encode elevation in terrain-rgb: (R*65536 + G*256 + B)/10 - 10000.
      */
-    private patchHillshadeMaterial(material: THREE.Material, technique: any): void {
+    private patchHillshadeMaterial(material: THREE.Material, technique: any, obj?: THREE.Mesh): void {
         const url = technique._hillshadeDemUrl as string;
         if (!url) return;
         if ((material as any).__mbHillshadePatched) return;
 
         const intensity = technique._hillshadeIntensity ?? 0.5;
-        const accent = new THREE.Color(technique._hillshadeAccent ?? '#ffffff');
-        const highlight = new THREE.Color(technique._hillshadeHighlight ?? '#ffffff');
 
         const applyShader = (demTex: THREE.Texture) => {
             if ((material as any).__mbHillshadePatched) return;
@@ -3525,49 +3524,176 @@ export class MBMaterialPatchManager {
             const borderFrac = buffer / imgSize;        // border offset (in UV)
             const pxStep = 1.0 / imgSize;               // one DEM pixel in UV
 
+            // §507 one-shot structure probe: discriminates UV collapse vs
+            // texture content vs geometry placement for the white/striped
+            // hillshade family (liteldbg universe only).
+            if ((globalThis as any).__mbLiteDbg
+                && ((globalThis as any).__mbHsProbeCount ?? 0) < 4) {
+                (globalThis as any).__mbHsProbeCount =
+                    ((globalThis as any).__mbHsProbeCount ?? 0) + 1;
+                try {
+                    const img2: any = (demTex as any).image;
+                    let uvBox = 'no-uv';
+                    let posBox = 'no-pos';
+                    const uvA = obj?.geometry?.attributes?.uv;
+                    const pA = obj?.geometry?.attributes?.position;
+                    if (uvA) {
+                        let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+                        for (let i = 0; i < uvA.count; i++) {
+                            const a = uvA.getX(i), b = uvA.getY(i);
+                            if (a < x0) x0 = a; if (a > x1) x1 = a;
+                            if (b < y0) y0 = b; if (b > y1) y1 = b;
+                        }
+                        uvBox = x0.toFixed(3) + '..' + x1.toFixed(3) + ',' + y0.toFixed(3) + '..' + y1.toFixed(3);
+                    }
+                    if (pA) {
+                        let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9;
+                        for (let i = 0; i < pA.count; i++) {
+                            const a = pA.getX(i), b = pA.getY(i), c = pA.getZ(i);
+                            if (a < x0) x0 = a; if (a > x1) x1 = a;
+                            if (b < y0) y0 = b; if (b > y1) y1 = b;
+                            if (c < z0) z0 = c; if (c > z1) z1 = c;
+                        }
+                        posBox = x0.toFixed(0) + '..' + x1.toFixed(0) + ',' + y0.toFixed(0) + '..' + y1.toFixed(0)
+                            + ',' + z0.toFixed(0) + '..' + z1.toFixed(0);
+                    }
+                    // eslint-disable-next-line no-console
+                    console.log('[MBHs] tex=' + (img2?.width ?? '?') + 'x' + (img2?.height ?? '?')
+                        + ' tile=' + tileSize + ' buf=' + buffer.toFixed(1)
+                        + ' uv=[' + uvBox + '] pos=[' + posBox + ']'
+                        + ' url=..' + url.slice(-28));
+                } catch {}
+            }
+
             const origOnCompile = material.onBeforeCompile;
+            // mgl hillshade replication (vendor: mapbox-gl-js/src/shaders/
+            // hillshade_prepare.fragment.glsl + hillshade.fragment.glsl +
+            // render/program/hillshade_program.js). Single-pass equivalent of
+            // mgl's two passes: 8-neighbour elevation taps (DEM decoded from
+            // terrain-rgb), deriv normalized by the zoom divisor and clamped
+            // through the prepare pass's rgba8 quantization, then the draw
+            // pass's atan slope/aspect + exponential reshape + accent/shade
+            // premultiplied blend. mgl composites that (premultiplied) over
+            // the style background — every hillshade fixture uses a white
+            // background, so the premultiplied-over-white result is folded
+            // here and emitted opaque.
+            const tileZoom = technique._tileZoom ?? 11;
+            const tileRow = technique._tileRow ?? 0;
+            // mgl's tile pipeline is 512-px-scheme end to end: the hillshade
+            // prepare divisor (and the latrange tile) use the DEM tile's
+            // OVERSCALED z = display z − 1 in our 256-px-scheme terms. The
+            // texel ground spacing is unchanged (76 m at this zoom) — only
+            // the divisor scale differs (2^(7.76)=217 vs 133), which is the
+            // difference between mgl's mid-tone relief and a blown-out render.
+            const hsZoom = Math.max(0, tileZoom - 1);
+            const hsRow = Math.floor(tileRow / 2);
+            const mercLat = (yFrac: number) =>
+                Math.atan(Math.sinh(Math.PI * (1 - 2 * yFrac))) * 180 / Math.PI;
+            const tilesAtZoom = Math.pow(2, hsZoom);
+            const latN = mercLat(hsRow / tilesAtZoom);
+            const latS = mercLat((hsRow + 1) / tilesAtZoom);
+            // Default illumination: mgl hillshade-illumination-direction 315,
+            // anchor viewport, bearing 0 in every hillshade fixture → the
+            // shader adds PI to the azimuthal ((-dir - 90) convention).
+            const azimuth = 315 * Math.PI / 180 + Math.PI;
+            const exaggeration = intensity;
+            const colShadow = new THREE.Color(technique.color ?? '#000000');
+            const colHighlight = new THREE.Color(technique._hillshadeHighlight ?? '#ffffff');
+            const colAccent = new THREE.Color(technique._hillshadeAccent ?? '#000000');
+
             material.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(material, shader);
                 shader.uniforms.uMBDem = { value: demTex };
-                shader.uniforms.uMBHsIntensity = { value: intensity };
-                shader.uniforms.uMBHsAccent = { value: accent };
-                shader.uniforms.uMBHsHighlight = { value: highlight };
+                shader.uniforms.uMBDemParams = { value: new THREE.Vector4(dataFrac, borderFrac, pxStep, 0) };
+                shader.uniforms.uMBHsZoom = { value: hsZoom };
+                shader.uniforms.uMBHsLat = { value: new THREE.Vector2(latN, latS) };
+                shader.uniforms.uMBHsAz = { value: azimuth };
+                shader.uniforms.uMBHsExag = { value: exaggeration };
+                shader.uniforms.uMBHsShadow = { value: new THREE.Vector3(colShadow.r, colShadow.g, colShadow.b) };
+                shader.uniforms.uMBHsHighlight = { value: new THREE.Vector3(colHighlight.r, colHighlight.g, colHighlight.b) };
+                shader.uniforms.uMBHsAccent = { value: new THREE.Vector3(colAccent.r, colAccent.g, colAccent.b) };
                 shader.fragmentShader = shader.fragmentShader.replace(
                     'void main() {',
                     `uniform sampler2D uMBDem;
-                     uniform float uMBHsIntensity;
-                     uniform vec3 uMBHsAccent;
-                     uniform vec3 uMBHsHighlight;
                      uniform vec4 uMBDemParams; // x=dataFrac, y=borderFrac, z=pxStep, w=unused
+                     uniform float uMBHsZoom;
+                     uniform vec2 uMBHsLat;     // tile north/south edge latitude (deg)
+                     uniform float uMBHsAz;     // azimuth + PI (mgl convention)
+                     uniform float uMBHsExag;   // hillshade-exaggeration
+                     uniform vec3 uMBHsShadow;
+                     uniform vec3 uMBHsHighlight;
+                     uniform vec3 uMBHsAccent;
                      // Mapbox terrain-rgb: height = (R*65536+G*256+B)/10 - 10000
-                     float mbDemElev(vec2 uv){ vec4 c=texture2D(uMBDem,uv);
-                         return (c.r*65536.0+c.g*256.0+c.b)/10.0-10000.0; }
-                     // Map tile-local UV (0..1 over the tile) into the DEM texture's
-                     // inner data region, honouring the pre-padded border.
+                     // (texture channels are normalized — scale to bytes first).
+                     float mbDemElev(vec2 uv){ vec3 c=texture2D(uMBDem,uv).rgb;
+                         return (c.r*16711680.0+c.g*65280.0+c.b*255.0)/10.0-10000.0; }
+                     // Map tile-local UV (0..1 over the tile) into the DEM
+                     // texture's inner data region, honouring the padded border.
                      vec2 mbDemUv(vec2 tileUv){
                          return uMBDemParams.y + tileUv * uMBDemParams.x;
                      }
                      void main() {`
                 );
-                shader.uniforms.uMBDemParams = { value: new THREE.Vector4(dataFrac, borderFrac, pxStep, 0) };
                 // In three r178 MeshBasicMaterial the final colour is written by
                 // `#include <opaque_fragment>` (not an inline `gl_FragColor = ...`
-                // line), so inject the hillshade override right after it.
+                // line), so inject the hillshade override right after it. The
+                // tile UV arrives as vMapUv (three r151+ per-map varying; the
+                // DEM is assigned to material.map above so USE_MAP is defined —
+                // the old generic vUv no longer exists and failed compilation).
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <opaque_fragment>',
                     `#include <opaque_fragment>
-                     vec2 mbUv = mbDemUv(vUv);
-                     float mbL=mbDemElev(mbUv-vec2(uMBDemParams.z,0.0));
-                     float mbR=mbDemElev(mbUv+vec2(uMBDemParams.z,0.0));
-                     float mbD=mbDemElev(mbUv-vec2(0.0,uMBDemParams.z));
-                     float mbU=mbDemElev(mbUv+vec2(0.0,uMBDemParams.z));
-                     vec3 mbN=normalize(vec3(mbL-mbR, mbD-mbU, 0.5));
-                     vec3 mbLight=normalize(vec3(0.7,0.7,1.0));
-                     float mbSlope=max(dot(mbN,mbLight),0.0);
-                     vec3 mbHs=mix(diffuse,vec3(mbSlope),uMBHsIntensity);
-                     mbHs+=uMBHsAccent*(1.0-abs(mbN.z))*0.15;
-                     mbHs+=uMBHsHighlight*pow(mbSlope,3.0)*0.2;
-                     gl_FragColor = vec4(mbHs, opacity);`
+                     // Geometry UVs run (0,0)=tile north-west (global-row frame,
+                     // see the emitter's bbox normalization) while the flipY
+                     // texture upload puts v=0 at the image's south row — flip
+                     // to mbT where y=0 is the tile's NORTH edge, matching mgl's
+                     // v_pos convention in both hillshade shaders.
+                     vec2 mbT=vec2(vMapUv.x,1.0-vMapUv.y);
+                     vec2 mbUv=mbDemUv(mbT);
+                     vec2 mbPx=vec2(uMBDemParams.z);
+                     float mbA=mbDemElev(mbUv+vec2(-mbPx.x,-mbPx.y));
+                     float mbB=mbDemElev(mbUv+vec2(0.0,-mbPx.y));
+                     float mbC=mbDemElev(mbUv+vec2(mbPx.x,-mbPx.y));
+                     float mbD=mbDemElev(mbUv+vec2(-mbPx.x,0.0));
+                     float mbE=mbDemElev(mbUv+vec2(mbPx.x,0.0));
+                     float mbF=mbDemElev(mbUv+vec2(-mbPx.x,mbPx.y));
+                     float mbG=mbDemElev(mbUv+vec2(0.0,mbPx.y));
+                     float mbH=mbDemElev(mbUv+vec2(mbPx.x,mbPx.y));
+                     float mbExF=uMBHsZoom<2.0?0.4:(uMBHsZoom<4.5?0.35:0.3);
+                     float mbEx=uMBHsZoom<15.0?(uMBHsZoom-15.0)*mbExF:0.0;
+                     float mbDiv=pow(2.0,mbEx+(19.2562-uMBHsZoom));
+                     vec2 mbDeriv=vec2(
+                         (mbC+mbE+mbE+mbH)-(mbA+mbD+mbD+mbF),
+                         (mbF+mbG+mbG+mbH)-(mbA+mbB+mbB+mbC))/mbDiv;
+                     // rgba8 round-trip of mgl's prepare-pass texture.
+                     mbDeriv=clamp(mbDeriv/2.0+0.5,0.0,1.0);
+                     mbDeriv=floor(mbDeriv*255.0+0.5)/255.0;
+                     mbDeriv=mbDeriv*2.0-1.0;
+                     float mbSF=cos(radians((uMBHsLat.x-uMBHsLat.y)*(1.0-mbT.y)+uMBHsLat.y));
+                     float mbSlope=atan(1.25*length(mbDeriv)/mbSF);
+                     float mbAspect=mbDeriv.x!=0.0
+                         ?atan(mbDeriv.y,-mbDeriv.x)
+                         :3.14159265/2.0*(mbDeriv.y>0.0?1.0:-1.0);
+                     float mbInt=uMBHsExag;
+                     float mbBase=1.875-mbInt*1.75;
+                     float mbMaxV=0.5*3.14159265;
+                     float mbSS=mbInt!=0.5
+                         ?((pow(mbBase,mbSlope)-1.0)/(pow(mbBase,mbMaxV)-1.0))*mbMaxV
+                         :mbSlope;
+                     float mbAcc=cos(mbSS);
+                     float mbShade=abs(mod((mbAspect+uMBHsAz)/3.14159265+0.5,2.0)-1.0);
+                     float mbCI=clamp(mbInt*2.0,0.0,1.0);
+                     vec4 mbAccC=(1.0-mbAcc)*vec4(uMBHsAccent,1.0)*mbCI;
+                     vec4 mbShadeC=mix(vec4(uMBHsShadow,1.0),vec4(uMBHsHighlight,1.0),mbShade)
+                         *sin(mbSS)*mbCI;
+                     vec4 mbGl=mbAccC*(1.0-mbShadeC.a)+mbShadeC;
+                     // mgl writes the hillshade value straight to the
+                     // framebuffer; three's colorspace_fragment re-encodes
+                     // gl_FragColor to sRGB on the way out — pre-decode so the
+                     // encoded output equals the mgl value.
+                     vec3 mbHsF=clamp(mbGl.rgb+vec3(1.0-mbGl.a),0.0,1.0);
+                     vec3 mbHsLin=mix(mbHsF/12.92,pow((mbHsF+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),mbHsF));
+                     gl_FragColor=vec4(mbHsLin,1.0);`
                 );
             };
             material.needsUpdate = true;

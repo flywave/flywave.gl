@@ -1983,16 +1983,21 @@ export class MBStyleDataSource extends TileDataSource {
             // Activated alongside depth occlusion — the two are complementary
             // (depth occlusion hides labels behind hills; draping paints
             // raster content on the DEM surface).
-            if (this.mapView && this.m_environment.terrainController) {
+            if (this.mapView) {
                 try {
-                    const { TerrainDraping } = await import('./TerrainDraping');
-                    this.m_terrainDraping?.dispose();
-                    // §505: pass the ENVIRONMENT (not the controller
-                    // instance) — applyTerrain swaps controller instances on
-                    // setTerrain toggles; the draping must follow the live one.
-                    this.m_terrainDraping = new TerrainDraping(
-                        this.mapView, this.m_environment);
-                    this.m_terrainDraping.start();
+                    // §505: CREATE-ONCE (even without a controller yet — the
+                    // env-reference follows applyTerrain rebuilds lazily). The draping holds the ENVIRONMENT
+                    // (not a controller instance), so it follows every
+                    // applyTerrain rebuild automatically. The previous
+                    // dispose+recreate-per-setup cleared the convergence
+                    // snapshots on every async style re-apply — the drape
+                    // never accumulated (hillshade-buffer family white).
+                    if (!this.m_terrainDraping) {
+                        const { TerrainDraping } = await import('./TerrainDraping');
+                        this.m_terrainDraping = new TerrainDraping(
+                            this.mapView, this.m_environment);
+                        this.m_terrainDraping.start();
+                    }
                 } catch {}
             }
         }
