@@ -15,14 +15,22 @@ rendering-test-results/
 credentials.js
 @flywave/flywave.gl/dist
 mapbox-gl-js/
-chunked-render-tests.log
-full-render-tests.log
-smoke-render-tests.log
+# 根目录一次性测试运行日志 / 基线快照（不入库）
+/*.log
+/baseline*.txt
 # tsc 历史误产物：src/test 内与 .ts 同名的编译输出（karma 走 tsconfig.karma 直编 .ts）
-@flywave/flywave-mbstyle-datasource/src/*.js
-@flywave/flywave-mbstyle-datasource/src/*.js.map
-@flywave/flywave-mbstyle-datasource/src/*.d.ts
-@flywave/flywave-mbstyle-datasource/test/*.js
-@flywave/flywave-mbstyle-datasource/test/*.js.map
-@flywave/flywave-mbstyle-datasource/test/*.d.ts
+@flywave/flywave-mbstyle-datasource/src/**/*.js
+@flywave/flywave-mbstyle-datasource/src/**/*.js.map
+@flywave/flywave-mbstyle-datasource/src/**/*.d.ts
+@flywave/flywave-mbstyle-datasource/test/**/*.js
+@flywave/flywave-mbstyle-datasource/test/**/*.js.map
+@flywave/flywave-mbstyle-datasource/test/**/*.d.ts
 !@flywave/flywave-mbstyle-datasource/test/karma-worker.bundle.js
+# 手写测试工具脚本（无 .ts 源，非编译产物）
+!@flywave/flywave-mbstyle-datasource/test/rendering/integration/image/dot.js
+!@flywave/flywave-mbstyle-datasource/test/rendering/integration/image/dot.d.ts
+!@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/upgrade.js
+!@flywave/flywave-mbstyle-datasource/test/rendering/integration/tiles/upgrade.d.ts
+# 包级构建输出目录（tsconfig outDir，发布前构建；包内 TS 解析走 tsconfig paths → src）
+@flywave/flywave-draco/lib/
+@flywave/flywave.gl/lib/
