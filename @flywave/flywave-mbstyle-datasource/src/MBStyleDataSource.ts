@@ -24,6 +24,7 @@ import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { MBTileDataEmitter } from './MBTileDataEmitter';
 import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
+import { mbCellTileKeyString, mbPendingChildrenPut, MBPendingChildTile } from './MBStyleDecoder';
 import { SpriteAtlas } from './materials/MapIconMaterial';
 import { MBStyleRuntime } from './MBStyleRuntime';
 import { MBEnvironmentManager } from './MBEnvironmentManager';
@@ -898,6 +899,75 @@ class DelegatingDataProvider extends DataProvider {
 }
 
 /**
+ * §511: serves the four mgl-level children of a 404'd cell (see the wiring
+ * comment above for the mgl covering semantics). Children are stashed in
+ * the decoder-side pending registry under the CELL key; the cell request
+ * itself returns an empty (non-empty-marker!) payload so the decode runs
+ * and the merge fires.
+ */
+class MglChildFallbackProvider extends DataProvider {
+    constructor(
+        private m_inner: DataProvider,
+        private m_maxZoom: number,
+    ) {
+        super();
+    }
+
+    ready(): boolean {
+        return this.m_inner.ready();
+    }
+
+    async getTile(tileKey: TileKey, abortSignal?: AbortSignal): Promise<ArrayBufferLike | {}> {
+        let data: ArrayBufferLike | {};
+        try {
+            data = await this.m_inner.getTile(tileKey, abortSignal);
+        } catch {
+            data = {};
+        }
+        if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+            return data;
+        }
+        // Miss (sparse tileset 404): try the four mgl-level children.
+        const L = tileKey.level;
+        if (L >= this.m_maxZoom) return data;
+        const x = tileKey.column;
+        const y = tileKey.row;
+        const children: MBPendingChildTile[] = [];
+        for (let i = 0; i < 2; i++) {
+            for (let j = 0; j < 2; j++) {
+                const cx = 2 * x + i;
+                const cy = 2 * y + j;
+                try {
+                    const cb: ArrayBufferLike | {} =
+                        await this.m_inner.getTile(
+                            TileKey.fromRowColumnLevel(cy, cx, L + 1), abortSignal);
+                    if (cb instanceof ArrayBuffer || cb instanceof Uint8Array) {
+                        children.push({ z: L + 1, x: cx, y: cy, bytes: cb });
+                    }
+                } catch {
+                    // Missing quarter → renders empty (pre-fallback behavior).
+                }
+            }
+        }
+        if (children.length === 0) return data;
+        mbPendingChildrenPut(mbCellTileKeyString(tileKey), children);
+        // Non-empty marker so TileLoader doesn't short-circuit the decode
+        // (§265) — the geojson branch ignores it and the merge runs.
+        return JSON.stringify({ type: 'FeatureCollection', features: [] });
+    }
+
+    protected async connect(): Promise<void> {
+        try {
+            await (this.m_inner as any).connect();
+        } catch {}
+    }
+
+    protected dispose(): void {
+        // nothing — the inner provider is owned by the caller
+    }
+}
+
+/**
  * Combines multiple GeoJSON-producing tile providers into one. Styles may
  * reference several sources (e.g. a synthetic `rect` fill + a GeoJSON
  * fill-extrusion); previously only one source was wired so the others' data
@@ -1296,6 +1366,18 @@ export class MBStyleDataSource extends TileDataSource {
             const bounds = (source as any).bounds;
             if (Array.isArray(bounds) && bounds.length === 4) {
                 delegate = new BoundsFilteredDataProvider(delegate, bounds as [number, number, number, number]);
+            }
+            // §511: mgl-level four-children fallback. mgl requests tiles at
+            // round(zoom) clamped to maxzoom (transform.js coveringZoomLevel)
+            // — one ABOVE our cell level for 512px sources. Sparse fixture
+            // tilesets (3d-intersections: z18-only) 404 at the cell level
+            // and rendered blank. On a miss, fetch the four children
+            // (L+1, 2x+i, 2y+j) — each child's 512px extent covers exactly
+            // one quarter of the cell — and stash them for the decoder's
+            // frame-correct merge (in-process decoder only).
+            if (tileSize > 256) {
+                delegate = new MglChildFallbackProvider(
+                    delegate, (source as any).maxzoom ?? 18);
             }
             this.m_delegatingProvider.delegate = delegate;
             this.m_currentSourceId = bestVectorSourceId;
@@ -1863,8 +1945,10 @@ export class MBStyleDataSource extends TileDataSource {
                             if ((o as any).isMesh || (o as any).isPoints || (o as any).isLine) {
                                 total++;
                                 const tname = o.userData?.technique?.name ?? o.userData?.technique?.technique ?? o.type;
-                                counts[tname] = (counts[tname] ?? 0) + 1;
-                                if (samples.length < 6 && tname !== 'Mesh') {
+                                const tcol = o.userData?.technique?._paint?.['fill-color']
+                                    ?? o.userData?.technique?.color ?? '';
+                                counts[`${tname}:${tcol}`] = (counts[`${tname}:${tcol}`] ?? 0) + 1;
+                                if (samples.length < 10) {
                                     o.updateMatrixWorld?.();
                                     const g: any = o.geometry;
                                     let vx = '';
@@ -1884,7 +1968,10 @@ export class MBStyleDataSource extends TileDataSource {
                                     o.getWorldPosition(V);
                                     V.project(cam);
                                     const mat: any = Array.isArray(o.material) ? o.material[0] : o.material;
-                                    samples.push(`${tname}:v=${o.visible?1:0} ndc=(${V.x.toFixed(2)},${V.y.toFixed(2)}) ${vx} nvert=${g?.attributes?.position?.count} mat=${mat?.type} op=${mat?.opacity} tr=${mat?.transparent?1:0}`);
+                                    const mc = mat?.color ? ` c=${mat.color.toArray().map((n: number) => n.toFixed(2)).join(',')}` : '';
+                                    const tech = o.userData?.technique;
+                                    const tinfo = tech ? ` tech=${tech.name}/${tech.technique}/r=${(tech.renderOrder ?? '').toString().slice(0,8)} ras=${tech._isRaster ? 1 : 0}` : '';
+                                    samples.push(`${tname}:${tcol}${tinfo ?? ''} v=${o.visible?1:0} ro=${o.renderOrder} ndc=(${V.x.toFixed(2)},${V.y.toFixed(2)}) ${vx} nvert=${g?.attributes?.position?.count} mat=${mat?.type} op=${mat?.opacity} tr=${mat?.transparent?1:0}${mc}`);
                                 }
                             }
                         });

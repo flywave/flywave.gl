@@ -15,6 +15,54 @@ import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBTileDataEmitter } from './MBTileDataEmitter';
 import { StyleSpecification } from './MBStyleSpec';
 import { findPoleOfInaccessibility } from './PoleOfInaccessibility';
+import {
+    HD_ELEVATION_SOURCE_LAYER,
+} from './3d-style/elevation/MBElevationConstants';
+import {
+    MBElevatedStructures,
+} from './3d-style/elevation/MBElevatedStructures';
+
+/**
+ * §511: mgl-level four-children fallback registry. The data provider (main
+ * thread) stashes fetched child tiles here under the CELL key when the cell
+ * tile 404s; `decodeThemedTile` picks them up, decodes each against its own
+ * tileKey (whose geoBox matches a child's 512px extent exactly 1:1 — the
+ * cell key's does NOT, which is why the direct mgl-level request frame
+ * explodes) and merges the rebased geometry into the cell's DecodedTile.
+ * In-process only: the worker path never sees pending entries and keeps
+ * today's empty-tile behavior.
+ */
+export interface MBPendingChildTile {
+    z: number;
+    x: number;
+    y: number;
+    bytes: ArrayBufferLike | {};
+}
+
+const s_pendingChildTiles = new Map<string, MBPendingChildTile[]>();
+/** True while decodeTileWithChildren decodes a child — suppresses the
+ * [MBNorm] probe for the nested calls. */
+let s_inChildMerge = false;
+
+export function mbPendingChildrenPut(key: string, children: MBPendingChildTile[]): void {
+    // Bound the registry: entries only clear when the engine decodes the
+    // cell — a cancelled tile would leak one array of byte references.
+    if (s_pendingChildTiles.size > 64) {
+        const oldest = s_pendingChildTiles.keys().next().value;
+        if (oldest !== undefined) s_pendingChildTiles.delete(oldest);
+    }
+    s_pendingChildTiles.set(key, children);
+}
+
+export function mbPendingChildrenTake(key: string): MBPendingChildTile[] | undefined {
+    const v = s_pendingChildTiles.get(key);
+    if (v) s_pendingChildTiles.delete(key);
+    return v;
+}
+
+export function mbCellTileKeyString(k: { level: number; column: number; row: number }): string {
+    return `${k.level}-${k.column}-${k.row}`;
+}
 
 class MBStyleDataProcessor implements IGeometryProcessor {
     private m_emitter: MBTileDataEmitter | undefined;
@@ -28,35 +76,56 @@ class MBStyleDataProcessor implements IGeometryProcessor {
      */
     private m_mvtYOffset: number | null = null;
 
+    /** §511: y-flip reference frame — the tile's north edge (row fraction)
+     * and level; the flip offset is computed PER LAYER EXTENT (the MVT
+     * extent varies per fixture family — 4096/8192/… — and a mismatch with
+     * the adapter's cookie grid blows the y frame up by ±R/2). */
+    private m_mvtFlip: { north: number; level: number } | null = null;
+
     /** Set the MVT y-flip constant (null = GeoJSON source, no transform). */
     setMvtYOffset(offset: number | null): void {
         this.m_mvtYOffset = offset;
     }
 
-    private mvtTransform(p: THREE.Vector2): THREE.Vector2 {
+    setMvtFlip(north: number, level: number): void {
+        this.m_mvtFlip = { north, level };
+    }
+
+    private mvtFlipOffset(extents: number): number {
+        const N = Math.log2(extents);
+        const scale = Math.pow(2, this.m_tileKey.level + N);
+        return scale - 2 * lat2tile(this.m_mvtFlip!.north, this.m_tileKey.level + N);
+    }
+
+    private mvtTransform(p: THREE.Vector2, extents: number): THREE.Vector2 {
+        if (this.m_mvtFlip) {
+            return new THREE.Vector2(p.x, this.mvtFlipOffset(extents) - p.y);
+        }
         if (this.m_mvtYOffset === null) return p;
         return new THREE.Vector2(p.x, this.m_mvtYOffset - p.y);
     }
-
-    private transformLineGeometry(geometry: ILineGeometry[]): ILineGeometry[] {
-        if (this.m_mvtYOffset === null) return geometry;
+    private transformLineGeometry(geometry: ILineGeometry[], extents: number): ILineGeometry[] {
+        if (this.m_mvtFlip === null && this.m_mvtYOffset === null) return geometry;
         return geometry.map(g => ({
             ...g,
-            positions: g.positions.map(p => this.mvtTransform(p)),
+            positions: g.positions.map(p => this.mvtTransform(p, extents)),
         }));
     }
 
-    private transformPolygonGeometry(geometry: IPolygonGeometry[]): IPolygonGeometry[] {
-        if (this.m_mvtYOffset === null) return geometry;
+    private transformPolygonGeometry(geometry: IPolygonGeometry[], extents: number): IPolygonGeometry[] {
+        if (this.m_mvtFlip === null && this.m_mvtYOffset === null) return geometry;
         return geometry.map(g => ({
             ...g,
-            rings: g.rings.map(ring => ring.map(p => this.mvtTransform(p))),
+            rings: g.rings.map(ring => ring.map(p => this.mvtTransform(p, extents))),
         }));
     }
 
-    private transformPoints(points: THREE.Vector3[]): THREE.Vector3[] {
-        if (this.m_mvtYOffset === null) return points;
-        return points.map(p => new THREE.Vector3(p.x, this.m_mvtYOffset! - p.y, p.z));
+    private transformPoints(points: THREE.Vector3[], extents: number): THREE.Vector3[] {
+        if (this.m_mvtFlip === null && this.m_mvtYOffset === null) return points;
+        return points.map(p => {
+            const t = this.mvtTransform(p, extents);
+            return new THREE.Vector3(t.x, t.y, p.z);
+        });
     }
 
     constructor(
@@ -143,6 +212,19 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_lastExtents = extents;
             this.m_emitter?.setExtents(extents);
         }
+        // §511 3d-style port: hd_road_elevation curve points feed the
+        // elevated-structures state instead of the emit pipeline.
+        if (layer === HD_ELEVATION_SOURCE_LAYER) {
+            this.m_elevationStructures?.addRawFeature({
+                type: 'Point',
+                properties,
+                x: geometry.length > 0 ? geometry[0].x : 0,
+                y: geometry.length > 0 ? geometry[0].y : 0,
+                bounds: [0, 0, extents, extents],
+                layerExtent: extents,
+            });
+            return;
+        }
         const coords = geometry.length > 0
             ? this.tileToLocalLngLat(geometry[0].x, geometry[0].y, extents)
             : [0, 0];
@@ -158,7 +240,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         if (matched.length === 0 || !this.m_emitter) return;
         const visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
         if (visible.length === 0) return;
-        this.m_emitter.processPointFeature(layer, extents, this.transformPoints(geometry), properties, featureId, visible);
+        this.m_emitter.processPointFeature(layer, extents, this.transformPoints(geometry, extents), properties, featureId, visible);
     }
 
     processLineFeature(
@@ -209,13 +291,13 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         const circleLayers = matched.filter(l => l.type === 'circle' && !this.isClipped('circle', coords[0], coords[1]));
 
         if (nonSymbolLayers.length > 0) {
-            this.m_emitter.processLineFeature(layer, extents, this.transformLineGeometry(geometry), properties, featureId, nonSymbolLayers);
+            this.m_emitter.processLineFeature(layer, extents, this.transformLineGeometry(geometry, extents), properties, featureId, nonSymbolLayers);
         }
 
         if (circleLayers.length > 0 && geometry.length > 0 && geometry[0].positions.length > 0) {
             const pts: THREE.Vector3[] = this.transformPoints(geometry[0].positions.map(
                 (p) => new THREE.Vector3(p.x, p.y, 0),
-            ));
+            ), extents);
             this.m_emitter.processPointFeature(layer, extents, pts, properties, featureId, circleLayers);
         }
 
@@ -238,13 +320,13 @@ class MBStyleDataProcessor implements IGeometryProcessor {
                 for (let i = 0; i < positions.length; i += step) {
                     linePts.push(new THREE.Vector3(positions[i].x, positions[i].y, 0));
                 }
-                const transformedPts = this.transformPoints(linePts);
+                const transformedPts = this.transformPoints(linePts, extents);
                 const anchorPt = pointOnly
                     ? new THREE.Vector3(positions[0].x, positions[0].y, 0)
                     : linePts[Math.floor(linePts.length / 2)];
                 this.m_emitter.processPointFeature(
                     layer, extents,
-                    this.transformPoints([anchorPt]),
+                    this.transformPoints([anchorPt], extents),
                     { ...properties, _linePath: transformedPts.map(p => [p.x, p.y]) },
                     featureId, symbolLayers,
                 );
@@ -259,6 +341,28 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         properties: Record<string, any>,
         featureId: string | number | undefined,
     ): void {
+        // §511 3d-style port: hd_road_elevation curve_meta polygons feed the
+        // elevated-structures state instead of the emit pipeline.
+        if (layer === HD_ELEVATION_SOURCE_LAYER) {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const poly of geometry) {
+                for (const ring of poly.rings) {
+                    for (const pt of ring) {
+                        minX = Math.min(minX, pt.x); minY = Math.min(minY, pt.y);
+                        maxX = Math.max(maxX, pt.x); maxY = Math.max(maxY, pt.y);
+                    }
+                }
+            }
+            this.m_elevationStructures?.addRawFeature({
+                type: 'Polygon',
+                properties,
+                x: geometry[0]?.rings[0]?.[0]?.x ?? 0,
+                y: geometry[0]?.rings[0]?.[0]?.y ?? 0,
+                bounds: [minX, minY, maxX, maxY],
+                layerExtent: extents,
+            });
+            return;
+        }
         const coords = geometry.length > 0 && geometry[0].rings.length > 0 && geometry[0].rings[0].length > 0
             ? this.tileToLocalLngLat(geometry[0].rings[0][0].x, geometry[0].rings[0][0].y, extents)
             : [0, 0];
@@ -300,7 +404,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             const ring = geometry.length > 0 && geometry[0].rings.length > 0
                 ? geometry[0].rings[0]
                 : [];
-            const pts = this.transformPoints(ring.map((pt) => new THREE.Vector3(pt.x, pt.y, 0)));
+            const pts = this.transformPoints(ring.map((pt) => new THREE.Vector3(pt.x, pt.y, 0)), extents);
             if (pts.length > 0) {
                 this.m_emitter.processPointFeature(layer, extents, pts, properties, featureId, circleLayers);
             }
@@ -308,7 +412,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
 
         const fillLayers = visible.filter(l => l.type !== 'circle' && l.type !== 'symbol');
         if (fillLayers.length > 0) {
-            this.m_emitter.processFillFeature(layer, extents, this.transformPolygonGeometry(geometry), properties, featureId, fillLayers);
+            this.m_emitter.processFillFeature(layer, extents, this.transformPolygonGeometry(geometry, extents), properties, featureId, fillLayers);
         }
 
         // Symbol layers on polygon features: mgl places one point-placement
@@ -325,7 +429,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
                     rings.map((ring) => ring.map((pt) => ({ x: pt.x, y: pt.y }))),
                     precision,
                 );
-                const pts = this.transformPoints([new THREE.Vector3(poi.x, poi.y, 0)]);
+                const pts = this.transformPoints([new THREE.Vector3(poi.x, poi.y, 0)], extents);
                 this.m_emitter.processPointFeature(layer, extents, pts, properties, featureId, symbolLayers);
             }
         }
@@ -341,6 +445,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_pitch: number = 0;
     private m_brightness: number = 0;
     private m_clipMask: Record<string, number[][][]> = {};
+    /** §511 3d-style port: per-tile hd_road_elevation curves. */
+    private m_elevationStructures: MBElevatedStructures | null = null;
     private m_worldview: string = '';
     private m_center: [number, number] = [0, 0];
     /**
@@ -532,7 +638,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         data: any,
         tileKey: TileKey,
         _styleSetEvaluator: any,
-        projection: Projection
+        projection: Projection,
+        zoomOverride?: number
     ): Promise<DecodedTile> {
         if (!this.m_layerEvaluator) {
             return { techniques: [], geometries: [] };
@@ -547,9 +654,19 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         // functions (icon-size/text-size stops, dynamic-filter distance) must
         // evaluate at the continuous camera zoom, not the floored tile level.
         const zoom = Math.max(0,
-            this.m_mapboxZoom !== undefined
-                ? this.m_mapboxZoom
-                : tileKey.level - this.m_storageLevelOffset - 1);
+            zoomOverride !== undefined
+                ? zoomOverride
+                : this.m_mapboxZoom !== undefined
+                    ? this.m_mapboxZoom
+                    : tileKey.level - this.m_storageLevelOffset - 1);
+        // §511: the provider fetched four mgl-level children for this cell —
+        // decode each against its own tileKey and merge (frame-correct).
+        const pendingChildren = mbPendingChildrenTake(
+            mbCellTileKeyString(tileKey));
+        if (pendingChildren && pendingChildren.length > 0) {
+            return this.decodeTileWithChildren(
+                data, tileKey, projection, pendingChildren, zoom);
+        }
         const decodeInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
         const emitter = new MBTileDataEmitter(tileKey, decodeInfo, zoom);
         // Bearing resolves `*-translate-anchor: viewport` (mapbox rotates the
@@ -612,8 +729,22 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 const scale = Math.pow(2, tileKey.level + N);
                 const { north } = decodeInfo.geoBox;
                 const top = lat2tile(north, tileKey.level + N);
+                // §511: per-layer-extent flip — MVT extent varies per fixture
+                // family (4096 default vs 8192 for the 3d-intersections set);
+                // a constant offset computed on the default grid blows the y
+                // frame up by ~R/2 for tiles with a different extent.
                 processor.setMvtYOffset(scale - 2 * top);
+                processor.setMvtFlip(north, tileKey.level);
+                this.m_elevationStructures = new MBElevatedStructures();
                 this.m_omvAdapter.process(buffer as ArrayBuffer, decodeInfo, processor);
+                // §511: assemble the hd_road_elevation curves (if any) and
+                // hand them to the emitter for feature elevation lookups.
+                try {
+                    this.m_elevationStructures.finalize(
+                        EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                        (256 * Math.pow(2, zoom + 1)));
+                    this.m_emitter?.setElevationStructures(this.m_elevationStructures);
+                } catch {}
             } else if (typeof data === 'string') {
                 // GeoJSON string from GeoJSONDataProvider
                 // The GeoJSON adapter projects through webMercatorProjection
@@ -649,7 +780,143 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
 
         injectBackground();
-        return emitter.getDecodedTile();
+        const __result = emitter.getDecodedTile();
+        if ((globalThis as any).__mbDecodeDbg && (__result?.geometries?.length ?? 0) > 0 && !s_inChildMerge) {
+            const g0 = __result.geometries[0];
+            const p0 = g0.vertexAttributes?.find(a => a.name === 'position');
+            const f0 = p0 ? new Float32Array(p0.buffer).slice(0, 3) : null;
+            // eslint-disable-next-line no-console
+            console.log(`[MBNorm] L=${tileKey.level} center=(${decodeInfo.center.x.toFixed(0)},${decodeInfo.center.y.toFixed(0)}) firstV=${f0 ? f0.map(n => n.toFixed(0)).join(',') : '-'} geos=${__result.geometries.length}`);
+        }
+        return __result;
+    }
+
+    /**
+     * §511: decode the four mgl-level children of a 404'd cell and merge
+     * them into one DecodedTile for the cell. Each child decodes against
+     * its own tileKey — the child's geoBox equals its 512px tile extent
+     * 1:1, so the emitted frame is correct. Mesh geometry is tile-center
+     * relative → rebase by (childCenter − cellCenter); text/POI geometry
+     * is absolute world (projectWorld) → concatenate as-is.
+     */
+    private async decodeTileWithChildren(
+        data: any,
+        tileKey: TileKey,
+        projection: Projection,
+        children: MBPendingChildTile[],
+        zoom: number
+    ): Promise<DecodedTile> {
+        const cell = await this.decodeThemedTile(
+            data, tileKey, undefined as any, projection, zoom);
+        const base: DecodedTile = cell ?? { techniques: [], geometries: [] };
+        const out: DecodedTile = {
+            techniques: [...base.techniques],
+            geometries: [...base.geometries],
+            pathGeometries: [...(base.pathGeometries ?? [])],
+            textPathGeometries: [...(base.textPathGeometries ?? [])],
+            textGeometries: [...(base.textGeometries ?? [])],
+            poiGeometries: [...(base.poiGeometries ?? [])],
+        };
+        let maxH = base.maxGeometryHeight ?? 0;
+        let minH = base.minGeometryHeight ?? 0;
+        const cellInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
+        s_inChildMerge = true;
+        try {
+        for (const ch of children) {
+            try {
+                const childKey = TileKey.fromRowColumnLevel(ch.y, ch.x, ch.z);
+                const child = await this.decodeThemedTile(
+                    ch.bytes as any, childKey, undefined as any, projection, zoom);
+                if (!child) continue;
+                const nTech = out.techniques.length;
+                out.techniques.push(...child.techniques);
+                const childInfo = new DecodeInfo(projection, childKey, this.m_storageLevelOffset);
+                const dx = childInfo.center.x - cellInfo.center.x;
+                // §511: with the per-layer-extent flip (setMvtFlip) the
+                // child decodes in the same frame as any normal tile — the
+                // merge is a plain rebase onto the cell center.
+                const dy = childInfo.center.y - cellInfo.center.y;
+                const dz = childInfo.center.z - cellInfo.center.z;
+                if ((globalThis as any).__mbDecodeDbg) {
+                    const g0 = (child.geometries ?? [])[0];
+                    const p0 = g0?.vertexAttributes?.find(a => a.name === 'position');
+                    const f0 = p0 ? new Float32Array(p0.buffer).slice(0, 3) : null;
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBMergeChild] z=${ch.z} x=${ch.x} y=${ch.y} cell=(${cellInfo.center.x.toFixed(0)},${cellInfo.center.y.toFixed(0)},${cellInfo.center.z.toFixed(0)}) child=(${childInfo.center.x.toFixed(0)},${childInfo.center.y.toFixed(0)},${childInfo.center.z.toFixed(0)}) d=(${dx.toFixed(0)},${dy.toFixed(0)},${dz.toFixed(0)}) firstV=${f0 ? f0.map(n => n.toFixed(0)).join(',') : '-'}`);
+                }
+                if ((globalThis as any).__mbDecodeDbg) {
+                    const bbs: Record<string, number[]> = {};
+                    for (const g of child.geometries ?? []) {
+                        const p = g.vertexAttributes.find(a => a.name === 'position');
+                        if (!p) continue;
+                        const arr = new Float32Array(p.buffer);
+                        const key = String(g.type);
+                        const bb = bbs[key] ?? (bbs[key] = [Infinity, Infinity, -Infinity, -Infinity]);
+                        for (let vi = 0; vi < arr.length; vi += 3) {
+                            bb[0] = Math.min(bb[0], arr[vi]); bb[1] = Math.min(bb[1], arr[vi + 1]);
+                            bb[2] = Math.max(bb[2], arr[vi]); bb[3] = Math.max(bb[3], arr[vi + 1]);
+                        }
+                    }
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBBBox] z=${ch.z} x=${ch.x} y=${ch.y} center=(${childInfo.center.x.toFixed(0)},${childInfo.center.y.toFixed(0)}) ` + JSON.stringify(bbs));
+                }
+                for (const g of child.geometries ?? []) {
+                    let vertexAttributes = g.vertexAttributes;
+                    let index = g.index;
+                    const posIdx = vertexAttributes.findIndex(a => a.name === 'position');
+                    if (posIdx >= 0) {
+                        const attr = vertexAttributes[posIdx];
+                        const arr = new Float32Array(attr.buffer);
+                        for (let vi = 0; vi < arr.length; vi += 3) {
+                            arr[vi] += dx;
+                            arr[vi + 1] += dy;
+                            arr[vi + 2] += dz;
+                        }
+                        vertexAttributes = vertexAttributes.map((a, ai) =>
+                            ai === posIdx ? { ...a, buffer: arr.buffer } : a);
+                        // The y mirror flips triangle winding — reverse the
+                        // index triplets or backface culling eats the fills.
+                        if (index) {
+                            const idx = new Uint32Array(index.buffer);
+                            for (let ti = 0; ti < idx.length; ti += 3) {
+                                const tmp = idx[ti + 1];
+                                idx[ti + 1] = idx[ti + 2];
+                                idx[ti + 2] = tmp;
+                            }
+                            index = { ...index, buffer: idx.buffer };
+                        }
+                    }
+                    out.geometries.push({
+                        ...g,
+                        vertexAttributes,
+                        index,
+                        groups: g.groups?.map(gr => ({
+                            ...gr,
+                            technique: (gr.technique ?? 0) + nTech,
+                        })),
+                    });
+                }
+                for (const k of ['pathGeometries', 'textPathGeometries', 'textGeometries', 'poiGeometries'] as const) {
+                    const arr = child[k] as any[] | undefined;
+                    if (arr && arr.length > 0) (out[k] as any[]).push(...arr);
+                }
+                maxH = Math.max(maxH, child.maxGeometryHeight ?? 0);
+                minH = Math.min(minH, child.minGeometryHeight ?? 0);
+            } catch {
+                // A missing child quarter renders empty — same as the
+                // pre-fallback behavior for the whole cell.
+            }
+        }
+        } finally {
+            s_inChildMerge = false;
+        }
+        if (maxH !== 0) out.maxGeometryHeight = maxH;
+        if (minH !== 0) out.minGeometryHeight = minH;
+        if ((globalThis as any).__mbDecodeDbg) {
+            // eslint-disable-next-line no-console
+            console.log(`[MBMerge] children=${children.length} cellGeos=${base.geometries.length} outGeos=${out.geometries.length} outTechs=${out.techniques.length} poi=${out.poiGeometries?.length ?? 0} textPath=${out.textPathGeometries?.length ?? 0}`);
+        }
+        return out;
     }
 
     /**

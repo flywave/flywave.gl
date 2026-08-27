@@ -750,10 +750,17 @@ export class MBTileDataEmitter {
      *
      * `type` is the layer type prefix: 'fill', 'line', or 'fill-extrusion'.
      */
+    /** §511 3d-style port: per-tile hd_road_elevation curves. */
+    setElevationStructures(structures: import('./3d-style/elevation/MBElevatedStructures').MBElevatedStructures | null): void {
+        this.m_elevationStructures = structures;
+    }
+    private m_elevationStructures: import('./3d-style/elevation/MBElevatedStructures').MBElevatedStructures | null = null;
+
     private resolveZOffset(
         layer: EvaluatedLayer,
         properties: Record<string, any> | undefined,
         type: 'fill' | 'line' | 'fill-extrusion' | 'symbol',
+        anchor?: { x: number; y: number },
     ): number {
         const paint = layer.paint ?? {};
         const layout = layer.layout ?? {};
@@ -764,13 +771,26 @@ export class MBTileDataEmitter {
         // HD elevation reference: lift feature to its real-world elevation.
         const elevRef = layout[`${type}-elevation-reference`];
         if (elevRef) {
+            // §511 3d-style port: features referencing an elevation curve
+            // (`3d_elevation_id`) sample the curve at their anchor point —
+            // a constant-height approximation of mgl's per-vertex sampling.
+            if (anchor && this.m_elevationStructures && !this.m_elevationStructures.isEmpty) {
+                const isMarkup = elevRef === 'hd-road-markup';
+                const h = this.m_elevationStructures.sampleHeight(properties, anchor.x, anchor.y, isMarkup);
+                if (h !== undefined) {
+                    z += h;
+                    return z;
+                }
+            }
             const featElev = Number(
                 properties?.elevation ?? properties?.height ??
                 properties?.z ?? properties?.level ?? 0,
             );
             z += elevRef === 'hd-road-markup'
                 ? featElev + 0.1 // markup sits slightly above the road surface
-                : featElev;
+                : featElev === 0 && elevRef === 'hd-road-base'
+                    ? 0.05 // base road surface: clear the ground-plane z-fight
+                    : featElev;
         }
         return z;
     }
@@ -849,7 +869,14 @@ export class MBTileDataEmitter {
                     const featElev = Number(properties?.elevation ?? properties?.height ?? properties?.z ?? properties?.level ?? 0);
                     props._hdElevation = fillElevRef === 'hd-road-markup'
                         ? featElev + 0.1  // markup sits slightly above road surface
-                        : featElev;
+                        : featElev === 0 && fillElevRef === 'hd-road-base'
+                            ? 0.05  // clear the ground-plane z-fight (§511)
+                            : featElev;
+                    // §511 3d-style port: HD road fills are elevated content —
+                    // mgl draws them in a late pass above the coverage quads
+                    // (whose renderOrder lands at 2..9 in the clearColor+quad
+                    // pipeline); the default 3D priority (ro=1) buries them.
+                    props.renderOrder = fillElevRef === 'hd-road-markup' ? 9.8 : 9.6;
                 }
                 if (l.visibility === 'none') props.enabled = false;
                 break;
@@ -1441,7 +1468,10 @@ export class MBTileDataEmitter {
     ): void {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
-            this.m_currentZOffset = this.resolveZOffset(layer, properties, 'fill');
+            this.m_currentZOffset = this.resolveZOffset(layer, properties, 'fill',
+            geometry.length > 0 && geometry[0].rings.length > 0 && geometry[0].rings[0].length > 0
+                ? { x: geometry[0].rings[0][0].x, y: geometry[0].rings[0][0].y }
+                : undefined);
             this.noteGeometryHeight(this.m_currentZOffset);
             // §244: injected per-tile background quads use the mgl-native fog
             // formula (mix(bgColor, fogColor, α²) band matches mgl exactly).
@@ -2147,7 +2177,10 @@ export class MBTileDataEmitter {
                 continue;
             }
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
-            this.m_currentZOffset = this.resolveZOffset(layer, properties, 'line');
+            this.m_currentZOffset = this.resolveZOffset(layer, properties, 'line',
+            geometry.length > 0 && geometry[0].positions.length > 0
+                ? { x: geometry[0].positions[0].x, y: geometry[0].positions[0].y }
+                : undefined);
             this.noteGeometryHeight(this.m_currentZOffset);
 
             for (let __pathIdx = 0; __pathIdx < geometry.length; __pathIdx++) {
@@ -3771,7 +3804,7 @@ export class MBTileDataEmitter {
         if ((globalThis as any).__mbDecodeDbg) {
             try {
                 const techs = this.m_techniques.map((t: any) =>
-                    `${t?.name ?? 'NONAME'}:${t ? (t.technique ?? (t as any).type ?? '') : ''}`);
+                    `${t?.name ?? 'NONAME'}:${t ? (t.technique ?? (t as any).type ?? '') : ''}:${(t?._paint?.['fill-color'] ?? t?.color ?? '')}`);
                 let verts = 0, geos = 0;
                 for (const [, geo] of this.m_geometries) {
                     if (geo.positions.length === 0) continue;

@@ -1,0 +1,11 @@
+export declare const PROPERTY_ELEVATION_ID = "3d_elevation_id";
+export declare const PROPERTY_ELEVATION_ROAD_MARKUP_Z_LEVEL = "zLevel";
+export declare const PROPERTY_ELEVATION_ROAD_BASE_Z_LEVEL = "level";
+export declare const HD_ELEVATION_SOURCE_LAYER = "hd_road_elevation";
+export declare const ELEVATION_CLIP_MARGIN = 1;
+export declare const MARKUP_ELEVATION_BIAS = 0.05;
+export declare const SUBDIVISION_EDGE_EXTENSION = 0.1;
+export declare const TUNNEL_THRESHOLD_METERS = 5;
+export declare const ELEVATION_EXTENT = 4096;
+export type ElevationType = 'none' | 'road' | 'offset';
+//# sourceMappingURL=MBElevationConstants.d.ts.map

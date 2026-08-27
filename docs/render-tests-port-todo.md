@@ -5904,3 +5904,19 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 3. 运维注意：pkill "RenderingTestResultServe"（不带 [r]）会误杀所有并行 runner 的服务器；后台长跑期间禁止全局 pkill。
 
 **六分类测试基建事实**：model-layer 每例 ~17s（61 分钟/191 执行）；globe/3D 系 ~7s/例但崩溃循环；CHUNK_TIMEOUT_MS 已验证可放宽至 4h 不再截断。
+
+**§512. 会话续记——3d-style 代码级移植落地（按本项目规范重写至 flywave-mbstyle-datasource/src/3d-style）+ 四子瓦片回退路由 + MVT extent 网格破案（2026-08-28）**：
+
+**3d-style/elevation 五模块重写入库**（mgl `3d-style/elevation/*` → 我方规范：THREE/plain 坐标、无 worker register、回调式解析）：MBElevationConstants（HD_ELEVATION_SOURCE_LAYER='hd_road_elevation'/MARKUP_ELEVATION_BIAS=0.05/TUNNEL_THRESHOLD=5m/ELEVATION_EXTENT=4096 归一）、MBElevationFeatureParser（v1.0.0 relative/v1.0.1 metric 双 schema，curve_meta/curve_point 分类，per-layer extent 归一）、MBElevationFeature（ElevationFeature 全语义：closest-edge 曼哈顿距离插值、slope normal、tessellate 平面度细分、isTunnel、Sampler zScale/offset+bias、mergeElevationFeatures 跨瓦片合并）、MBElevationGraph（portal 边 hash 分组 evaluate：border/entrance/tunnel/polygon 连接）、MBGetElevationFeature（同瓦片优先+跨瓦片 registry 二分查找+重叠部分收集）。
+
+**接线**：decoder 拦截 `hd_road_elevation` 层（curve_point→processPointFeature、curve_meta→processPolygonFeature 入 structures，不再进 emit 管线）→ finalize 组装 → emitter.setElevationStructures；resolveZOffset 增 anchor 参数：带 `3d_elevation_id` 的 feature 经 sampleHeight 采样曲线高度（markup 走 smoothstep bias），替代裸 elevation 属性查找。
+
+**四子瓦片回退路由落地**（MglChildFallbackProvider + mbPendingChildrenPut/Take + decodeTileWithChildren）：cell(L,x,y) 404 时抓 (L+1,2x+i,2y+j) 四子瓦片（mgl round(zoom) clamp maxzoom 语义），逐子带自身 tileKey 解码（帧 1:1 正确）后按 (childCenter−cellCenter) 重定基合并进 cell DecodedTile（technique 索引偏移+POI/text 直接拼接）。**road-markups-no-elevation 首次出图**（标线/ramp 全部对位；67706 空白→69129，蓝路面残差另一环）。
+
+**MVT extent 网格破案（本轮核心）**：子瓦片解码 y 含 −R/2 量级漂移的根因 = mvtYOffset flip 按 emitter 默认 extent(4096) 网格计算，而 3d-intersections 瓦片图层 extent=8192，与 adapter cookie 网格错一倍 → y 帧爆。修复 = setMvtFlip(north,level)，mvtTransform 按每层实际 extents 现算 flip offset（对 extent=4096 瓦片零变化）。
+
+**HD fill renderOrder 提升入库**（road-base/markup 3D 分类的 ro=1 被 coverage quads(ro=2..9) 覆盖 → 提至 9.6/9.8，mgl late-pass 语义）——该编辑后未及单测验证。
+
+**验证状态**：tsc --build 绿；回归采样零损失（fog 59102 带内、icon-color PASS、fog-import-scope 89087 反而优于历史 164k）；road-markups-no-elevation 标线/ramp 对位、蓝路面待 renderOrder 提升验证。
+
+**下会话 ROI**：① renderOrder 提升后蓝路面上屏验证 + 外观校准（整域 74 例解锁在望）；② per-vertex 高程插值（现 anchor 常量近似）；③ portal graph evaluate 接入 fill 边界收集；④ appearance/3d-intersections 批测对照 §510 基线。
