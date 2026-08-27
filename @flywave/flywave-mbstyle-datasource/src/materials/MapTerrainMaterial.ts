@@ -167,6 +167,19 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
 
     setDrapeTexture(texture: THREE.Texture | null): void {
         this.m_drapeTexture = texture;
+        // §502: the bake RT is 512² NPOT-safe, but the DRAPE RT is sampled
+        // by this material inside a SECOND render pass on SwiftShader —
+        // mipmap-filtered NPOT/sRGB RT textures have shown black-opaque
+        // sampling there (the isolated mesh rendered all-black). Force
+        // completion-safe sampling: no mipmaps, linear, clamp.
+        if (texture) {
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            texture.generateMipmaps = false;
+            texture.wrapS = THREE.ClampToEdgeWrapping;
+            texture.wrapT = THREE.ClampToEdgeWrapping;
+            texture.needsUpdate = true;
+        }
         this.needsUpdate = true;
     }
 
