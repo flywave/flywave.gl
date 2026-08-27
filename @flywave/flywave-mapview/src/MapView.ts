@@ -3657,6 +3657,26 @@ export class MapView extends EventDispatcher {
             !this.isDynamicFrame,
             this.m_previousFrameTimeStamp
         );
+        // §503 frame-interior probe (temporary, gated): what did the engine
+        // actually draw THIS frame — camera identity, scene population, and
+        // a corner pixel straight from the default framebuffer.
+        if ((globalThis as any).__mbLiteDbg && (this.m_frameNumber % 60) === 0) {
+            try {
+                const gl2 = this.m_renderer.getContext();
+                const px8 = new Uint8Array(4);
+                gl2.readPixels(Math.floor(gl2.drawingBufferWidth / 2),
+                    Math.floor(gl2.drawingBufferHeight / 2), 1, 1,
+                    gl2.RGBA, gl2.UNSIGNED_BYTE, px8);
+                // eslint-disable-next-line no-console
+                console.log('[MBFrame] cam=' + (camera === this.m_rteCamera ? 'rte'
+                    : camera === this.m_camera ? 'abs' : 'pov')
+                    + ' pos=' + camera.position.x.toFixed(0) + ',' + camera.position.y.toFixed(0)
+                    + ',' + camera.position.z.toFixed(0)
+                    + ' root=' + this.m_sceneRoot.children.length
+                    + ' px=' + px8[0] + ',' + px8[1] + ',' + px8[2] + ',' + px8[3]
+                    + ' calls=' + this.m_renderer.info.render.calls);
+            } catch {}
+        }
 
         if (gatherStatistics) {
             drawTime = PerformanceTimer.now();
