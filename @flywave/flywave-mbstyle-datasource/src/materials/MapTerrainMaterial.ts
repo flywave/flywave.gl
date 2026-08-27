@@ -38,6 +38,15 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
         }
         this.onBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms) => {
             if (self.m_drapeTexture) {
+                // §502 ROOT CAUSE of the white-drape lottery: the define was
+                // prepended to the FRAGMENT only, so the vertex shader's
+                // `#ifdef USE_DRAPE` blocks (vMapUv declaration + assignment)
+                // never activated — the fragment read an UNWRITTEN varying
+                // (undefined garbage per run/driver → the m255/m17/m135
+                // sampling lottery and white drapes). GL tolerates the
+                // unwritten varying at link time, which is why this rendered
+                // *something* for weeks instead of failing loudly.
+                shader.vertexShader = '#define USE_DRAPE\n' + shader.vertexShader;
                 shader.fragmentShader = '#define USE_DRAPE\n'
                     + 'uniform sampler2D uDrape;\nvarying vec2 vMapUv;\n'
                     + shader.fragmentShader;

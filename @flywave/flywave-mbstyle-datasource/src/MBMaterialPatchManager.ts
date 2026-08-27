@@ -1660,6 +1660,10 @@ export class MBMaterialPatchManager {
             } catch {}
             rasterTextureCache.set(url, padded);
             attach(padded);
+            if ((globalThis as any).__mbLiteDbg) {
+                // eslint-disable-next-line no-console
+                console.log('[MBAtt] late-attach ' + url.split('/').pop() + ' uuid=' + padded.uuid);
+            }
             // §502: the drape bake must run AFTER this attach — request extra
             // rebake frames so the final bake samples real imagery, never the
             // pre-attach placeholder window.

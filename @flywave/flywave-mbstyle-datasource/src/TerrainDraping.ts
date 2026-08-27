@@ -139,6 +139,50 @@ export class TerrainDraping {
                     });
                     // eslint-disable-next-line no-console
                     console.log('[MBFr] frN=' + frN + ' ' + parts.join(' '));
+                    // §502 dichotomy: render mesh #3 ALONE with its own
+                    // material into a scratch RT — material-renders-drape vs
+                    // main-canvas-path-loses-it.
+                    if (frN === 302) {
+                        try {
+                            const mid3: any = meshes[3];
+                            const renderer2 = this.m_mapView.renderer!;
+                            const prevT = renderer2.getRenderTarget();
+                            const prevSc = renderer2.getScissorTest();
+                            renderer2.setScissorTest(false);
+                            const scratch = new THREE.WebGLRenderTarget(64, 64);
+                            const sc = new THREE.Scene();
+                            sc.add(mid3);
+                            const cam2 = new THREE.OrthographicCamera(-6000, 6000, 6000, -6000, 1, 1e6);
+                            cam2.position.set(mid3.position.x, mid3.position.y, 12000);
+                            cam2.up.set(0, 1, 0);
+                            cam2.lookAt(mid3.position.x, mid3.position.y, 0);
+                            cam2.updateProjectionMatrix();
+                            renderer2.setRenderTarget(scratch);
+                            renderer2.setClearColor(0xff00ff, 1);
+                            renderer2.clear(true, true, false);
+                            renderer2.render(sc, cam2);
+                            const buf = new Uint8Array(64 * 64 * 4);
+                            renderer2.readRenderTargetPixels(scratch, 0, 0, 64, 64, buf);
+                            renderer2.setRenderTarget(prevT);
+                            renderer2.setScissorTest(prevSc);
+                            let visN = 0, sumL = 0;
+                            for (let q = 0; q < 64 * 64; q++) {
+                                const o5 = q * 4;
+                                if (buf[o5 + 3] > 32 && !(buf[o5] === 255 && buf[o5 + 2] === 255)) {
+                                    visN++;
+                                    sumL += (buf[o5] + buf[o5 + 1] + buf[o5 + 2]) / 3;
+                                }
+                            }
+                            // eslint-disable-next-line no-console
+                            console.log('[MBIso] mesh3 vis=' + visN + '/4096 meanL='
+                                + (visN ? (sumL / visN).toFixed(0) : '-'));
+                            sc.remove(mid3);
+                            scratch.dispose();
+                        } catch (e) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBIso] ERR ' + e);
+                        }
+                    }
                 }
             } catch {}
         }
