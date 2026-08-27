@@ -5887,3 +5887,20 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **工具入库**：decodedbg=1 门（getDecodedTile 每 tile 打印 geos/verts/techs + AfterRender MBScene 场景普查 + MBObj 首顶点 NDC/世界坐标/材质探针——数据侧 vs 渲染侧一跑二分，本轮 3d-intersections 定性的核心工具）；runner `MBSTYLE_DECODEDBG` 接线。
 
 **下会话 ROI**：① 3d-intersections 四子瓦片回退路由（方案如上，解锁整域 74 例的数据前提）；② appearance 残差簇（icon-bbox 族 125-797=碰撞盒 dpr/rasterization 域 §459/§422 遗留；zoom 族 2955-6309=icon-size pixelRatio/rotate 细节；feature-state/promoteId 条件求值核对）；③ model-layer 逐测独立重盘（212 例逐测，批跑不可信）；④ measure-light brightness 静态 lights 时序（appearance/brightness 588）。
+
+**§510. 会话续记——baseline8 部分基线落盘 + 六优先模块探查 + 结果服务器稳定性双破案**：
+
+**产物**：`rendering-test-results/mbstyle-baseline8/`（147 分类 / 807 例已落盘，166 PASS 清单见 `baseline8-pass.txt`）+ `MBCapF` 门控修复（commit `d8aae9ff`）。主跑（按测试数升序的分块 runner）在小分类域完成 ~139 分类后被中断；六优先分类经三轮定向补跑。
+
+**六优先模块基线现状**：
+- **3d-intersections 1/75**、**appearance 12/67**：全量执行完毕落盘（runner 逐分类独立服务器后稳定）；通过率极低=整域全红基线。
+- **fog 14/59**：horizon-blend 6/8、color/high-color 系近全过（此前 G7 修复兑现）；terrain 0/4、globe 0/6、switch-style 0/2。
+- **measure-light 4/19**：data-driven 系 3/3 过；纯色 brightness 全族 ~440px 近失（阈值外小残差）；globe/terrain/model 变体 4-20 万像素。
+- **globe 0/84**（共 128 执行/122 夹具）、**model-layer 0/41**（共 212，执行 191/61 分钟）：**浏览器反复崩溃（SwiftShader + 球面/GLTF 内存上限），karma 3 次重启后放弃**——本机环境无法单次全量采集，per-test JSON 止于每次崩溃前。后续采集方案=分子族（filter=各子目录）+ 每 ~20 例独立 karma 实例。
+
+**结果服务器稳定性双破案（记档防再犯）**：
+1. `MBCapF` 全帧 hex dump（§505 遗留）**无条件每测 ~32KB console**——karma socket 洪泛→浏览器到结果服务器的 HTTP POST 成片 "Failed to fetch"→per-test JSON 中途丢失（globe/model-layer 两轮全量重跑均毁于此）。修复=capfdump=1 门控。
+2. 逐分类独立调用 runner（每分类新服务器）替代六分类共享单服务器——长分类中途服务器死亡不再连坐后续分类。
+3. 运维注意：pkill "RenderingTestResultServe"（不带 [r]）会误杀所有并行 runner 的服务器；后台长跑期间禁止全局 pkill。
+
+**六分类测试基建事实**：model-layer 每例 ~17s（61 分钟/191 执行）；globe/3D 系 ~7s/例但崩溃循环；CHUNK_TIMEOUT_MS 已验证可放宽至 4h 不再截断。
