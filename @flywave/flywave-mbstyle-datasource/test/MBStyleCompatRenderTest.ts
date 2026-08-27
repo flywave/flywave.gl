@@ -1547,6 +1547,14 @@ describe("MBStyleDataSource render-tests compatibility", function () {
 
                 const operations = metadata.operations ?? [];
                 if (operations.length > 0) {
+                    // §505: a setTerrain TOGGLE rebuilds the terrain controller
+                    // AND re-triggers the async raster pipeline (the satellite
+                    // tiles decode, attach and drape-converge over dozens of
+                    // frames). A fixed 3-frame wait captured the map BEFORE
+                    // any of that — the terrain/raster family's all-white
+                    // frames. mgl waits for the terrain to re-render too:
+                    // run the full settle path after terrain toggles.
+                    const terrainToggled = operations.some(o => o[0] === "setTerrain");
                     await processOperations(mapView, dataSource, operations);
                     // Paint transitions interpolate by wall clock — the heavy
                     // multi-frame settle path adds capture latency that pushes
@@ -1558,9 +1566,36 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         // Zero extra frames: the wait loop's last AfterRender
                         // already shows the phase at the requested time — any
                         // further frame advances the wall clock past it.
+                    } else if (terrainToggled) {
+                        await renderUntilSettled(mapView, dataSource, 60);
                     } else {
                         await renderFrames(mapView, dataSource, 3);
                     }
+                    // §505: never capture a terrain frame before the drape
+                    // converged (satellite decode + attach + real bake).
+                    // Bounded; non-terrain fixtures report converged=true.
+                    for (let f = 0; f < 600; f++) {
+                        try {
+                            if ((dataSource as any).isDrapeConverged?.()) break;
+                        } catch {}
+                        await renderFrames(mapView, dataSource, 1);
+                    }
+                    // §505: read the canvas AT CAPTURE TIME — splits
+                    // "converged but later frames overwrite" vs "convergence
+                    // never reached the canvas".
+                    try {
+                        const gl5 = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+                        if (gl5) {
+                            const px5 = new Uint8Array(4 * 5);
+                            const w5 = gl5.drawingBufferWidth, h5 = gl5.drawingBufferHeight;
+                            [[0.5, 0.5], [0.3, 0.6], [0.7, 0.4], [0.5, 0.2], [0.5, 0.8]].forEach((pt, k) => {
+                                gl5.readPixels(Math.floor(pt[0] * w5), Math.floor(pt[1] * h5),
+                                    1, 1, gl5.RGBA, gl5.UNSIGNED_BYTE, px5, k * 4);
+                            });
+                            console.log('[MBCap] px=' + Array.from(px5)
+                                .map((v, k) => (k % 4 === 3) ? 'a' + v : v).join('/'));
+                        }
+                    } catch {}
                 }
 
 

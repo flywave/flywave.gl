@@ -41,6 +41,15 @@ export class TerrainDraping {
     private m_extraBakeFrames = 0;
     /** §504: bounded retry counter for placeholder→real drape convergence. */
     private m_contentRetries = 0;
+    /** §505: whether the LAST bake pass produced real imagery. */
+    private m_lastBakeAnyReal = false;
+    /** §505: once a real snapshot is on the terrain, stop rebaking — the
+     * placeholder→real lottery otherwise oscillates forever (attach fires
+     * on every engine material rebuild) and the capture lands on a white
+     * frame. Reset by real scene changes (terrain mesh count change). */
+    private m_drapeFrozen = false;
+    /** §505: immutable per-tile drape snapshots (DataTexture copies). */
+    private m_snapshots = new Map<number, THREE.DataTexture>();
     /** §504: dedicated layer for raster meshes under terrain (unused repo-wide). */
     static readonly RASTER_LAYER = 2;
     /** White opaque clear color for FBO (alpha=1 so empty areas preserve terrain color). */
@@ -64,6 +73,7 @@ export class TerrainDraping {
     /** §502: a raster texture finished attaching — rebake for MAX frames so
      * the drape converges to post-attach content. */
     onRasterAttached(): void {
+        if (this.m_drapeFrozen) return;
         this.m_extraBakeFrames = TerrainDraping.MAX_EXTRA_BAKES;
         this.m_needsBake = true;
     }
@@ -102,9 +112,20 @@ export class TerrainDraping {
             rt.dispose();
         }
         this.m_renderTargets.clear();
+        for (const [, snap] of this.m_snapshots) {
+            snap.dispose();
+        }
+        this.m_snapshots.clear();
     }
 
     get isActive(): boolean { return this.m_active; }
+
+    /** §505: true once a bake pass captured real imagery and it has been
+     * snapshotted onto the terrain — the render-test harness polls this
+     * before capturing, so the frame never races the tile decode. */
+    get drapeConverged(): boolean {
+        return this.m_lastBakeAnyReal && this.m_snapshots.size > 0;
+    }
     get bakeSize(): number { return this.m_bakeSize; }
 
     /**
@@ -164,6 +185,9 @@ export class TerrainDraping {
         // Detect terrain rebuild (mesh count change → old FBOs are stale).
         const meshCount = this.m_terrain.meshes.length;
         if (meshCount !== this.m_lastMeshCount) {
+            // Real scene change (setTerrain toggle) — allow re-convergence.
+            this.m_drapeFrozen = false;
+            this.m_contentRetries = 0;
             // Dispose old render targets that exceed the new mesh count.
             for (const [idx, rt] of this.m_renderTargets) {
                 if (idx >= meshCount) {
@@ -242,6 +266,9 @@ export class TerrainDraping {
         // camera fixed in §12.76-58). The content gate below auto-disables
         // drape when the FBO comes out uniform (empty bake).
         if (!TerrainDraping.DRAPE_ENABLED) return;
+        // §505: converged & frozen — the snapshots ARE the drape; further
+        // bakes only re-roll the placeholder lottery.
+        if (this.m_drapeFrozen) return;
         // §501 A/B kill switch (rtdisable=1): render terrain undraped.
         if ((globalThis as any).__mbRtDisable) return;
         // DRAPE_ALIGNMENT_CALIBRATION: dormant — see the gate at the
@@ -539,7 +566,10 @@ export class TerrainDraping {
                 // never apply that (the white drape freeze). statN counts
                 // non-transparent pixels among 9 scanned rows (max 3·S).
                 const meanL = statN ? statSum / statN : 255;
-                const whitePlaceholder = !uniform && meanL > 245 && statN > S;
+                // Dense = >half of the 9×S/3 scanned pixels (the C448/m255
+                // placeholder bake slipped the old absolute threshold).
+                const whitePlaceholder = !uniform && meanL > 245
+                    && statN > (3 * S) / 2;
                 const realContent = !uniform && !whitePlaceholder;
                 tileReal.push(realContent);
                 if (realContent) anyReal = true;
@@ -681,7 +711,27 @@ export class TerrainDraping {
                 // Content gate: only enable the drape when the bake actually
                 // produced non-uniform content (auto-disables on empty bakes).
                 if (realContent && mat && typeof mat.setDrapeTexture === 'function') {
-                    mat.setDrapeTexture(rt.texture);
+                    // §505 IMMUTABLE SNAPSHOT: hand the terrain a COPY of the
+                    // bake (DataTexture), never the live RT. The RT is re-
+                    // rendered by every later bake pass (placeholder-white
+                    // lottery included) and, being a live reference, every
+                    // white pass painted straight through to the screen.
+                    // The DataTexture keeps the RT's exact memory layout
+                    // (row0 first, flipY=false), so the proven-good sampling
+                    // is preserved byte-for-byte.
+                    try {
+                        const full = new Uint8Array(S * S * 4);
+                        renderer.readRenderTargetPixels(rt, 0, 0, S, S, full);
+                        const prevSnap = this.m_snapshots.get(i);
+                        if (prevSnap) prevSnap.dispose();
+                        const snap = new THREE.DataTexture(full, S, S);
+                        snap.needsUpdate = true;
+                        this.m_snapshots.set(i, snap);
+                        mat.setDrapeTexture(snap);
+                        this.m_drapeFrozen = true;
+                    } catch {
+                        mat.setDrapeTexture(rt.texture);
+                    }
                     if (!mat.defines) mat.defines = {};
                     if (!mat.defines.USE_DRAPE) {
                         mat.defines.USE_DRAPE = '';
@@ -693,6 +743,7 @@ export class TerrainDraping {
             // real content, keep retrying (the attach-triggered frames and
             // tile churn will eventually produce real imagery) — bounded so
             // a truly empty scene freezes instead of looping forever.
+            this.m_lastBakeAnyReal = anyReal;
             if (this.m_rasterHidden.length > 0 && !anyReal
                 && this.m_contentRetries < 30) {
                 this.m_contentRetries++;

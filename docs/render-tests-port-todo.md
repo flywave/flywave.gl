@@ -5775,3 +5775,15 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **drape 层当前完成度**：bake 内容正确（线性域卫星）、apply 链路正确、白占位拒绝、收敛有界——drape 层在"主画布正常渲染地形"的夹具上（如 setProperty）已进入正确工作状态。
 
 **§504 尾注二（同 commit）——最终定性：无 draw 振荡，白屏 = drape RT 内容逐 pass 交替（活引用透传）**。info.reset 前置后：calls 恒 **9**、tris 恒 **294912**（=9 张 DEM 网格；卫星 quad 已被 layer 2 排除 ✓）——此前"calls 9↔18 振荡"系 info 未逐帧复位的累计伪影。像素三态（白/暗蓝河流/pale 卫星）= **drape RT 纹理内容本身逐 bake pass 交替**，且 setDrapeTexture 持有活引用（同一 RT 反复重渲），apply gate 拒绝也无法阻止地形显示最新 pass 内容。⇒ 病灶唯一收敛：**为什么 attach 完成后仍有整 pass 渲出占位白**（全 pass 级联：一个 pass 内 9 tile 全白或全真，非单 tile）。下会话单点：在 bakeAll 循环外记录 pass 级相位（首 tile midRow 即可代表），对照 attach/帧号定位白 pass 的触发条件（疑似纹理上传与多 RT 顺序渲染的交错）。
+
+**§505. 会话终记——冻结机制实施 + 捕获时刻直读揭示"蓝画布→白 PNG"不一致（vMapUv/竞态/白占位全部证伪后的事实集）**：
+
+**实施**：① attach-rebake 机制（patcher attach → notifyRasterAttached → extraBakeFrames=MAX）；② drape 冻结（首个 realContent 快照上屏后 m_drapeFrozen=true，忽略后续 attach 触发；setTerrain 重建解锁）+ convergence poll（harness 捕获前轮询 isDrapeConverged，≤600 帧）；③ 占位密度阈值修正（C448/m255 滑过旧绝对阈值的漏洞封堵）。**结果：54634 恒定，未解锁。**
+
+**决定性新事实（MBCap 捕获时刻直读）**：terrain/raster 捕获时刻画布 = **未 drape 的 DEM-as-color 蓝色地形（0,13,104 等 = terrain-RGB 海拔编码 ≈1305m）**——非白！而写出的 current.png = 纯白。**断言读取与探针读取之间画布被改写**（引擎持续渲染，后续帧产出白色）或 PNG 来自更晚帧。同时 raster-emissive-strength 捕获到了蓝地形（证明捕获可以拿到内容）、raster-fade 捕获到淡色卫星+白混合。
+
+**事实总表（全部实证）**：bake 内容正确（dump=卫星/线性域）✓、apply 到在屏 mesh ✓（D1 在视锥）、capture 可拿到内容 ✓（emissive-strength 蓝）、canvas 捕获时刻=蓝 ✓——**但 5 张 PNG 白**。剩余唯一未探区域：**探针读像素 → assert toDataURL → server PNG 写盘** 三步之间的事件序列（引擎持续渲染帧在 toDataURL 前后的覆盖），及**为何部分帧白部分帧蓝**（drape snapshot 应用与引擎帧的交错）。
+
+**下会话单点（必达）**：在 assertCanvasMatchesReference 的 toDataURL 前后各插一行 canvas readPixels + 帧计数——一步定位白帧的产生时机；随后修复（候选：捕获时暂停渲染循环 / rAF 对齐 / drape snapshot 应用改为同步 upload）。
+
+**本轮资产**：layer 架构（无状态排除）、snapshot 架构（不可变 DataTexture）、冻结 + 收敛 poll、MBCap/MBFrame/MBIso/MBSceneRT 探针族。回归零损失全程保持。

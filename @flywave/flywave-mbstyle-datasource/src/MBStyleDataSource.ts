@@ -1035,6 +1035,11 @@ export class MBStyleDataSource extends TileDataSource {
     notifyRasterAttached(): void {
         this.m_terrainDraping?.onRasterAttached?.();
     }
+
+    /** §505: harness polls this before capturing terrain fixtures. */
+    isDrapeConverged(): boolean {
+        return this.m_terrainDraping ? this.m_terrainDraping.drapeConverged === true : true;
+    }
     /** §501: raster materials call this on their first draw (program
      * compile) — the earliest reliable signal that the tile's satellite
      * texture is on the GPU. Triggers a drape rebake; the render wake is
