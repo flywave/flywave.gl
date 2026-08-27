@@ -5654,3 +5654,27 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **下会话首步**：bake 渲染前一行打印 m_rasterHidden.length 与 census 中 fill 材质的 material.visible——一步判"收集集空"或"重显未及"。
 
 **会话终收束**：44 阶段（§454-§496）。
+
+**§497. 会话续记——§496 断点静态定案 + drape bake 修复批落地（零测试，攒批延后）**：
+
+**静态取证链（读引擎源码，不跑 karma）**：
+1. **场景图逐帧重建**（MapView.ts:3543 `m_sceneRoot.children.length = 0` + TileObjectsRenderer.render 逐 tile 重灌、`object.position.sub(cameraPosition)` 相对化）→ 跨帧 m_rasterHidden 清单对异步新瓦片的**新材质实例不可靠**。§496 所问"收集集空 or 重显未及"在源码层面即判：两者皆可能 → 不再信任跨帧清单。
+2. **背景/地面 quad 排除缺失**：mbstyle emitter 背景层 renderOrder=**−Infinity**（MBTileDataEmitter:757）、引擎 BackgroundDataSource.GROUND_RENDER_ORDER=**MIN_SAFE_INTEGER**；bake RT 原 depthBuffer:false，纯画家序 + 透明桶 z 平局下全幅地面色是 §482 "9/9 uniform 黑"的作者（§494 的 6 draws/589k tri 与常量红未现同时得解：红打在 raster fill 上而最后落笔的地面黑盖掉一切；主渲染有深度且 GROUND 特排序故无恙）。
+3. **材质类型核实**：引擎 fill/raster technique 材质=MapMeshBasicMaterial（MeshBasic 派生，非 ShaderMaterial）；线族 SolidLineMaterial/HighPrecisionLineMaterial 均 RawShaderMaterial 派生，声明内建矩阵名时 three 仍注入 modelView/projection（正交 bake 相机可正确投影）。
+
+**修复批五件（TerrainDraping.ts）**：
+1. **自愈合收集**：bakeAll 起点 fresh traverse 重收集全部 `_isRaster` 材质（替换式清单+Set 去重）、置 `__mbRasBake`+needsUpdate、统一复显；finally 统一重隐。WillRender 稳态门保留。
+2. **地面排除**：hide-pass 新分支 `(renderOrder ?? 0) <= -1000` 视为 ground/background 隐藏（地形 −100 不受影响、已在先隐藏）；语义对齐 mgl drape FBO 无独立地面 quad，空区由 alpha-0 mix 保持地形本色。
+3. **RT 启用深度缓冲**：depthBuffer:true + `__mbDepthV2` 标记强制重建旧无深度 RT；clear(true,true,false)。对齐 mgl drape FBO 的深度测试。
+4. **均匀性检测升级**：角+中心 5 点采样 → 9 整行 × 全宽 distinct-color 直方图（量化 >>3、alpha==0 跳过、≥12 早退）；消除"中段有内容但探针点全黑"误判均匀（§489 已标注歧义）。
+5. **fill 界每 bake 重算**：废除 `__mbFillBounds === undefined` 一次缓存（对象逐帧被相对化移动，陈旧偏移烙进后续窗口）；measure 移至 shift 之后并先 `scene.updateMatrixWorld(true)` 保证测量态=渲染态；顺带清除 require('three') hack（改用模块顶部导入，浏览器 bundle 风险一并消除）。
+
+**mgl 对齐附带（同文件）**：ShaderMaterial 一刀切 bake 排除 → 放行矢量线族（technique.name==='solid-line' || _isLineRibbon）。mgl 地形模式矢量线是 draping 对象；其余屏幕空间 shader 物（POI/text/sky/fog quads）维持排除。
+
+**tsc --build 通过，lib 已重建**。**测试延后（用户策略：攒批）**，下会话单批验证清单：
+① setProperty 四件套——drape 是否首次携带卫星色彩、uniform 内容门是否打开；
+② fog/terrain/icon/raster 回归采样——本批改动面覆盖 RT 语义与场景可见性（fog 曾对此敏感）；
+③ 上屏后进入外观校准（基调 mean 249 vs 177、UV 对齐迭代）。
+
+**未竟候选记档**：icon-with-offset-2 等 3 例基线回归涉碰撞盒 offset/渲染联动，需真值管线经验迭代，暂缓盲修；锚点 verdict BOTH 15→67 同前。
+

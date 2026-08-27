@@ -229,16 +229,33 @@ export class TerrainDraping {
         const terrainMeshes = new Set<THREE.Object3D>(this.m_terrain.meshes);
         if (terrainMeshes.size === 0) return;
 
-        // Re-show the rasters hidden for the main render — the bake IS the
-        // raster's rendering path under terrain (material-level gate). Also
-        // widen the raster far-plane cutoff (bake ortho camera sits 6000
-        // above the surface; the main-render far test would paint black).
-        for (const m of this.m_rasterHidden) {
-            m.visible = true;
-            if (!(m as any).__mbRasBake) {
-                (m as any).__mbRasBake = true;
-                m.needsUpdate = true;
-            }
+        // Self-healing re-show (§497): rebuild the hidden-material set by a
+        // FRESH traversal instead of trusting the cross-frame m_rasterHidden
+        // list. The scene graph is rebuilt every frame (MapView clears
+        // m_sceneRoot and TileObjectsRenderer re-adds tile objects with
+        // per-technique materials), so an async-loaded tile can carry fresh
+        // material instances the last WillRender snapshot never saw — those
+        // stayed visible in the main render yet missing here. The bake IS
+        // the raster's rendering path under terrain; also widen the far
+        // cutoff (the bake ortho camera sits 6000 above the surface).
+        {
+            const seen = new Set<THREE.Material>();
+            this.m_rasterHidden.length = 0;
+            scene.traverse((o: any) => {
+                if ((o.isMesh || o.isPoints) && o.userData?.technique?._isRaster) {
+                    const mats = Array.isArray(o.material) ? o.material : [o.material];
+                    for (const m of mats) {
+                        if (!m || seen.has(m)) continue;
+                        seen.add(m);
+                        if (!(m as any).__mbRasBake) {
+                            (m as any).__mbRasBake = true;
+                            m.needsUpdate = true;
+                        }
+                        this.m_rasterHidden.push(m);
+                    }
+                }
+            });
+            for (const m of this.m_rasterHidden) m.visible = true;
         }
 
         const tiles = this.m_terrain.allDemTiles;
@@ -256,10 +273,27 @@ export class TerrainDraping {
                 obj.visible = false;
                 hidden.push(obj);
             } else if ((obj as any).isMesh
-                && ((obj as any).material?.isMeshStandardMaterial
-                    // Screen-space POI/text quads project as garbage under
-                    // the top-down ortho bake camera — exclude.
-                    || (obj as any).material?.isShaderMaterial)) {
+                && (((obj as any).material?.isMeshStandardMaterial)
+                    || ((obj as any).material?.isShaderMaterial
+                        // mgl drapes vector LINES onto the terrain surface;
+                        // engine line materials derive from RawShaderMaterial,
+                        // so let the line family through and exclude only the
+                        // non-drapable screen-space/environment shader objects
+                        // (POI/text quads project as garbage under the ortho
+                        // bake camera).
+                        && obj.userData?.technique?.name !== 'solid-line'
+                        && !obj.userData?.technique?._isLineRibbon))) {
+                obj.visible = false;
+                hidden.push(obj);
+            } else if ((obj as any).isMesh && (obj.renderOrder ?? 0) <= -1000) {
+                // Ground/background plane (mbstyle emitter emits background
+                // with renderOrder −Infinity; engine BackgroundDataSource uses
+                // MIN_SAFE_INTEGER; terrain is −100 and already hidden above).
+                // In a depth-less painter-order RT these full-viewport quads
+                // painted last over every other content — the §482 "9/9 bake
+                // uniform black" writer. mgl's drape pass carries no separate
+                // ground quad either: void areas keep the terrain color via
+                // the alpha-0 mix.
                 obj.visible = false;
                 hidden.push(obj);
             } else if ((obj as any).isMesh || (obj as any).isSprite || (obj as any).isPoints) {
@@ -291,6 +325,37 @@ export class TerrainDraping {
             }
         });
 
+        // Refresh world matrices so the fill-bounds measurement below sees
+        // the exact transform state the bake render will use (renderer.render
+        // would do this implicitly AFTER our measurement otherwise).
+        scene.updateMatrixWorld(true);
+
+        // §488 fix (route 1), §497 revision: raster fill geometry carries
+        // LARGE tile-local coordinates on top of object.position (double
+        // offset) — a strictly tile-aligned camera misses it. Measure the
+        // fills' ACTUAL matrixWorld bounds; recomputed EVERY bake because
+        // tile content moves every frame (TileObjectsRenderer repositions
+        // against the live camera) and a once-ever cache bakes stale
+        // offsets into every later window.
+        const camAbs3 = this.m_mapView.camera.position;
+        let fillBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
+        {
+            const bb = new THREE.Box3();
+            scene.traverse((o: any) => {
+                if (!o.isMesh || !o.visible || !o.userData?.technique?._isRaster) return;
+                o.geometry.computeBoundingBox?.();
+                const gbb = o.geometry.boundingBox;
+                if (!gbb) return;
+                bb.union(gbb.clone().applyMatrix4(o.matrixWorld));
+            });
+            if (!bb.isEmpty()) {
+                fillBounds = {
+                    minX: bb.min.x + camAbs3.x, maxX: bb.max.x + camAbs3.x,
+                    minY: bb.min.y + camAbs3.y, maxY: bb.max.y + camAbs3.y,
+                };
+            }
+        }
+
         const prevTarget = renderer.getRenderTarget();
         const prevClearColor = renderer.getClearColor(new THREE.Color());
         const prevClearAlpha = renderer.getClearAlpha();
@@ -303,11 +368,17 @@ export class TerrainDraping {
 
                 // Create or reuse the render target for this tile.
                 let rt = this.m_renderTargets.get(i);
-                if (!rt) {
+                if (!rt || !(rt as any).__mbDepthV2) {
+                    // §497: enable the depth buffer. A depth-less RT turned
+                    // every draw into painter's-order with opaque/transparent
+                    // bucket z-ties at ground level resolving unpredictably;
+                    // mgl's drape FBO is depth-tested too.
+                    if (rt) rt.dispose();
                     rt = new THREE.WebGLRenderTarget(this.m_bakeSize, this.m_bakeSize, {
-                        depthBuffer: false,
+                        depthBuffer: true,
                         stencilBuffer: false,
                     });
+                    (rt as any).__mbDepthV2 = true;
                     rt.texture.minFilter = THREE.LinearFilter;
                     rt.texture.magFilter = THREE.LinearFilter;
                     this.m_renderTargets.set(i, rt);
@@ -317,35 +388,14 @@ export class TerrainDraping {
                 const camera = buildTileCamera(tile, (this.m_mapView as any).camera?.position);
                 if (!camera) continue;
 
-                // §488 fix (route 1): raster fill geometry carries LARGE
-                // tile-local coordinates on top of object.position (double
-                // offset) — the tile-aligned camera misses it by ~1.5 tiles.
-                // Widen the ortho window to the fills' ACTUAL matrixWorld
-                // bounds (union with the tile) so the bake captures them.
-                const camAbs3 = this.m_mapView.camera.position;
-                if ((this as any).__mbFillBounds === undefined) {
-                    const bb = new (require('three')).Box3();
-                    const V3b = (require('three')).Vector3;
-                    this.m_mapView.scene.traverse((o: any) => {
-                        if (!o.isMesh || !o.visible || !o.userData?.technique?._isRaster) return;
-                        o.geometry.computeBoundingBox?.();
-                        const gbb = o.geometry.boundingBox;
-                        if (!gbb) return;
-                        bb.union(gbb.clone().applyMatrix4(o.matrixWorld));
-                    });
-                    (this as any).__mbFillBounds = bb.isEmpty()
-                        ? null
-                        : { minX: bb.min.x + camAbs3.x, maxX: bb.max.x + camAbs3.x,
-                            minY: bb.min.y + camAbs3.y, maxY: bb.max.y + camAbs3.y };
-                }
-                const fb = (this as any).__mbFillBounds as
-                    { minX: number; maxX: number; minY: number; maxY: number } | null;
-                if (fb) {
-                    // World-absolute fill bounds → camera-relative frame.
-                    const relMinX = Math.min(camera.left, fb.minX - camAbs3.x);
-                    const relMaxX = Math.max(camera.right, fb.maxX - camAbs3.x);
-                    const relMinY = Math.min(camera.bottom, fb.minY - camAbs3.y);
-                    const relMaxY = Math.max(camera.top, fb.maxY - camAbs3.y);
+                // §488/§497: widen the ortho window to the fills' actual
+                // matrixWorld bounds (union with the tile window).
+                if (fillBounds) {
+                    const camAbs4 = this.m_mapView.camera.position;
+                    const relMinX = Math.min(camera.left, fillBounds.minX - camAbs4.x);
+                    const relMaxX = Math.max(camera.right, fillBounds.maxX - camAbs4.x);
+                    const relMinY = Math.min(camera.bottom, fillBounds.minY - camAbs4.y);
+                    const relMaxY = Math.max(camera.top, fillBounds.maxY - camAbs4.y);
                     camera.left = relMinX; camera.right = relMaxX;
                     camera.bottom = relMinY; camera.top = relMaxY;
                     const cx2 = (relMinX + relMaxX) / 2;
@@ -357,7 +407,7 @@ export class TerrainDraping {
 
                 if ((globalThis as any).__mbOccDbg && !(globalThis as any).__mbFillProj) {
                     (globalThis as any).__mbFillProj = 1;
-                    const V3 = (require('three')).Vector3;
+                    const V3 = THREE.Vector3;
                     let n = 0;
                     this.m_mapView.scene.traverse((o: any) => {
                         if (n >= 3 || !o.isMesh || !o.visible || !o.userData?.technique?._isRaster) return;
@@ -407,7 +457,7 @@ export class TerrainDraping {
                 // alpha 0 to keep the terrain's own color (alpha 1 blanked
                 // the whole tile to the clear color, the §472 black-field).
                 renderer.setClearColor(0x000000, 0);
-                renderer.clear();
+                renderer.clear(true, true, false);
                 const __mbCalls0 = renderer.info.render.calls;
                 renderer.render(scene, camera);
                 if ((globalThis as any).__mbOccDbg && (globalThis as any).__mbBakeCount === 5) {
@@ -423,16 +473,28 @@ export class TerrainDraping {
                 // to the clear color and REGRESS the fog/terrain fixtures.
                 // This gate self-disables until that is solved.
                 const S = this.m_bakeSize;
-                const sample = new Uint8Array(4 * 5);
-                renderer.readRenderTargetPixels(rt, 0, 0, 1, 1, sample);
-                renderer.readRenderTargetPixels(rt, S - 1, 0, 1, 1, sample, 4);
-                renderer.readRenderTargetPixels(rt, 0, S - 1, 1, 1, sample, 8);
-                renderer.readRenderTargetPixels(rt, S - 1, S - 1, 1, 1, sample, 12);
-                renderer.readRenderTargetPixels(rt, S >> 1, S >> 1, 1, 1, sample, 16);
-                let uniform = true;
-                for (let k = 4; k < 20; k++) {
-                    if (sample[k] !== sample[k % 4]) { uniform = false; break; }
+                // §497 content detection: corner+center point sampling conflated
+                // "content between the probe points" with "uniform black" (§489
+                // already noted the ambiguity). Scan 9 full rows and count
+                // distinct quantized colors among non-transparent pixels.
+                const rowBuf = new Uint8Array(S * 4);
+                const seenColors = new Set<number>();
+                uniformity: for (let ry = 0; ry < 9; ry++) {
+                    const py = Math.min(S - 1, Math.floor((ry + 0.5) * S / 9));
+                    renderer.readRenderTargetPixels(rt, 0, py, S, 1, rowBuf);
+                    for (let x = 0; x < S; x += 3) {
+                        const o = x * 4;
+                        if (rowBuf[o + 3] === 0) continue; // clear pixel — no content
+                        const key = ((rowBuf[o] >> 3) << 10)
+                            | ((rowBuf[o + 1] >> 3) << 5)
+                            | (rowBuf[o + 2] >> 3);
+                        if (!seenColors.has(key)) {
+                            seenColors.add(key);
+                            if (seenColors.size >= 12) break uniformity;
+                        }
+                    }
                 }
+                const uniform = seenColors.size < 2;
                 if ((globalThis as any).__mbOccDbg && ((globalThis as any).__mbDrapLogged ?? 0) < 9) {
                     (globalThis as any).__mbDrapLogged = ((globalThis as any).__mbDrapLogged ?? 0) + 1;
                     let vis = 0; const kinds: Record<string, number> = {};
@@ -475,7 +537,7 @@ export class TerrainDraping {
                     }
                     const mv: any = this.m_mapView;
                     if (meshes[0]) {
-                        const V3 = (require('three')).Vector3;
+                        const V3 = THREE.Vector3;
                         const rte = (typeof mv.getRteCamera === 'function')
                             ? mv.getRteCamera() : mv.m_rteCamera;
                         const center = meshes[Math.floor(meshes.length / 2)] ?? meshes[0];
