@@ -5787,3 +5787,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **下会话单点（必达）**：在 assertCanvasMatchesReference 的 toDataURL 前后各插一行 canvas readPixels + 帧计数——一步定位白帧的产生时机；随后修复（候选：捕获时暂停渲染循环 / rAF 对齐 / drape snapshot 应用改为同步 upload）。
 
 **本轮资产**：layer 架构（无状态排除）、snapshot 架构（不可变 DataTexture）、冻结 + 收敛 poll、MBCap/MBFrame/MBIso/MBSceneRT 探针族。回归零损失全程保持。
+
+**§505 尾注三（同 commit）——时序数据 + m135 反转定性**：MBFrame 采样（%60）时序：**pale 帧在前、白帧在后**（时段级翻转，非逐帧）；bakeAll 全程运行 ~34-56 次（冻结未止住——首个 realContent 快照未在采样窗前出现，或 m17/m135 real pass 后仍被后续白 pass 覆盖）。**m135 = 线性域卫星（z12 pale 193→linear≈135），terrain 输出重编码后 ≈ pale 176-197 = 正确外观**——即收敛态本应锁定正确画面；当前冻结锁定的状态未生效到屏幕（疑快照 apply 到非在屏 mesh / 后续白 pass 经活引用再透传——snapshot 架构应已封死后者，需以 MBFr 全 mesh D 标志 + MBCap 同帧对照终验）。
