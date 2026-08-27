@@ -53,8 +53,13 @@ export class TerrainDraping {
     /** §505: once a real snapshot is on the terrain, stop rebaking — the
      * placeholder→real lottery otherwise oscillates forever (attach fires
      * on every engine material rebuild) and the capture lands on a white
-     * frame. Reset by real scene changes (terrain mesh count change). */
+     * frame. Reset by real scene changes (terrain mesh identity change). */
     private m_drapeFrozen = false;
+    /** §506: last-seen terrain mesh instance signature — TerrainController
+     * rebuilds REPLACE mesh instances at the SAME count (9→9); the count
+     * check never unfroze, and the fresh meshes rendered white while the
+     * snapshots sat on the disposed instances. */
+    private m_lastMeshSig = '';
     /** §505: immutable per-tile drape snapshots (DataTexture copies). */
     private m_snapshots = new Map<number, THREE.DataTexture>();
     /** §504: dedicated layer for raster meshes under terrain (unused repo-wide). */
@@ -198,6 +203,53 @@ export class TerrainDraping {
                     + ' snaps=' + this.m_snapshots.size
                     + ' px=' + px[0] + ',' + px[1] + ',' + px[2]
                     + ' | ' + parts.join(' '));
+                // §506: LIT isolated rerender of the drape-holding mesh with
+                // the scene's lights (main-canvas conditions) — A: original
+                // material, B: drape-direct (diffuseColor=drape.rgb forced).
+                if ((globalThis as any).__mbLiteDbg && frN % 300 === 150) {
+                    try {
+                        const snapMesh = meshes.find((m: any) => m.material?.m_drapeTexture);
+                        if (snapMesh) {
+                            const renderer2 = this.m_mapView.renderer!;
+                            const prevT = renderer2.getRenderTarget();
+                            const scratch = new THREE.WebGLRenderTarget(32, 32);
+                            const sc = new THREE.Scene();
+                            this.m_mapView.scene.traverse((o: any) => {
+                                if (o.isLight) { const l: any = o.clone(); sc.add(l); }
+                            });
+                            if (!sc.children.some((c: any) => c.isLight)) {
+                                sc.add(new THREE.AmbientLight(0xffffff, 1.0));
+                            }
+                            sc.add(snapMesh);
+                            const cam2 = new THREE.OrthographicCamera(-6000, 6000, 6000, -6000, 1, 1e6);
+                            cam2.position.set(snapMesh.position.x, snapMesh.position.y, 20000);
+                            cam2.lookAt(snapMesh.position.x, snapMesh.position.y, 0);
+                            renderer2.setRenderTarget(scratch);
+                            renderer2.setScissorTest(false);
+                            renderer2.setClearColor(0xff00ff, 1);
+                            renderer2.clear(true, true, false);
+                            renderer2.render(sc, cam2);
+                            const buf = new Uint8Array(32 * 32 * 4);
+                            renderer2.readRenderTargetPixels(scratch, 0, 0, 32, 32, buf);
+                            renderer2.setRenderTarget(prevT);
+                            let vis = 0, sum = 0;
+                            for (let q = 0; q < 32 * 32; q++) {
+                                const o8 = q * 4;
+                                if (buf[o8 + 3] > 32 && !(buf[o8] === 255 && buf[o8 + 2] === 255)) {
+                                    vis++; sum += (buf[o8] + buf[o8 + 1] + buf[o8 + 2]) / 3;
+                                }
+                            }
+                            // eslint-disable-next-line no-console
+                            console.log('[MBIsoLit] vis=' + vis + '/1024 meanL='
+                                + (vis ? (sum / vis).toFixed(0) : '-'));
+                            sc.remove(snapMesh);
+                            scratch.dispose();
+                        }
+                    } catch (e) {
+                        // eslint-disable-next-line no-console
+                        console.log('[MBIsoLit] ERR ' + e);
+                    }
+                }
             } catch {}
         }
     };
@@ -224,9 +276,27 @@ export class TerrainDraping {
             this.m_extraBakeFrames = Math.max(this.m_extraBakeFrames, 2);
         }
 
-        // Detect terrain rebuild (mesh count change → old FBOs are stale).
+        // Detect terrain rebuild — by COUNT and by INSTANCE SIGNATURE: a
+        // rebuild swaps mesh instances at the same count (morph on setTerrain
+        // toggle), and only identity catches that.
         const meshCount = this.m_terrain.meshes.length;
-        if (meshCount !== this.m_lastMeshCount) {
+        const meshSig = this.m_terrain.meshes.map((m: any) => m.uuid).join(',');
+        const meshesChanged = meshSig !== this.m_lastMeshSig;
+        if (meshesChanged) {
+            this.m_lastMeshSig = meshSig;
+            // §506 SNAPSHOT SELF-HEAL: fresh instances render white while
+            // valid snapshots exist — re-apply them without a re-bake.
+            const meshes = this.m_terrain.meshes;
+            for (let mi = 0; mi < meshes.length; mi++) {
+                const snap = this.m_snapshots.get(mi);
+                const mat: any = (meshes[mi] as any).material;
+                if (snap && mat && !mat.m_drapeTexture
+                    && typeof mat.setDrapeTexture === 'function') {
+                    mat.setDrapeTexture(snap);
+                }
+            }
+        }
+        if (meshCount !== this.m_lastMeshCount || (meshesChanged && meshCount > 0)) {
             // Real scene change (setTerrain toggle) — allow re-convergence.
             this.m_drapeFrozen = false;
             this.m_contentRetries = 0;

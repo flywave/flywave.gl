@@ -5817,3 +5817,15 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **最终未解环节（唯一）**：快照已应用（DS ✓ 在视锥 ✓）但主画布地形仍白（54634 恒定）。关键线索合并：① MBIso 隔离渲染 = **全黑**（无灯 scratch 中 drape 采样黑）；② 主画布 = 白（有灯环境下同为不可见）；③ MBReplay2 直接 mrm.render = **有内容（线性域蓝）**。⇒ 三者矛盾的交汇点 = **材质的 drape 采样输出依赖渲染时刻的 GL 状态**（sRGB 编码/纹理单元/程序变体）——下会话单点：用 MBIso 带**环境灯光**重渲（复现主画布条件）+ 二分 shader（强制 diffuseColor=drape.rgb 直出），一步定位快照不可见的最终环节。
 
 **全部资产与机制保持**：layer 架构、snapshot 架构、冻结+poll（墙钟）、密度门控（无早退）、节流 rebake、env-rebind、全探针族。回归零损失（PASS 集恒定）。
+
+**§506 终破——白屏根因 = 网格实例替换（identity 检测 + 快照自愈），terrain/raster 首次非白**：
+
+**最后根因**：TerrainController 重建时**替换网格实例但数量不变**（9→9）——meshCount 检测永不触发解冻；快照坐在已 dispose 的旧实例上，新实例渲染白色，冻结又阻止一切再烘焙。MBMon 的 D 标志在索引间漂移即其铁证。
+
+**修复（两件）**：① 实例签名检测（uuid 串联对比，替代纯计数）；② **快照自愈**——签名变化时把 m_snapshots 里既有的有效快照重新应用到新实例（无需再烘焙）。
+
+**实测（s506-heal）**：terrain/raster **54634→46362**、raster-fade 54471→**46346**（数十轮尝试后**首次移动**）；捕获图像 mean=(156,149,127)——真实起伏地形+悬垂画面（非白！）vs EXP 浅色调。**白屏结构性问题终结**，残余 46k = 外观校准域（EXP=z12 overzoom 浅色影像指纹 §500 已验；我方 relief 对比更强+色调深）。
+
+**同批入库**：稳定 uniform holder（编译时闭包快照→持久引用，uDrape/uDem/uDemPrev/uDemLerp/uDemIsFloat/uExaggeration/uMBZSecLat 全套）；uniform-swap 使冻结期换纹理即时生效。
+
+**下阶段（校准清单）**：① relief/明暗基调对齐（EXP 浅、我方深——drape 地形光照基底+unlit 覆写已有，需调 drape 亮度/地形基色）；② z12 影像源的 overzoom 模糊特征（EXP 锐度低 2.2×已量化）；③ hillshade-buffer 族（meshCount=2 特例路径）；④ setProperty 四件套外观校准（结构已通，15863 好带）。

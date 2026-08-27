@@ -9,6 +9,19 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
     private m_demIsFloat: boolean = false;
     private m_exaggeration: number = 1.0;
     private m_drapeTexture: THREE.Texture | null = null;
+    // §506: STABLE uniform holders — `shader.uniforms.x = { value: v }` in
+    // onBeforeCompile snapshots the value AT COMPILE TIME; swapping
+    // m_drapeTexture later without a recompile (the draping freezes after
+    // convergence, so no further needsUpdate) left the GPU uniform on the
+    // old texture forever. Holders keep ONE object identity alive across
+    // compiles; setters mutate .value and three uploads it each frame.
+    private m_uDrape: { value: THREE.Texture | null } = { value: null };
+    private m_uDem: { value: THREE.Texture | null } = { value: null };
+    private m_uDemPrev: { value: THREE.Texture | null } = { value: null };
+    private m_uDemLerp: { value: number } = { value: 1 };
+    private m_uDemIsFloat: { value: number } = { value: 0 };
+    private m_uExaggeration: { value: number } = { value: 1 };
+    private m_uMBZSecLat: { value: number } = { value: 1 };
 
     constructor() {
         super({
@@ -54,17 +67,13 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
                     + 'uniform sampler2D uDrape;\nvarying vec2 vMapUv;\n'
                     + shader.fragmentShader;
             }
-            shader.uniforms.uDem = { value: self.m_demTexture };
-            shader.uniforms.uDemPrev = { value: self.m_demPrevTexture };
-            shader.uniforms.uDemLerp = { value: self.m_demLerp };
-            shader.uniforms.uDemIsFloat = { value: self.m_demIsFloat ? 1.0 : 0.0 };
-            shader.uniforms.uExaggeration = { value: self.m_exaggeration };
-            // mgl mercator z scale (§165): z_world = h·sec(lat) — one meter
-            // maps to sec(lat) equatorial-mercator world units. Lat comes from
-            // the mesh world position (mercator y) so each terrain tile uses
-            // its own latitude.
-            shader.uniforms.uMBZSecLat = { value: self.m_zSecLat };
-            shader.uniforms.uDrape = { value: self.m_drapeTexture };
+            shader.uniforms.uDem = self.m_uDem;
+            shader.uniforms.uDemPrev = self.m_uDemPrev;
+            shader.uniforms.uDemLerp = self.m_uDemLerp;
+            shader.uniforms.uDemIsFloat = self.m_uDemIsFloat;
+            shader.uniforms.uExaggeration = self.m_uExaggeration;
+            shader.uniforms.uMBZSecLat = self.m_uMBZSecLat;
+            shader.uniforms.uDrape = self.m_uDrape;
 
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <common>',
@@ -153,28 +162,35 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
 
     setDemTexture(texture: THREE.Texture | null): void {
         this.m_demTexture = texture;
+        this.m_uDem.value = texture;
         this.needsUpdate = true;
     }
 
     /** Previous-frame DEM texture for morphing transitions. */
     setDemPrevTexture(texture: THREE.Texture | null): void {
         this.m_demPrevTexture = texture;
+        this.m_uDemPrev.value = texture;
         this.needsUpdate = true;
     }
 
     /** Morph progress [0,1]; 1 = fully current (no morphing). */
     setDemLerp(lerp: number): void {
         this.m_demLerp = lerp;
+        this.m_uDemLerp.value = lerp;
     }
 
     /** Set true when the DEM texture is an R32F DataTexture (pre-decoded heights). */
     setDemIsFloat(isFloat: boolean): void {
         this.m_demIsFloat = isFloat;
+        this.m_uDemIsFloat.value = isFloat ? 1.0 : 0.0;
         this.needsUpdate = true;
     }
 
     setDrapeTexture(texture: THREE.Texture | null): void {
         this.m_drapeTexture = texture;
+        // Live uniform swap — works even when the draping has frozen (no
+        // further compiles): three uploads holder values every frame.
+        this.m_uDrape.value = texture;
         // §502: the bake RT is 512² NPOT-safe, but the DRAPE RT is sampled
         // by this material inside a SECOND render pass on SwiftShader —
         // mipmap-filtered NPOT/sRGB RT textures have shown black-opaque
@@ -193,6 +209,7 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
 
     setExaggeration(exaggeration: number): void {
         this.m_exaggeration = exaggeration;
+        this.m_uExaggeration.value = exaggeration;
         this.needsUpdate = true;
     }
 
@@ -200,6 +217,7 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
     /** Mercator z scale factor sec(lat) for the tile's latitude. */
     setZSecLat(secLat: number): void {
         this.m_zSecLat = secLat > 0.2 && Number.isFinite(secLat) ? secLat : 1;
+        this.m_uMBZSecLat.value = this.m_zSecLat;
         this.needsUpdate = true;
     }
 

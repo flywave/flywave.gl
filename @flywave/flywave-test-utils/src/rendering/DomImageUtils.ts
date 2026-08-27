@@ -63,7 +63,7 @@ export async function canvasToImageData(canvas: HTMLCanvasElement): Promise<Imag
                 + ' buf=' + glProbe.drawingBufferWidth + 'x' + glProbe.drawingBufferHeight;
         }
         // eslint-disable-next-line no-console
-        console.log('[MBCapCtx] size=' + canvas.width + 'x' + canvas.height
+        console.log('[MBCapCtx:' + ((globalThis as any).__mbFixture ?? '?') + '] size=' + canvas.width + 'x' + canvas.height
             + ' ' + probe);
     } catch {}
     const context = canvas.getContext("2d");
