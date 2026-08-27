@@ -5859,3 +5859,15 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **python 全流程仿真标定（本次方法资产）**：以 standalone hillshade-buffer-0 的 expected.png（RGBA 透明底、alpha mean 204）按 harness 语义（refHasAlpha → 白底合成后 pixelmatch）重建比较目标：mean 138.8 / p10 52.7 / p90 216.6 / white% 0.51。扫参结论：当前实现（div 217、无平滑）mean 137.6 已对齐，主要残差=高光尾部（p90 236、white% 4.0）→ 正是平滑项的作用面。expected 的 PNG 直存语义（rgb=shade、alpha=sin(ss)，无 background 层时透明）确认 harness 白底合成路径无误。
 
 **§508 验证批（渲染实测）**：terrain/raster **46367**（基线 46362，Δ5 噪声级 ✓）、raster-fade **46351**（基线 46346 ✓）、raster-emissive-strength 61454（历史带 61447 ✓）——**drape 主线零回归**。hillshade-buffer-0/1/2 50839→**50370**（平滑项小幅改善）；raster--hillshade-buffer-0/1/2 = 51972/51976/51975（结构化渲染域首测入库）；hillshade--raster 系 49671–65295 同域。standalone 视觉：mean 已对齐但黑影/白斑仍强于 expected——与仿真一致（高光尾部 p90 236 vs 217），下一步=/4 与 divisor zoom 约定联动标定（见上"vendor 重读新发现"）。测试基建注意：karma `--single-run` 在本机可自退出（本轮实测），长跑仍建议 timeout+kill 兜底；run-mbstyle-render-tests 的 filter 为子串匹配（`filter=hillshade` 会带入 combinations 全族 45 例 ≈ 拖满超时，定向跑用 `terrain/hillshade` 这类带目录前缀的过滤器）。
+
+**§509. 会话续记——symbol-spacing/symbol-placement line 族结构对齐（getAnchors 重复落地上屏）+ 混合坐标帧破案**：
+
+**结构性缺口**：mgl 对 `symbol-placement:line/line-center` 按 `symbol-spacing` 沿线**重复放置离散符号**（symbol_layout.ts getAnchors→addSymbolAtAnchor，tilePixelRatioForSymbolSpacing=EXTENT/(512·overscale) 换算、anchorIsTooClose 半距去重、icon-only 无 angle-window）。我方 text 只发一条通长 TextPathGeometry、icon 只放中点锚 → symbol-spacing 夹具（icon-image+spacing 20/50px）三角形链整域缺失（13–21 万像素域）。
+
+**落地（MBTileDataEmitter processPointFeature）**：① icon 分支——getLineAnchors 世界米制重采样，每锚点递归发射一个点要素（`_lineIconAngle`=段角度并入 `_iconRotate`，`_lineWorldPos` 直通绕过 extent→world 投影，每锚点唯一 `$id` 防 §429 引擎标签去重坍缩）；② text 分支——每锚点裁剪 label 跨度子路径发独立短 TextPathGeometry（曲率局部保留）；③ LineAnchor.ts 增 `angleWindowSize` 覆盖项（mgl getAngleWindowSize 对 icon-only 返回 0——无曲线剔除但保留 glyphSize 附加偏移）。
+
+**混合坐标帧破案（本轮核心排障）**：`_linePath`（decoder transformPoints 产物）x=extent+buffer、y=world-offset 混合帧——直接施加 0..extents bounds 或 extent 单位 spacing 会把全部锚点拒绝/错位（图标整域消失的第二轮根因，[MBSpc-enter] 探针实证 p0=4160,23076626）。修复=两分支统一先 projectWorld 到米制、px→meters 用 worldPerLinUnit()·(extents/512)（native 512px 方案）换算。**方法论教训：karma 直跑无 local:// 瓦片服务器会静默空渲染（1s 假失败），探针必须走 runner；karma console grep 模式 `[MBSpc]` 被 `.\]` 写法误伤**。
+
+**实测（26 夹具对照基线）**：IMPR——symbol-spacing/line-close 201089→**184862**、line-far 165565→**144255**、symbol-placement/point 1499→**1165**、icon-rotation-alignment line 系 26→24×2；WORSE——symbol-placement/line 82304→106269（旧混合帧 spacing 凑巧密度更高，世界帧锚点相位/labelLen 未校准，遗留）、line-overscaled +4-5k（overscale 因子未按 mgl overscaleFactor 折算，记档）；净 −9k。4 例 PASS 保持。新增 text-pitch-alignment/globe-symbols 首测基线入库（无基线对照）。
+
+**遗留（按 ROI）**：① line-overscaled 的 overscaleFactor（mgl `bucket.overscaling`=2^(ideal−canonical)，我们恒 1）→ spacing/label 换算偏大；② text 线放置的锚点相位（fixedExtraOffset=glyphSize·2·boxScale 精确值）与 labelLen 用 shapedText.right−left 的 px 基准；③ icon 显示宽 12px 名义值→查 sprite 实际 displaySize；④ symbol-spacing/point 系（point-close/far）未动（point 放置在 point 特性上的 spacing 语义另查）。

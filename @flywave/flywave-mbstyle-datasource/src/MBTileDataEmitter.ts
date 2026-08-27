@@ -21,6 +21,37 @@ import { ILineGeometry, IPolygonGeometry } from '@flywave/flywave-vectortile-dat
 import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
 import { createLineGeometry, LineGroup } from '@flywave/flywave-lines';
 import { resolveTextField, applyTextTransform, shapeText, shapeRTLText } from './TextShaping';
+import { getLineAnchors, getLineCenterAnchor, LineAnchor as LineAnchorT } from './LineAnchor';
+
+/** Cumulative length of a polyline. */
+function polyLength(pts: THREE.Vector2[]): number {
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) len += pts[i].distanceTo(pts[i - 1]);
+    return len;
+}
+
+/** Sub-polyline over arc distances [dmin, dmax] (with interpolation at ends). */
+function cropPolyline(pts: THREE.Vector2[], dmin: number, dmax: number): THREE.Vector2[] {
+    if (dmax <= dmin || pts.length < 2) return [];
+    const out: THREE.Vector2[] = [];
+    let dist = 0;
+    for (let i = 1; i < pts.length && dist <= dmax; i++) {
+        const a = pts[i - 1];
+        const b = pts[i];
+        const seg = a.distanceTo(b);
+        const segEnd = dist + seg;
+        if (segEnd >= dmin && dist <= dmax) {
+            const t0 = Math.max(0, (dmin - dist) / seg);
+            const t1 = Math.min(1, (dmax - dist) / seg);
+            const p0 = new THREE.Vector2(a.x + (b.x - a.x) * t0, a.y + (b.y - a.y) * t0);
+            const p1 = new THREE.Vector2(a.x + (b.x - a.x) * t1, a.y + (b.y - a.y) * t1);
+            if (!out.length) out.push(p0);
+            out.push(p1);
+        }
+        dist = segEnd;
+    }
+    return out;
+}
 import { EarthConstants } from '@flywave/flywave-geoutils';
 
 // Use earcut for proper polygon triangulation (concave + holes)
@@ -453,6 +484,30 @@ export class MBTileDataEmitter {
 
     private m_textGeometries: TextGeometry[] = [];
     private m_textPathGeometries: TextPathGeometry[] = [];
+    /** §509 bucket-wide anchorIsTooClose state (per layer id, per tile). */
+    private m_lineRepeatSeen = new Map<string, Array<{ x: number; y: number }>>();
+
+    private lineRepeatSeen(layerId: string): Array<{ x: number; y: number }> {
+        let s = this.m_lineRepeatSeen.get(layerId);
+        if (!s) {
+            s = [];
+            this.m_lineRepeatSeen.set(layerId, s);
+        }
+        return s;
+    }
+
+    /** §509 world meters per `_linePath` unit — the path frame mixes extent
+     * x with world-offset y (transformPoints), so anchor math runs on the
+     * PROJECTED world polyline and converts px lengths through this scale. */
+    private m_worldPerLinUnit = 0;
+    private worldPerLinUnit(): number {
+        if (!this.m_worldPerLinUnit) {
+            const a = this.projectWorld(new THREE.Vector2(0, 0));
+            const b = this.projectWorld(new THREE.Vector2(1, 0));
+            this.m_worldPerLinUnit = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        }
+        return this.m_worldPerLinUnit;
+    }
     private m_poiGeometries: PoiGeometry[] = [];
     private m_stringCatalog: string[] = [];
     private m_stringIndex: Map<string, number> = new Map();
@@ -997,7 +1052,14 @@ export class MBTileDataEmitter {
                         ? p['icon-occlusion-opacity'] : 1;
                     // Mapbox `icon-rotate` (degrees, clockwise). The PoiRenderer
                     // rotates the icon quad corners around the symbol point.
-                    props._iconRotate = l['icon-rotate'] ?? 0;
+                    // §509: line-placed icons add the segment angle — mgl
+                    // icon-rotation-alignment 'map' (line-placement default)
+                    // rotates the sprite to the local line direction; the
+                    // extent frame is y-north so the screen-clockwise angle
+                    // negates the atan2 angle.
+                    const lineAngleDeg = typeof properties._lineIconAngle === 'number'
+                        ? -properties._lineIconAngle * 180 / Math.PI : 0;
+                    props._iconRotate = (l['icon-rotate'] ?? 0) + lineAngleDeg;
                     if (typeof l['symbol-sort-key'] === 'number') props.priority = l['symbol-sort-key'];
                     // Native PoiBuilder reads `iconMayOverlap`/`iconReserveSpace`
                     // (NOT `mayOverlap`/`reserveSpace`); map `icon-allow-overlap` /
@@ -3305,6 +3367,84 @@ export class MBTileDataEmitter {
         matchedLayers: EvaluatedLayer[],
     ): void {
         for (const layer of matchedLayers) {
+            // §509 symbol-placement line/line-center for ICONS — mgl repeats
+            // the icon every `symbol-spacing` along the line (getAnchors →
+            // addSymbol per anchor, icon-rotation-alignment map default).
+            // Emit one point feature per anchor with the segment angle folded
+            // into `_lineIconAngle` (consumed by paintToTechniqueProps as an
+            // icon-rotate offset). Text modes keep the TextPathGeometry path.
+            {
+                const plc = layer.type === 'symbol'
+                    ? (layer.layout['symbol-placement'] ?? 'point') : 'point';
+                const linePath = properties?._linePath as number[][] | undefined;
+                if (plc !== 'point' && layer.type === 'symbol' && layer.layout['icon-image']
+                    && Array.isArray(linePath) && linePath.length >= 2
+                    && !properties._linePlaced) {
+                    if (!(globalThis as any).__mbSpcEntered) {
+                        (globalThis as any).__mbSpcEntered = true;
+                        // eslint-disable-next-line no-console
+                        console.log('[MBSpc-enter] extents=' + this.m_extents
+                            + ' pts=' + linePath.length
+                            + ' p0=' + linePath[0] + ' pN=' + linePath[linePath.length - 1]);
+                    }
+                    const iconSize = Number(layer.layout['icon-size'] ?? 1);
+                    // mgl shapedIcon display width ≈ sprite px × icon-size;
+                    // the standard sprite corpus is 12px (maki/-12 names).
+                    const labelLenPx = 12 * iconSize;
+                    // Anchor math runs on the PROJECTED world polyline (the
+                    // _linePath frame mixes extent x with world y — see
+                    // worldPerLinUnit) with px lengths converted to meters at
+                    // the tile's native 512px scheme.
+                    const worldPts = linePath.map((p) => {
+                        const w = this.projectWorld(new THREE.Vector3(p[0], p[1], 0));
+                        return new THREE.Vector2(w.x, w.y);
+                    });
+                    const metersPerPx = this.worldPerLinUnit() * ((this.m_extents || 4096) / 512);
+                    const maxAngleRad = Number(layer.layout['text-max-angle'] ?? 45) * Math.PI / 180;
+                    let anchors: LineAnchorT[];
+                    if (plc === 'line-center') {
+                        const c = getLineCenterAnchor(worldPts, {
+                            maxAngle: maxAngleRad,
+                            labelLength: labelLenPx * metersPerPx,
+                            glyphSize: labelLenPx * metersPerPx,
+                            // mgl getAngleWindowSize: 0 when there is no
+                            // shaped TEXT (icon-only) — no curve rejection,
+                            // while the glyphSize-based extra offset stays.
+                            angleWindowSize: 0,
+                        });
+                        anchors = c ? [c] : [];
+                    } else {
+                        const spacingPx = Number(layer.layout['symbol-spacing'] ?? 250);
+                        anchors = getLineAnchors(worldPts, spacingPx * metersPerPx, maxAngleRad, {
+                            labelLength: labelLenPx * metersPerPx,
+                            glyphSize: labelLenPx * metersPerPx,
+                            angleWindowSize: 0,
+                        });
+                    }
+                    for (let ai = 0; ai < anchors.length; ai++) {
+                        const a = anchors[ai];
+                        // Unique per-anchor identity: the engine's cross-layer
+                        // label de-duplication keys on $id (§429) and would
+                        // collapse every repetition of one feature into a
+                        // single placed symbol.
+                        const fid = featureId === undefined || featureId === null
+                            ? `line#${ai}` : `${featureId}#${ai}`;
+                        // Recursion takes the anchor as an EXTENT-frame point
+                        // — invert the projection the same way processPoint
+                        // features normally arrive (the point pipeline calls
+                        // projectWorld on its input). NOTE: the anchor is in
+                        // world meters; reuse the mixed-frame input by
+                        // passing the world position through a raw property
+                        // override instead (see `_lineWorldPos`).
+                        this.processPointFeature(layerName, extents,
+                            [new THREE.Vector3(a.x, a.y, 0)],
+                            { ...properties, _linePlaced: true, _lineIconAngle: a.angle,
+                              $id: fid, _lineWorldPos: [a.x, a.y] },
+                            fid, [layer]);
+                    }
+                    continue;
+                }
+            }
             // symbol-elevation: symbol-z-offset / symbol-elevation-reference
             // lift the POI/text geometry (consumed by `project()`).
             if (layer.type === 'symbol') {
@@ -3363,43 +3503,80 @@ export class MBTileDataEmitter {
                     continue;
                 }
 
-                // symbol-placement: line / line-center — place text along the
-                // feature's line path via the native TextPathGeometry pipeline.
+                // symbol-placement: line / line-center — labels REPEAT every
+                // `symbol-spacing` along the line (§509: faithful port of mgl
+                // symbol_layout.ts getAnchors → addSymbolAtAnchor), each
+                // repetition emitted as its own short TextPathGeometry over
+                // just the label's span (curvature preserved locally).
                 const placement = layer.layout['symbol-placement'] ?? 'point';
                 if (tech.name === 'text' && (placement === 'line' || placement === 'line-center')) {
                     const linePath = properties?._linePath;
                     if (Array.isArray(linePath) && linePath.length >= 2) {
-                        const path: number[] = [];
-                        let lenSqr = 0;
-                        for (let i = 0; i < linePath.length; i++) {
-                            const pt = linePath[i];
-                            const w = this.projectWorld(new THREE.Vector3(pt[0], pt[1], 0));
-                            path.push(w.x, w.y, w.z);
-                            if (i > 0) {
-                                const dx = w.x - path[(i - 1) * 3];
-                                const dy = w.y - path[(i - 1) * 3 + 1];
-                                const dz = w.z - path[(i - 1) * 3 + 2];
-                                lenSqr += dx * dx + dy * dy + dz * dz;
+                        const fontSize = Number(layer.layout['text-size'] ?? 16);
+                        // Anchor math on the PROJECTED world polyline (the
+                        // _linePath frame mixes extent x with world y — see
+                        // worldPerLinUnit); px → meters at the native
+                        // 512px-per-tile scheme.
+                        const worldPts = linePath.map((p: number[]) => {
+                            const w = this.projectWorld(new THREE.Vector3(p[0], p[1], 0));
+                            return new THREE.Vector2(w.x, w.y);
+                        });
+                        const metersPerPx = this.worldPerLinUnit() * ((this.m_extents || 4096) / 512);
+                        const labelWpx = Math.max(Number(tech._textWidth ?? 0), 0);
+                        const labelLenM = labelWpx * metersPerPx;
+                        const maxAngleRad = Number(layer.layout['text-max-angle'] ?? 45) * Math.PI / 180;
+                        let anchors: LineAnchorT[];
+                        if (labelLenM <= 4) {
+                            // No shaping metrics — degrade to the legacy
+                            // whole-line path (single full-path geometry).
+                            anchors = [{ x: NaN, y: NaN, t: 0.5, angle: 0, segmentIndex: 0 }];
+                        } else if (placement === 'line-center') {
+                            const c = getLineCenterAnchor(worldPts, {
+                                maxAngle: maxAngleRad,
+                                labelLength: labelLenM,
+                                glyphSize: fontSize * metersPerPx,
+                            });
+                            anchors = c ? [c] : [];
+                        } else {
+                            const spacingPx = Number(layer.layout['symbol-spacing'] ?? 250);
+                            anchors = getLineAnchors(worldPts, spacingPx * metersPerPx, maxAngleRad, {
+                                labelLength: labelLenM,
+                                glyphSize: fontSize * metersPerPx,
+                            });
+                            // mgl anchorIsTooClose: drop repeats closer than
+                            // spacing/2 to an already-placed label with the
+                            // same text (bucket-wide; keyed per layer here).
+                            const repeatDist = spacingPx * metersPerPx / 2;
+                            const seen = this.lineRepeatSeen(tech._layerId ?? String(techniqueIdx));
+                            anchors = anchors.filter((a) => !seen.some((s) =>
+                                Math.abs(s.x - a.x) < repeatDist && Math.abs(s.y - a.y) < repeatDist));
+                            for (const a of anchors) {
+                                seen.push({ x: a.x, y: a.y });
+                                if (seen.length > 512) seen.shift();
                             }
                         }
-                        // `text-max-angle` (default 45°): mgl's getLineAnchors
-                        // never places labels across a bend sharper than the
-                        // limit — split the path into straight-enough sections
-                        // so each gets its own (native) placement.
-                        const maxAngle = Number(layer.layout['text-max-angle'] ?? 45);
-                        const segments = this.splitPathByAngle(path, maxAngle);
-                        for (const seg of segments) {
-                            let segLen = 0;
-                            for (let i = 3; i < seg.length; i += 3) {
-                                segLen += Math.hypot(
-                                    seg[i] - seg[i - 3],
-                                    seg[i + 1] - seg[i - 2],
-                                    seg[i + 2] - seg[i - 1],
-                                );
+                        for (const a of anchors) {
+                            // Crop the world path to the label span and emit
+                            // one short curved-path geometry per repetition.
+                            const totalLen = polyLength(worldPts);
+                            let d0 = (a.x !== a.x) ? 0 : Math.max(0, a.t * totalLen - labelLenM / 2);
+                            let d1 = (a.x !== a.x) ? totalLen : Math.min(totalLen, a.t * totalLen + labelLenM / 2);
+                            const sub = cropPolyline(worldPts, d0, d1);
+                            if (sub.length < 2) continue;
+                            const path: number[] = [];
+                            let lenSqr = 0;
+                            for (const pt of sub) {
+                                path.push(pt.x, pt.y, 0);
+                                if (path.length > 3) {
+                                    const n = path.length;
+                                    const dx = pt.x - path[n - 6];
+                                    const dy = pt.y - path[n - 5];
+                                    lenSqr += dx * dx + dy * dy;
+                                }
                             }
                             this.m_textPathGeometries.push({
-                                path: seg,
-                                pathLengthSqr: segLen * segLen,
+                                path,
+                                pathLengthSqr: lenSqr * lenSqr,
                                 text: tech.text as string,
                                 technique: techniqueIdx,
                                 objInfos: { ...properties, $id: featureId ?? properties.$id ?? null },
@@ -3449,25 +3626,39 @@ export class MBTileDataEmitter {
                 for (const pt of points) {
                     const w = this.project(pt);
                     const ww = this.projectWorld(pt);
+                    // §509 line-anchor repetition: the anchor arrives in
+                    // absolute world meters via `_lineWorldPos` (getLineAnchors
+                    // runs on the projected polyline) — bypass the extent→world
+                    // projection for it.
+                    const lw = properties._lineWorldPos as number[] | undefined;
+                    let useWW = ww;
+                    let useW = w;
+                    if (lw) {
+                        useWW = new THREE.Vector3(lw[0], lw[1], ww.z);
+                        useW = new THREE.Vector3(
+                            useWW.x - this.m_decodeInfo.center.x,
+                            useWW.y - this.m_decodeInfo.center.y,
+                            useWW.z - this.m_decodeInfo.center.z);
+                    }
                     // §302: mgl lifts circle centers onto the terrain surface
                     // (single elevation sample at the center,
                     // getElevationForLngLatZoom semantics) when terrain is on.
                     if (this.m_terrainSampler && tech.name === 'circles') {
                         w.z += this.m_terrainSampler(ww.x, ww.y);
                     }
-                    geo.positions.push(w.x, w.y, w.z);
+                    geo.positions.push(useW.x, useW.y, useW.z);
                     if (twx !== 0 || twy !== 0) {
-                        ww.x += twx;
-                        ww.y += twy;
+                        useWW.x += twx;
+                        useWW.y += twy;
                     }
                     if (tech.name === 'text' && tech.text) {
-                        this.emitTextGeometry(techniqueIdx, ww, tech.text as string,
-                            { ...properties, $id: `${layer.id}:${this.symbolFeatureId(featureId, properties, ww)}` });
+                        this.emitTextGeometry(techniqueIdx, useWW, tech.text as string,
+                            { ...properties, $id: `${layer.id}:${this.symbolFeatureId(featureId, properties, useWW)}` });
                     } else if (tech.name === 'labeled-icon') {
                         const iconName = tech.imageTexture as string;
                         const caption = (layer.layout['text-field'] && mode === 'icon')
                             ? '' : (tech.text as string ?? '');
-                        this.emitPoiGeometry(techniqueIdx, ww,
+                        this.emitPoiGeometry(techniqueIdx, useWW,
                             iconName ?? '',
                             caption || undefined,
                             // Layer-scoped feature id: the engine's label cache
@@ -3475,7 +3666,7 @@ export class MBTileDataEmitter {
                             // rendering the SAME feature (mgl draws both,
                             // e.g. regressions/mapbox-gl-native#11451 blue
                             // under red) must not collapse into one label.
-                            { ...properties, $id: `${layer.id}:${this.symbolFeatureId(featureId, properties, ww)}` });
+                            { ...properties, $id: `${layer.id}:${this.symbolFeatureId(featureId, properties, useWW)}` });
                     }
                 }
 

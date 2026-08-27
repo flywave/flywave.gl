@@ -48,6 +48,10 @@ export interface GetLineAnchorsOptions {
     boxScale?: number;
     /** Storage-level overscale of the rendered tile (mgl overscaling). */
     overscaling?: number;
+    /** §509: override the computed angular window (mgl getAngleWindowSize
+     * returns 0 when there is no shaped TEXT — icon-only placement skips
+     * curve rejection while keeping the glyphSize-based extra offset). */
+    angleWindowSize?: number;
     /** Bounds (in point units) anchors must fall inside (mgl tile-extent test). */
     bounds?: { minX: number; minY: number; maxX: number; maxY: number };
 }
@@ -149,7 +153,9 @@ export function getLineAnchors(
     const overscaling = options.overscaling ?? 1;
     const bounds = options.bounds;
     const shapedLabelLength = labelLengthOpt;
-    const angleWindowSize = labelLengthOpt > 0 ? 3 / 5 * glyphSize * boxScale : 0;
+    const angleWindowSize = options.angleWindowSize !== undefined
+        ? options.angleWindowSize
+        : (labelLengthOpt > 0 ? 3 / 5 * glyphSize * boxScale : 0);
     const labelLength = shapedLabelLength * boxScale;
 
     // Is the line continued from outside the tile boundary? (mgl: geometry
