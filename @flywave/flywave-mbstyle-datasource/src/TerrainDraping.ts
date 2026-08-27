@@ -255,12 +255,17 @@ export class TerrainDraping {
                 // CONTENT quads alone through the bake camera — per-mesh NDC
                 // of the world bbox center + single-mesh coverage in a scratch
                 // RT. Splits far-clip / window-mapping / layer-attribution.
-                if ((globalThis as any).__mbLiteDbg && frN % 135 === 90
-                    && this.m_snapshots.size === 0) {
+                // §508: fire early (frN≥45, first 2 firings only) — the %135
+                // phase never fired on short runs (SwiftShader frame lottery).
+                if ((globalThis as any).__mbLiteDbg && frN % 45 === 0
+                    && this.m_snapshots.size === 0
+                    && (((globalThis as any).__mbIsoCount = ((globalThis as any).__mbIsoCount ?? 0) + 1) <= 2)) {
                     try {
                         const tiles = this.m_terrain.allDemTiles;
                         const isoMeshes = this.m_terrain.meshes;
                         if (tiles.length && isoMeshes.length) {
+                        const camAbsX = (this.m_mapView as any).camera?.position?.x ?? 0;
+                        const camAbsY = (this.m_mapView as any).camera?.position?.y ?? 0;
                         const camB = buildTileCamera(tiles[0], (this.m_mapView as any).camera?.position);
                         if (camB) {
                             camB.layers.enable(TerrainDraping.RASTER_LAYER);
@@ -309,8 +314,21 @@ export class TerrainDraping {
                                     const o8 = q * 4;
                                     if (buf[o8 + 3] > 32 && !(buf[o8] === 255 && buf[o8 + 2] === 255)) vis++;
                                 }
+                                // §508: absolute vertex bbox — separates the
+                                // anchor frame (o.position + camAbs) from the
+                                // actual vertex data (bbox · matrixWorld).
+                                let absBox = 'nobbox';
+                                if (cm.geometry.boundingBox) {
+                                    const bb2 = cm.geometry.boundingBox;
+                                    const mn = new THREE.Vector3(bb2.min.x, bb2.min.y, 0)
+                                        .applyMatrix4(cm.matrixWorld);
+                                    const mx = new THREE.Vector3(bb2.max.x, bb2.max.y, 0)
+                                        .applyMatrix4(cm.matrixWorld);
+                                    absBox = 'abs[' + (mn.x + camAbsX).toFixed(0) + '..' + (mx.x + camAbsX).toFixed(0)
+                                        + ',' + (mn.y + camAbsY).toFixed(0) + '..' + (mx.y + camAbsY).toFixed(0) + ']';
+                                }
                                 parts.push('L' + cm.layers.mask + 'pos' + world.x.toFixed(0) + ',' + world.y.toFixed(0)
-                                    + ' ndc=' + ndc + ' cov=' + vis + '/1024');
+                                    + ' ndc=' + ndc + ' cov=' + vis + '/1024 ' + absBox);
                             }
                             // eslint-disable-next-line no-console
                             console.log('[MBIsoBake] tile0=' + tiles[0].originX.toFixed(0) + ','

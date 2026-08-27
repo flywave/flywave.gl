@@ -5843,3 +5843,19 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **terrain/raster--hillshade-buffer-0（=前记档"raster--hillshade-buffer 系列"本体：terrain.source=hillshade + 卫星 raster + hillshade 层，z10.9/pitch45）**：本轮修复后仍 `B0/T512/C0` 恒定（45 bakes，fills=3，meshCount=2，**零 shader 编译错误**）——**零栅格化与编译错误脱钩，确证为独立环节**（记档的"z11 quad 在 z10 窗零栅格化"假设成立但机制未定）。已落地 **MBIsoBake 隔离探针**（liteldbg 门控，TerrainDraping.onWillRender）：content quad 单独用 buildTileCamera(tiles[0]) 重渲 32² scratch RT（品红清屏读覆盖率）+ bbox 中心 NDC 投影 + 层掩码/窗口/camPos 全打印——一步分离远裁剪/窗口换算/层归属。**探针相位修正（frN%135===90）后的运行未完成（会话中断），下会话单点=跑 MBIsoBake 读数定环节**。
 
 **回归面声明**：本轮非 debug 改动仅 hillshade 路径（emitter needsUv bbox 归一化对 raster 行为不变——原本已归一）+ create-once（上会话已验零回归）；TerrainDraping/patcher 探针全部 liteldbg 门控。**terrain/raster 46362 / raster-fade 46346 回归复跑未执行（会话收尾），下会话先补跑**。
+
+**§508. 会话续记——MBIsoBake 读数定案：布放正确，零栅格化收窄至 bake pass 材质/投影分歧；hillshade 色调两项 vendor 对齐（deriv 平滑 + latrange canonical z）**：
+
+**MBIsoBake 探针落地读数（上会话中断的"下会话单点"完成）**：探针相位从 frN%135===90 放宽为 %45===0 且限前 2 次（%135 相位在短跑次序下永不触发）。实测三组关键数据：① `win=[-31799..7337,-23069..16067]`+`abs[7416226..7435794,24322874..24342442]`（新增顶点 bbox 绝对坐标输出）——**卫星 quad 恰为 tile0 的东北 z11 子瓦片 + 北邻块，内容布放 100% 正确**（此前"错位 1 个 z11 瓦片"假设证伪；bs-center ndc 1.13 偏移系多 quad 共享 geometry 的质心探针伪影）。② RT dump（rtdump，修正了行打包解析：每 chunk=行号+2×64px）：内容出现在 GL 上半部右缘（与 NE 子瓦片位置吻合）但仅 ~78px/低 alpha。③ 全景对照：`uniform=01`（tile0 每 bake 有少量内容但 statN≤256 过不了密度门 → snaps=0/frz=false 无限重试）。
+
+**零栅格化终局定性（未修，证据链记档）**：几何正确（CPU bbox ✓）+ 隔离渲染仅 78px 边缘覆盖 + bake pass 零覆盖，三者矛盾指向 **材质/顶点着色器在非主相机 pass 下的分歧**——嫌疑=engine 材质的 per-frame RTE/投影 uniform（为主相机设置）在 bake 正交相机下产生水平位移/剔除。terrain/raster（quad 恰满窗）对位移不敏感故能收敛；hillshade-buffer（半瓦 quad 贴窗缘）把分歧暴露为"只剩窗角一线"。下会话单点：karma --debug 断 bake `renderer.render` 的 projectObject 分支/材质投影矩阵来源（§452 同族手法）。
+
+**hillshade 色调对齐（对照 vendor `draw_hillshade.ts`/`hillshade_program.js`/`dem_data.ts` 重读后的两项修复）**：
+1. **deriv LINEAR 平滑**：mgl draw pass 以 LINEAR 采样 prepare FBO（DEM-texel 分辨率的量化 deriv 图）→ 相邻 texel deriv 双线性混合=平滑浮雕底（亦是摩尔纹缺失的根源）。实现=`mbHsDerivAt(uv)` 提取 prepare 公式为函数，fragment 里 4 邻 + 中心 ×4/8 cross 核混合。
+2. **latrange 用 canonical z**：vendor `getTileLatRange` 用 `tileID.canonical.z`；我方误用 512 方案的 hsZoom=z−1。已改回 tileZoom/tileRow 原值。
+
+**vendor 重读新发现（未落地，记档）**：① mgl `getElevation = texture.r / 4.0`（R32F float 纹理存米值后再除 4=坡度再压缩 4×）——python 仿真显示单独引入 /4 会把 mean 推离目标（137→160+），需与 divisor zoom 约定联动再标定；② mgl DEMData `stride=height、dim=height−2`（最外圈一律视为 replicate border）且 float dem 支持 LINEAR 采样，v_pos 网格与我方 1/256 直采存在半像素差。
+
+**python 全流程仿真标定（本次方法资产）**：以 standalone hillshade-buffer-0 的 expected.png（RGBA 透明底、alpha mean 204）按 harness 语义（refHasAlpha → 白底合成后 pixelmatch）重建比较目标：mean 138.8 / p10 52.7 / p90 216.6 / white% 0.51。扫参结论：当前实现（div 217、无平滑）mean 137.6 已对齐，主要残差=高光尾部（p90 236、white% 4.0）→ 正是平滑项的作用面。expected 的 PNG 直存语义（rgb=shade、alpha=sin(ss)，无 background 层时透明）确认 harness 白底合成路径无误。
+
+**§508 验证批（渲染实测）**：terrain/raster **46367**（基线 46362，Δ5 噪声级 ✓）、raster-fade **46351**（基线 46346 ✓）、raster-emissive-strength 61454（历史带 61447 ✓）——**drape 主线零回归**。hillshade-buffer-0/1/2 50839→**50370**（平滑项小幅改善）；raster--hillshade-buffer-0/1/2 = 51972/51976/51975（结构化渲染域首测入库）；hillshade--raster 系 49671–65295 同域。standalone 视觉：mean 已对齐但黑影/白斑仍强于 expected——与仿真一致（高光尾部 p90 236 vs 217），下一步=/4 与 divisor zoom 约定联动标定（见上"vendor 重读新发现"）。测试基建注意：karma `--single-run` 在本机可自退出（本轮实测），长跑仍建议 timeout+kill 兜底；run-mbstyle-render-tests 的 filter 为子串匹配（`filter=hillshade` 会带入 combinations 全族 45 例 ≈ 拖满超时，定向跑用 `terrain/hillshade` 这类带目录前缀的过滤器）。

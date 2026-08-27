@@ -3580,16 +3580,19 @@ export class MBMaterialPatchManager {
             const tileZoom = technique._tileZoom ?? 11;
             const tileRow = technique._tileRow ?? 0;
             // mgl's tile pipeline is 512-px-scheme end to end: the hillshade
-            // prepare divisor (and the latrange tile) use the DEM tile's
-            // OVERSCALED z = display z − 1 in our 256-px-scheme terms. The
-            // texel ground spacing is unchanged (76 m at this zoom) — only
-            // the divisor scale differs (2^(7.76)=217 vs 133), which is the
-            // difference between mgl's mid-tone relief and a blown-out render.
+            // prepare divisor uses the DEM tile's OVERSCALED z = display z − 1
+            // in our 256-px-scheme terms. The texel ground spacing is
+            // unchanged (76 m at this zoom) — only the divisor scale differs
+            // (2^(7.76)=217 vs 133), which is the difference between mgl's
+            // mid-tone relief and a blown-out render.
             const hsZoom = Math.max(0, tileZoom - 1);
-            const hsRow = Math.floor(tileRow / 2);
+            // §508: the LATRANGE tile uses CANONICAL z (vendor:
+            // hillshade_program.js getTileLatRange → tileID.canonical.z), not
+            // the overscaled/512-scheme zoom the divisor uses.
+            const hsRow = tileRow;
             const mercLat = (yFrac: number) =>
                 Math.atan(Math.sinh(Math.PI * (1 - 2 * yFrac))) * 180 / Math.PI;
-            const tilesAtZoom = Math.pow(2, hsZoom);
+            const tilesAtZoom = Math.pow(2, tileZoom);
             const latN = mercLat(hsRow / tilesAtZoom);
             const latS = mercLat((hsRow + 1) / tilesAtZoom);
             // Default illumination: mgl hillshade-illumination-direction 315,
@@ -3632,6 +3635,26 @@ export class MBMaterialPatchManager {
                      vec2 mbDemUv(vec2 tileUv){
                          return uMBDemParams.y + tileUv * uMBDemParams.x;
                      }
+                     // mgl hillshade_prepare at an arbitrary texel centre:
+                     // 8-neighbour elevation taps → deriv → rgba8 round-trip.
+                     vec2 mbHsDerivAt(vec2 uv){
+                         vec2 e=vec2(uMBDemParams.z);
+                         float a=mbDemElev(uv+vec2(-e.x,-e.y));
+                         float b=mbDemElev(uv+vec2(0.0,-e.y));
+                         float c=mbDemElev(uv+vec2(e.x,-e.y));
+                         float d=mbDemElev(uv+vec2(-e.x,0.0));
+                         float f=mbDemElev(uv+vec2(e.x,0.0));
+                         float g=mbDemElev(uv+vec2(-e.x,e.y));
+                         float h=mbDemElev(uv+vec2(0.0,e.y));
+                         float i=mbDemElev(uv+vec2(e.x,e.y));
+                         float exF=uMBHsZoom<2.0?0.4:(uMBHsZoom<4.5?0.35:0.3);
+                         float ex=uMBHsZoom<15.0?(uMBHsZoom-15.0)*exF:0.0;
+                         float div=pow(2.0,ex+(19.2562-uMBHsZoom));
+                         vec2 dv=vec2((c+f+f+i)-(a+d+d+g),(g+h+h+i)-(a+b+b+c))/div;
+                         dv=clamp(dv/2.0+0.5,0.0,1.0);
+                         dv=floor(dv*255.0+0.5)/255.0;
+                         return dv*2.0-1.0;
+                     }
                      void main() {`
                 );
                 // In three r178 MeshBasicMaterial the final colour is written by
@@ -3669,6 +3692,18 @@ export class MBMaterialPatchManager {
                      mbDeriv=clamp(mbDeriv/2.0+0.5,0.0,1.0);
                      mbDeriv=floor(mbDeriv*255.0+0.5)/255.0;
                      mbDeriv=mbDeriv*2.0-1.0;
+                     // mgl's draw pass samples the prepare FBO (one deriv per
+                     // DEM texel) with LINEAR filtering — adjacent texel
+                     // derivs blend, giving the smooth relief wash (its FBO
+                     // is DEM-texel resolution while the draw quad is screen
+                     // resolution). Emulate with a cross-kernel blend of the
+                     // quantized deriv recomputed at the 4 neighbouring
+                     // texel centres (weights 4/1/1/1/1, the FBO-res case).
+                     mbDeriv=(mbDeriv*4.0
+                         +mbHsDerivAt(mbUv+vec2(-mbPx.x,0.0))
+                         +mbHsDerivAt(mbUv+vec2(mbPx.x,0.0))
+                         +mbHsDerivAt(mbUv+vec2(0.0,-mbPx.y))
+                         +mbHsDerivAt(mbUv+vec2(0.0,mbPx.y)))/8.0;
                      float mbSF=cos(radians((uMBHsLat.x-uMBHsLat.y)*(1.0-mbT.y)+uMBHsLat.y));
                      float mbSlope=atan(1.25*length(mbDeriv)/mbSF);
                      float mbAspect=mbDeriv.x!=0.0
