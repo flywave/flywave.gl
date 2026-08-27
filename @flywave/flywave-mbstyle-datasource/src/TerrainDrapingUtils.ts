@@ -44,10 +44,17 @@ export function buildTileCamera(
     // z-up scene edge-on and the bake comes out empty.
     // §280: generous z window — terrain-exaggerated content (extrusions
     // lifted onto a ×4 DEM reach z≈1000+) must stay inside the bake frustum.
+    // §499: far=12000 CLIPPED the DEM-displaced raster fills wholesale —
+    // the fill vertex shader lifts vertices by a DEM sample that can read
+    // the −10000m edge value (mis-mapped UV under the ortho bake camera),
+    // putting them ~10km below the surface and far beyond 6000+12000. With
+    // a top-down ortho camera z displacement does not move x/y, so a huge
+    // far only sacrifices depth precision (irrelevant — the drape blends
+    // by alpha, depth merely orders coincident surfaces).
     const camera = new THREE.OrthographicCamera(
         left, right, top, bottom,
         1,
-        12000,
+        1000000,
     );
     camera.position.set(centerX, centerY, 6000);
     camera.lookAt(centerX, centerY, 0);

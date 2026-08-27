@@ -325,40 +325,42 @@ export class TerrainDraping {
             }
         });
 
-        // Refresh world matrices so the fill-bounds measurement below sees
-        // the exact transform state the bake render will use (renderer.render
-        // would do this implicitly AFTER our measurement otherwise).
-        scene.updateMatrixWorld(true);
-
-        // §488 fix (route 1), §497 revision: raster fill geometry carries
-        // LARGE tile-local coordinates on top of object.position (double
-        // offset) — a strictly tile-aligned camera misses it. Measure the
-        // fills' ACTUAL matrixWorld bounds; recomputed EVERY bake because
-        // tile content moves every frame (TileObjectsRenderer repositions
-        // against the live camera) and a once-ever cache bakes stale
-        // offsets into every later window.
-        const camAbs3 = this.m_mapView.camera.position;
-        let fillBounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null;
-        {
-            const bb = new THREE.Box3();
-            scene.traverse((o: any) => {
-                if (!o.isMesh || !o.visible || !o.userData?.technique?._isRaster) return;
-                o.geometry.computeBoundingBox?.();
-                const gbb = o.geometry.boundingBox;
-                if (!gbb) return;
-                bb.union(gbb.clone().applyMatrix4(o.matrixWorld));
-            });
-            if (!bb.isEmpty()) {
-                fillBounds = {
-                    minX: bb.min.x + camAbs3.x, maxX: bb.max.x + camAbs3.x,
-                    minY: bb.min.y + camAbs3.y, maxY: bb.max.y + camAbs3.y,
-                };
-            }
-        }
+        // §499 REVERSAL of the §488 route-1 union widening: the "double
+        // offset" was a misdiagnosis — fills from NEIGHBORING tiles legitimately
+        // sit 1-2 tiles away, and unioning their bounds widened every tile's
+        // bake window to ~2×2 tiles, destroying the per-tile vMapUv↔tile-world
+        // 1:1 mapping (satellite squeezed into a corner of each drape, the
+        // white-void + misalignment signature). mgl drapes with the STRICT
+        // tile window; fills overlapping this tile land inside it naturally.
+        // scene.updateMatrixWorld(true) removed with the measurement.
 
         const prevTarget = renderer.getRenderTarget();
         const prevClearColor = renderer.getClearColor(new THREE.Color());
         const prevClearAlpha = renderer.getClearAlpha();
+
+        if ((globalThis as any).__mbOccDbg
+            && ((globalThis as any).__mbScene2Count ?? 0) < 6) {
+            (globalThis as any).__mbScene2Count = ((globalThis as any).__mbScene2Count ?? 0) + 1;
+            let rasN = 0; let visN = 0;
+            const parts: string[] = [];
+            scene.traverse((o: any) => {
+                if (!o.isMesh) return;
+                if (o.visible) visN++;
+                if (!o.userData?.technique?._isRaster) return;
+                rasN++;
+                if (parts.length < 6) {
+                    o.geometry.computeBoundingBox?.();
+                    const bb = o.geometry.boundingBox;
+                    parts.push('p=' + (o.position.x ?? 0).toFixed(0) + ',' + (o.position.y ?? 0).toFixed(0)
+                        + ' loc=' + (bb ? bb.min.x.toFixed(0) + '..' + bb.max.x.toFixed(0) + ',' + bb.min.y.toFixed(0) + '..' + bb.max.y.toFixed(0) : '?')
+                        + ' matVis=' + (Array.isArray(o.material) ? o.material.map(m => m.visible).join('/') : o.material?.visible)
+                        + ' ro=' + o.renderOrder);
+                }
+            });
+            // eslint-disable-next-line no-console
+            console.log('[MBScene2] visibles=' + visN + ' rasterMeshes=' + rasN
+                + ' hiddenList=' + this.m_rasterHidden.length + ' | ' + parts.join(' || '));
+        }
 
         try {
             for (let i = 0; i < meshes.length && i < tiles.length; i++) {
@@ -387,23 +389,6 @@ export class TerrainDraping {
                 // Build orthographic top-down camera covering this tile.
                 const camera = buildTileCamera(tile, (this.m_mapView as any).camera?.position);
                 if (!camera) continue;
-
-                // §488/§497: widen the ortho window to the fills' actual
-                // matrixWorld bounds (union with the tile window).
-                if (fillBounds) {
-                    const camAbs4 = this.m_mapView.camera.position;
-                    const relMinX = Math.min(camera.left, fillBounds.minX - camAbs4.x);
-                    const relMaxX = Math.max(camera.right, fillBounds.maxX - camAbs4.x);
-                    const relMinY = Math.min(camera.bottom, fillBounds.minY - camAbs4.y);
-                    const relMaxY = Math.max(camera.top, fillBounds.maxY - camAbs4.y);
-                    camera.left = relMinX; camera.right = relMaxX;
-                    camera.bottom = relMinY; camera.top = relMaxY;
-                    const cx2 = (relMinX + relMaxX) / 2;
-                    const cy2 = (relMinY + relMaxY) / 2;
-                    camera.position.set(cx2, cy2, 6000);
-                    camera.lookAt(cx2, cy2, 0);
-                    camera.updateProjectionMatrix();
-                }
 
                 if ((globalThis as any).__mbOccDbg && !(globalThis as any).__mbFillProj) {
                     (globalThis as any).__mbFillProj = 1;
@@ -460,7 +445,7 @@ export class TerrainDraping {
                 renderer.clear(true, true, false);
                 const __mbCalls0 = renderer.info.render.calls;
                 renderer.render(scene, camera);
-                if ((globalThis as any).__mbOccDbg && (globalThis as any).__mbBakeCount === 5) {
+                if ((globalThis as any).__mbOccDbg && ((globalThis as any).__mbBakeCount % 20) === 3) {
                     // eslint-disable-next-line no-console
                     console.log('[MBDC] bake draw-calls delta=' + (renderer.info.render.calls - __mbCalls0)
                         + ' triangles=' + renderer.info.render.triangles);
@@ -479,12 +464,20 @@ export class TerrainDraping {
                 // distinct quantized colors among non-transparent pixels.
                 const rowBuf = new Uint8Array(S * 4);
                 const seenColors = new Set<number>();
+                // Brightness stats over the same scan — the tone-calibration
+                // probe (§499): is the baked satellite DARK (bake-side issue)
+                // or pale (output-side issue) vs the ~177 expected mean?
+                let statN = 0, statSum = 0, statMin = 255, statMax = 0;
                 uniformity: for (let ry = 0; ry < 9; ry++) {
                     const py = Math.min(S - 1, Math.floor((ry + 0.5) * S / 9));
                     renderer.readRenderTargetPixels(rt, 0, py, S, 1, rowBuf);
                     for (let x = 0; x < S; x += 3) {
                         const o = x * 4;
                         if (rowBuf[o + 3] === 0) continue; // clear pixel — no content
+                        const lum = (rowBuf[o] + rowBuf[o + 1] + rowBuf[o + 2]) / 3;
+                        statN++; statSum += lum;
+                        if (lum < statMin) statMin = lum;
+                        if (lum > statMax) statMax = lum;
                         const key = ((rowBuf[o] >> 3) << 10)
                             | ((rowBuf[o + 1] >> 3) << 5)
                             | (rowBuf[o + 2] >> 3);
@@ -495,78 +488,55 @@ export class TerrainDraping {
                     }
                 }
                 const uniform = seenColors.size < 2;
-                if ((globalThis as any).__mbOccDbg && ((globalThis as any).__mbDrapLogged ?? 0) < 9) {
-                    (globalThis as any).__mbDrapLogged = ((globalThis as any).__mbDrapLogged ?? 0) + 1;
-                    let vis = 0; const kinds: Record<string, number> = {};
-                    this.m_mapView.scene.traverse((o: any) => {
-                        if (o.visible && (o.isMesh || o.isSprite || o.isPoints)) {
-                            vis++;
-                            const t = o.userData?.technique?.name ?? o.material?.type ?? '?';
-                            kinds[t] = (kinds[t] ?? 0) + 1;
+                if ((globalThis as any).__mbOccDbg && !uniform
+                    && ((globalThis as any).__mbDrapContentful ?? 0) < 6) {
+                    (globalThis as any).__mbDrapContentful =
+                        ((globalThis as any).__mbDrapContentful ?? 0) + 1;
+                    // Where do the few non-transparent pixels sit? First 8 (x,y).
+                    const spots: string[] = [];
+                    outer2: for (let ry2 = 0; ry2 < 9; ry2++) {
+                        const py2 = Math.min(S - 1, Math.floor((ry2 + 0.5) * S / 9));
+                        renderer.readRenderTargetPixels(rt, 0, py2, S, 1, rowBuf);
+                        for (let x2 = 0; x2 < S; x2 += 3) {
+                            const o2 = x2 * 4;
+                            if (rowBuf[o2 + 3] !== 0) {
+                                spots.push(x2 + ',' + py2 + ':a' + rowBuf[o2 + 3]);
+                                if (spots.length >= 8) break outer2;
+                            }
                         }
+                    }
+                    // Project the two in-window fills' bbox corners through the
+                    // BAKE camera (CPU, matrixWorld) — separates object-transform
+                    // collapse from vertex-shader collapse.
+                    const V3p = THREE.Vector3;
+                    const corners: string[] = [];
+                    let cn = 0;
+                    scene.updateMatrixWorld(true);
+                    scene.traverse((o: any) => {
+                        if (cn >= 2 || !o.isMesh || !o.visible || !o.userData?.technique?._isRaster) return;
+                        cn++;
+                        o.geometry.computeBoundingBox?.();
+                        const bb = o.geometry.boundingBox;
+                        if (!bb) return;
+                        const pts: string[] = [];
+                        for (const cx of [bb.min.x, bb.max.x]) {
+                            for (const cy of [bb.min.y, bb.max.y]) {
+                                const v = new V3p(cx, cy, 0).applyMatrix4(o.matrixWorld).project(camera);
+                                pts.push('(' + v.x.toFixed(2) + ',' + v.y.toFixed(2) + ')');
+                            }
+                        }
+                        corners.push('#' + (cn - 1) + ' q=' + pts.join(''));
                     });
-                    // Sample a coarse grid of the bake to characterize content.
-                    const S = this.m_bakeSize;
-                    const grid = new Uint8Array(4 * 25);
-                    for (let gy = 0; gy < 5; gy++) {
-                        for (let gx = 0; gx < 5; gx++) {
-                            renderer.readRenderTargetPixels(rt,
-                                Math.floor((gx + 0.5) * S / 5), Math.floor((gy + 0.5) * S / 5), 1, 1,
-                                grid, gy * 5 * 4 + gx * 4);
-                        }
-                    }
-                    const cells: string[] = [];
-                    for (let k = 0; k < 25; k++) {
-                        cells.push(grid[k * 4] + ',' + grid[k * 4 + 1] + ',' + grid[k * 4 + 2]);
-                    }
-                    let quadPos = '';
-                    let terrainPos = '';
-                    this.m_mapView.scene.traverse((o: any) => {
-                        if (o.isMesh && o.material?.isMeshBasicMaterial && o.userData?.technique === undefined && !quadPos) {
-                            quadPos = o.position.x.toFixed(0) + ',' + o.position.y.toFixed(0);
-                        }
-                    });
-                    if (meshes[0]) {
-                        const m0: any = meshes[0];
-                        terrainPos = m0.position.x.toFixed(0) + ',' + m0.position.y.toFixed(0)
-                            + ' vis=' + m0.visible + ' culled=' + m0.frustumCulled
-                            + ' parent=' + (m0.parent?.type ?? 'none')
-                            + ' inScene=' + this.m_mapView.scene.children.includes(m0.parent ?? m0)
-                            + ' renderOrder=' + m0.renderOrder
-                            + ' scale=' + m0.scale.x.toFixed(4);
-                    }
-                    const mv: any = this.m_mapView;
-                    if (meshes[0]) {
-                        const V3 = THREE.Vector3;
-                        const rte = (typeof mv.getRteCamera === 'function')
-                            ? mv.getRteCamera() : mv.m_rteCamera;
-                        const center = meshes[Math.floor(meshes.length / 2)] ?? meshes[0];
-                        const proj = (tag: string, cam: any) => {
-                            if (!cam) { console.log('[MBProj] cam=' + tag + ' MISSING'); return; }
-                            const v = new V3().copy(center.position);
-                            v.project(cam);
-                            // eslint-disable-next-line no-console
-                            console.log('[MBProj] cam=' + tag + ' centerTilePos='
-                                + center.position.x.toFixed(0) + ',' + center.position.y.toFixed(0)
-                                + ' NDC=' + v.x.toFixed(2) + ',' + v.y.toFixed(2) + ',' + v.z.toFixed(3)
-                                + ' nearFar=' + cam.near + ',' + cam.far);
-                        };
-                        proj('main', mv.camera);
-                        proj('rte', rte);
-                    }
                     // eslint-disable-next-line no-console
-                    console.log('[MBScene] scene===m_scene:' + (mv.scene === mv.m_scene)
-                        + ' root===' + (mv.scene === (mv as any).m_sceneRoot)
-                        + ' sceneChildren=' + (mv.scene?.children?.length ?? -1)
-                        + ' mSceneChildren=' + (mv.m_scene?.children?.length ?? -1));
-                    const sceneRoot = (this.m_mapView as any).m_sceneRoot;
-                    const rootPos = sceneRoot ? sceneRoot.position.x.toFixed(0) + ',' + sceneRoot.position.y.toFixed(0) : '?';
-                    const camPos2 = this.m_mapView.camera.position.x.toFixed(0) + ',' + this.m_mapView.camera.position.y.toFixed(0);
-                    // eslint-disable-next-line no-console
-                    console.log('[MBDrap] bake uniform=' + uniform + ' grid=' + cells.slice(0, 3).join(' | ')
-                        + ' | visibles=' + vis + ' kinds=' + JSON.stringify(kinds)
-                        + ' quad=' + quadPos + ' terrain=' + terrainPos + ' root=' + rootPos + ' cam=' + camPos2
-                        + ' tileO=' + tile?.originX?.toFixed(0) + ',' + tile?.originY?.toFixed(0) + ' size=' + tile?.size?.toFixed(0));
+                    console.log('[MBDrapC] contentful bake tileO=' + (tile?.originX?.toFixed(0) ?? '?')
+                        + ',' + (tile?.originY?.toFixed(0) ?? '?')
+                        + ' px=' + statN + ' mean=' + (statN ? (statSum / statN).toFixed(1) : '?')
+                        + ' min=' + statMin + ' max=' + statMax
+                        + ' colors=' + seenColors.size
+                        + ' camWin=[' + camera.left.toFixed(0) + '..' + camera.right.toFixed(0)
+                        + ',' + camera.bottom.toFixed(0) + '..' + camera.top.toFixed(0) + ']'
+                        + ' spots=' + spots.join(' ')
+                        + ' | ' + corners.join(' | '));
                 }
                 const mat = mesh.material as any;
                 // Content gate: only enable the drape when the bake actually

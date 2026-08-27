@@ -76,6 +76,14 @@ function discoverTests(): TestEntry[] {
         a.startsWith("occdbg="))?.slice("occdbg=".length);
     if (dbg === "1") (globalThis as any).__mbOccDbg = true;
 }
+// §499 RED PROBE with its OWN gate: occdbg's console/RT-read probe load
+// perturbs frame timing enough to change which bakes capture content, so
+// the rasterization-vs-alpha dichotomy must run in a clean universe.
+{
+    const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("rasred="))?.slice("rasred=".length);
+    if (dbg === "1") (globalThis as any).__mbRasRed = true;
+}
 const ALL_TESTS = discoverTests();
 console.log(`[MBStyleCompat] ${ALL_TESTS.length} compatible tests loaded`);
 

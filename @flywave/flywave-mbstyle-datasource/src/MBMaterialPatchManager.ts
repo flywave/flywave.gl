@@ -1403,6 +1403,13 @@ export class MBMaterialPatchManager {
                          gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
                          return;
                      }
+                     ${(globalThis as any).__mbRasRed ? `
+                     // §499 RED PROBE (rasred=1 gate — clean universe): force
+                     // opaque red to dichotomize "rasterization/coverage" vs
+                     // "texture alpha" for the bake-visibility investigation.
+                     gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+                     return;
+                     ` : ''}
                      vec2 mbRasUV = uMBRasUvOff + vMBRasUv * uMBRasUvScl;
                      vec2 mbRasSmp = mix(mbRasUV, (vec2(1.0) + mbRasUV * uMBRasFullPx) / (uMBRasFullPx + 2.0), uMBRasPadOn);
                      vec4 mbRasT = texture2D(uMBRasMap, mbRasSmp);

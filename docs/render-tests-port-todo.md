@@ -5690,3 +5690,20 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 **验证状态**：tsc --build 连续三绿、lib 已更新。karma 渲染测试按用户策略继续攒批延后。
 
+
+**§499. 会话终记——§497 攒批首批 karma 验证 + drape 校准决策（保留不回退）+ 探针宇宙污染定案**：
+
+**验证结果（清洁宇宙，无 occdbg）**：
+- **门开定案**：setProperty/terrain 17562/17585（冻结带）→ **18826/18825**——drape 首次携带卫星内容上屏，像素彻底离开 §491 以来五态同值冻结；目视确认 = DEM 起伏 + 悬垂卫星纹理 + POI 图标正常渲染。
+- **回归采样零损失**：icon-color/default **PASS 0**、raster-opacity/default **PASS 0**、unsupported-fog **PASS 0**、fog/space-color-use-theme **PASS 36**（历史 39px 近失转绿）、fog/space-color **78 = §392 文档原值**（标定级，未变）、cache-invalidation background/hide/remove-layer **PASS 0**、fill-layer-change-color **171**/show-layer **173** = §278 记档原值逐位相同（drape 重烘焙标定级，非新回归）。
+- **terrain/raster 族 54-62k**（原 ~13-17k 冻结态）：数值变差但该族从未 PASS——冻结态是"纯 DEM 无内容"的偶然接近；新态携带真实悬垂内容，进入 mgl 正确架构下的外观校准区间。
+
+**决策：校准路线（不回退）**。依据：门开=结构对齐 mgl（地形模式 raster 悬垂语义）；退化夹具全部为从未通过族；清洁宇宙回归面零损失。校准目标（下阶段）：① 悬垂色调（cur 暗饱和 vs exp 浅平滑 mean 177——嫌疑 raster-fade 双纹理链的低分辨率父瓦片掺白 §2805 + 地形光照抬升）；② setProperty 图左下白斑（tile 覆盖洞，独立问题）。
+
+**探针宇宙污染定案（方法论级教训）**：occdbg=1 的 console 刷屏 + readRenderTargetPixels 探针负载足以改变帧时序，使晚期"含内容 bake"窗口消失——**§495"常量红未现"、§496"编译但不绘制"、本会话"12px 水平线"全部为探针宇宙伪影**。红probe以独立 rasred=1 门在清洁宇宙复跑：**整屏红 = bake 栅格化/门控/drape 链路全通**。今后 bake 取证一律用独立轻量门（rasred 式），禁用重探针宇宙下结论。
+
+**本批代码变化**：
+1. **联合扩窗撤销**（§497 的 §488 路线①回退）：内容性 bake 探针证实联合窗跨 ~2×2 tile → 每个 tile 的 drape 用同一大窗，vMapUv↔tile 1:1 破坏（卫星挤角落 + 白斑签名）。§488"双重偏移"系误诊（邻 tile fill 的合法世界位）。严格 tile 窗恢复。
+2. **MapTerrainMaterial unlit 覆写**（mgl 语义）：USE_DRAPE 下 opaque_fragment 后 `gl_FragColor.rgb = mix(lit, drape.rgb, drape.a)`——PBR 光照不再乘悬垂部分。A/B 实测当前场景无像素差（光照≈恒等），保留为语义正确项。
+3. **bake 相机 far 12000→1e6**（TerrainDrapingUtils）：防 DEM 位移顶点越远裁剪；正交俯视下 z 位移不影响 x/y，深度仅排序。A/B 无差，保留为防御项。
+4. **rasred=1 红probe**（patch manager + test 映射 + runner 传参）与 MBScene2/MBDrapC 探针（occdbg 门）入库为工具。
