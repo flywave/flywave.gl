@@ -466,7 +466,8 @@ export class TerrainDraping {
         // to keep the clean-universe behavior.
         if ((globalThis as any).__mbLiteDbg) {
             // eslint-disable-next-line no-console
-            console.log('[MBLiteEntry] bakeAll entered');
+            console.log('[MBLiteEntry] bakeAll entered fx=' + ((globalThis as any).__mbFixture ?? '?')
+                + ' frozen=' + this.m_drapeFrozen + ' meshes=' + terrainMeshes.size);
         }
         const liteUniform: boolean[] = [];
         const liteFills: number[] = [];
@@ -593,7 +594,10 @@ export class TerrainDraping {
                 // probe (§499): is the baked satellite DARK (bake-side issue)
                 // or pale (output-side issue) vs the ~177 expected mean?
                 let statN = 0, statSum = 0, statMin = 255, statMax = 0;
-                uniformity: for (let ry = 0; ry < 9; ry++) {
+                // NO early break: the 12-color cap made RICH imagery exit the
+                // scan with a partial statN, failing the density gate — the
+                // gate rejected exactly the good bakes (§505 final root).
+                for (let ry = 0; ry < 9; ry++) {
                     const py = Math.min(S - 1, Math.floor((ry + 0.5) * S / 9));
                     renderer.readRenderTargetPixels(rt, 0, py, S, 1, rowBuf);
                     for (let x = 0; x < S; x += 3) {
@@ -608,7 +612,6 @@ export class TerrainDraping {
                             | (rowBuf[o + 2] >> 3);
                         if (!seenColors.has(key)) {
                             seenColors.add(key);
-                            if (seenColors.size >= 12) break uniformity;
                         }
                     }
                 }
@@ -619,11 +622,12 @@ export class TerrainDraping {
                 // non-transparent pixels among 9 scanned rows (max 3·S).
                 const meanL = statN ? statSum / statN : 255;
                 // §505: DENSITY GATE — scanned total is 9 rows × S/3 = 3·S
-                // pixels. Real imagery covers ≥ half; the LOADING-WINDOW
-                // bakes cover ~0 (a couple of stray decode pixels read as
-                // "non-uniform" and, worse, LOCKED THE FREEZE on a garbage
-                // snapshot — every later real bake was then blocked).
-                const dense = statN > (3 * S) / 2;
+                // pixels. The gate only needs to separate REAL bakes (even
+                // partial-coverage ones — the satellite quads can legitimately
+                // cover a quarter/band of the window) from LOADING-WINDOW
+                // garbage (~0-20 stray pixels that once locked the freeze on
+                // a garbage snapshot). Floor: one covered row.
+                const dense = statN > S / 2;
                 const whitePlaceholder = !uniform && meanL > 245 && dense;
                 if (whitePlaceholder) passHadWhite = true;
                 const realContent = !uniform && dense && !whitePlaceholder;
@@ -819,7 +823,8 @@ export class TerrainDraping {
         } finally {
             if ((globalThis as any).__mbLiteDbg) {
                 // eslint-disable-next-line no-console
-                console.log('[MBLite:' + ((globalThis as any).__mbFixture ?? '?') + '] fills=' + liteFillCount
+                console.log('[MBLite:' + ((globalThis as any).__mbFixture ?? '?') + '|frz=' + this.m_drapeFrozen
+                    + '|snaps=' + this.m_snapshots.size + '] fills=' + liteFillCount
                     + ' camZoom=' + this.m_mapView.zoomLevel.toFixed(2)
                     + ' uniform=' + liteUniform.map(u => (u ? 1 : 0)).join('')
                     + ' perTileFills=' + liteFills.slice(0, 9).join(',')

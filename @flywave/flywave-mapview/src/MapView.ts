@@ -3663,7 +3663,7 @@ export class MapView extends EventDispatcher {
         // §503 frame-interior probe (temporary, gated): what did the engine
         // actually draw THIS frame — camera identity, scene population, and
         // a corner pixel straight from the default framebuffer.
-        if ((globalThis as any).__mbLiteDbg && (this.m_frameNumber % 60) === 0) {
+        if ((globalThis as any).__mbLiteDbg) {
             try {
                 const gl2 = this.m_renderer.getContext();
                 const px8 = new Uint8Array(4);

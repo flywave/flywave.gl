@@ -1600,8 +1600,10 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                             // §506 full-frame dump at capture (4-bit hex rows).
                             const full5 = new Uint8Array(w5 * h5 * 4);
                             gl5.readPixels(0, 0, w5, h5, gl5.RGBA, gl5.UNSIGNED_BYTE, full5);
+                            const tag5 = String((globalThis as any).__mbFixture ?? '?');
                             for (let row = h5 - 1; row >= 0; row -= 16) {
-                                let hex5 = row.toString(16).padStart(3, '0');
+                                let hex5 = row.toString(16).padStart(3, '0')
+                                    + '@' + tag5 + '@';
                                 for (let x5b = 0; x5b < w5; x5b += 2) {
                                     const o7 = (row * w5 + x5b) * 4;
                                     hex5 += (full5[o7] >> 4).toString(16)

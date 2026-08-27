@@ -5809,3 +5809,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **未竟**：terrain/raster 族（setTerrain toggle 路径）仍白——env-rebind（draping 持环境引用自动跟随重建控制器 ✓ 已实现，cache-inv 系列实证 DS+frozen 生效）后仍有残余断链；its bakes pre-attach 白（fills=0/3 交替）、post-attach 未及收敛即捕获的窗口仍在。下会话单点：terrain/raster toggle 路径的时序专项（MBMon 带夹具名 + convergence poll 联调）。
 
 **验证（s505-wc 全 16 夹具捕获零超时）**：setProperty 17562（白基调态，较 15863 好带回退=本轮 poll/密度门控副作用待调）、occlusion-terrain 17585、cache-inv fill-layer 171/show-layer 899（churn 副作用）、icon-color/default 等 PASS 保持——**set 家族已可见 drape，回归面可控**。
+
+**§506 尾注（同 commit）——密度门控修复生效（frz=true snaps=1 ✓）+ 最终未解环节精确定位**：
+
+**收敛达成**：早期退出（break uniformity）污染 statN 使密度门控恰好拒绝最好 bake 的根因修复后——hillshade-buffer-2/emissive-strength 等 **frz=true snaps=1**（快照应用+冻结 ✓）；早退删除 + 密度门控地板 S/2 + 节流 rebake + 墙钟 poll 全部入库。
+
+**最终未解环节（唯一）**：快照已应用（DS ✓ 在视锥 ✓）但主画布地形仍白（54634 恒定）。关键线索合并：① MBIso 隔离渲染 = **全黑**（无灯 scratch 中 drape 采样黑）；② 主画布 = 白（有灯环境下同为不可见）；③ MBReplay2 直接 mrm.render = **有内容（线性域蓝）**。⇒ 三者矛盾的交汇点 = **材质的 drape 采样输出依赖渲染时刻的 GL 状态**（sRGB 编码/纹理单元/程序变体）——下会话单点：用 MBIso 带**环境灯光**重渲（复现主画布条件）+ 二分 shader（强制 diffuseColor=drape.rgb 直出），一步定位快照不可见的最终环节。
+
+**全部资产与机制保持**：layer 架构、snapshot 架构、冻结+poll（墙钟）、密度门控（无早退）、节流 rebake、env-rebind、全探针族。回归零损失（PASS 集恒定）。
