@@ -5789,3 +5789,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **本轮资产**：layer 架构（无状态排除）、snapshot 架构（不可变 DataTexture）、冻结 + 收敛 poll、MBCap/MBFrame/MBIso/MBSceneRT 探针族。回归零损失全程保持。
 
 **§505 尾注三（同 commit）——时序数据 + m135 反转定性**：MBFrame 采样（%60）时序：**pale 帧在前、白帧在后**（时段级翻转，非逐帧）；bakeAll 全程运行 ~34-56 次（冻结未止住——首个 realContent 快照未在采样窗前出现，或 m17/m135 real pass 后仍被后续白 pass 覆盖）。**m135 = 线性域卫星（z12 pale 193→linear≈135），terrain 输出重编码后 ≈ pale 176-197 = 正确外观**——即收敛态本应锁定正确画面；当前冻结锁定的状态未生效到屏幕（疑快照 apply 到非在屏 mesh / 后续白 pass 经活引用再透传——snapshot 架构应已封死后者，需以 MBFr 全 mesh D 标志 + MBCap 同帧对照终验）。
+
+**§506. 会话终记——全帧 dump 揭示终极机制：渐进渲染条纹 + drape bake 扰动**：
+
+**全帧捕获 dump（assert 时刻 256² hex → PNG）**：捕获瞬间画布 = **黑底 + 稀疏水平亮线（隔行条纹）**——地形只栅格化出了条纹带，非完整画面非纯白！两夹具对照：亮线条纹（一夹具）与蓝线纹理（另一夹具）。
+
+**终极机制定性**：引擎对静态帧走 **progressive rendering（分条纹多帧逐步绘制）**；捕获/assert 落在渐进未完成时刻（0 条纹=纯白 PNG ✓、部分条纹=黑底亮线 ✓）。**drape bake 的帧中 RT 渲染（AfterRender 内 9 次 RT render）持续扰动渐进状态使其永不完成**——§479 时代注释"mid-frame RT renders perturb engine GL state and regress fog/terrain"正是同一机理的先见。此前所有"纹理/竞态/可见性"理论全部作废——**这是 bake 与引擎渐进渲染器的 GL 状态冲突**。
+
+**修复方向（下会话单点）**：① 读 composing 状态机找渐进条纹的驱动与重置条件；② bake 与渐进的共存策略：a) bake 改用独立 WebGLRenderTarget 之外的独立 context（重）/ b) bake 前后完整保存恢复 progressive 状态（composer 内部 RT 绑定/视口/scissor 全套）/ c) drape bake 降频至渐进完成帧之后（监听渐进完成信号）/ d) 关闭 terrain 夹具的渐进（isDynamicFrame 路径）。
+
+**本轮全部资产保持**：layer 架构、snapshot 架构、冻结+收敛 poll、占位拒绝、MBCap/MBFrame/MBIso/MBSceneRT/MBRTD 探针族。验证零回归。

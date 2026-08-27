@@ -158,6 +158,37 @@ export class TerrainDraping {
                 o.layers.set(2);
             }
         });
+        // §505d frozen-state monitor: per-mesh drape/NDC + canvas pixel in
+        // ONE line — which mesh holds the snapshot, is it on-screen, and
+        // what does the canvas actually show.
+        const frN = ((globalThis as any).__mbMonProbe ?? 0) + 1;
+        (globalThis as any).__mbMonProbe = frN;
+        if ((globalThis as any).__mbLiteDbg && frN % 150 === 0) {
+            try {
+                const mv: any = this.m_mapView;
+                const rte = (typeof mv.getRteCamera === 'function')
+                    ? mv.getRteCamera() : mv.m_rteCamera;
+                const meshes = this.m_terrain.meshes;
+                const V = new THREE.Vector3();
+                const parts: string[] = [];
+                meshes.forEach((mid: any, mi: number) => {
+                    V.copy(mid.position).project(rte);
+                    const dt = mid.material?.m_drapeTexture ?? null;
+                    parts.push('#' + mi + 'N' + V.x.toFixed(1) + ',' + V.y.toFixed(1)
+                        + 'D' + (dt ? (dt.isDataTexture ? 'S' : 'R') : '0'));
+                });
+                const gl2 = mv.renderer.getContext();
+                const px = new Uint8Array(4);
+                gl2.readPixels(Math.floor(gl2.drawingBufferWidth / 2),
+                    Math.floor(gl2.drawingBufferHeight / 2), 1, 1,
+                    gl2.RGBA, gl2.UNSIGNED_BYTE, px);
+                // eslint-disable-next-line no-console
+                console.log('[MBMon] frN=' + frN + ' frozen=' + this.m_drapeFrozen
+                    + ' snaps=' + this.m_snapshots.size
+                    + ' px=' + px[0] + ',' + px[1] + ',' + px[2]
+                    + ' | ' + parts.join(' '));
+            } catch {}
+        }
     };
 
     private onAfterRender = (): void => {
@@ -314,6 +345,15 @@ export class TerrainDraping {
             if (terrainMeshes.has(obj)) {
                 obj.visible = false;
                 hidden.push(obj);
+            } else if ((obj as any).isMesh
+                // §505: the hillshade path builds ADDITIONAL TerrainControllers
+                // (applyTerrain per DEM tile) whose MapTerrainMaterial meshes
+                // are NOT in this.m_terrain.meshes — they drew the DEM-rgb-as-
+                // color into the bake (the blue/black contamination). Hide
+                // every terrain-material mesh regardless of controller.
+                && typeof (obj as any).material?.setDemTexture === 'function') {
+                obj.visible = false;
+                hidden.push(obj);
             } else if (this.isEnvironmentObject(obj)) {
                 obj.visible = false;
                 hidden.push(obj);
@@ -422,6 +462,7 @@ export class TerrainDraping {
         const liteAlpha: string[] = [];
         const tileReal: boolean[] = [];
         let anyReal = false;
+        let passHadWhite = false;
         const bakeSeq = ++(globalThis as any).__mbBakeSeqCounter || 1;
         (globalThis as any).__mbBakeSeqCounter = bakeSeq;
         const tileOKey = (tiles[0]?.originX?.toFixed(0) ?? '?') + '_' + (tiles[0]?.originY?.toFixed(0) ?? '?');
@@ -570,6 +611,7 @@ export class TerrainDraping {
                 // placeholder bake slipped the old absolute threshold).
                 const whitePlaceholder = !uniform && meanL > 245
                     && statN > (3 * S) / 2;
+                if (whitePlaceholder) passHadWhite = true;
                 const realContent = !uniform && !whitePlaceholder;
                 tileReal.push(realContent);
                 if (realContent) anyReal = true;
@@ -728,7 +770,10 @@ export class TerrainDraping {
                         snap.needsUpdate = true;
                         this.m_snapshots.set(i, snap);
                         mat.setDrapeTexture(snap);
-                        this.m_drapeFrozen = true;
+                        // Freeze only when the WHOLE pass was real — a white
+                        // placeholder anywhere means later passes may still
+                        // converge other tiles.
+                        if (!passHadWhite) this.m_drapeFrozen = true;
                     } catch {
                         mat.setDrapeTexture(rt.texture);
                     }
@@ -744,11 +789,17 @@ export class TerrainDraping {
             // tile churn will eventually produce real imagery) — bounded so
             // a truly empty scene freezes instead of looping forever.
             this.m_lastBakeAnyReal = anyReal;
-            if (this.m_rasterHidden.length > 0 && !anyReal
-                && this.m_contentRetries < 30) {
+            // §505: retry WITHOUT a count cap while raster meshes exist —
+            // the satellite textures attach asynchronously and can take
+            // hundreds of frames; a 30-frame cap froze the drape white
+            // before the first real bake. The rasterHidden.length>0 guard
+            // already prevents looping on truly empty scenes, and the
+            // fixture lifetime bounds the retry in all cases.
+            if (!this.m_drapeFrozen && this.m_rasterHidden.length > 0
+                && (!anyReal || passHadWhite)) {
                 this.m_contentRetries++;
                 this.requestBake();
-            } else if (anyReal) {
+            } else if (anyReal && !passHadWhite) {
                 this.m_contentRetries = 0;
             }
         } finally {

@@ -1594,6 +1594,35 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                             });
                             console.log('[MBCap] px=' + Array.from(px5)
                                 .map((v, k) => (k % 4 === 3) ? 'a' + v : v).join('/'));
+                            // §506 full-frame dump at capture (4-bit hex rows).
+                            const full5 = new Uint8Array(w5 * h5 * 4);
+                            gl5.readPixels(0, 0, w5, h5, gl5.RGBA, gl5.UNSIGNED_BYTE, full5);
+                            for (let row = h5 - 1; row >= 0; row -= 16) {
+                                let hex5 = row.toString(16).padStart(3, '0');
+                                for (let x5b = 0; x5b < w5; x5b += 2) {
+                                    const o7 = (row * w5 + x5b) * 4;
+                                    hex5 += (full5[o7] >> 4).toString(16)
+                                        + (full5[o7 + 1] >> 4).toString(16)
+                                        + (full5[o7 + 2] >> 4).toString(16);
+                                }
+                                console.log('[MBCapF]' + hex5);
+                            }
+                            // §505b: same-moment toDataURL decode — the IBCT
+                            // capture uses canvas.toBlob; if the two paths
+                            // diverge, the toBlob capture is the white source.
+                            const url5 = canvas.toDataURL();
+                            const img5 = new Image();
+                            img5.onload = () => {
+                                const c5 = document.createElement('canvas');
+                                c5.width = 16; c5.height = 16;
+                                const x5 = c5.getContext('2d')!;
+                                x5.drawImage(img5, 0, 0, 16, 16);
+                                const d5 = x5.getImageData(8, 8, 1, 1).data;
+                                const d6 = x5.getImageData(4, 12, 1, 1).data;
+                                console.log('[MBCap2] toDataURL-center=' + d5[0] + ',' + d5[1] + ',' + d5[2]
+                                    + ' lower-left=' + d6[0] + ',' + d6[1] + ',' + d6[2]);
+                            };
+                            img5.src = url5;
                         }
                     } catch {}
                 }
