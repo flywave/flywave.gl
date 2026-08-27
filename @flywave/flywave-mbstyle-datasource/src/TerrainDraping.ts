@@ -39,6 +39,8 @@ export class TerrainDraping {
      * textures. The counter decrements each successful bake.
      */
     private m_extraBakeFrames = 0;
+    /** §504: bounded retry counter for placeholder→real drape convergence. */
+    private m_contentRetries = 0;
     /** White opaque clear color for FBO (alpha=1 so empty areas preserve terrain color). */
     private static readonly CLEAR_COLOR = new THREE.Color(1, 1, 1);
     /** Master switch for the drape bake. */
@@ -449,8 +451,12 @@ export class TerrainDraping {
 
         // If the scene has no drapable content (only terrain + environment),
         // skip the bake entirely. The terrain will render with its own color.
+        // §504: the self-heal above RE-SHOWED the raster materials — every
+        // early return from here on MUST re-hide them, or they leak visible
+        // into the next main render frame (the bake/main visibility interleave).
         if (!hasDrapableContent) {
             for (const obj of hidden) obj.visible = true;
+            for (const m of this.m_rasterHidden) m.visible = false;
             return;
         }
 
@@ -516,6 +522,8 @@ export class TerrainDraping {
         const liteUniform: boolean[] = [];
         const liteFills: number[] = [];
         const liteAlpha: string[] = [];
+        const tileReal: boolean[] = [];
+        let anyReal = false;
         const bakeSeq = ++(globalThis as any).__mbBakeSeqCounter || 1;
         (globalThis as any).__mbBakeSeqCounter = bakeSeq;
         const tileOKey = (tiles[0]?.originX?.toFixed(0) ?? '?') + '_' + (tiles[0]?.originY?.toFixed(0) ?? '?');
@@ -654,6 +662,15 @@ export class TerrainDraping {
                     }
                 }
                 const uniform = seenColors.size < 2;
+                // §504 placeholder rejection: the pre-attach window bakes the
+                // placeholder quads as SOLID NEAR-WHITE with dense coverage —
+                // never apply that (the white drape freeze). statN counts
+                // non-transparent pixels among 9 scanned rows (max 3·S).
+                const meanL = statN ? statSum / statN : 255;
+                const whitePlaceholder = !uniform && meanL > 245 && statN > S;
+                const realContent = !uniform && !whitePlaceholder;
+                tileReal.push(realContent);
+                if (realContent) anyReal = true;
                 if ((globalThis as any).__mbRtDump && !uniform
                     && ((globalThis as any).__mbRtDumpCount ?? 0) < 6) {
                     (globalThis as any).__mbRtDumpCount = ((globalThis as any).__mbRtDumpCount ?? 0) + 1;
@@ -791,7 +808,7 @@ export class TerrainDraping {
                 const mat = mesh.material as any;
                 // Content gate: only enable the drape when the bake actually
                 // produced non-uniform content (auto-disables on empty bakes).
-                if (!uniform && mat && typeof mat.setDrapeTexture === 'function') {
+                if (realContent && mat && typeof mat.setDrapeTexture === 'function') {
                     mat.setDrapeTexture(rt.texture);
                     if (!mat.defines) mat.defines = {};
                     if (!mat.defines.USE_DRAPE) {
@@ -799,6 +816,17 @@ export class TerrainDraping {
                         mat.needsUpdate = true;
                     }
                 }
+            }
+            // §504 convergence: while raster fills exist but NO tile produced
+            // real content, keep retrying (the attach-triggered frames and
+            // tile churn will eventually produce real imagery) — bounded so
+            // a truly empty scene freezes instead of looping forever.
+            if (this.m_rasterHidden.length > 0 && !anyReal
+                && this.m_contentRetries < 30) {
+                this.m_contentRetries++;
+                this.requestBake();
+            } else if (anyReal) {
+                this.m_contentRetries = 0;
             }
         } finally {
             if ((globalThis as any).__mbLiteDbg) {

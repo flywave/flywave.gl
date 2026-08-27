@@ -5765,3 +5765,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **§503 尾注（同 commit）——composer/pointOfView/effects 全部排除，收束帧内取证方案**：探针实证 m_anyEffectEnabled=false（bloom/outline/vignette/sepia/sgr 全 false）→ 直渲路径；m_pointOfView 仅示例使用。至此：场景内容 ✓、RTE 相机 ✓、直渲路径 ✓、材质 ✓——**唯余帧内差异**：引擎 render() 时刻的 scene/camera 状态与我 AfterRender 探针时刻的差异（场景 root 每帧重建时机/mapAnchors 停更帧）。下会话单点：在 MapView.render 的 mapRenderingManager.render 调用前后各插一行（camera 指针/scene.children 数/renderer.info.calls + 8px canvas readPixels），定位引擎帧内"渲染了什么"；若引擎帧本身白 → 场景 root 重建/锚点帧序问题；若有色 → 捕获时机/覆盖问题。
 
 **§503 尾注二（同 commit）——帧内探针破案级发现：画面逐帧闪烁，正确 drape 帧真实存在**：MapView.render 帧内探针（RTE cam、root=9、中点 readPixels + calls）实测 terrain/raster 的引擎帧**在三种状态间振荡**：`px=176,174,158`（=z12 pale 卫星，**drape 正确出图！**）、`px=0,13,105`（河流暗蓝=亦正确）、`px=255,255,255`（白）——calls 同步 **18↔9** 振荡：18=卫星 quad 直渲帧（gate 该帧未生效！）、9=仅地形（gate 生效但 drape 未应用帧）。⇒ **drape 管线能产出完全正确的画面**；残余缺陷=①gate 可见性跨帧交错泄漏（bake 的 show 泄入部分主渲染帧）②drape 应用帧与泄漏帧竞争捕获。下会话单点：①审计 `!hasDrapableContent` 等早退路径的 show 泄漏（bake 复显后所有 return 必须恢复隐藏）；②确定 final bake 后停止 rebake（settle 冻结最后正确帧）→ 捕获必中正确帧。
+
+**§504. 会话终记——f8046256 两项修复实施 + 验证（零回归，白屏确认属主画布通路层）**：
+
+**修复落地**：① bakeAll `!hasDrapableContent` 早退路径补 raster 隐藏恢复（self-heal 复显后的 show 泄漏封堵）；② 占位拒绝 + 有界收敛：drape apply gate 从 `!uniform` 收紧为 realContent（拒绝近白高覆盖的占位 bake——白 drape 永不再上屏），raster 存在但无任何真实内容时有界重试（≤30 次）后冻结。
+
+**验证（s504 批）**：setProperty/terrain 15863/15881（=历史好带，优于 17562 冻结态）；terrain/raster 族 54634/61447/62130 恒定；cache-invalidation 171/173/9939 原值；icon/fog PASS——**零回归**。terrain/raster 白屏未随两项修复解锁，与 MBSceneRT 证据一致：**其白屏属主画布通路丢失（setTerrain toggle 后引擎级），drape 层已排除**——terrain/raster 的解锁跟随组合器根因修复，不再阻塞 drape 层迭代。
+
+**drape 层当前完成度**：bake 内容正确（线性域卫星）、apply 链路正确、白占位拒绝、收敛有界——drape 层在"主画布正常渲染地形"的夹具上（如 setProperty）已进入正确工作状态。
