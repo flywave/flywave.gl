@@ -112,8 +112,11 @@ export class TerrainDraping {
         this.m_mapView.removeEventListener(MapViewEventNames.AfterRender, this.onAfterRender);
         this.m_mapView.removeEventListener(MapViewEventNames.WillRender, this.onWillRender);
         // Disable USE_DRAPE on all terrain materials so the terrain renders
-        // without the drape overlay after stopping.
-        for (const mesh of this.m_terrain.meshes) {
+        // without the drape overlay after stopping. The controller can be
+        // gone already (applyTerrain swap to null on a style re-apply) —
+        // a throw here used to poison the engine render loop every frame
+        // and blank ALL subsequent tests in the shared karma page.
+        for (const mesh of (this.m_env.terrainController?.meshes ?? [])) {
             const mat = mesh.material as any;
             if (mat?.defines?.USE_DRAPE) {
                 delete mat.defines.USE_DRAPE;
@@ -158,6 +161,17 @@ export class TerrainDraping {
      * renders nothing. The bake flips it back for its own render.
      */
     private m_rasterHidden: THREE.Material[] = [];
+    /** Raster meshes moved to the bake-only layer 2 (with their previous
+     * layer mask) so a terrain-less style can restore them. */
+    private m_layerTagged: Array<{ obj: THREE.Object3D; mask: number }> = [];
+
+    /** Return layer-2-tagged raster meshes to their original layers. */
+    private restoreRasterLayers(): void {
+        for (const t of this.m_layerTagged) {
+            t.obj.layers.mask = t.mask;
+        }
+        this.m_layerTagged.length = 0;
+    }
 
     private onWillRender = (): void => {
         // §504: LAYER-based raster exclusion. Raster meshes live on layer 2
@@ -167,13 +181,21 @@ export class TerrainDraping {
         // scene rebuild and flip-flopped the canvas (the §503 flicker:
         // calls 9↔18, px white/satellite/river lottery). Idempotent, and
         // it re-tags meshes created by later tile rebuilds (setTerrain).
-        const scene = this.m_mapView.scene;
-        scene.traverse((o: any) => {
-            if ((o.isMesh || o.isPoints) && o.userData?.technique?._isRaster
-                && o.layers.mask !== 2) {
-                o.layers.set(2);
-            }
-        });
+        // WITHOUT a terrain controller the exclusion is meaningless and
+        // harmful — a later terrain-less style would lose every raster
+        // tile (they'd render only into the bake nobody performs).
+        if (!this.m_env.terrainController) {
+            this.restoreRasterLayers();
+        } else {
+            const scene = this.m_mapView.scene;
+            scene.traverse((o: any) => {
+                if ((o.isMesh || o.isPoints) && o.userData?.technique?._isRaster
+                    && o.layers.mask !== 2) {
+                    this.m_layerTagged.push({ obj: o, mask: o.layers.mask });
+                    o.layers.set(2);
+                }
+            });
+        }
         // §505d frozen-state monitor: per-mesh drape/NDC + canvas pixel in
         // ONE line — which mesh holds the snapshot, is it on-screen, and
         // what does the canvas actually show.
@@ -373,7 +395,9 @@ export class TerrainDraping {
 
         // Detect terrain rebuild — by COUNT and by INSTANCE SIGNATURE: a
         // rebuild swaps mesh instances at the same count (morph on setTerrain
-        // toggle), and only identity catches that.
+        // toggle), and only identity catches that. Controller may be gone
+        // (style re-apply swapped it to null) — nothing to detect then.
+        if (!this.m_env.terrainController) return;
         const meshCount = this.m_terrain.meshes.length;
         const meshSig = this.m_terrain.meshes.map((m: any) => m.uuid).join(',');
         const meshesChanged = meshSig !== this.m_lastMeshSig;
@@ -467,6 +491,14 @@ export class TerrainDraping {
     private bakeAll(): void {
         const renderer = this.m_mapView.renderer;
         if (!renderer) return;
+        // No terrain controller (style without terrain, or swapped away) —
+        // nothing to bake into; also un-tag raster meshes that a previous
+        // terrain style left on the bake-only layer 2 (they would stay
+        // invisible to the main camera for every subsequent style).
+        if (!this.m_env.terrainController) {
+            this.restoreRasterLayers();
+            return;
+        }
         // Master switch. The bake pipeline is verified end-to-end (§12.76-60:
         // plain mesh + tile camera + no-depth RT + big-scene-first order all
         // rasterize; the historical "renderer blocker" was the broken −Y

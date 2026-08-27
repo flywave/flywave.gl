@@ -5871,3 +5871,19 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **实测（26 夹具对照基线）**：IMPR——symbol-spacing/line-close 201089→**184862**、line-far 165565→**144255**、symbol-placement/point 1499→**1165**、icon-rotation-alignment line 系 26→24×2；WORSE——symbol-placement/line 82304→106269（旧混合帧 spacing 凑巧密度更高，世界帧锚点相位/labelLen 未校准，遗留）、line-overscaled +4-5k（overscale 因子未按 mgl overscaleFactor 折算，记档）；净 −9k。4 例 PASS 保持。新增 text-pitch-alignment/globe-symbols 首测基线入库（无基线对照）。
 
 **遗留（按 ROI）**：① line-overscaled 的 overscaleFactor（mgl `bucket.overscaling`=2^(ideal−canonical)，我们恒 1）→ spacing/label 换算偏大；② text 线放置的锚点相位（fixedExtraOffset=glyphSize·2·boxScale 精确值）与 labelLen 用 shapedText.right−left 的 px 基准；③ icon 显示宽 12px 名义值→查 sprite 实际 displaySize；④ symbol-spacing/point 系（point-close/far）未动（point 放置在 point 特性上的 spacing 语义另查）。
+
+**§510. 会话续记——三大目标域（3d-intersections/model-layer/appearance）基线盘点 + appearance 两修复 + TerrainDraping 跨测毒化修复 + 3d-intersections 瓦片帧深度定性（2026-08-28）**：
+
+**基线盘点（批跑 mbstyle-goal3d-baseline，Edge，注意 §12.85 批跑负载劣化——数值作相对参照非逐测真值）**：appearance 20/74 PASS、3d-intersections 1/75（**整域只渲背景色**）、model-layer 批跑 109/212 全 FAILED 后被 chunk 超时截断（§2736 曾记 212/212 已被 §2747 假阳性定性作废，逐测真值未知）。appearance 逐测真值参照 baseline7-pass（20 例）+ §468 采样（icon-with-offset-2 621 回归与本次批跑值逐位一致 ⇒ 批跑小数值可作真值参照）。
+
+**修复一（mgl appearance 首匹配语义，MBLayerEvaluator）**：mgl `symbol_bucket.updateAppearances` 用 `findIndex(a => a.isActive(...))` + `FeatureAppearances.evaluateAllFeatures` 返回**首个**条件为真的 appearance（后续激活者不叠加）；我们原实现逐个覆盖合并（末位获胜）→ 多 appearance 夹具选错图标。修 = 首个条件为真即 break。**实测：condition-get-all 3427→1768，零回归**。
+
+**修复二（pitch 全局条件重求值，MBStyleDataSource + harness）**：mgl `FeatureAppearances.update` 对 zoom/pitch/brightness 世界态变化逐帧重判定 appearance；我们解码时求值且 geojson 瓦片解码一次即冻结。`refreshDecoderBrightness` 原来用静态 style.pitch——改传实时 `mapView.tilt`，并新增 `refreshDecoderPitch`（=同路径 + markTilesDirty），harness setPitch op 调用之。**实测：appearance/pitch 785→639（首次移动），零回归**。遗留：639 残差=icon-image/旋转等外观细节域。
+
+**修复三（TerrainDraping 空控制器跨测毒化，TerrainDraping.ts）**：批跑实证 `TypeError: Cannot read properties of null (reading 'meshes')` 在带 terrain 的 3d-intersections 用例（elevated-circles-mixed-terrain-enabled）后每帧抛出 → 引擎 renderLoop 持续失败 → **同页全部后续测试渲染空白**（毒化面覆盖整个 3d-intersections chunk 后段）。根因：create-once draping 持 env 引用，style 重挂后 terrainController=null 而监听器仍活跃。修 = stop()/onAfterRender/bakeAll 全部空控制器守卫 + onWillRender 的 raster layer-2 迁移在无控制器时回滚（`m_layerTagged` 簿记恢复原 layer mask，防后续无 terrain style 丢失 raster）。**实测：3d-intersections/fog、elevated-circles-mixed(-terrain) 与基线逐位同、icon/fog/occlusion/icon-image/setProperty(15866 好带)/use-theme 全值带内、`meshes` 错误清零**。
+
+**3d-intersections 空白根因定性（未修，证据链与方案记档）**：域内夹具空白非瓦片缺失——临时把 512px 源 storageLevelOffset 从 −2 改 −1（请求级 = mgl `round(zoom)` clamp maxzoom，transform.js:569 覆盖语义）后 z18 瓦片成功请求且**解码出 10-13 geometries（fill/solid-line/labeled-icon 齐备）**，但网格 NDC x=−2.53 整体出屏、顶点世界坐标含 **−6.14e6 = 慕尼黑世界 y 的负值**（绝对坐标泄漏进 tile-local 帧）⇒ 解码几何帧与 tileKey 级别强耦合（tile2world/mvtYOffset 假设 tileKey.level=MVT 级，−1 时 cell(18)=MVT-18 的 ½ 面积 → 帧爆）。**mgl 对齐事实**：mgl 请求级 = round(zoom) clamp maxZoom（本域 z18），比我们 cell 级（floor(zoom)−1）高一级；512px tile (L+1,x,y) 的面积 = 256px cell (L,x,y) 的**四倍**（每 cell 需 4 子瓦片 (L+1,2x+i,2y+j)，各自 DecodeInfo=子 tileKey 时帧 1:1）。**下会话方案**：矢量 404 回退路由——cell 级 404 时抓 4 子瓦片，逐子带自身 tileKey 解码，几何按 (子中心−cell 中心) 重定基后合并进 cell DecodedTile（合并点=datasource 解码拦截层）。已回滚 offset 至 −2/−1 旧值保住全部既有校准（probe 证明改 −1 会使全 512px 源帧爆，**不可直接改**）。
+
+**工具入库**：decodedbg=1 门（getDecodedTile 每 tile 打印 geos/verts/techs + AfterRender MBScene 场景普查 + MBObj 首顶点 NDC/世界坐标/材质探针——数据侧 vs 渲染侧一跑二分，本轮 3d-intersections 定性的核心工具）；runner `MBSTYLE_DECODEDBG` 接线。
+
+**下会话 ROI**：① 3d-intersections 四子瓦片回退路由（方案如上，解锁整域 74 例的数据前提）；② appearance 残差簇（icon-bbox 族 125-797=碰撞盒 dpr/rasterization 域 §459/§422 遗留；zoom 族 2955-6309=icon-size pixelRatio/rotate 细节；feature-state/promoteId 条件求值核对）；③ model-layer 逐测独立重盘（212 例逐测，批跑不可信）；④ measure-light brightness 静态 lights 时序（appearance/brightness 588）。

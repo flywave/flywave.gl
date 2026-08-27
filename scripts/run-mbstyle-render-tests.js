@@ -84,6 +84,7 @@ function main() {
             ...(process.env.MBSTYLE_RASRED ? ["rasred=1"] : []),
             ...(process.env.MBSTYLE_LITEDBG ? ["liteldbg=1"] : []),
             ...(process.env.MBSTYLE_RASUVDBG ? ["rasuvdbg=1"] : []),
+            ...(process.env.MBSTYLE_DECODEDBG ? ["decodedbg=1"] : []),
             ...(process.env.MBSTYLE_RTDUMP ? ["rtdump=1"] : []),
             ...(process.env.MBSTYLE_RTDISABLE ? ["rtdisable=1"] : []),
             ...(process.env.MBSTYLE_UVTDBG ? ["uvtdbg=1"] : [])];

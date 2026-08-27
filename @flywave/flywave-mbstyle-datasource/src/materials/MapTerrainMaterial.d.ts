@@ -6,6 +6,13 @@ export declare class MapTerrainMaterial extends THREE.MeshStandardMaterial {
     private m_demIsFloat;
     private m_exaggeration;
     private m_drapeTexture;
+    private m_uDrape;
+    private m_uDem;
+    private m_uDemPrev;
+    private m_uDemLerp;
+    private m_uDemIsFloat;
+    private m_uExaggeration;
+    private m_uMBZSecLat;
     constructor();
     setDemTexture(texture: THREE.Texture | null): void;
     setDemPrevTexture(texture: THREE.Texture | null): void;

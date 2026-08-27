@@ -51,6 +51,13 @@ class MapTerrainMaterial extends THREE.MeshStandardMaterial {
         this.m_demIsFloat = false;
         this.m_exaggeration = 1.0;
         this.m_drapeTexture = null;
+        this.m_uDrape = { value: null };
+        this.m_uDem = { value: null };
+        this.m_uDemPrev = { value: null };
+        this.m_uDemLerp = { value: 1 };
+        this.m_uDemIsFloat = { value: 0 };
+        this.m_uExaggeration = { value: 1 };
+        this.m_uMBZSecLat = { value: 1 };
         this.m_zSecLat = 1;
         const self = this;
         this.customProgramCacheKey = () => (self.m_drapeTexture ? 'mbDrape' : 'mbNoDrape');
@@ -64,18 +71,20 @@ class MapTerrainMaterial extends THREE.MeshStandardMaterial {
             };
         }
         this.onBeforeCompile = (shader) => {
+            const uvtdbg = !!globalThis.__mbUvTerrainDbg;
             if (self.m_drapeTexture) {
+                shader.vertexShader = '#define USE_DRAPE\n' + shader.vertexShader;
                 shader.fragmentShader = '#define USE_DRAPE\n'
                     + 'uniform sampler2D uDrape;\nvarying vec2 vMapUv;\n'
                     + shader.fragmentShader;
             }
-            shader.uniforms.uDem = { value: self.m_demTexture };
-            shader.uniforms.uDemPrev = { value: self.m_demPrevTexture };
-            shader.uniforms.uDemLerp = { value: self.m_demLerp };
-            shader.uniforms.uDemIsFloat = { value: self.m_demIsFloat ? 1.0 : 0.0 };
-            shader.uniforms.uExaggeration = { value: self.m_exaggeration };
-            shader.uniforms.uMBZSecLat = { value: self.m_zSecLat };
-            shader.uniforms.uDrape = { value: self.m_drapeTexture };
+            shader.uniforms.uDem = self.m_uDem;
+            shader.uniforms.uDemPrev = self.m_uDemPrev;
+            shader.uniforms.uDemLerp = self.m_uDemLerp;
+            shader.uniforms.uDemIsFloat = self.m_uDemIsFloat;
+            shader.uniforms.uExaggeration = self.m_uExaggeration;
+            shader.uniforms.uMBZSecLat = self.m_uMBZSecLat;
+            shader.uniforms.uDrape = self.m_uDrape;
             shader.vertexShader = shader.vertexShader.replace('#include <common>', `
                 #include <common>
                 uniform sampler2D uDem;
@@ -114,9 +123,14 @@ class MapTerrainMaterial extends THREE.MeshStandardMaterial {
                 vMapUv = uv;
                 #endif
                 `);
+            if (uvtdbg) {
+                shader.fragmentShader = '#define USE_DRAPE\n' + shader.fragmentShader;
+                shader.vertexShader = '#define USE_DRAPE\n' + shader.vertexShader;
+            }
             shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
                 #include <map_fragment>
                 #ifdef USE_DRAPE
+                    ${uvtdbg ? 'diffuseColor.rgb = vec4(vMapUv.x, vMapUv.y, 0.5);' : ''}
                     // Flip V: terrain mesh UV V=0 is at the far edge (originY+size)
                     // but the FBO texture V=0 is at the near edge (originY), so a
                     // 1.0 - v.y flip is needed to align drape content with the
@@ -124,35 +138,62 @@ class MapTerrainMaterial extends THREE.MeshStandardMaterial {
                     // sampling above (which also does 1.0 - uv.y).
                     vec4 drapeColor = texture2D(uDrape, vec2(vMapUv.x, 1.0 - vMapUv.y));
                     diffuseColor.rgb = mix(diffuseColor.rgb, drapeColor.rgb, drapeColor.a);
+                    vec4 mbDrapeSamp = drapeColor;
+                #endif
+                `);
+            shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>', `
+                #include <opaque_fragment>
+                #ifdef USE_DRAPE
+                    // mgl semantics (§499): the drape FBO carries the painted
+                    // raster/vector colors UNLIT — PBR/scene lighting must not
+                    // multiply the draped part (it darkened the satellite to
+                    // ~0.65×; expected shows the pale source colors). Lighting
+                    // keeps applying to the terrain's own base color only.
+                    gl_FragColor.rgb = mix(gl_FragColor.rgb, mbDrapeSamp.rgb, mbDrapeSamp.a);
                 #endif
                 `);
         };
     }
     setDemTexture(texture) {
         this.m_demTexture = texture;
+        this.m_uDem.value = texture;
         this.needsUpdate = true;
     }
     setDemPrevTexture(texture) {
         this.m_demPrevTexture = texture;
+        this.m_uDemPrev.value = texture;
         this.needsUpdate = true;
     }
     setDemLerp(lerp) {
         this.m_demLerp = lerp;
+        this.m_uDemLerp.value = lerp;
     }
     setDemIsFloat(isFloat) {
         this.m_demIsFloat = isFloat;
+        this.m_uDemIsFloat.value = isFloat ? 1.0 : 0.0;
         this.needsUpdate = true;
     }
     setDrapeTexture(texture) {
         this.m_drapeTexture = texture;
+        this.m_uDrape.value = texture;
+        if (texture) {
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            texture.generateMipmaps = false;
+            texture.wrapS = THREE.ClampToEdgeWrapping;
+            texture.wrapT = THREE.ClampToEdgeWrapping;
+            texture.needsUpdate = true;
+        }
         this.needsUpdate = true;
     }
     setExaggeration(exaggeration) {
         this.m_exaggeration = exaggeration;
+        this.m_uExaggeration.value = exaggeration;
         this.needsUpdate = true;
     }
     setZSecLat(secLat) {
         this.m_zSecLat = secLat > 0.2 && Number.isFinite(secLat) ? secLat : 1;
+        this.m_uMBZSecLat.value = this.m_zSecLat;
         this.needsUpdate = true;
     }
     dispose() {

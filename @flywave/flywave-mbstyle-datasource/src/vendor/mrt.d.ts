@@ -6,7 +6,7 @@ declare const VERSION = "2.0.1";
 declare class MapboxRasterTile {
     constructor(cacheSize?: number);
     getLayer(layerName: any): any;
-    getHeaderLength(buf: any): any;
+    getHeaderLength(buf: any): number;
     parseHeader(buf: any): this;
     createDecodingTask(range: any): MRTDecodingBatch;
 }
@@ -35,7 +35,7 @@ declare class MapboxRasterLayer {
     };
     getDataRange(bandList: any): {
         layerName: any;
-        firstByte: any;
+        firstByte: number;
         lastByte: number;
         blockIndices: any[];
     };
@@ -43,7 +43,7 @@ declare class MapboxRasterLayer {
     hasDataForBand(band: any): boolean;
     getBandView(band: any): {
         data: any;
-        bytes: any;
+        bytes: Uint8Array<any>;
         tileSize: any;
         buffer: any;
         pixelFormat: any;

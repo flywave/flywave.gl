@@ -111,6 +111,13 @@ function discoverTests(): TestEntry[] {
         a.startsWith("rasuvdbg="))?.slice("rasuvdbg=".length);
     if (dbg === "1") (globalThis as any).__mbRasUvDbg = true;
 }
+// Decode census: per-tile technique/vertex counts (is content reaching the
+// emitter at all — data vs render side split for blank domains).
+{
+    const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("decodedbg="))?.slice("decodedbg=".length);
+    if (dbg === "1") (globalThis as any).__mbDecodeDbg = true;
+}
 const ALL_TESTS = discoverTests();
 console.log(`[MBStyleCompat] ${ALL_TESTS.length} compatible tests loaded`);
 
@@ -529,6 +536,11 @@ async function processOperations(
                 // MapView exposes `tilt` (degrees).
                 try {
                     mapView.tilt = args[0];
+                } catch {}
+                // mgl re-evaluates pitch-dependent appearance conditions on
+                // pitch change — our decode-time evaluation needs a re-decode.
+                try {
+                    (dataSource as any).refreshDecoderPitch?.();
                 } catch {}
                 break;
             }

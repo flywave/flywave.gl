@@ -3768,6 +3768,20 @@ export class MBTileDataEmitter {
 
     getDecodedTile(): DecodedTile {
         if ((this as any).__feats) { console.log('MB_FEATS', (this as any).__feats); (this as any).__feats = ''; } // FEAT-PROBE (temp)
+        if ((globalThis as any).__mbDecodeDbg) {
+            try {
+                const techs = this.m_techniques.map((t: any) =>
+                    `${t?.name ?? 'NONAME'}:${t ? (t.technique ?? (t as any).type ?? '') : ''}`);
+                let verts = 0, geos = 0;
+                for (const [, geo] of this.m_geometries) {
+                    if (geo.positions.length === 0) continue;
+                    geos++;
+                    verts += geo.positions.length / 3;
+                }
+                // eslint-disable-next-line no-console
+                console.log(`[MBDecode] tile=${String(this.m_tileKey)} geos=${geos} verts=${verts} techs=[${techs.join(',')}]`);
+            } catch {}
+        }
         const geometries: Geometry[] = [];
 
         for (const [, geo] of this.m_geometries) {

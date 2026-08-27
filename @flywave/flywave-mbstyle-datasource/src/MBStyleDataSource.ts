@@ -1270,6 +1270,13 @@ export class MBStyleDataSource extends TileDataSource {
                 return true;
             }
             const tileSize = rawSpec?.tileSize ?? (source as any).tileSize ?? 256;
+            // §510: keep the historical −2 (512px) / −1 (256px) frame the
+            // decoder geometry pipeline is calibrated against. The mgl
+            // request level (round(zoom) clamped to maxZoom — one ABOVE our
+            // cell level for 512px sources) is reached by the §510 fallback
+            // in getVectorTile below: on a 404 at the cell level, fetch the
+            // mgl-level tile (L+1, x, y) whose 512px extent covers the cell
+            // exactly 1:1.
             const desiredOffset = tileSize > 256 ? -2 : -1;
             // TileDataSource.connect() later forwards storageLevelOffset to the
             // decoder (see TileDataSource.ts), which derives the zoom-expression
@@ -1844,6 +1851,51 @@ export class MBStyleDataSource extends TileDataSource {
                 // Icon cross-fade blends decoded tiles requested — register
                 // them before placement/PoiRenderer material creation.
                 self.flushIconBlends();
+                if ((globalThis as any).__mbDecodeDbg) {
+                    try {
+                        const counts: Record<string, number> = {};
+                        let total = 0;
+                        const cam: any = (self.mapView as any).m_rteCamera
+                            ?? (self.mapView as any).camera;
+                        const V = new THREE.Vector3();
+                        const samples: string[] = [];
+                        self.mapView.scene.traverse((o: any) => {
+                            if ((o as any).isMesh || (o as any).isPoints || (o as any).isLine) {
+                                total++;
+                                const tname = o.userData?.technique?.name ?? o.userData?.technique?.technique ?? o.type;
+                                counts[tname] = (counts[tname] ?? 0) + 1;
+                                if (samples.length < 6 && tname !== 'Mesh') {
+                                    o.updateMatrixWorld?.();
+                                    const g: any = o.geometry;
+                                    let vx = '';
+                                    if (g?.attributes?.position) {
+                                        const pa = g.attributes.position;
+                                        const v0 = new THREE.Vector3();
+                                        if (pa.itemCount === 3 || pa.itemSize === 3) {
+                                            v0.fromBufferAttribute?.(pa, 0)
+                                                ?? v0.set(pa.array[0], pa.array[1], pa.array[2]);
+                                        } else {
+                                            v0.set(pa.array[0], pa.array[1], 0);
+                                        }
+                                        v0.applyMatrix4(o.matrixWorld);
+                                        const vv = v0.clone().project(cam);
+                                        vx = `v0ndc=(${vv.x.toFixed(2)},${vv.y.toFixed(2)}) v0w=(${v0.x.toFixed(0)},${v0.y.toFixed(0)},${v0.z.toFixed(0)})`;
+                                    }
+                                    o.getWorldPosition(V);
+                                    V.project(cam);
+                                    const mat: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                                    samples.push(`${tname}:v=${o.visible?1:0} ndc=(${V.x.toFixed(2)},${V.y.toFixed(2)}) ${vx} nvert=${g?.attributes?.position?.count} mat=${mat?.type} op=${mat?.opacity} tr=${mat?.transparent?1:0}`);
+                                }
+                            }
+                        });
+                        // eslint-disable-next-line no-console
+                        console.log('[MBScene] objs=' + total + ' ' + JSON.stringify(counts));
+                        for (const s of samples) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBObj] ' + s);
+                        }
+                    } catch {}
+                }
                 // §273: per-frame fog uniform sync (globe center / alpha) —
                 // materials snapshot UniformsLib.fog at creation.
                 self.m_environment?.syncFogUniforms();
@@ -3187,7 +3239,10 @@ export class MBStyleDataSource extends TileDataSource {
             mbStyle: style,
             currentSourceId: this.m_currentSourceId,
             demTileUrl: this.m_demTileUrl,
-            pitch: style.pitch ?? 0,
+            // Live camera pitch (mgl appearance conditions evaluate the
+            // camera pitch, not the style's static value — setPitch ops
+            // must reach appearance conditions, not just new decodes).
+            pitch: this.mapView ? (this.mapView.tilt ?? style.pitch ?? 0) : (style.pitch ?? 0),
             bearing: style.bearing ?? 0,
             brightness: this.m_environment?.brightness ?? 0,
             clipMask: Object.fromEntries(this.m_clipMask),
@@ -3197,6 +3252,16 @@ export class MBStyleDataSource extends TileDataSource {
         if (this.mapView) {
             this.mapView.markTilesDirty(this);
         }
+    }
+
+    /**
+     * Re-ship the live camera pitch to the decoder and re-decode — mgl
+     * re-evaluates appearance conditions whose expression depends on the
+     * global pitch state (FeatureAppearances.update globalChanged) on every
+     * change; our decode-time evaluation needs a tile refresh to match.
+     */
+    refreshDecoderPitch(): void {
+        this.refreshDecoderBrightness();
     }
 
     shouldPreloadTiles(): boolean {

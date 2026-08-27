@@ -651,9 +651,11 @@ export class MBLayerEvaluator {
                 }
             }
 
-            // Apply appearances: conditional property overrides. Each appearance
-            // whose condition evaluates truthy merges its properties over the
-            // base paint/layout (last matching appearance wins).
+            // Apply appearances: conditional property overrides. mgl semantics
+            // (symbol_bucket.updateAppearances findIndex + FeatureAppearances.
+            // evaluateAllFeatures): the FIRST appearance whose condition
+            // evaluates truthy becomes the active appearance and the only one
+            // applied — later active appearances do NOT stack over it.
             if (pl.appearances) {
                 for (const app of pl.appearances) {
                     try {
@@ -682,6 +684,8 @@ export class MBLayerEvaluator {
                                     }
                                 }
                             }
+                            // First active appearance only (mgl findIndex).
+                            break;
                         }
                     } catch {}
                 }
