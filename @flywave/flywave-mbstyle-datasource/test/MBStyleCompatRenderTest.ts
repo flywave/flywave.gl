@@ -103,6 +103,11 @@ function discoverTests(): TestEntry[] {
 }
 {
     const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("uvtdbg="))?.slice("uvtdbg=".length);
+    if (dbg === "1") (globalThis as any).__mbUvTerrainDbg = true;
+}
+{
+    const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("rasuvdbg="))?.slice("rasuvdbg=".length);
     if (dbg === "1") (globalThis as any).__mbRasUvDbg = true;
 }

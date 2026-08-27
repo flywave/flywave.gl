@@ -5751,3 +5751,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **§502 附记（同 commit）——隔离渲染终判：drape-applied 网格单独渲染 = 全黑（4096/4096 frags, meanL=0）**。三签名合并定性：RT 内有真实卫星（dump ✓）+ mesh#3 drapeSet=true 且在视锥（MBFr ✓）+ 隔离渲染**全黑** ⇒ **terrain 材质在 RT pass 里把 uDrape 采样成黑不透明**——texture-incomplete/绑定失效特征（NPOT 258² CanvasTexture + mipmap 过滤 + SwiftShader 组合为头号嫌疑；主画布正常 RT 黑 = 状态/纹理单元在第二 render pass 的差异）。vertex USE_DRAPE define 修复（防御性正确，已入库）未改变结果——varying 理论亦证伪。下会话单点：隔离渲染里对 uDrape 做 mipmap/过滤/complete 探针（如 scratch 渲染前强制 tex.needsUpdate+generateMipmaps=false+NearestFilter A/B）。
 
 **§502 尾注（同 commit）——m135 定性反转 + 收束**：attach 后 bake 的 C448/m135 ≈ **线性域真实卫星**（z12 pale sRGB 193 → linear ≈138；RT 为 NoColorSpace 不编码=正确管线行为）——**bake 内容已正确**！过滤假设（Nearest/无 mipmap/Clamp A/B）无变化已回滚保留 hygiene。残余白屏唯一收窄：**terrain 侧 vMapUv 采样位置错位**（采到 RT 透明区→mix 保持白基色；setProperty 的局部白带同解）。下会话单点（5 行探针）：terrain fragment 按 vMapUv 着色可视化（R=u,G=v），一步定位 UV 错位方向（翻转/缩放/平移）。
+
+**§503. 会话终记——UV 可视化反证 + 决定性切分：场景在渲染、丢的是主画布通路（setTerrain 切换后的引擎组合器状态）**：
+
+**UV 可视化（uvtdbg=1，R=u/G=v）反证**：terrain/raster 全白屏上 vMapUv 渐变零上屏——**地形 fragment 根本没进主画布**（非 UV 采样错位；§502 尾注的"vMapUv 采样错位"定性作废）。
+
+**整场景 settle 渲染探针（MBSceneRT）**：AfterRender 中用 RTE 相机把**整个 m_scene** 渲进 scratch RT（挂 onShaderError 钩子，无 shader 错误）——**36/36 非空**：上排 lum 14-23（远处地形亮部）下排 1-6（近地暗部）= pitch 45 的正常地形画面。**场景在 settle 时可完整渲染，主画布却全白 ⇒ 丢失发生在 mapRenderingManager 组合器通路**——terrain/raster 独有 `setTerrain(null)→setTerrain` 中途切换后，组合器的渐进渲染状态未随场景重建（init-build 路径的 setProperty 正常、forceRenderCached 的 cache-invalidation 正常，唯 toggle 路径坏）= **引擎级缺口**（与 §452 karma --debug 同族手法可终审）。
+
+**下会话单点**：读 mapRenderingManager/composing 源码的 progressive 状态机（何时重置 dirty/重新渐进），找 setTerrain 重建后组合器不重绘的根因；或 harness 侧在 setTerrain op 后强制 composer 重置。修复后 terrain/raster 全链（地形+z12 drape）即刻生效——bake 内容正确性已由 §502 尾注证实。
+
+**探针资产新增**：uvtdbg=1（terrain vMapUv 可视化）、MBSceneRT（整场景 scratch RT 渲染 + 6×6 网格直方图 + onShaderError 钩子）、rtdisable/MBAtt 时序标记（§502）。

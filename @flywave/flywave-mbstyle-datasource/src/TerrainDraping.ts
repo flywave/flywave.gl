@@ -139,6 +139,51 @@ export class TerrainDraping {
                     });
                     // eslint-disable-next-line no-console
                     console.log('[MBFr] frN=' + frN + ' ' + parts.join(' '));
+                    // §503: whole-scene settle render through the RTE camera
+                    // + shader-error hook — splits scene-draw loss vs canvas
+                    // post-pass loss, and surfaces program failures.
+                    if (frN === 302) {
+                        try {
+                            const renderer2 = this.m_mapView.renderer!;
+                            const prevT = renderer2.getRenderTarget();
+                            renderer2.debug = renderer2.debug || (renderer2 as any).debug || {};
+                            (renderer2 as any).debug.onShaderError = (
+                                gl: any, program: any, vs: any, fs: any) => {
+                                // eslint-disable-next-line no-console
+                                console.log('[MBShaderErr] program link/compile failure');
+                            };
+                            const scratch = new THREE.WebGLRenderTarget(64, 64);
+                            const rte = (this.m_mapView as any).getRteCamera
+                                ? (this.m_mapView as any).getRteCamera()
+                                : (this.m_mapView as any).m_rteCamera;
+                            renderer2.setRenderTarget(scratch);
+                            renderer2.setScissorTest(false);
+                            renderer2.setClearColor(0xff00ff, 1);
+                            renderer2.clear(true, true, false);
+                            renderer2.render(this.m_mapView.scene, rte);
+                            const buf = new Uint8Array(64 * 64 * 4);
+                            renderer2.readRenderTargetPixels(scratch, 0, 0, 64, 64, buf);
+                            renderer2.setRenderTarget(prevT);
+                            // sample 6x6 grid luminance + count non-magenta
+                            let nonMag = 0;
+                            const cells: string[] = [];
+                            for (let gy = 0; gy < 6; gy++) {
+                                for (let gx = 0; gx < 6; gx++) {
+                                    const q = ((5 - gy) * 10 + 5) * 64 + (gx * 10 + 5);
+                                    const o6 = q * 4;
+                                    const isMag = buf[o6] === 255 && buf[o6 + 2] === 255;
+                                    if (!isMag) nonMag++;
+                                    cells.push(((buf[o6] + buf[o6 + 1] + buf[o6 + 2]) / 3).toFixed(0));
+                                }
+                            }
+                            // eslint-disable-next-line no-console
+                            console.log('[MBSceneRT] nonMag=' + nonMag + '/36 grid=' + cells.join(','));
+                            scratch.dispose();
+                        } catch (e) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBSceneRT] ERR ' + e);
+                        }
+                    }
                     // §502 dichotomy: render mesh #3 ALONE with its own
                     // material into a scratch RT — material-renders-drape vs
                     // main-canvas-path-loses-it.

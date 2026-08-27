@@ -37,6 +37,9 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
             };
         }
         this.onBeforeCompile = (shader: THREE.WebGLProgramParametersWithUniforms) => {
+            // §503 terrain-side UV visualizer (uvtdbg=1): paint vMapUv as
+            // R=u, G=v on the terrain — one capture reads the orientation.
+            const uvtdbg = !!(globalThis as any).__mbUvTerrainDbg;
             if (self.m_drapeTexture) {
                 // §502 ROOT CAUSE of the white-drape lottery: the define was
                 // prepended to the FRAGMENT only, so the vertex shader's
@@ -109,11 +112,16 @@ export class MapTerrainMaterial extends THREE.MeshStandardMaterial {
                 `
             );
 
+            if (uvtdbg) {
+                shader.fragmentShader = '#define USE_DRAPE\n' + shader.fragmentShader;
+                shader.vertexShader = '#define USE_DRAPE\n' + shader.vertexShader;
+            }
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <map_fragment>',
                 `
                 #include <map_fragment>
                 #ifdef USE_DRAPE
+                    ${uvtdbg ? 'diffuseColor.rgb = vec4(vMapUv.x, vMapUv.y, 0.5);' : ''}
                     // Flip V: terrain mesh UV V=0 is at the far edge (originY+size)
                     // but the FBO texture V=0 is at the near edge (originY), so a
                     // 1.0 - v.y flip is needed to align drape content with the
