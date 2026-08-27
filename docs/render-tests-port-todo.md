@@ -5678,3 +5678,15 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 
 **未竟候选记档**：icon-with-offset-2 等 3 例基线回归涉碰撞盒 offset/渲染联动，需真值管线经验迭代，暂缓盲修；锚点 verdict BOTH 15→67 同前。
 
+
+**§498. 会话续记——symbol-placement line 域：mgl get_anchors 忠实移植（LineAnchor 自包含，调用点接线因 tsc 缺陷延后）**：
+
+**域分析定案**（对照 mapbox-gl-js/src/symbol/get_anchors.ts + check_max_angle.ts）：
+我方 LineAnchor 旧实现与 mgl 六处语义差——① 首锚偏移恒 spacing/2（mgl=(shapedLabelLength/2+glyphSize×2)×boxScale×overscale % spacing，续接线才用半距）；② 无 shaped 标签长度参与；③ 无"标签相对 spacing 过长时扩距保证 ≥spacing/4 净空"规则；④ 无锚点 tile/视口界内检查与"整标签须落在线段内（dist±halfLabel∈[0,lineLength]）"约束；⑤ 锐角剔除语义错位：比较相邻锚点角度差（mgl=沿标签长度滑窗 sum|转角| 超 text-max-angle 即拒，windowSize=3/5·glyphSize）；⑥ 无"零锚且非续接→线中点重试一次"回退。残留带 13-21 万像素与此一致。
+
+**移植落地（LineAnchor.ts 重写）**：getAnchors/resample/getCenterAnchor/checkMaxAngle 四函数逐行同构移植；导出签名向后兼容（前 3 参不变，第 4 参 GetLineAnchorsOptions 可选）。无 options 时退化路径仍含 mgl 的首锚 fixedExtraOffset 偏移与中点回退（较旧实现的纯均匀采样更近 mgl）。
+
+**工具链事件（重要记档）**：tsc 5.8.3 在本仓库 solution 级出现非确定性 `Debug Failure`（isUndefinedIdentifierExpression 序列化路径）——MBStyleSymbolPlacement.ts 哪怕纯注释级触碰也会在特定增量图形状下触发；单文件独立声明发射探针（全部 src+test 114+39 文件逐个 emit）全绿 ⇒ 与内容无关，是 builder 状态耦合缺陷。全程取证补丁法（patch _tsc.js 断点打印节点）未获稳定归因。**处置**：该文件保持 HEAD 位不动（其 lib/d.ts 有效），LineAnchor 移植保留；**待办=升级 typescript 后一行完成调用点接线**（传 labelLength=max(textBox.w,iconBox.w)、glyphSize=textSize、bounds={0,0,canvasW,canvasH}，mbstyle-symbolplacement.ts:732 区域）。
+
+**验证状态**：tsc --build 连续三绿、lib 已更新。karma 渲染测试按用户策略继续攒批延后。
+
