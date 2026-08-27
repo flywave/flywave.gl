@@ -5829,3 +5829,5 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **同批入库**：稳定 uniform holder（编译时闭包快照→持久引用，uDrape/uDem/uDemPrev/uDemLerp/uDemIsFloat/uExaggeration/uMBZSecLat 全套）；uniform-swap 使冻结期换纹理即时生效。
 
 **下阶段（校准清单）**：① relief/明暗基调对齐（EXP 浅、我方深——drape 地形光照基底+unlit 覆写已有，需调 drape 亮度/地形基色）；② z12 影像源的 overzoom 模糊特征（EXP 锐度低 2.2×已量化）；③ hillshade-buffer 族（meshCount=2 特例路径）；④ setProperty 四件套外观校准（结构已通，15863 好带）。
+
+**§506 尾注二——hillshade-buffer 族专项（未解，已定位调查框架）**：① 用 token 补齐 terrain-buffer-0/1/2 缺失的 7 张 z10 DEM 瓦片——发现 Mapbox CDN 对这 7 块本就返回空（无数据），**本地数据与 mgl 原始期望一致，非数据缺口**（mgl expected 同样缺这 7 块）。② create-once draping 落地（反复 setup 不再清空收敛快照）。③ 该族白屏的特有结构：terrain.source=hillshade（z10 网格，本地仅 2/9 张有效→2-mesh 控制器），卫星=z11 三张 quad 只覆盖 bake 窗中央 1/4——**z11 quad 在 z10 窗内的栅格化为零**（T512/C0 恒定，90 次 bake），与 terrain/raster（z12 quad 恰满 z12 窗）的本质差异。④ 下会话单点：MBIsoLit 式带灯隔离渲染 hillshade-buffer 的 z11 quad（复用 §506 方法），确定零栅格化的环节（远裁剪/窗口换算/层）；hillshade 层 drape 语义对照 mgl（mgl hillshade 也参与 drape）。
