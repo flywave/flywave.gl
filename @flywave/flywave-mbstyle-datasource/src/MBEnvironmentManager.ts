@@ -664,7 +664,9 @@ export class MBEnvironmentManager {
                 );
                 const dirVec = this.directionalVec(direction);
                 this.m_directionalLight.position.set(dirVec[0], dirVec[1], dirVec[2]);
-                if (p['cast-shadow']) {
+                // mgl spec: 'cast-shadows' (plural); 'cast-shadow' kept as a
+                // legacy alias.
+                if (p['cast-shadows'] === true || p['cast-shadow'] === true) {
                     this.m_directionalLight.castShadow = true;
                     this.m_directionalLight.shadow.mapSize.width = 2048;
                     this.m_directionalLight.shadow.mapSize.height = 2048;
@@ -673,7 +675,7 @@ export class MBEnvironmentManager {
                 }
                 // mgl shadow state (shadow_renderer.ts reads these off the
                 // directional light each frame): enabled + intensity.
-                this.m_shadowEnabled = p['cast-shadow'] === true;
+                this.m_shadowEnabled = p['cast-shadows'] === true || p['cast-shadow'] === true;
                 this.m_shadowIntensity = Number(p['shadow-intensity'] ?? 0);
                 // Kept out of the scene — see the ambient note above about
                 // double lighting of manually-injected materials.

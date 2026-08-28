@@ -432,7 +432,10 @@ export class MBModelRenderer {
         // shadow casters; layer 1 is the shadow-camera mask.
         const castShadows = technique._paint?.['model-cast-shadows'] !== false;
         if (castShadows) {
-            model.layers.enable(1);
+            // §522: the shadow depth pass renders layer 1 ONLY — enable it on
+            // every descendant (three tests per-renderable layers, not the
+            // root's).
+            model.traverse((o) => { o.layers.enable(1); });
             shadowCasters.add(model);
         }
 

@@ -118,6 +118,11 @@ function discoverTests(): TestEntry[] {
         a.startsWith("decodedbg="))?.slice("decodedbg=".length);
     if (dbg === "1") (globalThis as any).__mbDecodeDbg = true;
 }
+{
+    const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shadowdbg="))?.slice("shadowdbg=".length);
+    if (dbg === "1") (globalThis as any).__mbShadowEnable = true;
+}
 const ALL_TESTS = discoverTests();
 console.log(`[MBStyleCompat] ${ALL_TESTS.length} compatible tests loaded`);
 

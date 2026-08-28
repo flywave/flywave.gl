@@ -67,6 +67,15 @@ export class MBShadowRenderer {
 
     /** Per-frame entry point (AfterRender; one-frame uniform lag like heatmap). */
     run(): void {
+        // §522 GATE: with `cast-shadows` actually activating (property-name
+        // bug fixed this session) the pass uniformly darkens the whole ground
+        // (856405 vs 375224 px on buildings-trees-shadows-casting) — the
+        // result is pixel-identical across shadow-camera framings (absolute
+        // vs eye-rebased center), i.e. the depth sample is uniformly wrong
+        // and needs a shadow-map dump probe (frame/extent/bias decomposition)
+        // before visual calibration. Opt back in per-run via the forensic
+        // karma arg gate `shadowdbg=1` (window.__mbShadowEnable).
+        if (!(globalThis as any).__mbShadowEnable) return;
         if (!this.m_enabled || this.m_intensity <= 0) return;
         const renderer = this.m_mapView?.renderer as THREE.WebGLRenderer | undefined;
         const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;
@@ -96,6 +105,15 @@ export class MBShadowRenderer {
         camera.getWorldPosition(center);
         const target = (this.m_mapView as any).worldCenter as THREE.Vector3 | undefined;
         if (target) center.copy(target);
+        // §522: NOTE — with cast-shadows actually activating (the singular/
+        // plural property bug is fixed), an eye-relative rebase of `center`
+        // here was tried and OVERSPREAD shadows across the whole ground
+        // (−481k px on buildings-trees-shadows-casting). The receiver side
+        // (vMBWorldPos from RTE matrixWorld) vs this shadow camera framing
+        // needs a coherent frame rework with a shadow-map dump tool before
+        // re-enabling visual calibration. The absolute framing leaves the
+        // depth sample out of [0,1] for RTE receivers → no modulation (the
+        // pre-§522 status quo).
         const lightDir = (this.m_dataSource as any).m_environment
             ?.lighting3DState?.dir as THREE.Vector3 | undefined;
         if (!lightDir) return;
@@ -114,9 +132,14 @@ export class MBShadowRenderer {
         this.m_shadowCamera.updateMatrixWorld();
 
         // Depth-only pass over the casters (layer mask + override material).
+        // §522: layer 1 = registered shadow casters ONLY — a scene-wide depth
+        // pass would bake the ground into the shadow map and self-shadow
+        // every receiver (mgl drawDepthPrepass renders the caster set).
         const prevTarget = renderer.getRenderTarget();
         const prevOverride = scene.overrideMaterial;
         const prevShadowEnabled = renderer.shadowMap.enabled;
+        const prevLayers = this.m_shadowCamera.layers.mask;
+        this.m_shadowCamera.layers.set(1);
         renderer.shadowMap.enabled = false;
         scene.overrideMaterial = this.m_depthMaterial;
         try {
@@ -127,6 +150,7 @@ export class MBShadowRenderer {
             scene.overrideMaterial = prevOverride;
             renderer.shadowMap.enabled = prevShadowEnabled;
             renderer.setRenderTarget(prevTarget);
+            this.m_shadowCamera.layers.mask = prevLayers;
         }
 
         // world → shadow-uv matrix (proj*view + [0,1] remap).

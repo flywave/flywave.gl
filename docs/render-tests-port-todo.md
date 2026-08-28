@@ -6034,3 +6034,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **实现**：① emitter 逐要素求值 model-color（表达式→THREE.Color，ColorManagement 转 linear）→ placement.color/colorMix；② `applyMglModelLighting` 增 tint 参数——mix>0 时**克隆共享原型材质**（逐实例独立 uniform），shader 在 albedo 捕获后 `mbAlbedo = mix(mbAlbedo, uMB3DTint, uMB3DTintA)`（线性域，mgl 同款）。
 
 **验证**：buildings-trees-shadows-casting 394548→**375224**（−19k），白/灰/粉/橙/黄/绿树冠色分布与 expected 对齐。**余项**：① 树影上地面（expected 黑色树影；shadow depth pass 全场景含树，疑地面接收端/强度链路，下阶段）；② 整体亮度（我方偏暗，ambient 域）；③ landmark emissive/roughness。
+
+**§522. 会话续记——影子链路三连破案 + 校准门（2026-08-28 续八）**：
+
+**三实锤**：① **`cast-shadows` 复数属性 bug**——环境管理器读 `p['cast-shadow']`（单数），mgl 规范（v8.json properties_light_directional）是 **`cast-shadows`** → 影子链路自创建以来从未激活过（shadowLightState 恒 null）。已修（复数为主、单数别名兼容）。② **RTE 帧疑云**：shadow 相机绝对 worldCenter 取帧 vs 接收端 vMBWorldPos（RTE matrixWorld）——但实验证明 eye-rebase 与绝对取帧产出**逐像素相同**的满地暗（调制对相机取帧不敏感 = 深度采样均匀性错误，非取帧问题）。③ **深度 pass 自遮蔽假设排除**：限 layer-1 caster 过滤 + 模型全 descendants 启 layer 1 后像素不变。
+
+**坑位追加**：f4–f7 四轮跑全没带 `MB_NO_WEBPACK_CACHE=1`——f5/f6/f7 可能都在吃同一个旧 webpack 构建（§517 定案的坑再犯），对照实验全部作废重跑后才定性。
+
+**校准门**：影子激活后 buildings-trees-shadows-casting 856405 vs 门关 375224（−481k 回归）——`MBShadowRenderer.run` 加 `__mbShadowEnable` 门（karma 参数 `shadowdbg=1` 取证通道，harness 已接线），默认关=维持 §521 无回归状态。**下阶段专项**：shadow-map dump probe（RT 深度回读/落盘）分解帧/范围/偏置后重开校准；已入库组件（复数属性修复、caster layer-1 全 descendant、layer 过滤、receiver 注入）均为正确方向，差的是深度采样链路的某一环。
