@@ -34,20 +34,9 @@ export class MBShadowRenderer {
     private m_shRenderer: THREE.WebGLRenderer | null = null;
     private m_shTex: THREE.CanvasTexture | null = null;
     private m_shadowCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 4000);
-    // §527: depth packed into COLOR (16-bit RG) — gl_FragCoord.z linearized
-    // over the shadow camera's [near, far].
-    private m_depthMaterial = new THREE.ShaderMaterial({
-        vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-        fragmentShader: `
-            void main(){
-                // raw window depth (gl_FragCoord.z) — receivers project with
-                // the SAME shadow camera matrix, so uv.z is directly
-                // comparable. 16-bit pack: R=hi, G=lo.
-                float v = gl_FragCoord.z * 255.0;
-                float hi = floor(v) / 255.0;
-                float lo = fract(v);
-                gl_FragColor = vec4(hi, lo, 0.0, 1.0);
-            }`,
+    // §532 bisect: ShaderMaterial vs Basic — is the ctx2 blank a silent
+    // shader-compile failure or something else? (Basic draws white geometry.)
+    private m_depthMaterial: THREE.Material = new THREE.MeshBasicMaterial({
         colorWrite: true,
     });
     private m_matrix = new THREE.Matrix4();
@@ -169,7 +158,8 @@ export class MBShadowRenderer {
         // in the INDEPENDENT context — the main renderer/canvas untouched.
         const prevOverride = scene.overrideMaterial;
         const prevLayers = this.m_shadowCamera.layers.mask;
-        this.m_shadowCamera.layers.set(1);
+        // §532 bisect B: layer filter DISABLED — render everything.
+        this.m_shadowCamera.layers.set(0);
         scene.overrideMaterial = this.m_depthMaterial;
         try {
             this.m_shRenderer.setRenderTarget(null);
@@ -218,6 +208,20 @@ export class MBShadowRenderer {
                     grid.push(row);
                 }
                 (globalThis as any).__mbShadowGrid = grid;
+                // direct POST with own throttle — the census dump signature
+                // doesn't include the grid, so late frames would never post.
+                const fb = (window as any).__karma__?.config?.args
+                    ?.find?.((a: string) => a.startsWith('feedback-url='))
+                    ?.slice('feedback-url='.length);
+                const st = (globalThis as any).__mbShadowPost ??= { n: 0 };
+                if (fb && st.n < 3) {
+                    st.n++;
+                    void fetch(`${fb}/mb-probe-dump`, {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({ name: 'shadow-grid', grid }),
+                    }).catch(() => {});
+                }
             } catch {}
         }
 
