@@ -6128,3 +6128,7 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **§536. 会话续记——model-roughness/emissive 落地，model-emissive-strength −62%（2026-08-29 续五）**：
 
 ① emitter 逐要素求值 `model-roughness`（mgl 默认 1=全粗糙，覆盖 glTF 自身 roughnessFactor）→ placement.roughness；② MBModelRenderer.instantiate 对带 roughness 的实例钳位 [0,1] 后写入材质 roughness（与 tint 同路径克隆材质）。③ 验证（单跑 model-emissive-strength + landmark-emission-strength）：**model-emissive-strength 18563→6986（−62%）**；landmark-emission-strength(-lod) 264389/314352 持平——landmark 系模型来自多源 landmark tiles，其模型实例化/材质链另行诊断（非本项回归）。亮度域 gamma 实验阴性结论（§535）维持。单测 290。
+
+**§537. 会话续记——landmark 链根因：`batched-model` 源类型不支持（2026-08-29 续六）**：
+
+landmark-emission-strength 夹具解析：landmark 源是 **`type: "batched-model"`**（tile 即 `.glb` 文件：`local://models/landmark/mbx/{x}-{y}-{z}.glb`，maxzoom 14，model layer `landmarks` 挂其上，paint 含 model-color-mix-intensity/emissive-strength/height-based-multiplier/roughness）——**非 vector 源**。§530 的多源接线只处理 `type==='vector'` extras → batched-model 源整体不接线 → landmark GLB 从未加载（模型层完全空）。**支持方案（engine 级，下会话）**：新源类型处理器——按 mgl `model_source` 语义拉取 GLB tile、解析内嵌批次定位（GLB node translation，tile 坐标→世界系）、按 model layer paint 逐实例着色/roughness/emissive（复用 §518/§521/§536 的逐要素通道）。工作量=新 data source 类型 + GLB tile 解析 + 定位语义，独立立项。
