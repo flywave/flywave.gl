@@ -119,6 +119,8 @@ export class MBShadowRenderer {
             this.m_shRenderer = new THREE.WebGLRenderer({
                 canvas,
                 antialias: false,
+                // the CanvasTexture upload samples this buffer — keep it
+                preserveDrawingBuffer: true,
             });
             this.m_shRenderer.setSize(size, size, false);
             this.m_shRenderer.setClearColor(0xffffff, 1);
@@ -179,6 +181,18 @@ export class MBShadowRenderer {
         }
         this.m_shTex.needsUpdate = true;
 
+        // §531 probe: renderer.info quantifies whether ctx2 drew anything.
+        if ((globalThis as any).__mbDecodeDbg) {
+            try {
+                const inf = this.m_shRenderer.info;
+                (globalThis as any).__mbShadowInfo = {
+                    calls: inf.render.calls,
+                    tris: inf.render.triangles,
+                    geoms: inf.memory.geometries,
+                    tex: inf.memory.textures,
+                };
+            } catch {}
+        }
         // §530 probe: 8×8 sample of the depth canvas (shadowdbg diagnostics).
         if ((globalThis as any).__mbDecodeDbg) {
             try {
@@ -188,11 +202,19 @@ export class MBShadowRenderer {
                 c2.height = 8;
                 const cx2 = c2.getContext('2d')!;
                 cx2.drawImage(this.m_shRenderer.domElement, 0, 0, 8, 8);
-                const px = cx2.getImageData(0, 0, 8, 8).data;
+                const gl2: any = this.m_shRenderer.getContext();
+                // 8×8 grid of single pixels spanning the WHOLE canvas (GL
+                // origin bottom-left).
+                const px = new Uint8Array(4);
                 const grid: number[][] = [];
                 for (let gy = 0; gy < 8; gy++) {
                     const row: number[] = [];
-                    for (let gx = 0; gx < 8; gx++) row.push(px[(gy * 8 + gx) * 4]);
+                    for (let gx = 0; gx < 8; gx++) {
+                        const x = gx * 128 + 64;
+                        const y = (7 - gy) * 128 + 64;
+                        gl2.readPixels(x, y, 1, 1, gl2.RGBA, gl2.UNSIGNED_BYTE, px);
+                        row.push(px[0]);
+                    }
                     grid.push(row);
                 }
                 (globalThis as any).__mbShadowGrid = grid;

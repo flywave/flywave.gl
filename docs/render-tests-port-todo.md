@@ -6102,3 +6102,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **ctx2 空渲染定性**（8×8 画布采样探针）：第二 context 深度 pass 只输出 clear 色（白）——caster 几何（extrusion 160 + 树）未在 ctx2 光栅化。疑 SwiftShader 多 context 资源上限/软件渲染限制（此前 globe 域同环境多 context 崩溃史，§510）。**故影子视觉仍未开启**（375224 持平），门保持默认关；真机 GPU 或单 context 诊断（ctx2 getContext 失败检测/资源逐帧上传观察）为下步。
 
 **入库**：独立 context 深度 pass（主帧零污染已验证）、CanvasTexture 回流、per-frame receiver 注入重试（修 patch 早于 lights 解析的时序）、ctx2 画布采样探针、inventory-length 签名。单测 290。
+
+**§531. 会话续记——ctx2 空渲染诊断推进 + 会话收口（2026-08-29 续）**：
+
+**新探针数据**：ctx2 `renderer.info` = 80 draw calls / 12031 triangles / 80 geometries——**第二 context 确实在画**（资源双传成功、非 context 创建失败）；但 `preserveDrawingBuffer:true` + `gl.readPixels` 全画布 8×8 网格仍全 255（clear 白色）。矛盾焦点收窄为二选一：① ctx2 端 depth ShaderMaterial 编译静默失败（three 回退跳过绘制，console 转发不稳无法确认）；② 相机/视口在 ctx2 的取框偏移（几何全部 clip 出画布）。
+
+**本阶段入库**：ctx2 `preserveDrawingBuffer` + `readPixels` 全画布网格探针、`renderer.info` 量化。影子校准门维持默认关（375224 无回归）。**下会话入口**：① 二分①/②——先给 depth material 换 MeshBasicMaterial({colorWrite:true}) 试画（排除编译问题），再试禁用 layers 过滤（排除 layer 误筛）；② 影子现身后 extent/偏置校准；③ 亮度域；④ landmark emissive/roughness。基础设施完备，每步单夹具验证即可推进。

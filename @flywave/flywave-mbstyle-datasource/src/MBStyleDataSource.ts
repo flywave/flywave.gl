@@ -2222,6 +2222,7 @@ export class MBStyleDataSource extends TileDataSource {
                                     su: !!(self.m_shadowRenderer as any)?.getShadowUniforms?.(),
                                     en: !!(self.m_shadowRenderer as any)?.enabled,
                                     grid: (globalThis as any).__mbShadowGrid,
+                                    info: (globalThis as any).__mbShadowInfo,
                                 },
                                 elev: elevSamples, yellow: yellowSamples,
                                 black: blackSamples, samples, inventory,
