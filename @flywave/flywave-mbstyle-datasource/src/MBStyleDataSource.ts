@@ -2613,6 +2613,12 @@ export class MBStyleDataSource extends TileDataSource {
                         this.m_loadedModels.push({ model, layer: layer as any });
                         this.applyThemeToModel(model, layer as any);
                     } catch {}
+                    // §520: mgl apply_lighting (emissive-strength default 0).
+                    try {
+                        const { applyMglModelLighting } = await import('./MBModelRenderer');
+                        applyMglModelLighting(this, model,
+                            Number(layer?.paint?.['model-emissive-strength'] ?? 0));
+                    } catch {}
                     const lng = def.position[0] ?? 0;
                     const lat = def.position[1] ?? 0;
                     const z = def.position[2] ?? 0;

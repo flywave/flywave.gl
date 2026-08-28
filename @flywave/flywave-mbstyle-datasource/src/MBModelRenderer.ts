@@ -36,6 +36,80 @@ interface ModelPlacement {
 
 type GLTFLoaderType = any;
 
+/**
+ * §520: mgl shades model materials with LIGHTING_3D_MODE apply_lighting
+ * (model.fragment.glsl getDiffuseShadedColor → _prelude_lighting): the
+ * three-lit result is REPLACED by
+ *
+ *   dir_factor = saturate(dot(N, u_lighting_directional_dir))  (no shadow
+ *   map on our side; the shadowed variant needs the depth prepass)
+ *   k = u_lighting_ambient_color * vertical*ambientDirFactor(N)
+ *       + u_lighting_directional_color * dir_factor
+ *   out = albedo_linear * k   (= mapbox linearProduct through the output
+ *   sRGB conversion), mixed back toward raw albedo by emissive strength.
+ *
+ * Without style lights the material stays untouched (mgl !LIGHTING_3D_MODE
+ * renders raw albedo). Exports for both instantiation paths (per-feature
+ * MBModelRenderer and the source-registry loadModels in MBStyleDataSource).
+ */
+export function applyMglModelLighting(dataSource: any, model: THREE.Object3D, emissiveStrength: number): void {
+    const ls = dataSource?.m_environment?.lighting3DState;
+    model.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const mat of mats as any[]) {
+            if (!mat || mat.__mbMglLit) continue;
+            if (!ls) { mat.__mbMglLit = true; continue; }
+            mat.__mbMglLit = true;
+            const origOnCompile = mat.onBeforeCompile;
+            mat.onBeforeCompile = (shader: any) => {
+                if (origOnCompile) origOnCompile.call(mat, shader);
+                const ls2 = dataSource?.m_environment?.lighting3DState;
+                shader.uniforms.uMB3DAmb = { value: ls2 ? ls2.ambientColorLinear : [1, 1, 1] };
+                shader.uniforms.uMB3DDirColor = { value: ls2 ? ls2.directionalColorLinear : [1, 1, 1] };
+                shader.uniforms.uMB3DDir = { value: ls2 ? ls2.dir : [0, 0, 1] };
+                shader.uniforms.uMB3DEmissive = { value: emissiveStrength ?? 0 };
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'void main() {',
+                    `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
+                     uniform float uMB3DEmissive;
+                     vec3 mbAlbedo = vec3(1.0);
+                     void main() {`
+                );
+                // Capture the glTF albedo AFTER the base-color texture —
+                // that is the `albedo` mgl's getBaseColor feeds apply_lighting.
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <map_fragment>',
+                    `#include <map_fragment>
+                     mbAlbedo = diffuseColor.rgb;`
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <opaque_fragment>',
+                    `#include <opaque_fragment>
+                     {
+                         #ifdef FLAT_SHADED
+                             vec3 mbN = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+                         #else
+                             vec3 mbN = normalize(vNormal);
+                         #endif
+                         vec3 mbDirView = normalize((viewMatrix * vec4(uMB3DDir, 0.0)).xyz);
+                         vec3 mbUpView = normalize((viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
+                         float mbNdotL = clamp(dot(mbN, mbDirView), 0.0, 1.0);
+                         float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
+                         float mbAmbDir = mix(1.0 - 0.3 * min(mbDirLum, 1.0), 1.0, min(dot(mbN, mbDirView) + 1.0, 1.0));
+                         float mbVert = mix(0.92, 1.0, dot(mbN, mbUpView) * 0.5 + 0.5);
+                         vec3 mbK = uMB3DAmb * (mbVert * mbAmbDir) + uMB3DDirColor * mbNdotL;
+                         vec3 mbLit = mbAlbedo * mbK;
+                         gl_FragColor.rgb = mix(mbLit, mbAlbedo, uMB3DEmissive);
+                     }`
+                );
+            };
+            mat.needsUpdate = true;
+        }
+    });
+}
+
 async function getSharedGLTFLoader(): Promise<GLTFLoaderType> {
     const mod: any = await import('three/examples/jsm/loaders/GLTFLoader.js');
     const loader = new mod.GLTFLoader();
@@ -354,6 +428,12 @@ export class MBModelRenderer {
                 this.m_dataSource.applyThemeToModel(model, layer);
             } catch {}
         }
+
+        // §520: mgl apply_lighting on the glTF materials (per-feature
+        // model-emissive-strength rides the placement, default 0).
+        try {
+            applyMglModelLighting(this.m_dataSource, model, (placement as any).emissive ?? 0);
+        } catch {}
     }
 
     /**

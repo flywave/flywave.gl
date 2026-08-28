@@ -6020,3 +6020,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **model-color 语义核案**：spec `model-color-mix-intensity` 默认 0 且 shader `mix(albedo, color_mix, mix)` ——model-color 在 mix=0 时**不生效**；expected 秋色树来自 glTF 自身 albedo/顶点色。我方树冠淡绿偏洗白 vs expected 的浓彩+落地阴影 = 光照/颜色空间域残差（mgl PBR u_lighting_ambient 0.4 + directional 0.5 + shadow map vs 引擎 MeshStandardMaterial+环境光），是 model-layer 下阶段主校准项（与 emissive-strength/roughness 一起）。
 
 **验证**：buildings-trees-shadows-casting 399264→405501（直立后形状对位，±差为光照域噪声级）；单测 290、tsc 绿。
+
+**§520. 会话续记——模型材质 mgl apply_lighting 注入（2026-08-28 续六）**：
+
+`applyMglModelLighting`（MBModelRenderer 导出，两路实例化共用）：glTF 材质 onBeforeCompile 注入 mgl `model.fragment.glsl getDiffuseShadedColor`（LIGHTING_3D_MODE 路径）——**替换** three 光照输出：`dir_factor=saturate(dot(N,dir))`（shadowed 变体需深度 prepass，未移植）、ambient=`u_lighting_ambient_color × vertical(0.92..1)×ambientDirFactor`、`out=albedo_linear×k`（linearProduct 经输出 sRGB 等效）、`mix(lit, albedo, emissive_strength)`（per-feature emissive 走 placement）。albedo 在 `map_fragment` 后捕获（=getBaseColor 产出口径）；无 lights 的样式材质原样（=mgl !LIGHTING_3D_MODE 原始 albedo）。uMB3D uniforms 与 §515/§518 注入器同族。
+
+**验证**：buildings-trees-shadows-casting 405501→394548；树冠从洗白粉绿变浓绿+方向光照，着色贴近 expected。**余项**：① expected 多色树冠（白/粉/橙）vs 我方全绿——树种 albedo 差异（4 个 glb 加载路径或 meshopt/纹理变体未吃到，待查）；② 模型落地阴影（expected 树影上地面，我方 shadow caster 已注册但地面未接收模型影）；③ landmark 系 emissive/roughness 校准。
