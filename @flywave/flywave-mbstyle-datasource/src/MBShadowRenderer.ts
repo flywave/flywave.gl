@@ -212,6 +212,12 @@ export class MBShadowRenderer {
             renderer.shadowMap.enabled = prevShadowEnabled;
             renderer.setRenderTarget(prevTarget);
             this.m_shadowCamera.layers.mask = prevLayers;
+            // §529: the shadow pass leaves three's GL state CACHE mismatched
+            // with the real GL state (viewport/scissor/blend/depth-func) —
+            // every subsequent main render reproduces the same wrong output
+            // (deterministic darkening). resetState() drops the cache so the
+            // next render re-applies everything.
+            (renderer as any).resetState?.();
         }
 
         // world → shadow-uv matrix (proj*view + [0,1] remap).

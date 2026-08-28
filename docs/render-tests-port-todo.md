@@ -6090,3 +6090,7 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 影子深度 pass 从 AfterRender 迁至 **WillRender**（主渲染前执行，画布级破坏会被本帧主渲染覆盖）——**像素与 AfterRender 逐位相同（856405）**。结合 §527 排他矩阵：破坏既非画布时序亦非 FBO/DepthTexture/渲染内容——**是 shadow pass 在同 context 内改变了 three renderer 的持久 GL 状态缓存**（viewport/scissor/depth-func/绑定缓存之一失配后，每次主渲染都复现同一错误输出，故 856405 逐位确定）。修复需 engine（flywave-mapview/three 版本）层：shadow RT 的独立 renderer/context（资源双传成本）或 renderer 状态强制恢复（`renderer.resetState()`/显式 viewport+scissor+depthFunc 重置）——超出数据源层。
 
 **本阶段入库**：深度 pass 迁 WillRender（uniforms 提前到主渲染前就绪，语义更优）；`getShadowUniforms` 返回 color texture。**下阶段（engine 层）**：`renderer.resetState()` 实验 / 独立 context renderer / Spector 帧捕获三选一；随后影子 extent/偏置校准、亮度域、landmark emissive。校准门默认关（375224 无回归）。
+
+**§529. 会话续记——resetState 实验阴性，残余=独立 context renderer（2026-08-28 续十五）**：
+
+`renderer.resetState()`（three r3xx 存在，已验证执行）在 shadow pass 恢复 target 后调用——像素仍 856405 逐位不变 → **three 状态缓存理论亦否定**。至此排除矩阵完备：深度渲染内容、blit、receiver 调制（shIn=0）、画布时序、three 状态缓存全部阴性；唯剩 setRenderTarget(m_rt)+clear 的**GL 层直接效应**（疑 SwiftShader 上带 DepthTexture/color FBO 的绑定切换污染主画布深度状态且 resetState 不覆盖）。**唯一剩余修法=独立 WebGL context 的 renderer 实例跑深度 pass**（资源双传成本，engine 层工程，下一会话评估）；resetState 调用保留（门关时无害，若 engine 修复后自动生效）。影子校准门维持默认关。
