@@ -31,6 +31,11 @@ export interface ShadowUniformState {
 
 export class MBShadowRenderer {
     private m_rt: THREE.WebGLRenderTarget | null = null;
+    // §523 depth→color blit probe (shadowdbg gate).
+    private m_dumpRt: THREE.WebGLRenderTarget | null = null;
+    private m_dumpScene: THREE.Scene | null = null;
+    private m_dumpCam: THREE.OrthographicCamera | null = null;
+    private m_dumpQuad: THREE.Mesh | null = null;
     private m_shadowCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 4000);
     private m_depthMaterial = new THREE.MeshBasicMaterial({ colorWrite: false });
     private m_matrix = new THREE.Matrix4();
@@ -104,7 +109,30 @@ export class MBShadowRenderer {
         const center = new THREE.Vector3();
         camera.getWorldPosition(center);
         const target = (this.m_mapView as any).worldCenter as THREE.Vector3 | undefined;
-        if (target) center.copy(target);
+        // §523: the dump probe caught camPos=NaN — worldCenter / the camera
+        // world position can be non-finite (undefined worldCenter or a
+        // non-finite camera matrix), which NaN-poisons the shadow camera and
+        // empties the depth map (all 1.0). Guard to the last finite value.
+        if (target && Number.isFinite(target.x) && Number.isFinite(target.y) && Number.isFinite(target.z)) {
+            center.copy(target);
+        }
+        if (!Number.isFinite(center.x) || !Number.isFinite(center.y) || !Number.isFinite(center.z)) {
+            center.set(0, 0, 0);
+        }
+        // §523: the scene renders RELATIVE-TO-EYE — the dump probe proved the
+        // absolute worldCenter frames the ortho box 6.4e6 away from every
+        // caster (depth map empty, all 1.0). Rebase the center by −eye so the
+        // box wraps the eye-relative casters (same frame as MBModelRenderer).
+        // (The §522 eye-rebase attempt never actually ran — f5/f6/f7 all used
+        // a stale webpack bundle, MB_NO_WEBPACK_CACHE was missing.)
+        try {
+            const gc = (this.m_mapView as any).geoCenter;
+            const pr = (this.m_mapView as any).projection;
+            if (gc && pr) {
+                const eye = pr.projectPoint(gc, { x: 0, y: 0, z: 0 });
+                center.sub(eye as any);
+            }
+        } catch {}
         // §522: NOTE — with cast-shadows actually activating (the singular/
         // plural property bug is fixed), an eye-relative rebase of `center`
         // here was tried and OVERSPREAD shadows across the whole ground
@@ -162,6 +190,82 @@ export class MBShadowRenderer {
                 0, 0, 0.5, 0.5,
                 0, 0, 0, 1,
             ));
+
+        // §523: shadow-map dump probe (shadowdbg=1) — the depth RT is not
+        // color-readable, so blit it through a fullscreen depth→color quad
+        // into a small RGBA8 target and POST stats + a grid via the
+        // /mb-probe-dump channel (§516).
+        if ((globalThis as any).__mbShadowEnable) {
+            try { this.dumpShadowDepth(renderer, center, lightDir, radius); } catch {}
+        }
+    }
+
+    private dumpShadowDepth(renderer: THREE.WebGLRenderer, center: THREE.Vector3, lightDir: any, radius: number): void {
+        const S = 64;
+        if (!this.m_dumpRt || this.m_dumpRt.width !== S) {
+            this.m_dumpRt?.dispose();
+            this.m_dumpRt = new THREE.WebGLRenderTarget(S, S);
+            this.m_dumpScene = new THREE.Scene();
+            this.m_dumpCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+            this.m_dumpQuad = new THREE.Mesh(
+                new THREE.PlaneGeometry(2, 2),
+                new THREE.ShaderMaterial({
+                    uniforms: { uMap: { value: null } },
+                    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+                    fragmentShader: `uniform sampler2D uMap; varying vec2 vUv;
+                        void main(){ float d = texture2D(uMap, vUv).r;
+                        gl_FragColor = vec4(d, fract(d * 256.0), 0.0, 1.0); }`,
+                }),
+            );
+            this.m_dumpScene.add(this.m_dumpQuad);
+        }
+        const mat = this.m_dumpQuad.material as THREE.ShaderMaterial;
+        mat.uniforms.uMap.value = this.m_rt!.depthTexture!;
+        const prevTarget = renderer.getRenderTarget();
+        renderer.setRenderTarget(this.m_dumpRt);
+        renderer.render(this.m_dumpScene, this.m_dumpCam);
+        renderer.setRenderTarget(prevTarget);
+        const buf = new Uint8Array(S * S * 4);
+        renderer.readRenderTargetPixels(this.m_dumpRt, 0, 0, S, S, buf);
+        // 8×8 grid of the R channel (0..255 depth quantized to 8 bits).
+        const grid: number[][] = [];
+        for (let gy = 0; gy < 8; gy++) {
+            const row: number[] = [];
+            for (let gx = 0; gx < 8; gx++) {
+                let sum = 0;
+                for (let y = 0; y < 8; y++) {
+                    for (let x = 0; x < 8; x++) {
+                        sum += buf[(((gy * 8 + y) * S) + (gx * 8 + x)) * 4];
+                    }
+                }
+                row.push(Math.round(sum / 64));
+            }
+            grid.push(row);
+        }
+        const e = this.m_matrix.elements;
+        const dump = {
+            name: 'shadow-map',
+            grid,
+            matrix: Array.from(e).map((v) => Number(v.toFixed(4))),
+            camPos: this.m_shadowCamera.position.toArray().map((v) => Math.round(v)),
+            radius: Math.round(this.m_shadowCamera.right),
+            raw: {
+                center: [center.x, center.y, center.z].map((v) => Number(v.toFixed(1))),
+                dir: Array.isArray(lightDir) ? lightDir.slice(0, 3) : String(lightDir),
+                radius,
+                target: String((this.m_mapView as any).worldCenter),
+            },
+        };
+        const fb = (window as any).__karma__?.config?.args
+            ?.find?.((a: string) => a.startsWith('feedback-url='))
+            ?.slice('feedback-url='.length);
+        if (fb) {
+            void fetch(`${fb}/mb-probe-dump`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(dump),
+            }).catch(() => {});
+        }
     }
 
     dispose(): void {

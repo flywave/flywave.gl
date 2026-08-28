@@ -6042,3 +6042,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **坑位追加**：f4–f7 四轮跑全没带 `MB_NO_WEBPACK_CACHE=1`——f5/f6/f7 可能都在吃同一个旧 webpack 构建（§517 定案的坑再犯），对照实验全部作废重跑后才定性。
 
 **校准门**：影子激活后 buildings-trees-shadows-casting 856405 vs 门关 375224（−481k 回归）——`MBShadowRenderer.run` 加 `__mbShadowEnable` 门（karma 参数 `shadowdbg=1` 取证通道，harness 已接线），默认关=维持 §521 无回归状态。**下阶段专项**：shadow-map dump probe（RT 深度回读/落盘）分解帧/范围/偏置后重开校准；已入库组件（复数属性修复、caster layer-1 全 descendant、layer 过滤、receiver 注入）均为正确方向，差的是深度采样链路的某一环。
+
+**§523. 会话续记——shadow-map dump probe 落地 + 影子链路四连定性（2026-08-28 续九）**：
+
+**probe 基建**：`MBShadowRenderer.dumpShadowDepth`（`shadowdbg=1` 门）——深度 RT 不可直接读色，经全屏 depth→color blit quad 转染到 64×64 RGBA8 RT 后 `readRenderTargetPixels`，8×8 网格 + 矩阵/camPos/center/dir/radius 原始量走 `POST /mb-probe-dump`。runner 补 `MBSTYLE_SHADOW` env → `shadowdbg=` karma 参数（f4–f7 四轮漏传 shadowdbg 且漏 `MB_NO_WEBPACK_CACHE=1` 的教训记档——**§522 的 eye-rebase 实验当时从未真正执行**）。
+
+**破案**：① **camPos NaN 实锤**（dump camPos 序列化 null）——worldCenter/camera 矩阵可给出非有限值 NaN 毒化 shadow 相机 → 加有限值守卫（非有限回退 0）。② **取帧实证**：dump 显示绝对 worldCenter（6.4e6）取帧时深度图全 255（ortho 框在 6.4e6 外、场景全 eye-relative）→ eye-rebase（worldCenter−eye≈0）后 center=(0,0,0) 正确取框。③ **影子真实渲染**：激活后与 expected 逐点采样部分精确吻合（63/57、83/79——影子区内对位），但范围过宽（expected 亮区被误暗，128→89），总失配 856405 仍劣于门关 375224。
+
+**状态**：校准门保持默认关（无回归保证）；`shadowdbg=1` 即影子全链路 + dump。**下阶段**：① blit 读数与接收端实际采样的矛盾待解（接收端明明在调制而 blit 全 255——疑 blit 时机/绑定或 DepthTexture 采样路径差异）；② 影子范围过宽（ortho extent/偏置/强度混合）逐参数校准；③ 亮度域、landmark emissive。
