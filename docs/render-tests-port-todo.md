@@ -6162,3 +6162,7 @@ GLB tile 勘测：position 单位为 tile 局部量化坐标（x∈[634,7174]、
 逐 tile parse 异常捕获 + 5s hang 检测器入库后，f11 诊断显示 parsed=0 且无 parseErr/hang——parse 回调与同步异常均未触发，即 **GLTFLoader.parse 在 karma/SwiftShader 页面对 Draco GLB 静默挂起**（fetch arrayBuffer 路径与 XHR 路径均同；f12 空输出为构建态噪声已回退）。此为 DRACOLoader worker 在该测试环境的已知形态问题（karma 页面内 Worker 脚本路径受限），修复方向：① `draco.setDecoderPath` 指向 karma 可服务的 worker bundle；② 主线程解码 fallback（`DRACOLoader` 的 `_decode` 换 `draco_decoder.js` 动态 script 注入）；③ 或 fixture 预解码去 Draco。属环境/工具链工程，独立于影子与样式管线（均已完备）。校准门默认关（375224 无回归）、单测 290。
 
 **§544. WIP——DRACOLoader 解码器改由 fixtures 目录服务（未验证）**：假设=karma 不服务 `/base/node_modules/**`，DRACOLoader 拉取解码器脚本 404 → parse 静默挂起。已将 `gltf/` 解码器 4 文件拷入 `models/draco/` 并改 `setDecoderPath` 指向；f13 单跑未取回数据，**需重跑验证**（landmark-emission-strength，基线 264389；命中标志=batched.parsed>0）。
+
+**§545. decoder 路径假设证伪 + DRACOLoader 挂起终态（2026-08-29 终五）**：
+
+f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 parseErr——**decoder 路径假设证伪**。剩余指向 DRACOLoader 的 **Worker spawn 在 karma 页面被阻塞**（karma 页面 CSP/worker 脚本同源策略；错误回调也不触发=worker 生命周期死锁而非解码失败）。**下会话修复方向（唯一）**：绕过 worker——主线程直接解码：`DRACOLoader` 源码显示其 worker 由 `Blob URL` spawn；改用主线程方案=拷贝 `draco_decoder.js`（emscripten 模块）以 `<script>` 注入页面后直接 `new DracoDecoderModule.Decoder()` 手解 GLB（§538 已验证 node 侧同 API 可用，页面侧同理），替换 GLTFLoader.parse 的 Draco 依赖。工程量：解析脚本+GLB 重打包或 loader 钩子，1 会话。基线 264389 维持。
