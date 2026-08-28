@@ -6012,3 +6012,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **camera-projection 族（10 例）定性为引擎级缺口**：mgl orthographic 相机（`camera-orthographic-*`），涉及 flywave-mapview 相机体系，记档不在本数据源层修。
 
 **通道/探针**：`MBModelReg`/`MBModelRun`（registry 尺寸/ placements 可见性）、`MBModelObj`（实例根 pos/scl/matrixWorld）、`MBMergeSources`（合并统计）——全部 decodedbg 门控。
+
+**§519. 会话续记——模型变换 mgl 精确矩阵（Y↔Z 竖立）落地（2026-08-28 续五）**：
+
+`model_util.rotationScaleYZFlipMatrix` 移植：模型局部矩阵 = `Rz(rot[2])·Rx(rot[0])·Ry(rot[1])·S(scale)·F`，F=Y/Z 轴交换（glTF Y-up 右手 → 地图 Z-up；无 F 模型侧躺）。MBModelRenderer.instantiate 与 loadModels 两路统一改为显式 Matrix4（three 默认 Euler 合成既非该顺序也无 F；matrixAutoUpdate=false + setPosition 吃平移）。placement 的逐要素 rotation/scale（§518）直接进矩阵。
+
+**model-color 语义核案**：spec `model-color-mix-intensity` 默认 0 且 shader `mix(albedo, color_mix, mix)` ——model-color 在 mix=0 时**不生效**；expected 秋色树来自 glTF 自身 albedo/顶点色。我方树冠淡绿偏洗白 vs expected 的浓彩+落地阴影 = 光照/颜色空间域残差（mgl PBR u_lighting_ambient 0.4 + directional 0.5 + shadow map vs 引擎 MeshStandardMaterial+环境光），是 model-layer 下阶段主校准项（与 emissive-strength/roughness 一起）。
+
+**验证**：buildings-trees-shadows-casting 399264→405501（直立后形状对位，±差为光照域噪声级）；单测 290、tsc 绿。

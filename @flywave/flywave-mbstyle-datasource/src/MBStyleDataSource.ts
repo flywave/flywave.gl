@@ -2631,25 +2631,35 @@ export class MBStyleDataSource extends TileDataSource {
                     // Scale: scalar or [x,y,z] — layout `model-scale` or the
                     // source registry entry's own `scale`.
                     const effScale = def.scale ?? modelScale;
+                    // Rotation: [x,y,z] Euler angles in degrees — layout
+                    // `model-rotation` or the registry entry's `orientation`.
+                    const effRotation = def.orientation ?? modelRotation;
                     // §518: render AFTER the HD road band (see MBModelRenderer
                     // — ro 0 gets overdrawn by the depthTest-less fill band).
                     model.traverse((o: any) => { o.renderOrder = 10; });
                     model.renderOrder = 10;
-                    if (Array.isArray(effScale)) {
-                        model.scale.set(effScale[0] ?? 1, effScale[1] ?? 1, effScale[2] ?? 1);
-                    } else if (effScale !== undefined) {
-                        model.scale.setScalar(effScale);
-                    }
-
-                    // Rotation: [x,y,z] Euler angles in degrees — layout
-                    // `model-rotation` or the registry entry's `orientation`.
-                    const effRotation = def.orientation ?? modelRotation;
-                    if (Array.isArray(effRotation)) {
-                        model.rotation.set(
-                            (effRotation[0] ?? 0) * Math.PI / 180,
-                            (effRotation[1] ?? 0) * Math.PI / 180,
-                            (effRotation[2] ?? 0) * Math.PI / 180,
-                        );
+                    // §519: mgl model_util.rotationScaleYZFlipMatrix —
+                    // Rz·Rx·Ry·S·F with F swapping Y/Z (glTF Y-up → map
+                    // Z-up); a bare three Euler leaves the model on its side.
+                    {
+                        const rot = Array.isArray(effRotation) ? effRotation : [0, 0, 0];
+                        const sc = Array.isArray(effScale)
+                            ? [effScale[0] ?? 1, effScale[1] ?? 1, effScale[2] ?? 1]
+                            : (effScale !== undefined ? [effScale, effScale, effScale] : [1, 1, 1]);
+                        const D2R = Math.PI / 180;
+                        const m = new THREE.Matrix4()
+                            .multiply(new THREE.Matrix4().makeRotationZ((rot[2] ?? 0) * D2R))
+                            .multiply(new THREE.Matrix4().makeRotationX((rot[0] ?? 0) * D2R))
+                            .multiply(new THREE.Matrix4().makeRotationY((rot[1] ?? 0) * D2R))
+                            .multiply(new THREE.Matrix4().makeScale(sc[0], sc[1], sc[2]))
+                            .multiply(new THREE.Matrix4().set(
+                                1, 0, 0, 0,
+                                0, 0, 1, 0,
+                                0, 1, 0, 0,
+                                0, 0, 0, 1));
+                        m.setPosition(model.position);
+                        model.matrixAutoUpdate = false;
+                        model.matrix.copy(m);
                     }
 
                     scene.add(model);

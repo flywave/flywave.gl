@@ -269,39 +269,31 @@ export class MBModelRenderer {
         const model = prototype.clone(true);
         model.position.set(placement.x, placement.y, placement.z);
 
-        // Transform convention mirrors MBStyleDataSource.loadModels: rotation
-        // [x,y,z] degrees → Euler, scale scalar or [x,y,z], translation in
-        // meters (applied after rotation, in world axes). §518: the per-
-        // feature EVALUATED model-* values ride the placement (mgl data-driven
-        // paint); the technique constants are the non-data-driven fallback.
-        // NaN guard: a raw expression array multiplied as a number yields NaN
-        // and destroys the whole instance matrix (invisible models).
+        // §519: mgl model_util.rotationScaleYZFlipMatrix — the model local
+        // matrix is Rz(rot[2])·Rx(rot[0])·Ry(rot[1])·S(scale)·F, where F
+        // swaps the Y and Z axes (glTF is Y-up right-handed, the map frame
+        // is Z-up). three's default Euler composition is neither of those —
+        // build the matrix explicitly. Without F the model lies on its side.
         const sanitizeVec = (v: any): number[] | undefined => {
             if (!Array.isArray(v)) return undefined;
             const out = [Number(v[0] ?? 0), Number(v[1] ?? 0), Number(v[2] ?? 0)];
             return out.every(Number.isFinite) ? out : undefined;
         };
         const rotation = sanitizeVec((placement as any).rotation) ??
-            sanitizeVec(technique._modelRotation);
-        if (rotation) {
-            model.rotation.set(
-                (rotation[0] ?? 0) * Math.PI / 180,
-                (rotation[1] ?? 0) * Math.PI / 180,
-                (rotation[2] ?? 0) * Math.PI / 180,
-            );
-        }
-        const scale = sanitizeVec((placement as any).scale);
-        if (scale) {
-            model.scale.set(scale[0] ?? 1, scale[1] ?? 1, scale[2] ?? 1);
-        } else if (Number.isFinite(Number(technique._modelScale))) {
-            const s = Number(technique._modelScale);
-            if (Array.isArray(technique._modelScale)) {
-                const sv = sanitizeVec(technique._modelScale);
-                if (sv) model.scale.set(sv[0], sv[1], sv[2]);
-            } else if (s !== 0) {
-                model.scale.setScalar(s);
-            }
-        }
+            sanitizeVec(technique._modelRotation) ?? [0, 0, 0];
+        const scale = sanitizeVec((placement as any).scale) ??
+            sanitizeVec(technique._modelScale) ?? [1, 1, 1];
+        const D2R = Math.PI / 180;
+        const m = new THREE.Matrix4()
+            .multiply(new THREE.Matrix4().makeRotationZ(rotation[2] * D2R))
+            .multiply(new THREE.Matrix4().makeRotationX(rotation[0] * D2R))
+            .multiply(new THREE.Matrix4().makeRotationY(rotation[1] * D2R))
+            .multiply(new THREE.Matrix4().makeScale(scale[0], scale[1], scale[2]))
+            .multiply(new THREE.Matrix4().set(
+                1, 0, 0, 0,
+                0, 0, 1, 0,
+                0, 1, 0, 0,
+                0, 0, 0, 1));
         const translation = sanitizeVec((placement as any).translation) ??
             sanitizeVec(technique._modelTranslation);
         if (translation) {
@@ -309,6 +301,9 @@ export class MBModelRenderer {
             model.position.y += translation[1] ?? 0;
             model.position.z += translation[2] ?? 0;
         }
+        m.setPosition(model.position);
+        model.matrixAutoUpdate = false;
+        model.matrix.copy(m);
 
         // model-opacity: transparent only when actually faded.
         const opacity = Number((placement as any).opacity ?? technique.opacity ?? 1);
