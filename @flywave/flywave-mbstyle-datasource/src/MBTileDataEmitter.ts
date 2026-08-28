@@ -564,6 +564,7 @@ export class MBTileDataEmitter {
         colorMix?: number;
         color?: number[];
         emissive?: number;
+        roughness?: number;
         modelId?: string;
     }> = [];
 
@@ -4159,6 +4160,13 @@ export class MBTileDataEmitter {
                         } catch { colorLin = undefined; }
                     }
                     const emissive = evalScalar('model-emissive-strength', 0);
+                    // §536: model-roughness (mgl default 1 — fully rough,
+                    // overriding the glTF's own roughnessFactor).
+                    const roughRaw = (layer as any).paintDefs?.['model-roughness']?.value
+                        ?? layer.paint?.['model-roughness'];
+                    const roughness = roughRaw === undefined || roughRaw === null
+                        ? undefined
+                        : evalScalar('model-roughness', NaN);
                     for (const pt of points) {
                         const w = this.projectWorld(pt);
                         this.m_modelInstances.push({
@@ -4176,6 +4184,7 @@ export class MBTileDataEmitter {
                             ...(opacity !== 1 ? { opacity } : {}),
                             ...(colorMix !== undefined ? { colorMix } : {}),
                             ...(colorLin ? { color: colorLin } : {}),
+                            ...(roughness !== undefined ? { roughness } : {}),
                             ...(emissive !== 0 ? { emissive } : {}),
                             ...(typeof modelId === 'string' && modelId ? { modelId } : {}),
                         });

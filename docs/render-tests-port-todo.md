@@ -6124,3 +6124,7 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **§535. 会话续记——亮度域 gamma 实验阴性（2026-08-29 续四）**：
 
 理论推导：mgl `apply_lighting=linearProduct(color,k)=color_lin×k^(1/2.2)` 再整体 linearTosRGB → sRGB 域等效乘 `k^0.207`；我方直接乘 k 于线性色再经输出 gamma → 等效乘 `k^0.455` → 理论上偏暗。**实测证伪**：`pow(k,1/2.2)` 修正使 buildings-trees-shadows-casting 375224→392171（+17k 变差）——raw k 乘法反而更接近 expected。已回退。**启示**：expected 的树冠亮度分布含 mgl PBR 其余项（`u_lightintensity` 调制、GGX specular、天空环境项）或 albedo 空间差异，单靠 apply_lighting 的 k-gamma 理论修正不成立；亮度域校准需以逐像素比值拟合（fitting）而非公式推导，工作量独立。影子 extent/偏置校准仍待真机 GPU（shadowdbg=1）。校准门默认关，375224 无回归，单测 290。
+
+**§536. 会话续记——model-roughness/emissive 落地，model-emissive-strength −62%（2026-08-29 续五）**：
+
+① emitter 逐要素求值 `model-roughness`（mgl 默认 1=全粗糙，覆盖 glTF 自身 roughnessFactor）→ placement.roughness；② MBModelRenderer.instantiate 对带 roughness 的实例钳位 [0,1] 后写入材质 roughness（与 tint 同路径克隆材质）。③ 验证（单跑 model-emissive-strength + landmark-emission-strength）：**model-emissive-strength 18563→6986（−62%）**；landmark-emission-strength(-lod) 264389/314352 持平——landmark 系模型来自多源 landmark tiles，其模型实例化/材质链另行诊断（非本项回归）。亮度域 gamma 实验阴性结论（§535）维持。单测 290。

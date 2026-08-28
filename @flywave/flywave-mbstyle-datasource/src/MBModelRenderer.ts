@@ -451,12 +451,23 @@ export class MBModelRenderer {
         // §520: mgl apply_lighting on the glTF materials (per-feature
         // model-emissive-strength rides the placement, default 0).
         // §521: per-feature model-color×mix tint (clones the materials).
+        // §536: model-roughness (mgl default 1) overrides the glTF's own
+        // roughnessFactor — requires material clones (per-feature value).
         try {
             const pl: any = placement;
             const tint = pl.color && pl.colorMix > 0
                 ? { color: pl.color, mix: pl.colorMix }
                 : undefined;
             applyMglModelLighting(this.m_dataSource, model, pl.emissive ?? 0, tint);
+            if (Number.isFinite(pl.roughness)) {
+                model.traverse((o) => {
+                    const mesh = o as THREE.Mesh;
+                    if (!mesh.isMesh) return;
+                    const apply = (m: any) => { if (m) m.roughness = Math.min(Math.max(pl.roughness, 0), 1); };
+                    if (Array.isArray(mesh.material)) mesh.material.forEach(apply);
+                    else apply(mesh.material);
+                });
+            }
         } catch {}
     }
 
