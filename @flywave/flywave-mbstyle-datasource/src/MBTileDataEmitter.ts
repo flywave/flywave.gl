@@ -430,6 +430,16 @@ export class MBTileDataEmitter {
     }
     private m_terrainSampler: ((x: number, y: number) => number) | null = null;
 
+    /** §514: style declares terrain (mgl terrainEnabled equivalent). */
+    setStyleHasTerrain(v: boolean): void {
+        this.m_styleHasTerrain = v;
+    }
+    private m_styleHasTerrain = false;
+    /** Terrain-flat gate: the sampler when present, else the style flag. */
+    private get terrainActive(): boolean {
+        return this.m_terrainSampler !== null || this.m_styleHasTerrain;
+    }
+
     /**
      * Multiplier converting style meters (fill-extrusion height/base) to
      * world-z units. mgl scales every z coordinate by sec(lat)
@@ -784,7 +794,13 @@ export class MBTileDataEmitter {
 
         // HD elevation reference: lift feature to its real-world elevation.
         const elevRef = layout[`${type}-elevation-reference`];
-        if (elevRef) {
+        // mgl symbol_hd_extension.resolveRoadElevation: under terrain the
+        // road-elevation lookup returns none — symbols (and markup lines)
+        // sit flat on the terrain instead of following the curve. Fills
+        // keep their curve elevation (fill_hd_extension has no gate).
+        const terrainFlat = this.terrainActive &&
+            elevRef === 'hd-road-markup' && type !== 'fill';
+        if (elevRef && !terrainFlat) {
             // §513: when the per-vertex path handles this feature (fills),
             // the curve sample must NOT be folded in a second time.
             if (!skipHdSample &&
@@ -1807,40 +1823,51 @@ export class MBTileDataEmitter {
         const scale = this.m_extents > 0 && this.m_extents !== 4096
             ? this.m_extents / 4096 : 1;
         const yDelta = this.elevationYDelta(this.m_extents);
-        const geo = this.getOrCreateGeometry('__mb-elevated-structures');
+        const projected: number[] = new Array(mesh.positions.length);
         for (let i = 0; i < mesh.positions.length; i += 3) {
             const w = this.project(new THREE.Vector2(
                 mesh.positions[i] * scale, mesh.positions[i + 1] * scale + yDelta));
-            geo.positions.push(w.x, w.y, w.z + mesh.positions[i + 2]);
+            projected[i] = w.x; projected[i + 1] = w.y;
+            projected[i + 2] = w.z + mesh.positions[i + 2];
             if (mesh.positions[i + 2] > 0) this.noteGeometryHeight(mesh.positions[i + 2]);
         }
 
         const segments: Array<{
             from: number; to: number;
             sections: Array<{ featureIndex: number; vertexStart: number }>;
-            colorProp: string; orderBias: number; key: string;
+            colorProp: string; key: string;
         }> = [
             { from: 0, to: mesh.tunnelStart, sections: mesh.bridgeSections,
-              colorProp: 'fill-bridge-guard-rail-color', orderBias: 0.05, key: 'bridge' },
+              colorProp: 'fill-bridge-guard-rail-color', key: 'bridge' },
             { from: mesh.tunnelStart, to: mesh.indices.length, sections: mesh.tunnelSections,
-              colorProp: 'fill-tunnel-structure-color', orderBias: 0.1, key: 'tunnel' },
+              colorProp: 'fill-tunnel-structure-color', key: 'tunnel' },
         ];
 
+        // One GEOMETRY per (mode, color) — a geometry's groups must all share
+        // ONE technique (see processFillFeature): the renderer draws each
+        // group object from the shared index buffer, so multiple colors as
+        // groups of one geometry repaint the whole mesh with the last color.
         for (const seg of segments) {
             if (seg.to <= seg.from) continue;
+            interface Bucket {
+                techIdx: number;
+                info: Record<string, any> | null;
+                featureId: string | number | undefined;
+                indices: number[];
+            }
+            const buckets = new Map<string, Bucket>();
             for (let si = 0; si < seg.sections.length; si++) {
                 const section = seg.sections[si];
                 const vEnd = si + 1 < seg.sections.length ? seg.sections[si + 1].vertexStart : Infinity;
                 const info = this.m_elevatedFeatureProps.get(section.featureIndex);
-                const groupStart = geo.indices.length;
+                const sectionIndices: number[] = [];
                 for (let i = seg.from; i < seg.to; i += 3) {
                     if (mesh.indices[i] >= section.vertexStart && mesh.indices[i] < vEnd) {
-                        geo.indices.push(
+                        sectionIndices.push(
                             mesh.indices[i], mesh.indices[i + 1], mesh.indices[i + 2]);
                     }
                 }
-                const count = geo.indices.length - groupStart;
-                if (count === 0) continue;
+                if (sectionIndices.length === 0) continue;
 
                 const layer = info?.layer;
                 const raw = layer?.paintDefs?.[seg.colorProp]?.value ??
@@ -1853,29 +1880,44 @@ export class MBTileDataEmitter {
                     } as any);
                 }
                 const techIdx = this.getOrCreateElevatedStructureTechnique(
-                    layer, seg.key, String(color), seg.orderBias);
+                    layer, seg.key, String(color));
+                const colorKey = `${layer?.id ?? 'none'}:${String(color)}`;
+                let bucket = buckets.get(colorKey);
+                if (!bucket) {
+                    bucket = { techIdx, info: info?.properties ?? null, featureId: info?.featureId, indices: [] };
+                    buckets.set(colorKey, bucket);
+                }
+                bucket.indices.push(...sectionIndices);
+            }
+
+            for (const [colorKey, bucket] of buckets) {
+                const geo = this.getOrCreateGeometry(`__mb-elevated-${seg.key}:${colorKey}`);
+                if (geo.positions.length === 0) {
+                    for (let i = 0; i < projected.length; i++) geo.positions.push(projected[i]);
+                }
+                const groupStart = geo.indices.length;
+                for (let i = 0; i < bucket.indices.length; i++) {
+                    geo.indices.push(bucket.indices[i]);
+                }
                 geo.groups.push({
                     start: groupStart,
-                    count,
-                    materialIndex: techIdx,
-                    sortKey: this.extractSortKey(layer ?? ({} as EvaluatedLayer)),
+                    count: geo.indices.length - groupStart,
+                    materialIndex: bucket.techIdx,
                 });
                 geo.featureStarts.push(groupStart);
-                geo.objInfos.push({ ...(info?.properties ?? {}), $id: info?.featureId ?? null });
+                geo.objInfos.push({ ...(bucket.info ?? {}), $id: bucket.featureId ?? null });
             }
         }
     }
 
     private getOrCreateElevatedStructureTechnique(
-        layer: EvaluatedLayer | undefined, mode: string, color: string, orderBias: number,
+        layer: EvaluatedLayer | undefined, mode: string, color: string,
     ): number {
-        void orderBias;
         const key = `__mb-elevated-${mode}:${layer?.id ?? 'none'}:${color}`;
         let idx = this.m_layerToTechniqueIndex.get(key);
         if (idx === undefined) {
             idx = this.m_techniqueIndex++;
             this.m_layerToTechniqueIndex.set(key, idx);
-            const ro = (layer?.renderOrder ?? 9.6) + orderBias;
             const technique: any = {
                 name: 'fill',
                 _index: idx,
@@ -2531,7 +2573,11 @@ export class MBTileDataEmitter {
             //    geometry outside the tile ± 2 extent (mgl dropOutOfBounds);
             //  - otherwise the legacy constant z-offset path.
             const lineElevRef = layer.layout?.['line-elevation-reference'];
-            const useHdRoad = lineElevRef === 'hd-road-markup' &&
+            // mgl line_hd_extension: under terrain, HD road-markup lines
+            // drape flat — the curve lookup (and any lift) is skipped.
+            const lineTerrainFlat = this.terrainActive &&
+                lineElevRef === 'hd-road-markup';
+            const useHdRoad = !lineTerrainFlat && lineElevRef === 'hd-road-markup' &&
                 this.m_elevationStructures !== null && !this.m_elevationStructures.isEmpty;
             const useZOffsetMode = !useHdRoad &&
                 (lineElevRef === 'sea' || lineElevRef === 'ground');
@@ -2542,7 +2588,7 @@ export class MBTileDataEmitter {
                   layer.layout?.['line-z-offset'] ??
                   layer.paint?.['line-z-offset'] ?? 0)
                 : null;
-            this.m_currentZOffset = (useHdRoad || useZOffsetMode)
+            this.m_currentZOffset = (useHdRoad || useZOffsetMode || lineTerrainFlat)
                 ? 0
                 : this.resolveZOffset(layer, properties, 'line',
                     geometry.length > 0 && geometry[0].positions.length > 0

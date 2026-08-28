@@ -549,6 +549,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
      */
     private m_elevationRegistry: Map<string, ElevationTiledFeature[]> = new Map();
     private m_elevationRegistryFlat: ElevationTiledFeature[] | null = null;
+
     private m_worldview: string = '';
     private m_center: [number, number] = [0, 0];
     /**
@@ -560,6 +561,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_bearing: number = 0;
     /** Terrain elevation sampler (world x/y -> meters, exaggeration applied). */
     private m_terrainSampler: ((x: number, y: number) => number) | null = null;
+    /** Style declares terrain — mgl terrainEnabled equivalent (§514). */
+    private m_styleHasTerrain = false;
     private m_terrainHeightScale = 1;
     private m_iconDepthTest = false;
     private m_heightScaleScaleFromTerrainFlag = false;
@@ -635,6 +638,14 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             const isGlobe = (style as any).projection?.name === 'globe'
                 || (style as any).projection?.type === 'globe';
             this.m_emitBackgroundTiles = hasBg && (hasGeo || isGlobe);
+            // §514: mgl gates HD road-markup lines/symbols on the LIVE
+            // terrain state (terrainEnabled populate option). The sampler
+            // arrives asynchronously (applyTerrain after first decodes), so
+            // derive the flag from the style's terrain declaration instead.
+            this.m_styleHasTerrain = !!(style as any).terrain;
+            if (customOptions?.styleHasTerrain !== undefined) {
+                this.m_styleHasTerrain = customOptions.styleHasTerrain === true;
+            }
             // §513: the elevation pre-pass doubles the MVT decode cost —
             // only pay it when the style actually references HD road
             // elevation (mgl parses the elevation layer for every tile, but
@@ -865,6 +876,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         if (this.m_terrainSampler) {
             emitter.setTerrainSampler(this.m_terrainSampler);
         }
+        emitter.setStyleHasTerrain(this.m_styleHasTerrain);
 
         const processor = new MBStyleDataProcessor(
             tileKey, decodeInfo,

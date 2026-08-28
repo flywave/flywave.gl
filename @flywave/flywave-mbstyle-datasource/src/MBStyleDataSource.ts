@@ -1968,13 +1968,33 @@ export class MBStyleDataSource extends TileDataSource {
                                         const vv = v0.clone().project(cam);
                                         vx = `v0ndc=(${vv.x.toFixed(2)},${vv.y.toFixed(2)}) v0w=(${v0.x.toFixed(0)},${v0.y.toFixed(0)},${v0.z.toFixed(0)})`;
                                     }
+                                    // §514: elevated-structures meshes share one
+                                    // buffer across color groups — sample the FIRST
+                                    // VERTEX OF EACH three.js group draw range so the
+                                    // probe reflects the group's own location, and
+                                    // verify the index buffer against the group range.
+                                    let gx = '';
+                                    if (isElev && g?.groups?.length) {
+                                        const pa = g.attributes.position;
+                                        const idx: any = g.index;
+                                        for (const gr of g.groups.slice(0, 4)) {
+                                            const i0 = idx ? idx.array[gr.start] : gr.start;
+                                            const v0 = new THREE.Vector3(
+                                                pa.array[i0 * 3], pa.array[i0 * 3 + 1], pa.array[i0 * 3 + 2]);
+                                            v0.applyMatrix4(o.matrixWorld);
+                                            const vv = v0.clone().project(cam);
+                                            gx += ` g[s=${gr.start},n=${gr.count},m=${gr.materialIndex}]v0w=(${v0.x.toFixed(0)},${v0.y.toFixed(0)},${v0.z.toFixed(0)})ndc=(${vv.x.toFixed(2)},${vv.y.toFixed(2)})`;
+                                        }
+                                        const dr = g.drawRange;
+                                        gx += ` drawRange=(${dr?.start},${dr?.count}) idxLen=${idx ? idx.array.length : 0}`;
+                                    }
                                     o.getWorldPosition(V);
                                     V.project(cam);
                                     const mat: any = Array.isArray(o.material) ? o.material[0] : o.material;
                                     const mc = mat?.color ? ` c=${mat.color.toArray().map((n: number) => n.toFixed(2)).join(',')}` : '';
                                     const tech = o.userData?.technique;
                                     const tinfo = tech ? ` tech=${tech.name}/${tech.technique}/r=${(tech.renderOrder ?? '').toString().slice(0,8)} ras=${tech._isRaster ? 1 : 0}` : '';
-                                    sampleSink.push(`${tname}:${tcol}${tinfo ?? ''} v=${o.visible?1:0} fr=${o.frustumCulled?1:0} ro=${o.renderOrder} ndc=(${V.x.toFixed(2)},${V.y.toFixed(2)}) ${vx} nvert=${g?.attributes?.position?.count} mat=${mat?.type} op=${mat?.opacity} tr=${mat?.transparent?1:0}${mc}`);
+                                    sampleSink.push(`${tname}:${tcol}${tinfo ?? ''} v=${o.visible?1:0} fr=${o.frustumCulled?1:0} ro=${o.renderOrder} ndc=(${V.x.toFixed(2)},${V.y.toFixed(2)}) ${vx} nvert=${g?.attributes?.position?.count} mat=${mat?.type} op=${mat?.opacity} tr=${mat?.transparent?1:0}${mc}${gx}`);
                                 }
                             }
                         });

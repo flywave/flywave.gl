@@ -5952,3 +5952,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **验证**：单测 290（+3 construct 断言：护栏 z∈[5.4,5.6]、隧道墙顶 −2=−6+4/底 −6、降级 hash 序）；**3d-intersections 全域 HEAD 6,291,836 → 5,947,217 失配像素（−5.5%，51 升/20 降）**——guard-rail-joint 112k→67k、tunnel-color-feature-dependent 125k→78k、elevated-symbols-pitched 126k→79k、bridge-to-tunnel-transition 109k→69k、road-islands 72k→47k；tunnel-enterance 米色结构上屏（对照 expected 的隧道口墙）；guard-rail-color 米色护栏条带上屏（绿色桥护栏数据组已验证在 DecodedTile，本 fixture 视角未见=外观校准域）。**回归金丝雀逐像素持平**：fog 全域 20 例 px 全等、elevated-line-join 4 PASS 保持、line-progress-expression 12612 保持。降者集中 terrain-enabled 变体（mgl terrain 下结构/线平铺语义未对齐）与 elevated-wireframe/road-extend-tilecover（新几何出现但外观未校准）。
 
 **完全对齐剩余清单**：① terrain×structures 语义（terrain-enabled 系回退根因，mgl terrain 下 markup 线 drape flat + 结构处理待查）；② mask/depth/shadow caster 分段（mgl construct 的 stencil 雕刻=路面下穿透可见、depth rebuild、tunnel roof 阴影——可见几何已备，差渲染 pass 语义）；③ 墙/护栏光照（现 MeshBasicMaterial 平涂，mgl apply_lighting NdotL 按法线着色——normals 已在 mesh 里，差消费）；④ road-markups 标线颜色域（黄线/斑马纹渲黑，§513 遗留）。
+
+**§514 尾注——绿色护栏不可见破案（多技术 groups 共享索引缓冲）+ 地形门控（同会话续）**：
+
+**绿栏案**：MBElevObj 探针升级按 three.js `geometry.groups` 逐组采样首顶点 + drawRange 后实锤——网格几何以**多技术 groups**挂在一个 AccumulatedGeometry 上，而渲染器按组建对象时共享整块索引缓冲（drawRange=(0,Infinity)）：每个颜色的对象把**整个网格**用自己的颜色重画一遍，最后画的 tan 覆盖全部（fill 管线的既有铁律"一个 geometry 的 groups 必须同技术"被违反）。修复 = **按 (mode, color) 拆分几何**（每色独立 AccumulatedGeometry + 单技术 group，位置缓冲按色复制）。实测 **guard-rail-color 绿色护栏首次上屏**（布局对齐 expected，残差为条宽/AA 校准），tunnel-color-feature-dependent 78402→67600。全域终验（颜色拆分+地形门控齐备）：**HEAD 6,281,851 → 5,840,814 失配像素（−7.0%，46 升/18 降/9 平）**。
+
+**地形门控案**：markup 线/symbol 的 mgl terrainEnabled 语义（地形下曲线查询跳过、平铺地形）最初挂 `m_terrainSampler`——MBTerrainProbe（一次性 decode 态打印）实锤**首瓦片解码时 sampler=false**（applyTerrain 晚于首批解码，sampler 门控永不触发）；改用**样式级 terrain 标志**（configure 时已知，等价 mgl 语义）。像素中性（±200 噪声级；viewport-aligned −2134，icons-and-text −201），保留（语义正确，真实 DEM 场景下生效）。terrain 变体残差主体在**引擎侧**：TerrainDraping 对曲线抬升几何的交互与 mgl 地形渲染管线不同——解码语义已对齐，深水区在渲染引擎（下一阶段）。
+
+**MBTerrainProbe 移除**（一次性取证用）；MBElevObj 逐组采样能力保留（decodedbg 门控）。
