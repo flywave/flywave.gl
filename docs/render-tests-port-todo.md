@@ -6050,3 +6050,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **破案**：① **camPos NaN 实锤**（dump camPos 序列化 null）——worldCenter/camera 矩阵可给出非有限值 NaN 毒化 shadow 相机 → 加有限值守卫（非有限回退 0）。② **取帧实证**：dump 显示绝对 worldCenter（6.4e6）取帧时深度图全 255（ortho 框在 6.4e6 外、场景全 eye-relative）→ eye-rebase（worldCenter−eye≈0）后 center=(0,0,0) 正确取框。③ **影子真实渲染**：激活后与 expected 逐点采样部分精确吻合（63/57、83/79——影子区内对位），但范围过宽（expected 亮区被误暗，128→89），总失配 856405 仍劣于门关 375224。
 
 **状态**：校准门保持默认关（无回归保证）；`shadowdbg=1` 即影子全链路 + dump。**下阶段**：① blit 读数与接收端实际采样的矛盾待解（接收端明明在调制而 blit 全 255——疑 blit 时机/绑定或 DepthTexture 采样路径差异）；② 影子范围过宽（ortho extent/偏置/强度混合）逐参数校准；③ 亮度域、landmark emissive。
+
+**§524. 会话续记——blit/接收端矛盾收敛 + 暗化源排除法（2026-08-28 续十）**：
+
+**probe 加固**：dump 增记 center/dir/radius/target 原始量并修传参。实锤链路现状：center=(0,0,0)（eye-rebase 生效）、dir/radius 有限——取帧参数全部正确，但 blit 深度图仍全 255，而接收端（f15 vs f3 差 75.6 万像素）确实在调制。
+
+**关键排除**：对 f3/f15 逐点采样——暗化因子是**连续值**（102→63=×0.617、128→89=×0.695、122→83=×0.68、94→29=×0.31），而 receiver 注入是二值 `mix(1-intensity,1,lit)`（intensity=1.0 → 只能 ×0/×1）。**结论：满地暗化不是 shadow 调制本身**——是 `shadowLightState` 从 null 变非 null 触发 `injectGroundShadow` 的 `material.needsUpdate=true` 重编译，链式 onBeforeCompile 重新求值时某注入器以不同 uniforms 重编译（连续 k 因子=ambient 光照族，如 groundRadiance/extrusion3D lighting 重应用/重应用叠加）——即**双重光照/重编译副作用**，与影子深度采样无关。影子采样链路本身（空深度图→应全亮）反而自洽。
+
+**下阶段精确入口**：① 抓重编译前后的 ShaderProgram diff（`renderer.info.programs` 或 capfdump 通道）定位哪个注入器在重编译时引入 k<1；② 消灭重编译副作用（注入器 idempotent 化/uniform 热更新代替 needsUpdate）后影子范围校准才有干净基线；③ 校准门保持默认关。
