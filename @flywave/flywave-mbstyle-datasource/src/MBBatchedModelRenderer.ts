@@ -165,7 +165,10 @@ export class MBBatchedModelRenderer {
         try {
             const dracoMod: any = await import('three/examples/jsm/loaders/DRACOLoader.js');
             const draco = new dracoMod.DRACOLoader();
-            draco.setDecoderPath('/base/node_modules/three/examples/jsm/libs/draco/gltf/');
+            // §544: serve the decoder from the fixtures dir — /base/node_modules is
+                // NOT karma-servable, and a 404 decoder script hangs the parse
+                // silently (this was the landmark blank root cause).
+                draco.setDecoderPath('/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/models/draco/');
             // §542: force the JS decoder — the wasm worker path hangs silently
             // in the karma/SwiftShader page.
             draco.setDecoderConfig({ type: 'js' });
