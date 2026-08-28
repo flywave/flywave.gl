@@ -2357,21 +2357,29 @@ export class MBMaterialPatchManager {
                     'varying vec3 vMBWorldPos;\n' +
                     'uniform sampler2D uMBShadowMap;\n' +
                     'uniform mat4 uMBShadowMatrix;\n' +
-                    'uniform float uMBShadowIntensity;',
+                    'uniform float uMBShadowIntensity;\n' +
+                    'uniform float uMBShadowDbg;',
                 )
                 .replace(
                     '#include <opaque_fragment>',
                     `#include <opaque_fragment>
                     if (uMBShadowIntensity > 0.0) {
                         vec4 mbShadowUv = uMBShadowMatrix * vec4(vMBWorldPos, 1.0);
+                        float mbShadowDepth = 1.0;
                         if (mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
                             mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
-                            float mbShadowDepth = texture2D(uMBShadowMap, mbShadowUv.xy).r;
+                            mbShadowDepth = texture2D(uMBShadowMap, mbShadowUv.xy).r;
                             float mbLit = mbShadowUv.z <= mbShadowDepth + 0.0015 ? 1.0 : 0.0;
                             gl_FragColor.rgb *= mix(1.0 - uMBShadowIntensity, 1.0, mbLit);
                         }
+                        // §525 debug readout (baked 1.0/0.0 at compile time when
+                        // shadowdbg=1): R=intensity, G=depth sample, B=uv.z.
+                        if (uMBShadowDbg > 0.5) {
+                            gl_FragColor.rgb = vec3(uMBShadowIntensity, mbShadowDepth, mbShadowUv.z);
+                        }
                     }`,
                 );
+            shader.uniforms.uMBShadowDbg = { value: (globalThis as any).__mbShadowEnable ? 1 : 0 };
         };
     }
 

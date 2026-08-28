@@ -119,9 +119,12 @@ function discoverTests(): TestEntry[] {
     if (dbg === "1") (globalThis as any).__mbDecodeDbg = true;
 }
 {
-    const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
-        a.startsWith("shadowdbg="))?.slice("shadowdbg=".length);
-    if (dbg === "1") (globalThis as any).__mbShadowEnable = true;
+    const dbg = Number((window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shadowdbg="))?.slice("shadowdbg=".length) ?? 0);
+    if (dbg >= 1) (globalThis as any).__mbShadowEnable = true;
+    // §525 A/B: shadowdbg=2 opens the gate but SKIPS the depth pass —
+    // discriminates depth-pass side effects from the patcher/lighting path.
+    if (dbg === 2) (globalThis as any).__mbShadowSkipPass = true;
 }
 const ALL_TESTS = discoverTests();
 console.log(`[MBStyleCompat] ${ALL_TESTS.length} compatible tests loaded`);

@@ -167,13 +167,20 @@ export class MBShadowRenderer {
         const prevOverride = scene.overrideMaterial;
         const prevShadowEnabled = renderer.shadowMap.enabled;
         const prevLayers = this.m_shadowCamera.layers.mask;
+        if ((globalThis as any).__mbShadowSkipPass) {
+            // §525 A/B discriminator: uniforms still flow (intensity > 0) but
+            // the depth pass never renders — receivers see a cleared (empty)
+            // map. Restores below are harmless no-ops.
+        }
         this.m_shadowCamera.layers.set(1);
         renderer.shadowMap.enabled = false;
         scene.overrideMaterial = this.m_depthMaterial;
         try {
             renderer.setRenderTarget(this.m_rt);
             renderer.clear();
-            renderer.render(scene, this.m_shadowCamera);
+            if (!(globalThis as any).__mbShadowSkipPass) {
+                renderer.render(scene, this.m_shadowCamera);
+            }
         } finally {
             scene.overrideMaterial = prevOverride;
             renderer.shadowMap.enabled = prevShadowEnabled;

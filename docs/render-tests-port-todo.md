@@ -6058,3 +6058,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **关键排除**：对 f3/f15 逐点采样——暗化因子是**连续值**（102→63=×0.617、128→89=×0.695、122→83=×0.68、94→29=×0.31），而 receiver 注入是二值 `mix(1-intensity,1,lit)`（intensity=1.0 → 只能 ×0/×1）。**结论：满地暗化不是 shadow 调制本身**——是 `shadowLightState` 从 null 变非 null 触发 `injectGroundShadow` 的 `material.needsUpdate=true` 重编译，链式 onBeforeCompile 重新求值时某注入器以不同 uniforms 重编译（连续 k 因子=ambient 光照族，如 groundRadiance/extrusion3D lighting 重应用/重应用叠加）——即**双重光照/重编译副作用**，与影子深度采样无关。影子采样链路本身（空深度图→应全亮）反而自洽。
 
 **下阶段精确入口**：① 抓重编译前后的 ShaderProgram diff（`renderer.info.programs` 或 capfdump 通道）定位哪个注入器在重编译时引入 k<1；② 消灭重编译副作用（注入器 idempotent 化/uniform 热更新代替 needsUpdate）后影子范围校准才有干净基线；③ 校准门保持默认关。
+
+**§525. 会话续记——A/B 判别 + debug 读出框架落地 + 暗化材质定位收窄（2026-08-28 续十一）**：
+
+**A/B 判别实验**（`shadowdbg=2`=开门+跳过深度 pass，harness/MBShadowRenderer 接线）：跳过深度 pass 后像素与全开**逐位相同（856405）**——暗化与深度渲染 pass 无关，均匀性错误的深度图也不是调制输入。
+
+**debug 读出框架**（receiver 注入加编译期烘焙的 `uMBShadowDbg` uniform：R=intensity/G=depth/B=uv.z）：f18/f19 两轮像素逐位相同且 R=G=B（R 应为常量 intensity、G/B 应随点变化）——**可见地面材质根本没走 injectGroundShadow 补丁路径**（暗化材质 ≠ 已插桩材质），且 f18 的未声明 uniform GLSL 失败会被 three 静默回退旧 program（无控制台报错可依赖）。**坑位**：① 注入器链 `#include <common>` 等 anchor 首次 replace 后即被消耗，二次 replace 必须并入首个块（f19 修）；② GLSL 编译失败静默回退 = 像素不变的旧 program——任何 shader 实验必须带可观测变色验证（f18 教训）。
+
+**收窄结论**：暗化材质的注入路径在 patchMaterial 常规地面 fill 之外（疑 DisplacedMesh/engine MapMeshBasicMaterial 变体或 ribbon-adjacent 材质），`__mbShadowInjected` 注册探针（对象级：哪个 obj 带哪些注入 flag）是下一步。校准门维持默认关（375224 无回归）；shadowdbg=1/2 A/B 通道与 debug 读出框架入库。
