@@ -6166,3 +6166,7 @@ GLB tile 勘测：position 单位为 tile 局部量化坐标（x∈[634,7174]、
 **§545. decoder 路径假设证伪 + DRACOLoader 挂起终态（2026-08-29 终五）**：
 
 f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 parseErr——**decoder 路径假设证伪**。剩余指向 DRACOLoader 的 **Worker spawn 在 karma 页面被阻塞**（karma 页面 CSP/worker 脚本同源策略；错误回调也不触发=worker 生命周期死锁而非解码失败）。**下会话修复方向（唯一）**：绕过 worker——主线程直接解码：`DRACOLoader` 源码显示其 worker 由 `Blob URL` spawn；改用主线程方案=拷贝 `draco_decoder.js`（emscripten 模块）以 `<script>` 注入页面后直接 `new DracoDecoderModule.Decoder()` 手解 GLB（§538 已验证 node 侧同 API 可用，页面侧同理），替换 GLTFLoader.parse 的 Draco 依赖。工程量：解析脚本+GLB 重打包或 loader 钩子，1 会话。基线 264389 维持。
+
+**§546. WIP 记录——主线程 Draco 解码首版回退（2026-08-29 终四）**：
+
+`decodeGlbDraco`（页面 script 注入 draco_decoder.js + DecodeBufferToMesh + GLB 重打包）首版实现在 f15 单跑中表现异常（census dump 零 POST、mismatch 恒等于基线）——未定位即回退至 §542 已验证态（HEAD）。**下会话入口**：① 从本 WIP 分支恢复 decodeGlbDraco 草稿（git show aa69728d..HEAD 前的差异已散失，需按 §545 设计重写，约 200 行）；② 重点排查 WillRender 链路异常（decodeGlbDraco 的 emscripten 实例化在主线程的开销/报错路径）；③ landmark 上屏后接 extent/偏置、亮度拟合、外观域。基线 264389 无回归，单测 290。
