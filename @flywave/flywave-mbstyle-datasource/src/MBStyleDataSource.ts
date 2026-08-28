@@ -2014,6 +2014,8 @@ export class MBStyleDataSource extends TileDataSource {
                                     // probe reflects the group's own location, and
                                     // verify the index buffer against the group range.
                                     let gx = '';
+                                    const gfr = (o.userData?.technique as any)?._ribbonGapFraction;
+                                    if (gfr !== undefined) { gx += ` gfr=${gfr.toFixed(3)}`; }
                                     if ((isElev || isYellow) && g) {
                                         const pa = g.attributes.position;
                                         const idx: any = g.index;
@@ -2082,6 +2084,7 @@ export class MBStyleDataSource extends TileDataSource {
                                 elev: elevSamples, yellow: yellowSamples,
                                 black: blackSamples, samples, inventory,
                                 shaders: (globalThis as any).__mbShaderProbe ?? [],
+                                ribbonShaders: (globalThis as any).__mbRibbonProbe ?? [],
                             };
                             (globalThis as any).__mbProbeDump = dump;
                             const sig = dump.yellow.join('|') + '#' + dump.black.join('|');

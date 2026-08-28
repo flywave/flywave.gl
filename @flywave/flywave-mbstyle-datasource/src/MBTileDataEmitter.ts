@@ -2816,13 +2816,17 @@ export class MBTileDataEmitter {
                 const geoBox: any = (this.m_decodeInfo as any).geoBox;
                 const latC = (Number(geoBox?.north ?? 0) + Number(geoBox?.south ?? 0)) / 2;
                 const secLat = 1 / Math.max(0.2, Math.cos(latC * Math.PI / 180));
+                // §516 line-gap-width: the ribbon stays `line-width` wide; the
+                // middle `gap` px is discarded in the fragment (gap fraction
+                // below), leaving two hairline strips — mgl gap semantics.
+                const gapWidthPx = Number(layer.paint?.['line-gap-width'] ?? 0);
+                const worldHalfWidth = widthUnit === 'meters'
+                    ? (lineWidthPx / 2) * secLat
+                    : lineWidthPx * metersPerPixel / 2;
                 // NOTE: blurring would want the ribbon geometry widened by
                 // the blur radius, but in dense road networks the widened
                 // ribbons overlap and stack into large black regions —
                 // reverted; the fade is clipped at the line edge instead.
-                const worldHalfWidth = widthUnit === 'meters'
-                    ? (lineWidthPx / 2) * secLat
-                    : lineWidthPx * metersPerPixel / 2;
                 // Variable-width lines: `line-width` may itself be a
                 // line-progress interpolate (e.g. gradient-vector-tile:
                 // 30px at progress 0.1 tapering to 0.5). The evaluator has
@@ -2966,9 +2970,15 @@ export class MBTileDataEmitter {
                     Number.isFinite(clipStart) && Number.isFinite(clipEnd) && clipEnd > clipStart
                         ? [Math.max(0, clipStart), Math.min(1, clipEnd)]
                         : undefined;
+                // §516: pass the gap fraction (gap / total dilated width)
+                // through the technique for the fragment gap discard.
+                const ribbonWidthPx = lineWidthPx > 0 ? lineWidthPx + 1 : 0;
+                const gapFraction = lineWidthPx > 0 && gapWidthPx > 0
+                    ? Math.min(gapWidthPx / lineWidthPx, 0.98)
+                    : 0;
                 this.emitRibbonFill(layer, worldPts, mainHalfWidth + aaDilate, cumDist,
-                    trueWidthPx > 0 ? trueWidthPx + 1 : 0, lineGeom, progressHalfWidths, offsetWorld, properties,
-                    progressClip);
+                    ribbonWidthPx, lineGeom, progressHalfWidths, offsetWorld, properties,
+                    progressClip, gapFraction);
                 // line-border: edge ribbons under the main line (constant
                 // width only — variable-width borders are not a test case).
                 if (!progressHalfWidths) {
@@ -3153,11 +3163,12 @@ export class MBTileDataEmitter {
         offsetWorld = 0,
         properties?: Record<string, any>,
         progressClip?: [number, number],
+        gapFraction?: number,
     ): void {
         // Key by ribbon technique: see the fill key comment in
         // processFillFeature — groups sharing a geometry must use one technique,
         // otherwise every per-technique object draws the whole index buffer.
-        const ribbonTechIdx = this.getOrCreateRibbonTechniqueIndex(layer, properties);
+        const ribbonTechIdx = this.getOrCreateRibbonTechniqueIndex(layer, properties, gapFraction);
         if (effectiveWidthPx !== undefined) {
             // Dilated ribbon width in px (true width + 2×0.5px AA dilation) —
             // the patcher's edge AA ramp measures distances against it.
@@ -3659,7 +3670,7 @@ export class MBTileDataEmitter {
         ];
     }
 
-    private getOrCreateRibbonTechniqueIndex(layer: EvaluatedLayer, properties?: Record<string, any>): number {
+    private getOrCreateRibbonTechniqueIndex(layer: EvaluatedLayer, properties?: Record<string, any>, gapFraction = 0): number {
         // The ribbon-fill material carries the per-feature line color. Key the
         // technique by the resolved line color (plus opacity) so categorical /
         // data-driven line-colors produce one technique per distinct value —
@@ -3756,6 +3767,7 @@ export class MBTileDataEmitter {
                 _paint: paint,
                 _layout: layer.layout,
                 _mbGlobalLayerOrder: true,
+                ...(gapFraction > 0 ? { _ribbonGapFraction: gapFraction } : {}),
                 // line-gradient: per-feature line-progress ramp consumed by
                 // the patcher (aRibbonDist varying → ramp texture sample).
                 ...(gradient ? { _lineGradientStops: gradient } : {}),
