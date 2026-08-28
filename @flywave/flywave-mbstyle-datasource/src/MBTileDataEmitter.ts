@@ -2820,6 +2820,9 @@ export class MBTileDataEmitter {
                 // middle `gap` px is discarded in the fragment (gap fraction
                 // below), leaving two hairline strips — mgl gap semantics.
                 const gapWidthPx = Number(layer.paint?.['line-gap-width'] ?? 0);
+                const gapFraction = lineWidthPx > 0 && gapWidthPx > 0
+                    ? Math.min(gapWidthPx / lineWidthPx, 0.98)
+                    : 0;
                 const worldHalfWidth = widthUnit === 'meters'
                     ? (lineWidthPx / 2) * secLat
                     : lineWidthPx * metersPerPixel / 2;
@@ -2902,7 +2905,10 @@ export class MBTileDataEmitter {
                     // them only through the offscreen density composite) — an
                     // opaque SolidLine twin would underlie the composite and
                     // double-accumulate in the density pass.
-                    layer.paint?.['line-blend-mode'] === 'additive');
+                    layer.paint?.['line-blend-mode'] === 'additive' ||
+                    // §516 gap lines: the ribbon renders strips+gap; an
+                    // opaque SolidLine twin would paint the gap solid.
+                    gapFraction > 0);
                 if (!skipSolidLine) this.m_preExtrudedLines = true;
                 // Store interleaved vertex data + remapped indices
                 const stride = 13; // extrusionCoord(3)+position(3)+tangent(3)+biTangent(4)
@@ -2970,15 +2976,12 @@ export class MBTileDataEmitter {
                     Number.isFinite(clipStart) && Number.isFinite(clipEnd) && clipEnd > clipStart
                         ? [Math.max(0, clipStart), Math.min(1, clipEnd)]
                         : undefined;
-                // §516: pass the gap fraction (gap / total dilated width)
-                // through the technique for the fragment gap discard.
-                const ribbonWidthPx = lineWidthPx > 0 ? lineWidthPx + 1 : 0;
-                const gapFraction = lineWidthPx > 0 && gapWidthPx > 0
-                    ? Math.min(gapWidthPx / lineWidthPx, 0.98)
-                    : 0;
+                // §516: the ribbon carries the gap fraction for the
+                // fragment discard (the native SolidLine twin is skipped
+                // above — the ribbon IS the line for gap features).
                 this.emitRibbonFill(layer, worldPts, mainHalfWidth + aaDilate, cumDist,
-                    ribbonWidthPx, lineGeom, progressHalfWidths, offsetWorld, properties,
-                    progressClip, gapFraction);
+                    lineWidthPx > 0 ? lineWidthPx + 1 : 0, lineGeom, progressHalfWidths,
+                    offsetWorld, properties, progressClip, gapFraction);
                 // line-border: edge ribbons under the main line (constant
                 // width only — variable-width borders are not a test case).
                 if (!progressHalfWidths) {

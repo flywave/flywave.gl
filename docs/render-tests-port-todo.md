@@ -5984,3 +5984,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **§516 尾注——黑 stroke 破案结案（hatch pattern alpha 合成顺序）**：hide 实验通道（`MBSTYLE_HIDE=substr` karma 参数 → census 钩子按 layerId/color/pattern 隐藏对象）二分锁定黑源=**road-hatched-area**；编译期探针（post-replacement 插桩经 dump 通道回传）证实注入链路本身正常（vsOK=true）——真凶是 **patchFillPatternMaterial 内部顺序**：我插入的 alpha 感知块被三行之后的基句 `material.transparent = mglComposite || opacity < 1` **覆写回 false**（opaque pass 写 sprite 透明 texel 的黑 RGB 残影=纯黑 stroke）。修复=alpha 条件并入基句（`|| tex.__mbHasAlpha`）+ depthWrite=false。实测：**road-markups 黑 stroke 清零（black px 816→0），19076→17959**、high-pitch 26800→22768；全域 **5,836,406 → 5,631,065（−20.5 万；累计较 HEAD −10.4%）**，37 升/4 微降（shadows/symbols/road-islands 域大面积改善——translucent hatch 不再黑覆盖）；fog 30 例仅 fill-pattern 1828→1551 一处改善级差异，零回归。**余项**：黄 ribbon 对象在场景（材质黄、屏上、recolor 不变色）却不光栅化——疑 gap-width ribbon 路径的顶点 alpha 属性（CustomBlending SrcAlpha 下 alpha=0 即不可见），下会话查 emitRibbonBody 对 gap-width 输入的 aRibbonEdge 写入。
 
 **§516 尾注二——黄线可见性结案 + renderOrder 策略定版**：黄线不渲染的第二根因=**hd-road-markup ribbon 的 renderOrder 提升只落了 solid-line 技术，ribbon 技术（真正可见几何）仍在样式序 4-7**，先画、被 §512 提升后的路基面（9.6, depthTest=true）覆盖——MBYellowObj 逐组采样（groups[s=0,n=891,m=0] drawRange(0,Infinity) idxLen=891 材质黄/屏上）+ 间隙 width 排除（ribbon 路径无 gap 处理只会缺缺口）后 ribbonRO 提升到 9.75 收效（**yellow px 0→2654**）。变体对比：flat 9.75（5.69M）优于样式序带 9.75+idx×1e-3（5.95M，线间样式序与 symbols 交互劣化）——**定版 flat 9.75**（黄线像素校准不足，画错比缺失扣分多，语义正确性优先；带宽排序随线校准后再启）。fog 30 例逐像素零回归（仅 fill-pattern 1828→1551 改善）。MBSTYLE_HIDE 取证通道与 MBShaderProbe 编译期探针保留（decodedbg/参数门控）。
+
+**§517. 会话续记——黄线渲染三连破（剩余：缺口屏幕合成）+ 通道基建定版（2026-08-28 续三）**：
+
+**破案三连**：① **line-gap-width 在 ribbon 路径完全未实现**（几何、着色器均无）——实现：geometry 保持 line-width 宽，片元按 `vMBRibbonEdge`（|edge|∈[0,1] 全宽坐标）挖中带（`uMBGap=(gapHalfEdge, AA)`，smoothstep ±AA），`gapFraction=gap/width` 经技术标记 `_ribbonGapFraction` 下传；② **原生 SolidLine 双胞胎覆盖**——skipSolidLine 条件补 `gapFraction>0`（与 gradient/pattern/blur/offset/additive 同列），消除无 gap 的实心双胞胎；③ **blending 在 opaque ribbon 上未生效**（alpha=0 被无视画成实心）——gap ribbon 强制 `transparent=true + depthWrite=false`（真实混合，缺口透出下层）。
+
+**通道基建定版**：karma 主线程 console 转发不稳 → 探针全部走 `POST /mb-probe-dump` 落盘通道（按内容签名重发）；`MBSTYLE_HIDE` 隐藏二分实验参数；MBShaderProbe/MBRibbonProbe 编译期+替换后探针；karma webpack 文件缓存供旧包（§185）——**校准/取证会话必须 `MB_NO_WEBPACK_CACHE=1`**。
+
+**度量**：road-markups 黄线从无到 2654px（黑 stroke 816→0）；mismatch 24938（黄线宽/位置校准余量：实测条带≈18 display px vs expected ≈9px——gap 屏幕合成与线宽标定是收尾项）；fog 金丝雀零回归；单测 290 全过。
+
+**完全对齐剩余清单（优先序）**：① gap 屏幕合成（transparent 已强制，疑 CustomBlending/混合状态或 alpha 语义——需逐像素 alpha dump）；② 黄线宽/位置标定（实测 2× 于 expected 的量级关系待定）；③ tunnel-enterance 三维形态（mgl 相机射线深度重建 shader 化）；④ terrain-enabled 变体（TerrainDraping×曲线抬升）；⑤ 墙面 NdotL 光照；⑥ 标线颜色域（黄线 color 表达式已通，斑马纹黄待 hatch 域验证）。
