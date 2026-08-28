@@ -6066,3 +6066,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **debug 读出框架**（receiver 注入加编译期烘焙的 `uMBShadowDbg` uniform：R=intensity/G=depth/B=uv.z）：f18/f19 两轮像素逐位相同且 R=G=B（R 应为常量 intensity、G/B 应随点变化）——**可见地面材质根本没走 injectGroundShadow 补丁路径**（暗化材质 ≠ 已插桩材质），且 f18 的未声明 uniform GLSL 失败会被 three 静默回退旧 program（无控制台报错可依赖）。**坑位**：① 注入器链 `#include <common>` 等 anchor 首次 replace 后即被消耗，二次 replace 必须并入首个块（f19 修）；② GLSL 编译失败静默回退 = 像素不变的旧 program——任何 shader 实验必须带可观测变色验证（f18 教训）。
 
 **收窄结论**：暗化材质的注入路径在 patchMaterial 常规地面 fill 之外（疑 DisplacedMesh/engine MapMeshBasicMaterial 变体或 ribbon-adjacent 材质），`__mbShadowInjected` 注册探针（对象级：哪个 obj 带哪些注入 flag）是下一步。校准门维持默认关（375224 无回归）；shadowdbg=1/2 A/B 通道与 debug 读出框架入库。
+
+**§526. 会话续记——对象级注入探针 + shIn=0 实锤 + 嫌疑清单清零（2026-08-28 续十二）**：
+
+**探针扩展**：§516 census inventory 增记每对象注入 flag（`shIn=__mbShadowInjected`/`glit`/`slit`/`elab`/材质类型）+ POST 签名并入 `inventory.length`（此前只发首帧）。probe dump 门收紧为 `__mbShadowEnable && __mbDecodeDbg`。
+
+**全量 inventory 实锤（649 对象）**：**shIn=0 全场**——`injectGroundShadow` 从未在任何可见材质上执行（该路径=事实死代码）；extrusion 160 个 elab=1（§518 光照正常挂载）；403 个 `MeshPhysicalMaterial`=树（engine GLTF 通道，无 flag 正常）；road 2 个 glit=1。
+
+**嫌疑清单清零后剩唯一全局差异**：gate 开时 run() 越过早退 → `setRenderTarget(m_rt)+clear()`（RT 挂 DepthTexture、无显式 color 纹理，疑绑定不完整使 clear 落在主画布）+ RT/DepthTexture GPU 资源创建 + getShadowUniforms 非 null（refresh 循环 shIn=0 无操作）。深度 pass（f17 跳过仍暗）、blit（f22 跳过仍暗）、receiver 调制（shIn=0）逐一排除后，**RT 绑定/clear 落点是最后嫌疑**——修复方向=RT 补显式 color buffer + setRenderTarget 后校验绑定成功再 clear。
+
+**状态**：校准门默认关（375224 无回归）；inventory 注入 flag 探针、签名修正、dump 门控入库。

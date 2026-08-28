@@ -2205,6 +2205,14 @@ export class MBStyleDataSource extends TileDataSource {
                                     cw: m?.colorWrite === false ? 0 : 1,
                                     tr: m?.transparent ? 1 : 0,
                                     map: !!m?.map,
+                                    // §526: per-object injection flags —
+                                    // identify which materials actually carry
+                                    // each injector (shadow receiver etc.).
+                                    shIn: m?.__mbShadowInjected ? 1 : 0,
+                                    glit: m?.__mbGroundLitHandler ? 1 : 0,
+                                    slit: m?.__mbStructLit ? 1 : 0,
+                                    elab: m?.__mbExtrusion3DLit ? 1 : 0,
+                                    mat: String(m?.type ?? ''),
                                 });
                             });
                             (globalThis as any).__mbProbeInventory = inventory;
@@ -2215,7 +2223,7 @@ export class MBStyleDataSource extends TileDataSource {
                                 ribbonShaders: (globalThis as any).__mbRibbonProbe ?? [],
                             };
                             (globalThis as any).__mbProbeDump = dump;
-                            const sig = dump.yellow.join('|') + '#' + dump.black.join('|');
+                            const sig = dump.yellow.join('|') + '#' + dump.black.join('|') + '#' + inventory.length;
                             const st = (globalThis as any).__mbProbePost ??= { n: 0, sig: '' };
                             const fb = (window as any).__karma__?.config?.args
                                 ?.find?.((a: string) => a.startsWith('feedback-url='))
