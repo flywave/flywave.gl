@@ -1943,6 +1943,7 @@ export class MBStyleDataSource extends TileDataSource {
                         const samples: string[] = [];
                         const elevSamples: string[] = [];
                         const yellowSamples: string[] = [];
+                        const blackSamples: string[] = [];
                         self.mapView.scene.traverse((o: any) => {
                             if ((o as any).isMesh || (o as any).isPoints || (o as any).isLine) {
                                 total++;
@@ -1952,7 +1953,14 @@ export class MBStyleDataSource extends TileDataSource {
                                 counts[`${tname}:${tcol}`] = (counts[`${tname}:${tcol}`] ?? 0) + 1;
                                 const isElev = !!(o.userData?.technique as any)?.__elev;
                                 const isYellow = String(o.userData?.technique?.color ?? '').includes('54, 100%');
-                                const sampleSink = (isElev || isYellow) ? (isYellow ? yellowSamples : elevSamples) : samples;
+                                const matAny: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                                const isBlackMat = !!matAny?.color &&
+                                    matAny.color.r + matAny.color.g + matAny.color.b < 0.02 &&
+                                    matAny.colorWrite !== false;
+                                const sampleSink = isElev ? elevSamples
+                                    : isYellow ? yellowSamples
+                                    : isBlackMat ? blackSamples
+                                    : samples;
                                 if (sampleSink.length < 6) {
                                     o.updateMatrixWorld?.();
                                     const g: any = o.geometry;
@@ -2010,6 +2018,56 @@ export class MBStyleDataSource extends TileDataSource {
                             // eslint-disable-next-line no-console
                             console.log('[MBYellowObj] ' + ys);
                         }
+                        for (const bs of blackSamples) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBBlackObj] ' + bs);
+                        }
+                        // §516: console forwarding from the page is flaky
+                        // (§510) — mirror the probes to a global the result
+                        // page can dump, and POST to the result server.
+                        try {
+                            // §516 full inventory: every object's technique
+                            // color/ro + material state for black-source elimination.
+                            const inventory: any[] = [];
+                            self.mapView.scene.traverse((o: any) => {
+                                if (!((o as any).isMesh || (o as any).isPoints || (o as any).isLine)) return;
+                                const t: any = o.userData?.technique;
+                                const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                                inventory.push({
+                                    c: String(t?.color ?? ''),
+                                    ro: o.renderOrder,
+                                    layer: String(t?._layerId ?? ''),
+                                    pat: t?._patternName ?? undefined,
+                                    prepass: t?._mbElevPrepass ?? undefined,
+                                    nvert: o.geometry?.attributes?.position?.count ?? 0,
+                                    matc: m?.color ? m.color.toArray().map((n: number) => Number(n.toFixed(2))) : undefined,
+                                    vis: o.visible ? 1 : 0,
+                                    cw: m?.colorWrite === false ? 0 : 1,
+                                    tr: m?.transparent ? 1 : 0,
+                                    map: !!m?.map,
+                                });
+                            });
+                            (globalThis as any).__mbProbeInventory = inventory;
+                            const dump = {
+                                elev: elevSamples, yellow: yellowSamples,
+                                black: blackSamples, samples, inventory,
+                            };
+                            (globalThis as any).__mbProbeDump = dump;
+                            const sig = dump.yellow.join('|') + '#' + dump.black.join('|');
+                            const st = (globalThis as any).__mbProbePost ??= { n: 0, sig: '' };
+                            const fb = (window as any).__karma__?.config?.args
+                                ?.find?.((a: string) => a.startsWith('feedback-url='))
+                                ?.slice('feedback-url='.length);
+                            if (fb && st.n < 10 && sig !== st.sig) {
+                                st.sig = sig;
+                                st.n++;
+                                fetch(`${fb}/mb-probe-dump`, {
+                                    method: 'POST',
+                                    headers: { 'content-type': 'application/json' },
+                                    body: JSON.stringify(dump),
+                                }).catch(() => {});
+                            }
+                        } catch {}
                         for (const s of samples) {
                             // eslint-disable-next-line no-console
                             console.log('[MBObj] ' + s);

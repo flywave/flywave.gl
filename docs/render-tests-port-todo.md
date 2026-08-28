@@ -5970,3 +5970,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **黄线/斑马纹渲黑排查（未结，证据链在案）**：解码侧两度验证正确——harness [MBDecode] 技术清单含 `solid-line/fill:hsl(54,100%,65%)`（双线/实线/虚线/斑马黄全在），MBDiag 直解视图瓦片（18-42114 系）计数 `yellow:double×13/solid×27/dashed×2`、hatched-pattern-yellow 技术在册；patchFillPatternMaterial 纹理提取 `tex=true`（atlas 859 icons）。黑 pixel 纯 (0,0,0)、位置与黄双线吻合 → 渲染侧材质问题（黄 ribbon 的材质创建/补丁链路），非解码。**取证工具入库**：MBYellowObj 场景探针（黄技术对象专采，decodedbg 门控）+ MBPatternProbe 已撤。karma 主线程 console 转发不稳定（[MBScene] 时有时无，§510 旧病）拖慢取证——下会话续查黄 ribbon 的 material.color 实时值。
 
 **度量**：全域 5,908,303 → **5,696,996（−21.1 万，累计较 HEAD −9.3%）**；大项：guard-rail-color-feature-dependent -47k、viewport-aligned-text -20k、mixed-text -18k、wireframe -17k、guard-rail-joint -15k；**回归**：elevated-line-labels-tunnel 38692→74761（depthTest 副作用，markup 豁免未回收——标注符号与带深路面交互）、tunnel-color-feature-dependent 67600→84354、elevated-line-pattern -13.5k、bridge-to-tunnel -10.7k。fog 域 30 例逐像素零回归；单测 290 全过。**下会话**：① 黄线渲黑续查（MBYellowObj + 材质 dump）；② labels-tunnel/tunnel-color 回退拆解（prepass 地面深度与标注/桥面交互）；③ 墙面 NdotL 光照；④ mgl 深度重建 shader 化（相机射线投影替垂直压平）。
+
+**§516. 黄线渲黑四层取证 + 探针通道重建（2026-08-28 续二）**：
+
+**取证通道重建**：karma 主线程 console 转发不稳（[MBScene] 时有时无）——结果服务器新增 **`POST /mb-probe-dump`**（flywave-test-utils RenderingTestResultServer，落盘 `mb-probe-dumps/probe-*.json`），页面侧普查（MBStyleDataSource AfterRender）按内容签名变化重发（上限 10 次）+ 全场景 inventory（每对象 technique color/ro/layer/pattern/prepass/材质色/visible/colorWrite/map）——console 不再是瓶颈。
+
+**四层取证结论**：① 解码三验（harness [MBDecode] 技术清单、MBDiag 直解视图瓦片 18-42114 系要素计数 yellow:double×13/solid×27、group→technique 指针零黑指）全部正确；② 场景内黄对象**存在且材质为黄**（MBYellowObj dump：`c=1.00,0.85,0.07` MeshBasicMaterial+ShaderMaterial 两族，v=1 fr=0）；③ 黄对象 v0ndc 与黑像素坐标精确吻合（(0.12,-0.77)→px(286,265)=纯黑）；④ **recolor 实验：黄技术改 #00ff00 后零绿像素、黑依旧**——黄线对象**根本不光栅化**（非"画成黑"），黑 stroke 是另一对象画在其像素上。scanline 对照：黑 K 与 expected 黄 Y 逐列对应（双黄线位置）。
+
+**嫌疑收敛**：黑 stroke 候选=road-hatched-area（ro 9.8 最后绘制，技术基色 #000000+pattern 贴图；但 alpha 修复后 px 不变、inventory 显示 map=True）与 prepass（colorWrite=0 已核）均暂排除；黄线不光栅化嫌疑=该瓦片对象未进渲染列表（layers mask/tile 可见性）或 ribbon 着色器编译失败静默回退。**下会话**：① scene.overrideMaterial 或 Spector式 trace 抓黑 draw call 的 source object；② 检查黄 ribbon 所在 tile 的 visible/layers 状态；③ MBYellowObj dump 已可复现取证（decodedbg+结果服务器通道）。
+
+**本轮其余**：hatch pattern **alpha 感知合成**（extractPatternTexture 扫描 alpha<250 → translucent+depthWrite=false；不透明 tile 保持 §403 校准的 opaque pass）——fill-pattern 域 sprite（不透明）零影响，hatched 域待黄线结案后复测；MBDiag.tmp 测试文件转正式前的临时取证件（不入库）。

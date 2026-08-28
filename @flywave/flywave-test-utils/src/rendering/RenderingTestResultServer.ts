@@ -57,6 +57,22 @@ function updateCurrentResults(newResult: ImageTestResultLocal) {
     }
 }
 
+// §516: page-probe dump channel — the karma page console forwarding is
+// flaky (§510); probes POST here to land on disk regardless.
+export async function postMbProbeDump(req: express.Request, res: express.Response) {
+    try {
+        const fs = await import("fs");
+        const path = await import("path");
+        const outDir = path.join(outputBasePath, "mb-probe-dumps");
+        fs.mkdirSync(outDir, { recursive: true });
+        const name = `probe-${Date.now()}-${Math.round(Math.random() * 1e6)}.json`;
+        fs.writeFileSync(path.join(outDir, name), JSON.stringify(req.body, null, 1));
+        res.status(200).send("ok");
+    } catch (e) {
+        res.status(500).send(String(e));
+    }
+}
+
 export async function postIbctFeedback(req: express.Request, res: express.Response) {
     try {
         const payload: ImageTestResultRequest = req.body;
@@ -181,6 +197,7 @@ export function installMiddleware(app: express.Router, basePath: string) {
     const jsonParser = bodyParser.json({ limit: 1024 * 1024 * 16 });
     app.get("/ibct-report", jsonParser, getIbctReport);
     app.post("/ibct-feedback", jsonParser, postIbctFeedback);
+    app.post("/mb-probe-dump", jsonParser, postMbProbeDump);
     app.get("/reference-image", getReferenceImage);
 
     logger.info("serving IBCT report at /ibct-report endpoint");

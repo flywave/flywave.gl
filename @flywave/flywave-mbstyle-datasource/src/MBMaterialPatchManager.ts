@@ -4103,12 +4103,24 @@ export class MBMaterialPatchManager {
             const ctx = canvas.getContext('2d');
             if (!ctx) return undefined;
             ctx.drawImage(img, info.x, info.y, w, h, 0, 0, w, h);
+            // §515: sprites with transparent texels (hatched road markups)
+            // must composite, not overwrite — an opaque pass writes the
+            // texels' RGB residue (canvas-transparent = pure black). Record
+            // whether the extracted tile has any alpha < 255.
+            let hasAlpha = false;
+            try {
+                const imgData = ctx.getImageData(0, 0, w, h);
+                for (let p2 = 3; p2 < imgData.data.length; p2 += 4) {
+                    if (imgData.data[p2] < 250) { hasAlpha = true; break; }
+                }
+            } catch {}
             const tex = new THREE.CanvasTexture(canvas);
             tex.wrapS = THREE.RepeatWrapping;
             tex.wrapT = THREE.RepeatWrapping;
             tex.magFilter = THREE.LinearFilter;
             tex.minFilter = THREE.LinearFilter;
             tex.needsUpdate = true;
+            (tex as any).__mbHasAlpha = hasAlpha;
             patternTextureCache.set(patternName, tex);
             return tex;
         } catch {
@@ -4139,6 +4151,13 @@ export class MBMaterialPatchManager {
 
         (material as any).map = tex;
         (material as any).color = new THREE.Color('#ffffff');
+        // Alpha-carrying pattern tiles (hatched markups) composite over the
+        // content below — opaque would paint the transparent texels' black
+        // RGB residue. Opaque tiles keep the calibrated pass (§403).
+        if ((tex as any).__mbHasAlpha) {
+            (material as any).transparent = true;
+            (material as any).depthWrite = false;
+        }
         // mglComposite (fill-extrusion): mgl draws patterned extrusions in
         // the translucent pass with alpha blending (draw_fill_extrusion.ts:
         // 104-129) — transparent sprite texels composite over the content
