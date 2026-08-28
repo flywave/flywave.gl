@@ -24,7 +24,7 @@ import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { MBTileDataEmitter } from './MBTileDataEmitter';
 import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
-import { mbCellTileKeyString, mbPendingChildrenPut, MBPendingChildTile } from './MBStyleDecoder';
+import { mbCellTileKeyString, mbPendingChildrenPut, mbPendingSourceTilesPut, MBPendingChildTile, MBPendingSourceTile } from './MBStyleDecoder';
 import { SpriteAtlas } from './materials/MapIconMaterial';
 import { MBStyleRuntime } from './MBStyleRuntime';
 import { MBEnvironmentManager } from './MBEnvironmentManager';
@@ -968,6 +968,81 @@ class MglChildFallbackProvider extends DataProvider {
 }
 
 /**
+ * §518: multi-vector-source styles (mgl loads a covering per source; the
+ * trees/landmark points of the model-layer fixtures live in a SECOND vector
+ * source next to the base). Wraps the PRIMARY source's provider chain: on
+ * every cell request it also fetches the extra vector sources' tiles at
+ * their mgl covering level (round(zoom) clamped to the source maxzoom,
+ * ancestor-shifted — transform.ts:865/coveringZoomLevel) and stashes them
+ * for the decoder's frame-correct merge (mbPendingSourceTilesPut). The
+ * primary response flows through unchanged, so single-source behavior is
+ * untouched.
+ */
+class MBExtraVectorSourcesProvider extends DataProvider {
+    constructor(
+        private m_inner: DataProvider,
+        private m_extras: Array<{
+            sourceId: string;
+            provider: DataProvider;
+            maxzoom: number;
+        }>,
+        /** True when the PRIMARY source is 512px (cell level = mgl level −1). */
+        private m_primary512: boolean,
+    ) {
+        super();
+    }
+
+    ready(): boolean {
+        return this.m_inner.ready();
+    }
+
+    async getTile(tileKey: TileKey, abortSignal?: AbortSignal): Promise<ArrayBufferLike | {}> {
+        const primary = this.m_inner.getTile(tileKey, abortSignal);
+        // Fire the extra fetches concurrently with the primary — they are
+        // best-effort (missing tile = its layers render empty).
+        const stash: MBPendingSourceTile[] = [];
+        const mglLevel = tileKey.level + (this.m_primary512 ? 1 : 0);
+        await Promise.all(this.m_extras.map(async (ex) => {
+            let lvl = mglLevel;
+            let x = tileKey.column;
+            let y = tileKey.row;
+            if (lvl > ex.maxzoom) {
+                const shift = lvl - ex.maxzoom;
+                lvl = ex.maxzoom;
+                x = x >> shift;
+                y = y >> shift;
+            }
+            try {
+                const bytes = await ex.provider.getTile(
+                    TileKey.fromRowColumnLevel(y, x, lvl), abortSignal);
+                if (bytes instanceof ArrayBuffer || bytes instanceof Uint8Array) {
+                    stash.push({ sourceId: ex.sourceId, z: lvl, x, y, bytes });
+                }
+            } catch {
+                // Missing quarter → its layers stay empty.
+            }
+        }));
+        const data = await primary;
+        if (stash.length > 0) {
+            mbPendingSourceTilesPut(mbCellTileKeyString(tileKey), stash);
+        }
+        return data;
+    }
+
+    protected async connect(): Promise<void> {
+        try { await (this.m_inner as any).connect(); } catch {}
+        for (const ex of this.m_extras) {
+            try { await (ex.provider as any).connect?.(); } catch {}
+        }
+    }
+
+    protected dispose(): void {
+        this.m_inner = null as any;
+        this.m_extras = [];
+    }
+}
+
+/**
  * Combines multiple GeoJSON-producing tile providers into one. Styles may
  * reference several sources (e.g. a synthetic `rect` fill + a GeoJSON
  * fill-extrusion); previously only one source was wired so the others' data
@@ -1378,6 +1453,39 @@ export class MBStyleDataSource extends TileDataSource {
             if (tileSize > 256) {
                 delegate = new MglChildFallbackProvider(
                     delegate, (source as any).maxzoom ?? 18);
+            }
+            // §518: multi-vector-source styles — wire the OTHER vector
+            // sources (with layers referencing them) so their features
+            // decode into the same cell (mgl per-source coverings).
+            const extras: Array<{
+                sourceId: string;
+                provider: DataProvider;
+                maxzoom: number;
+            }> = [];
+            for (const [extraId, extraSource] of sources) {
+                if (extraId === bestVectorSourceId) continue;
+                if ((extraSource as any).type !== 'vector') continue;
+                if ((layerCounts.get(extraId) ?? 0) === 0) continue;
+                const exSpec = (style.sources as any)?.[extraId] as any;
+                const exTiles = exSpec?.tiles;
+                if (!Array.isArray(exTiles) || exTiles.length === 0) continue;
+                const exClient = this.createOmvRestClient(
+                    { ...extraSource, tiles: exTiles } as any,
+                    this.m_styleParams.accessToken);
+                let exDelegate: DataProvider = exClient;
+                const exScheme = (extraSource as any).scheme ?? 'xyz';
+                if (exScheme === 'tms') {
+                    exDelegate = new TMSDataProvider(exClient);
+                }
+                extras.push({
+                    sourceId: extraId,
+                    provider: exDelegate,
+                    maxzoom: (extraSource as any).maxzoom ?? 22,
+                });
+            }
+            if (extras.length > 0) {
+                delegate = new MBExtraVectorSourcesProvider(
+                    delegate, extras, tileSize > 256);
             }
             this.m_delegatingProvider.delegate = delegate;
             this.m_currentSourceId = bestVectorSourceId;
@@ -1974,7 +2082,22 @@ export class MBStyleDataSource extends TileDataSource {
                         const elevSamples: string[] = [];
                         const yellowSamples: string[] = [];
                         const blackSamples: string[] = [];
+                        const modelSamples: string[] = [];
                         self.mapView.scene.traverse((o: any) => {
+                            // §518: model-instance ROOTS (transform carriers,
+                            // plain Object3D) — probe before the mesh branch.
+                            if (o.userData?._mbLayerId && modelSamples.length < 6) {
+                                o.updateWorldMatrix?.(true, false);
+                                o.getWorldPosition(V);
+                                const vv = V.clone().project(cam);
+                                const e = o.matrixWorld.elements;
+                                modelSamples.push(
+                                    `root layer=${o.userData._mbLayerId} v=${o.visible ? 1 : 0}` +
+                                    ` pos=(${o.position.x.toFixed(0)},${o.position.y.toFixed(0)},${o.position.z.toFixed(0)})` +
+                                    ` scl=(${o.scale.x},${o.scale.y},${o.scale.z})` +
+                                    ` ndc=(${vv.x.toFixed(2)},${vv.y.toFixed(2)})` +
+                                    ` mw0=(${e[0].toFixed(1)},${e[5].toFixed(1)},${e[10].toFixed(1)},${e[12].toFixed(0)},${e[13].toFixed(0)},${e[14].toFixed(0)})`);
+                            }
                             if ((o as any).isMesh || (o as any).isPoints || (o as any).isLine) {
                                 total++;
                                 const tname = o.userData?.technique?.name ?? o.userData?.technique?.technique ?? o.type;
@@ -1990,6 +2113,7 @@ export class MBStyleDataSource extends TileDataSource {
                                 const sampleSink = isElev ? elevSamples
                                     : isYellow ? yellowSamples
                                     : isBlackMat ? blackSamples
+                                    : o.userData?._mbLayerId ? modelSamples
                                     : samples;
                                 if (sampleSink.length < 6) {
                                     o.updateMatrixWorld?.();
@@ -2053,6 +2177,10 @@ export class MBStyleDataSource extends TileDataSource {
                         for (const bs of blackSamples) {
                             // eslint-disable-next-line no-console
                             console.log('[MBBlackObj] ' + bs);
+                        }
+                        for (const ms of modelSamples) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBModelObj] ' + ms);
                         }
                         // §516: console forwarding from the page is flaky
                         // (§510) — mirror the probes to a global the result
@@ -2120,6 +2248,22 @@ export class MBStyleDataSource extends TileDataSource {
                 }
                 if (self.m_modelRenderer) {
                     self.m_modelRenderer.run();
+                }
+                // §518: loadModels instances (source-registry path) share the
+                // RTE problem — keep them at absolute − eye (see
+                // MBModelRenderer.run for the frame explanation).
+                if ((self as any).m_loadedModels?.length > 0) {
+                    try {
+                        const gc = (self.mapView as any).geoCenter;
+                        const pr = (self.mapView as any).projection;
+                        if (gc && pr) {
+                            const eye = pr.projectPoint(gc, { x: 0, y: 0, z: 0 });
+                            for (const entry of (self as any).m_loadedModels) {
+                                const base = entry.model.userData?._mbBasePos;
+                                if (base) entry.model.position.set(base.x - eye.x, base.y - eye.y, base.z - eye.z);
+                            }
+                        }
+                    } catch {}
                 }
 
                 if (self.m_atmosphereRenderer) {
@@ -2353,6 +2497,10 @@ export class MBStyleDataSource extends TileDataSource {
             }
         }
         this.m_modelRenderer.setModelRegistry(registry);
+        if ((globalThis as any).__mbDecodeDbg) {
+            // eslint-disable-next-line no-console
+            console.log(`[MBModelReg] registry=${registry.size} entries=${[...registry.keys()].join(',')} renderer=${!!this.m_modelRenderer}`);
+        }
         this.m_modelRenderer.setLayers?.((style.layers ?? []) as any[]);
         // Placements only come from model layers over vector/geojson sources.
         const expectPlacements = (style.layers ?? []).some((l: any) =>
@@ -2473,11 +2621,20 @@ export class MBStyleDataSource extends TileDataSource {
                         const geoCoord = new GeoCoordinates(lat, lng);
                         const worldPos = projection.projectPoint(geoCoord);
                         model.position.set(worldPos.x, worldPos.y, (worldPos as any).z ?? z);
+                        // §518: keep the absolute placement for the per-frame
+                        // RTE (−eye) rebase in the render hook.
+                        (model.userData as any)._mbBasePos = {
+                            x: model.position.x, y: model.position.y, z: model.position.z,
+                        };
                     }
 
                     // Scale: scalar or [x,y,z] — layout `model-scale` or the
                     // source registry entry's own `scale`.
                     const effScale = def.scale ?? modelScale;
+                    // §518: render AFTER the HD road band (see MBModelRenderer
+                    // — ro 0 gets overdrawn by the depthTest-less fill band).
+                    model.traverse((o: any) => { o.renderOrder = 10; });
+                    model.renderOrder = 10;
                     if (Array.isArray(effScale)) {
                         model.scale.set(effScale[0] ?? 1, effScale[1] ?? 1, effScale[2] ?? 1);
                     } else if (effScale !== undefined) {

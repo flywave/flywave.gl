@@ -5994,3 +5994,21 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **度量**：road-markups 黄线从无到 2654px（黑 stroke 816→0）；mismatch 24938（黄线宽/位置校准余量：实测条带≈18 display px vs expected ≈9px——gap 屏幕合成与线宽标定是收尾项）；fog 金丝雀零回归；单测 290 全过。
 
 **完全对齐剩余清单（优先序）**：① gap 屏幕合成（transparent 已强制，疑 CustomBlending/混合状态或 alpha 语义——需逐像素 alpha dump）；② 黄线宽/位置标定（实测 2× 于 expected 的量级关系待定）；③ tunnel-enterance 三维形态（mgl 相机射线深度重建 shader 化）；④ terrain-enabled 变体（TerrainDraping×曲线抬升）；⑤ 墙面 NdotL 光照；⑥ 标线颜色域（黄线 color 表达式已通，斑马纹黄待 hatch 域验证）。
+
+**§518. 会话续记——黄线 gap 改 mgl 几何双条带 + 结构 NdotL 光照 + model-layer 四连根因破案（多源/逐要素求值/RTE/renderOrder）（2026-08-28 续四）**：
+
+**3d-intersections ①②（gap 屏幕合成+线宽标定）**：重读 mgl `line.vertex.glsl:308` 实锤 gap-width 是**纯几何**语义——`inset=gapwidth/2+AA`、`outset=gapwidth/2+width+AA`：两条各 `line-width` 厚的实心条带、中心 ±(gap/2+width/2)、无任何 alpha。§517 的片元挖带方案（条带保持 line-width、中带 alpha=0）结构性错误——既是缺口合成问题（opaque 忽略 alpha/transparent 重排序毒化）也是条带宽度 2× 的根因。重实现：emitter 在 `gap>0` 时经既有 `aRibbonOffs` 属性通道（line-offset 同款，tile 裁剪不可见）**发射两条带**（offset ±(gap/2+width/2)，条带 halfwidth=width/2+0.5AA），patcher 的 uMBGap 片元挖带/强制 transparent 全部删除（dead path）。SolidLine 双胞胎跳过条件改 `hasGap`。
+
+**3d-intersections ⑤（墙/护栏 NdotL）**：`injectStructure3DLighting`——`__elev` 技术材质注入 mgl `elevated_structures_model.fragment.glsl` 的 apply_lighting（dir_factor=max(NdotL,0)、emissive 硬编码 0、vertical_factor 0.92；屏幕空间导数法线、viewMatrix 每帧更新，与 §455 injectExtrusion3DLighting 同族；MeshBasicMaterial 无 vViewPosition → 自带 vMBViewPos varying）。73/75 域夹具带 lights，墙面/护栏从平涂变光照。
+
+**model-layer 整域全红根因四连（§5875"批跑 109/212 全 FAILED"的定性）**：基线采集（Edge 单趟，142 上报）**0/142 全 PASS**——§86"212/212"假阳性再实锤。破案链：
+1. **单向量源架构（主根因，103/156 夹具）**：`wireTileSources` 只接"最佳"向量源（按图层数），trees/landmark 第二向量源的瓦片**从不请求**（forensic 实锤：log 零请求、decode 零 model 技术）→ 模型要素根本不存在。修复=**多向量源合并解码**：新 `MBExtraVectorSourcesProvider`（主源链外包一层，cell 请求时并发抓取其余向量源在 mgl covering 级（round(zoom) clamp maxzoom，transform.ts:865；512px 主源 cell 级=mgl−1）的瓦片，`mbPendingSourceTilesPut` 暂存）+ decoder `decodeTileWithSources`（每源以自身 tileKey+临时 `m_currentSourceId` 解码，中心差重定基+技术索引重映射，`modelInstances`/`heatmapPoints` 直接拼接——绝对坐标无重定基）。单源行为零改动（provider 透传）。
+2. **逐要素求值缺失**：`model-rotation` 等全是 data-driven 表达式，raw `["match",...]` 数组按数乘 → **NaN 矩阵**（"Computed radius is NaN" 报警的真身）→ 实例全体不可见。修复=emitter 逐要素 `MBExpressionEngine.evaluate`（placement 携带 rotation/scale/translation/opacity/colorMix/emissive/modelId），renderer 侧 `sanitizeVec` NaN 守卫。
+3. **RTE 帧不匹配**：引擎 render 是 relative-to-eye（tile 矩阵每帧预乘 −eye，probe 实锤 mesh 世界坐标为小值），直挂 scene 的模型组保持绝对坐标（~1e7）而 three 相机在原点 → 全体出屏。修复=`MBModelRenderer.run` 每帧 group.position=−eye（geoCenter→projectPoint）；loadModels 路径同款（`_mbBasePos` 快照+逐帧重定基）。
+4. **renderOrder**：clone ro=0 先画，被 §512 提升的路面带（2..9.8，depthTest=false）整体覆盖——提 ro=10（mgl draw_model 在 road/fill pass 后）。
+
+**验证**：buildings-trees-shadows-casting 树从无到整域上屏（公园环树布局对位 expected，383277→399264——绿树颜色/倾角/阴影外观未校准的预期代价）；单元 290 全过、tsc 绿。阶段批测（3d-intersections 全域 74 + fog 20 + model-layer 子集）：3d-intersections 总失配 5.94M（§517 HEAD）→ **5.16M（−13%）**，与 §510 goal3d 基线共同夹具比 −310 万，66 夹具 0 显著回归（最大 +1k 级噪声）；fog 金丝雀 fog/default 448、empty-update 998（残差量级不变）。model-layer 余项=外观校准（树颜色 theme/秋色变体、rotation 轴向约定 glTF Y-up、阴影/LOD/landmark 系）——内容管线已通，下阶段逐外观项校准。
+
+**camera-projection 族（10 例）定性为引擎级缺口**：mgl orthographic 相机（`camera-orthographic-*`），涉及 flywave-mapview 相机体系，记档不在本数据源层修。
+
+**通道/探针**：`MBModelReg`/`MBModelRun`（registry 尺寸/ placements 可见性）、`MBModelObj`（实例根 pos/scl/matrixWorld）、`MBMergeSources`（合并统计）——全部 decodedbg 门控。

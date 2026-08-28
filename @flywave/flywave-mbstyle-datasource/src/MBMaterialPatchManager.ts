@@ -224,6 +224,13 @@ export class MBMaterialPatchManager {
             this.setupTranslucentExtrusionDualPass(obj, tech);
             this.registerShadowCaster(obj, tech);
             }
+            // §518: mgl shades structures with LIGHTING_3D_MODE apply_lighting
+            // when the style declares lights (73/75 3d-intersections fixtures).
+            if ((tech as any).__elev) {
+                for (const material of materials) {
+                    this.injectStructure3DLighting(material);
+                }
+            }
             if ((noTech > 0) && !(MBMaterialPatchManager as any).__ntk) {
                 (MBMaterialPatchManager as any).__ntk = 1;
                 console.log('[MBDBG] patchTile noTech=' + noTech + ' withTech=' + withTech);
@@ -697,6 +704,68 @@ export class MBMaterialPatchManager {
      *   lit = color * pow(k, 1/2.2)          (linearProduct)
      *   out = mix(lit, color, emissive_strength)
      */
+    /**
+     * §518: mgl shades elevated structures (guard rails / tunnel walls) with
+     * the same LIGHTING_3D_MODE apply_lighting (elevated_structures_model
+     * .fragment.glsl): dir_factor = max(NdotL, 0), emissive_strength is
+     * hardcoded 0, no underground-occlusion hack here. The structures render
+     * through plain (unlit) fill materials, and MeshBasicMaterial has no
+     * vViewPosition varying — derive the view position in our own varying.
+     */
+    private injectStructure3DLighting(material: THREE.Material): boolean {
+        const ls = (this.m_dataSource as any).m_environment?.lighting3DState;
+        if (!ls) return false;
+        if ((material as any).__mbStructLit) return true;
+        (material as any).__mbStructLit = true;
+        const origOnCompile = material.onBeforeCompile;
+        material.onBeforeCompile = (shader: any) => {
+            if (origOnCompile) origOnCompile.call(material, shader);
+            const ls2 = (this.m_dataSource as any).m_environment?.lighting3DState;
+            shader.uniforms.uMB3DAmb = { value: ls2 ? ls2.ambientColorLinear : [1, 1, 1] };
+            shader.uniforms.uMB3DDirColor = { value: ls2 ? ls2.directionalColorLinear : [1, 1, 1] };
+            shader.uniforms.uMB3DDir = { value: ls2 ? ls2.dir : [0, 0, 1] };
+            shader.vertexShader = shader.vertexShader.replace(
+                'void main() {',
+                `varying vec3 vMBViewPos;
+                 void main() {`
+            );
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <begin_vertex>',
+                `#include <begin_vertex>
+                 vMBViewPos = (modelViewMatrix * vec4(position, 1.0)).xyz;`
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                'void main() {',
+                `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
+                 varying vec3 vMBViewPos;
+                 vec3 mbBaseColor = vec3(1.0);
+                 void main() {`
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <color_fragment>',
+                `#include <color_fragment>
+                 mbBaseColor = diffuseColor.rgb;`
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <opaque_fragment>',
+                `#include <opaque_fragment>
+                 {
+                     vec3 mbN3 = normalize(cross(dFdx(vMBViewPos), dFdy(vMBViewPos)));
+                     vec3 mbDirView = normalize((viewMatrix * vec4(uMB3DDir, 0.0)).xyz);
+                     vec3 mbUpView = normalize((viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
+                     float mbNdotL = dot(mbN3, mbDirView);
+                     float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
+                     float mbDirFactorMin = 1.0 - 0.3 * min(mbDirLum, 1.0);
+                     float mbAmbDir = mix(mbDirFactorMin, 1.0, min(mbNdotL + 1.0, 1.0));
+                     float mbVert = mix(0.92, 1.0, dot(mbN3, mbUpView) * 0.5 + 0.5);
+                     vec3 mbK = uMB3DAmb * (mbVert * mbAmbDir) + uMB3DDirColor * max(mbNdotL, 0.0);
+                     gl_FragColor.rgb = mbBaseColor * mbK;
+                 }`
+            );
+        };
+        material.needsUpdate = true;
+        return true;
+    }
     private injectExtrusion3DLighting(material: THREE.Material, emissiveStrength: number): void {
         if ((material as any).__mbExtrusion3DLit) return;
         (material as any).__mbExtrusion3DLit = true;
@@ -1898,17 +1967,6 @@ export class MBMaterialPatchManager {
             // offset in the vertex shader, invisible to tile clipping — the
             // geometric bake truncated offsets >~20px at tile boundaries).
             const hasOffset = Boolean(technique._ribbonHasOffset);
-            // §516 line-gap-width: discard the central gap band (edge units —
-            // |edge| ∈ [0,1] across the dilated ribbon; gap half in edge
-            // units = gapFraction × W_true / W_dil, with a ~1px AA on both
-            // gap edges).
-            const gapFraction = Number(technique._ribbonGapFraction ?? 0);
-            const hasGap = gapFraction > 0;
-            const widthDil = Number(technique._ribbonWidthPx ?? 1);
-            const gapHalfEdge = hasGap
-                ? (gapFraction * Math.max(widthDil - 1, 0) / 2) * (2 / Math.max(widthDil, 1e-5))
-                : 0;
-            const gapAAEdge = 2 / Math.max(widthDil, 1e-5);
             // The ~1px AA feather is only active for blurred lines: on the
             // (alpha-blended, tile-fading) ribbon materials it costs ~1px of
             // semi-transparent edge along the whole network — a large net
@@ -1936,15 +1994,6 @@ export class MBMaterialPatchManager {
                 (material as any).blendSrc = THREE.SrcAlphaFactor;
                 (material as any).blendDst = THREE.OneMinusSrcAlphaFactor;
                 (material as any).blendEquation = THREE.AddEquation;
-                // §516 gap carve: the center gap relies on alpha=0 blending.
-                // The SwiftShader/emulator path drops CustomBlending on
-                // opaque materials (gap painted solid), so force the
-                // transparent list for gap ribbons — the mgl semantics (gap
-                // shows the content below) require real blending.
-                if (hasGap) {
-                    (material as any).transparent = true;
-                    (material as any).depthWrite = false;
-                }
             }
             if (!(material as any).__mbRibbonAA && widthPx > 0) {
                 (material as any).__mbRibbonAA = true;
@@ -1975,16 +2024,13 @@ export class MBMaterialPatchManager {
                     if (orig) orig.call(material, shader);
                     shader.uniforms.uMBRibbonWidth = { value: widthPx };
                     shader.uniforms.uMBRibbonBlur = { value: blurPx };
-                    if (hasGap) {
-                        shader.uniforms.uMBGap = { value: new THREE.Vector2(gapHalfEdge, gapAAEdge) };
-                    }
                     // §516: three's program cache key is the OUTERMOST
                     // onBeforeCompile.toString() — identical for every ribbon
                     // (customization rides closure variables), so the first
                     // compiled program (no gap) would be reused for gap
                     // variants. The custom key splits them.
                     material.customProgramCacheKey = () =>
-                        `ribbonGap:${hasGap ? 1 : 0}:${dashWorld ? 1 : 0}:${patTex ? 1 : 0}:${rampTex ? 1 : 0}:${hasTrim ? 1 : 0}`;
+                        `ribbon:${dashWorld ? 1 : 0}:${patTex ? 1 : 0}:${rampTex ? 1 : 0}:${hasTrim ? 1 : 0}`;
                     if (hasDash) {
                         const dashLayout = technique._layout ?? {};
                         const dashCap = String(dashLayout['line-cap'] ?? 'butt');
@@ -2045,7 +2091,6 @@ export class MBMaterialPatchManager {
                         'void main() {',
                          `attribute float aRibbonEdge;
                           varying float vMBRibbonEdge;
-                          ${hasGap ? 'uniform vec2 uMBGap;' : ''}
                           ${rampTex || hasTrim ? 'attribute float aRibbonDist;\nvarying float vMBRibbonDist;' : ''}
                           ${patTex || hasDash ? 'attribute float aRibbonLen;\nvarying float vMBRibbonLen;' : ''}
                           ${translateWorld ? 'uniform vec2 uMBTranslate;' : ''}
@@ -2066,7 +2111,6 @@ export class MBMaterialPatchManager {
                          `varying float vMBRibbonEdge;
                           uniform float uMBRibbonWidth;
                           uniform float uMBRibbonBlur;
-                          ${hasGap ? 'uniform vec2 uMBGap;' : ''}
                           ${rampTex || hasTrim ? 'varying float vMBRibbonDist;\nuniform sampler2D uMBRamp;\nuniform vec2 uMBTrimRange;\nuniform vec4 uMBTrimColor;\nuniform vec2 uMBTrimFade;' : ''}
                           ${patTex || hasDash ? `varying float vMBRibbonLen;${patTex ? '\nuniform sampler2D uMBPat;\nuniform float uMBPatUScale;\nuniform float uMBPatVScale;' + (patTex2 ? '\nuniform sampler2D uMBPat2;\nuniform float uMBPatFade;' : '') : ''}${hasDash ? '\nuniform vec2 uMBDashSize;\nuniform float uMBDashCap;\nuniform float uMBDashHalfW;\nuniform float uMBDashPx;' : ''}` : ''}
                           void main() {`
@@ -2163,20 +2207,8 @@ export class MBMaterialPatchManager {
                              gl_FragColor.a *= step(-0.5, mbDistEdge);`}
                              ${featherEnabled ? `float mbDistCenter = abs(vMBRibbonEdge) * uMBRibbonWidth * 0.5;
                                  gl_FragColor.a *= clamp(1.0 - mbDistCenter / max(uMBRibbonBlur, 0.5), 0.0, 1.0);` : ''}
-                             ${hasGap ? `gl_FragColor.a *= smoothstep(uMBGap.x - uMBGap.y, uMBGap.x + uMBGap.y, abs(vMBRibbonEdge));` : ''}
                          }`
                     );
-                    try {
-                        ((globalThis as any).__mbRibbonProbe ??= []).push({
-                            layer: technique._layerId,
-                            vsHas: shader.vertexShader.includes('uMBGap'),
-                            fsHas: shader.fragmentShader.includes('uMBGap'),
-                            fsDiscard: shader.fragmentShader.includes('uMBGap.x - uMBGap.y'),
-                            w: widthDil,
-                            gfr: gapFraction,
-                            ghe: Number(gapHalfEdge.toFixed(3)),
-                        });
-                    } catch {}
                 };
                 material.needsUpdate = true;
             }

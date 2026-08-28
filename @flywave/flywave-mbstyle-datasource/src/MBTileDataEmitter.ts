@@ -556,6 +556,14 @@ export class MBTileDataEmitter {
         x: number; y: number; z: number;
         technique: any;
         properties: Record<string, any>;
+        /** Per-feature evaluated data-driven model-* paint (mgl semantics). */
+        rotation?: number[];
+        scale?: number[];
+        translation?: number[];
+        opacity?: number;
+        colorMix?: number;
+        emissive?: number;
+        modelId?: string;
     }> = [];
 
     /**
@@ -2816,12 +2824,18 @@ export class MBTileDataEmitter {
                 const geoBox: any = (this.m_decodeInfo as any).geoBox;
                 const latC = (Number(geoBox?.north ?? 0) + Number(geoBox?.south ?? 0)) / 2;
                 const secLat = 1 / Math.max(0.2, Math.cos(latC * Math.PI / 180));
-                // §516 line-gap-width: the ribbon stays `line-width` wide; the
-                // middle `gap` px is discarded in the fragment (gap fraction
-                // below), leaving two hairline strips — mgl gap semantics.
+                // §518 line-gap-width — mgl line.vertex.glsl:308 is GEOMETRIC:
+                // inset = gapwidth/2 + AA, outset = gapwidth/2 + width + AA.
+                // Two opaque strips of `line-width` thickness centered at
+                // ±(gap/2 + width/2); the gap is simply not covered. No alpha
+                // carve — the §517 fragment carve needs blending (opaque ribbon
+                // ignores alpha; transparent reorder breaks road compositing).
+                // The strips ride the aRibbonOffs attribute like line-offset,
+                // so tile clipping/culling never sees the displaced geometry.
                 const gapWidthPx = Number(layer.paint?.['line-gap-width'] ?? 0);
-                const gapFraction = lineWidthPx > 0 && gapWidthPx > 0
-                    ? Math.min(gapWidthPx / lineWidthPx, 0.98)
+                const hasGap = lineWidthPx > 0 && gapWidthPx > 0;
+                const gapStripOffWorld = hasGap
+                    ? (gapWidthPx / 2 + lineWidthPx / 2) * metersPerPixel
                     : 0;
                 const worldHalfWidth = widthUnit === 'meters'
                     ? (lineWidthPx / 2) * secLat
@@ -2906,9 +2920,8 @@ export class MBTileDataEmitter {
                     // opaque SolidLine twin would underlie the composite and
                     // double-accumulate in the density pass.
                     layer.paint?.['line-blend-mode'] === 'additive' ||
-                    // §516 gap lines: the ribbon renders strips+gap; an
-                    // opaque SolidLine twin would paint the gap solid.
-                    gapFraction > 0);
+                    hasGap);
+
                 if (!skipSolidLine) this.m_preExtrudedLines = true;
                 // Store interleaved vertex data + remapped indices
                 const stride = 13; // extrusionCoord(3)+position(3)+tangent(3)+biTangent(4)
@@ -2979,9 +2992,21 @@ export class MBTileDataEmitter {
                 // §516: the ribbon carries the gap fraction for the
                 // fragment discard (the native SolidLine twin is skipped
                 // above — the ribbon IS the line for gap features).
-                this.emitRibbonFill(layer, worldPts, mainHalfWidth + aaDilate, cumDist,
-                    lineWidthPx > 0 ? lineWidthPx + 1 : 0, lineGeom, progressHalfWidths,
-                    offsetWorld, properties, progressClip, gapFraction);
+                // §518: gap features emit TWO strips (mgl geometric inset/
+                // outset); `gapStripOffWorld` displaces each via the
+                // aRibbonOffs attribute. No gapFraction carve.
+                if (gapStripOffWorld !== 0) {
+                    this.emitRibbonFill(layer, worldPts, mainHalfWidth + aaDilate, cumDist,
+                        lineWidthPx > 0 ? lineWidthPx + 1 : 0, lineGeom, progressHalfWidths,
+                        offsetWorld + gapStripOffWorld, properties, progressClip);
+                    this.emitRibbonFill(layer, worldPts, mainHalfWidth + aaDilate, cumDist,
+                        lineWidthPx > 0 ? lineWidthPx + 1 : 0, lineGeom, progressHalfWidths,
+                        offsetWorld - gapStripOffWorld, properties, progressClip);
+                } else {
+                    this.emitRibbonFill(layer, worldPts, mainHalfWidth + aaDilate, cumDist,
+                        lineWidthPx > 0 ? lineWidthPx + 1 : 0, lineGeom, progressHalfWidths,
+                        offsetWorld, properties, progressClip);
+                }
                 // line-border: edge ribbons under the main line (constant
                 // width only — variable-width borders are not a test case).
                 if (!progressHalfWidths) {
@@ -3166,12 +3191,11 @@ export class MBTileDataEmitter {
         offsetWorld = 0,
         properties?: Record<string, any>,
         progressClip?: [number, number],
-        gapFraction?: number,
     ): void {
         // Key by ribbon technique: see the fill key comment in
         // processFillFeature — groups sharing a geometry must use one technique,
         // otherwise every per-technique object draws the whole index buffer.
-        const ribbonTechIdx = this.getOrCreateRibbonTechniqueIndex(layer, properties, gapFraction);
+        const ribbonTechIdx = this.getOrCreateRibbonTechniqueIndex(layer, properties);
         if (effectiveWidthPx !== undefined) {
             // Dilated ribbon width in px (true width + 2×0.5px AA dilation) —
             // the patcher's edge AA ramp measures distances against it.
@@ -3673,7 +3697,7 @@ export class MBTileDataEmitter {
         ];
     }
 
-    private getOrCreateRibbonTechniqueIndex(layer: EvaluatedLayer, properties?: Record<string, any>, gapFraction = 0): number {
+    private getOrCreateRibbonTechniqueIndex(layer: EvaluatedLayer, properties?: Record<string, any>): number {
         // The ribbon-fill material carries the per-feature line color. Key the
         // technique by the resolved line color (plus opacity) so categorical /
         // data-driven line-colors produce one technique per distinct value —
@@ -3770,7 +3794,6 @@ export class MBTileDataEmitter {
                 _paint: paint,
                 _layout: layer.layout,
                 _mbGlobalLayerOrder: true,
-                ...(gapFraction > 0 ? { _ribbonGapFraction: gapFraction } : {}),
                 // line-gradient: per-feature line-progress ramp consumed by
                 // the patcher (aRibbonDist varying → ramp texture sample).
                 ...(gradient ? { _lineGradientStops: gradient } : {}),
@@ -4057,6 +4080,67 @@ export class MBTileDataEmitter {
                 // (the engine has no 'model' technique consumer; mgl
                 // instantiates a GLTF per feature at the feature position).
                 if (layer.type === 'model') {
+                    // mgl model-* paint properties are data-driven — evaluate
+                    // PER FEATURE (a raw expression array multiplied as a
+                    // number yields NaN and destroys the instance matrix).
+                    const evalVec3 = (name: string): number[] | undefined => {
+                        const raw = (layer as any).paintDefs?.[name]?.value
+                            ?? layer.paint?.[name];
+                        if (raw === undefined || raw === null) return undefined;
+                        let v: any = raw;
+                        if (typeof v === 'object') {
+                            try {
+                                v = MBExpressionEngine.evaluate(raw, {
+                                    zoom: this.m_zoom,
+                                    feature: { type: 'Point', properties, id: featureId } as any,
+                                } as any);
+                            } catch { return undefined; }
+                        }
+                        if (!Array.isArray(v)) {
+                            const n = Number(v);
+                            return Number.isFinite(n) ? [n, n, n] : undefined;
+                        }
+                        const out = [Number(v[0] ?? 0), Number(v[1] ?? 0), Number(v[2] ?? 0)];
+                        return out.every(Number.isFinite) ? out : undefined;
+                    };
+                    const evalScalar = (name: string, dflt: number): number => {
+                        const raw = (layer as any).paintDefs?.[name]?.value
+                            ?? layer.paint?.[name];
+                        if (raw === undefined || raw === null) return dflt;
+                        let v: any = raw;
+                        if (typeof v === 'object') {
+                            try {
+                                v = MBExpressionEngine.evaluate(raw, {
+                                    zoom: this.m_zoom,
+                                    feature: { type: 'Point', properties, id: featureId } as any,
+                                } as any);
+                            } catch { return dflt; }
+                        }
+                        const n = Number(v);
+                        return Number.isFinite(n) ? n : dflt;
+                    };
+                    // model-id: layout, data-driven — resolve the registry key.
+                    let modelId: any = layer.layout?.['model-id'] ?? properties?.['model-id'] ?? '';
+                    if (typeof modelId === 'object') {
+                        try {
+                            modelId = MBExpressionEngine.evaluate(modelId, {
+                                zoom: this.m_zoom,
+                                feature: { type: 'Point', properties, id: featureId } as any,
+                            } as any);
+                        } catch { modelId = ''; }
+                    }
+                    const rotation = evalVec3('model-rotation');
+                    const mScale = evalVec3('model-scale');
+                    const translation = evalVec3('model-translation');
+                    const opacity = evalScalar('model-opacity', 1);
+                    const colorRaw = (layer as any).paintDefs?.['model-color']?.value
+                        ?? layer.paint?.['model-color'];
+                    const mixRaw = (layer as any).paintDefs?.['model-color-mix-intensity']?.value
+                        ?? layer.paint?.['model-color-mix-intensity'];
+                    const colorMix = mixRaw === undefined || mixRaw === null
+                        ? undefined
+                        : evalScalar('model-color-mix-intensity', NaN);
+                    const emissive = evalScalar('model-emissive-strength', 0);
                     for (const pt of points) {
                         const w = this.projectWorld(pt);
                         this.m_modelInstances.push({
@@ -4065,6 +4149,16 @@ export class MBTileDataEmitter {
                             // decodedTile/techniques array is transient.
                             technique: tech,
                             properties: { ...properties, $id: featureId ?? properties.$id ?? null },
+                            // Per-feature evaluated transform (mgl data-driven
+                            // model-* semantics); falls back to the technique
+                            // constants in the renderer when undefined.
+                            ...(rotation ? { rotation } : {}),
+                            ...(mScale ? { scale: mScale } : {}),
+                            ...(translation ? { translation } : {}),
+                            ...(opacity !== 1 ? { opacity } : {}),
+                            ...(colorMix !== undefined ? { colorMix } : {}),
+                            ...(emissive !== 0 ? { emissive } : {}),
+                            ...(typeof modelId === 'string' && modelId ? { modelId } : {}),
                         });
                     }
                     continue;

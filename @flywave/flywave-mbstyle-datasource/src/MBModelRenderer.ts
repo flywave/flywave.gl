@@ -134,7 +134,37 @@ export class MBModelRenderer {
     /** Per-frame entry point. Early-returns when no tile carries models. */
     run(): void {
         const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;
+        if ((globalThis as any).__mbDecodeDbg && !(this as any).__ranDbg) {
+            (this as any).__ranDbg = true;
+            let tilesWithModels = 0, modelCount = 0, cleared = 0;
+            for (const tile of this.m_dataSource.getDecodedTiles?.() ?? []) {
+                const d = (tile as any)?.decodedTile as any;
+                const n = d?.modelInstances?.length ?? (tile as any).modelInstances?.length ?? 0;
+                if (n > 0) { tilesWithModels++; modelCount += n; }
+                if (!d) cleared++;
+            }
+            // eslint-disable-next-line no-console
+            console.log(`[MBModelRun] registry=${this.m_registry.size} scene=${!!scene} tiles=${(this.m_dataSource.getDecodedTiles?.() ?? []).length} withModels=${tilesWithModels} models=${modelCount} noDecoded=${cleared}`);
+        }
         if (!scene || this.m_registry.size === 0) return;
+
+        // §518: the engine renders RELATIVE-TO-EYE — tile meshes' matrices
+        // are pre-translated by −eye each frame (census probe: tile mesh world
+        // coords are small, eye-centered). Groups added directly to the scene
+        // keep ABSOLUTE placements (magnitudes ~1e7) while the three camera
+        // sits at the eye → the instances land 10⁷ units off-screen. Keep the
+        // per-tile group at −eye so its absolute-positioned children render
+        // camera-relative like everything else.
+        try {
+            const geoCenter = (this.m_mapView as any).geoCenter;
+            const projection = (this.m_mapView as any).projection;
+            if (geoCenter && projection) {
+                const eye = projection.projectPoint(geoCenter, { x: 0, y: 0, z: 0 });
+                for (const group of this.m_tileGroups.values()) {
+                    group.position.set(-eye.x, -eye.y, -eye.z);
+                }
+            }
+        } catch {}
 
         const tiles: Tile[] = this.m_dataSource.getDecodedTiles?.() ?? [];
         for (const tile of tiles) {
@@ -241,30 +271,47 @@ export class MBModelRenderer {
 
         // Transform convention mirrors MBStyleDataSource.loadModels: rotation
         // [x,y,z] degrees → Euler, scale scalar or [x,y,z], translation in
-        // meters (applied after rotation, in world axes).
-        const rotation = technique._modelRotation;
-        if (Array.isArray(rotation)) {
+        // meters (applied after rotation, in world axes). §518: the per-
+        // feature EVALUATED model-* values ride the placement (mgl data-driven
+        // paint); the technique constants are the non-data-driven fallback.
+        // NaN guard: a raw expression array multiplied as a number yields NaN
+        // and destroys the whole instance matrix (invisible models).
+        const sanitizeVec = (v: any): number[] | undefined => {
+            if (!Array.isArray(v)) return undefined;
+            const out = [Number(v[0] ?? 0), Number(v[1] ?? 0), Number(v[2] ?? 0)];
+            return out.every(Number.isFinite) ? out : undefined;
+        };
+        const rotation = sanitizeVec((placement as any).rotation) ??
+            sanitizeVec(technique._modelRotation);
+        if (rotation) {
             model.rotation.set(
                 (rotation[0] ?? 0) * Math.PI / 180,
                 (rotation[1] ?? 0) * Math.PI / 180,
                 (rotation[2] ?? 0) * Math.PI / 180,
             );
         }
-        const scale = technique._modelScale;
-        if (Array.isArray(scale)) {
+        const scale = sanitizeVec((placement as any).scale);
+        if (scale) {
             model.scale.set(scale[0] ?? 1, scale[1] ?? 1, scale[2] ?? 1);
-        } else if (scale !== undefined && scale !== null) {
-            model.scale.setScalar(Number(scale) || 1);
+        } else if (Number.isFinite(Number(technique._modelScale))) {
+            const s = Number(technique._modelScale);
+            if (Array.isArray(technique._modelScale)) {
+                const sv = sanitizeVec(technique._modelScale);
+                if (sv) model.scale.set(sv[0], sv[1], sv[2]);
+            } else if (s !== 0) {
+                model.scale.setScalar(s);
+            }
         }
-        const translation = technique._modelTranslation;
-        if (Array.isArray(translation)) {
+        const translation = sanitizeVec((placement as any).translation) ??
+            sanitizeVec(technique._modelTranslation);
+        if (translation) {
             model.position.x += translation[0] ?? 0;
             model.position.y += translation[1] ?? 0;
             model.position.z += translation[2] ?? 0;
         }
 
         // model-opacity: transparent only when actually faded.
-        const opacity = Number(technique.opacity ?? 1);
+        const opacity = Number((placement as any).opacity ?? technique.opacity ?? 1);
         if (opacity < 1) {
             model.traverse((o) => {
                 const mesh = o as THREE.Mesh;
@@ -286,6 +333,13 @@ export class MBModelRenderer {
         // so GPU clipping is sufficient.
         model.frustumCulled = false;
         model.traverse((o) => { o.frustumCulled = false; });
+        // §518 draw AFTER the tile's fill/line band: the mapview paints plain
+        // fills with depthTest=false in style order, and the §512-promoted HD
+        // road band occupies ro 2..9.8 — clones at ro 0 rasterize FIRST and
+        // are overdrawn to zero visible pixels (mgl draw_model renders the
+        // model pass after the road/fill passes).
+        model.traverse((o) => { o.renderOrder = 10; });
+        model.renderOrder = 10;
         model.userData._mbLayerId = technique._layerId;
         group.add(model);
 
@@ -327,7 +381,10 @@ export class MBModelRenderer {
                 const placement = placements[i];
                 const technique = placement.technique;
                 if (!technique) { done.add(i); (placement as any).__placed = true; continue; }
-                const url = this.m_registry.get(String(technique.modelId ?? ''));
+                // §518: model-id is data-driven — the per-feature evaluated
+                // value rides the placement; technique.modelId is the fallback.
+                const modelId = (placement as any).modelId ?? technique.modelId ?? '';
+                const url = this.m_registry.get(String(modelId));
                 if (!url) { done.add(i); (placement as any).__placed = true; continue; }
                 const prototype = this.m_prototypes.get(url);
                 if (prototype && prototype !== 'loading' && prototype !== 'failed') {

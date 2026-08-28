@@ -64,6 +64,38 @@ export function mbPendingChildrenTake(key: string): MBPendingChildTile[] | undef
     return v;
 }
 
+/**
+ * §518 multi-vector-source styles (mgl parity: every source loads its own
+ * covering — model-layer fixtures put the trees/landmark points in a SECOND
+ * vector source next to the mapbox base). The provider fetches the extra
+ * sources' tiles for the requested cell and stashes them here; the decoder
+ * decodes each against its own tileKey + sourceId and merges into the
+ * primary DecodedTile. In-process only (same as the §511 child registry).
+ */
+export interface MBPendingSourceTile {
+    sourceId: string;
+    z: number;
+    x: number;
+    y: number;
+    bytes: ArrayBufferLike;
+}
+
+const s_pendingSourceTiles = new Map<string, MBPendingSourceTile[]>();
+
+export function mbPendingSourceTilesPut(key: string, tiles: MBPendingSourceTile[]): void {
+    if (s_pendingSourceTiles.size > 64) {
+        const oldest = s_pendingSourceTiles.keys().next().value;
+        if (oldest !== undefined) s_pendingSourceTiles.delete(oldest);
+    }
+    s_pendingSourceTiles.set(key, tiles);
+}
+
+export function mbPendingSourceTilesTake(key: string): MBPendingSourceTile[] | undefined {
+    const v = s_pendingSourceTiles.get(key);
+    if (v) s_pendingSourceTiles.delete(key);
+    return v;
+}
+
 export function mbCellTileKeyString(k: { level: number; column: number; row: number }): string {
     return `${k.level}-${k.column}-${k.row}`;
 }
@@ -877,6 +909,14 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             return this.decodeTileWithChildren(
                 data, tileKey, projection, pendingChildren, zoom);
         }
+        // §518: extra vector sources fetched by the provider for this cell —
+        // decode each against its own tileKey + sourceId and merge.
+        const pendingSources = mbPendingSourceTilesTake(
+            mbCellTileKeyString(tileKey));
+        if (pendingSources && pendingSources.length > 0) {
+            return this.decodeTileWithSources(
+                data, tileKey, projection, pendingSources, zoom);
+        }
         const decodeInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
         const emitter = new MBTileDataEmitter(tileKey, decodeInfo, zoom);
         // Bearing resolves `*-translate-anchor: viewport` (mapbox rotates the
@@ -1038,6 +1078,118 @@ export class MBStyleDecoder extends ThemedTileDecoder {
      * relative → rebase by (childCenter − cellCenter); text/POI geometry
      * is absolute world (projectWorld) → concatenate as-is.
      */
+    /**
+     * §518: merge the tiles of the style's OTHER vector sources into the
+     * primary cell decode. Each extra tile decodes with its own tileKey
+     * (mgl per-source covering: the extra source's own level, clamped to its
+     * maxzoom — overzoom content rebases by the tile-center delta exactly
+     * like the §511 child merge) and its own currentSourceId so the layer
+     * source filter admits its features. Geometry positions are world
+     * meters — translation-only rebase, no winding reversal (no mirror).
+     */
+    private async decodeTileWithSources(
+        data: any,
+        tileKey: TileKey,
+        projection: Projection,
+        extras: MBPendingSourceTile[],
+        zoom: number
+    ): Promise<DecodedTile> {
+        const cell = await this.decodeThemedTile(
+            data, tileKey, undefined as any, projection, zoom);
+        const base: DecodedTile = cell ?? { techniques: [], geometries: [] };
+        const out: DecodedTile = {
+            techniques: [...base.techniques],
+            geometries: [...base.geometries],
+            pathGeometries: [...(base.pathGeometries ?? [])],
+            textPathGeometries: [...(base.textPathGeometries ?? [])],
+            textGeometries: [...(base.textGeometries ?? [])],
+            poiGeometries: [...(base.poiGeometries ?? [])],
+        } as DecodedTile;
+        const outAny = out as any;
+        const baseAny = base as any;
+        if (baseAny.modelInstances) outAny.modelInstances = [...baseAny.modelInstances];
+        if (baseAny.heatmapPoints) outAny.heatmapPoints = [...baseAny.heatmapPoints];
+        let maxH = base.maxGeometryHeight ?? 0;
+        let minH = base.minGeometryHeight ?? 0;
+        const cellInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
+        const savedSourceId = this.m_currentSourceId;
+        try {
+            for (const ex of extras) {
+                try {
+                    const exKey = TileKey.fromRowColumnLevel(ex.y, ex.x, ex.z);
+                    this.m_currentSourceId = ex.sourceId;
+                    const child = await this.decodeThemedTile(
+                        ex.bytes as any, exKey, undefined as any, projection, zoom);
+                    if (!child) continue;
+                    const nTech = out.techniques.length;
+                    out.techniques.push(...child.techniques);
+                    const childInfo = new DecodeInfo(projection, exKey, this.m_storageLevelOffset);
+                    const dx = childInfo.center.x - cellInfo.center.x;
+                    const dy = childInfo.center.y - cellInfo.center.y;
+                    const dz = childInfo.center.z - cellInfo.center.z;
+                    for (const g of child.geometries ?? []) {
+                        let vertexAttributes = g.vertexAttributes;
+                        let index = g.index;
+                        const posIdx = vertexAttributes.findIndex(a => a.name === 'position');
+                        if (posIdx >= 0) {
+                            const attr = vertexAttributes[posIdx];
+                            const arr = new Float32Array(attr.buffer);
+                            for (let vi = 0; vi < arr.length; vi += 3) {
+                                arr[vi] += dx;
+                                arr[vi + 1] += dy;
+                                arr[vi + 2] += dz;
+                            }
+                            vertexAttributes = vertexAttributes.map((a, ai) =>
+                                ai === posIdx ? { ...a, buffer: arr.buffer } : a);
+                        }
+                        out.geometries.push({
+                            ...g,
+                            vertexAttributes,
+                            index,
+                            groups: g.groups?.map(gr => ({
+                                ...gr,
+                                technique: (gr.technique ?? 0) + nTech,
+                            })),
+                        });
+                    }
+                    for (const k of ['pathGeometries', 'textPathGeometries', 'textGeometries', 'poiGeometries'] as const) {
+                        const arr = child[k] as any[] | undefined;
+                        if (arr && arr.length > 0) (out[k] as any[]).push(...arr);
+                    }
+                    const childAny = child as any;
+                    if (childAny.modelInstances?.length) {
+                        outAny.modelInstances = [
+                            ...(outAny.modelInstances ?? []),
+                            ...childAny.modelInstances,
+                        ];
+                    }
+                    if (childAny.heatmapPoints?.length) {
+                        outAny.heatmapPoints = [
+                            ...(outAny.heatmapPoints ?? []),
+                            ...childAny.heatmapPoints,
+                        ];
+                    }
+                    maxH = Math.max(maxH, child.maxGeometryHeight ?? 0);
+                    minH = Math.min(minH, child.minGeometryHeight ?? 0);
+                } catch {
+                    // A missing extra-source tile renders its layers empty —
+                    // same as the single-source pre-fallback behavior.
+                } finally {
+                    this.m_currentSourceId = savedSourceId;
+                }
+            }
+        } finally {
+            this.m_currentSourceId = savedSourceId;
+        }
+        if (maxH !== 0) out.maxGeometryHeight = maxH;
+        if (minH !== 0) out.minGeometryHeight = minH;
+        if ((globalThis as any).__mbDecodeDbg) {
+            // eslint-disable-next-line no-console
+            console.log(`[MBMergeSources] extras=${extras.map(e => e.sourceId).join(',')} outGeos=${out.geometries.length} outTechs=${out.techniques.length} models=${outAny.modelInstances?.length ?? 0}`);
+        }
+        return out;
+    }
+
     private async decodeTileWithChildren(
         data: any,
         tileKey: TileKey,
