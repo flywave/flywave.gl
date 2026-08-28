@@ -2261,6 +2261,7 @@ export class MBStyleDataSource extends TileDataSource {
                                     gerr: (globalThis as any).__mbShadowGridErr,
                                     perr: (globalThis as any).__mbShadowPassErr,
                                     batched: (globalThis as any).__mbBatched,
+                                    perr2: (globalThis as any).__mbBatched?.parseErr,
                                     wire: (globalThis as any).__mbBatchedWire,
                                     runs: (globalThis as any).__mbBatchedRun,
                                     srcs: (self as any).m_batchedModelSources?.length,
@@ -2756,6 +2757,10 @@ export class MBStyleDataSource extends TileDataSource {
         const r = this.m_modelRenderer;
         if (!r) return !this.m_modelsLoaded;
         if (r.isLoading()) return true;
+        // §542: batched-model GLB tiles (fetch + async Draco parse window).
+        try {
+            if ((this.m_batchedModelRenderer as any)?.isLoading?.()) return true;
+        } catch {}
         // Vector model layers deliver placements through the transient
         // decoded-tile stash — run() may observe them only after the engine
         // reports tiles settled, so wait for the first observation too.

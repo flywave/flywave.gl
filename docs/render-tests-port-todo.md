@@ -6152,3 +6152,7 @@ GLB tile 勘测：position 单位为 tile 局部量化坐标（x∈[634,7174]、
 **§541. 会话续记——GLB tile 命中（3/9），异步解析与时序待收（2026-08-29 续八）**：
 
 可达性排查闭环：wire=1/srcs=1/runs=9 全通（此前 runs/grid 缺失系 census 签名去重吞后帧——签名已并入 batched 状态）；fetch 命中 **3 个 GLB**（8718-5683 主瓦片、8717-5683、8717-5684，余 6 邻域 404 属正常）；tile 坐标公式修正为标准北向上 y（projectPoint 的 y 是南向约定，不可混用——坑位记档）。parsed=0：Draco 异步解析未在捕获窗口内完成（err 无 parse 报错）。**下轮**：延长/等待 parsed>0 再截帧（modelsPending 挂钩 MBBatchedModelRenderer），验证 landmark 上屏后接入 extent/偏置校准。基线 264389 暂持平。
+
+**§542. 会话收口——batched-model 链路：fetch→parse 打通至 Draco 挂起（2026-08-29 终二）**：
+
+已修复入库：① fetch 后 `m_inflight.delete`（inflight 泄漏）；② parse 错误独立记录（`stat.parseErr`，与 fetch err 分离——此前被并行邻域 404 覆盖）；③ `modelsPending` 挂钩 `MBBatchedModelRenderer.isLoading()`（inflight/pending 群组跟踪，harness 会等 Draco 窗口）；④ `setDecoderConfig({type:'js'})` 强制 JS 解码器。**终态**：fetch 9/ok 3（主瓦片命中），`parsed=0` 且 parse 无错误回调——**GLTFLoader.parse 对 Draco GLB 在 karma/SwiftShader 页面静默挂起**（js/wasm 解码器均同），baseline 264389 维持、无回归。**下会话**：① DRACOLoader worker 环境诊断（独立 HTML 页复现/`draco.setDecoderConfig` vs worker 生命周期/主线程解码 fallback `THREE.LoaderUtils`）；或脱离 GLTFLoader 直接解 GLB chunk+Draco 原始解码；② landmark 上屏后接 extent/偏置、亮度域、外观域校准。

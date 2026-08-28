@@ -115,11 +115,18 @@ export class MBBatchedModelRenderer {
             .replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y))
             .replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
         this.m_inflight.add(key);
+        // track the pending tile so isLoading() covers the Draco window.
+        const pendingGroup = new THREE.Group();
+        pendingGroup.name = 'MBBatchedModelTile:' + key;
+        const sceneNow = this.m_mapView?.m_scene as THREE.Scene | undefined;
+        sceneNow?.add(pendingGroup);
+        this.m_entries.push({ group: pendingGroup, source: src, key, loaded: false });
         const stat: any = ((globalThis as any).__mbBatched ??= { fetch: 0, ok: 0, parsed: 0, err: '' });
         stat.fetch++;
         void fetch(url)
             .then(r => {
-                if (!r.ok) { stat.err = 'HTTP ' + r.status + ' ' + url.slice(-60); throw new Error(String(r.status)); }
+                this.m_inflight.delete(key);
+                if (!r.ok) { stat.err = 'HTTP ' + r.status; throw new Error(String(r.status)); }
                 return r.arrayBuffer();
             })
             .then(async buf => {
@@ -127,6 +134,9 @@ export class MBBatchedModelRenderer {
                 stat.ok++;
                 loader.parse(buf, '', (gltf: any) => {
                     stat.parsed++;
+                    for (const e of this.m_entries) {
+                        if (e.key === key) (e as any).__parsed = true;
+                    }
                     const group = new THREE.Group();
                     group.name = 'MBBatchedModelTile';
                     const model = gltf.scene;
@@ -135,13 +145,15 @@ export class MBBatchedModelRenderer {
                     // evaluated paint (mix/emissive/roughness/opacity).
                     this.applyLayerPaint(group, (src as any).paint ?? {});
                     const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;
-                    if (scene) scene.add(group);
-                    this.m_entries.push({
-                        group, source: src, key,
-                        loaded: true,
-                    });
+                    void scene;
+                    group.position.copy(pendingGroup.position);
+                    for (const child of [...group.children]) pendingGroup.add(child);
+                    pendingGroup.visible = true;
                 }, (e: any) => {
-                    stat.err = String(e).slice(0, 120);
+                    stat.parseErr = String(e).slice(0, 200);
+                    for (const en of this.m_entries) {
+                        if (en.key === key) (en as any).__parsed = true;
+                    }
                 });
             })
             .catch((e: any) => { stat.err = 'FETCH ' + String(e).slice(0, 120) + ' ' + url.slice(-60); });
@@ -154,6 +166,9 @@ export class MBBatchedModelRenderer {
             const dracoMod: any = await import('three/examples/jsm/loaders/DRACOLoader.js');
             const draco = new dracoMod.DRACOLoader();
             draco.setDecoderPath('/base/node_modules/three/examples/jsm/libs/draco/gltf/');
+            // §542: force the JS decoder — the wasm worker path hangs silently
+            // in the karma/SwiftShader page.
+            draco.setDecoderConfig({ type: 'js' });
             loader.setDRACOLoader(draco);
         } catch {}
         return loader;
@@ -225,6 +240,12 @@ export class MBBatchedModelRenderer {
     /** Called by the datasource once sources are known. */
     setSources(sources: BatchedSource[]): void {
         this.m_sources = sources;
+    }
+
+    /** §542: true while GLB tiles are fetching or Draco-parsing. */
+    isLoading(): boolean {
+        return this.m_inflight.size > 0 ||
+            this.m_entries.some(e => !(e as any).__parsed);
     }
 
     get sources(): BatchedSource[] {
