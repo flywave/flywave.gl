@@ -160,10 +160,59 @@ export class MBMaterialPatchManager {
             if (!tech) { noTech++; continue; }
             withTech++;
 
+            // §515 elevated-structures depth prepass (mgl drawDepthPrepass):
+            // colorless fragments that only write/rebuild the depth buffer —
+            //  - 'ground': the underground road footprint flattened to the
+            //    ground plane (LESS) builds implicit ground occlusion;
+            //  - 'mask': tunnel structures + non-tunnel roads flattened
+            //    (GREATER) carve the see-through holes at entrances.
+            const prepass = (tech as any)._mbElevPrepass as 'ground' | 'mask' | undefined;
+            if (prepass) {
+                const rawPrepass = (obj as any).material;
+                const prepassMats: THREE.Material[] = Array.isArray(rawPrepass)
+                    ? rawPrepass : (rawPrepass ? [rawPrepass] as any : []);
+                for (const material of prepassMats) {
+                    material.colorWrite = false;
+                    material.depthWrite = true;
+                    material.depthTest = true;
+                    material.transparent = false;
+                    material.side = THREE.DoubleSide;
+                    material.depthFunc = prepass === 'mask'
+                        ? THREE.GreaterDepth
+                        : THREE.LessEqualDepth;
+                    material.needsUpdate = true;
+                    (material as any).__mbPatched = true;
+                }
+                continue;
+            }
+
             const rawMaterial = (obj as any).material;
             const materials: THREE.Material[] = Array.isArray(rawMaterial)
                 ? rawMaterial : (rawMaterial ? [rawMaterial] as any : []);
             if (materials.length === 0) continue;
+
+            // §515: the mapview disables depthTest for plain fills — the HD
+            // road domain relies on it (ground occlusion of underground
+            // roads vs the depth prepass). Scoped to HD-elevated layers and
+            // structure meshes so every other category keeps its
+            // draw-order-only behavior.
+            if ((tech as any)._hdElevation !== undefined || (tech as any).__elev) {
+                // Markup (additive/stackable) layers overdraw the base roads by
+                // design — mgl stacks them in the depth reconstruction; without
+                // that pass depth-testing markup against the base surface
+                // z-fights it away. Base roads + structures keep depth testing.
+                const isMarkupBand = (tech as any).renderOrder >= 9.75 ||
+                    (tech as any)._paint?.['line-elevation-reference'] === 'hd-road-markup' ||
+                    (tech as any)._layout?.['line-elevation-reference'] === 'hd-road-markup';
+                if (!isMarkupBand) {
+                    for (const material of materials) {
+                        if (material.depthTest !== true) {
+                            material.depthTest = true;
+                            material.needsUpdate = true;
+                        }
+                    }
+                }
+            }
 
             for (const material of materials) {
             this.patchMaterial(material, tech, obj);
@@ -4073,7 +4122,16 @@ export class MBMaterialPatchManager {
      */
     private patchFillPatternMaterial(material: THREE.Material, technique: any, mglComposite = false): void {
         const tex = this.extractPatternTexture(technique._patternName);
-        if (!tex) return;
+        if (!tex) {
+            // mgl: a pattern missing from the atlas renders the layer
+            // invisible — never the black fill-color base. The marker is
+            // cleared so a later pass (sprite atlas loaded asynchronously)
+            // retries and restores visibility.
+            (material as any).__mbPatternPatched = false;
+            material.visible = false;
+            return;
+        }
+        material.visible = true;
         // Terrain draping: make patterned fill conform to the terrain surface.
         if (!!this.centerDem) this.injectTerrainDrape(material);
         if ((material as any).__mbPatternPatched) return;

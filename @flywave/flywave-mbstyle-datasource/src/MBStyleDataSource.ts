@@ -1942,6 +1942,7 @@ export class MBStyleDataSource extends TileDataSource {
                         const V = new THREE.Vector3();
                         const samples: string[] = [];
                         const elevSamples: string[] = [];
+                        const yellowSamples: string[] = [];
                         self.mapView.scene.traverse((o: any) => {
                             if ((o as any).isMesh || (o as any).isPoints || (o as any).isLine) {
                                 total++;
@@ -1950,7 +1951,8 @@ export class MBStyleDataSource extends TileDataSource {
                                     ?? o.userData?.technique?.color ?? '';
                                 counts[`${tname}:${tcol}`] = (counts[`${tname}:${tcol}`] ?? 0) + 1;
                                 const isElev = !!(o.userData?.technique as any)?.__elev;
-                                const sampleSink = isElev ? elevSamples : samples;
+                                const isYellow = String(o.userData?.technique?.color ?? '').includes('54, 100%');
+                                const sampleSink = (isElev || isYellow) ? (isYellow ? yellowSamples : elevSamples) : samples;
                                 if (sampleSink.length < 6) {
                                     o.updateMatrixWorld?.();
                                     const g: any = o.geometry;
@@ -2003,6 +2005,10 @@ export class MBStyleDataSource extends TileDataSource {
                         for (const es of elevSamples) {
                             // eslint-disable-next-line no-console
                             console.log('[MBElevObj] ' + es);
+                        }
+                        for (const ys of yellowSamples) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBYellowObj] ' + ys);
                         }
                         for (const s of samples) {
                             // eslint-disable-next-line no-console

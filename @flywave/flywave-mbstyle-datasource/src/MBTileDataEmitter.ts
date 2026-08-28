@@ -1908,6 +1908,63 @@ export class MBTileDataEmitter {
                 geo.objInfos.push({ ...(bucket.info ?? {}), $id: bucket.featureId ?? null });
             }
         }
+
+        // §515 depth prepass (mgl drawDepthPrepass initialize/reset): the
+        // underground footprint flattened onto the ground plane builds
+        // implicit ground occlusion; the mask (tunnel structures + non-
+        // tunnel roads) re-clears depth to far so entrances stay see-through.
+        if (mesh.underground && (mesh.depthIndices.length > 0 || mesh.maskIndices.length > 0)) {
+            const flat: number[] = new Array(mesh.positions.length);
+            for (let i = 0; i < mesh.positions.length; i += 3) {
+                const w = this.project(new THREE.Vector2(
+                    mesh.positions[i] * scale, mesh.positions[i + 1] * scale + yDelta));
+                flat[i] = w.x; flat[i + 1] = w.y; flat[i + 2] = w.z;
+            }
+            this.emitElevPrepass('ground', mesh.depthIndices, flat);
+            this.emitElevPrepass('mask', mesh.maskIndices, flat);
+        }
+    }
+
+    private emitElevPrepass(kind: 'ground' | 'mask', indices: number[], flat: number[]): void {
+        if (indices.length === 0) return;
+        const geo = this.getOrCreateGeometry(`__mb-elev-prepass-${kind}`);
+        if (geo.positions.length === 0) {
+            for (let i = 0; i < flat.length; i++) geo.positions.push(flat[i]);
+        }
+        const groupStart = geo.indices.length;
+        for (let i = 0; i < indices.length; i++) geo.indices.push(indices[i]);
+        const techIdx = this.getOrCreateElevPrepassTechnique(kind);
+        geo.groups.push({
+            start: groupStart,
+            count: geo.indices.length - groupStart,
+            materialIndex: techIdx,
+        });
+        geo.featureStarts.push(groupStart);
+        geo.objInfos.push({});
+    }
+
+    private getOrCreateElevPrepassTechnique(kind: 'ground' | 'mask'): number {
+        const key = `__mb-elev-prepass:${kind}`;
+        let idx = this.m_layerToTechniqueIndex.get(key);
+        if (idx === undefined) {
+            idx = this.m_techniqueIndex++;
+            this.m_layerToTechniqueIndex.set(key, idx);
+            const technique: any = {
+                name: 'fill',
+                _index: idx,
+                // Strictly before the road fills (9.6): ground footprint
+                // first, mask second (mgl initialize → reset → geometry).
+                renderOrder: kind === 'ground' ? 9.55 : 9.56,
+                _renderOrder: kind === 'ground' ? 9.55 : 9.56,
+                _layerId: '__mb-elev-prepass',
+                _mbElevPrepass: kind,
+                _mbGlobalLayerOrder: true,
+                color: '#000000',
+                opacity: 1,
+            };
+            this.m_techniques.push(technique as IndexedTechnique);
+        }
+        return idx;
     }
 
     private getOrCreateElevatedStructureTechnique(

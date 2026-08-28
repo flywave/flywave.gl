@@ -135,6 +135,12 @@ export interface ElevatedStructuresMesh {
     /** Per-feature vertex sections for data-driven structure colors. */
     bridgeSections: Array<{ featureIndex: number; vertexStart: number }>;
     tunnelSections: Array<{ featureIndex: number; vertexStart: number }>;
+    /** §515 depth prepass: tunnel structures + all roads (real depth). */
+    depthIndices: number[];
+    /** §515 depth prepass: tunnel structures + non-tunnel roads (holes). */
+    maskIndices: number[];
+    /** Any contributed feature samples below the ground plane. */
+    underground: boolean;
 }
 
 export class MBElevatedStructures {
@@ -166,6 +172,8 @@ export class MBElevatedStructures {
     private m_unevalTriangles: number[] = [];
     private m_unevalTunnelTriangles: number[] = [];
     private m_unevalEdges: ElevatedEdge[] = [];
+    /** Any sampled road height dips to/below the ground plane (mgl heightRange). */
+    private m_underground = false;
     /** Exterior-vertex posHash → hashes of the edges it connects (mgl vertexHashLookup). */
     private m_vertexHashLookup: Map<number, { prev: string; next: string }> = new Map();
 
@@ -569,6 +577,9 @@ export class MBElevatedStructures {
     }): void {
         const { featureIndex, guardRailEnabled, isTunnel, pieces } = params;
         for (const piece of pieces) {
+            for (const h of piece.ringHeights) {
+                if (h < 1.0) this.m_underground = true;  // mgl heightMargin 1.0
+            }
             const rings: Array<{ ring: ClipPoint[]; heights: number[] }> = [
                 { ring: piece.ring, heights: piece.ringHeights },
                 ...piece.holes.map((h, i) => ({ ring: h, heights: piece.holeHeights[i] ?? [] })),
@@ -644,6 +655,7 @@ export class MBElevatedStructures {
         }
 
         const tunnelStart = indices.length;
+        const tunnelQuadStart = indices.length;
         if (this.m_unevalEdges.length > 0) {
             const afterWallEnd = this.m_unevalEdges.splice(wallEndIdx);
             const tunnelEndIdx = partition(afterWallEnd, 'tunnel') + wallEndIdx;
@@ -652,9 +664,24 @@ export class MBElevatedStructures {
                 builder, { min: 0, max: wallEndIdx }, { min: wallEndIdx, max: tunnelEndIdx },
                 tunnelSections);
         }
+        const tunnelQuadEnd = indices.length;
 
-        if (indices.length === 0) return null;
-        return { positions, normals, indices, tunnelStart, bridgeSections, tunnelSections };
+        // §515 depth-prepass index sets (mgl drawDepthPrepass):
+        //  - depth = tunnel structures + ALL road triangles (real depth);
+        //  - mask  = tunnel structures + NON-tunnel roads — flattened to the
+        //    ground plane with GREATER depth mode these carve the
+        //    "see-through" holes so tunnels read as sunken 3D forms.
+        const tunnelQuads = indices.slice(tunnelQuadStart, tunnelQuadEnd);
+        const depthIndices = [
+            ...tunnelQuads, ...this.m_unevalTriangles, ...this.m_unevalTunnelTriangles,
+        ];
+        const maskIndices = [...tunnelQuads, ...this.m_unevalTriangles];
+
+        if (indices.length === 0 && depthIndices.length === 0) return null;
+        return {
+            positions, normals, indices, tunnelStart, bridgeSections, tunnelSections,
+            depthIndices, maskIndices, underground: this.m_underground,
+        };
     }
 
     /**

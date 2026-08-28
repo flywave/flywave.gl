@@ -5960,3 +5960,13 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **地形门控案**：markup 线/symbol 的 mgl terrainEnabled 语义（地形下曲线查询跳过、平铺地形）最初挂 `m_terrainSampler`——MBTerrainProbe（一次性 decode 态打印）实锤**首瓦片解码时 sampler=false**（applyTerrain 晚于首批解码，sampler 门控永不触发）；改用**样式级 terrain 标志**（configure 时已知，等价 mgl 语义）。像素中性（±200 噪声级；viewport-aligned −2134，icons-and-text −201），保留（语义正确，真实 DEM 场景下生效）。terrain 变体残差主体在**引擎侧**：TerrainDraping 对曲线抬升几何的交互与 mgl 地形渲染管线不同——解码语义已对齐，深水区在渲染引擎（下一阶段）。
 
 **MBTerrainProbe 移除**（一次性取证用）；MBElevObj 逐组采样能力保留（decodedbg 门控）。
+
+**§515. 会话续记——mask/depth prepass 落地 + HD 域深度测试 + 绿栏可见性二连破（2026-08-28 续）**：
+
+**mask/depth 分段移植**（mgl `drawDepthPrepass` 三段语义）：construct() 补 `depthIndices`（隧道结构+全部路面三角，真实深度）与 `maskIndices`（隧道结构+非隧道路面=凿穿孔集，mgl reset 段语义）；emitter 发射两张**压平到 z=0** 的 prepass 几何（`__mb-elev-prepass-ground` ro 9.55 / `-mask` ro 9.56），patcher 材质钩子置 colorWrite=false/depthWrite=true/DoubleSide，mask 用 **GREATER depthFunc** 写远深凿孔（mgl depthModeReset 语义）。**关键前置发现：mapview 给普通 fill 材质 depthTest=false（纯绘序）**——prepass 深度写入对不测深度的路面无效；修复 = patcher 对 HD 域技术（`_hdElevation`/`__elev`）开 depthTest，**markup 带（ro≥9.75 与 hd-road-markup 线）豁免**（叠层靠绘序，mgl 深度重建未移植前深度测试会 z-fight 掉标线）。
+
+**绿栏可见性二连破**：①多技术 groups 共享索引缓冲（每色对象重画整网格，末位 tan 覆盖全部）→按 (mode,color) 拆几何——绿栏/feature-dependent 色组上屏；②域级深度测试使 guard-rail-color-feature-dependent 110708→**63594（-43%）**（护栏与路面的 z 序正确化）。
+
+**黄线/斑马纹渲黑排查（未结，证据链在案）**：解码侧两度验证正确——harness [MBDecode] 技术清单含 `solid-line/fill:hsl(54,100%,65%)`（双线/实线/虚线/斑马黄全在），MBDiag 直解视图瓦片（18-42114 系）计数 `yellow:double×13/solid×27/dashed×2`、hatched-pattern-yellow 技术在册；patchFillPatternMaterial 纹理提取 `tex=true`（atlas 859 icons）。黑 pixel 纯 (0,0,0)、位置与黄双线吻合 → 渲染侧材质问题（黄 ribbon 的材质创建/补丁链路），非解码。**取证工具入库**：MBYellowObj 场景探针（黄技术对象专采，decodedbg 门控）+ MBPatternProbe 已撤。karma 主线程 console 转发不稳定（[MBScene] 时有时无，§510 旧病）拖慢取证——下会话续查黄 ribbon 的 material.color 实时值。
+
+**度量**：全域 5,908,303 → **5,696,996（−21.1 万，累计较 HEAD −9.3%）**；大项：guard-rail-color-feature-dependent -47k、viewport-aligned-text -20k、mixed-text -18k、wireframe -17k、guard-rail-joint -15k；**回归**：elevated-line-labels-tunnel 38692→74761（depthTest 副作用，markup 豁免未回收——标注符号与带深路面交互）、tunnel-color-feature-dependent 67600→84354、elevated-line-pattern -13.5k、bridge-to-tunnel -10.7k。fog 域 30 例逐像素零回归；单测 290 全过。**下会话**：① 黄线渲黑续查（MBYellowObj + 材质 dump）；② labels-tunnel/tunnel-color 回退拆解（prepass 地面深度与标注/桥面交互）；③ 墙面 NdotL 光照；④ mgl 深度重建 shader 化（相机射线投影替垂直压平）。
