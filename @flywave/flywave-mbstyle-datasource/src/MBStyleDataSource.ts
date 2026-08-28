@@ -2217,6 +2217,12 @@ export class MBStyleDataSource extends TileDataSource {
                             });
                             (globalThis as any).__mbProbeInventory = inventory;
                             const dump = {
+                                shadow: {
+                                    sls: !!(self.m_environment as any)?.shadowLightState,
+                                    su: !!(self.m_shadowRenderer as any)?.getShadowUniforms?.(),
+                                    en: !!(self.m_shadowRenderer as any)?.enabled,
+                                    grid: (globalThis as any).__mbShadowGrid,
+                                },
                                 elev: elevSamples, yellow: yellowSamples,
                                 black: blackSamples, samples, inventory,
                                 shaders: (globalThis as any).__mbShaderProbe ?? [],

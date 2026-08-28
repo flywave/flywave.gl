@@ -6094,3 +6094,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **§529. 会话续记——resetState 实验阴性，残余=独立 context renderer（2026-08-28 续十五）**：
 
 `renderer.resetState()`（three r3xx 存在，已验证执行）在 shadow pass 恢复 target 后调用——像素仍 856405 逐位不变 → **three 状态缓存理论亦否定**。至此排除矩阵完备：深度渲染内容、blit、receiver 调制（shIn=0）、画布时序、three 状态缓存全部阴性；唯剩 setRenderTarget(m_rt)+clear 的**GL 层直接效应**（疑 SwiftShader 上带 DepthTexture/color FBO 的绑定切换污染主画布深度状态且 resetState 不覆盖）。**唯一剩余修法=独立 WebGL context 的 renderer 实例跑深度 pass**（资源双传成本，engine 层工程，下一会话评估）；resetState 调用保留（门关时无害，若 engine 修复后自动生效）。影子校准门维持默认关。
+
+**§530. 会话续记——独立 context 深度 pass 落地：主画布暗化根除 + ctx2 空渲染定性（2026-08-29）**：
+
+**实现**（§530 主目标达成一半）：MBShadowRenderer 深度 pass 移入**独立 WebGL context**（离屏 canvas + 第二 THREE.WebGLRenderer + `CanvasTexture` 回流主 context，1024² RGBA 每帧上传）。主画布暗化**根除**——shadowdbg=1 与门关逐位同（375224），任意 pass 变体不再污染主帧。
+
+**ctx2 空渲染定性**（8×8 画布采样探针）：第二 context 深度 pass 只输出 clear 色（白）——caster 几何（extrusion 160 + 树）未在 ctx2 光栅化。疑 SwiftShader 多 context 资源上限/软件渲染限制（此前 globe 域同环境多 context 崩溃史，§510）。**故影子视觉仍未开启**（375224 持平），门保持默认关；真机 GPU 或单 context 诊断（ctx2 getContext 失败检测/资源逐帧上传观察）为下步。
+
+**入库**：独立 context 深度 pass（主帧零污染已验证）、CanvasTexture 回流、per-frame receiver 注入重试（修 patch 早于 lights 解析的时序）、ctx2 画布采样探针、inventory-length 签名。单测 290。

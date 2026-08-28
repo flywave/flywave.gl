@@ -80,6 +80,24 @@ export class MBMaterialPatchManager {
         const shadowState = (this.m_dataSource as any).m_shadowRenderer
             ?.getShadowUniforms?.() ?? null;
         if (shadowState || this.m_lastShadowActive) {
+            // §530: tiles can patch BEFORE the style lights resolve — retry
+            // the receiver injection per frame for not-yet-injected eligible
+            // materials (idempotent via __mbShadowInjected).
+            if (shadowState) {
+                for (const tile of tiles) {
+                    for (const obj of tile.objects ?? []) {
+                        const tech: any = obj.userData?.technique;
+                        if (!tech || tech._isLineRibbon || tech._isRaster || tech._isHillshade) continue;
+                        const rawM = (obj as any).material;
+                        const mats: THREE.Material[] = Array.isArray(rawM)
+                            ? rawM : (rawM ? [rawM] as any : []);
+                        for (const material of mats) {
+                            if (!material || (material as any).__mbShadowInjected) continue;
+                            this.injectGroundShadow(material as any);
+                        }
+                    }
+                }
+            }
             const identity = shadowState ? null : new THREE.Matrix4();
             for (const tile of tiles) {
                 for (const obj of tile.objects ?? []) {
