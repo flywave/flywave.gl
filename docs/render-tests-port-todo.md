@@ -6120,3 +6120,7 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **§534. 会话续记——注入命中实锤 + 环境阻塞终定性（2026-08-29 续三）**：
 
 命中计数 dump（decodedbg 门）实锤：4 帧内 tiles=4/objs=648/eligible=644/**injected=161/already=483**——**per-frame receiver 注入重试完全正常**，大量材质已携带 `__mbShadowUniforms`。结合 gate 开/关像素逐位同：receiver shader 在跑，但其 depth 采样返回空画布值（白 clear → 解码 ≈1.004 → 全 lit → 与无影子不可区分）。**双向实证 ctx2 在 SwiftShader 下无法光栅化新几何**（f42 黑 clear 全 0 / f35 白 clear 全 255，同一 pass、同一场景、info 计数正常）。**结论：影子视觉开启被测试环境 SwiftShader 双 context 限制阻塞**——管线（独立 context pass、颜色编码深度、receiver 注入、矩阵帧对齐、探针矩阵）已完备且无回归，真机 GPU 环境下应直接生效并进入 extent/偏置校准。亮度域/landmark emissive 校准顺延至影子收尾后。校准门默认关（当前环境安全）。
+
+**§535. 会话续记——亮度域 gamma 实验阴性（2026-08-29 续四）**：
+
+理论推导：mgl `apply_lighting=linearProduct(color,k)=color_lin×k^(1/2.2)` 再整体 linearTosRGB → sRGB 域等效乘 `k^0.207`；我方直接乘 k 于线性色再经输出 gamma → 等效乘 `k^0.455` → 理论上偏暗。**实测证伪**：`pow(k,1/2.2)` 修正使 buildings-trees-shadows-casting 375224→392171（+17k 变差）——raw k 乘法反而更接近 expected。已回退。**启示**：expected 的树冠亮度分布含 mgl PBR 其余项（`u_lightintensity` 调制、GGX specular、天空环境项）或 albedo 空间差异，单靠 apply_lighting 的 k-gamma 理论修正不成立；亮度域校准需以逐像素比值拟合（fitting）而非公式推导，工作量独立。影子 extent/偏置校准仍待真机 GPU（shadowdbg=1）。校准门默认关，375224 无回归，单测 290。
