@@ -1930,6 +1930,26 @@ export class MBStyleDataSource extends TileDataSource {
                     patcher.invalidate();
                 }
                 patcher.patchTileMaterials();
+                // §516 hide-probe: `mbhide=<substr>` karma arg hides every
+                // object whose technique layerId/color/pattern contains the
+                // substring (comma-separated list) — binary-search the source
+                // of stray pixels without code edits.
+                try {
+                    const hideArg = (window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith('mbhide='))
+                        ?.slice('mbhide='.length);
+                    if (hideArg) {
+                        const needles = hideArg.split(',');
+                        self.mapView.scene.traverse((o: any) => {
+                            const t: any = o.userData?.technique;
+                            if (!t) return;
+                            const hay = `${t._layerId ?? ''}|${t.color ?? ''}|${t._patternName ?? ''}|${t._mbElevPrepass ?? ''}`;
+                            if (needles.some((n2) => n2 && hay.includes(n2))) {
+                                o.visible = false;
+                            }
+                        });
+                    }
+                } catch {}
                 // Icon cross-fade blends decoded tiles requested — register
                 // them before placement/PoiRenderer material creation.
                 self.flushIconBlends();
@@ -2051,6 +2071,7 @@ export class MBStyleDataSource extends TileDataSource {
                             const dump = {
                                 elev: elevSamples, yellow: yellowSamples,
                                 black: blackSamples, samples, inventory,
+                                shaders: (globalThis as any).__mbShaderProbe ?? [],
                             };
                             (globalThis as any).__mbProbeDump = dump;
                             const sig = dump.yellow.join('|') + '#' + dump.black.join('|');

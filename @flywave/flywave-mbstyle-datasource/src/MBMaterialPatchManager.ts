@@ -4151,13 +4151,7 @@ export class MBMaterialPatchManager {
 
         (material as any).map = tex;
         (material as any).color = new THREE.Color('#ffffff');
-        // Alpha-carrying pattern tiles (hatched markups) composite over the
-        // content below — opaque would paint the transparent texels' black
-        // RGB residue. Opaque tiles keep the calibrated pass (§403).
-        if ((tex as any).__mbHasAlpha) {
-            (material as any).transparent = true;
-            (material as any).depthWrite = false;
-        }
+
         // mglComposite (fill-extrusion): mgl draws patterned extrusions in
         // the translucent pass with alpha blending (draw_fill_extrusion.ts:
         // 104-129) — transparent sprite texels composite over the content
@@ -4167,7 +4161,15 @@ export class MBMaterialPatchManager {
         // The 2D fill path keeps the calibrated opaque-pass approximation
         // (its near-miss band was fitted on it; the translucent pass
         // regresses it, §403).
-        (material as any).transparent = mglComposite || (technique.opacity ?? 1) < 1;
+        // §516: alpha-carrying pattern tiles (hatched road markups) composite
+        // over the content below — an opaque pass would paint the transparent
+        // texels' black RGB residue. Opaque tiles keep the calibrated pass
+        // (§403). Runs AFTER the base assignment so it wins.
+        (material as any).transparent = mglComposite || (technique.opacity ?? 1) < 1
+            || (tex as any).__mbHasAlpha === true;
+        if ((tex as any).__mbHasAlpha === true) {
+            (material as any).depthWrite = false;
+        }
 
         // Pattern cross-fade: with a second candidate (["image", a, b]) mgl
         // blends the two tiles in the PREMULTIPLIED domain by the fade
@@ -4189,6 +4191,16 @@ export class MBMaterialPatchManager {
         const origOnCompile = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
             if (origOnCompile) origOnCompile.call(material, shader);
+            try {
+                const probeArr = (globalThis as any).__mbShaderProbe ??= [];
+                probeArr.push({
+                    pat: technique._patternName,
+                    vsInjected: shader.vertexShader.includes('vMBPatternUv'),
+                    fsInjected: shader.fragmentShader.includes('mbPat'),
+                    fsHasOpaque: shader.fragmentShader.includes('#include <opaque_fragment>'),
+                });
+                (globalThis as any).__mbShaderProbe = probeArr;
+            } catch {}
             shader.uniforms.uMBPatternTex = { value: tex };
             shader.uniforms.uMBPatternScale = { value: tileScale };
             shader.uniforms.uMBPatternCrossFade = { value: crossFade };
@@ -4211,6 +4223,23 @@ export class MBMaterialPatchManager {
                 'void main() {',
                 `uniform sampler2D uMBPatternTex;${tex2 ? '\nuniform sampler2D uMBPatternTex2;' : ''}\nuniform float uMBPatternCrossFade;\nvarying vec2 vMBPatternUv;\nvoid main() {`
             );
+            // §516 post-replacement compile probe (dump channel).
+            try {
+                const probeArr = (globalThis as any).__mbShaderProbe ??= [];
+                probeArr.push({
+                    pat: technique._patternName,
+                    vsOK: shader.vertexShader.includes('vMBPatternUv = position.xy'),
+                    fsOK: shader.fragmentShader.includes('mbPat = texture2D'),
+                    anchors: (shader.fragmentShader.match(/#include <opaque_fragment>/g) ?? []).length,
+                    hasMapFrag: shader.fragmentShader.includes('#include <map_fragment>'),
+                    matType: material.type,
+                    isRibbon: !!technique._isLineRibbon,
+                    transparent: material.transparent,
+                    hasAlpha: (tex as any).__mbHasAlpha,
+                    imgType: (this.m_dataSource as any).spriteAtlas?.texture?.image?.constructor?.name,
+                });
+                (globalThis as any).__mbShaderProbe = probeArr;
+            } catch {}
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <opaque_fragment>',
                 mglComposite
