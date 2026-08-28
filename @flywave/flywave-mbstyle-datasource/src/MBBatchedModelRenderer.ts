@@ -48,6 +48,7 @@ export class MBBatchedModelRenderer {
 
     /** Per-frame entry point. */
     run(): void {
+        (globalThis as any).__mbBatchedRun = ((globalThis as any).__mbBatchedRun ?? 0) + 1;
         if (this.m_sources.length === 0) return;
         const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;
         if (!scene) return;
@@ -89,18 +90,13 @@ export class MBBatchedModelRenderer {
             // camera lon/lat → tile x/y (mercator).
             let lon = cam.longitude, lat = cam.latitude;
             void lon; void lat;
-            let tx: number, ty: number;
-            try {
-                const { mercatorProjection, GeoCoordinates } = this.merc();
-                const wp = mercatorProjection;
-                const p = wp.projectPoint(new GeoCoordinates(lat, lon), { x: 0, y: 0, z: 0 });
-                tx = Math.floor((p.x / wp.unitScale) * n);
-                ty = Math.floor((p.y / wp.unitScale) * n);
-                ty = Math.min(n - 1, Math.max(0, ty));
-                tx = Math.min(n - 1, Math.max(0, tx));
-            } catch {
-                continue;
-            }
+            // Standard web-mercator tile coords (NORTH-up y, per the GLB
+            // file naming) — NOT the engine projection's south-positive y.
+            const tx = Math.floor(((lon + 180) / 360) * n);
+            const mercN = Math.log(Math.tan(Math.PI * 0.25 + (lat * Math.PI / 180) * 0.5));
+            const ty = Math.max(0, Math.min(n - 1,
+                Math.floor(((1 - mercN / Math.PI) / 2) * n)));
+            void tx; void ty;
             // center tile + 4 neighbors (pitch-70 views span multiple tiles).
             for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
                 const x = tx + dx, y = ty + dy;
@@ -123,7 +119,7 @@ export class MBBatchedModelRenderer {
         stat.fetch++;
         void fetch(url)
             .then(r => {
-                if (!r.ok) throw new Error(String(r.status));
+                if (!r.ok) { stat.err = 'HTTP ' + r.status + ' ' + url.slice(-60); throw new Error(String(r.status)); }
                 return r.arrayBuffer();
             })
             .then(async buf => {
@@ -148,7 +144,7 @@ export class MBBatchedModelRenderer {
                     stat.err = String(e).slice(0, 120);
                 });
             })
-            .catch(() => {});
+            .catch((e: any) => { stat.err = 'FETCH ' + String(e).slice(0, 120) + ' ' + url.slice(-60); });
     }
 
     private async makeLoader(): Promise<any> {

@@ -1493,6 +1493,8 @@ export class MBStyleDataSource extends TileDataSource {
             // §540: batched-model sources — tile = whole GLB file; handled by
             // MBBatchedModelRenderer (independent of the tile decode pipeline).
             {
+                (globalThis as any).__mbBatchedWire =
+                    ((globalThis as any).__mbBatchedWire ?? 0) + 1;
                 const batched: any[] = [];
                 for (const [sid, src] of sources) {
                     if ((src as any).type !== 'batched-model') continue;
@@ -1993,7 +1995,11 @@ export class MBStyleDataSource extends TileDataSource {
                 const { MBBatchedModelRenderer } = await import('./MBBatchedModelRenderer');
                 self.m_batchedModelRenderer = new MBBatchedModelRenderer(
                     this.mapView, self, this.m_batchedModelSources ?? []);
-            } catch {}
+            } catch (e) {
+                (globalThis as any).__mbBatchedInitErr = String(e);
+                // eslint-disable-next-line no-console
+                console.error('[MBBatched] init failed', e);
+            }
 
             // Standalone shadow pass (mgl shadow_renderer): active only when
             // 3D lights carry cast-shadows + shadow-intensity > 0.
@@ -2255,6 +2261,10 @@ export class MBStyleDataSource extends TileDataSource {
                                     gerr: (globalThis as any).__mbShadowGridErr,
                                     perr: (globalThis as any).__mbShadowPassErr,
                                     batched: (globalThis as any).__mbBatched,
+                                    wire: (globalThis as any).__mbBatchedWire,
+                                    runs: (globalThis as any).__mbBatchedRun,
+                                    srcs: (self as any).m_batchedModelSources?.length,
+                                    ierr: (globalThis as any).__mbBatchedInitErr,
                                     info: (globalThis as any).__mbShadowInfo,
                                     retry: (globalThis as any).__mbShadowRetry,
                                 },
@@ -2264,7 +2274,7 @@ export class MBStyleDataSource extends TileDataSource {
                                 ribbonShaders: (globalThis as any).__mbRibbonProbe ?? [],
                             };
                             (globalThis as any).__mbProbeDump = dump;
-                            const sig = dump.yellow.join('|') + '#' + dump.black.join('|') + '#' + inventory.length + '#' + JSON.stringify(dump.shadow?.grid ?? '') + (dump.shadow?.gerr ? '#E' + dump.shadow.gerr : '') + (dump.shadow?.perr ? '#P' + dump.shadow.perr : '');
+                            const sig = dump.yellow.join('|') + '#' + dump.black.join('|') + '#' + inventory.length + '#' + JSON.stringify(dump.shadow?.grid ?? '') + (dump.shadow?.gerr ? '#E' + dump.shadow.gerr : '') + (dump.shadow?.perr ? '#P' + dump.shadow.perr : '') + '#B' + JSON.stringify([dump.shadow?.runs ?? 0, dump.shadow?.srcs ?? 0, dump.shadow?.ierr ?? '', dump.shadow?.batched ?? null]);
                             const st = (globalThis as any).__mbProbePost ??= { n: 0, sig: '' };
                             const fb = (window as any).__karma__?.config?.args
                                 ?.find?.((a: string) => a.startsWith('feedback-url='))

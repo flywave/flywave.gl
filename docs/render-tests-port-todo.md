@@ -6148,3 +6148,7 @@ GLB tile 勘测：position 单位为 tile 局部量化坐标（x∈[634,7174]、
 已入库：`MBBatchedModelRenderer.ts`（独立 tile 覆盖请求器：中心 tile+8 邻域、round(zoom) clamp maxzoom、fetch→GLTFLoader.parse（Draco）→tile group（NW 角世界系、scale=span/8192、z 米直通、−eye 每帧回流、ro 10）+ `applyLayerPaint` 整 tile 单样式（mix/emissive/roughness/opacity））；MBStyleDataSource 接线（wireTileSources 收集 batched-model 源→`m_batchedModelSources`→renderer init/setSources；per-frame run）。
 
 **开放问题（下会话第一步）**：landmark-emission-strength 跑批 `__mbBatched` 计数器不存在——requestTiles 从未带源执行 ⇒ 疑 `m_batchedModelSources` 为空（wireTileSources 批处理块未执行/时序）或 renderer.run 未被调到。排查法：在 wireTileSources 批处理块与 run() 首行各加 globalThis 计数入 dump。基线 264389 维持，无回归。
+
+**§541. 会话续记——GLB tile 命中（3/9），异步解析与时序待收（2026-08-29 续八）**：
+
+可达性排查闭环：wire=1/srcs=1/runs=9 全通（此前 runs/grid 缺失系 census 签名去重吞后帧——签名已并入 batched 状态）；fetch 命中 **3 个 GLB**（8718-5683 主瓦片、8717-5683、8717-5684，余 6 邻域 404 属正常）；tile 坐标公式修正为标准北向上 y（projectPoint 的 y 是南向约定，不可混用——坑位记档）。parsed=0：Draco 异步解析未在捕获窗口内完成（err 无 parse 报错）。**下轮**：延长/等待 parsed>0 再截帧（modelsPending 挂钩 MBBatchedModelRenderer），验证 landmark 上屏后接入 extent/偏置校准。基线 264389 暂持平。
