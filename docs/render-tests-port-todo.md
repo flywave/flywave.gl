@@ -6116,3 +6116,7 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **§533. 会话续记——探针可达性修复 + pass 异常清零 + receiver 覆盖确认为最后缺口（2026-08-29 续二）**：
 
 ① census dump 签名并入 grid/异常文本（修签名去重吞后帧）；② pass/render 异常捕获入 dump（`perr`/`gerr`）——**此后 perr=None**：bisect B 引入的 layers.set(0) 让 atmosphere 网格（onBeforeRender `assert(material instanceof GroundAtmosphereMaterial)` 遇 overrideMaterial 必炸）重新进 pass 导致每帧中止——已回退 layer-1 过滤 + ctx2 clear 改黑（可读化）。③ 但 gate 开/关像素仍逐位同（375224）——**确认 receiver 覆盖=最后缺口**：全场景无材质携带 `__mbShadowUniforms`（§526 shIn=0 未变），per-frame 重试注入未命中任何对象（疑 patchTileMaterials 遍历的 tile.objects 与可见材质集合错位，或 eligible 条件过滤过严）。**下会话**：① 在注入重试处 dump 命中数（tiles/objects/注入次数）定位错位；② receiver 命中后 extent/偏置校准；③ 亮度域；④ landmark emissive。
+
+**§534. 会话续记——注入命中实锤 + 环境阻塞终定性（2026-08-29 续三）**：
+
+命中计数 dump（decodedbg 门）实锤：4 帧内 tiles=4/objs=648/eligible=644/**injected=161/already=483**——**per-frame receiver 注入重试完全正常**，大量材质已携带 `__mbShadowUniforms`。结合 gate 开/关像素逐位同：receiver shader 在跑，但其 depth 采样返回空画布值（白 clear → 解码 ≈1.004 → 全 lit → 与无影子不可区分）。**双向实证 ctx2 在 SwiftShader 下无法光栅化新几何**（f42 黑 clear 全 0 / f35 白 clear 全 255，同一 pass、同一场景、info 计数正常）。**结论：影子视觉开启被测试环境 SwiftShader 双 context 限制阻塞**——管线（独立 context pass、颜色编码深度、receiver 注入、矩阵帧对齐、探针矩阵）已完备且无回归，真机 GPU 环境下应直接生效并进入 extent/偏置校准。亮度域/landmark emissive 校准顺延至影子收尾后。校准门默认关（当前环境安全）。

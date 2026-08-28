@@ -2225,6 +2225,7 @@ export class MBStyleDataSource extends TileDataSource {
                                     gerr: (globalThis as any).__mbShadowGridErr,
                                     perr: (globalThis as any).__mbShadowPassErr,
                                     info: (globalThis as any).__mbShadowInfo,
+                                    retry: (globalThis as any).__mbShadowRetry,
                                 },
                                 elev: elevSamples, yellow: yellowSamples,
                                 black: blackSamples, samples, inventory,

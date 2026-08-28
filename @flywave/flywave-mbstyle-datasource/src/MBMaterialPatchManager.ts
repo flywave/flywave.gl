@@ -84,15 +84,30 @@ export class MBMaterialPatchManager {
             // the receiver injection per frame for not-yet-injected eligible
             // materials (idempotent via __mbShadowInjected).
             if (shadowState) {
+                // §534 hit-count probe (decodedbg gate).
+                const stat = (globalThis as any).__mbDecodeDbg
+                    ? ((globalThis as any).__mbShadowRetry ??= { frames: 0, tiles: 0, objs: 0,
+                        eligible: 0, already: 0, injected: 0, techs: {} as Record<string, number> })
+                    : null;
+                if (stat) stat.frames++;
                 for (const tile of tiles) {
+                    if (stat) stat.tiles++;
                     for (const obj of tile.objects ?? []) {
+                        if (stat) stat.objs++;
                         const tech: any = obj.userData?.technique;
                         if (!tech || tech._isLineRibbon || tech._isRaster || tech._isHillshade) continue;
+                        if (stat) {
+                            stat.eligible++;
+                            const k = String(tech.name ?? '?') + ':' + String(tech._layerId ?? '');
+                            stat.techs[k] = (stat.techs[k] ?? 0) + 1;
+                        }
                         const rawM = (obj as any).material;
                         const mats: THREE.Material[] = Array.isArray(rawM)
                             ? rawM : (rawM ? [rawM] as any : []);
                         for (const material of mats) {
-                            if (!material || (material as any).__mbShadowInjected) continue;
+                            if (!material) continue;
+                            if ((material as any).__mbShadowInjected) { if (stat) stat.already++; continue; }
+                            if (stat) stat.injected++;
                             this.injectGroundShadow(material as any);
                         }
                     }
