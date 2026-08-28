@@ -6076,3 +6076,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **嫌疑清单清零后剩唯一全局差异**：gate 开时 run() 越过早退 → `setRenderTarget(m_rt)+clear()`（RT 挂 DepthTexture、无显式 color 纹理，疑绑定不完整使 clear 落在主画布）+ RT/DepthTexture GPU 资源创建 + getShadowUniforms 非 null（refresh 循环 shIn=0 无操作）。深度 pass（f17 跳过仍暗）、blit（f22 跳过仍暗）、receiver 调制（shIn=0）逐一排除后，**RT 绑定/clear 落点是最后嫌疑**——修复方向=RT 补显式 color buffer + setRenderTarget 后校验绑定成功再 clear。
 
 **状态**：校准门默认关（375224 无回归）；inventory 注入 flag 探针、签名修正、dump 门控入库。
+
+**§527. 会话续记——暗化根因最终定性：setRenderTarget 状态破坏（engine/SwiftShader 层）+ 颜色编码深度管线入库（2026-08-28 续十三）**：
+
+**排他实验矩阵**（全部单夹具 buildings-trees-shadows-casting、MB_NO_WEBPACK_CACHE=1）：f17 跳 render 保 setRenderTarget+clear=暗；f22 跳 blit=暗；f23 **全跳过（run 纯 no-op）=亮（375224）**；f25 换纯 color RT（无 DepthTexture）+render=暗。**结论：`renderer.setRenderTarget(m_rt)`+`clear()` 本身即暗化主帧——与 DepthTexture、FBO 完整性、渲染内容、我们的注入器全部无关**（FBO 完整性已校验 COMPLETE；f17/f22/f25 的暗化像素逐位一致 856405）。这是 engine renderer/SwiftShader 层的 RT 绑定状态恢复缺陷（疑 viewport/scissor/深度附着恢复不完整），**不在 mbstyle-datasource 数据源层可修**。
+
+**入库资产**：① **颜色编码深度管线**——shadow pass 改写 packed depth 进 color（16-bit R=hi/G=lo，raw window depth），receiver 解码比较（弃 DepthTexture，规避主帧状态破坏的尝试+为未来换渲染路径后直接可用）；② dump blit 读 color（直接 readRenderTargetPixels 可简化）；③ `shadowdbg=1/2` A/B 通道、inventory 注入 flag 探针。
+
+**校准门维持默认关**（run() 开头 `__mbShadowEnable` 早退，375224 无回归）。**重开影子的前置**：engine 层验证 setRenderTarget(m_rt)+clear 后主画布深度/视口状态的保持（Spector 式帧捕获或最小 repro），或将影子深度 pass 移到独立 renderer 实例。

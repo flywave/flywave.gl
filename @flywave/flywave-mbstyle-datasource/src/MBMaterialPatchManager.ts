@@ -2368,8 +2368,10 @@ export class MBMaterialPatchManager {
                         float mbShadowDepth = 1.0;
                         if (mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
                             mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
-                            mbShadowDepth = texture2D(uMBShadowMap, mbShadowUv.xy).r;
-                            float mbLit = mbShadowUv.z <= mbShadowDepth + 0.0015 ? 1.0 : 0.0;
+                            vec4 mbPk = texture2D(uMBShadowMap, mbShadowUv.xy);
+                            // §527: 16-bit packed window depth (R=hi, G=lo)
+                            mbShadowDepth = mbPk.r + mbPk.g / 255.0;
+                            float mbLit = mbShadowUv.z <= mbShadowDepth + 0.002 ? 1.0 : 0.0;
                             gl_FragColor.rgb *= mix(1.0 - uMBShadowIntensity, 1.0, mbLit);
                         }
                         // §525 debug readout (baked 1.0/0.0 at compile time when

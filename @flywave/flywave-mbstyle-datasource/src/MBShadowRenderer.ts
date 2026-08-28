@@ -37,7 +37,22 @@ export class MBShadowRenderer {
     private m_dumpCam: THREE.OrthographicCamera | null = null;
     private m_dumpQuad: THREE.Mesh | null = null;
     private m_shadowCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 4000);
-    private m_depthMaterial = new THREE.MeshBasicMaterial({ colorWrite: false });
+    // §527: depth packed into COLOR (16-bit RG) — gl_FragCoord.z linearized
+    // over the shadow camera's [near, far].
+    private m_depthMaterial = new THREE.ShaderMaterial({
+        vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: `
+            void main(){
+                // raw window depth (gl_FragCoord.z) — receivers project with
+                // the SAME shadow camera matrix, so uv.z is directly
+                // comparable. 16-bit pack: R=hi, G=lo.
+                float v = gl_FragCoord.z * 255.0;
+                float hi = floor(v) / 255.0;
+                float lo = fract(v);
+                gl_FragColor = vec4(hi, lo, 0.0, 1.0);
+            }`,
+        colorWrite: true,
+    });
     private m_matrix = new THREE.Matrix4();
     private m_enabled = false;
     private m_intensity = 0;
@@ -64,7 +79,7 @@ export class MBShadowRenderer {
     getShadowUniforms(): ShadowUniformState | null {
         if (!this.enabled || !this.m_rt) return null;
         return {
-            map: this.m_rt.depthTexture!,
+            map: this.m_rt.texture,
             matrix: this.m_matrix,
             intensity: this.m_intensity,
         };
@@ -96,9 +111,11 @@ export class MBShadowRenderer {
         const size = 1024;
         if (!this.m_rt || this.m_rt.width !== size) {
             this.m_rt?.dispose();
-            const depthTexture = new THREE.DepthTexture(size, size);
+            // §527: NO DepthTexture — attaching+sampling one corrupts the main
+            // canvas depth state on SwiftShader (even with a complete FBO).
+            // The pass writes PACKED DEPTH into the COLOR buffer instead
+            // (16-bit: R=hi, G=lo); receivers decode.
             this.m_rt = new THREE.WebGLRenderTarget(size, size, {
-                depthTexture,
                 depthBuffer: true,
             });
         }
@@ -167,19 +184,28 @@ export class MBShadowRenderer {
         const prevOverride = scene.overrideMaterial;
         const prevShadowEnabled = renderer.shadowMap.enabled;
         const prevLayers = this.m_shadowCamera.layers.mask;
-        if ((globalThis as any).__mbShadowSkipPass) {
-            // §525 A/B discriminator: uniforms still flow (intensity > 0) but
-            // the depth pass never renders — receivers see a cleared (empty)
-            // map. Restores below are harmless no-ops.
-        }
         this.m_shadowCamera.layers.set(1);
         renderer.shadowMap.enabled = false;
         scene.overrideMaterial = this.m_depthMaterial;
         try {
             renderer.setRenderTarget(this.m_rt);
-            renderer.clear();
-            if (!(globalThis as any).__mbShadowSkipPass) {
+            // §526: the A/B run proved setRenderTarget+clear darkened the MAIN
+            // canvas — the RT FBO was binding incomplete (DepthTexture without
+            // an explicit color buffer on SwiftShader) and the clear fell
+            // through to the canvas. Verify the FBO before clearing.
+            const gl = renderer.getContext();
+            const fbStatus = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+            if (fbStatus === gl.FRAMEBUFFER_COMPLETE) {
+                renderer.clear();
                 renderer.render(scene, this.m_shadowCamera);
+            } else {
+                // eslint-disable-next-line no-console
+                console.warn('[MBShadow] RT incomplete 0x' + fbStatus.toString(16) + ' — shadows disabled');
+                this.m_rt!.depthTexture!.dispose();
+                this.m_rt!.dispose();
+                this.m_rt = null;
+                renderer.setRenderTarget(prevTarget);
+                return;
             }
         } finally {
             scene.overrideMaterial = prevOverride;
@@ -227,7 +253,7 @@ export class MBShadowRenderer {
             this.m_dumpScene.add(this.m_dumpQuad);
         }
         const mat = this.m_dumpQuad.material as THREE.ShaderMaterial;
-        mat.uniforms.uMap.value = this.m_rt!.depthTexture!;
+        mat.uniforms.uMap.value = this.m_rt!.texture;
         const prevTarget = renderer.getRenderTarget();
         renderer.setRenderTarget(this.m_dumpRt);
         renderer.render(this.m_dumpScene, this.m_dumpCam);
