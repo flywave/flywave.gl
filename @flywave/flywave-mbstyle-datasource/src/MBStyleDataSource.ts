@@ -2274,17 +2274,25 @@ export class MBStyleDataSource extends TileDataSource {
                     } catch {}
                 }
 
+                // §528: the shadow DEPTH pass runs in WillRender instead —
+                // its setRenderTarget/clear leaves the canvas depth state
+                // corrupted AFTER the frame was drawn (SwiftShader), and the
+                // post-frame capture then sees the corrupted canvas. Running
+                // it BEFORE the main render means any canvas-level damage is
+                // overwritten by the frame itself; uniforms lag one frame
+                // (same as heatmap).
+                if (self.m_shadowRenderer) {
+                    const sl = self.m_environment?.shadowLightState;
+                    self.m_shadowRenderer.setLightState(!!sl, sl?.intensity ?? 0);
+                    self.m_shadowRenderer.run();
+                }
                 if (self.m_atmosphereRenderer) {
                     self.m_atmosphereRenderer.run();
                 }
                 if (self.m_backgroundFogRenderer) {
                     self.m_backgroundFogRenderer.run();
                 }
-                if (self.m_shadowRenderer) {
-                    const sl = self.m_environment?.shadowLightState;
-                    self.m_shadowRenderer.setLightState(!!sl, sl?.intensity ?? 0);
-                    self.m_shadowRenderer.run();
-                }
+
                 if (self.m_debugTileBoundaries) self.drawTileBoundaries();
                 const tc = self.m_environment?.terrainController;
                 if (tc && tc.isMorphing) {

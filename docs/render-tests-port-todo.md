@@ -6084,3 +6084,9 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **入库资产**：① **颜色编码深度管线**——shadow pass 改写 packed depth 进 color（16-bit R=hi/G=lo，raw window depth），receiver 解码比较（弃 DepthTexture，规避主帧状态破坏的尝试+为未来换渲染路径后直接可用）；② dump blit 读 color（直接 readRenderTargetPixels 可简化）；③ `shadowdbg=1/2` A/B 通道、inventory 注入 flag 探针。
 
 **校准门维持默认关**（run() 开头 `__mbShadowEnable` 早退，375224 无回归）。**重开影子的前置**：engine 层验证 setRenderTarget(m_rt)+clear 后主画布深度/视口状态的保持（Spector 式帧捕获或最小 repro），或将影子深度 pass 移到独立 renderer 实例。
+
+**§528. 会话续记——WillRender 迁移实验 + 根因锁定为 renderer 持久 GL 状态失配（2026-08-28 续十四）**：
+
+影子深度 pass 从 AfterRender 迁至 **WillRender**（主渲染前执行，画布级破坏会被本帧主渲染覆盖）——**像素与 AfterRender 逐位相同（856405）**。结合 §527 排他矩阵：破坏既非画布时序亦非 FBO/DepthTexture/渲染内容——**是 shadow pass 在同 context 内改变了 three renderer 的持久 GL 状态缓存**（viewport/scissor/depth-func/绑定缓存之一失配后，每次主渲染都复现同一错误输出，故 856405 逐位确定）。修复需 engine（flywave-mapview/three 版本）层：shadow RT 的独立 renderer/context（资源双传成本）或 renderer 状态强制恢复（`renderer.resetState()`/显式 viewport+scissor+depthFunc 重置）——超出数据源层。
+
+**本阶段入库**：深度 pass 迁 WillRender（uniforms 提前到主渲染前就绪，语义更优）；`getShadowUniforms` 返回 color texture。**下阶段（engine 层）**：`renderer.resetState()` 实验 / 独立 context renderer / Spector 帧捕获三选一；随后影子 extent/偏置校准、亮度域、landmark emissive。校准门默认关（375224 无回归）。
