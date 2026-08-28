@@ -6112,3 +6112,7 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **§532. 会话续记——ctx2 二分推进（2026-08-29 续二）**：
 
 二分 A：depth ShaderMaterial → `MeshBasicMaterial({colorWrite:true})` 试画——网格仍全 255，**排除 ctx2 编译静默失败**。二分 B（禁 layers.set(1) 过滤全画）：grid 探针直连 POST（修 census 签名去重吞后帧——旧签名不含 grid，后帧永不重发）**未达**——探针可达性待查（疑 run() 早退或 drawImage/readPixels 抛异常被 catch 吞）。**下轮**：探针自垫错误上报；或直接在 f37 状态下给 ctx2 render 换无 layers 的 OrthographicCamera 对照。校准门默认关（375224 无回归）。
+
+**§533. 会话续记——探针可达性修复 + pass 异常清零 + receiver 覆盖确认为最后缺口（2026-08-29 续二）**：
+
+① census dump 签名并入 grid/异常文本（修签名去重吞后帧）；② pass/render 异常捕获入 dump（`perr`/`gerr`）——**此后 perr=None**：bisect B 引入的 layers.set(0) 让 atmosphere 网格（onBeforeRender `assert(material instanceof GroundAtmosphereMaterial)` 遇 overrideMaterial 必炸）重新进 pass 导致每帧中止——已回退 layer-1 过滤 + ctx2 clear 改黑（可读化）。③ 但 gate 开/关像素仍逐位同（375224）——**确认 receiver 覆盖=最后缺口**：全场景无材质携带 `__mbShadowUniforms`（§526 shIn=0 未变），per-frame 重试注入未命中任何对象（疑 patchTileMaterials 遍历的 tile.objects 与可见材质集合错位，或 eligible 条件过滤过严）。**下会话**：① 在注入重试处 dump 命中数（tiles/objects/注入次数）定位错位；② receiver 命中后 extent/偏置校准；③ 亮度域；④ landmark emissive。

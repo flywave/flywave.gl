@@ -36,7 +36,18 @@ export class MBShadowRenderer {
     private m_shadowCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 4000);
     // §532 bisect: ShaderMaterial vs Basic — is the ctx2 blank a silent
     // shader-compile failure or something else? (Basic draws white geometry.)
-    private m_depthMaterial: THREE.Material = new THREE.MeshBasicMaterial({
+    private m_depthMaterial: THREE.Material = new THREE.ShaderMaterial({
+        vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: `
+            void main(){
+                // raw window depth (gl_FragCoord.z) — receivers project with
+                // the SAME shadow camera matrix, so uv.z is directly
+                // comparable. 16-bit pack: R=hi, G=lo.
+                float v = gl_FragCoord.z * 255.0;
+                float hi = floor(v) / 255.0;
+                float lo = fract(v);
+                gl_FragColor = vec4(hi, lo, 0.0, 1.0);
+            }`,
         colorWrite: true,
     });
     private m_matrix = new THREE.Matrix4();
@@ -112,7 +123,7 @@ export class MBShadowRenderer {
                 preserveDrawingBuffer: true,
             });
             this.m_shRenderer.setSize(size, size, false);
-            this.m_shRenderer.setClearColor(0xffffff, 1);
+            this.m_shRenderer.setClearColor(0x000000, 1);
             this.m_shTex = new THREE.CanvasTexture(canvas);
             this.m_shTex.minFilter = THREE.NearestFilter;
             this.m_shTex.magFilter = THREE.NearestFilter;
@@ -158,13 +169,18 @@ export class MBShadowRenderer {
         // in the INDEPENDENT context — the main renderer/canvas untouched.
         const prevOverride = scene.overrideMaterial;
         const prevLayers = this.m_shadowCamera.layers.mask;
-        // §532 bisect B: layer filter DISABLED — render everything.
-        this.m_shadowCamera.layers.set(0);
+        // §532: layer 1 filter REQUIRED — it also excludes the atmosphere
+        // sky/ground meshes whose onBeforeRender asserts
+        // (material instanceof GroundAtmosphereMaterial) against the pass's
+        // override material, aborting the whole render (white canvas).
+        this.m_shadowCamera.layers.set(1);
         scene.overrideMaterial = this.m_depthMaterial;
         try {
             this.m_shRenderer.setRenderTarget(null);
             this.m_shRenderer.clear();
             this.m_shRenderer.render(scene, this.m_shadowCamera);
+        } catch (e) {
+            (globalThis as any).__mbShadowPassErr = String(e);
         } finally {
             scene.overrideMaterial = prevOverride;
             this.m_shadowCamera.layers.mask = prevLayers;
@@ -175,13 +191,18 @@ export class MBShadowRenderer {
         if ((globalThis as any).__mbDecodeDbg) {
             try {
                 const inf = this.m_shRenderer.info;
+                const g2: any = this.m_shRenderer.getContext();
                 (globalThis as any).__mbShadowInfo = {
                     calls: inf.render.calls,
                     tris: inf.render.triangles,
                     geoms: inf.memory.geometries,
                     tex: inf.memory.textures,
+                    lost: g2.isContextLost ? g2.isContextLost() : 'n/a',
+                    err: g2.getError ? g2.getError() : -1,
                 };
-            } catch {}
+            } catch (e) {
+                (globalThis as any).__mbShadowInfo = { err: String(e) };
+            }
         }
         // §530 probe: 8×8 sample of the depth canvas (shadowdbg diagnostics).
         if ((globalThis as any).__mbDecodeDbg) {
@@ -208,21 +229,11 @@ export class MBShadowRenderer {
                     grid.push(row);
                 }
                 (globalThis as any).__mbShadowGrid = grid;
-                // direct POST with own throttle — the census dump signature
-                // doesn't include the grid, so late frames would never post.
-                const fb = (window as any).__karma__?.config?.args
-                    ?.find?.((a: string) => a.startsWith('feedback-url='))
-                    ?.slice('feedback-url='.length);
-                const st = (globalThis as any).__mbShadowPost ??= { n: 0 };
-                if (fb && st.n < 3) {
-                    st.n++;
-                    void fetch(`${fb}/mb-probe-dump`, {
-                        method: 'POST',
-                        headers: { 'content-type': 'application/json' },
-                        body: JSON.stringify({ name: 'shadow-grid', grid }),
-                    }).catch(() => {});
-                }
-            } catch {}
+                // §533: the census dump signature now includes the grid, so
+                // the (proven-reachable) census POST carries it.
+            } catch (e) {
+                (globalThis as any).__mbShadowGridErr = String(e);
+            }
         }
 
         // world → shadow-uv matrix (proj*view + [0,1] remap).

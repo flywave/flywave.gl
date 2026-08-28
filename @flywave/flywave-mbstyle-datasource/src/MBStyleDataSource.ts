@@ -2222,6 +2222,8 @@ export class MBStyleDataSource extends TileDataSource {
                                     su: !!(self.m_shadowRenderer as any)?.getShadowUniforms?.(),
                                     en: !!(self.m_shadowRenderer as any)?.enabled,
                                     grid: (globalThis as any).__mbShadowGrid,
+                                    gerr: (globalThis as any).__mbShadowGridErr,
+                                    perr: (globalThis as any).__mbShadowPassErr,
                                     info: (globalThis as any).__mbShadowInfo,
                                 },
                                 elev: elevSamples, yellow: yellowSamples,
@@ -2230,7 +2232,7 @@ export class MBStyleDataSource extends TileDataSource {
                                 ribbonShaders: (globalThis as any).__mbRibbonProbe ?? [],
                             };
                             (globalThis as any).__mbProbeDump = dump;
-                            const sig = dump.yellow.join('|') + '#' + dump.black.join('|') + '#' + inventory.length;
+                            const sig = dump.yellow.join('|') + '#' + dump.black.join('|') + '#' + inventory.length + '#' + JSON.stringify(dump.shadow?.grid ?? '') + (dump.shadow?.gerr ? '#E' + dump.shadow.gerr : '') + (dump.shadow?.perr ? '#P' + dump.shadow.perr : '');
                             const st = (globalThis as any).__mbProbePost ??= { n: 0, sig: '' };
                             const fb = (window as any).__karma__?.config?.args
                                 ?.find?.((a: string) => a.startsWith('feedback-url='))
