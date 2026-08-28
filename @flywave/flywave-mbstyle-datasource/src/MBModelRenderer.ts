@@ -52,12 +52,23 @@ type GLTFLoaderType = any;
  * renders raw albedo). Exports for both instantiation paths (per-feature
  * MBModelRenderer and the source-registry loadModels in MBStyleDataSource).
  */
-export function applyMglModelLighting(dataSource: any, model: THREE.Object3D, emissiveStrength: number): void {
+export function applyMglModelLighting(
+    dataSource: any,
+    model: THREE.Object3D,
+    emissiveStrength: number,
+    tint?: { color: number[]; mix: number },
+): void {
     const ls = dataSource?.m_environment?.lighting3DState;
     model.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
-        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        let mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        // §521: model-color tint is PER FEATURE — clone the (shared prototype)
+        // materials so each instance can carry its own uniforms.
+        if (tint && tint.mix > 0) {
+            mats = mats.map((m: any) => m?.clone?.() ?? m);
+            mesh.material = Array.isArray(mesh.material) ? mats : mats[0];
+        }
         for (const mat of mats as any[]) {
             if (!mat || mat.__mbMglLit) continue;
             if (!ls) { mat.__mbMglLit = true; continue; }
@@ -70,10 +81,13 @@ export function applyMglModelLighting(dataSource: any, model: THREE.Object3D, em
                 shader.uniforms.uMB3DDirColor = { value: ls2 ? ls2.directionalColorLinear : [1, 1, 1] };
                 shader.uniforms.uMB3DDir = { value: ls2 ? ls2.dir : [0, 0, 1] };
                 shader.uniforms.uMB3DEmissive = { value: emissiveStrength ?? 0 };
+                shader.uniforms.uMB3DTint = { value: tint?.color ?? [0, 0, 0] };
+                shader.uniforms.uMB3DTintA = { value: tint?.mix ?? 0 };
                 shader.fragmentShader = shader.fragmentShader.replace(
                     'void main() {',
                     `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
                      uniform float uMB3DEmissive;
+                     uniform vec3 uMB3DTint; uniform float uMB3DTintA;
                      vec3 mbAlbedo = vec3(1.0);
                      void main() {`
                 );
@@ -82,7 +96,9 @@ export function applyMglModelLighting(dataSource: any, model: THREE.Object3D, em
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <map_fragment>',
                     `#include <map_fragment>
-                     mbAlbedo = diffuseColor.rgb;`
+                     mbAlbedo = diffuseColor.rgb;
+                     // mgl getBaseColor: mix(albedo, sRGBToLinear(v_color_mix), mix)
+                     mbAlbedo = mix(mbAlbedo, uMB3DTint, uMB3DTintA);`
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <opaque_fragment>',
@@ -431,8 +447,13 @@ export class MBModelRenderer {
 
         // §520: mgl apply_lighting on the glTF materials (per-feature
         // model-emissive-strength rides the placement, default 0).
+        // §521: per-feature model-color×mix tint (clones the materials).
         try {
-            applyMglModelLighting(this.m_dataSource, model, (placement as any).emissive ?? 0);
+            const pl: any = placement;
+            const tint = pl.color && pl.colorMix > 0
+                ? { color: pl.color, mix: pl.colorMix }
+                : undefined;
+            applyMglModelLighting(this.m_dataSource, model, pl.emissive ?? 0, tint);
         } catch {}
     }
 

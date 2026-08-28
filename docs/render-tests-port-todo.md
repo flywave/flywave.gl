@@ -6026,3 +6026,11 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 `applyMglModelLighting`（MBModelRenderer 导出，两路实例化共用）：glTF 材质 onBeforeCompile 注入 mgl `model.fragment.glsl getDiffuseShadedColor`（LIGHTING_3D_MODE 路径）——**替换** three 光照输出：`dir_factor=saturate(dot(N,dir))`（shadowed 变体需深度 prepass，未移植）、ambient=`u_lighting_ambient_color × vertical(0.92..1)×ambientDirFactor`、`out=albedo_linear×k`（linearProduct 经输出 sRGB 等效）、`mix(lit, albedo, emissive_strength)`（per-feature emissive 走 placement）。albedo 在 `map_fragment` 后捕获（=getBaseColor 产出口径）；无 lights 的样式材质原样（=mgl !LIGHTING_3D_MODE 原始 albedo）。uMB3D uniforms 与 §515/§518 注入器同族。
 
 **验证**：buildings-trees-shadows-casting 405501→394548；树冠从洗白粉绿变浓绿+方向光照，着色贴近 expected。**余项**：① expected 多色树冠（白/粉/橙）vs 我方全绿——树种 albedo 差异（4 个 glb 加载路径或 meshopt/纹理变体未吃到，待查）；② 模型落地阴影（expected 树影上地面，我方 shadow caster 已注册但地面未接收模型影）；③ landmark 系 emissive/roughness 校准。
+
+**§521. 会话续记——树冠多色破案（model-color mix 生效路径）+ 逐要素着色落地（2026-08-28 续七）**：
+
+**根因**：glb 解析实锤 4 个树种 baseColorFactor 全是绿色系——expected 的白/粉/橙树冠**不是 albedo**；重读夹具 paint（此前截断）发现两 tree layer 都设了 **`model-color-mix-intensity: 0.7`**——model-color 按 mgl `getBaseColor: mix(albedo, sRGBToLinear(color), mix)` 生效。§520 的"mix=0 不生效"结论对 spec 默认值正确，但本夹具显式设 0.7。
+
+**实现**：① emitter 逐要素求值 model-color（表达式→THREE.Color，ColorManagement 转 linear）→ placement.color/colorMix；② `applyMglModelLighting` 增 tint 参数——mix>0 时**克隆共享原型材质**（逐实例独立 uniform），shader 在 albedo 捕获后 `mbAlbedo = mix(mbAlbedo, uMB3DTint, uMB3DTintA)`（线性域，mgl 同款）。
+
+**验证**：buildings-trees-shadows-casting 394548→**375224**（−19k），白/灰/粉/橙/黄/绿树冠色分布与 expected 对齐。**余项**：① 树影上地面（expected 黑色树影；shadow depth pass 全场景含树，疑地面接收端/强度链路，下阶段）；② 整体亮度（我方偏暗，ambient 域）；③ landmark emissive/roughness。

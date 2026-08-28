@@ -562,6 +562,7 @@ export class MBTileDataEmitter {
         translation?: number[];
         opacity?: number;
         colorMix?: number;
+        color?: number[];
         emissive?: number;
         modelId?: string;
     }> = [];
@@ -4140,6 +4141,23 @@ export class MBTileDataEmitter {
                     const colorMix = mixRaw === undefined || mixRaw === null
                         ? undefined
                         : evalScalar('model-color-mix-intensity', NaN);
+                    // §521: model-color tints the albedo (mix in LINEAR — mgl
+                    // getBaseColor: mix(albedo, sRGBToLinear(v_color_mix), a)).
+                    // Resolve to linear RGB (THREE.Color applies ColorManagement).
+                    let colorLin: number[] | undefined;
+                    if (colorMix !== undefined && colorMix > 0 && colorRaw !== undefined && colorRaw !== null) {
+                        try {
+                            let cv: any = colorRaw;
+                            if (typeof cv === 'object') {
+                                cv = MBExpressionEngine.evaluate(colorRaw, {
+                                    zoom: this.m_zoom,
+                                    feature: { type: 'Point', properties, id: featureId } as any,
+                                } as any);
+                            }
+                            const c = new THREE.Color(cv as any);
+                            colorLin = [c.r, c.g, c.b];
+                        } catch { colorLin = undefined; }
+                    }
                     const emissive = evalScalar('model-emissive-strength', 0);
                     for (const pt of points) {
                         const w = this.projectWorld(pt);
@@ -4157,6 +4175,7 @@ export class MBTileDataEmitter {
                             ...(translation ? { translation } : {}),
                             ...(opacity !== 1 ? { opacity } : {}),
                             ...(colorMix !== undefined ? { colorMix } : {}),
+                            ...(colorLin ? { color: colorLin } : {}),
                             ...(emissive !== 0 ? { emissive } : {}),
                             ...(typeof modelId === 'string' && modelId ? { modelId } : {}),
                         });
