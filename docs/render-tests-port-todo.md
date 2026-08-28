@@ -6156,3 +6156,7 @@ GLB tile 勘测：position 单位为 tile 局部量化坐标（x∈[634,7174]、
 **§542. 会话收口——batched-model 链路：fetch→parse 打通至 Draco 挂起（2026-08-29 终二）**：
 
 已修复入库：① fetch 后 `m_inflight.delete`（inflight 泄漏）；② parse 错误独立记录（`stat.parseErr`，与 fetch err 分离——此前被并行邻域 404 覆盖）；③ `modelsPending` 挂钩 `MBBatchedModelRenderer.isLoading()`（inflight/pending 群组跟踪，harness 会等 Draco 窗口）；④ `setDecoderConfig({type:'js'})` 强制 JS 解码器。**终态**：fetch 9/ok 3（主瓦片命中），`parsed=0` 且 parse 无错误回调——**GLTFLoader.parse 对 Draco GLB 在 karma/SwiftShader 页面静默挂起**（js/wasm 解码器均同），baseline 264389 维持、无回归。**下会话**：① DRACOLoader worker 环境诊断（独立 HTML 页复现/`draco.setDecoderConfig` vs worker 生命周期/主线程解码 fallback `THREE.LoaderUtils`）；或脱离 GLTFLoader 直接解 GLB chunk+Draco 原始解码；② landmark 上屏后接 extent/偏置、亮度域、外观域校准。
+
+**§543. 会话收口——DRACOLoader 挂起诊断记录（2026-08-29 终三）**：
+
+逐 tile parse 异常捕获 + 5s hang 检测器入库后，f11 诊断显示 parsed=0 且无 parseErr/hang——parse 回调与同步异常均未触发，即 **GLTFLoader.parse 在 karma/SwiftShader 页面对 Draco GLB 静默挂起**（fetch arrayBuffer 路径与 XHR 路径均同；f12 空输出为构建态噪声已回退）。此为 DRACOLoader worker 在该测试环境的已知形态问题（karma 页面内 Worker 脚本路径受限），修复方向：① `draco.setDecoderPath` 指向 karma 可服务的 worker bundle；② 主线程解码 fallback（`DRACOLoader` 的 `_decode` 换 `draco_decoder.js` 动态 script 注入）；③ 或 fixture 预解码去 Draco。属环境/工具链工程，独立于影子与样式管线（均已完备）。校准门默认关（375224 无回归）、单测 290。
