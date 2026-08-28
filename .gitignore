@@ -34,3 +34,4 @@ mapbox-gl-js/
 # 包级构建输出目录（tsconfig outDir，发布前构建；包内 TS 解析走 tsconfig paths → src）
 @flywave/flywave-draco/lib/
 @flywave/flywave.gl/lib/
+/tmp
