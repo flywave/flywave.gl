@@ -6138,3 +6138,7 @@ landmark-emission-strength 夹具解析：landmark 源是 **`type: "batched-mode
 GLB tile 勘测：position 单位为 tile 局部量化坐标（x∈[634,7174]、y∈[1400,7793]，合 extent≈8192 网格；z∈[-0.05,330] 米高程）；`extensionsUsed=['MAPBOX_mesh_features','KHR_draco_mesh_compression']`（特性级样式经 mesh_features、几何需 Draco 解码——GLTFLoader 已配 DRACOLoader）。36 nodes/meshes 无 translation（定位在顶点域）。fixture 请求 Munich z14 tile 8718-5683，本地 fixtures 缺该文件（仅 8715-5684/8717-5683 邻瓦）——本地数据亦有缺口。**立项范围**：① batched-model DataProvider（URL 模板/maxzoom/超采）② GLB→Draco 解码 ③ tile 局部系(8192 网格+z 米)→世界系变换 ④ MAPBOX_mesh_features 特性→逐要素样式桥接（复用 §518/§521/§536 通道）⑤ 本地 fixture 补齐。预估独立多会话工程。
 
 **本会话总结（§518–§538，22 提交）**：3d-intersections −13%（5.94M→5.16M）；model-layer 0/142 全红→树多色上屏、多向量源架构、model-roughness/emissive（model-emissive-strength −62%）、黄线 gap mgl 几何、结构/模型 mgl 光照、影子链路完整排除矩阵+独立 context 管线（待真机 GPU）。单测 290 全过、每阶段单夹具验证无回归。
+
+**§539. batched-model 实现前勘误与设计定稿（2026-08-29 续三）**：
+
+勘误：本地 fixtures **完整**（19 个 GLB 含 8718-5683-14 主瓦片；§538"缺主瓦片"系 `ls | head` 截断误判）。**实现设计定稿**（下会话直接按此施工）：① 新 `MBBatchedModelRenderer`（仿 MBModelRenderer：独立管理 batched-model 源的 tile 覆盖/加载/实例化/RTE −eye 回流，不经 decodedTile 管线）；② 源注册：wireTileSources extras 收集 `type==='batched-model'`（URL 模板 {x}-{y}-{z}.glb、maxzoom clamp、tile 即模型文件）；③ tile→世界变换：GLB position 为 tile 局部量化坐标（extent≈8192 网格，z 米）——group 置 tile 世界角点、scale=span/8192；④ 样式：MAPBOX_mesh_features 逐特性桥接（先整 tile 单样式，mesh_features 二期）；⑤ Draco 已配 DRACOLoader；⑥ 验证=landmark-emission-strength（基线 264389）单夹具。工作量估 1-2 会话。
