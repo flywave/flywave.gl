@@ -6108,3 +6108,7 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **新探针数据**：ctx2 `renderer.info` = 80 draw calls / 12031 triangles / 80 geometries——**第二 context 确实在画**（资源双传成功、非 context 创建失败）；但 `preserveDrawingBuffer:true` + `gl.readPixels` 全画布 8×8 网格仍全 255（clear 白色）。矛盾焦点收窄为二选一：① ctx2 端 depth ShaderMaterial 编译静默失败（three 回退跳过绘制，console 转发不稳无法确认）；② 相机/视口在 ctx2 的取框偏移（几何全部 clip 出画布）。
 
 **本阶段入库**：ctx2 `preserveDrawingBuffer` + `readPixels` 全画布网格探针、`renderer.info` 量化。影子校准门维持默认关（375224 无回归）。**下会话入口**：① 二分①/②——先给 depth material 换 MeshBasicMaterial({colorWrite:true}) 试画（排除编译问题），再试禁用 layers 过滤（排除 layer 误筛）；② 影子现身后 extent/偏置校准；③ 亮度域；④ landmark emissive/roughness。基础设施完备，每步单夹具验证即可推进。
+
+**§532. 会话续记——ctx2 二分推进（2026-08-29 续二）**：
+
+二分 A：depth ShaderMaterial → `MeshBasicMaterial({colorWrite:true})` 试画——网格仍全 255，**排除 ctx2 编译静默失败**。二分 B（禁 layers.set(1) 过滤全画）：grid 探针直连 POST（修 census 签名去重吞后帧——旧签名不含 grid，后帧永不重发）**未达**——探针可达性待查（疑 run() 早退或 drawImage/readPixels 抛异常被 catch 吞）。**下轮**：探针自垫错误上报；或直接在 f37 状态下给 ctx2 render 换无 layers 的 OrthographicCamera 对照。校准门默认关（375224 无回归）。
