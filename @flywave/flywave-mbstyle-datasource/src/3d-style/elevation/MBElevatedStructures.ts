@@ -56,6 +56,31 @@ import {
     lineSubdivision,
     polygonSubdivision,
 } from '../util/MBPolygonClippingHD';
+import earcut from 'earcut';
+
+/** mgl TUNNEL_ENTERANCE_HEIGHT: wall/entrance rise above the tunnel roof. */
+const TUNNEL_ENTERANCE_HEIGHT_METERS = 4.0;
+
+interface ElevatedEdge {
+    polygonIdx: number;
+    a: number;
+    b: number;
+    hash: string;
+    portalHash: string;
+    isTunnel: boolean;
+    type: ElevationPortalType;
+    featureIndex: number;
+    guardRailEnabled: boolean;
+}
+
+type Vec3 = [number, number, number];
+
+interface MeshBuilder {
+    positions: number[];
+    normals: number[];
+    indices: number[];
+    vertexLookup: Map<string, number>;
+}
 
 export interface FillElevationPiece {
     ring: ClipPoint[];
@@ -72,6 +97,10 @@ export interface FillElevationPlan {
     pieces: FillElevationPiece[];
     /** Clipped pre-subdivision rings (exterior first) — portal candidates. */
     clippedRings: ClipPoint[][];
+    /** Same pieces in canonical extent space (structures mesh frame). */
+    piecesCanonical: CanonicalPiece[];
+    /** Clipped pre-subdivision rings in canonical space (portal hashing). */
+    clippedRingsCanonical: ClipPoint[][];
 }
 
 export interface LineElevationPlan {
@@ -79,6 +108,33 @@ export interface LineElevationPlan {
     /** Subdivided points with sampled heights (markup bias applied). */
     points: ClipPoint[];
     heights: number[];
+}
+
+/**
+ * One subdivided piece in CANONICAL extent space (structures mesh frame —
+ * portal/edge hashes must match between candidates and renderable edges).
+ * Heights are pre-sampled meters (markup bias already applied when the
+ * plan was built with it).
+ */
+export interface CanonicalPiece {
+    ring: ClipPoint[];
+    ringHeights: number[];
+    holes: ClipPoint[][];
+    holeHeights: number[][];
+}
+
+/** Constructed elevated-structures mesh (mgl `ElevatedStructures.construct`). */
+export interface ElevatedStructuresMesh {
+    /** Flat vertex stream: x, y (canonical extent), z (meters). */
+    positions: number[];
+    /** Per-vertex unit normals (x, y, z; +z up in extent space). */
+    normals: number[];
+    indices: number[];
+    /** Index offset where the tunnel segment begins (rails first). */
+    tunnelStart: number;
+    /** Per-feature vertex sections for data-driven structure colors. */
+    bridgeSections: Array<{ featureIndex: number; vertexStart: number }>;
+    tunnelSections: Array<{ featureIndex: number; vertexStart: number }>;
 }
 
 export class MBElevatedStructures {
@@ -103,6 +159,15 @@ export class MBElevatedStructures {
     /** Merged cross-tile curves by feature id (mgl mergedFeatureCache). */
     private m_mergedCache: Map<number, MBElevationFeature> = new Map();
     private m_unevaluatedPortals: MBElevationPortalGraph | null = null;
+
+    // ---- elevated structures mesh state (mgl ElevatedStructures) ----
+    private m_unevalPositions: number[] = [];
+    private m_unevalHeights: number[] = [];
+    private m_unevalTriangles: number[] = [];
+    private m_unevalTunnelTriangles: number[] = [];
+    private m_unevalEdges: ElevatedEdge[] = [];
+    /** Exterior-vertex posHash → hashes of the edges it connects (mgl vertexHashLookup). */
+    private m_vertexHashLookup: Map<number, { prev: string; next: string }> = new Map();
 
     constructor(z = 0, x = 0, y = 0) {
         this.m_consumerZ = z;
@@ -271,21 +336,31 @@ export class MBElevatedStructures {
             scale === 1 ? ring : ring.map(p => ({ x: p.x * inv, y: p.y * inv }));
 
         const pieces: FillElevationPiece[] = [];
+        const piecesCanonical: CanonicalPiece[] = [];
 
         if (feature.constantHeight != null || edges.length === 0) {
             const h = feature.pointElevation(clipped[0][0].x, clipped[0][0].y);
+            const heightsAll = clipped[0].map(() => this.biased(h, bias));
             pieces.push({
                 ring: back(clipped[0]),
-                heights: clipped[0].map(() => this.biased(h, bias)),
+                heights: heightsAll,
                 holes: clipped.slice(1).map(ring => ({
                     ring: back(ring),
                     heights: ring.map(() => this.biased(h, bias)),
                 })),
             });
+            piecesCanonical.push({
+                ring: clipped[0],
+                ringHeights: heightsAll,
+                holes: clipped.slice(1),
+                holeHeights: clipped.slice(1).map(ring => ring.map(() => this.biased(h, bias))),
+            });
             return {
                 feature, isTunnel: feature.isTunnel(),
                 pieces,
+                piecesCanonical,
                 clippedRings: clipped.map(back),
+                clippedRingsCanonical: clipped,
             };
         }
 
@@ -296,21 +371,35 @@ export class MBElevatedStructures {
 
         for (const piece of exteriorPieces) {
             const holes: FillElevationPiece['holes'] = [];
+            const holesCanonical: ClipPoint[][] = [];
+            const holeHeightsCanonical: number[][] = [];
             for (const parts of holePieces) {
                 for (const part of parts) {
                     if (pointInRing(part[0], piece)) {
-                        holes.push({ ring: back(part), heights: part.map(sample) });
+                        const hs = part.map(sample);
+                        holes.push({ ring: back(part), heights: hs });
+                        holesCanonical.push(part);
+                        holeHeightsCanonical.push(hs);
                     }
                 }
             }
-            pieces.push({ ring: back(piece), heights: piece.map(sample), holes });
+            const ringHeights = piece.map(sample);
+            pieces.push({ ring: back(piece), heights: ringHeights, holes });
+            piecesCanonical.push({
+                ring: piece,
+                ringHeights,
+                holes: holesCanonical,
+                holeHeights: holeHeightsCanonical,
+            });
         }
 
         if (pieces.length === 0) return null;
         return {
             feature, isTunnel: feature.isTunnel(),
             pieces,
+            piecesCanonical,
             clippedRings: clipped.map(back),
+            clippedRingsCanonical: clipped,
         };
     }
 
@@ -408,11 +497,23 @@ export class MBElevatedStructures {
             : exterior.length;
         if (n < 2) return;
 
+        // Rebuild the per-feature vertex → adjacent edge hashes table (mgl
+        // vertexHashLookup in addPortalCandidates) — addRenderableRing uses
+        // it to propagate the ORIGINAL edge hash (portalHash) through
+        // geometry later split by subdivision.
+        this.m_vertexHashLookup.clear();
+        let prevEdgeHash = edgeHashOf(exterior[n - 1], exterior[0]);
+        void prevEdgeHash;
+
         for (let i = 0; i < n; i++) {
             const a = exterior[i];
             const b = exterior[(i + 1) % n];
             const length = Math.hypot(b.x - a.x, b.y - a.y);
             if (length === 0) continue;
+
+            const edgeHash = edgeHashOf(a, b);
+            this.m_vertexHashLookup.set(posHashOf(a), { prev: prevEdgeHash, next: edgeHash });
+            prevEdgeHash = edgeHash;
 
             let type: ElevationPortalType = 'unevaluated';
             const ha = elevation.pointElevation(a.x, a.y);
@@ -448,6 +549,417 @@ export class MBElevatedStructures {
         return this.evaluatedPortals;
     }
 
+    // ------------------------------------------------------------------
+    // Elevated structures mesh (mgl ElevatedStructures.construct)
+    // ------------------------------------------------------------------
+
+    /**
+     * Feed one hd-road-base feature's subdivided geometry into the
+     * structures mesh state (mgl addVertices + addTriangles +
+     * addRenderableRing, driven by FillBucket.addGeometry). Pieces are in
+     * canonical extent space with pre-sampled heights in meters; portal
+     * candidates must have been added for this feature FIRST (the render
+     * hash propagation reads the vertex lookup built there).
+     */
+    addElevatedFeature(params: {
+        featureIndex: number;
+        guardRailEnabled: boolean;
+        isTunnel: boolean;
+        pieces: CanonicalPiece[];
+    }): void {
+        const { featureIndex, guardRailEnabled, isTunnel, pieces } = params;
+        for (const piece of pieces) {
+            const rings: Array<{ ring: ClipPoint[]; heights: number[] }> = [
+                { ring: piece.ring, heights: piece.ringHeights },
+                ...piece.holes.map((h, i) => ({ ring: h, heights: piece.holeHeights[i] ?? [] })),
+            ];
+            const flattened: number[] = [];
+            const holeIndices: number[] = [];
+            const ringRanges: Array<[number, number]> = [];
+
+            for (const { ring, heights } of rings) {
+                const open = ring.length >= 2 &&
+                    ring[0].x === ring[ring.length - 1].x &&
+                    ring[0].y === ring[ring.length - 1].y
+                    ? ring.slice(0, ring.length - 1)
+                    : ring;
+                if (open.length < 3) continue;
+                const start = flattened.length / 2;
+                for (let i = 0; i < open.length; i++) {
+                    flattened.push(open[i].x, open[i].y);
+                    this.m_unevalPositions.push(open[i].x, open[i].y);
+                    this.m_unevalHeights.push(heights[i] ?? 0);
+                }
+                if (start > 0) holeIndices.push(start);
+                ringRanges.push([start, open.length]);
+            }
+            if (ringRanges.length === 0) continue;
+
+            const tri = earcut(flattened, holeIndices.length > 0 ? holeIndices : null, 2);
+            const vOffset = this.m_unevalHeights.length - flattened.length / 2;
+            const outTriangles = isTunnel ? this.m_unevalTunnelTriangles : this.m_unevalTriangles;
+            for (const idx of tri) outTriangles.push(idx + vOffset);
+
+            for (const [offset, count] of ringRanges) {
+                this.addRenderableRing(
+                    featureIndex, vOffset + offset, count, isTunnel, guardRailEnabled);
+            }
+        }
+    }
+
+    /**
+     * Build the structures mesh from all collected features (mgl
+     * `construct`): bridge guard rails over non-shared edges, tunnel walls
+     * under every edge of the road, and double-sided tunnel entrances.
+     * Returns null when the tile collected no elevated geometry.
+     */
+    construct(): ElevatedStructuresMesh | null {
+        if (this.m_unevalPositions.length === 0) return null;
+        this.evaluatePortals();
+        const portals = this.evaluatedPortals?.portals ?? [];
+
+        this.prepareEdges(portals, this.m_unevalEdges);
+
+        const positions: number[] = [];
+        const normals: number[] = [];
+        const indices: number[] = [];
+        const bridgeSections: Array<{ featureIndex: number; vertexStart: number }> = [];
+        const tunnelSections: Array<{ featureIndex: number; vertexStart: number }> = [];
+        const builder: MeshBuilder = { positions, normals, indices, vertexLookup: new Map() };
+
+        const partition = (edges: ElevatedEdge[], type: ElevationPortalType): number => {
+            edges.sort((a, b) => {
+                if (a.type === type && b.type !== type) return -1;
+                if (a.type !== type && b.type === type) return 1;
+                return 0;
+            });
+            const idx = edges.findIndex(e => e.type !== type);
+            return idx >= 0 ? idx : edges.length;
+        };
+
+        let wallEndIdx = 0;
+        if (this.m_unevalEdges.length > 0) {
+            wallEndIdx = partition(this.m_unevalEdges, 'none');
+            this.constructBridgeStructures(builder, wallEndIdx, bridgeSections);
+        }
+
+        const tunnelStart = indices.length;
+        if (this.m_unevalEdges.length > 0) {
+            const afterWallEnd = this.m_unevalEdges.splice(wallEndIdx);
+            const tunnelEndIdx = partition(afterWallEnd, 'tunnel') + wallEndIdx;
+            this.m_unevalEdges.push(...afterWallEnd);
+            this.constructTunnelStructures(
+                builder, { min: 0, max: wallEndIdx }, { min: wallEndIdx, max: tunnelEndIdx },
+                tunnelSections);
+        }
+
+        if (indices.length === 0) return null;
+        return { positions, normals, indices, tunnelStart, bridgeSections, tunnelSections };
+    }
+
+    /**
+     * Prune shared edges and classify survivors against the evaluated
+     * portal graph (mgl prepareEdges).
+     */
+    private prepareEdges(portals: ElevationPortalEdge[], edges: ElevatedEdge[]): void {
+        if (edges.length === 0) return;
+
+        edges.sort((a, b) => (a.hash === b.hash
+            ? b.polygonIdx - a.polygonIdx
+            : b.hash > a.hash ? 1 : -1));
+
+        let begin = 0;
+        let end = 0;
+        let out = 0;
+        let polygonIdx = edges[begin].polygonIdx;
+
+        do {
+            end++;
+            if (end === edges.length || edges[begin].hash !== edges[end].hash) {
+                const occurrences = end - begin;
+                const differentOwner = edges[end - 1].polygonIdx !== polygonIdx;
+                if (occurrences === 1 || differentOwner) {
+                    if (out < begin) {
+                        edges[out] = edges[begin];
+                    }
+                    edges[out].type = 'none';
+                    out++;
+                }
+                begin = end;
+                if (begin !== edges.length) {
+                    polygonIdx = edges[begin].polygonIdx;
+                }
+            }
+        } while (begin !== edges.length);
+
+        edges.splice(out);
+
+        // Classify surviving edges by portal hash against the evaluated graph.
+        if (edges.length !== 0 && portals.length !== 0) {
+            const sortedPortals = portals.slice().sort((a, b) => (a.hash < b.hash ? 1 : -1));
+            edges.sort((a, b) => (a.portalHash < b.portalHash ? 1 : -1));
+
+            let eIndex = 0;
+            let pIndex = 0;
+            while (eIndex !== edges.length && pIndex !== sortedPortals.length) {
+                const edge = edges[eIndex];
+                const portal = sortedPortals[pIndex];
+                if (edge.portalHash > portal.hash) {
+                    eIndex++;
+                } else if (portal.hash > edge.portalHash) {
+                    pIndex++;
+                } else {
+                    edge.type = portal.type;
+                    eIndex++;
+                }
+            }
+        }
+    }
+
+    /**
+     * Bridge guard rails along non-shared road edges (mgl
+     * constructBridgeStructures): outer/top/inner strips around a 0.5 m
+     * cross-section, plus end caps at terminal vertices near the ground.
+     */
+    private constructBridgeStructures(
+        builder: MeshBuilder, edgeEnd: number,
+        sections: Array<{ featureIndex: number; vertexStart: number }>,
+    ): void {
+        builder.vertexLookup.clear();
+        const vertices = this.m_unevalPositions;
+        const heights = this.m_unevalHeights;
+        const edges = this.m_unevalEdges;
+
+        const connectivity = this.computeVertexConnections(edges, 0, edgeEnd);
+        const metersToTile = this.m_metersToTile;
+        const scale = 0.5 * metersToTile;
+
+        let lastFeatureIndex = Number.POSITIVE_INFINITY;
+
+        // Feature order reduces vertex-binder fragmentation (mgl sorts too).
+        const range = edges.slice(0, edgeEnd);
+        range.sort((a, b) => a.featureIndex - b.featureIndex);
+
+        for (const edge of range) {
+            if (!edge.guardRailEnabled) continue;
+
+            const pts = prepareEdgePoints(vertices, heights, edge, (a, b) => a > b);
+            if (!pts) continue;
+            const [pa, pb] = pts;
+
+            const va: Vec3 = [pa.x, pa.y, metersToTile * pa.h];
+            const vb: Vec3 = [pb.x, pb.y, metersToTile * pb.h];
+            if (va[0] === vb[0] && va[1] === vb[1] && va[2] === vb[2]) continue;
+
+            const dir = norm3(sub3(vb, va));
+            const aFwd = this.computeFwd(connectivity, vertices, heights, edge.a, metersToTile) || dir;
+            const bFwd = this.computeFwd(connectivity, vertices, heights, edge.b, metersToTile) || dir;
+
+            const aLeft = norm3([aFwd[1], -aFwd[0], 0]);
+            const bLeft = norm3([bFwd[1], -bFwd[0], 0]);
+            const aUp = norm3(cross3(aLeft, aFwd));
+            const bUp = norm3(cross3(bLeft, bFwd));
+
+            // Cross-section: outer, top, inner points + the road vertex.
+            const aV: Vec3[] = [
+                add3(va, scale3(sub3(aLeft, aUp), scale)),
+                add3(va, scale3(add3(aLeft, aUp), scale)),
+                add3(va, scale3(aUp, scale)),
+                va,
+            ];
+            const bV: Vec3[] = [
+                add3(vb, scale3(sub3(bLeft, bUp), scale)),
+                add3(vb, scale3(add3(bLeft, bUp), scale)),
+                add3(vb, scale3(bUp, scale)),
+                vb,
+            ];
+
+            if (edge.featureIndex !== lastFeatureIndex) {
+                lastFeatureIndex = edge.featureIndex;
+                sections.push({ featureIndex: edge.featureIndex, vertexStart: builder.positions.length / 3 });
+                builder.vertexLookup.clear();
+            }
+
+            // Cross-sections are built in tile units (mgl toTileVec);
+            // emit with z converted back to METERS (mgl addVertex's
+            // tileToMeters argument) so the mesh shares one z unit.
+            const m = (v: Vec3, n: Vec3): number =>
+                addVertex(builder, [v[0], v[1], v[2] / metersToTile], n);
+
+            // Outer side
+            quad(builder,
+                m(aV[0], aLeft), m(aV[1], aLeft),
+                m(bV[0], bLeft), m(bV[1], bLeft));
+            // Top side
+            quad(builder,
+                m(aV[1], aUp), m(aV[2], aUp),
+                m(bV[1], bUp), m(bV[2], bUp));
+            // Inner side
+            quad(builder,
+                m(aV[2], neg3(aLeft)), m(aV[3], neg3(aLeft)),
+                m(bV[2], neg3(bLeft)), m(bV[3], neg3(bLeft)));
+
+            // End caps at terminal vertices that sit near the ground.
+            const aTerminal = isTerminalVertex(connectivity, posHashOf({ x: vertices[edge.a * 2], y: vertices[edge.a * 2 + 1] }));
+            const bTerminal = isTerminalVertex(connectivity, posHashOf({ x: vertices[edge.b * 2], y: vertices[edge.b * 2 + 1] }));
+            if (pa.h < 0.01 && aTerminal) {
+                quad(builder,
+                    m(aV[3], neg3(aFwd)), m(aV[2], neg3(aFwd)),
+                    m(aV[1], neg3(aFwd)), m(aV[0], neg3(aFwd)));
+            }
+            if (pb.h < 0.01 && bTerminal) {
+                quad(builder,
+                    m(bV[0], bFwd), m(bV[1], bFwd),
+                    m(bV[2], bFwd), m(bV[3], bFwd));
+            }
+        }
+    }
+
+    /**
+     * Tunnel walls under the road edges + double-sided entrances (mgl
+     * constructTunnelStructures). Heights stay in meters.
+     */
+    private constructTunnelStructures(
+        builder: MeshBuilder,
+        wallRange: { min: number; max: number },
+        entranceRange: { min: number; max: number },
+        sections: Array<{ featureIndex: number; vertexStart: number }>,
+    ): void {
+        builder.vertexLookup.clear();
+        const vertices = this.m_unevalPositions;
+        const heights = this.m_unevalHeights;
+        const edges = this.m_unevalEdges;
+        const entranceHeight = TUNNEL_ENTERANCE_HEIGHT_METERS;
+        let lastFeatureIndex = Number.POSITIVE_INFINITY;
+
+        const section = (featureIndex: number): void => {
+            if (featureIndex !== lastFeatureIndex) {
+                lastFeatureIndex = featureIndex;
+                sections.push({ featureIndex, vertexStart: builder.positions.length / 3 });
+                builder.vertexLookup.clear();
+            }
+        };
+
+        // Underground walls for every edge (below-ground part only).
+        for (let i = wallRange.min; i < wallRange.max; i++) {
+            const pts = prepareEdgePoints(vertices, heights, edges[i], (a, b) => a < b);
+            if (!pts) continue;
+            const [a, b] = pts;
+            const n = norm3([-(b.y - a.y), b.x - a.x, 0]);
+            section(edges[i].featureIndex);
+            const topB = edges[i].isTunnel ? b.h + entranceHeight : 0;
+            const topA = edges[i].isTunnel ? a.h + entranceHeight : 0;
+            quad(builder,
+                addVertex(builder, [a.x, a.y, a.h], n),
+                addVertex(builder, [b.x, b.y, b.h], n),
+                addVertex(builder, [b.x, b.y, topB], n),
+                addVertex(builder, [a.x, a.y, topA], n));
+        }
+
+        // Entrances from tunnel-flagged edges (double-sided).
+        for (let i = entranceRange.min; i < entranceRange.max; i++) {
+            const edge = edges[i];
+            if (edge.isTunnel) {
+                const t = edge.a; edge.a = edge.b; edge.b = t;
+            }
+            const ax = vertices[edge.a * 2], ay = vertices[edge.a * 2 + 1];
+            const bx = vertices[edge.b * 2], by = vertices[edge.b * 2 + 1];
+            const n = norm3([-(by - ay), bx - ax, 0]);
+            section(edge.featureIndex);
+            const ha = heights[edge.a];
+            const hb = heights[edge.b];
+            // Two quads == double sided.
+            quad(builder,
+                addVertex(builder, [bx, by, 0], n),
+                addVertex(builder, [ax, ay, 0], n),
+                addVertex(builder, [ax, ay, ha + entranceHeight], n),
+                addVertex(builder, [bx, by, hb + entranceHeight], n));
+            quad(builder,
+                addVertex(builder, [ax, ay, 0], n),
+                addVertex(builder, [bx, by, 0], n),
+                addVertex(builder, [bx, by, hb + entranceHeight], n),
+                addVertex(builder, [ax, ay, ha + entranceHeight], n));
+        }
+    }
+
+    /**
+     * Renderable boundary edges of one ring (mgl addRenderableRing):
+     * border-touching edges are skipped; edges inherit the portal hash of
+     * the ORIGINAL (pre-subdivision) edge via the vertex lookup.
+     */
+    private addRenderableRing(
+        polygonIdx: number, vertexOffset: number, count: number,
+        isTunnel: boolean, guardRailEnabled: boolean,
+    ): void {
+        const vertices = this.m_unevalPositions;
+        // The stored ring is OPEN (closing duplicate stripped) — all count
+        // edges wrap. (mgl loops count-1 because its rings keep the dup.)
+        for (let i = 0; i < count; i++) {
+            const ai = vertexOffset + i;
+            const bi = vertexOffset + ((i + 1) % count);
+            const vax = vertices[ai * 2], vay = vertices[ai * 2 + 1];
+            const vbx = vertices[bi * 2], vby = vertices[bi * 2 + 1];
+
+            if (this.isOnBorder(vax, vbx) || this.isOnBorder(vay, vby)) continue;
+
+            const va = { x: vax, y: vay };
+            const vb = { x: vbx, y: vby };
+            const edgeHash = edgeHashOf(va, vb);
+            let portalHash = this.m_vertexHashLookup.get(posHashOf(va))?.next
+                ?? this.m_vertexHashLookup.get(posHashOf(vb))?.prev
+                ?? edgeHash;
+
+            this.m_unevalEdges.push({
+                polygonIdx, a: ai, b: bi, hash: edgeHash, portalHash,
+                isTunnel, type: 'unevaluated',
+                featureIndex: polygonIdx, guardRailEnabled,
+            });
+        }
+    }
+
+    private computeVertexConnections(
+        edges: ElevatedEdge[], start: number, end: number,
+    ): Map<number, { from?: number; to?: number }> {
+        const map = new Map<number, { from?: number; to?: number }>();
+        const vertices = this.m_unevalPositions;
+        const heights = this.m_unevalHeights;
+        for (let i = start; i < end; i++) {
+            const edge = edges[i];
+            const aHash = posHashOf({ x: vertices[edge.a * 2], y: vertices[edge.a * 2 + 1] });
+            const bHash = posHashOf({ x: vertices[edge.b * 2], y: vertices[edge.b * 2 + 1] });
+            let pA = map.get(aHash);
+            if (!pA) { pA = {}; map.set(aHash, pA); }
+            let pB = map.get(bHash);
+            if (!pB) { pB = {}; map.set(bHash, pB); }
+            // No rail connectivity across ground-level edges (mgl).
+            if (heights[edge.a] <= 0 && heights[edge.b] <= 0) continue;
+            pA.to = edge.b;
+            pB.from = edge.a;
+        }
+        return map;
+    }
+
+    private computeFwd(
+        connectivity: Map<number, { from?: number; to?: number }>,
+        vertices: number[], heights: number[], vIdx: number, metersToTile: number,
+    ): Vec3 | undefined {
+        const conn = connectivity.get(posHashOf({ x: vertices[vIdx * 2], y: vertices[vIdx * 2 + 1] }));
+        if (!conn) return undefined;
+        const from = conn.from;
+        const to = conn.to;
+        if (from === undefined || to === undefined) return undefined;
+
+        const fromV: Vec3 = [vertices[from * 2], vertices[from * 2 + 1], heights[from] * metersToTile];
+        const midV: Vec3 = [vertices[vIdx * 2], vertices[vIdx * 2 + 1], heights[vIdx] * metersToTile];
+        const toV: Vec3 = [vertices[to * 2], vertices[to * 2 + 1], heights[to] * metersToTile];
+
+        let fwd: Vec3 = [0, 0, 0];
+        if (!eq3(fromV, midV)) fwd = add3(fwd, norm3(sub3(midV, fromV)));
+        if (!eq3(toV, midV)) fwd = add3(fwd, norm3(sub3(toV, midV)));
+        const len = len3(fwd);
+        return len > 0 ? scale3(fwd, 1 / len) : undefined;
+    }
+
     get unevaluatedPortals(): MBElevationPortalGraph | null {
         return this.m_unevaluatedPortals;
     }
@@ -481,3 +993,103 @@ function pointInRing(p: ClipPoint, ring: ClipPoint[]): boolean {
     }
     return inside;
 }
+
+// ---------------------------------------------------------------------------
+// Structures mesh helpers (mgl ElevatedStructures statics + MeshBuilder)
+// ---------------------------------------------------------------------------
+
+/** mgl computePosHash: 16-bit truncating coordinate hash. */
+function posHashOf(p: ClipPoint): number {
+    const x = Math.round(p.x) & 0xFFFF;
+    const y = Math.round(p.y) & 0xFFFF;
+    return ((x << 16) | y) >>> 0;
+}
+
+/** mgl computeEdgeHash: order-independent pair hash, string form. */
+function edgeHashOf(pa: ClipPoint, pb: ClipPoint): string {
+    if ((pa.y === pb.y && pa.x > pb.x) || pa.y > pb.y) {
+        const t = pa; pa = pb; pb = t;
+    }
+    return `${posHashOf(pa)}_${posHashOf(pb)}`;
+}
+
+function addVertex(builder: MeshBuilder, v: Vec3, n: Vec3): number {
+    const key = `${v[0]},${v[1]},${v[2]},${n[0]},${n[1]},${n[2]}`;
+    const hit = builder.vertexLookup.get(key);
+    if (hit !== undefined) return hit;
+    const offset = builder.positions.length / 3;
+    builder.vertexLookup.set(key, offset);
+    builder.positions.push(v[0], v[1], v[2]);
+    builder.normals.push(n[0], n[1], n[2]);
+    return offset;
+}
+
+function quad(builder: MeshBuilder, a: number, b: number, c: number, d: number): void {
+    builder.indices.push(a, b, c, c, d, a);
+}
+
+function sub3(a: Vec3, b: Vec3): Vec3 { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+function add3(a: Vec3, b: Vec3): Vec3 { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+function scale3(a: Vec3, s: number): Vec3 { return [a[0] * s, a[1] * s, a[2] * s]; }
+function neg3(a: Vec3): Vec3 { return [-a[0], -a[1], -a[2]]; }
+function dot3(a: Vec3, b: Vec3): number { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+function len3(a: Vec3): number { return Math.hypot(a[0], a[1], a[2]); }
+function eq3(a: Vec3, b: Vec3): boolean { return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]; }
+function cross3(a: Vec3, b: Vec3): Vec3 {
+    return [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ];
+}
+function norm3(a: Vec3): Vec3 {
+    const len = len3(a);
+    return len > 0 ? [a[0] / len, a[1] / len, a[2] / len] : [0, 0, 1];
+}
+
+function isTerminalVertex(
+    connectivity: Map<number, { from?: number; to?: number }>, hash: number,
+): boolean {
+    const conn = connectivity.get(hash);
+    return !conn || conn.from === undefined || conn.to === undefined;
+}
+
+interface EdgePoint { x: number; y: number; h: number; }
+
+/**
+ * mgl prepareEdgePoints: keep only the segment part that passes the
+ * comparison (above ground for rails, below for tunnel walls), cutting at
+ * the zero crossing.
+ */
+function prepareEdgePoints(
+    vertices: number[], heights: number[], edge: ElevatedEdge,
+    comp: (a: number, b: number) => boolean,
+): [EdgePoint, EdgePoint] | null {
+    let vax = vertices[edge.a * 2], vay = vertices[edge.a * 2 + 1];
+    let vbx = vertices[edge.b * 2], vby = vertices[edge.b * 2 + 1];
+    let ha = heights[edge.a];
+    let hb = heights[edge.b];
+    const aPass = comp(ha, 0);
+    const bPass = comp(hb, 0);
+
+    if (aPass && bPass) {
+        return [{ x: vax, y: vay, h: ha }, { x: vbx, y: vby, h: hb }];
+    }
+    if (!aPass && !bPass) return null;
+
+    if (!aPass) {
+        const t = ha / (ha - hb);
+        vax = vax + (vbx - vax) * t;
+        vay = vay + (vby - vay) * t;
+        ha = ha + (hb - ha) * t;
+    } else {
+        const t = hb / (hb - ha);
+        vbx = vbx + (vax - vbx) * t;
+        vby = vby + (vay - vby) * t;
+        hb = hb + (ha - hb) * t;
+    }
+    return [{ x: vax, y: vay, h: ha }, { x: vbx, y: vby, h: hb }];
+}
+
+// Silence an unused-helper lint for dot3 (kept for future lighting math).
+void dot3;

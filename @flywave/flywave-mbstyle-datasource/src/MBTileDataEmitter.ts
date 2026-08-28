@@ -756,6 +756,19 @@ export class MBTileDataEmitter {
     }
     private m_elevationStructures: import('./3d-style/elevation/MBElevatedStructures').MBElevatedStructures | null = null;
 
+    /**
+     * §513: global y offset of the MVT flip frame. Elevated geometry must
+     * meet the elevation curves in the tile-LOCAL extent frame — subtract
+     * before sampling, add back before projecting.
+     */
+    setElevationYDelta(delta: (extents: number) => number): void {
+        this.m_elevYDelta = delta;
+    }
+    private m_elevYDelta: ((extents: number) => number) | null = null;
+    private elevationYDelta(extents: number): number {
+        return this.m_elevYDelta ? this.m_elevYDelta(extents) : 0;
+    }
+
     private resolveZOffset(
         layer: EvaluatedLayer,
         properties: Record<string, any> | undefined,
@@ -780,7 +793,9 @@ export class MBTileDataEmitter {
                 const h = this.m_elevationStructures.sampleHeightCanonical(
                     properties,
                     anchor.x * (4096 / this.m_extents),
-                    anchor.y * (4096 / this.m_extents),
+                    this.elevationYDelta(this.m_extents) === 0
+                        ? anchor.y * (4096 / this.m_extents)
+                        : (anchor.y - this.elevationYDelta(this.m_extents)) * (4096 / this.m_extents),
                     isMarkup);
                 if (h !== undefined) {
                     z += h;
@@ -1546,13 +1561,52 @@ export class MBTileDataEmitter {
                 // candidates come from the clipped pre-subdivision rings
                 // (mgl handleFeature order), base mode only.
                 if (fillHdMode) {
+                    // Curves live in the tile-local frame — sample there,
+                    // then shift the returned pieces back into the project
+                    // frame (additive per-axis delta).
+                    const yDelta = this.elevationYDelta(extents);
+                    const toLocal = (rs: Array<Array<{ x: number; y: number }>>): Array<Array<{ x: number; y: number }>> =>
+                        yDelta ? rs.map(r => r.map(p => ({ x: p.x, y: p.y - yDelta }))) : rs;
                     const plan = this.m_elevationStructures!.prepareFillGeometry(
-                        properties, effectiveRings,
+                        properties, toLocal(effectiveRings),
                         fillElevRef === 'hd-road-markup', extents);
+                    if (plan && yDelta) {
+                        const back = (rs: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> =>
+                            rs.map(p => ({ x: p.x, y: p.y + yDelta }));
+                        for (const piece of plan.pieces) {
+                            piece.ring = back(piece.ring);
+                            for (const hole of piece.holes) hole.ring = back(hole.ring);
+                        }
+                    }
                     if (plan) {
                         if (fillElevRef === 'hd-road-base') {
+                            // mgl handleFeature: portal candidates from the
+                            // clipped ORIGINAL polygon first, then the mesh
+                            // state (verts/triangles/renderable edges).
                             this.m_elevationStructures!.addPortalCandidates(
-                                plan.feature.id, plan.clippedRings[0], plan.isTunnel, plan.feature);
+                                plan.feature.id, plan.clippedRingsCanonical[0],
+                                plan.isTunnel, plan.feature);
+                            // fill-construct-bridge-guard-rail is a
+                            // data-driven LAYOUT property (mgl default true).
+                            const guardRailRaw = layer.layoutDefs?.['fill-construct-bridge-guard-rail'] ??
+                                layer.layout?.['fill-construct-bridge-guard-rail'] ?? true;
+                            const guardRail = guardRailRaw === true ||
+                                (typeof guardRailRaw === 'object'
+                                    ? MBExpressionEngine.evaluate(guardRailRaw, {
+                                        zoom: this.m_zoom,
+                                        feature: { properties, id: featureId } as any,
+                                    } as any) !== false
+                                    : Boolean(guardRailRaw));
+                            const featureIndex = this.m_elevatedFeatureCounter++;
+                            this.m_elevatedFeatureProps.set(featureIndex, {
+                                properties, featureId, layer,
+                            });
+                            this.m_elevationStructures!.addElevatedFeature({
+                                featureIndex,
+                                guardRailEnabled: guardRail !== false,
+                                isTunnel: plan.isTunnel,
+                                pieces: plan.piecesCanonical,
+                            });
                         }
                         let maxH = 0;
                         for (const piece of plan.pieces) {
@@ -1723,6 +1777,123 @@ export class MBTileDataEmitter {
         for (let i = 0; i < triIndices.length; i++) {
             geo.indices.push(triIndices[i] + startIdx);
         }
+    }
+
+    /** Per-tile HD elevated-structures bookkeeping (§513 mesh emission). */
+    private m_elevatedFeatureCounter = 0;
+    private m_elevatedFeatureProps: Map<number, {
+        properties: Record<string, any>;
+        featureId: string | number | undefined;
+        layer: EvaluatedLayer;
+    }> = new Map();
+
+    /**
+     * §513: build + emit the tile's elevated-structures mesh (bridge guard
+     * rails / tunnel walls / tunnel entrances) as fill-technique geometry.
+     * Called by the decoder after the main pass, before getDecodedTile —
+     * mgl runs ElevatedStructures.construct after the evaluated portal
+     * graph is pushed back.
+     */
+    emitElevatedStructures(): void {
+        const structures = this.m_elevationStructures;
+        if (!structures || structures.isEmpty) return;
+        const mesh = structures.construct();
+        if (!mesh || mesh.indices.length === 0) return;
+
+        // Mesh x/y are canonical extent units in the tile-LOCAL frame (the
+        // curves' frame) — scale into the layer's extent grid and add the
+        // flip's global y offset back so project() lands in the tile window
+        // like every other fill.
+        const scale = this.m_extents > 0 && this.m_extents !== 4096
+            ? this.m_extents / 4096 : 1;
+        const yDelta = this.elevationYDelta(this.m_extents);
+        const geo = this.getOrCreateGeometry('__mb-elevated-structures');
+        for (let i = 0; i < mesh.positions.length; i += 3) {
+            const w = this.project(new THREE.Vector2(
+                mesh.positions[i] * scale, mesh.positions[i + 1] * scale + yDelta));
+            geo.positions.push(w.x, w.y, w.z + mesh.positions[i + 2]);
+            if (mesh.positions[i + 2] > 0) this.noteGeometryHeight(mesh.positions[i + 2]);
+        }
+
+        const segments: Array<{
+            from: number; to: number;
+            sections: Array<{ featureIndex: number; vertexStart: number }>;
+            colorProp: string; orderBias: number; key: string;
+        }> = [
+            { from: 0, to: mesh.tunnelStart, sections: mesh.bridgeSections,
+              colorProp: 'fill-bridge-guard-rail-color', orderBias: 0.05, key: 'bridge' },
+            { from: mesh.tunnelStart, to: mesh.indices.length, sections: mesh.tunnelSections,
+              colorProp: 'fill-tunnel-structure-color', orderBias: 0.1, key: 'tunnel' },
+        ];
+
+        for (const seg of segments) {
+            if (seg.to <= seg.from) continue;
+            for (let si = 0; si < seg.sections.length; si++) {
+                const section = seg.sections[si];
+                const vEnd = si + 1 < seg.sections.length ? seg.sections[si + 1].vertexStart : Infinity;
+                const info = this.m_elevatedFeatureProps.get(section.featureIndex);
+                const groupStart = geo.indices.length;
+                for (let i = seg.from; i < seg.to; i += 3) {
+                    if (mesh.indices[i] >= section.vertexStart && mesh.indices[i] < vEnd) {
+                        geo.indices.push(
+                            mesh.indices[i], mesh.indices[i + 1], mesh.indices[i + 2]);
+                    }
+                }
+                const count = geo.indices.length - groupStart;
+                if (count === 0) continue;
+
+                const layer = info?.layer;
+                const raw = layer?.paintDefs?.[seg.colorProp]?.value ??
+                    layer?.paint?.[seg.colorProp];
+                let color: any = raw ?? 'rgba(241, 236, 225, 255)';
+                if (color !== null && typeof color === 'object') {
+                    color = MBExpressionEngine.evaluate(color, {
+                        zoom: this.m_zoom,
+                        feature: { properties: info?.properties, id: info?.featureId } as any,
+                    } as any);
+                }
+                const techIdx = this.getOrCreateElevatedStructureTechnique(
+                    layer, seg.key, String(color), seg.orderBias);
+                geo.groups.push({
+                    start: groupStart,
+                    count,
+                    materialIndex: techIdx,
+                    sortKey: this.extractSortKey(layer ?? ({} as EvaluatedLayer)),
+                });
+                geo.featureStarts.push(groupStart);
+                geo.objInfos.push({ ...(info?.properties ?? {}), $id: info?.featureId ?? null });
+            }
+        }
+    }
+
+    private getOrCreateElevatedStructureTechnique(
+        layer: EvaluatedLayer | undefined, mode: string, color: string, orderBias: number,
+    ): number {
+        void orderBias;
+        const key = `__mb-elevated-${mode}:${layer?.id ?? 'none'}:${color}`;
+        let idx = this.m_layerToTechniqueIndex.get(key);
+        if (idx === undefined) {
+            idx = this.m_techniqueIndex++;
+            this.m_layerToTechniqueIndex.set(key, idx);
+            const ro = (layer?.renderOrder ?? 9.6) + orderBias;
+            const technique: any = {
+                name: 'fill',
+                _index: idx,
+                // Same late-pass band as the HD road fills (§512): coverage
+                // quads occupy ro 2..9 — structures below ~9.6 get buried.
+                // Rails sit above the base surface (9.6), tunnel walls below
+                // the markup pass (9.8).
+                renderOrder: mode === 'bridge' ? 9.65 : 9.7,
+                _renderOrder: mode === 'bridge' ? 9.65 : 9.7,
+                _layerId: layer?.id ?? '__mb-elevated',
+                __elev: true,
+                _mbGlobalLayerOrder: true,
+                color,
+                opacity: 1,
+            };
+            this.m_techniques.push(technique as IndexedTechnique);
+        }
+        return idx;
     }
 
     /**
@@ -2406,12 +2577,14 @@ export class MBTileDataEmitter {
                 let ptHeights: number[] | null = null;
                 if (!needsResample && pts.length > 1) {
                     if (useHdRoad) {
+                        const yDelta = this.elevationYDelta(extents);
+                        const localPts = yDelta
+                            ? pts.map(p => ({ x: p.x, y: p.y - yDelta }))
+                            : pts.map(p => ({ x: p.x, y: p.y }));
                         const plan = this.m_elevationStructures!.prepareLineGeometry(
-                            properties,
-                            pts.map(p => ({ x: p.x, y: p.y })),
-                            true, extents);
+                            properties, localPts, true, extents);
                         if (plan) {
-                            pts = plan.points.map(p => new THREE.Vector2(p.x, p.y));
+                            pts = plan.points.map(p => new THREE.Vector2(p.x, p.y + yDelta));
                             ptHeights = plan.heights;
                         }
                     } else if (useZOffsetMode) {

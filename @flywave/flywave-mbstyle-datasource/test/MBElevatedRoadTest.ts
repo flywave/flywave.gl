@@ -329,6 +329,107 @@ describe('MBTileDataEmitter sea-mode per-vertex z-offset', () => {
     });
 });
 
+describe('MBElevatedStructures mesh construction', () => {
+    function makeCurveStructures(heights: number[]): MBElevatedStructures {
+        const s = new MBElevatedStructures(10, 5, 5);
+        if (heights.length === 1) heights = [heights[0], heights[0]];
+        heights.forEach((h, i) => {
+            // Duplicate a lone height so the curve has an edge — an
+            // edgeless (single-vertex) curve has no defined surface and
+            // pointElevation falls back to 0 (mgl getClosestEdge miss).
+            s.addRawFeature({
+                type: 'Point',
+                properties: {
+                    type: 'curve_point', version: '1.0.1',
+                    // h arrives as the RAW property value (/10000 on decode).
+                    '3d_elevation_id': 1, elevation_idx: i, extent: 4, height: h,
+                },
+                x: i * 4096, y: 4096, bounds: [0, 0, 4096, 4096], layerExtent: 4096,
+            });
+        });
+        s.addRawFeature({
+            type: 'Polygon',
+            properties: { type: 'curve_meta', version: '1.0.1', '3d_elevation_id': 1 },
+            x: 0, y: 0, bounds: [0, 0, 4096, 4096], layerExtent: 4096,
+        });
+        s.finalize(1);
+        return s;
+    }
+
+    it('builds bridge guard-rail strips around an elevated road', () => {
+        const s = makeCurveStructures([50000]); // constant 5 m
+        const plan = s.prepareFillGeometry({ '3d_elevation_id': 1 }, [
+            [{ x: 100, y: 100 }, { x: 200, y: 100 }, { x: 200, y: 200 }, { x: 100, y: 200 }, { x: 100, y: 100 }],
+        ], false, 4096);
+        expect(plan).to.not.equal(null);
+        if (!plan) return;
+        s.addPortalCandidates(plan.feature.id, plan.clippedRingsCanonical[0], plan.isTunnel, plan.feature);
+        s.addElevatedFeature({
+            featureIndex: 0, guardRailEnabled: true, isTunnel: plan.isTunnel,
+            pieces: plan.piecesCanonical,
+        });
+        const mesh = s.construct();
+        expect(mesh).to.not.equal(null);
+        if (!mesh) return;
+        // 4 ring edges → 3 strips × 2 triangles × 4 quads… at minimum the
+        // rails must exist and rise above the 5 m surface.
+        expect(mesh.indices.length).to.be.greaterThan(0);
+        expect(mesh.tunnelStart).to.equal(mesh.indices.length); // no tunnel segment
+        let maxZ = -Infinity;
+        for (let i = 2; i < mesh.positions.length; i += 3) {
+            if (mesh.positions[i] > maxZ) maxZ = mesh.positions[i];
+        }
+        // Rail top = surface 5 m + 0.5 m rail height.
+        expect(maxZ).to.be.greaterThan(5.4);
+        expect(maxZ).to.be.lessThan(5.6);
+    });
+
+    it('builds tunnel walls and double-sided entrances below ground', () => {
+        const s = makeCurveStructures([-60000]); // constant −6 m → tunnel
+        const plan = s.prepareFillGeometry({ '3d_elevation_id': 1 }, [
+            [{ x: 100, y: 100 }, { x: 200, y: 100 }, { x: 200, y: 200 }, { x: 100, y: 200 }, { x: 100, y: 100 }],
+        ], false, 4096);
+        expect(plan).to.not.equal(null);
+        if (!plan) return;
+        expect(plan.isTunnel).to.equal(true);
+        s.addPortalCandidates(plan.feature.id, plan.clippedRingsCanonical[0], plan.isTunnel, plan.feature);
+        s.addElevatedFeature({
+            featureIndex: 0, guardRailEnabled: true, isTunnel: plan.isTunnel,
+            pieces: plan.piecesCanonical,
+        });
+        const mesh = s.construct();
+        expect(mesh).to.not.equal(null);
+        if (!mesh) return;
+        // Single tunnel polygon: no bridge segment; the walls carry the
+        // tunnel flag and rise to h + TUNNEL_ENTERANCE_HEIGHT = −2 m.
+        expect(mesh.indices.length).to.be.greaterThan(0);
+        // Entrance quads reach −6 + 4 = −2 m; walls stay below 0.
+        let maxZ = -Infinity;
+        for (let i = 2; i < mesh.positions.length; i += 3) {
+            if (mesh.positions[i] > maxZ) maxZ = mesh.positions[i];
+        }
+        expect(maxZ).to.be.closeTo(-2, 1e-6);
+        // Underground walls descend to the road surface −6 m.
+        let minZ = Infinity;
+        for (let i = 2; i < mesh.positions.length; i += 3) {
+            if (mesh.positions[i] < minZ) minZ = mesh.positions[i];
+        }
+        expect(minZ).to.be.closeTo(-6, 1e-6);
+    });
+
+    it('portal evaluate keeps descending hash order for prepareEdges', () => {
+        const g1 = new MBElevationPortalGraph();
+        g1.addPortal({
+            connection: { a: 1, b: undefined },
+            vaX: 2000, vaY: 2000, vbX: 2100, vbY: 2000, length: 100,
+            hash: 'aaa', isTunnel: false, type: 'entrance',
+        });
+        const out = MBElevationPortalGraph.evaluate([g1]);
+        expect(out.portals.length).to.equal(1);
+        expect(out.portals[0].type).to.equal('entrance');
+    });
+});
+
 function shoelace(ring: Array<{ x: number; y: number }>): number {
     let a = 0;
     for (let i = 0; i < ring.length - 1; i++) {

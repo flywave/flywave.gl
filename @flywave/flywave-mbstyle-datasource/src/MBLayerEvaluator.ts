@@ -74,7 +74,9 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
         'fill-elevation-reference': undefined,
         'fill-emissive-strength': 0,
         'fill-pattern-cross-fade': 0,
-        'fill-construct-bridge-guard-rail': false,
+        // mgl paint defaults for the elevated-structure colors (tan).
+        'fill-bridge-guard-rail-color': 'rgba(241, 236, 225, 255)',
+        'fill-tunnel-structure-color': 'rgba(241, 236, 225, 255)',
     },
     line: {
         'line-opacity': 1,
@@ -246,6 +248,8 @@ export const PAINT_DEFAULTS: Record<string, Record<string, any>> = {
 export const LAYOUT_DEFAULTS: Record<string, Record<string, any>> = {
     fill: {
         visibility: 'visible',
+        // HD layout property (mgl v8 default true) — evaluates per feature.
+        'fill-construct-bridge-guard-rail': true,
     },
     line: {
         'line-cap': 'butt',

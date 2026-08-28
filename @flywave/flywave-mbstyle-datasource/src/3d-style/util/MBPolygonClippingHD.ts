@@ -130,6 +130,10 @@ export function polygonSubdivision(
 
     let current = polygons.map(ring => normalizeRing(ring) ?? ring);
     for (const e of subdivisionEdges) {
+        // Degenerate edges (isolated curve vertices have no direction) do
+        // not cut — clipping to both sides of a point would duplicate the
+        // ring and every shared edge would prune away in prepareEdges.
+        if (e.ax === e.bx && e.ay === e.by) continue;
         const next: ClipPoint[][] = [];
         for (const ring of current) {
             const left = clipRingHalfPlane(ring, e.ax, e.ay, e.bx, e.by, true);

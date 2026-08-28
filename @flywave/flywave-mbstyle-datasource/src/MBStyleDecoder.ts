@@ -116,6 +116,25 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         if (this.m_mvtYOffset === null) return p;
         return { x: p.x, y: this.m_mvtYOffset - p.y };
     }
+
+    /**
+     * §513: y of the tile-LOCAL extent frame. The MVT flip keeps y in the
+     * flipped GLOBAL grid; elevation sampling needs curves and queries in
+     * ONE local frame, so both subtract the flip's global offset
+     * (delta = mvtFlipOffset − extents). x is already local in the MVT
+     * path; the GeoJSON path keeps the historical frame.
+     */
+    elevationLocalY(y: number, extents: number): number {
+        if (this.m_mvtFlip) {
+            return y - (this.mvtFlipOffset(extents) - extents);
+        }
+        return y;
+    }
+
+    /** The global offset to subtract from flipped y (0 outside MVT). */
+    elevationYDelta(extents: number): number {
+        return this.m_mvtFlip ? this.mvtFlipOffset(extents) - extents : 0;
+    }
     private transformLineGeometry(geometry: ILineGeometry[], extents: number): ILineGeometry[] {
         if (this.m_mvtFlip === null && this.m_mvtYOffset === null) return geometry;
         return geometry.map(g => ({
@@ -244,7 +263,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
                 type: 'Point',
                 properties,
                 x: p.x,
-                y: p.y,
+                y: this.elevationLocalY(p.y, extents),
                 bounds: [0, 0, extents, extents],
                 layerExtent: extents,
             });
@@ -375,8 +394,9 @@ class MBStyleDataProcessor implements IGeometryProcessor {
                 for (const ring of poly.rings) {
                     for (const pt of ring) {
                         const t = this.mvtTransform(pt, extents);
-                        minX = Math.min(minX, t.x); minY = Math.min(minY, t.y);
-                        maxX = Math.max(maxX, t.x); maxY = Math.max(maxY, t.y);
+                        const ty = this.elevationLocalY(t.y, extents);
+                        minX = Math.min(minX, t.x); minY = Math.min(minY, ty);
+                        maxX = Math.max(maxX, t.x); maxY = Math.max(maxY, ty);
                     }
                 }
             }
@@ -387,7 +407,7 @@ class MBStyleDataProcessor implements IGeometryProcessor {
                 type: 'Polygon',
                 properties,
                 x: p0.x,
-                y: p0.y,
+                y: this.elevationLocalY(p0.y, extents),
                 bounds: [minX, minY, maxX, maxY],
                 layerExtent: extents,
             });
@@ -746,9 +766,12 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         this.m_elevationStructures = structures;
         this.m_elevationPassStructuresKey = tileKey;
         // The processor's copy receives the raw curves (intercepts); the
-        // emitter's copy samples them during the main pass.
+        // emitter's copy samples them during the main pass. The emitter
+        // also needs the tile's local-frame y delta so elevated queries
+        // meet the curves in one frame.
         processor.setElevationStructures(structures);
         emitter.setElevationStructures(structures);
+        emitter.setElevationYDelta((extents: number) => processor.elevationYDelta(extents));
         this.m_elevationPassProcessor = new MBElevationOnlyProcessor(processor);
         // meters→canonical-extent-units factor for tessellation; same
         // formula the finalize step has used since §511.
@@ -942,16 +965,22 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     this.m_geoJsonAdapter.process(normalized, decodeInfo, processor);
                 }
             }
-        } catch {
+        } catch (e) {
+            if ((globalThis as any).__mbDecodeErr) {
+                // eslint-disable-next-line no-console
+                console.error('[MBDecodeErr]', tileKey.level, tileKey.column, tileKey.row, e);
+            }
             injectBackground();
             return emitter.getDecodedTile();
         }
 
-        // §513: all contributing fills of the tile are processed — the
-        // portal graph can be evaluated (mgl evaluatePortalGraphs runs
-        // after every bucket populated).
+        // §513: all contributing fills of the tile are processed — build
+        // the elevated-structures mesh (rails/tunnel walls/entrances) and
+        // emit it into the tile's geometry (mgl runs construct() after the
+        // evaluated portal graph is pushed back; construct evaluates the
+        // portal graph internally).
         try {
-            this.m_elevationStructures?.evaluatePortals();
+            emitter.emitElevatedStructures();
         } catch {}
         injectBackground();
         const __result = emitter.getDecodedTile();

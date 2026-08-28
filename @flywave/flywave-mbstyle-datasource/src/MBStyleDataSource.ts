@@ -1941,6 +1941,7 @@ export class MBStyleDataSource extends TileDataSource {
                             ?? (self.mapView as any).camera;
                         const V = new THREE.Vector3();
                         const samples: string[] = [];
+                        const elevSamples: string[] = [];
                         self.mapView.scene.traverse((o: any) => {
                             if ((o as any).isMesh || (o as any).isPoints || (o as any).isLine) {
                                 total++;
@@ -1948,7 +1949,9 @@ export class MBStyleDataSource extends TileDataSource {
                                 const tcol = o.userData?.technique?._paint?.['fill-color']
                                     ?? o.userData?.technique?.color ?? '';
                                 counts[`${tname}:${tcol}`] = (counts[`${tname}:${tcol}`] ?? 0) + 1;
-                                if (samples.length < 10) {
+                                const isElev = !!(o.userData?.technique as any)?.__elev;
+                                const sampleSink = isElev ? elevSamples : samples;
+                                if (sampleSink.length < 6) {
                                     o.updateMatrixWorld?.();
                                     const g: any = o.geometry;
                                     let vx = '';
@@ -1971,12 +1974,16 @@ export class MBStyleDataSource extends TileDataSource {
                                     const mc = mat?.color ? ` c=${mat.color.toArray().map((n: number) => n.toFixed(2)).join(',')}` : '';
                                     const tech = o.userData?.technique;
                                     const tinfo = tech ? ` tech=${tech.name}/${tech.technique}/r=${(tech.renderOrder ?? '').toString().slice(0,8)} ras=${tech._isRaster ? 1 : 0}` : '';
-                                    samples.push(`${tname}:${tcol}${tinfo ?? ''} v=${o.visible?1:0} ro=${o.renderOrder} ndc=(${V.x.toFixed(2)},${V.y.toFixed(2)}) ${vx} nvert=${g?.attributes?.position?.count} mat=${mat?.type} op=${mat?.opacity} tr=${mat?.transparent?1:0}${mc}`);
+                                    sampleSink.push(`${tname}:${tcol}${tinfo ?? ''} v=${o.visible?1:0} fr=${o.frustumCulled?1:0} ro=${o.renderOrder} ndc=(${V.x.toFixed(2)},${V.y.toFixed(2)}) ${vx} nvert=${g?.attributes?.position?.count} mat=${mat?.type} op=${mat?.opacity} tr=${mat?.transparent?1:0}${mc}`);
                                 }
                             }
                         });
                         // eslint-disable-next-line no-console
                         console.log('[MBScene] objs=' + total + ' ' + JSON.stringify(counts));
+                        for (const es of elevSamples) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBElevObj] ' + es);
+                        }
                         for (const s of samples) {
                             // eslint-disable-next-line no-console
                             console.log('[MBObj] ' + s);
