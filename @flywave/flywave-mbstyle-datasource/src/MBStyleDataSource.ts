@@ -1930,6 +1930,16 @@ export class MBStyleDataSource extends TileDataSource {
                     patcher.invalidate();
                 }
                 patcher.patchTileMaterials();
+                // §516: tiles that decoded before their cross-tile elevation
+                // curves arrived re-decode once the registry grows (mgl
+                // reparse-on-provider-arrival for deferred features).
+                try {
+                    const dec = self.decoder as any;
+                    if (dec?.hasElevationRedecodePending?.()) {
+                        dec.clearElevationRedecodePending();
+                        self.mapView?.markTilesDirty?.(self as any);
+                    }
+                } catch {}
                 // §516 hide-probe: `mbhide=<substr>` karma arg hides every
                 // object whose technique layerId/color/pattern contains the
                 // substring (comma-separated list) — binary-search the source
@@ -2004,7 +2014,7 @@ export class MBStyleDataSource extends TileDataSource {
                                     // probe reflects the group's own location, and
                                     // verify the index buffer against the group range.
                                     let gx = '';
-                                    if (isElev && g?.groups?.length) {
+                                    if ((isElev || isYellow) && g) {
                                         const pa = g.attributes.position;
                                         const idx: any = g.index;
                                         for (const gr of g.groups.slice(0, 4)) {

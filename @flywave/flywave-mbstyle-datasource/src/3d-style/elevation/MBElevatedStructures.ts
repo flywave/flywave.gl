@@ -174,6 +174,8 @@ export class MBElevatedStructures {
     private m_unevalEdges: ElevatedEdge[] = [];
     /** Any sampled road height dips to/below the ground plane (mgl heightRange). */
     private m_underground = false;
+    /** §516: consumer key of this tile (for the deferred-curve report). */
+    private m_consumerKey = '';
     /** Exterior-vertex posHash → hashes of the edges it connects (mgl vertexHashLookup). */
     private m_vertexHashLookup: Map<number, { prev: string; next: string }> = new Map();
 
@@ -181,7 +183,20 @@ export class MBElevatedStructures {
         this.m_consumerZ = z;
         this.m_consumerX = x;
         this.m_consumerY = y;
+        this.m_consumerKey = `${z}-${x}-${y}`;
     }
+
+    /**
+     * §516: features here referenced a curve that was not available at
+     * decode time (mgl hasDeferredElevationFeatures) — the tile must be
+     * re-decoded once the registry grows. Keys accumulate until taken.
+     */
+    takeDeferredKeys(): string[] {
+        const out = [...this.m_deferredKeys];
+        this.m_deferredKeys.clear();
+        return out;
+    }
+    private m_deferredKeys: Set<string> = new Set();
 
     /** Wire the decoder's cross-tile elevation registry. */
     setRegistryProvider(provider: () => ElevationTiledFeature[]): void {
@@ -284,7 +299,12 @@ export class MBElevatedStructures {
         const registry = this.m_registryProvider?.() ?? [];
         const parts = getOverlappingElevationParts(
             properties, registry, this.m_consumerZ, this.m_consumerX, this.m_consumerY);
-        if (parts.length === 0) return undefined;
+        if (parts.length === 0) {
+            if (properties?.['3d_elevation_id'] !== undefined) {
+                this.m_deferredKeys.add(this.m_consumerKey);
+            }
+            return undefined;
+        }
 
         const id = parts[0].feature.id;
         const cached = this.m_mergedCache.get(id);

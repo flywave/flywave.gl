@@ -945,6 +945,14 @@ export class MBTileDataEmitter {
                     props._hdElevation = lineElevRef === 'hd-road-markup'
                         ? featElev + 0.1
                         : featElev;
+                    // §516: markup lines must draw AFTER the base-road fills
+                    // (9.6) and BEFORE markup fills (9.8) — mgl's style order
+                    // (base first, markups after) is broken by the §512 fill
+                    // promotion, which left lines at their style index (4-7)
+                    // painting UNDER the later-drawn base surface.
+                    if (lineElevRef === 'hd-road-markup') {
+                        props.renderOrder = 9.75;
+                    }
                 }
                 if (p['line-pattern']) {
                     props._patternName = p['line-pattern'];
@@ -3733,11 +3741,17 @@ export class MBTileDataEmitter {
                     if (patternName2) patternFade = fadeVal;
                 }
             }
+            // §516: hd-road-markup ribbons must draw AFTER the base-road
+            // fills (9.6) — the §512 fill promotion left ribbons at their
+            // style order (4-7) painting UNDER the later-drawn base surface.
+            const ribbonRO = layer.layout?.['line-elevation-reference'] === 'hd-road-markup'
+                ? 9.75
+                : layer.renderOrder + 0.5;
             const technique: any = {
                 name: 'fill',
                 _index: idx,
-                _renderOrder: layer.renderOrder + 0.5,
-                renderOrder: layer.renderOrder + 0.5,
+                _renderOrder: ribbonRO,
+                renderOrder: ribbonRO,
                 _layerId: layer.id,
                 _paint: paint,
                 _layout: layer.layout,

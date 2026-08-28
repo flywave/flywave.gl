@@ -549,6 +549,19 @@ export class MBStyleDecoder extends ThemedTileDecoder {
      */
     private m_elevationRegistry: Map<string, ElevationTiledFeature[]> = new Map();
     private m_elevationRegistryFlat: ElevationTiledFeature[] | null = null;
+    /** §516: tiles that decoded with unresolved curve references (mgl
+     * hasDeferredElevationFeatures) — re-decode once the registry grows. */
+    private m_elevationDeferredKeys: Set<string> = new Set();
+    private m_elevationRedecodePending = false;
+
+    /** True when deferred elevation tiles exist AND the registry grew. */
+    hasElevationRedecodePending(): boolean {
+        return this.m_elevationRedecodePending;
+    }
+
+    clearElevationRedecodePending(): void {
+        this.m_elevationRedecodePending = false;
+    }
 
     private m_worldview: string = '';
     private m_center: [number, number] = [0, 0];
@@ -806,6 +819,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         if (!features || features.length === 0) return;
         const key = mbCellTileKeyString(tileKey);
         this.m_elevationRegistry.delete(key);
+        // New curves arrived — tiles that deferred on missing curves can
+        // resolve them after a re-decode (mgl reparse-on-provider-arrival).
+        if (this.m_elevationDeferredKeys.size > 0) {
+            this.m_elevationRedecodePending = true;
+        }
         this.m_elevationRegistry.set(key, features.map(f => ({
             z: tileKey.level, x: tileKey.column, y: tileKey.row, feature: f,
         })));
@@ -993,6 +1011,12 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         // portal graph internally).
         try {
             emitter.emitElevatedStructures();
+        } catch {}
+        // §516: collect this tile's unresolved curve references.
+        try {
+            for (const k of this.m_elevationStructures?.takeDeferredKeys() ?? []) {
+                this.m_elevationDeferredKeys.add(k);
+            }
         } catch {}
         injectBackground();
         const __result = emitter.getDecodedTile();
