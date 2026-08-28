@@ -1204,6 +1204,9 @@ export class MBStyleDataSource extends TileDataSource {
     private m_modelRenderer: any = null;
     /** Standalone directional shadow pass (mgl shadow_renderer parity). */
     private m_shadowRenderer: any = null;
+    /** §540: batched-model sources (type "batched-model", tile = whole GLB). */
+    private m_batchedModelSources: any[] = [];
+    private m_batchedModelRenderer: any = null;
     /** Background fog gradient (mgl draw_background fog parity). */
     private m_backgroundFogRenderer: any = null;
     /** mgl atmosphere glow screen-space quad (pitch > 76). */
@@ -1486,6 +1489,28 @@ export class MBStyleDataSource extends TileDataSource {
             if (extras.length > 0) {
                 delegate = new MBExtraVectorSourcesProvider(
                     delegate, extras, tileSize > 256);
+            }
+            // §540: batched-model sources — tile = whole GLB file; handled by
+            // MBBatchedModelRenderer (independent of the tile decode pipeline).
+            {
+                const batched: any[] = [];
+                for (const [sid, src] of sources) {
+                    if ((src as any).type !== 'batched-model') continue;
+                    const spec = (style.sources as any)?.[sid] as any;
+                    const tpl = spec?.tiles ?? (src as any).tiles;
+                    if (!Array.isArray(tpl) || tpl.length === 0) continue;
+                    const layer = (style.layers as any[]).find(
+                        (l: any) => l.type === 'model' && l.source === sid);
+                    batched.push({
+                        sourceId: sid,
+                        tiles: tpl,
+                        maxzoom: (src as any).maxzoom ?? spec?.maxzoom ?? 22,
+                        paint: layer?.paint ?? {},
+                        layer,
+                    });
+                }
+                this.m_batchedModelSources = batched;
+                (this.m_batchedModelRenderer as any)?.setSources?.(batched);
             }
             this.m_delegatingProvider.delegate = delegate;
             this.m_currentSourceId = bestVectorSourceId;
@@ -1964,6 +1989,11 @@ export class MBStyleDataSource extends TileDataSource {
                 self.m_modelRenderer = new MBModelRenderer(this.mapView, self);
                 self.updateModelRegistry(style);
             } catch {}
+            try {
+                const { MBBatchedModelRenderer } = await import('./MBBatchedModelRenderer');
+                self.m_batchedModelRenderer = new MBBatchedModelRenderer(
+                    this.mapView, self, this.m_batchedModelSources ?? []);
+            } catch {}
 
             // Standalone shadow pass (mgl shadow_renderer): active only when
             // 3D lights carry cast-shadows + shadow-intensity > 0.
@@ -2224,6 +2254,7 @@ export class MBStyleDataSource extends TileDataSource {
                                     grid: (globalThis as any).__mbShadowGrid,
                                     gerr: (globalThis as any).__mbShadowGridErr,
                                     perr: (globalThis as any).__mbShadowPassErr,
+                                    batched: (globalThis as any).__mbBatched,
                                     info: (globalThis as any).__mbShadowInfo,
                                     retry: (globalThis as any).__mbShadowRetry,
                                 },
@@ -2266,6 +2297,9 @@ export class MBStyleDataSource extends TileDataSource {
                 }
                 if (self.m_modelRenderer) {
                     self.m_modelRenderer.run();
+                }
+                if (self.m_batchedModelRenderer) {
+                    self.m_batchedModelRenderer.run();
                 }
                 // §518: loadModels instances (source-registry path) share the
                 // RTE problem — keep them at absolute − eye (see

@@ -6142,3 +6142,9 @@ GLB tile 勘测：position 单位为 tile 局部量化坐标（x∈[634,7174]、
 **§539. batched-model 实现前勘误与设计定稿（2026-08-29 续三）**：
 
 勘误：本地 fixtures **完整**（19 个 GLB 含 8718-5683-14 主瓦片；§538"缺主瓦片"系 `ls | head` 截断误判）。**实现设计定稿**（下会话直接按此施工）：① 新 `MBBatchedModelRenderer`（仿 MBModelRenderer：独立管理 batched-model 源的 tile 覆盖/加载/实例化/RTE −eye 回流，不经 decodedTile 管线）；② 源注册：wireTileSources extras 收集 `type==='batched-model'`（URL 模板 {x}-{y}-{z}.glb、maxzoom clamp、tile 即模型文件）；③ tile→世界变换：GLB position 为 tile 局部量化坐标（extent≈8192 网格，z 米）——group 置 tile 世界角点、scale=span/8192；④ 样式：MAPBOX_mesh_features 逐特性桥接（先整 tile 单样式，mesh_features 二期）；⑤ Draco 已配 DRACOLoader；⑥ 验证=landmark-emission-strength（基线 264389）单夹具。工作量估 1-2 会话。
+
+**§540. 会话收口——MBBatchedModelRenderer 骨架落地 + 开放问题（2026-08-29 续七）**：
+
+已入库：`MBBatchedModelRenderer.ts`（独立 tile 覆盖请求器：中心 tile+8 邻域、round(zoom) clamp maxzoom、fetch→GLTFLoader.parse（Draco）→tile group（NW 角世界系、scale=span/8192、z 米直通、−eye 每帧回流、ro 10）+ `applyLayerPaint` 整 tile 单样式（mix/emissive/roughness/opacity））；MBStyleDataSource 接线（wireTileSources 收集 batched-model 源→`m_batchedModelSources`→renderer init/setSources；per-frame run）。
+
+**开放问题（下会话第一步）**：landmark-emission-strength 跑批 `__mbBatched` 计数器不存在——requestTiles 从未带源执行 ⇒ 疑 `m_batchedModelSources` 为空（wireTileSources 批处理块未执行/时序）或 renderer.run 未被调到。排查法：在 wireTileSources 批处理块与 run() 首行各加 globalThis 计数入 dump。基线 264389 维持，无回归。
