@@ -28,7 +28,8 @@ export interface ElevationCurveVertex {
     /** Position in canonical elevation-extent units. */
     x: number;
     y: number;
-    /** Road half-width in extent units. */
+    /** Road half-width in METERS (raw property — mgl keeps it unnormalized;
+     * the subdivision edge iterator scales it by metersToTile at use time). */
     extent: number;
     /** Height above ground in meters. */
     height: number;
@@ -112,7 +113,9 @@ const schemaV100: { meta: MetaSchema; vertex: VertexSchema } = {
         }
         out.id = id;
         out.idx = idx;
-        out.extent = normalizeCoord(extent, f.layerExtent);
+        // mgl keeps `extent` (road half-width, meters) raw — normalizing it
+        // by the layer extent would halve the subdivision strip width.
+        out.extent = extent;
         out.height = decodeRelativeHeight(height);
         out.x = normalizeCoord(f.x, f.layerExtent);
         out.y = normalizeCoord(f.y, f.layerExtent);
@@ -141,7 +144,8 @@ const schemaV101: { meta: MetaSchema; vertex: VertexSchema } = {
         }
         out.id = id;
         out.idx = idx;
-        out.extent = normalizeCoord(extent, f.layerExtent);
+        // See the v1.0.0 note: `extent` stays raw meters.
+        out.extent = extent;
         out.height = decodeMetricHeight(height);
         out.x = normalizeCoord(f.x, f.layerExtent);
         out.y = normalizeCoord(f.y, f.layerExtent);

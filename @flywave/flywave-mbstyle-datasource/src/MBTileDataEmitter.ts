@@ -761,6 +761,7 @@ export class MBTileDataEmitter {
         properties: Record<string, any> | undefined,
         type: 'fill' | 'line' | 'fill-extrusion' | 'symbol',
         anchor?: { x: number; y: number },
+        skipHdSample = false,
     ): number {
         const paint = layer.paint ?? {};
         const layout = layer.layout ?? {};
@@ -771,12 +772,16 @@ export class MBTileDataEmitter {
         // HD elevation reference: lift feature to its real-world elevation.
         const elevRef = layout[`${type}-elevation-reference`];
         if (elevRef) {
-            // §511 3d-style port: features referencing an elevation curve
-            // (`3d_elevation_id`) sample the curve at their anchor point —
-            // a constant-height approximation of mgl's per-vertex sampling.
-            if (anchor && this.m_elevationStructures && !this.m_elevationStructures.isEmpty) {
+            // §513: when the per-vertex path handles this feature (fills),
+            // the curve sample must NOT be folded in a second time.
+            if (!skipHdSample &&
+                anchor && this.m_elevationStructures && !this.m_elevationStructures.isEmpty) {
                 const isMarkup = elevRef === 'hd-road-markup';
-                const h = this.m_elevationStructures.sampleHeight(properties, anchor.x, anchor.y, isMarkup);
+                const h = this.m_elevationStructures.sampleHeightCanonical(
+                    properties,
+                    anchor.x * (4096 / this.m_extents),
+                    anchor.y * (4096 / this.m_extents),
+                    isMarkup);
                 if (h !== undefined) {
                     z += h;
                     return z;
@@ -1468,10 +1473,16 @@ export class MBTileDataEmitter {
     ): void {
         for (const layer of matchedLayers) {
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
+            // §513 HD fill elevation: `fill-elevation-reference: hd-road-*`
+            // lifts the feature onto its road curve PER VERTEX (curve
+            // subdivision + sampled heights) instead of the anchor constant.
+            const fillElevRef = layer.layout?.['fill-elevation-reference'];
+            const fillHdMode = (fillElevRef === 'hd-road-base' || fillElevRef === 'hd-road-markup') &&
+                this.m_elevationStructures !== null && !this.m_elevationStructures.isEmpty;
             this.m_currentZOffset = this.resolveZOffset(layer, properties, 'fill',
             geometry.length > 0 && geometry[0].rings.length > 0 && geometry[0].rings[0].length > 0
                 ? { x: geometry[0].rings[0][0].x, y: geometry[0].rings[0][0].y }
-                : undefined);
+                : undefined, fillHdMode);
             this.noteGeometryHeight(this.m_currentZOffset);
             // §244: injected per-tile background quads use the mgl-native fog
             // formula (mix(bgColor, fogColor, α²) band matches mgl exactly).
@@ -1529,6 +1540,32 @@ export class MBTileDataEmitter {
                 const effectiveRings = (maxHoles !== undefined && maxHoles >= 0)
                     ? [rings[0], ...rings.slice(1, 1 + maxHoles)]
                     : rings;
+
+                // §513 HD road elevation: subdivide the rings along the
+                // curve and emit per-vertex sampled heights. Portal
+                // candidates come from the clipped pre-subdivision rings
+                // (mgl handleFeature order), base mode only.
+                if (fillHdMode) {
+                    const plan = this.m_elevationStructures!.prepareFillGeometry(
+                        properties, effectiveRings,
+                        fillElevRef === 'hd-road-markup', extents);
+                    if (plan) {
+                        if (fillElevRef === 'hd-road-base') {
+                            this.m_elevationStructures!.addPortalCandidates(
+                                plan.feature.id, plan.clippedRings[0], plan.isTunnel, plan.feature);
+                        }
+                        let maxH = 0;
+                        for (const piece of plan.pieces) {
+                            for (const h of piece.heights) if (h > maxH) maxH = h;
+                            this.emitElevatedFillPiece(geo, piece, extents, tech, plan.feature);
+                        }
+                        if (maxH > 0) this.noteGeometryHeight(maxH);
+                        continue;
+                    }
+                    // No curve for this feature → renders flat (mgl:
+                    // "elevated-mode features with no tiled elevation
+                    // coverage render flat rather than being dropped").
+                }
 
                 // Use earcut for proper polygon triangulation with hole support
                 const allVerts: number[] = [];
@@ -1635,6 +1672,56 @@ export class MBTileDataEmitter {
                 geo.featureStarts.push(featureStart);
                 geo.objInfos.push({ ...properties, $id: featureId ?? properties.$id ?? null });
             }
+        }
+    }
+
+    /**
+     * §513: emit one subdivided elevated-fill piece (exterior + holes)
+     * with per-vertex sampled heights. The piece rings arrive in the
+     * layer's extent units (prepareFillGeometry converts back from the
+     * canonical elevation grid); positions project like any fill
+     * (`project()` folds the explicit `fill-z-offset`) and each vertex's
+     * curve height is added on top.
+     */
+    private emitElevatedFillPiece(
+        geo: AccumulatedGeometry,
+        piece: {
+            ring: Array<{ x: number; y: number }>;
+            heights: number[];
+            holes: Array<{ ring: Array<{ x: number; y: number }>; heights: number[] }>;
+        },
+        extents: number,
+        tech: any,
+        _feature: unknown,
+    ): void {
+        void _feature;
+        void extents;
+        void tech;
+        const allVerts: number[] = [];
+        const allHeights: number[] = [];
+        const holeIndices: number[] = [];
+
+        const pushRing = (ring: Array<{ x: number; y: number }>, heights: number[]): void => {
+            for (const pt of ring) allVerts.push(pt.x, pt.y);
+            for (const h of heights) allHeights.push(h);
+        };
+        pushRing(piece.ring, piece.heights);
+        for (const hole of piece.holes) {
+            holeIndices.push(allVerts.length / 2);
+            pushRing(hole.ring, hole.heights);
+        }
+        if (allVerts.length < 6) return;
+
+        const triIndices = earcut(allVerts, holeIndices.length > 0 ? holeIndices : null, 2);
+
+        const startIdx = geo.positions.length / 3;
+        const vertCount2d = allVerts.length / 2;
+        for (let i = 0; i < vertCount2d; i++) {
+            const w = this.project(new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1]));
+            geo.positions.push(w.x, w.y, w.z + allHeights[i]);
+        }
+        for (let i = 0; i < triIndices.length; i++) {
+            geo.indices.push(triIndices[i] + startIdx);
         }
     }
 
@@ -2157,6 +2244,82 @@ export class MBTileDataEmitter {
     private m_lineAttr: string[] = [];
     private m_preExtrudedLines = false;
 
+    /**
+     * §513: clip a polyline to the tile box ± 2 extent units (mgl
+     * elevationType 'offset' border clip). Returns the inside pieces with
+     * their start arc length within the FULL line, so per-vertex
+     * line-progress stays anchored to the whole feature (mgl clipLine
+     * preserves lineSoFar).
+     */
+    private clipLinePathsToTile(
+        positions: THREE.Vector2[], extents: number,
+    ): Array<{ positions: THREE.Vector2[]; startArc: number; totalArc: number }> {
+        const m = 2;
+        const minX = -m, minY = -m, maxX = extents + m, maxY = extents + m;
+
+        const cum: number[] = [0];
+        for (let i = 1; i < positions.length; i++) {
+            cum.push(cum[i - 1] + Math.hypot(
+                positions[i].x - positions[i - 1].x, positions[i].y - positions[i - 1].y));
+        }
+        const totalArc = cum[cum.length - 1] || 0;
+
+        interface Piece { positions: THREE.Vector2[]; arcs: number[]; }
+        const pieces: Piece[] = [];
+        let current: Piece | null = null;
+        const flush = (): void => {
+            if (current && current.positions.length >= 2) pieces.push(current);
+            current = null;
+        };
+
+        for (let i = 0; i < positions.length - 1; i++) {
+            const x1 = positions[i].x, y1 = positions[i].y;
+            const x2 = positions[i + 1].x, y2 = positions[i + 1].y;
+            const dx = x2 - x1, dy = y2 - y1;
+            let t0 = 0, t1 = 1;
+            let rejected = false;
+            const bounds: Array<[number, number]> = [
+                [-dx, x1 - minX], [dx, maxX - x1],
+                [-dy, y1 - minY], [dy, maxY - y1],
+            ];
+            for (const [p, q] of bounds) {
+                if (p === 0) {
+                    if (q < 0) { rejected = true; break; }
+                } else {
+                    const r = q / p;
+                    if (p < 0) {
+                        if (r > t1) { rejected = true; break; }
+                        if (r > t0) t0 = r;
+                    } else {
+                        if (r < t0) { rejected = true; break; }
+                        if (r < t1) t1 = r;
+                    }
+                }
+            }
+            if (rejected) {
+                flush();
+                continue;
+            }
+            const segArc = cum[i + 1] - cum[i];
+            const cx1 = x1 + dx * t0, cy1 = y1 + dy * t0;
+            const cx2 = x1 + dx * t1, cy2 = y1 + dy * t1;
+            const a1 = cum[i] + segArc * t0;
+            const a2 = cum[i] + segArc * t1;
+            const last = current?.positions[current.positions.length - 1];
+            if (!current || !last || last.x !== cx1 || last.y !== cy1) {
+                flush();
+                current = { positions: [new THREE.Vector2(cx1, cy1)], arcs: [a1] };
+            }
+            current!.positions.push(new THREE.Vector2(cx2, cy2));
+            current!.arcs.push(a2);
+        }
+        flush();
+
+        return pieces.map(p => ({
+            positions: p.positions, startArc: p.arcs[0], totalArc,
+        }));
+    }
+
     processLineFeature(
         layerName: string,
         extents: number,
@@ -2166,6 +2329,18 @@ export class MBTileDataEmitter {
         matchedLayers: EvaluatedLayer[],
     ): void {
         const needsResample = (this.m_decodeInfo.targetProjection as any)?.mbCustomProjection === true;
+        // §513: sea/ground offset lines drop geometry outside the tile
+        // ± 2 extent units (mgl elevationType 'offset' dropOutOfBounds +
+        // clipLine). Pre-cut each path once; pieces carry their arc offset
+        // into the full line so line-progress stays feature-anchored.
+        const anyOffsetLayer = matchedLayers.some(l => {
+            const r = l.layout?.['line-elevation-reference'];
+            return r === 'sea' || r === 'ground';
+        });
+        interface ClippedLinePath { positions: THREE.Vector2[]; startArc: number; totalArc: number; }
+        const linePaths: ClippedLinePath[] | null = anyOffsetLayer && !needsResample
+            ? geometry.flatMap(g => this.clipLinePathsToTile(g.positions, extents))
+            : geometry.map(g => ({ positions: g.positions, startArc: 0, totalArc: 0 }));
         for (const layer of matchedLayers) {
             // A dasharray whose DASH elements are all zero renders nothing
             // (mgl collapses the zero-length dash ranges in the line atlas,
@@ -2177,27 +2352,102 @@ export class MBTileDataEmitter {
                 continue;
             }
             const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
-            this.m_currentZOffset = this.resolveZOffset(layer, properties, 'line',
-            geometry.length > 0 && geometry[0].positions.length > 0
-                ? { x: geometry[0].positions[0].x, y: geometry[0].positions[0].y }
-                : undefined);
+            // §513 HD line elevation (mgl line_bucket elevationType):
+            //  - 'hd-road-markup' → 'road': sample the road curve per
+            //    subdivided vertex (markup bias) — line-z-offset is ignored;
+            //  - 'sea' / 'ground' → 'offset': evaluate the data-driven
+            //    line-z-offset PER VERTEX with line-progress, dropping
+            //    geometry outside the tile ± 2 extent (mgl dropOutOfBounds);
+            //  - otherwise the legacy constant z-offset path.
+            const lineElevRef = layer.layout?.['line-elevation-reference'];
+            const useHdRoad = lineElevRef === 'hd-road-markup' &&
+                this.m_elevationStructures !== null && !this.m_elevationStructures.isEmpty;
+            const useZOffsetMode = !useHdRoad &&
+                (lineElevRef === 'sea' || lineElevRef === 'ground');
+            // Raw style value: the per-vertex evaluation needs the
+            // expression form (mgl zOffsetValue.evaluate({lineProgress})).
+            const zOffsetRaw = useZOffsetMode
+                ? (layer.layoutDefs?.['line-z-offset'] ??
+                  layer.layout?.['line-z-offset'] ??
+                  layer.paint?.['line-z-offset'] ?? 0)
+                : null;
+            this.m_currentZOffset = (useHdRoad || useZOffsetMode)
+                ? 0
+                : this.resolveZOffset(layer, properties, 'line',
+                    geometry.length > 0 && geometry[0].positions.length > 0
+                        ? { x: geometry[0].positions[0].x, y: geometry[0].positions[0].y }
+                        : undefined);
             this.noteGeometryHeight(this.m_currentZOffset);
 
-            for (let __pathIdx = 0; __pathIdx < geometry.length; __pathIdx++) {
-                const lineGeo = geometry[__pathIdx];
+            for (let __pathIdx = 0; __pathIdx < linePaths.length; __pathIdx++) {
                 // Convert tile-local to world. Under a non-Mercator custom
                 // projection, subdivide each segment first so straight
                 // geographic lines bend smoothly when reprojected (Albers,
                 // EqualEarth, …) instead of becoming chordal polylines.
-                const pts = needsResample
-                    ? resampleLinePoints(lineGeo.positions, extents)
-                    : lineGeo.positions;
+                const lp = linePaths[__pathIdx];
+                let pts = needsResample
+                    ? resampleLinePoints(lp.positions, extents)
+                    : lp.positions;
+
+                // Progress bookkeeping for the offset mode: sub-paths cut at
+                // the tile border keep their arc offset into the FULL line
+                // (mgl clipLine preserves lineSoFar fractions).
+                let progressBase = 0;
+                let progressTotal = 0;
+                if (anyOffsetLayer && !needsResample) {
+                    if (lp.positions.length < 2) continue; // fully outside
+                    progressBase = lp.startArc;
+                    progressTotal = lp.totalArc;
+                }
+
+                // §513 per-vertex heights (meters). road mode: curve
+                // sampling after subdivision; offset mode: line-z-offset
+                // expression at per-vertex line-progress.
+                let ptHeights: number[] | null = null;
+                if (!needsResample && pts.length > 1) {
+                    if (useHdRoad) {
+                        const plan = this.m_elevationStructures!.prepareLineGeometry(
+                            properties,
+                            pts.map(p => ({ x: p.x, y: p.y })),
+                            true, extents);
+                        if (plan) {
+                            pts = plan.points.map(p => new THREE.Vector2(p.x, p.y));
+                            ptHeights = plan.heights;
+                        }
+                    } else if (useZOffsetMode) {
+                        // Cumulative distance → line-progress per vertex.
+                        const cum: number[] = [0];
+                        let total = 0;
+                        for (let i = 1; i < pts.length; i++) {
+                            total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+                            cum.push(total);
+                        }
+                        ptHeights = [];
+                        for (let i = 0; i < pts.length; i++) {
+                            const progress = progressTotal > 0
+                                ? Math.min(1, (progressBase + cum[i]) / progressTotal)
+                                : 0;
+                            const ctxLine = {
+                                zoom: this.m_zoom,
+                                feature: { properties, id: featureId } as any,
+                                lineProgress: progress,
+                            };
+                            const v = Number(MBExpressionEngine.evaluate(zOffsetRaw!, ctxLine));
+                            ptHeights.push(Number.isFinite(v) ? v : 0);
+                        }
+                    }
+                }
 
                 const worldPts: number[] = [];
-                for (const pt of pts) {
+                let pathMaxH = 0;
+                for (let pi = 0; pi < pts.length; pi++) {
+                    const pt = pts[pi];
                     const w = this.project(pt);
-                    worldPts.push(w.x, w.y, w.z);
+                    const h = ptHeights ? ptHeights[pi] : 0;
+                    if (h > pathMaxH) pathMaxH = h;
+                    worldPts.push(w.x, w.y, w.z + h);
                 }
+                if (pathMaxH > 0) this.noteGeometryHeight(pathMaxH);
 
                 // `line-translate` [x east, y north] px: displace the
                 // centerline in the map plane (baked geometrically — the

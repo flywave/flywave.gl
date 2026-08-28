@@ -10,6 +10,7 @@ import { GeoJsonDataAdapter } from '@flywave/flywave-vectortile-datasource/adapt
 import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
 import { IGeometryProcessor, ILineGeometry, IPolygonGeometry } from '@flywave/flywave-vectortile-datasource/IGeometryProcessor';
 import { lat2tile } from '@flywave/flywave-vectortile-datasource/OmvUtils';
+import { EarthConstants } from '@flywave/flywave-geoutils';
 import * as THREE from 'three';
 import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBTileDataEmitter } from './MBTileDataEmitter';
@@ -21,6 +22,9 @@ import {
 import {
     MBElevatedStructures,
 } from './3d-style/elevation/MBElevatedStructures';
+import type {
+    ElevationTiledFeature,
+} from './3d-style/elevation/MBGetElevationFeature';
 
 /**
  * §511: mgl-level four-children fallback registry. The data provider (main
@@ -67,6 +71,14 @@ export function mbCellTileKeyString(k: { level: number; column: number; row: num
 class MBStyleDataProcessor implements IGeometryProcessor {
     private m_emitter: MBTileDataEmitter | undefined;
     private m_featureStates: Map<string | number, Record<string, any>> = new Map();
+    /** §511 3d-style port: per-tile hd_road_elevation curves, fed by the
+     * decoder (elevation pre-pass) and filled by the intercepts below. */
+    private m_elevationStructures: MBElevatedStructures | null = null;
+
+    /** Set the tile's elevated-structures state (decoder-owned). */
+    setElevationStructures(s: MBElevatedStructures | null): void {
+        this.m_elevationStructures = s;
+    }
     /**
      * Y-offset applied to raw MVT (y-down) tile coordinates so they land in
      * the same world2tile convention the GeoJSON adapter produces. The MapView
@@ -97,18 +109,21 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         return scale - 2 * lat2tile(this.m_mvtFlip!.north, this.m_tileKey.level + N);
     }
 
-    private mvtTransform(p: THREE.Vector2, extents: number): THREE.Vector2 {
+    private mvtTransform(p: { x: number; y: number }, extents: number): { x: number; y: number } {
         if (this.m_mvtFlip) {
-            return new THREE.Vector2(p.x, this.mvtFlipOffset(extents) - p.y);
+            return { x: p.x, y: this.mvtFlipOffset(extents) - p.y };
         }
         if (this.m_mvtYOffset === null) return p;
-        return new THREE.Vector2(p.x, this.m_mvtYOffset - p.y);
+        return { x: p.x, y: this.m_mvtYOffset - p.y };
     }
     private transformLineGeometry(geometry: ILineGeometry[], extents: number): ILineGeometry[] {
         if (this.m_mvtFlip === null && this.m_mvtYOffset === null) return geometry;
         return geometry.map(g => ({
             ...g,
-            positions: g.positions.map(p => this.mvtTransform(p, extents)),
+            positions: g.positions.map(p => {
+                const t = this.mvtTransform(p, extents);
+                return new THREE.Vector2(t.x, t.y);
+            }),
         }));
     }
 
@@ -116,7 +131,10 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         if (this.m_mvtFlip === null && this.m_mvtYOffset === null) return geometry;
         return geometry.map(g => ({
             ...g,
-            rings: g.rings.map(ring => ring.map(p => this.mvtTransform(p, extents))),
+            rings: g.rings.map(ring => ring.map(p => {
+                const t = this.mvtTransform(p, extents);
+                return new THREE.Vector2(t.x, t.y);
+            })),
         }));
     }
 
@@ -213,13 +231,20 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_emitter?.setExtents(extents);
         }
         // §511 3d-style port: hd_road_elevation curve points feed the
-        // elevated-structures state instead of the emit pipeline.
+        // elevated-structures state instead of the emit pipeline. The y-flip
+        // applied to fill/line geometry MUST be applied here too — curves are
+        // sampled against emitter-space coordinates, and raw MVT y runs the
+        // opposite direction (§513: unflipped curves sampled mirrored ramps
+        // at the wrong height).
         if (layer === HD_ELEVATION_SOURCE_LAYER) {
+            const p = geometry.length > 0
+                ? this.mvtTransform(geometry[0], extents)
+                : { x: 0, y: 0 };
             this.m_elevationStructures?.addRawFeature({
                 type: 'Point',
                 properties,
-                x: geometry.length > 0 ? geometry[0].x : 0,
-                y: geometry.length > 0 ? geometry[0].y : 0,
+                x: p.x,
+                y: p.y,
                 bounds: [0, 0, extents, extents],
                 layerExtent: extents,
             });
@@ -342,22 +367,27 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         featureId: string | number | undefined,
     ): void {
         // §511 3d-style port: hd_road_elevation curve_meta polygons feed the
-        // elevated-structures state instead of the emit pipeline.
+        // elevated-structures state instead of the emit pipeline (y-flipped
+        // to the emitter frame — see the point-feature note above).
         if (layer === HD_ELEVATION_SOURCE_LAYER) {
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             for (const poly of geometry) {
                 for (const ring of poly.rings) {
                     for (const pt of ring) {
-                        minX = Math.min(minX, pt.x); minY = Math.min(minY, pt.y);
-                        maxX = Math.max(maxX, pt.x); maxY = Math.max(maxY, pt.y);
+                        const t = this.mvtTransform(pt, extents);
+                        minX = Math.min(minX, t.x); minY = Math.min(minY, t.y);
+                        maxX = Math.max(maxX, t.x); maxY = Math.max(maxY, t.y);
                     }
                 }
             }
+            const p0 = geometry[0]?.rings[0]?.[0]
+                ? this.mvtTransform(geometry[0].rings[0][0], extents)
+                : { x: 0, y: 0 };
             this.m_elevationStructures?.addRawFeature({
                 type: 'Polygon',
                 properties,
-                x: geometry[0]?.rings[0]?.[0]?.x ?? 0,
-                y: geometry[0]?.rings[0]?.[0]?.y ?? 0,
+                x: p0.x,
+                y: p0.y,
                 bounds: [minX, minY, maxX, maxY],
                 layerExtent: extents,
             });
@@ -436,6 +466,45 @@ class MBStyleDataProcessor implements IGeometryProcessor {
     }
 }
 
+/**
+ * §513 elevation pre-pass processor: routes ONLY `hd_road_elevation`
+ * features into the main processor's intercepts (so the y-flip and extent
+ * normalization live in exactly one place); all other layers are dropped
+ * without feature evaluation, keeping the first pass cheap.
+ */
+class MBElevationOnlyProcessor implements IGeometryProcessor {
+    constructor(private m_main: MBStyleDataProcessor) {}
+
+    processPointFeature(
+        layer: string,
+        extents: number,
+        geometry: THREE.Vector3[],
+        properties: Record<string, any>,
+        featureId: string | number | undefined,
+    ): void {
+        if (layer === HD_ELEVATION_SOURCE_LAYER) {
+            this.m_main.processPointFeature(layer, extents, geometry, properties, featureId);
+        }
+    }
+
+    processLineFeature(): void {
+        // hd_road_elevation carries only points (curve_point) and polygons
+        // (curve_meta) — lines never feed the elevation state.
+    }
+
+    processPolygonFeature(
+        layer: string,
+        extents: number,
+        geometry: IPolygonGeometry[],
+        properties: Record<string, any>,
+        featureId: string | number | undefined,
+    ): void {
+        if (layer === HD_ELEVATION_SOURCE_LAYER) {
+            this.m_main.processPolygonFeature(layer, extents, geometry, properties, featureId);
+        }
+    }
+}
+
 export class MBStyleDecoder extends ThemedTileDecoder {
     private m_omvAdapter: OmvDataAdapter;
     private m_geoJsonAdapter: GeoJsonDataAdapter;
@@ -447,6 +516,19 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_clipMask: Record<string, number[][][]> = {};
     /** §511 3d-style port: per-tile hd_road_elevation curves. */
     private m_elevationStructures: MBElevatedStructures | null = null;
+    /** §513: pass-1 processor that intercepts only `hd_road_elevation`. */
+    private m_elevationPassProcessor: MBElevationOnlyProcessor | null = null;
+    /** Style references hd-road elevation — the pre-pass is worth paying. */
+    private m_styleUsesHdElevation = false;
+    /**
+     * §513 cross-tile elevation registry: curves parsed per decoded tile,
+     * keyed by tile key string (freshest insertion wins; bounded). Road
+     * features whose curve lives in a NEIGHBOUR tile resolve through the
+     * flattened, id-sorted view (mgl passes options.elevationFeatures +
+     * a provider registry into bucket populate).
+     */
+    private m_elevationRegistry: Map<string, ElevationTiledFeature[]> = new Map();
+    private m_elevationRegistryFlat: ElevationTiledFeature[] | null = null;
     private m_worldview: string = '';
     private m_center: [number, number] = [0, 0];
     /**
@@ -533,6 +615,17 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             const isGlobe = (style as any).projection?.name === 'globe'
                 || (style as any).projection?.type === 'globe';
             this.m_emitBackgroundTiles = hasBg && (hasGeo || isGlobe);
+            // §513: the elevation pre-pass doubles the MVT decode cost —
+            // only pay it when the style actually references HD road
+            // elevation (mgl parses the elevation layer for every tile, but
+            // only HD styles consume it).
+            this.m_styleUsesHdElevation = (style.layers ?? []).some((l: any) => {
+                const ref = l.layout?.['fill-elevation-reference']
+                    ?? l.layout?.['line-elevation-reference']
+                    ?? l.layout?.['circle-elevation-reference']
+                    ?? l.layout?.['symbol-elevation-reference'];
+                return typeof ref === 'string' && ref.startsWith('hd-road');
+            });
         }
         if (customOptions?.currentSourceId) {
             this.m_currentSourceId = customOptions.currentSourceId as string;
@@ -632,6 +725,71 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             return Promise.resolve(undefined);
         }
         return this.decodeThemedTile(data, tileKey, undefined as any, projection);
+    }
+
+    /**
+     * §513: spin up the elevation-only first pass. The stub processor
+     * routes `hd_road_elevation` features through the main processor's
+     * intercepts (y-flip + extent normalization included); everything else
+     * is dropped. Road features are emitted in the SECOND pass, so the
+     * curves are fully assembled before the first fill/line samples them.
+     */
+    /** Tile key captured during the elevation pass (for the registry). */
+    private m_elevationPassStructuresKey: TileKey | null = null;
+
+    private prepareElevationPass(
+        tileKey: TileKey, zoom: number, processor: MBStyleDataProcessor, emitter: MBTileDataEmitter,
+    ): void {
+        const structures = new MBElevatedStructures(
+            tileKey.level, tileKey.column, tileKey.row);
+        structures.setRegistryProvider(() => this.elevationRegistryFlat());
+        this.m_elevationStructures = structures;
+        this.m_elevationPassStructuresKey = tileKey;
+        // The processor's copy receives the raw curves (intercepts); the
+        // emitter's copy samples them during the main pass.
+        processor.setElevationStructures(structures);
+        emitter.setElevationStructures(structures);
+        this.m_elevationPassProcessor = new MBElevationOnlyProcessor(processor);
+        // meters→canonical-extent-units factor for tessellation; same
+        // formula the finalize step has used since §511.
+        structures.setMetersToTile(
+            EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+            (256 * Math.pow(2, zoom + 1)));
+    }
+
+    /** Assemble curves after the elevation pre-pass and register the tile. */
+    private finalizeElevationPass(): void {
+        try {
+            this.m_elevationStructures?.finalize();
+            if (this.m_elevationStructures && this.m_elevationPassStructuresKey) {
+                this.registerElevationTile(
+                    this.m_elevationPassStructuresKey, this.m_elevationStructures.features);
+            }
+        } catch {}
+    }
+
+    private registerElevationTile(tileKey: TileKey, features: import('./3d-style/elevation/MBElevationFeature').MBElevationFeature[]): void {
+        if (!features || features.length === 0) return;
+        const key = mbCellTileKeyString(tileKey);
+        this.m_elevationRegistry.delete(key);
+        this.m_elevationRegistry.set(key, features.map(f => ({
+            z: tileKey.level, x: tileKey.column, y: tileKey.row, feature: f,
+        })));
+        if (this.m_elevationRegistry.size > 96) {
+            const oldest = this.m_elevationRegistry.keys().next().value;
+            if (oldest !== undefined) this.m_elevationRegistry.delete(oldest);
+        }
+        this.m_elevationRegistryFlat = null;
+    }
+
+    private elevationRegistryFlat(): ElevationTiledFeature[] {
+        if (!this.m_elevationRegistryFlat) {
+            const flat: ElevationTiledFeature[] = [];
+            for (const arr of this.m_elevationRegistry.values()) flat.push(...arr);
+            flat.sort((a, b) => a.feature.id - b.feature.id);
+            this.m_elevationRegistryFlat = flat;
+        }
+        return this.m_elevationRegistryFlat;
     }
 
     async decodeThemedTile(
@@ -735,16 +893,18 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 // frame up by ~R/2 for tiles with a different extent.
                 processor.setMvtYOffset(scale - 2 * top);
                 processor.setMvtFlip(north, tileKey.level);
-                this.m_elevationStructures = new MBElevatedStructures();
+                // §513: elevation curves must exist BEFORE road features are
+                // emitted (mgl parses `hd_road_elevation` ahead of bucket
+                // populate via parseElevationFeatures). The old post-process
+                // finalize could never serve the emit pass — a first adapter
+                // pass intercepts only the elevation layer, then the main
+                // pass samples per-vertex heights during feature emission.
+                if (this.m_styleUsesHdElevation) {
+                    this.prepareElevationPass(tileKey, zoom, processor, emitter);
+                    this.m_omvAdapter.process(buffer as ArrayBuffer, decodeInfo, this.m_elevationPassProcessor!);
+                    this.finalizeElevationPass();
+                }
                 this.m_omvAdapter.process(buffer as ArrayBuffer, decodeInfo, processor);
-                // §511: assemble the hd_road_elevation curves (if any) and
-                // hand them to the emitter for feature elevation lookups.
-                try {
-                    this.m_elevationStructures.finalize(
-                        EarthConstants.EQUATORIAL_CIRCUMFERENCE /
-                        (256 * Math.pow(2, zoom + 1)));
-                    this.m_emitter?.setElevationStructures(this.m_elevationStructures);
-                } catch {}
             } else if (typeof data === 'string') {
                 // GeoJSON string from GeoJSONDataProvider
                 // The GeoJSON adapter projects through webMercatorProjection
@@ -760,6 +920,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 const geoJson = JSON.parse(data);
                 const normalized = MBStyleDecoder.normalizeGeoJson(geoJson);
                 if (this.m_geoJsonAdapter.canProcess(normalized)) {
+                    if (this.m_styleUsesHdElevation) {
+                        this.prepareElevationPass(tileKey, zoom, processor, emitter);
+                        this.m_geoJsonAdapter.process(normalized, decodeInfo, this.m_elevationPassProcessor!);
+                        this.finalizeElevationPass();
+                    }
                     this.m_geoJsonAdapter.process(normalized, decodeInfo, processor);
                 }
             } else if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
@@ -771,6 +936,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 processor.setMvtYOffset(scale - 2 * top);
                 const normalized = MBStyleDecoder.normalizeGeoJson(data);
                 if (this.m_geoJsonAdapter.canProcess(normalized)) {
+                    this.prepareElevationPass(tileKey, zoom, processor, emitter);
+                    this.m_geoJsonAdapter.process(normalized, decodeInfo, this.m_elevationPassProcessor!);
+                    this.finalizeElevationPass();
                     this.m_geoJsonAdapter.process(normalized, decodeInfo, processor);
                 }
             }
@@ -779,6 +947,12 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             return emitter.getDecodedTile();
         }
 
+        // §513: all contributing fills of the tile are processed — the
+        // portal graph can be evaluated (mgl evaluatePortalGraphs runs
+        // after every bucket populated).
+        try {
+            this.m_elevationStructures?.evaluatePortals();
+        } catch {}
         injectBackground();
         const __result = emitter.getDecodedTile();
         if ((globalThis as any).__mbDecodeDbg && (__result?.geometries?.length ?? 0) > 0 && !s_inChildMerge) {
@@ -786,7 +960,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             const p0 = g0.vertexAttributes?.find(a => a.name === 'position');
             const f0 = p0 ? new Float32Array(p0.buffer).slice(0, 3) : null;
             // eslint-disable-next-line no-console
-            console.log(`[MBNorm] L=${tileKey.level} center=(${decodeInfo.center.x.toFixed(0)},${decodeInfo.center.y.toFixed(0)}) firstV=${f0 ? f0.map(n => n.toFixed(0)).join(',') : '-'} geos=${__result.geometries.length}`);
+            console.log(`[MBNorm] L=${tileKey.level} center=(${decodeInfo.center.x.toFixed(0)},${decodeInfo.center.y.toFixed(0)}) firstV=${f0 ? f0.map(n => Math.round(n)).join(',') : '-'} geos=${__result.geometries.length}`);
         }
         return __result;
     }
@@ -842,7 +1016,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     const p0 = g0?.vertexAttributes?.find(a => a.name === 'position');
                     const f0 = p0 ? new Float32Array(p0.buffer).slice(0, 3) : null;
                     // eslint-disable-next-line no-console
-                    console.log(`[MBMergeChild] z=${ch.z} x=${ch.x} y=${ch.y} cell=(${cellInfo.center.x.toFixed(0)},${cellInfo.center.y.toFixed(0)},${cellInfo.center.z.toFixed(0)}) child=(${childInfo.center.x.toFixed(0)},${childInfo.center.y.toFixed(0)},${childInfo.center.z.toFixed(0)}) d=(${dx.toFixed(0)},${dy.toFixed(0)},${dz.toFixed(0)}) firstV=${f0 ? f0.map(n => n.toFixed(0)).join(',') : '-'}`);
+                    console.log(`[MBMergeChild] z=${ch.z} x=${ch.x} y=${ch.y} cell=(${cellInfo.center.x.toFixed(0)},${cellInfo.center.y.toFixed(0)},${cellInfo.center.z.toFixed(0)}) child=(${childInfo.center.x.toFixed(0)},${childInfo.center.y.toFixed(0)},${childInfo.center.z.toFixed(0)}) d=(${dx.toFixed(0)},${dy.toFixed(0)},${dz.toFixed(0)}) firstV=${f0 ? f0.map(n => Math.round(n)).join(',') : '-'}`);
                 }
                 if ((globalThis as any).__mbDecodeDbg) {
                     const bbs: Record<string, number[]> = {};

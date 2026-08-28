@@ -32,6 +32,9 @@ export interface EvaluatedLayer {
      * read the raw value from here.
      */
     paintDefs?: Record<string, PaintPropertyDef>;
+    /** Raw (pre-evaluation) layout property values, for consumers that must
+     * re-evaluate per vertex (line-z-offset with line-progress). */
+    layoutDefs?: Record<string, any>;
 }
 
 interface PreprocessedLayer {
@@ -700,6 +703,7 @@ export class MBLayerEvaluator {
                 layout,
                 renderOrder: pl.renderOrder,
                 paintDefs: pl.paintDefs,
+                layoutDefs: pl.layoutDefs,
             });
         }
 

@@ -15,6 +15,14 @@ export interface MBExpressionContext {
     id?: string | number | null;
     /** Map center as [lng, lat], for `distance-from-center`. */
     center?: [number, number] | number[];
+    /**
+     * Progress (0..1) along the current line geometry, for `line-progress`.
+     * Only supplied while evaluating data-driven per-vertex paint values
+     * (line-z-offset) during line geometry emission; 0 elsewhere (mgl
+     * evaluates line-progress against the full feature when the source has
+     * lineMetrics).
+     */
+    lineProgress?: number;
 }
 
 type CompiledExpression = (ctx: MBExpressionContext) => MBValue;
@@ -376,6 +384,26 @@ export class MBExpressionEngine {
 
             case 'pitch':
                 return ctx.pitch ?? 0;
+
+            case 'line-progress':
+                // Progress along the line geometry (0..1). mgl warns and
+                // anchors to 0 when the source lacks lineMetrics.
+                return ctx.lineProgress ?? 0;
+
+            case 'at-interpolated': {
+                // mgl AtInterpolated: fractional array indices linearly
+                // interpolate between the two neighbouring numeric entries.
+                const idx = Number(this.exec(args[0], ctx));
+                const arr = this.exec(args[1], ctx);
+                if (!Array.isArray(arr) || arr.length === 0) return null;
+                const i = Math.floor(idx);
+                if (idx < 0 || idx > arr.length - 1) return null;
+                if (idx === i) return arr[i];
+                const a = arr[i];
+                const b = arr[i + 1];
+                if (typeof a !== 'number' || typeof b !== 'number') return null;
+                return a + (b - a) * (idx - i);
+            }
 
             case 'distance-from-center': {
                 // Distance (meters) from the feature to the map center. Uses the

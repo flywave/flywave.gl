@@ -92,7 +92,13 @@ export class MBElevationPortalGraph {
 
         const evaluated = portals.filter(p => p.type !== 'unevaluated');
         const unevaluatedGroup = portals.filter(p => p.type === 'unevaluated');
-        if (unevaluatedGroup.length === 0) return out;
+        if (unevaluatedGroup.length === 0) {
+            // mgl returns an EMPTY graph here (elevation_graph.ts:65),
+            // dropping pre-classified entrance/border portals. Keep them —
+            // they carry the tunnel-entrance semantics the mesh pass needs.
+            out.portals = evaluated;
+            return out;
+        }
 
         // Group shared edges: sort by hash (tunnel first within a hash so
         // the tunnel copy leads the pair), evaluated group stays in front.

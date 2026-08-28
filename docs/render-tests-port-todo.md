@@ -5920,3 +5920,23 @@ rgb      = mix(rgb, fogColor.rgb, opacity)         // + pitch∈[45°,65°] smoo
 **验证状态**：tsc --build 绿；回归采样零损失（fog 59102 带内、icon-color PASS、fog-import-scope 89087 反而优于历史 164k）；road-markups-no-elevation 标线/ramp 对位、蓝路面待 renderOrder 提升验证。
 
 **下会话 ROI**：① renderOrder 提升后蓝路面上屏验证 + 外观校准（整域 74 例解锁在望）；② per-vertex 高程插值（现 anchor 常量近似）；③ portal graph evaluate 接入 fill 边界收集；④ appearance/3d-intersections 批测对照 §510 基线。
+
+**§513. 会话续记——3d-style 死接线破案 + elevation 全链激活（per-vertex 采样/跨瓦片 registry/portal evaluate）+ §512 七个 tsc 错误清偿（2026-08-28）**：
+
+**三处死代码/死接线破案（本轮核心）**：① **§512 采样从未生效**——decoder 的 `finalize`+`setElevationStructures` 排在 `adapter.process()` **之后**，而 resolveZOffset 采样发生在 process 期间 → emitter 侧 structures 恒为 null，全部 fill/line 走 `properties.elevation` 兜底。mgl 的对应架构是 `parseElevationFeatures` 先于 bucket populate——修复 = **elevation 预扫描两遍解码**：第一遍 `MBElevationOnlyProcessor`（只拦 `hd_road_elevation`，其余 layer 零成本丢弃）→ finalize → 注册 registry → 主 pass 采样；MVT/GeoJSON 两条路径都接了。② **跨瓦片 registry 是死代码**——`getOverlappingElevationParts`/`mergeElevationFeatures`/`ElevationTiledFeature` 从无调用方。decoder 新增 `m_elevationRegistry`（tileKey 串→curves，插入序淘汰，上限 96 tile）+ 惰性 id 排序 flat 视图；structures 经 `setRegistryProvider` 拿到，`resolveElevation()` 同瓦片优先→registry 重叠部件→`mergeElevationFeatures` 并入消费瓦片帧（带 mergedCache）。③ **portal graph 是死代码**——`addPortalEdge`/`evaluate` 无调用方。按 mgl `addPortalCandidates` 重写：外环逐边候选、两端高程 |h|<0.01→`entrance`、贴瓦片边→`border`；decodeTile 末尾 `evaluatePortals()`（mgl `evaluatePortalGraphs` 语义）。
+
+**per-vertex 高程采样落地（替 anchor 常量近似）**：fill 走 `prepareFillGeometry`——clip 至 tile±ELEVATION_CLIP_MARGIN（Sutherland–Hodgman）→ `polygonSubdivision`（细分边=曲线顶点垂线，半宽 (extent+1)·metersToTile）→ 洞环同细分按包含回挂 → earcut 逐 piece + 逐顶点采样高度（markup bias smoothstep）→ `emitElevatedFillPiece`；`fill-elevation-reference` base/markup 分流，无曲线回退平铺（mgl 语义）。line 走 mgl line_bucket elevationType 三分——`hd-road-markup`='road'（`prepareLineGeometry` lineSubdivision+逐点采样，line-z-offset 忽略）、`sea`/`ground`='offset'（数据驱动 line-z-offset **逐顶点**求值，ctx 新增 `lineProgress`，累计距离/总长）、否则旧常量路径。
+
+**表达式引擎补口**：`at-interpolated`（分数下标线性插值、越界 null）+ `line-progress`（读 ctx，缺省 0）——elevated-line 全域 187 例的 `["-", ["at-interpolated", ["*", ["line-progress"], 1], ["get", "elevation"]], 300]` 形态首次可求值。`EvaluatedLayer` 补 `layoutDefs`（原始 layout 表达式，per-vertex 重求值入口）。
+
+**坐标帧三案**：① **elevation 曲线 y 未翻转**——fill/line 坐标经 mvtTransform y 翻转，曲线在拦截点存原始 MVT y-down → 采样帧镜像，斜坡/多高曲线上必错。拦截点（point+polygon）补 mvtTransform（bounds 同步翻转）。② **细分返回帧统一**——prepare*Geometry 入口 extent→canonical(4096)、返回转回 extent（emitter project() 吃 extent 帧，二次缩放曾致 8192 瓦片错帧，karma 首跑作废重录）。③ **parser extent 误归一**——mgl `extent`（道路半宽，米）原样保留，我方 parser 曾按 layerExtent 归一（8192 瓦片半宽减半→细分条带变窄）。
+
+**工具性修复**：MBPolygonClippingHD 的 lineHit t 公式初版叉积符号错（交点恒越界）——单测逼出；SH 裁剪平面统一 CCW 绕向（两平面 inside 判反）。`MBElevationGraph.evaluate` 偏离 mgl 一处并记档：mgl 在全部 portal 已预分类（无共享边）时返回**空图**丢弃 entrance/border（elevation_graph.ts:65 疑似边缘 bug），我方保留已分类 portal（tunnel-entrance 几何语义所需）。
+
+**§512 遗留 tsc 清偿（build 实为红，7 错）**：EarthConstants 未导入、processor/decoder 两侧 `m_elevationStructures`/`m_emitter` 字段缺失、transformPoints Vector3→Vector2、Float32Array.map(toFixed) 类型错 ×2——全修，`tsc --noEmit` 绿。另：CollisionIndexTest 两例期望与 72fbc74a 的 mgl 语义（任意相交即拒、不查 priority）脱节——按现语义改写测试（代码未动）。
+
+**新模块/文件**：`3d-style/util/MBPolygonClippingHD.ts`（polygonSubdivision 半平面切割替 martinez——SH 凹环产生零宽桥接，逐顶点连续高度采样下不可见；lineSubdivision/clipRingToBox/clipLinesToBox 直移植）、`test/MBElevatedRoadTest.ts`（11 例：细分/裁剪/曲线采样/portal evaluate/at-interpolated）。
+
+**验证状态**：单测 287 passing（+12，含 emitter 级 sea 模式逐顶点断言 z∈[700,4700]）。渲染验证（Chrome headless + SwiftShader，vs HEAD 同域对照）：**3d-intersections 1/78→1/78**（逐夹具 ±0.2% 噪声级，域级零回归；road-markups 形状对位极好——立交/匝道/环道全对齐，缺口在标线颜色域：黄线/斑马纹渲黑，属 appearance 域下轮）；**elevated-line 域 line-progress-expression 25056→12612 减半、join-types 53418→48620、terrain-near-tile 4111→3911**，其余逐像素不变（常量 z-offset 夹具逐顶点求值=同值，天然零回归）；join-no-tile-borders 首跑 17321→29387 回退由出界段未裁导致——补 mgl `dropOutOfBounds` 语义（tile±2 extent Liang–Barsky 预裁 + 弧长偏移保 progress 全线锚定）后**回到 17321 逐像素持平**；terrain/lines-elevated-line-joins-bevel 27161→30766（+3.6k，terrain×elevation 交互域，ground-scale 未实现所致，在册）。join-linear-elevation/join-none 两夹具为上游 mgl `skip-test`（web 平台），runner 正确跳过。**karma 基建事实：karma 经 package main 吃 lib/ 产物——改 src 后必须先 `npm run build` 再跑 karma，否则"对照"跑的是旧代码（本轮 elevated-line 首轮对照逐像素相同即此坑）。**
+
+**下会话 ROI**：① 3d-intersections 75 例结果分析 + 蓝路面/renderOrder 验证收尾；② elevated-line 域（187 例 sea per-vertex z-offset 首次真求值）批测对照；③ elevated structures 几何本体（guard rails/tunnel walls/entrances，mgl `construct()` 921 行）——portal evaluate 已就绪，差 THREE 几何发射 + mask/depth 分段语义；④ `line-cross-slope`/`line-elevation-ground-scale`（各 1 例）；⑤ symbol/circle elevation-reference 走 registry resolve 统一。

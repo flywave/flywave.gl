@@ -185,6 +185,30 @@ export class MBElevationFeature {
         }
     }
 
+    /**
+     * Perpendicular subdivision split lines, one per curve vertex (mgl
+     * `EdgeIterator`): each line runs through the vertex along the local
+     * perpendicular of the accumulated curve direction, extended half a
+     * road width + 1m to each side so it fully crosses any attached road
+     * polygon. Consumer of `polygonSubdivision`/`lineSubdivision` in
+     * MBPolygonClippingHD.
+     */
+    getSubdivisionEdges(metersToTile: number): Array<{ ax: number; ay: number; bx: number; by: number }> {
+        const out: Array<{ ax: number; ay: number; bx: number; by: number }> = [];
+        for (let i = 0; i < this.vertices.length; i++) {
+            const v = this.vertices[i];
+            const dir = this.vertexDirs[i];
+            const perpX = dir.dy;
+            const perpY = -dir.dx;
+            const dist = (v.extent + 1) * metersToTile;
+            out.push({
+                ax: v.x + perpX * dist, ay: v.y + perpY * dist,
+                bx: v.x - perpX * dist, by: v.y - perpY * dist,
+            });
+        }
+        return out;
+    }
+
     /** Elevation at a point: nearest-edge linear height interpolation. */
     pointElevation(x: number, y: number): number {
         if (this.constantHeight != null) return this.constantHeight;
