@@ -221,9 +221,12 @@ function applyPbrProperties(
         if (texture) {
             texture.colorSpace = SRGBColorSpace;
             material.map = texture;
-            if (gltfMaterial.alphaMode === "MASK") {
-                material.alphaMap = texture;
-            }
+            // glTF MASK cutout relies solely on the baseColor texture's own
+            // alpha channel × alphaTest. Do NOT also assign alphaMap: in the
+            // WebGPU/TSL pipeline opacity composes as `opacity × alphaMap`
+            // sampled from the texture's COLOR channels, so an sRGB baseColor
+            // texture would drive fragment alpha toward its red channel and
+            // alphaTest discards everything (foliage renders bare).
         }
     }
 
