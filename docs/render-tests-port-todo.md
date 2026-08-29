@@ -6340,3 +6340,15 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **④ LOD AO 顶点色乘法**（§553 遗留④）：mgl `buildMeshFeatureArray isLodMesh` 把 4444 alpha（baked AO）乘进 rgb——仅 LOD 瓦片（mbx_bvh 标记），非 LOD alpha 任意值（可 0）绝不乘。expandAlpha4444 + `__mbFeatLod` 门。
 
 **验证困境（未闭环，下轮第一查）**：indirect 家族复测像素逐位不变（doors 442181/-lod 416294/update 260574/doors 587578/doors-lod 613748），且本轮 mbbatchdbg 下 **[MBBatchedTile] diag 零输出**（上一轮仅 1 条 meshopt=false）——meshopt 分支疑似根本未执行，与 §553 记录的"duplicate-model-layer-lod 红/绿翻转=DS 注册顺序竞态"同族：karma 单页多测试顺序下 batched DS 的注册/复用（`getDataSourceByName` 命中旧实例 return 分支不走新 paint）可疑。**下轮**：①单测单独跑 -lod 夹具验证 meshopt 分支 diag；②查 MBStyleDataSource:1450 `ds.setPaint` 复用分支是否覆盖 hasMeshFeatures 探测链；③确认非 direct-render 夹具（museum-lod 族）像素收益。
+
+**§556. V2 解码真闭环——asset.extras 探测 + FLOAT32 SCALAR 直读 + albedo 纹理剥离（2026-08-30 续二）**：
+
+§555 遗留的"meshopt 分支未执行"破案三连（单跑 -lod 夹具 + mbbatchdbg 探针迭代）：
+
+**① features 标记在 `asset.extras`**：mbx-lod 的 extensionsUsed 无 MAPBOX_mesh_features——mgl worker 双探测 `extensionsUsed.includes(...) || json.asset.extras['MAPBOX_mesh_features']`（tiled_3d_model_worker_source.ts:74-76），mbx-lod 只设 extras 形态。补齐后 features=true、split 生效（vcol 18/34）。
+
+**② V2 特性值是 FLOAT32 SCALAR（决定性）**：mbx-lod 的 `_FEATURE_ID_RGBA4444` accessor = componentType 5126（FLOAT）SCALAR——meshopt 限制值 <2^24 故 float 精确，mgl `getBufferData` 原样保 Float32Array、`buildMeshFeatureArray` 的 `>>` 隐式截断。我方 `feature.array as Uint16Array` 把 float 位模式当 u16 对读（探针实证：两"半区"恒近似=相邻顶点相似 float 的位模式）→ part 全落 0 桶。修复：`instanceof Float32Array` 直读 `((floats[i]|0)>>>0)`，splitByPart/refreshSplit 双点。修复后 part 分布正常（wall 千/door 百/roof 千/window 百/logo 千级），4444 原色 sensible（wall 白/灰、roof 灰、window 蓝灰）。
+
+**③ albedo 纹理剥离**：mgl a_pbr 路径顶点色替换 glTF albedo——mbx-lod 内嵌基色纹理（KHR_texture_transform），splitByPart 置 vertexColors 时 `mat.map=null`+needsUpdate（此前 Draco 瓦片无纹理故从未暴露）。
+
+**效果**：doors-no-shadows-lod 416294→**392306**（−2.4万）；非 lod 用例逐位不变（V1 路径未动，无回归）。**遗留（下轮 ROI）**：①roof 应橙(252,163,0)现蓝灰、wall 应黄现灰蓝——mix=1 已证生效（探针 mix0=1/col0=[245,224,102]），疑 mgl 灯光 uniform 与 vertexColors 组合下的色域问题（update-doors-lod 613748 同族）；②update-doors(非lod) 587578 为 indirect 家族新头部，待查。探针法记档：mbbatchdbg=1 + vertParts 直方图是 part 域对齐的 fastest 反馈环。
