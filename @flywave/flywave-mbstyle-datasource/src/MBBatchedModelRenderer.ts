@@ -131,7 +131,7 @@ export class MBBatchedModelRenderer {
         if (this.m_carrierGroup.parent !== root) {
             this.m_carrierGroup.parent = null;
         }
-        root.add(this.m_carrierGroup);
+
 
         if (st) {
             st.rendered = keep.length;
