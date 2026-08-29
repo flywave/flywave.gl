@@ -110,6 +110,7 @@ export class MBBatchedModelRenderer {
             this.m_carrierGroup.parent = null;
         }
         root.add(this.m_carrierGroup);
+
         if (st) {
             st.rendered = keep.length;
             st.inRoot = root.children.indexOf(this.m_carrierGroup) >= 0 ? 1 : 0;
