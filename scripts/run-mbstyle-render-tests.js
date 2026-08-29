@@ -89,7 +89,8 @@ function main() {
             ...(process.env.MBSTYLE_RTDISABLE ? ["rtdisable=1"] : []),
             ...(process.env.MBSTYLE_UVTDBG ? ["uvtdbg=1"] : []),
             ...(process.env.MBSTYLE_HIDE ? [`mbhide=${process.env.MBSTYLE_HIDE}`] : []),
-            ...(process.env.MBSTYLE_SHADOW ? [`shadowdbg=${process.env.MBSTYLE_SHADOW}`] : [])];
+            ...(process.env.MBSTYLE_SHADOW ? [`shadowdbg=${process.env.MBSTYLE_SHADOW}`] : []),
+            ...(process.env.MBSTYLE_BATCHEDDBG ? ["mbbatchdbg=1"] : [])];
         const result = spawnSync(
             "npx",
             karmaArgs,

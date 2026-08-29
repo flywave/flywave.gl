@@ -55,7 +55,8 @@ export function batchedDiagEnabled(): boolean {
     if ((globalThis as any).__mbBatchedDbgFlag === undefined) {
         (globalThis as any).__mbBatchedDbgFlag =
             (globalThis as any).__karma__?.config?.args?.find?.((a: string) =>
-                a.startsWith('mbbatchdbg='))?.slice('mbbatchdbg='.length) === '1';
+                a.startsWith('mbbatchdbg='))?.slice('mbbatchdbg='.length) === '1'
+            || (globalThis as any).__mbBatchedDbgForce === true;
     }
     return (globalThis as any).__mbBatchedDbgFlag === true;
 }
@@ -816,7 +817,10 @@ export class MBBatchedModelDataSource extends TileDataSource<MBBatchedModelTile>
             minDataLevel: Math.max(1, options.minzoom ?? 1),
             maxDataLevel: options.maxzoom ?? 14,
             minDisplayLevel: 0,
-            maxDisplayLevel: 20,
+            // mgl mapbox zooms reach 22 (= flywave zoom 23); a display cap of
+            // 20 silently disabled the source for zoom-20.6+ fixtures
+            // (indirect-doors-no-shadows: tiles were never scheduled).
+            maxDisplayLevel: 26,
             storageLevelOffset: 0,
             enablePicking: false,
         };
