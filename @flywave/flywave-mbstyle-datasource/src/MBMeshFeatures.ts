@@ -496,6 +496,8 @@ function buildNodeLightsMesh(
         });
         mat.onBeforeCompile = (shader: any) => {
             shader.uniforms.uMBLightsE = { value: doorEmissive };
+            // Indirect-update handle (refreshMeshFeatures).
+            (mat as any).__mbLightsU = shader.uniforms.uMBLightsE;
             shader.vertexShader = shader.vertexShader
                 .replace('void main() {',
                     `attribute vec4 mbC4f;
@@ -570,8 +572,16 @@ export function applyMeshFeatures(
             const mesh = o as THREE.Mesh;
             if (mesh.isMesh && mesh.geometry?.getAttribute?.(FEATURE_ATTR)) meshes.push(mesh);
         });
+        // Indirect-update bookkeeping: the split sources and the featureless
+        // meshes, so runtime setLights/setZoom (measure-light-dependent part
+        // paint) can re-derive the styling without a re-decode.
+        root.userData.__mbFeatSources = [];
+        root.userData.__mbFeatFeatureless = [];
         for (const mesh of meshes) {
             splitByPart(mesh, parts, root, dataSource);
+            if (mesh.userData.__mbFeatSplit) {
+                root.userData.__mbFeatSources.push(mesh);
+            }
         }
         // Feature-less meshes of a features tile: mgl evaluates the layer's
         // emissive with no part property (the part-0 slot).
@@ -579,9 +589,49 @@ export function applyMeshFeatures(
             const mesh = o as THREE.Mesh;
             if (mesh.isMesh && !mesh.geometry.getAttribute(FEATURE_ATTR) && !mesh.userData.__mbPart) {
                 applyMglModelLighting(dataSource, mesh, parts[0].emissive);
+                root.userData.__mbFeatFeatureless.push(mesh);
             }
         });
+        root.userData.__mbFeatState = { zoom, brightness };
     } catch { /* styling must never break tile loading */ }
+}
+
+/**
+ * Indirect part-styling update (runtime `setLights` / `setZoom`): the part
+ * paint is evaluated with the CURRENT measure-light brightness and zoom, and
+ * the already-built split meshes are re-derived in place — vertex mix colors,
+ * per-part roughness/alpha/opacity and the emissive-strength uniform. No-op
+ * when neither zoom nor brightness moved since the last application. Split
+ * topology (which triangles belong to which part) never changes, so the
+ * per-part index buffers are reused.
+ */
+export function refreshMeshFeatures(
+    root: THREE.Object3D,
+    paint: any,
+    zoom: number,
+    dataSource: any,
+): void {
+    try {
+        const prev = root.userData.__mbFeatState as
+            { zoom: number; brightness: number } | undefined;
+        if (!prev) return; // never styled (or a non-features tile)
+        const brightness = mglMeasureLightBrightness(dataSource);
+        if (Math.abs(prev.zoom - zoom) < 1e-9
+            && Math.abs(prev.brightness - brightness) < 1e-9) return;
+        root.userData.__mbFeatState = { zoom, brightness };
+        const parts = PART_NAMES.map(name => evalPart(paint, zoom, name, brightness));
+        const sources = root.userData.__mbFeatSources as THREE.Mesh[];
+        for (const mesh of sources) {
+            refreshSplit(mesh, parts);
+        }
+        for (const mesh of root.userData.__mbFeatFeatureless as THREE.Mesh[]) {
+            const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            for (const mat of mats as any[]) {
+                const u = mat?.userData?.__mbLightU;
+                if (u?.emis) u.emis.value = parts[0].emissive;
+            }
+        }
+    } catch { /* styling must never break the frame */ }
 }
 
 function splitByPart(
@@ -683,9 +733,12 @@ function splitByPart(
         sub.userData.__mbNodeBox = mesh.userData?.__mbNodeBox;
         sub.userData.__mbAnchor = mesh.userData?.__mbAnchor;
         sub.userData.__mbBaseOpacity = (mat.opacity ?? 1);
+        // Base opacity BEFORE the part alpha/opacity chain (refresh re-derives).
+        sub.userData.__mbMatBaseOpacity = (mat.opacity ?? 1);
         if (mat.transparent) (mat.userData ??= {}).__mbForceTransparent = true;
-        applyMglModelLighting(dataSource, sub, style.emissive, undefined,
-            mbHeightRampUniforms(style.heightEmission, bboxZMin, bboxZMax));
+        const hr = mbHeightRampUniforms(style.heightEmission, bboxZMin, bboxZMax);
+        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr);
+        sub.userData.__mbHrParams = hr;
         subMeshes.push(sub);
     }
 
@@ -694,14 +747,99 @@ function splitByPart(
     // Door lights (mgl node.lights → lightMeshIndex mesh tinted by the door
     // color_mix). The lights ride the same node as the features mesh.
     const lightsBase64 = mesh.userData?.__mbLights;
+    let lightsMesh: THREE.Mesh | null = null;
     if (lightsBase64 && partFirstColor.has(DOOR_PART)) {
         const doorColor = partFirstColor.get(DOOR_PART)!;
-        const lightsMesh = buildNodeLightsMesh(
+        lightsMesh = buildNodeLightsMesh(
             lightsBase64, doorColor, parts[DOOR_PART].emissive,
             mesh.userData?.__mbZScale ?? 5);
         if (lightsMesh) {
             lightsMesh.userData.__mbNodeId = mesh.userData?.__mbNodeId;
             parent.add(lightsMesh);
         }
+    }
+    // Indirect-update bookkeeping (see refreshMeshFeatures): everything a
+    // re-application needs — the detached source mesh keeps its geometry
+    // (sub-meshes share the attribute buffers, only indices are copied).
+    mesh.userData.__mbFeatSplit = {
+        parent,
+        subMeshes,
+        lightsMesh,
+        partFirstColor,
+        bboxZMin,
+        bboxZMax,
+        colorAttr: sharedColor,
+    };
+}
+
+/**
+ * Re-derive one split source mesh's styling under new parts (indirect
+ * update): vertex mix colors, per-sub roughness/alpha/opacity/emissive
+ * uniforms/height-ramp and the door-light tint. The part→triangle topology
+ * is reused unchanged.
+ */
+function refreshSplit(mesh: THREE.Mesh, parts: PartStyle[]): void {
+    const split = mesh.userData?.__mbFeatSplit as {
+        parent: THREE.Object3D; subMeshes: THREE.Mesh[];
+        lightsMesh: THREE.Mesh | null;
+        partFirstColor: Map<number, [number, number, number]>;
+        bboxZMin: number; bboxZMax: number;
+        colorAttr: THREE.BufferAttribute;
+    } | undefined;
+    if (!split) return;
+    const geometry = mesh.geometry;
+    const feature = geometry.getAttribute(FEATURE_ATTR) as THREE.BufferAttribute;
+    const colorAttr = split.colorAttr;
+    if (!feature || !colorAttr) return;
+    const u16 = feature.array as Uint16Array;
+    const vertCount = feature.count;
+    const colors = colorAttr.array as Float32Array;
+    const partFirstColor = new Map<number, [number, number, number]>();
+    for (let i = 0; i < vertCount; i++) {
+        const u32 = (u16[i * 2] | (u16[i * 2 + 1] << 16)) >>> 0;
+        const rawPart = u32 & 0xf;
+        const partId = rawPart < parts.length ? rawPart : 0;
+        const style = parts[partId] ?? parts[0];
+        let [r, g, b] = expand4444((u32 >>> 16) & 0xffff);
+        if (!partFirstColor.has(partId)) partFirstColor.set(partId, [r, g, b]);
+        if (style.mix > 0) {
+            r = Math.round(r + (style.colorSrgb[0] - r) * style.mix);
+            g = Math.round(g + (style.colorSrgb[1] - g) * style.mix);
+            b = Math.round(b + (style.colorSrgb[2] - b) * style.mix);
+        }
+        colors[i * 3] = srgbToLinear(r / 255);
+        colors[i * 3 + 1] = srgbToLinear(g / 255);
+        colors[i * 3 + 2] = srgbToLinear(b / 255);
+    }
+    colorAttr.needsUpdate = true;
+    for (const sub of split.subMeshes) {
+        const partId: number = sub.userData.__mbPart ?? 0;
+        const style = parts[partId] ?? parts[0];
+        const mat: any = sub.material;
+        mat.roughness = style.roughness;
+        const base: number = sub.userData.__mbMatBaseOpacity ?? 1;
+        const opacity = base * style.alpha * style.opacity;
+        mat.opacity = opacity;
+        mat.transparent = opacity < 1 || !!((mat.userData ?? {}).__mbForceTransparent);
+        mat.depthWrite = opacity >= 1 && !mat.transparent;
+        sub.userData.__mbBaseOpacity = opacity;
+        const u = mat.userData?.__mbLightU;
+        if (u?.emis) u.emis.value = style.emissive;
+        const hr = mbHeightRampUniforms(style.heightEmission, split.bboxZMin, split.bboxZMax);
+        if (u?.hbs) u.hbs.value = [hr.b0, hr.b1, hr.power, hr.start];
+        if (u?.hbsRange) u.hbsRange.value = hr.range;
+        sub.userData.__mbHrParams = hr;
+    }
+    if (split.lightsMesh) {
+        const doorColor = partFirstColor.get(DOOR_PART);
+        const mat: any = split.lightsMesh.material;
+        if (doorColor && mat?.color) {
+            mat.color.setRGB(
+                srgbToLinear(doorColor[0] / 255),
+                srgbToLinear(doorColor[1] / 255),
+                srgbToLinear(doorColor[2] / 255));
+        }
+        const u = mat?.userData?.__mbLightsU;
+        if (u) u.value = parts[DOOR_PART]?.emissive ?? u.value;
     }
 }

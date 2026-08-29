@@ -3766,6 +3766,11 @@ export class MBMaterialPatchManager {
             // Default illumination: mgl hillshade-illumination-direction 315,
             // anchor viewport, bearing 0 in every hillshade fixture → the
             // shader adds PI to the azimuthal ((-dir - 90) convention).
+            // NOTE: wiring the paint's illumination-direction/anchor per
+            // hillshade_program.js was tried (2026-08-29) and regressed the
+            // lighting-3d-mode/hillshade family ~+60k px — the ground-radiance
+            // calibration diverges from mgl, so the constant stays until that
+            // domain is revisited.
             const azimuth = 315 * Math.PI / 180 + Math.PI;
             const exaggeration = intensity;
             const colShadow = new THREE.Color(technique.color ?? '#000000');

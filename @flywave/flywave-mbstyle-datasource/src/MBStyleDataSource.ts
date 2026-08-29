@@ -3920,6 +3920,12 @@ export class MBStyleDataSource extends TileDataSource {
      */
     refreshDecoderBrightness(): void {
         const style = this.m_styleManager.getStyle();
+        // Runtime `setLights` changes the 3D-lights ground radiance — the
+        // lit background clear color (color × radiance) must be re-derived
+        // or the ground keeps the pre-update lighting (indirect-update).
+        try {
+            this.applyBackgroundColor(style);
+        } catch { /* best-effort */ }
         this.decoder.configure(undefined, {
             mbStyle: style,
             currentSourceId: this.m_currentSourceId,

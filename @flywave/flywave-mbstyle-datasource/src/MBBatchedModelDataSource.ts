@@ -34,6 +34,7 @@ import { DataProvider, TileDataSource, TileDataSourceOptions, TileFactory } from
 import { DecodedTile, ITileDecoder, OptionsMap, TileInfo } from '@flywave/flywave-datasource-protocol';
 import type { Projection } from '@flywave/flywave-geoutils';
 import { applyMglModelLighting, syncMglModelLighting } from './MBModelRenderer';
+import { refreshMeshFeatures } from './MBMeshFeatures';
 import { decodeGlbTile, parseGlb, TileMaterialData, TileMaterialized, TilePrimitiveData } from './MBDracoDecoder';
 import { applyMeshFeatures, applyModelFrontCutoff, applyModelFarCutoff, mglMeasureLightBrightness } from './MBMeshFeatures';
 import { MBExpressionEngine } from './MBExpressionEngine';
@@ -546,9 +547,17 @@ class MBBatchedModelDecoder implements ITileDecoder {
      * (runtime setZoom) + model-front-cutoff node opacity.
      */
     syncStyleState(): void {
+        const zoom = this.m_zoomProvider();
         for (const outer of this.m_builtGroups) {
             this.applyNodeTransforms(outer);
             syncMglModelLighting(outer, this.m_envProvider);
+            // Indirect part-styling update (runtime setLights/setZoom over
+            // measure-light-dependent part paint) — no-op unless brightness
+            // or zoom moved since the last application.
+            try {
+                refreshMeshFeatures(outer.children[0] as THREE.Object3D,
+                    this.m_paint, zoom, this.m_envProvider);
+            } catch { /* must never break the frame */ }
         }
         try {
             const mv: any = (this.m_envProvider as any)?.mapView;

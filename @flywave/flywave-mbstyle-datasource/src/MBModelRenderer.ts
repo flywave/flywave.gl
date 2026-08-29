@@ -159,6 +159,13 @@ export function applyMglModelLighting(
                     amb: shader.uniforms.uMB3DAmb,
                     dirColor: shader.uniforms.uMB3DDirColor,
                     dir: shader.uniforms.uMB3DDir,
+                    // Indirect part-styling update: per-part emissive strength
+                    // and the height-based emission ramp are measure-light /
+                    // paint dependent — refreshed in place by
+                    // MBMeshFeatures.refreshMeshFeatures.
+                    emis: shader.uniforms.uMB3DEmissive,
+                    hbs: shader.uniforms.uMBHbs,
+                    hbsRange: shader.uniforms.uMBHbsRange,
                 };
                 shader.fragmentShader = shader.fragmentShader.replace(
                     'void main() {',
