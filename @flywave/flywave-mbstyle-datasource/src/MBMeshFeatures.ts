@@ -20,11 +20,17 @@
 
 import * as THREE from 'three';
 import { MBExpressionEngine } from './MBExpressionEngine';
-import { applyMglModelLighting } from './MBModelRenderer';
+import { applyMglModelLighting, MBHeightBasedEmission, mbHeightRampUniforms } from './MBModelRenderer';
 import { parseGlb } from './MBDracoDecoder';
 
 // mgl Tiled3dModelBucket PartNames — index = the partId in the feature attr.
 export const PART_NAMES = ['', 'wall', 'door', 'roof', 'window', 'lamp', 'logo'];
+
+/** mgl PartIndices.door — the part whose color drives the door lights. */
+const DOOR_PART = 2;
+
+/** GLB quantized grid extent (mgl tiled 3D models) — the y mirror axis. */
+const GRID = 8192;
 
 const FEATURE_ATTR = '_feature_rgba4444';
 
@@ -41,14 +47,43 @@ export function hasMeshFeatures(buffer: ArrayBuffer): boolean {
 interface PartStyle {
     colorSrgb: [number, number, number]; // 0..255 bytes (mgl lerps bytes)
     mix: number;
-    roughness: number | null; // null = keep the glTF material's roughness
+    roughness: number; // mgl overwrites the glTF factor (default 1)
     emissive: number;
+    /** model-color alpha (mgl rmea[3] → final opacity multiplier). */
+    alpha: number;
+    /** model-opacity evaluated per part. */
+    opacity: number;
+    /** model-height-based-emissive-strength-multiplier ([1,1,1,1,0] default). */
+    heightEmission: MBHeightBasedEmission;
 }
 
-function parseRgbaBytes(v: any): [number, number, number] | null {
-    const m = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/.exec(String(v));
+function parseRgbaBytes(v: any): [number, number, number, number] | null {
+    if (typeof v !== 'string') return null;
+    // MBExpressionEngine formats colors as CSS hex (§550: the engine returns
+    // e.g. "#f5e066" — the rgba() branch alone fell back to white and the
+    // mix lerp washed the whole tile out).
+    const hex = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(v.trim());
+    if (hex) {
+        const h = hex[1];
+        const pair = (s: string) => parseInt(s, 16);
+        if (h.length <= 4) {
+            return [
+                parseInt(h[0] + h[0], 16),
+                parseInt(h[1] + h[1], 16),
+                parseInt(h[2] + h[2], 16),
+                h.length === 4 ? pair(h[3] + h[3]) / 255 : 1,
+            ];
+        }
+        return [
+            pair(h.slice(0, 2)),
+            pair(h.slice(2, 4)),
+            pair(h.slice(4, 6)),
+            h.length === 8 ? pair(h.slice(6, 8)) / 255 : 1,
+        ];
+    }
+    const m = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s]+([\d.]+))?/.exec(v);
     if (!m) return null;
-    return [Number(m[1]), Number(m[2]), Number(m[3])];
+    return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] !== undefined ? Number(m[4]) : 1];
 }
 
 function evalPart(paint: any, zoom: number, part: string): PartStyle {
@@ -68,7 +103,7 @@ function evalPart(paint: any, zoom: number, part: string): PartStyle {
     const colorRaw = paint?.['model-color'];
     const colorEval = typeof colorRaw === 'object' && colorRaw !== null
         ? evalRaw(colorRaw) : colorRaw;
-    const colorSrgb = parseRgbaBytes(colorEval) ?? [255, 255, 255];
+    const colorSrgb = parseRgbaBytes(colorEval) ?? [255, 255, 255, 1];
     const num = (raw: any, dflt: number): number => {
         const v = evalRaw(raw);
         const n = Number(v);
@@ -76,11 +111,30 @@ function evalPart(paint: any, zoom: number, part: string): PartStyle {
     };
     const mix = paint?.['model-color-mix-intensity'] === undefined ? 0
         : num(paint['model-color-mix-intensity'], 0);
-    const roughness = paint?.['model-roughness'] === undefined
-        ? null
-        : num(paint['model-roughness'], 1);
+    // mgl Tiled3dModelBucket.evaluate overwrites the per-part roughness with
+    // the paint value unconditionally (style-spec default 1) — the glTF
+    // material's own factor never survives for mesh-features tiles.
+    const roughness = Math.min(Math.max(num(paint?.['model-roughness'], 1), 0), 1);
     const emissive = num(paint?.['model-emissive-strength'], 0);
-    return { colorSrgb, mix, roughness, emissive };
+    // [start, finish, startValue, finishValue, exponent] — mgl style-spec
+    // default [1,1,1,1,0] degenerates to the constant ~1 branch.
+    const rawH = paint?.['model-height-based-emissive-strength-multiplier'];
+    const hArr = Array.isArray(rawH) && rawH.every((v: any) => typeof v === 'number')
+        ? rawH : evalRaw(rawH);
+    const heightEmission: MBHeightBasedEmission = Array.isArray(hArr) && hArr.length >= 5
+        ? { start: Number(hArr[0]), finish: Number(hArr[1]),
+            startValue: Number(hArr[2]), finishValue: Number(hArr[3]),
+            exponent: Number(hArr[4]) }
+        : { start: 1, finish: 1, startValue: 1, finishValue: 1, exponent: 0 };
+    return {
+        colorSrgb: [colorSrgb[0], colorSrgb[1], colorSrgb[2]],
+        mix,
+        roughness,
+        emissive,
+        alpha: colorSrgb[3] ?? 1,
+        opacity: num(paint?.['model-opacity'], 1),
+        heightEmission,
+    };
 }
 
 function expand4444(color: number): [number, number, number, number] {
@@ -94,6 +148,301 @@ function expand4444(color: number): [number, number, number, number] {
 
 function srgbToLinear(c: number): number {
     return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+/**
+ * mgl draw_model front-cutoff (model-front-cutoff paint, CPU per node):
+ *   [start, range, opacity], enabled when opacity < 1.
+ * cameraCollisionOpacity: camera inside the node AABB → fade out/in at 1/6
+ * per frame. calculateFrontCutoffOpacity: pitch-gated (20°..40° ramp)
+ * camera-space AABB bottom-edge cutoff with a range-scaled fade band.
+ * Applied per frame over built tile groups; node factor multiplies each
+ * part material's base opacity (mgl: u_opacity per node draw).
+ */
+export function applyModelFrontCutoff(
+    groups: Iterable<THREE.Object3D>,
+    paint: any,
+    mv: any,
+    evalVec: (key: string, dflt: [number, number, number]) => [number, number, number],
+): void {
+    const params = evalVec('model-front-cutoff', [0, 0, 1]);
+    const finalOpacity = Math.min(Math.max(params[2], 0), 1);
+    const enabled = finalOpacity < 1;
+    const meshes: THREE.Mesh[] = [];
+    for (const group of groups) {
+        group.traverse((o: any) => {
+            if (o.isMesh && o.userData?.__mbNodeBox) meshes.push(o as THREE.Mesh);
+        });
+    }
+    if (!enabled) {
+        for (const mesh of meshes) {
+            const mat: any = mesh.material;
+            if (mat && mesh.userData.__mbBaseOpacity !== undefined) {
+                mat.opacity = mesh.userData.__mbBaseOpacity;
+            }
+            mesh.userData.__mbCamColOp = undefined;
+        }
+        return;
+    }
+    const camera: any = mv?.camera;
+    const pitch = Number(mv?.pitch ?? 0);
+    if (!camera || pitch < 20) {
+        for (const mesh of meshes) {
+            const mat: any = mesh.material;
+            if (mat && mesh.userData.__mbBaseOpacity !== undefined) {
+                mat.opacity = mesh.userData.__mbBaseOpacity;
+            }
+        }
+        return;
+    }
+    // Screen pixels per meter at the target distance (mgl tr.pixelsPerMeter).
+    const camPos = camera.position;
+    const target: any = mv?.m_targetWorldPos ?? camPos;
+    const dist = Math.max(camPos.distanceTo(target), 1);
+    const canvasH = (mv?.getCanvasClientSize?.()?.height) ?? 512;
+    const fovY = (camera.fov ?? 30) * Math.PI / 180;
+    const pixelsPerMeter = (canvasH / 2) / (dist * Math.tan(fovY / 2));
+    const fovScale = Math.tan(fovY / 2) * (camera.aspect ?? 1);
+    const cutoffRange = 100 * pixelsPerMeter * Math.min(Math.max(params[1], 0), 1);
+    const pitchT = Math.min(Math.max((pitch - 20) / 20, 0), 1);
+    const camLocal = new THREE.Vector3();
+    const corner = new THREE.Vector3();
+    const mat4 = new THREE.Matrix4();
+
+    for (const mesh of meshes) {
+        const box: THREE.Box3 = mesh.userData.__mbNodeBox;
+        // cameraCollisionOpacity (±1/6 per frame) — camera inside the node box.
+        let camCol: number = mesh.userData.__mbCamColOp ?? 1;
+        try {
+            mesh.updateWorldMatrix(true, false);
+            camLocal.copy(camPos);
+            mesh.parent!.worldToLocal(camLocal);
+            const inside = camLocal.x > box.min.x && camLocal.x < box.max.x &&
+                camLocal.y > box.min.y && camLocal.y < box.max.y &&
+                camLocal.z < box.max.z;
+            camCol = inside
+                ? Math.max(camCol - 1 / 6, 0)
+                : Math.min(camCol + 1 / 6, 1);
+        } catch { camCol = 1; }
+        mesh.userData.__mbCamColOp = camCol;
+
+        // calculateFrontCutoffOpacity: transform the local box's 4 bottom
+        // corners to CAMERA space via the last render's modelViewMatrix.
+        let nodeOpacity = 1;
+        try {
+            mat4.multiplyMatrices(camera.matrixWorldInverse, mesh.matrixWorld);
+            const zs = box.min.z;
+            let minY = Infinity, maxY = -Infinity;
+            const pts: THREE.Vector3[] = [];
+            for (const [cx, cy] of [[box.min.x, box.min.y], [box.max.x, box.min.y],
+                [box.max.x, box.max.y], [box.min.x, box.max.y]]) {
+                corner.set(cx, cy, zs).applyMatrix4(mat4);
+                pts.push(corner.clone());
+                minY = Math.min(minY, corner.y);
+                maxY = Math.max(maxY, corner.y);
+            }
+            const t0 = Math.min(Math.max(params[0], 0), 1);
+            const cutoffStartY = minY + (maxY - minY) * t0;
+            const cutoffStartZ = Math.abs(pts[0].z);
+            const yMinLimit = -cutoffStartZ * fovScale;
+            if (cutoffRange === 0) {
+                nodeOpacity = cutoffStartY < yMinLimit ? finalOpacity : 1;
+            } else {
+                const cutoffFactor = (yMinLimit - cutoffStartY) / cutoffRange;
+                const lerpFactor = Math.min(Math.max(cutoffFactor, 0), 1);
+                const op = Math.min(Math.max(1 + (finalOpacity - 1) * lerpFactor, finalOpacity), 1);
+                nodeOpacity = 1 + (op - 1) * pitchT;
+            }
+        } catch { nodeOpacity = 1; }
+
+        const factor = camCol * nodeOpacity;
+        const mat: any = mesh.material;
+        if (mat && mesh.userData.__mbBaseOpacity !== undefined) {
+            const base = mesh.userData.__mbBaseOpacity;
+            const opacity = base * factor;
+            mat.opacity = opacity;
+            mat.transparent = opacity < 1 || mat.userData.__mbForceTransparent === true;
+        }
+    }
+}
+
+/**
+ * mgl decodeLights (model_loader.ts): node `extras.lights` base64 → area
+ * lights. 24 bytes per light: two uint16 (height, elevation — /30) + a
+ * uint16 depth (/100 at u16 index 10) + three float32 endpoints (x0,y0,x1,y1
+ * tile coordinates).
+ */
+function decodeLights(base64: string): Array<{
+    pos: [number, number, number]; normal: [number, number, number];
+    width: number; height: number; depth: number;
+}> {
+    if (!base64.length) return [];
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const lightCount = Math.floor(bytes.length / 24);
+    const u16 = new Uint16Array(bytes.buffer);
+    const f32 = new Float32Array(bytes.buffer);
+    const lights: Array<{ pos: [number, number, number]; normal: [number, number, number]; width: number; height: number; depth: number; }> = [];
+    for (let i = 0; i < lightCount; i++) {
+        const height = u16[i * 12] / 30;
+        const elevation = u16[i * 12 + 1] / 30;
+        const depth = u16[i * 12 + 10] / 100;
+        const x0 = f32[i * 6 + 1];
+        const y0 = f32[i * 6 + 2];
+        const x1 = f32[i * 6 + 3];
+        const y1 = f32[i * 6 + 4];
+        // Corrupt/out-of-grid endpoints would explode the extrusion quads
+        // across the whole map — skip instead (door lights are sub-meter
+        // features inside the 8192 grid).
+        if (![x0, y0, x1, y1, height, elevation, depth].every(
+            (v) => Number.isFinite(v) && Math.abs(v) <= GRID * 2)) {
+            continue;
+        }
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+        const width = Math.hypot(dx, dy);
+        if (width === 0 || depth === 0) continue;
+        const normal: [number, number, number] = [dy / width, -dx / width, 0];
+        const pos: [number, number, number] = [x0 + dx * 0.5, y0 + dy * 0.5, elevation];
+        lights.push({ pos, normal, width, height, depth });
+    }
+    return lights;
+}
+
+/**
+ * mgl calculateLightsMesh / createLightsMesh: 10 vertices + 4 triangles per
+ * door light — the door plane plus a ground/face extrusion whose per-vertex
+ * `color_4f` encodes the falloff frame. Coordinates come out in the GLB grid
+ * (y south); vertices are y-mirrored like the regular tile geometry.
+ */
+function buildLightsGeometry(
+    lights: Array<{ pos: [number, number, number]; normal: [number, number, number]; width: number; height: number; depth: number; }>,
+    zScale: number,
+): { positions: Float32Array; c4f: Float32Array; indices: Uint32Array } | null {
+    const positions = new Float32Array(lights.length * 10 * 3);
+    const c4f = new Float32Array(lights.length * 10 * 4);
+    const indices = new Uint32Array(lights.length * 12);
+    const MY = (y: number) => GRID - y; // GLB grid y-south → engine y-north
+    let v = 0, t = 0;
+    for (const light of lights) {
+        const fallOff = Math.min(10, Math.max(4, 1.3 * light.height)) * zScale;
+        const tangent = [-light.normal[1], light.normal[0], 0];
+        const horizontalSpread = Math.min(0.29, 0.1 * light.width / light.depth);
+        const width = light.width - 2 * light.depth * zScale * (horizontalSpread + 0.01);
+        const halfWidth = width / fallOff / 2.0;
+        const v1: [number, number, number] = [
+            light.pos[0] + tangent[0] * width / 2,
+            light.pos[1] + tangent[1] * width / 2,
+            light.pos[2],
+        ];
+        const v2: [number, number, number] = [
+            light.pos[0] - tangent[0] * width / 2,
+            light.pos[1] - tangent[1] * width / 2,
+            light.pos[2],
+        ];
+        const v0: [number, number, number] = [v1[0], v1[1], v1[2] + light.height];
+        const v3: [number, number, number] = [v2[0], v2[1], v2[2] + light.height];
+        const push = (p: [number, number, number], x: number, y: number, z: number, w: number) => {
+            positions[v * 3] = p[0];
+            positions[v * 3 + 1] = MY(p[1]);
+            positions[v * 3 + 2] = p[2];
+            c4f[v * 4] = x; c4f[v * 4 + 1] = y; c4f[v * 4 + 2] = z; c4f[v * 4 + 3] = w;
+            v++;
+        };
+        const v1e: [number, number, number] = [
+            v1[0] + (light.normal[0] + tangent[0] * horizontalSpread) * fallOff,
+            v1[1] + (light.normal[1] + tangent[1] * horizontalSpread) * fallOff,
+            v1[2],
+        ];
+        const v2e: [number, number, number] = [
+            v2[0] + (light.normal[0] - tangent[0] * horizontalSpread) * fallOff,
+            v2[1] + (light.normal[1] - tangent[1] * horizontalSpread) * fallOff,
+            v2[2],
+        ];
+        const v1b: [number, number, number] = [v1[0], v1[1], v1[2] + 0.1];
+        const v2b: [number, number, number] = [v2[0], v2[1], v2[2] + 0.1];
+        push(v1e, -halfWidth - horizontalSpread, -1, halfWidth, 0.8);
+        push(v2e, halfWidth + horizontalSpread, -1, halfWidth, 0.8);
+        push(v1b, -halfWidth, 0, halfWidth, 1.3);
+        push(v2b, halfWidth, 0, halfWidth, 1.3);
+        push(v0, halfWidth + horizontalSpread, -0.8, halfWidth, 0.7);
+        push(v3, halfWidth + horizontalSpread, -0.8, halfWidth, 0.7);
+        push(v1b, 0, 0, halfWidth, 1.3);
+        push(v2b, 0, 0, halfWidth, 1.3);
+        push(v1e, halfWidth + horizontalSpread, -1.2, halfWidth, 0.8);
+        push(v2e, halfWidth + horizontalSpread, -1.2, halfWidth, 0.8);
+        indices[t++] = v - 10 + 6; indices[t++] = v - 10 + 4; indices[t++] = v - 10 + 8;
+        indices[t++] = v - 10 + 7; indices[t++] = v - 10 + 9; indices[t++] = v - 10 + 5;
+        indices[t++] = v - 10 + 0; indices[t++] = v - 10 + 1; indices[t++] = v - 10 + 2;
+        indices[t++] = v - 10 + 1; indices[t++] = v - 10 + 3; indices[t++] = v - 10 + 2;
+    }
+    if (v === 0) return null;
+    return { positions, c4f, indices };
+}
+
+/**
+ * The emissive door-light quads of a landmark node (mgl renders them in the
+ * same model draw, tinted by the DOOR part's color_mix with a distance
+ * falloff from the color_4f frame — model.fragment.glsl
+ * HAS_ATTRIBUTE_a_color_4f branch).
+ */
+function buildNodeLightsMesh(
+    lightsBase64: string,
+    doorColorBytes: [number, number, number],
+    doorEmissive: number,
+    zScale: number,
+): THREE.Mesh | null {
+    try {
+        const geo = buildLightsGeometry(decodeLights(lightsBase64), zScale);
+        if (!geo) return null;
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(geo.positions, 3));
+        g.setAttribute('mbC4f', new THREE.BufferAttribute(geo.c4f, 4));
+        g.setIndex(new THREE.BufferAttribute(geo.indices, 1));
+        const mat: any = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(
+                srgbToLinear(doorColorBytes[0] / 255),
+                srgbToLinear(doorColorBytes[1] / 255),
+                srgbToLinear(doorColorBytes[2] / 255)),
+            transparent: true,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+        });
+        mat.onBeforeCompile = (shader: any) => {
+            shader.uniforms.uMBLightsE = { value: doorEmissive };
+            shader.vertexShader = shader.vertexShader
+                .replace('void main() {',
+                    `attribute vec4 mbC4f;
+                     varying vec4 vMbC4f;
+                     void main() {
+                         vMbC4f = mbC4f;`)
+                // three expands color_vertex etc.; keep them intact.
+                .replace('#include <begin_vertex>',
+                    '#include <begin_vertex>');
+            shader.fragmentShader = shader.fragmentShader
+                .replace('void main() {',
+                    `uniform float uMBLightsE;
+                     varying vec4 vMbC4f;
+                     void main() {`)
+                .replace('#include <opaque_fragment>',
+                    `#include <opaque_fragment>
+                     {
+                         // mgl model.fragment.glsl light-geometry falloff.
+                         float mbD = length(vec2(1.3 * max(0.0, abs(vMbC4f.x) - vMbC4f.z), vMbC4f.y));
+                         mbD += mix(0.5, 0.0, clamp(uMBLightsE - 1.0, 0.0, 1.0));
+                         gl_FragColor.a *= clamp(1.0 - mbD * mbD, 0.0, 1.0);
+                         if (gl_FragColor.a <= 0.0) discard;
+                     }`);
+        };
+        const mesh = new THREE.Mesh(g, mat);
+        (mat as any).__mbIsLights = true;
+        mesh.renderOrder = 11;
+        mesh.frustumCulled = false;
+        return mesh;
+    } catch {
+        return null;
+    }
 }
 
 /**
@@ -144,6 +493,9 @@ function splitByPart(
     // Per-vertex partId + the mixed, linear-space vertex color.
     const partOf = new Uint8Array(vertCount);
     const colors = new Float32Array(vertCount * 3);
+    // First mixed 4444 color per part — the door color that drives the node's
+    // light geometry (mgl buildMeshFeatureArray doorLight branch).
+    const partFirstColor = new Map<number, [number, number, number]>();
     for (let i = 0; i < vertCount; i++) {
         const u32 = (u16[i * 2] | (u16[i * 2 + 1] << 16)) >>> 0;
         const rawPart = u32 & 0xf;
@@ -151,6 +503,7 @@ function splitByPart(
         partOf[i] = partId;
         const style = parts[partId];
         let [r, g, b] = expand4444((u32 >>> 16) & 0xffff);
+        if (!partFirstColor.has(partId)) partFirstColor.set(partId, [r, g, b]);
         if (style.mix > 0) {
             // mgl lerps in sRGB byte space before the shader converts.
             r = Math.round(r + (style.colorSrgb[0] - r) * style.mix);
@@ -163,6 +516,11 @@ function splitByPart(
     }
 
     // Group triangle indices by part (tiler authors uniform parts per face).
+    // The height ramp maps the mesh-local z through the WHOLE mesh's z range
+    // (mgl computePartPbrTable receives mesh.aabb before the part split).
+    geometry.computeBoundingBox();
+    const bboxZMin = geometry.boundingBox?.min.z ?? 0;
+    const bboxZMax = geometry.boundingBox?.max.z ?? 0;
     const byPart = new Map<number, number[]>();
     const idx = index.array as ArrayLike<number>;
     for (let t = 0; t < index.count; t += 3) {
@@ -193,7 +551,19 @@ function splitByPart(
         // so the material's base color factor must not tint it again.
         mat.vertexColors = true;
         if (mat.color) mat.color.setRGB(1, 1, 1);
-        if (style.roughness !== null) mat.roughness = style.roughness;
+        mat.roughness = style.roughness;
+        // mgl never styles metallic (Tiled3dModelFeature default table:
+        // window=1, every other part=0) and the a_pbr decode replaces the
+        // glTF factor with it.
+        mat.metalness = partId === 4 ? 1 : 0;
+        // Final opacity chain (mgl: baseColorFactor.a × part alpha ×
+        // model-opacity — u_opacity uniform).
+        const opacity = (mat.opacity ?? 1) * style.alpha * style.opacity;
+        if (opacity < 1) {
+            mat.transparent = true;
+            mat.opacity = opacity;
+            mat.depthWrite = false;
+        }
         const sub = new THREE.Mesh(subGeo, mat);
         sub.position.copy(mesh.position);
         sub.quaternion.copy(mesh.quaternion);
@@ -201,10 +571,30 @@ function splitByPart(
         sub.renderOrder = mesh.renderOrder;
         sub.frustumCulled = mesh.frustumCulled;
         sub.userData.__mbPart = partId;
-        applyMglModelLighting(dataSource, sub, style.emissive);
+        // Front-cutoff / opacity bookkeeping propagates to the split meshes
+        // (the per-frame applyModelFrontCutoff walks these).
+        sub.userData.__mbNodeBox = mesh.userData?.__mbNodeBox;
+        sub.userData.__mbAnchor = mesh.userData?.__mbAnchor;
+        sub.userData.__mbBaseOpacity = (mat.opacity ?? 1);
+        if (mat.transparent) (mat.userData ??= {}).__mbForceTransparent = true;
+        applyMglModelLighting(dataSource, sub, style.emissive, undefined,
+            mbHeightRampUniforms(style.heightEmission, bboxZMin, bboxZMax));
         subMeshes.push(sub);
     }
 
     parent.add(...subMeshes);
     parent.remove(mesh);
+    // Door lights (mgl node.lights → lightMeshIndex mesh tinted by the door
+    // color_mix). The lights ride the same node as the features mesh.
+    const lightsBase64 = mesh.userData?.__mbLights;
+    if (lightsBase64 && partFirstColor.has(DOOR_PART)) {
+        const doorColor = partFirstColor.get(DOOR_PART)!;
+        const lightsMesh = buildNodeLightsMesh(
+            lightsBase64, doorColor, parts[DOOR_PART].emissive,
+            mesh.userData?.__mbZScale ?? 5);
+        if (lightsMesh) {
+            lightsMesh.userData.__mbNodeId = mesh.userData?.__mbNodeId;
+            parent.add(lightsMesh);
+        }
+    }
 }

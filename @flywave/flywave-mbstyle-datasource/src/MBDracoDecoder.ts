@@ -148,12 +148,30 @@ export interface TileMaterialData {
     doubleSided: boolean;
     /** true when the material carries an occlusion/AO texture. */
     hasOcclusion: boolean;
+    /** Index into TileMaterialized.textures when occlusionTexture present. */
+    occlusionTextureIndex: number;
+}
+
+/** Decoded image payload of a GLB texture (occlusion maps on mbx tiles). */
+export interface TileTextureData {
+    bytes: Uint8Array;
+    mimeType: string;
 }
 
 export interface TileMaterialized {
     nodes: TilePrimitiveData[][];
     materials: TileMaterialData[];
     hasMeshFeatures: boolean;
+    /** GLB images (bufferView bytes) — occlusion maps for the mbx tiles. */
+    textures: (TileTextureData | undefined)[];
+    /** Per-mesh glTF node `extras.id` (mgl ModelNode.id, feature filter key). */
+    nodeIds: (string | undefined)[];
+    /** nodes[i] came from json.meshes[meshIndices[i]] (skipped empty meshes). */
+    meshIndices: number[];
+    /** Per-mesh glTF node `extras.lights` (base64 door-light definitions). */
+    nodeLights: (string | undefined)[];
+    /** Per-mesh glTF node `extras.anchor` (grid units — model-scale pivot). */
+    nodeAnchors: ([number, number] | undefined)[];
 }
 
 /**
@@ -168,9 +186,11 @@ export async function decodeGlbTile(buffer: ArrayBuffer): Promise<TileMaterializ
     const { json, bin } = parseGlb(buffer);
     const draco = await loadDracoModule();
     const nodes: TilePrimitiveData[][] = [];
+    let meshIdx = -1;
+    const meshIndices: number[] = [];
     for (const mesh of json.meshes ?? []) {
-        const prims: TilePrimitiveData[] = [];
-        for (const prim of mesh.primitives ?? []) {
+        meshIdx++;
+        const prims: TilePrimitiveData[] = [];        for (const prim of mesh.primitives ?? []) {
             const config = prim.extensions?.[DRACO_EXT];
             if (!config) continue;
             const bytes = viewBytes(bin, json, config.bufferView);
@@ -242,12 +262,17 @@ export async function decodeGlbTile(buffer: ArrayBuffer): Promise<TileMaterializ
                 throw e;
             }
         }
-        if (prims.length > 0) nodes.push(prims);
+        if (prims.length > 0) {
+            nodes.push(prims);
+            meshIndices.push(meshIdx);
+        }
     }
 
     const materials: TileMaterialData[] = (json.materials ?? []).map((m: any) => {
         const pbr = m.pbrMetallicRoughness ?? {};
         const e = m.emissiveFactor ?? [0, 0, 0];
+        const occTex = m.occlusionTexture?.index !== undefined
+            ? json.textures?.[m.occlusionTexture.index] : undefined;
         return {
             baseColorFactor: pbr.baseColorFactor ?? [1, 1, 1, 1],
             roughnessFactor: pbr.roughnessFactor ?? 1,
@@ -255,13 +280,40 @@ export async function decodeGlbTile(buffer: ArrayBuffer): Promise<TileMaterializ
             emissiveFactor: [e[0] ?? 0, e[1] ?? 0, e[2] ?? 0],
             doubleSided: !!m.doubleSided,
             hasOcclusion: !!m.occlusionTexture,
+            occlusionTextureIndex: occTex?.source ?? -1,
         };
+    });
+
+    // GLB images → raw encoded bytes (PNG/JPEG). mbx landmark tiles carry
+    // occlusion maps here (no baseColor textures) — mgl samples them in the
+    // model shader (ao = (tex-1)*u_aoIntensity + 1).
+    const textures: (TileTextureData | undefined)[] = (json.images ?? []).map((img: any) => {
+        try {
+            if (img.bufferView === undefined) return undefined;
+            const bytes = viewBytes(bin, json, img.bufferView);
+            return { bytes, mimeType: img.mimeType ?? 'image/png' };
+        } catch {
+            return undefined;
+        }
     });
 
     const hasFeatures = !!((Array.isArray(json.extensionsUsed) &&
         json.extensionsUsed.includes('MAPBOX_mesh_features')) ||
         json.asset?.extras?.MAPBOX_mesh_features);
-    return { nodes, materials, hasMeshFeatures: hasFeatures };
+    // mgl convertNode: node.id = extras.id — the feature-filter key for
+    // tiled 3D models (landmark-filter / -duplicate fixtures filter on it).
+    const nodeIds: (string | undefined)[] = new Array((json.meshes ?? []).length).fill(undefined);
+    const nodeLights: (string | undefined)[] = new Array((json.meshes ?? []).length).fill(undefined);
+    const nodeAnchors: ([number, number] | undefined)[] = new Array((json.meshes ?? []).length).fill(undefined);
+    for (const n of json.nodes ?? []) {
+        if (n.mesh === undefined || n.mesh >= nodeIds.length) continue;
+        if (n.extras?.id !== undefined) nodeIds[n.mesh] = String(n.extras.id);
+        if (typeof n.extras?.lights === 'string') nodeLights[n.mesh] = n.extras.lights;
+        if (Array.isArray(n.extras?.anchor) && n.extras.anchor.length >= 2) {
+            nodeAnchors[n.mesh] = [Number(n.extras.anchor[0]), Number(n.extras.anchor[1])];
+        }
+    }
+    return { nodes, materials, hasMeshFeatures: hasFeatures, textures, nodeIds, meshIndices, nodeLights, nodeAnchors };
 }
 
 /**

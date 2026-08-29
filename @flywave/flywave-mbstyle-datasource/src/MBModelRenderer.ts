@@ -52,11 +52,77 @@ type GLTFLoaderType = any;
  * renders raw albedo). Exports for both instantiation paths (per-feature
  * MBModelRenderer and the source-registry loadModels in MBStyleDataSource).
  */
+/** mgl `model-height-based-emissive-strength-multiplier` paint value. */
+export interface MBHeightBasedEmission {
+    /** Ramp start/finish heights, in the mesh's local z units (meters). */
+    start: number;
+    finish: number;
+    /** Multiplier value at start/finish (each clamped 0..1 in mgl). */
+    startValue: number;
+    finishValue: number;
+    /** Interpolation power exponent (mgl: pow factor = 10^clamp(exp,-1,1)). */
+    exponent: number;
+}
+
+/**
+ * Encode the height ramp into the vertex-shader constants mgl packs into the
+ * a_pbr attributes (tiled_3d_model_bucket computePartPbrTable):
+ *   t = z*b0 + b1, multiplier = startQ + rangeQ * pow(clamp(t,0,1), power)
+ * The /256 quantization replicates mgl's byte packing (a3 unpack). When the
+ * ramp degenerates (start===finish) mgl falls back to the constant 0xffff
+ * branch — multiplier 255/256, no z dependence.
+ */
+export function mbHeightRampUniforms(
+    ramp: MBHeightBasedEmission | undefined,
+    zMin: number,
+    zMax: number,
+): { b0: number; b1: number; power: number; start: number; range: number } {
+    const zRange = zMax - zMin;
+    if (ramp && ramp.start !== ramp.finish && zRange > 0) {
+        const denom = zRange * (ramp.finish - ramp.start);
+        const startQ = Math.floor(Math.min(Math.max(ramp.startValue, 0), 1) * 255) / 256;
+        const finishQ = Math.floor(Math.min(Math.max(ramp.finishValue, 0), 1) * 255) / 256;
+        return {
+            b0: 1 / denom,
+            b1: -(zMin + zRange * ramp.start) / denom,
+            power: Math.pow(10, Math.min(Math.max(ramp.exponent, -1), 1)),
+            start: startQ,
+            range: finishQ - startQ,
+        };
+    }
+    // mgl a3=0xffff / b0=0 / b1=1 / b2=1 constant branch.
+    return { b0: 0, b1: 1, power: 1, start: 255 / 256, range: 0 };
+}
+
+/**
+ * Refresh the captured 3D-lighting uniforms of every mgl-lit material under
+ * `model` from the CURRENT lighting3DState (mgl re-uploads u_lighting_*
+ * every draw; a runtime render-test `setLights` op must take effect without
+ * a material recompile).
+ */
+export function syncMglModelLighting(model: THREE.Object3D, dataSource: any): void {
+    const ls = dataSource?.m_environment?.lighting3DState;
+    if (!ls) return;
+    model.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const mat of mats as any[]) {
+            const u = mat?.userData?.__mbLightU;
+            if (!u) continue;
+            u.amb.value = ls.ambientColorLinear;
+            u.dirColor.value = ls.directionalColorLinear;
+            u.dir.value = ls.dir;
+        }
+    });
+}
+
 export function applyMglModelLighting(
     dataSource: any,
     model: THREE.Object3D,
     emissiveStrength: number,
     tint?: { color: number[]; mix: number },
+    heightRamp?: { b0: number; b1: number; power: number; start: number; range: number },
 ): void {
     const ls = dataSource?.m_environment?.lighting3DState;
     model.traverse((o) => {
@@ -76,6 +142,7 @@ export function applyMglModelLighting(
             const origOnCompile = mat.onBeforeCompile;
             mat.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(mat, shader);
+                const hr = heightRamp ?? { b0: 0, b1: 1, power: 1, start: 1, range: 0 };
                 const ls2 = dataSource?.m_environment?.lighting3DState;
                 shader.uniforms.uMB3DAmb = { value: ls2 ? ls2.ambientColorLinear : [1, 1, 1] };
                 shader.uniforms.uMB3DDirColor = { value: ls2 ? ls2.directionalColorLinear : [1, 1, 1] };
@@ -83,13 +150,34 @@ export function applyMglModelLighting(
                 shader.uniforms.uMB3DEmissive = { value: emissiveStrength ?? 0 };
                 shader.uniforms.uMB3DTint = { value: tint?.color ?? [0, 0, 0] };
                 shader.uniforms.uMB3DTintA = { value: tint?.mix ?? 0 };
+                shader.uniforms.uMBHbs = { value: [hr.b0, hr.b1, hr.power, hr.start] };
+                shader.uniforms.uMBHbsRange = { value: hr.range };
+                // Runtime `setLights`: keep the uniform OBJECTS so a per-frame
+                // sync can refresh their values without a recompile (mirrors
+                // mgl re-uploading u_lighting_* every draw).
+                mat.userData.__mbLightU = {
+                    amb: shader.uniforms.uMB3DAmb,
+                    dirColor: shader.uniforms.uMB3DDirColor,
+                    dir: shader.uniforms.uMB3DDir,
+                };
                 shader.fragmentShader = shader.fragmentShader.replace(
                     'void main() {',
                     `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
                      uniform float uMB3DEmissive;
                      uniform vec3 uMB3DTint; uniform float uMB3DTintA;
+                     uniform vec4 uMBHbs; uniform float uMBHbsRange;
+                     varying float vMbLocalZ;
                      vec3 mbAlbedo = vec3(1.0);
                      void main() {`
+                );
+                // a_pbr height ramp: mgl evaluates the ramp against the mesh
+                // LOCAL z (a_pos_3f.z, grid meters) — pass it through a
+                // varying from the un-transformed attribute.
+                shader.vertexShader = shader.vertexShader.replace(
+                    'void main() {',
+                    `varying float vMbLocalZ;
+                     void main() {
+                         vMbLocalZ = position.z;`
                 );
                 // Capture the glTF albedo AFTER the base-color texture —
                 // that is the `albedo` mgl's getBaseColor feeds apply_lighting.
@@ -99,6 +187,19 @@ export function applyMglModelLighting(
                      mbAlbedo = diffuseColor.rgb;
                      // mgl getBaseColor: mix(albedo, sRGBToLinear(v_color_mix), mix)
                      mbAlbedo = mix(mbAlbedo, uMB3DTint, uMB3DTintA);`
+                );
+                // §550: batched-model tiles carry the albedo as VERTEX COLOR
+                // (the MAPBOX_mesh_features 4444 bake), which three multiplies
+                // in at color_fragment — AFTER the capture above. Re-capture
+                // there so the lit/emissive paths both see the baked color.
+                // Gated on USE_COLOR so vertex-color-less materials (the
+                // model-layer GLTFs, calibrated without it) are untouched.
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <color_fragment>',
+                    `#include <color_fragment>
+                     #ifdef USE_COLOR
+                         mbAlbedo = diffuseColor.rgb;
+                     #endif`
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <opaque_fragment>',
@@ -117,7 +218,19 @@ export function applyMglModelLighting(
                          float mbVert = mix(0.92, 1.0, dot(mbN, mbUpView) * 0.5 + 0.5);
                          vec3 mbK = uMB3DAmb * (mbVert * mbAmbDir) + uMB3DDirColor * mbNdotL;
                          vec3 mbLit = mbAlbedo * mbK;
-                         gl_FragColor.rgb = mix(mbLit, mbAlbedo, uMB3DEmissive);
+                         // mgl applies the occlusion texture to the LIT color
+                         // only (model.fragment.glsl: diffuse *= ao / color *=
+                         // ao) — the emissive color_mix target is not darkened.
+                         #ifdef USE_AOMAP
+                             float mbAo = (texture2D(aoMap, vAoMapUv).r - 1.0) * aoMapIntensity + 1.0;
+                             mbLit *= mbAo;
+                         #endif
+                         // model-height-based-emissive-strength-multiplier:
+                         // resEmission = emissive * (start + range * t^power),
+                         // t the height ramp over the mesh-local z (mgl
+                         // model.fragment.glsl v_height_based_emission_params).
+                         float mbRes = uMB3DEmissive * (uMBHbs.w + uMBHbsRange * pow(clamp(vMbLocalZ * uMBHbs.x + uMBHbs.y, 0.0, 1.0), uMBHbs.z));
+                         gl_FragColor.rgb = mix(mbLit, mbAlbedo, min(mbRes, 1.0));
                      }`
                 );
             };

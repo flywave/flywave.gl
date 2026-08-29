@@ -6242,3 +6242,66 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 
 
 **§549 尾注九——会话最终收口（2026-08-29 终）**：本会话渲染攻坚完成的事实矩阵：①direct path 实锤（anyEffect=false/camIsRte=1）；②THREE 单实例（engIsOurObj3D=1）；③**红盒在 m_sceneRoot/rteCamera 正前方向（南向帧 (+485,+353,-100)，在引擎 tile 对象 w0 分布范围 [-1411,1156]×[-1360,713]×[-174,0] 之内）仍零像素**；④tile.objects 通道红盒亦零像素。数据源层可及的全部通道（5 种挂载×2 种位置系）与对象构建（标准 BoxGeometry）**穷尽且等价失败**。**有效产出（不受阻断影响）**：①§547 decodeGlbTile 主线程解码+GLB 直构全链（decoded=3/parsed=3 探针实锤）；②MBMeshFeatures 逐 part 样式（PartNames+4444 差值帧无关定位）；③§548 ground-scale 全链；④探针矩阵（mrm patch/renderPath/像素A/B/dsRegistered）。**上屏解锁需要引擎层介入**：(a) 正规 flywave DataSource（batched-model 源实现 TileDataSource，tile.objects 由引擎管线全权渲染——绕开普通子树不绘制的现象）；(b) 引擎渲染循环排查（WebGLRenderer.render 对非 tile 子树的遍历路径）。单测 299 passing、tsc 绿。
+
+
+**§550. 正规 TileDataSource 实现落地——batched-model 源全链重写为引擎管线正规成员（2026-08-29）**：
+
+**实现（MBBatchedModelDataSource.ts 全量重写）**：①`extends TileDataSource<MBBatchedModelTile>`——正规四件套：`GLBTileDataProvider`（DataProvider 子类，fetch GLB 字节；404/网络错误→`ArrayBuffer(0)` 空瓦片，TileLoader 短路为空 DecodedTile+forceHasGeometry，缓存不重拉——稀疏瓦片集无 404 风暴）+ `MBatchedModelDecoder`（in-process ITileDecoder，§547 主线程 Draco decodeGlbTile 直构 THREE 场景，经 DecodedTile expando `mbObjects` 携带——in-process 无结构化克隆边界）+ `MBBatchedModelTile`（load() override：super.load() 后将 mbObjects push 进 `tile.objects`——TileObjectRenderer 每帧重挂 m_sceneRoot 的正规通道）+ TileFactory。②`useGeometryLoader=false`（GLB 无平面几何/technique 内容；allGeometryLoaded 回落 hasGeometry）。③**坐标定案（本会话关键考古）**：MapView 默认 `mercatorProjection` 为 **y 北正向**（WebMercatorProjection 才是南正向；emitter 的 tileToWorld 行分数公式靠 decoder 的 `py' = scale − 2·top − py` y 翻转进北正向系——MBStyleDecoder 1012-1016 行注释为权威依据）⇒ GLB 网格（NW 原点 y 南向）局部变换：`x'=(glbX−4096)·w`、`y'=(4096−glbY)·w`（翻转）、`z'=glbZ·sec(latCenter)`（mgl zScaleMatrix=pixelsPerMeter=secφ 语义；emitter line-width 同约定"1 ground meter = sec(lat) world units"）。**y 镜像以顶点烘焙实现 + 索引绕向反转**（负 scale=负行列式会翻转绕向致 FrontSide 内外翻转——渲染正确性关键）；法线 ny 同步取反。node 自洽验证过：四角网格点→世界→逆投影精确落回瓦片四角（Munich z14 8718/5683）。④levels：minDataLevel=minzoom、maxDataLevel=maxzoom（getDataZoomLevel=clamp(zoom+offset)⇒镜头 z17.85 直接请求 z14，无超采 404）。⑤maxGeometryHeight=500（§547 探针 330m×sec48°≈495 世界单位）。
+
+**挂接改造（MBStyleDataSource.ts）**：manualRegister 废除→正规 `mapView.addDataSource(ds)`（同 harness 里 MBStyleDataSource 走通的同一 attach→connect→theme 路径；骨架注释"getTheme 挂死"不成立——同 harness 同路径已验证）；`modelsPending` 挂到新 DS 的 fetch/decode 窗口（pending 计数器 provider+decoder 共享）+ wiring→注册桥接计数器（防 harness 在接线-注册间隙提前截帧）；census dump 增 `dsEnabled`/`dsLoading` 探针（区分"已注册未启用"——isDataSourceEnabled 还要求 m_connectedDataSources，仅 theme 步骤后加入）。`__mbBatched` 计数器族全保留（harness 兼容）。
+
+**验证状态**：tsc 绿；渲染批测未跑（按指示不跑测试）——下会话首动作：landmark-emission-strength 单夹具（基线 264389/314352；命中标志 batched.parsed>0 且首像素出现）。若仍零像素，第一排查点=census 的 `dsEnabled`（0=theme 步骤卡住→DS 未进调度）与 `dsLoading`；第二排查点=y 镜像方向（NW 原点假设若反，模型南北镜像但仍在瓦片内）。**保留资产不变**：MBBatchedModelRenderer（休眠）、mrm patch、全部探针。单测预计无回归（无既有用例引用被改接口）。
+
+
+**§550 续记——上屏打通：self→window 幽灵引用根因 + 颜色域三连修（2026-08-29 续）**：
+
+**首跑零像素的根因（教科书级坑）**：wireTileSources 的 batched 块内所有 `(self as any)` 解析到 **`window.self` 全局**——该方法无局部 `self`（`const self = this` 只存在于 connect() 的监听器块）。IIFE 轮询的 `window.mapView` 永远不存在 → 5 秒后 "mapView never attached" 静默退出 → DS 从未注册 → 调度器从未请求瓦片（stat=null 是铁证）。**旧骨架的 manualRegister 从未成功过**（§541 的 fetch 探针来自旧渲染器通道，非 IIFE）。修复=块内全改 `this`；`[MBBatchedDiag]` 探针证实全链即刻贯通：reg=1/en=1、fetch 8/ok 4（4×404=稀疏邻域，空瓦片缓存不重拉）、decoded=4/parsed=4、cache=8/objs=4/rendered=8、root=6（模型组进入引擎每帧根节点——§549 的阻断通道被正规管线绕开）。
+
+**颜色域三连修**（264389→105636，60% 差值消除）：①**shader albedo 捕获点**：`applyMglModelLighting` 在 map_fragment 捕获 mbAlbedo，但顶点色在 color_fragment 才乘入 diffuseColor → 受光分支丢失 4444 基色（灰白）、emissive 分支显示白 albedo（白窗带）。修复=color_fragment 后二次捕获，**`#ifdef USE_COLOR` 门控**（model 层 GLTF 无顶点色零影响——model-layer/default 失败值 3136/8591 与改动前逐位相同，证实零回归）；②**hex 颜色解析**：`parseRgbaBytes` 只认 `rgba(...)` 格式，而 MBExpressionEngine 返回 hex（`#f5e066`）→ 解析失败回落白色 → mix=0.9 全向白 lerp（灰白主因）。修复=支持 #rgb/#rrggbb；③node 实证表达式求值全对（wall=#f5e066 mix0.9 / window=#ffbe00 mix0.9 emis1 rough0.4 / door #00ffcc / roof #fcff00）——修复后墙体橄榄、窗带黄光与参考同族。
+
+**当前像素级状态**（pngjs 区域对比）：地面/天空逐像素近同（148,146,144 vs 147,146,143）；tower 均值 174,152,69 vs 151,143,94（同族）；窗带最亮 255,197,26 vs 233,207,85（我们更饱和）。几何覆盖正确（宝马四缸塔+博物馆碗+全街区，与参考同构）。
+
+**剩余差值 105636 的定性**（下会话外观域精调）：①雾化/大气透视——参考远景建筑融入浅色雾（更去饱和柔和），我们远景全饱和；②对比度/色调映射微差；③逐面 NdotL 分布细节。**-lod 夹具（314352=基线未动）**：mbx-lod GLB 用 **EXT_meshopt_compression + KHR_mesh_quantization**（无 Draco）→ decodeGlbTile 全跳过 → 零网格。需新增 meshopt 解码（three MeshoptDecoder 主线程 + 量化 accessor 反量化）——独立工程项。
+
+**验证**：单测 299 passing、tsc 绿；model-layer/default 抽查无回归；诊断日志门控于 karma 参数 `mbbatchdbg=1`（[MBBatchedDiag] 帧级链路状态 + [MBBatchedTile] 逐瓦片网格统计）。资产：MBBatchedModelRenderer（休眠）保留。
+
+
+**§550 续记二——meshopt LOD 瓦片解码落地：-lod 零像素→95030（2026-08-29 续二）**：
+
+**mbx-lod 结构勘测**：105 node/mesh 各带 **matrix**（平移=8192 网格坐标 [3000..6000]、缩放≈5.03 米→网格单位且 **y=−5.03**——局部米制 y-up → 网格 y-south，与 mbx Draco 瓦片同网格约定、z 米直通）；POSITION FLOAT 局部米制（min/max ±80 米级）；`_FEATURE_ID_RGBA4444` 为 SCALAR FLOAT（与 mbx 的 VEC2 UINT16 完全不同语义且 extensionsUsed 无 MAPBOX_mesh_features → 无逐 part 样式，走整 tile paint 默认分支）；35 材质/贴图（KHR_texture_transform）；压缩=EXT_meshopt_compression（ATTRIBUTES+EXPONENTIAL filter / TRIANGLES）+ KHR_mesh_quantization。
+
+**实现（MBBatchedModelDataSource decodeTile 双路径）**：检测 `extensionsUsed ∋ EXT_meshopt_compression` → `GLTFLoader.parseAsync` + **MeshoptDecoder**（three/examples 内嵌 WASM 主线程解码——与 DRACOLoader 的 blob-worker 死链无关，karma 安全，4 瓦片全部解析成功无挂起）；解析场景已在网格系（node matrix 已乘）→ 套组级 y 镜像 `scale=(w,−w,secLat)`+`pos=(−4096w,+4096w,0)`；组级负行列式（叠加节点自带负 y 缩放）翻转绕向 → **强制 DoubleSide**（mgl 模型同因双面）。Draco 路径不变（顶点烘焙镜像+绕向反转+正 scale）。maxGeometryHeight 改由 `Box3.setFromObject` 统一计算（两路径共口径）。
+
+**整 tile 样式升级为 tint 语义**：applyLayerPaint 用 MBExpressionEngine 以无 part 特性求值默认分支（color/mix-intensity/emissive），model-color 经 `Color.setStyle(…, SRGBColorSpace)` 转线性后作为 `applyMglModelLighting` 的 `tint={color,mix}`——**mix 在 shader 内对（贴图）albedo 线性插值**（mgl `mix(albedo, srgb2linear(color), mix)` 原语义），替代旧 setStyle 全量替换（丢贴图）。
+
+**结果**：-lod 314352（零像素基线）→ **95030**（−70%）；主夹具 105636 逐位不变（重构零回归）；单测 299 passing、tsc 绿。**-lod 剩余差值定性（外观域，与主夹具同桶）**：diff 图显示结构/位置全对、每条边缘错位——我们锐利边 vs 参考柔和边（多重采样/纹理过滤/mipmap 差异域）+ 轻微曝光色调差；下轮精调项：纹理 minFilter/mipmap、MSAA、曝光曲线。诊断：`mbbatchdbg=1`（[MBBatchedTile] 已增 meshopt 字段）。
+
+
+**§551. model-layer 代码对齐大批次——mgl 3d-style 源码逐语义复刻 + 基线盘点（2026-08-29 续三）**：
+
+**基线批测（212 例 filter=model-layer，ChromeHeadlessNoSandbox 单趟）**：186/212 采集后被浏览器 ping 超时 DISCONNECTED 截断（karma 3 次重启未果；~50 min 处 SwiftShader 劣化）。per-test JSON 在 /tmp/mbreport-ml（138 unique 名）。**关键数值**：landmark-emission-strength 105636/-lod 95030（§550 状态复现✓）；landmark-part-styling-indirect-update 100.8万/−lod 100.3万（全域最大，setLights 后灯光不更新）；models-on-globe 族 72-81万（globe 域已知）；buildings-trees-shadows-fog 族 50-86万；landmark-part-styling-doors/door-light 族 46-62万（门灯网格缺失）；landmark-duplicate-* 13.9万（双层反向 filter 未支持）；landmark-filter-runtime-styling 4246 已近绿。**基线质量警告**：mbx 家族（landmark-mbx 等）在后续烟雾复跑中出现"与基线逐位相同"的假象——实为两轮均为全黑帧（px=0,0,0,a255，截图实锤）+ reg=0 的页面级偶发失败；smoke6→smoke7 无代码变更而结果翻转证明是环境性（SwiftShader/karma webpack 会话）非代码回归。**mbx 家族基线值作废，全量批测时须以 [MBBatchedDiag] reg=1+stat 非空为准逐测核验**。
+
+**mgl 源码语义提取（mapbox-gl-js/3d-style/ 本地可用）**：①`Tiled3dModelBucket.evaluate/buildMeshFeatureArray/computePartPbrTable`——4444 色展开+字节域 mix、V1(draco)/V2(meshopt) 位偏移（colorShift 16/0、idShift 0/16）、LOD 网格顶点色 alpha=烘焙 AO（仅 LOD 乘）、emission 编码 0.5·clamp(e,0,2)·255、高度发射 b0/b1/b2+start/finish 字节对（/256 量化）；②shader（model.vertex/fragment.glsl）——a_pbr 路径 v_color_mix.a=1.0（顶点色完全替代 albedo，baseColorFactor 仅出 alpha）、`color=mix(lit, color_mix, min(1, emissive×heightMult))`、AO=(tex−1)·u_aoIntensity+1 只乘受光项、mesh_features 瓦片 u_emissive_strength=0（draw_model:1404）、getBaseColor 顶点色 mix、透明链=baseColorFactor.a×partAlpha×u_opacity；③节点系统——node.extras.id（filter 键）、extras.lights（base64 门灯）、getNodeHeight（filter height 属性）、每层 bucket（同源多层各自 node 集）；④paint 默认值（v8.json）——model-roughness 默认 1 且 evaluate 无条件覆写 glTF 因子、metallic 不参与样式（默认表 window=1 其余 0）、model-ambient-occlusion-intensity 默认 1、height-based 默认 [1,1,1,1,0]（退化为常数 255/256）。
+
+**实现批次（7 项，全部攒批后烟雾验证）**：①**高度发射渐变**（44 夹具）——MBModelRenderer 新增 mbHeightRampUniforms（mgl 字节量化语义）+applyMglModelLighting 第五参，shader 注入 varying vMbLocalZ（mesh-local z）+`resEmission=e×(start+range·pow(clamp(z·b0+b1),power))`+min(1,·) 封顶；②**AO 贴图链**（42）——MBDracoDecoder 输出 textures（bufferView 字节）+occlusionTextureIndex，datasource decodeOcclusionTextures（createImageBitmap→THREE.Texture，flipY=false+NoColorSpace），buildPrimitiveMesh 挂 aoMap+aoMapIntensity（three 0.178 aomap_fragment 与 mgl 公式逐字相同），mgl patch 内 `#ifdef USE_AOMAP` 乘 mbLit；③**逐 part alpha+model-opacity**（80）——parseRgbaBytes 支持 #rrggbbaa/rgba 第四分量，splitByPart 设 transparent/opacity=baseAlpha×partAlpha×modelOpacity；④**roughness/metallic 对齐**（68）——roughness 无条件取 paint（默认 1），metalness=window?1:0（注：本地 shader patch 替换全部 three 光照输出，roughness/metalness 实际不进像素——与 mgl a_pbr 的 rmea 解码等价性待外观校准轮核）；⑤**model-scale/translation**（40+2）——decodeTile 组级求值（zoom 插值生长动画），基准变换存 userData 供每帧重算；⑥**节点 filter+每层 DS**（6）——MBDracoDecoder 输出 nodeIds/nodeLights/meshIndices，decoder nodePassesFilter（MBExpressionEngine ["in",["id"]]已验证）+可见性过滤+m_builtGroups 注册，DS setFilter；MBStyleDataSource 接线改**每 model 层一个 DS**（-mbbatched-<layerId>，双层反向 filter 家具解锁），MBStyleRuntime.onLayerFilterChanged 钩子→DS.setFilter；⑦**门灯网格**（doors 族 46-100万）——decodeLights（u16/f32 24B/灯布局，真实 GLB 9 灯解码验证）+calculateLightsMesh 10 顶点 4 三角/灯复刻（y 镜像）+MeshBasicMaterial onBeforeCompile color_4f 距离衰减 patch（uMBLightsE=door emissive），door 颜色取该 part 首顶点 mix 后字节。
+
+**活体样式同步（indirect-update 族 200 万失配根因）**——setLights/setZoom 运行时操作不再要求重解码：applyMglModelLighting 捕获 uniform 引用（mat.userData.__mbLightU），DS connect() 挂 AfterRender→decoder.syncStyleState()（每帧从 lighting3DState 刷新 amb/dirColor/dir + 当前 zoom 重算 scale/translation，mgl evaluateTransform/每帧 uniform 语义）；setPaint 改 markTilesDirty 强制重解码（MBBatchedModelTile.load 按 decodedTile 身份换装 mbObjects 防旧组滞留）。
+
+**烟雾验证**：landmark-emission-strength **105636→41937（−60%）**、-lod **95030→88702**；诊断实锤 ao=9..19/lights=2..4/逐 part 分裂正常；无 shader 链接错误、无 NaN。**踩坑记档**：DS connect() override 忘调 super.connect()→dataProvider 未 register→调度器永不请求瓦片（stat=null/reg=1 但 en=0 零像素）——TileDataSource.connect 是注册载体不可整体替换。**遗留（下轮）**：①model-front-cutoff/cutoff-fade-range（8 夹具）未实现；②conflation 族（挤压碰撞）未动；③V2 meshopt 位偏移+LOD AO 顶点色乘法未接入（mbx-lod 无 MAPBOX_mesh_features 不触发，暂无夹具需求）；④MBBatchedModelDecoder 泄漏的 m_builtGroups（瓦片重建累积，测试会话量级无害）；⑤lights mesh 的 mgl 全语义（resEmission−1 位移、premultiplied 输出链）为简化版，外观校准轮精调。单测 299 passing、tsc 绿。**未提交**——工作区含全部 §551 改动。
+
+
+**§552. §551 批次全量复测 + zScale 灯光爆炸修复 + 逐节点 anchor 缩放 + front-cutoff 落地（2026-08-29 续四）**：
+
+**landmark 家族全新会话批测（filter=landmark，93 执行+10 skip，mbbatchdbg=1，[MBBatchedDiag] reg=1/en=1/root=551 全链健康实证）**：70 例与基线可比——**23 改善 / 5 回归 / 42 相同**。改善前列：z-offset-munich-3d-hidden **−61300**（148719→…z-offset-munich-museum **−28532**、z-offset-scale-munich-museum −15805、door-light-munich-museum-lod −26246、part-styling-update −17650/−lod −13628、tile-cover-extension 族 −3500..−9930、emission-strength 105636→41937 延续）。回归 5 例全部定性：①z-offset-scale-munich-museum-lod +36890 = **meshopt -lod 模型整体渲染黑色**（expected 中心 168,167,167 vs 我方 38,51,56——材质外观域，缩放 3.15× 只是放大黑区，Draco 孪生夹具同批改善 −15805）+ z-only 缩放下 anchor 补偿恒零（anchor×(sx−1)，sx=sy=1）新旧实现逐位等价；②door-light-munich-museum 主夹具 +5508（灯光 falloff 简化版 vs mgl 全语义）；③roughness +2000、hidden-extrusions-lod +3500（同族噪声级）。
+
+**重大 bug 修复——门灯 zScale 爆炸**：zScale 公式误写 `TILE_GRID/(groundMeters/TILE_GRID)`（=8192²/1636≈41012，正确值 8192/1636≈5.008）→ fallOff 爆炸 → 巨型四边形盖满地面（conflation-index-overflow 91610→594654 实锤，灰底变霓虹绿截图定案）。修复+decodeLights 出界防护（|端点|≤2·8192 丢弃）。修复后 90533（−1077 vs 基线）。
+
+**逐节点 model-scale/translation 重构**：组级缩放在多节点瓦片错误（mgl 绕节点 anchor 缩放：`T(anchor·(s−1)+t_grid)·S(s)·base`，applyTileTransform 实序 translate→scale）。applyNodeTransforms 逐帧求值（矩阵缓存 __mbBaseMatrix，identityPaint 快路径还原）；nodeAnchors/extras.anchor 全链（decoder→meshopt userData→splitByPart 传播）。z-only 缩放（现夹具全部）与组级逐位等价；x/y 缩放夹具就位待测。
+
+**model-front-cutoff 落地（8 夹具族）**：applyModelFrontCutoff 每帧——cameraCollisionOpacity（相机在节点 AABB 内 ±1/6 渐隐）+ calculateFrontCutoffOpacity 全公式（pitch 20°..40° 门控、相机空间 AABB 底边 lerp(start)、yMinLimit=−|z_cam|·fovX、range=100·pixelsPerMeter·fade、finalOpacity 钳制），u_opacity 乘 node 因子写回材质（__mbBaseOpacity 基链）。model-cutoff-fade-range（2 夹具，getCutoffParams 的 near/farZ 内部量）未实现。
+
+**黑帧夹具定性（先于 §551 存在，非回归）**：landmark-duplicate-* ×4 + landmark-mbx-xray ×2 = 确定性 100% 黑帧（基线归档截图同黑）——待查（xray=model-type x-ray 渲染模式未实现？duplicate=双 DS 同名冲突？）。**duplicate 族 (=) 逐位相同为正确行为**：互补 filter 的并集=全集，单 DS 无 filter 绘制同节点集。
+
+**批测方法论**：mbbatchdbg=1 安全（Diag 全局封顶 30 行 + [MBBatchedTile] 每瓦片 1 行）；**归档目录污染教训**——smoke 复跑会覆写归档 per-test JSON（emission-strength 基线在归档中已是 41937 而非 105636），对比时须以最早采集为准；首跑补测 31 例非 landmark 结果随 rm 丢失（标准路径逐位=基线，损失仅 MAPS3D ±100）。非 landmark 补充批测（61 例，globe/model-* 前缀约 40 例未含）另行采集。
+
+**下轮清单（按 ROI）**：①meshopt -lod 材质黑色外观（GLTFLoader 材质/KHR 扩展排查，影响全部 museum-lod 族）；②conflation replacement 子系统（landmark footprint 抑制 fill-extrusion，需跨源 footprint 注册 + emitter 抑制，buckingham expected 已分析：宫殿足迹内挤块被替换）；③cutoff-fade-range（getCutoffParams）；④duplicate/xray 黑帧排查；⑤conflation-buckingham 的 fill-extrusion 侧接地面阴影长影（-12710 已改善但影子方向/长度未对齐）。单测 299 passing、tsc 绿。**未提交**。

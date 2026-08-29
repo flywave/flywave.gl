@@ -240,11 +240,16 @@ export class MBStyleRuntime {
     /**
      * Set the filter on a layer.
      */
+    onLayerFilterChanged: ((layerId: string, filter: any) => void) | null = null;
+
     setFilter(layerId: string, filter: any): void {
         const layer = this.findLayer(layerId);
         if (!layer) return;
         (layer as any).filter = filter;
         this.rebuildEvaluator();
+        // batched-model datasources filter NODES by this expression (mgl
+        // bucket.setFilter) — notify the owner so they can update.
+        this.onLayerFilterChanged?.(layerId, filter);
     }
 
     /**
