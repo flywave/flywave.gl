@@ -220,8 +220,11 @@ class MBBatchedModelDecoder implements ITileDecoder {
                     && json.extensionsUsed.includes('EXT_meshopt_compression');
                 isLodTile = Array.isArray(json?.extensionsUsed)
                     && json.extensionsUsed.includes('mbx_bvh');
-                mbxFeatures = Array.isArray(json?.extensionsUsed)
-                    && json.extensionsUsed.includes('MAPBOX_mesh_features');
+                // mgl worker source: extensionsUsed OR asset.extras flag
+                // (the meshopt tiler only sets the extras form).
+                mbxFeatures = (Array.isArray(json?.extensionsUsed)
+                    && json.extensionsUsed.includes('MAPBOX_mesh_features'))
+                    || json?.asset?.extras?.MAPBOX_mesh_features === true;
             } catch { /* fall through to the Draco path */ }
 
             const w = EQUATORIAL_CIRCUMFERENCE / Math.pow(2, tileKey.level) / TILE_GRID;

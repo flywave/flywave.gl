@@ -649,11 +649,16 @@ function splitByPart(
     const index = geometry.getIndex();
     if (!feature || !index) return;
     const u16 = feature.array as Uint16Array;
+    const floats = feature.array instanceof Float32Array
+        ? feature.array as Float32Array : null;
     const vertCount = feature.count;
     // mgl V1/V2 halves are swapped (updateNodeFeatureVertices): V2
     // (EXT_meshopt_compression) packs the color in the LOW 16 bits and the
-    // part id in bits 16..19; V1 the other way around.
-    const v2 = geometry.userData?.__mbFeatV2 === true;
+    // part id in bits 16..19; V1 the other way around. V2 stores the packed
+    // value as a FLOAT32 SCALAR (meshopt keeps values below 2^24 so the float
+    // is exact; mgl getBufferData keeps the Float32Array and `>>` truncates)
+    // — u16-pair aliasing of those bits is garbage.
+    const v2 = !!floats || geometry.userData?.__mbFeatV2 === true;
     const colorShift = v2 ? 0 : 16;
     const idShift = v2 ? 16 : 0;
     // LOD meshes encode baked ambient occlusion in the 4444 alpha; non-LOD
@@ -667,7 +672,8 @@ function splitByPart(
     // light geometry (mgl buildMeshFeatureArray doorLight branch).
     const partFirstColor = new Map<number, [number, number, number]>();
     for (let i = 0; i < vertCount; i++) {
-        const u32 = (u16[i * 2] | (u16[i * 2 + 1] << 16)) >>> 0;
+        const u32 = floats ? ((floats[i] | 0) >>> 0)
+            : (u16[i * 2] | (u16[i * 2 + 1] << 16)) >>> 0;
         const rawPart = (u32 >>> idShift) & 0xf;
         const partId = rawPart < parts.length ? rawPart : 0;
         partOf[i] = partId;
@@ -722,9 +728,12 @@ function splitByPart(
         const mat: any = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material)?.clone()
             ?? new THREE.MeshStandardMaterial();
         // mgl a_pbr path: vertex color REPLACES the glTF albedo (mix=1.0),
-        // so the material's base color factor must not tint it again.
+        // so neither the base color factor nor a glTF base-color TEXTURE
+        // (mbx-lod embeds them) may tint it — only the vertex color shows.
         mat.vertexColors = true;
         if (mat.color) mat.color.setRGB(1, 1, 1);
+        mat.map = null;
+        mat.needsUpdate = true;
         mat.roughness = style.roughness;
         // mgl never styles metallic (Tiled3dModelFeature default table:
         // window=1, every other part=0) and the a_pbr decode replaces the
@@ -809,15 +818,18 @@ function refreshSplit(mesh: THREE.Mesh, parts: PartStyle[]): void {
     const colorAttr = split.colorAttr;
     if (!feature || !colorAttr) return;
     const u16 = feature.array as Uint16Array;
+    const floats = feature.array instanceof Float32Array
+        ? feature.array as Float32Array : null;
     const vertCount = feature.count;
     const colors = colorAttr.array as Float32Array;
-    const v2 = geometry.userData?.__mbFeatV2 === true;
+    const v2 = !!floats || geometry.userData?.__mbFeatV2 === true;
     const colorShift = v2 ? 0 : 16;
     const idShift = v2 ? 16 : 0;
     const aoFromAlpha = geometry.userData?.__mbFeatLod === true;
     const partFirstColor = new Map<number, [number, number, number]>();
     for (let i = 0; i < vertCount; i++) {
-        const u32 = (u16[i * 2] | (u16[i * 2 + 1] << 16)) >>> 0;
+        const u32 = floats ? ((floats[i] | 0) >>> 0)
+            : (u16[i * 2] | (u16[i * 2 + 1] << 16)) >>> 0;
         const rawPart = (u32 >>> idShift) & 0xf;
         const partId = rawPart < parts.length ? rawPart : 0;
         const style = parts[partId] ?? parts[0];
