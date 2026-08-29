@@ -1413,6 +1413,10 @@ export class MBStyleDataSource extends TileDataSource {
                         (l: any) => l.type === 'model' && l.source === sid);
                     if (modelLayers.length === 0) modelLayers.push(undefined);
                     for (const layer of modelLayers) {
+                        // mgl never creates a bucket for a visibility:'none'
+                        // layer — skip the whole wiring so the GLB landmark
+                        // stays hidden (landmark-z-offset-*-3d-hidden).
+                        if (layer?.layout?.visibility === 'none') continue;
                         const layerSuffix = layer ? '-' + String(layer.id).replace(/[^a-zA-Z0-9-]/g, '') : '';
                         batched.push({
                             sourceId: sid,
@@ -2026,6 +2030,20 @@ export class MBStyleDataSource extends TileDataSource {
                         bgPaint['background-color'] ?? '#000000',
                         bgPaint['background-opacity'] ?? 1,
                         pitchAlign,
+                    );
+                } else if (!pattern && pitchAlign === 'viewport') {
+                    // Viewport-aligned solid background: mgl draws it as a
+                    // screen-space quad (not the map-tilted clear-color path).
+                    // When this background layer sits ABOVE all content layers
+                    // it composites over them (test fixtures place it last);
+                    // below content it stays behind.
+                    const bgIndex = (style.layers ?? []).indexOf(bgLayer);
+                    const onTop = (style.layers ?? []).every(
+                        (l: any, i: number) => i < bgIndex || l.type === 'background');
+                    this.m_environment.applyBackgroundViewportQuad(
+                        bgPaint['background-color'] ?? '#000000',
+                        bgPaint['background-opacity'] ?? 1,
+                        onTop,
                     );
                 }
             }

@@ -267,6 +267,99 @@ class MBStyleDataProcessor implements IGeometryProcessor {
     private m_lastExtents: number = 4096;
 
     /**
+     * Probe an MVT tile buffer for its layer `extent` (protobuf field 3 =
+     * layer, layer field 5 varint = extent) so `setExtents` can run BEFORE
+     * the first feature is processed. The per-feature lazy update left the
+     * emitter on the 4096 default for everything decoded ahead of the first
+     * feature of a non-4096 tile (background injection, y-flip scale), and
+     * emitted the first feature itself in two different coordinate frames.
+     * Returns 0 when nothing was found.
+     */
+    private probeMvtExtent(data: ArrayBuffer | Uint8Array): number {
+        try {
+            // Accept ArrayBuffers AND Uint8Array views — a view may start at a
+            // non-zero byteOffset inside a larger buffer; probing the raw
+            // buffer would parse garbage ahead of the tile payload.
+            const u8 = data instanceof Uint8Array
+                ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+                : new Uint8Array(data);
+            let pos = 0;
+            let best = 0;
+            const varint = (p: number[]): number => {
+                let result = 0;
+                let shift = 0;
+                for (;;) {
+                    if (p[0] >= u8.length) throw new Error('eof');
+                    const b = u8[p[0]++];
+                    result += (b & 0x7f) * Math.pow(2, shift);
+                    if ((b & 0x80) === 0) break;
+                    shift += 7;
+                    if (shift > 42) throw new Error('bad varint');
+                }
+                return result;
+            };
+            const skip = (wt: number, p: number[]): void => {
+                if (wt === 0) varint(p);
+                else if (wt === 1) p[0] += 8;
+                else if (wt === 2) p[0] += varint(p);
+                else if (wt === 5) p[0] += 4;
+                else if (wt === 3 || wt === 4) { /* group start/end: no payload */ }
+                else throw new Error('bad wiretype');
+            };
+            while (pos < u8.length) {
+                const p = [pos];
+                const tag = varint(p);
+                const field = tag >> 3;
+                const wt = tag & 7;
+                if ((field === 3 || field === 4) && (wt === 2 || wt === 3)) {
+                    // Layer: length-delimited (MVT 2.1) or a group (legacy
+                    // pre-2.1 tiles use SGROUP/EGROUP for the same field).
+                    let end = u8.length;
+                    if (wt === 2) end = p[0] + varint(p);
+                    while (p[0] < end) {
+                        const t2 = varint(p);
+                        const f2 = t2 >> 3;
+                        const w2 = t2 & 7;
+                        if (f2 === 5 && w2 === 0) {
+                            best = Math.max(best, varint(p));
+                        } else {
+                            skip(w2, p);
+                        }
+                    }
+                    pos = end;
+                } else {
+                    skip(wt, p);
+                    pos = p[0];
+                }
+            }
+            // Sanity gate: a plausible MVT extent is a power of two in
+            // [256, 65536]; anything else came from a mis-parse and must not
+            // poison the emitter's coordinate frame.
+            if (best >= 256 && best <= 65536 && (best & (best - 1)) === 0) {
+                return best;
+            }
+            return 0;
+        } catch {
+            return 0;
+        }
+    }
+
+    /**
+     * Probe the raw MVT payload for its layer extent and apply it to the
+     * emitter BEFORE any feature is processed (see probeMvtExtent). The
+     * per-feature lazy update in processXFeature left everything decoded
+     * ahead of the first feature — the background injection, the decoder's
+     * y-flip scale — on the 4096 default for non-4096 tiles.
+     */
+    applyProbedMvtExtent(data: ArrayBuffer | Uint8Array): void {
+        const probed = this.probeMvtExtent(data);
+        if (probed > 0 && probed !== this.m_lastExtents) {
+            this.m_lastExtents = probed;
+            this.m_emitter?.setExtents(probed);
+        }
+    }
+
+    /**
      * Override processPointFeature to capture the tile extent from the adapter
      * and propagate it to the emitter before processing begins.
      */
@@ -985,6 +1078,10 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 // flip them into the world2tile convention the GeoJSON adapter
                 // uses (see MBStyleDataProcessor.m_mvtYOffset).
                 const buffer = data instanceof Uint8Array ? data.buffer : data;
+                // Propagate a non-default MVT layer extent to the emitter up
+                // front (see applyProbedMvtExtent) — before the y-flip scale
+                // and the background injection read `emitter.extents`.
+                processor.applyProbedMvtExtent(data);
                 const N = Math.log2(emitter.extents);
                 const scale = Math.pow(2, tileKey.level + N);
                 const { north } = decodeInfo.geoBox;

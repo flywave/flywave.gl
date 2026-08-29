@@ -2314,6 +2314,19 @@ export class MBEnvironmentManager {
             );
         };
 
+        this.installBackgroundQuad(material, updateRepeat);
+    }
+
+    /**
+     * Shared fullscreen background-quad installer: registers the mesh on the
+     * environment scene and orients it every frame to exactly cover the
+     * frustum (viewport-aligned background semantics). `onBeforeFrame` runs
+     * before placement so the pattern variant can refresh tiling/phase.
+     */
+    private installBackgroundQuad(
+        material: THREE.Material,
+        onBeforeFrame?: (renderer: THREE.WebGLRenderer) => void,
+    ): void {
         const geom = new THREE.PlaneGeometry(2, 2);
         this.m_backgroundQuad = new THREE.Mesh(geom, material);
         this.m_backgroundQuad.frustumCulled = false;
@@ -2327,7 +2340,7 @@ export class MBEnvironmentManager {
         // Instead: place the quad on the camera axis, oriented with the
         // camera and scaled to exactly cover the frustum at that depth.
         this.m_backgroundQuad.onBeforeRender = (renderer: THREE.WebGLRenderer, _scene: THREE.Scene, camera: THREE.Camera) => {
-            updateRepeat(renderer);
+            onBeforeFrame?.(renderer);
             // Robust fullscreen placement: unproject the four NDC corners at
             // mid-depth and fit the quad to them. Deriving orientation from
             // camera.quaternion / inverse(P·V) is unreliable here (MapView
@@ -2360,10 +2373,45 @@ export class MBEnvironmentManager {
             this.m_backgroundQuad!.scale.set(right.length() / 2, up.length() / 2, 1);
         };
 
-        this.m_scene.add(this.m_backgroundQuad);
-                // The quad is added asynchronously (sprite fetch) — likely after the
+        // The quad is added asynchronously (sprite fetch) — likely after the
         // last scheduled frame. Adding a scene object does not itself request
         // a redraw, so without this the pattern never appears in the capture.
+        this.m_scene.add(this.m_backgroundQuad);
+        (this.m_mapView as any).update?.();
+    }
+
+    /**
+     * Viewport-aligned solid background (mgl `background-pitch-alignment:
+     * viewport` without a pattern): a screen-space quad carrying
+     * background-color × background-opacity, composited over already-drawn
+     * content when the background layer sits above content layers
+     * (`renderOrder > 0`), otherwise behind them. Map-aligned backgrounds
+     * keep the clear-color / drape path.
+     */
+    applyBackgroundViewportQuad(
+        bgColor: string,
+        bgOpacity: number,
+        onTop: boolean,
+    ): void {
+        if (!this.m_scene) return;
+
+        if (this.m_backgroundQuad) {
+            this.m_scene.remove(this.m_backgroundQuad);
+            (this.m_backgroundQuad.geometry as THREE.BufferGeometry).dispose();
+            (this.m_backgroundQuad.material as THREE.Material).dispose();
+            this.m_backgroundQuad = null;
+            this.m_bgPatternInfo = null;
+        }
+
+        const material = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(bgColor),
+            transparent: bgOpacity < 1,
+            opacity: bgOpacity,
+            depthWrite: false,
+            depthTest: false,
+        });
+        this.installBackgroundQuad(material);
+        if (onTop) this.m_backgroundQuad!.renderOrder = 10000;
         (this.m_mapView as any).update?.();
     }
 

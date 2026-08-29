@@ -936,9 +936,11 @@ export class MBStyleSymbolPlacement {
                 const layout = tech._layout ?? {};
                 const iconOffset = tech._iconOffset ?? layout['icon-offset'];
                 if (Array.isArray(iconOffset)) {
-                    // icon-offset is in pixels: [dx, dy] (y positive = down).
+                    // icon-offset is in pixels: [dx, dy] (y positive = down in
+                    // mgl spec). The offset is applied in NDC (y-up) below, so
+                    // the y component must be negated to move the icon down.
                     dxPx += Number(iconOffset[0] ?? 0);
-                    dyPx += Number(iconOffset[1] ?? 0);
+                    dyPx -= Number(iconOffset[1] ?? 0);
                 }
                 // icon-anchor positions the icon relative to the anchor point
                 // (only when there is no accompanying text-field, per Mapbox).

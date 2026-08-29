@@ -608,8 +608,10 @@ export class MBLayerEvaluator {
             const paint: EvaluatedPaint = {};
             for (const [key, def] of Object.entries(pl.paintDefs)) {
                 // Gradient/ramp expressions use shader-varying inputs (line-progress,
-                // heatmap-density) not available in JS. Store raw for patcher.
-                if (key === 'line-gradient' || key === 'line-border-gradient' || key === 'heatmap-color') {
+                // heatmap-density, raster-value) not available in JS. Store raw for patcher.
+                if (key === 'line-gradient' || key === 'line-border-gradient' || key === 'heatmap-color'
+                    || (key === 'raster-color' && typeof def.value === 'object' && def.value !== null
+                        && JSON.stringify(def.value).includes('raster-value'))) {
                     paint[key] = def.value;
                 } else if (def.type === 'expression') {
                     paint[key] = MBExpressionEngine.evaluate(def.value, ctx);

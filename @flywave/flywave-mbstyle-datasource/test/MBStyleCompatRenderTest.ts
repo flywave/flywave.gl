@@ -925,45 +925,74 @@ break;
             }
             case "setCameraPosition":
             case "lookAtPoint": {
-                // setCameraPosition: [x, y, z] in geo coordinates (lng, lat, alt meters)
-                // lookAtPoint: [lng, lat] target to look at from current camera pos,
-                //   optional 2nd arg [dx,dy,dz] = up vector direction.
+                // mgl free-camera semantics (free_camera.ts):
+                //  - setCameraPosition [lng, lat, altMeters] sets the camera
+                //    EYE position (not the map target);
+                //  - lookAtPoint [lng, lat], up [x,y,z]: forward = target-eye
+                //    (mercator, y-down, z-up meters), right = up × forward,
+                //    bearing = atan2(-right.y, right.x), pitch =
+                //    atan2(|forward.xy|, -forward.z); camera orbit distance =
+                //    |forward|. Degenerate frames (null orientation, mgl
+                //    invalid-orientation/roll cases) keep the map as-is — the
+                //    engine cannot roll.
                 if (name === "setCameraPosition" && args[0]) {
-                    // Convert geo position to flywave camera.
-                    const lng = args[0][0];
-                    const lat = args[0][1];
-                    const alt = args[0][2] ?? 1000;
-                    try {
-                        const { GeoCoordinates } = await import("@flywave/flywave-geoutils");
-                        // Use altitude to estimate zoom level.
-                        const earthCircumference = 40075016.686;
-                        const mpp = alt / (mapView.canvas.height ?? 512);
-                        const zoom = Math.max(0, Math.log2(earthCircumference / (mpp * 256)));
-                        mapView.setCameraGeolocationAndZoom(
-                            new GeoCoordinates(lat, lng), zoom);
-                    } catch {}
+                    (globalThis as any).__mbFreeCameraPos = {
+                        lng: Number(args[0][0]), lat: Number(args[0][1]),
+                        alt: Number(args[0][2] ?? 0),
+                    };
                 }
                 if (name === "lookAtPoint" && args[0]) {
-                    const targetLng = args[0][0];
-                    const targetLat = args[0][1];
-                    const upVector = args[1] as number[] | undefined;
                     try {
                         const { GeoCoordinates } = await import("@flywave/flywave-geoutils");
-                        // Move camera to look at the target point from current zoom.
-                        mapView.setCameraGeolocationAndZoom(
-                            new GeoCoordinates(targetLat, targetLng),
-                            mapView.zoomLevel);
-                        // If an up/direction vector is provided, approximate
-                        // the resulting bearing/pitch from the direction.
-                        if (upVector && Array.isArray(upVector)) {
-                            const [ux, uy, uz] = upVector;
-                            // Bearing from horizontal component (atan2 of x,y).
-                            const bearing = Math.atan2(ux, uy) * 180 / Math.PI;
-                            // Pitch from vertical component.
-                            const horizMag = Math.sqrt(ux*ux + uy*uy);
-                            const pitch = Math.atan2(horizMag, uz) * 180 / Math.PI;
-                            mapView.heading = bearing;
-                            mapView.tilt = Math.min(pitch, 60);
+                        const targetLng = Number(args[0][0]);
+                        const targetLat = Number(args[0][1]);
+                        let eye = (globalThis as any).__mbFreeCameraPos as
+                            { lng: number; lat: number; alt: number } | undefined;
+                        if (!eye) {
+                            // mgl getFreeCameraOptions: position defaults to the
+                            // current camera (geo center + height above ground).
+                            const { MapViewUtils } = await import("@flywave/flywave-mapview");
+                            eye = {
+                                lng: mapView.geoCenter.longitude,
+                                lat: mapView.geoCenter.latitude,
+                                alt: MapViewUtils.calculateDistanceToGroundFromZoomLevel(
+                                    mapView, mapView.zoomLevel),
+                            };
+                        }
+                        const C = 40075016.686;
+                        const mercX = (lng: number) => ((lng + 180) / 360) * C;
+                        const mercY = (lat: number) =>
+                            (0.5 - Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360))
+                                / (2 * Math.PI)) * C;
+                        const fx = mercX(targetLng) - mercX(eye.lng);
+                        const fy = mercY(targetLat) - mercY(eye.lat);
+                        const fz = -eye.alt;
+                        // up defaults to world up; its z is forced positive (mgl).
+                        const up = Array.isArray(args[1]) ? args[1].slice() : [0, 0, 1];
+                        up[2] = Math.abs(Number(up[2]) || 0);
+                        const ux = Number(up[0]) || 0, uy = Number(up[1]) || 0;
+                        // right = up × forward
+                        const rx = uy * fz - up[2] * fy;
+                        const ry = up[2] * fx - ux * fz;
+                        const rl = Math.hypot(rx, ry);
+                        if (rl > 1e-9) {
+                            const bearing = Math.atan2(-ry, rx) * 180 / Math.PI;
+                            const pitch = Math.atan2(Math.hypot(fx, fy), -fz)
+                                * 180 / Math.PI;
+                            const dist = Math.hypot(fx, fy, fz);
+                            // setCameraGeolocationAndZoom (NOT lookAt): the
+                            // orbit lookAt leaves the tile scheduler idle —
+                            // tiles never re-request and the frame stays
+                            // blank. Passing the CURRENT heading/tilt keeps
+                            // them (the setter zeroes defaults).
+                            const { MapViewUtils } = await import("@flywave/flywave-mapview");
+                            const zoom = MapViewUtils.calculateZoomLevelFromDistance({
+                                focalLength: (mapView as any).focalLength,
+                                minZoomLevel: 0, maxZoomLevel: 22,
+                            }, dist);
+                            (mapView as any).setCameraGeolocationAndZoom(
+                                new GeoCoordinates(targetLat, targetLng),
+                                zoom, bearing, Math.min(pitch, 89));
                         }
                     } catch {}
                 }
@@ -976,35 +1005,34 @@ break;
                 const bearing = args[2];
                 if (p0 && p1) {
                     try {
-                        const geo0 = (mapView as any).getGeoCoordinatesAt?.(p0.x, p0.y, true);
-                        const geo1 = (mapView as any).getGeoCoordinatesAt?.(p1.x, p1.y, true);
-                        if (geo0 && geo1) {
-                            // Compute center and approximate zoom.
-                            const lat0 = geo0.latitude;
-                            const lng0 = geo0.longitude;
-                            const lat1 = geo1.latitude;
-                            const lng1 = geo1.longitude;
-                            const centerLat = (lat0 + lat1) / 2;
-                            const centerLng = (lng0 + lng1) / 2;
-                            // Haversine distance for zoom estimate.
-                            const dLat = (lat1 - lat0) * Math.PI / 180;
-                            const dLng = (lng1 - lng0) * Math.PI / 180;
-                            const a = Math.sin(dLat/2)**2 + Math.cos(lat0*Math.PI/180) *
-                                      Math.cos(lat1*Math.PI/180) * Math.sin(dLng/2)**2;
-                            const dist = 6378137 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                            // Fit: viewport spans ~canvas pixels for this distance.
-                            const canvasSize = Math.min(mapView.canvas.width, mapView.canvas.height);
-                            const targetMetersPerPixel = dist / Math.max(canvasSize * 0.8, 1);
-                            const zoom = Math.log2(
-                                40075016.686 / (targetMetersPerPixel * Math.cos(centerLat * Math.PI / 180))
-                            );
-                            const { GeoCoordinates } = await import("@flywave/flywave-geoutils");
-                            (mapView as any).setCameraGeolocationAndZoom?.(
-                                new GeoCoordinates(centerLat, centerLng),
-                                Math.max(0, Math.min(22, zoom)),
-                                bearing ?? 0,
-                                0,
-                            );
+                        const { GeoCoordinates, GeoBox } = await import("@flywave/flywave-geoutils");
+                        // mgl camera.fitScreenCoordinates: unproject the four
+                        // corners of the p0/p1 rectangle, then fit that geo
+                        // bounds — keeping the current pitch unless options
+                        // say otherwise. The old harness used a single-shot
+                        // haversine zoom estimate and forced pitch 0, which
+                        // misplaced/buried the camera (white screen).
+                        const proj = (p: { x: number; y: number }) =>
+                            (mapView as any).getGeoCoordinatesAt?.(p.x, p.y, true);
+                        const minX = Math.min(p0.x, p1.x), maxX = Math.max(p0.x, p1.x);
+                        const minY = Math.min(p0.y, p1.y), maxY = Math.max(p0.y, p1.y);
+                        const corners = [
+                            proj({ x: minX, y: minY }), proj({ x: maxX, y: maxY }),
+                            proj({ x: minX, y: maxY }), proj({ x: maxX, y: minY }),
+                        ];
+                        if (corners.every(Boolean)) {
+                            const lats = corners.map(c => c.latitude);
+                            const lngs = corners.map(c => c.longitude);
+                            const box = new GeoBox(
+                                new GeoCoordinates(Math.min(...lats), Math.min(...lngs)),
+                                new GeoCoordinates(Math.max(...lats), Math.max(...lngs)));
+                            const opts = args[3] ?? {};
+                            const pitch = Number(opts.pitch) || mapView.tilt;
+                            (mapView as any).lookAt({
+                                bounds: box,
+                                tilt: pitch,
+                                heading: bearing ?? mapView.heading,
+                            });
                         }
                     } catch {}
                 }
