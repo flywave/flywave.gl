@@ -22,6 +22,7 @@
  */
 
 import * as THREE from 'three';
+import { TileKey, webMercatorTilingScheme } from '@flywave/flywave-geoutils';
 import { applyMglModelLighting } from './MBModelRenderer';
 import { decodeGlbTile, TileMaterialData, TilePrimitiveData } from './MBDracoDecoder';
 import { applyMeshFeatures } from './MBMeshFeatures';
@@ -36,10 +37,10 @@ interface BatchedSource {
 interface TileEntry {
     key: string;
     source: BatchedSource;
-    /** Model group in GLB-local coordinates (scaled; anchor applied per frame). */
+    /** Model group in GLB-local coordinates (scaled). */
     model: THREE.Group | null;
-    /** Absolute world anchor of the model (the tile's corner in engine units). */
-    anchor: THREE.Vector3;
+    /** GLB tile coordinates (standard north-up web-mercator). */
+    x: number; y: number; z: number;
     __parsed: boolean;
 }
 
@@ -94,13 +95,34 @@ export class MBBatchedModelRenderer {
             this.m_carrierGroup.renderOrder = 10;
         }
         const keep = this.m_entries.filter(e => e.__parsed && e.model);
+        // §549: carrier = a tile the ENGINE itself renders (its center is in
+        // the engine frame near the camera by construction). Position each
+        // model by the STANDARD-frame offset between its GLB tile center and
+        // the carrier tile center — a frame-independent delta (both ends in
+        // the same standard mercator frame cancel the absolute-frame question).
+        // §549: carrier = the first tile the ENGINE itself renders this frame.
+        const list = mapView?.m_visibleTiles?.dataSourceTileList;
+        let carrier: any = null;
+        for (const l of list ?? []) {
+            if (l.renderedTiles?.values) {
+                for (const t of l.renderedTiles.values()) { carrier = t; break; }
+            }
+            if (carrier) break;
+        }
+        if (!carrier) return;
+        const R = 40075016.686;
+        const ck: any = carrier.tileKey;
+        const cDim = Math.pow(2, ck?.level ?? 0);
+        const ccx = ((ck?.column ?? 0) + 0.5) / cDim * R;
+        const ccy = ((ck?.row ?? 0) + 0.5) / cDim * R;
         for (const e of keep) {
             if (e.model.parent !== this.m_carrierGroup) {
                 this.m_carrierGroup.add(e.model);
             }
-            // RTE: engine subtracts the camera position (m_camera.position —
-            // the pitched-back camera, not the geoCenter target).
-            e.model.position.copy(e.anchor).sub(this.m_eye);
+            const gn = Math.pow(2, e.z);
+            const gx = ((e.x + 0.5) / gn) * R;
+            const gy = ((e.y + 0.5) / gn) * R;
+            e.model.position.set(gx - ccx, gy - ccy, 0);
         }
         // §549 CRITICAL: the engine clears the root via
         // `m_sceneRoot.children.length = 0`, which does NOT reset
@@ -178,7 +200,7 @@ export class MBBatchedModelRenderer {
             .replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
         this.m_inflight.add(key);
         // track the pending tile so isLoading() covers the decode window.
-        const entry: TileEntry = { key, source: src, model: null, anchor: new THREE.Vector3(), __parsed: false };
+        const entry: TileEntry = { key, source: src, model: null, x, y, z, __parsed: false };
         this.m_entries.push(entry);
         const stat: any = ((globalThis as any).__mbBatched ??= { fetch: 0, ok: 0, parsed: 0, err: '' });
         stat.fetch++;
@@ -202,10 +224,9 @@ export class MBBatchedModelRenderer {
                             model.add(this.buildPrimitiveMesh(prim, tile.materials));
                         }
                     }
-                    const anchor = this.computeAnchor(z, x, y);
-                    model.scale.set(anchor.w, anchor.w, 1);
+                    model.scale.set(this.computeScale(z), this.computeScale(z), 1);
                     entry.model = model;
-                    entry.anchor.set(anchor.x, anchor.y, 0);
+                    entry.x = x; entry.y = y; entry.z = z;
                     const paint = (src as any).paint ?? {};
                     if (tile.hasMeshFeatures) {
                         // §547: per-part styling over MAPBOX_mesh_features
@@ -276,24 +297,9 @@ export class MBBatchedModelRenderer {
      * tiling scheme — hand-rolled normalized unproject landed in a different
      * frame) plus the world-units-per-GLB-unit scale for the x/y grid.
      */
-    /**
-     * Tile anchor in absolute ENGINE world units plus the world-units per
-     * GLB-unit scale. §549: the engine's tile frame (MBTileDataEmitter
-     * tile2world) is PLANE web-mercator arithmetic — x = (col/2^z)·R,
-     * y = (row/2^z)·R south-positive, R = equatorial circumference. Going
-     * through `mapView.projection.projectPoint(getGeoBox(...))` instead
-     * produced a different (non-linear / globe-or-custom) mapping and the
-     * anchor landed kilometres away from the camera.
-     */
-    private computeAnchor(z: number, x: number, y: number):
-        { x: number; y: number; w: number } {
-        const R = 40075016.686; // EarthConstants.EQUATORIAL_CIRCUMFERENCE
-        const n = Math.pow(2, z);
-        return {
-            x: (x / n) * R,
-            y: (y / n) * R,
-            w: R / n / 8192,
-        };
+    /** World-units per GLB-unit: one standard-z tile spans R/2^z world units. */
+    private computeScale(z: number): number {
+        return 40075016.686 / Math.pow(2, z) / 8192;
     }
 
     /** Called by the datasource once sources are known. */
