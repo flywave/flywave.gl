@@ -6319,3 +6319,12 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **⑤ meshopt 分支 filter 缺失 + CSS 颜色关键字**：(a) meshopt 分支从未按 nodePassesFilter 设 `visible`（Draco 分支有）→ xray 的 filter `["!",true]`=false 层照画（粉层盖绿层；期望只绿层）——补 `o.visible=nodePassesFilter(__mbNodeId,__mbNodeHeight)`，meshopt 同时补 `__mbNodeHeight=boundingBox.max.z`（mgl getNodeHeight）。(b) `parseRgbaBytes` 不识别 CSS 关键字 → duplicate 主夹具 model-color "red"/"green" 解析失败→白色兜底×mix=1→全白（137574；几何与 filter 划分逐像素对位、唯颜色缺失的对比截图定案）——新增 `parseCssColor`（THREE.Color.NAMES 关键字 + hsl() 正则门，setStyle SRGB）挂入 parseRgbaBytes 失败链。效果：duplicate 137574→**46865**。
 
 **验证**：emission-strength 41885（vs §552 41937，flatShading 等改动无回归）；shadows-cutoff-range 20675（far-cutoff 新链路跑通无崩溃）；单测 299 passing、tsc 绿。测试基建记档：dump server 重建在 /tmp/mbreport/server.js（`/ibct-feedback` JSON→/tmp/mbreport/results/，含 actual/diff png）；karma 须从仓库根启动（`CHROME_BIN=/usr/bin/microsoft-edge KARMA_ARGS="filter=<名> feedback-url=http://127.0.0.1:9871 mbbatchdbg=1" npx karma start --browsers ChromeHeadlessNoSandbox --single-run`，timeout 360+kill）。**遗留（下轮 ROI）**：①conflation replacement 子系统（§552 ②）；②featureless meshopt tile 的 mgl 逐节点逐 part 色（random(id) 逐节点评估需 per-node evalPart，现 per-part 全局一次）；③duplicate 剩余 46865（估计为门灯/外观域）；④V2 mesh_features 位偏移+LOD AO 顶点色乘法；⑤conflation-buckingham fill-extrusion 影子方向。
+
+**§554. batched-model maxDisplayLevel cap 破案——indirect-doors-no-shadows 瓦片从未调度 + 夹具还原 mgl 原版（2026-08-30）**：
+
+**① 根因**：`MBBatchedModelDataSource` 构造时 `maxDisplayLevel: 20` 硬编码——mgl mapbox zoom 上限 22 对应 flywave level 23，zoom≥20.6 的夹具（landmark-part-styling-indirect-doors-no-shadows/-lod，mgl zoom 20.6）在 flywave 帧内需求 level>20，源被静默禁用 → 纯背景帧（857513/816364 px）。修复：`maxDisplayLevel: 26`。效果：模型完整上屏（几何/门灯网格可见），442181/416294 px。
+
+**② 夹具还原**：上会话曾把该夹具 style.json 的 logo `model-color` interpolate(measure-light, rgba(0,149,230,.8)→rgba(100,189,255,.9)) 临时简化为 `"rgba(255,0,0,1.0)"`——已从 mapbox-gl-js 原版还原（语义 diff 校验通过）。**关键观察**：简化色与表达式两版 mismatch 像素完全相同（442181），说明该 part 色在两条路径下都退化为同一兜底（求值失败/未应用），非表达式本身问题。
+
+**③ 剩余差距定性（442k）**：current 渲染右侧存在 expected 没有的大面积蓝色墙体——颜色恰为还原表达式的 rgba(0,149,230)→rgba(100,189,255) 蓝带，疑为该 `model-color` 表达式被应用到过宽的 part 集合（match 桶泄漏/mix-intensity 全乘），或 maxDisplayLevel 放宽后调度了 mgl 不显示的更高 level 瓦片（过采样几何）。**下轮入口**：①检查 mesh_features part match 桶绑定（`get part` 过滤是否只命中目标 part）；②对比 mgl tile 调度上界（overzoom 语义 vs flywave displayLevel）确认无多余几何；③per-part 色求值失败兜底链复查。测试基建：`MBSTYLE_BATCHEDDBG=1` 传 mbbatchdbg karma 参数（run-mbstyle-render-tests.js 已接）。单测/tsc 绿。
+
