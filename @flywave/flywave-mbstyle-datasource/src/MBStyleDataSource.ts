@@ -20,6 +20,7 @@ import {
 import * as THREE from 'three';
 
 import { MBStyleManager, ResolvedSource } from './MBStyleManager';
+import { MBBatchedModelDataSource } from './MBBatchedModelDataSource';
 import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { MBTileDataEmitter } from './MBTileDataEmitter';
@@ -1510,6 +1511,40 @@ export class MBStyleDataSource extends TileDataSource {
                         paint: layer?.paint ?? {},
                         layer,
                     });
+                    // §549: register a REGULAR DataSource for the batched-model
+                    // source — tiles ride the engine's tile pipeline
+                    // (TileObjectsRenderer renders tile.objects), which is the
+                    // only reliably rendered channel (§549 尾注四/五).
+                    void (async () => {
+                        (globalThis as any).__mbIifeEntered = ((globalThis as any).__mbIifeEntered ?? 0) + 1;
+                        try {
+                            const dsName = sid + '-mbbatched';
+                            // mapView may attach after configure — wait briefly.
+                            for (let i = 0; i < 100 && !(self as any).mapView; i++) {
+                                await new Promise(r => setTimeout(r, 50));
+                            }
+                            const mv: any = (self as any).mapView;
+                            let ds = mv.getDataSourceByName?.(dsName);
+                            if (ds) {
+                                ds.setPaint?.(layer?.paint ?? {});
+                                return;
+                            }
+                            ds = new MBBatchedModelDataSource({
+                                name: dsName,
+                                srcTemplate: tpl[0],
+                                maxDataLevel: (src as any).maxzoom ?? spec?.maxzoom ?? 14,
+                                paint: layer?.paint ?? {},
+                                envProvider: self,
+                            });
+                            // §549: manual registration — addDataSource awaits
+                            // getTheme() which hangs in the harness.
+                            MBBatchedModelDataSource.manualRegister(mv, ds);
+                            (self as any).m_batchedDsRegistered = true;
+                        } catch (e: any) {
+                            (globalThis as any).__mbBatchedDsErr =
+                                String(e?.stack ?? e).slice(0, 200);
+                        }
+                    })();
                 }
                 this.m_batchedModelSources = batched;
                 (this.m_batchedModelRenderer as any)?.setSources?.(batched);
@@ -1993,50 +2028,6 @@ export class MBStyleDataSource extends TileDataSource {
             } catch {}
             try {
                 const { MBBatchedModelRenderer } = await import('./MBBatchedModelRenderer');
-                // §549: patch MapRenderingManager.render — add the batched
-                // models into the engine root at the last moment before the
-                // actual renderer.render (engine scene filtering wipes plain
-                // scene-attach and WillRender-window adds; the tile-pipeline
-                // root is the reliably rendered location).
-                try {
-                    const mrm = (self.mapView as any).mapRenderingManager;
-                    if (mrm && !mrm.__mbPatched) {
-                        mrm.__mbPatched = true;
-                        (globalThis as any).__mbPatchedOk = 1;
-                        const origRender = mrm.render.bind(mrm);
-                        mrm.render = function(renderer: any, scene: any, camera: any, st: boolean, ts: any) {
-                            (self.m_batchedModelRenderer as any)?.attachForRender?.(self.mapView, scene);
-                            (globalThis as any).__mbRenderPath = {
-                                camIsRte: camera === (self.mapView as any).m_rteCamera ? 1 : 0,
-                                camIsMain: camera === (self.mapView as any).camera ? 1 : 0,
-                                anyEffect: !!(mrm as any).m_anyEffectEnabled,
-                                hasComposer: !!((mrm as any).m_composer),
-                                sceneIsMain: scene === (self.mapView as any).scene ? 1 : 0,
-                                rootKids: (self.mapView as any).m_sceneRoot?.children?.length ?? -1,
-                            };
-                            // §549 pixel A/B around the actual render call.
-                            try {
-                                const gl = renderer.getContext();
-                                const cv = renderer.domElement;
-                                const px = new Uint8Array(4);
-                                gl.readPixels((cv.width / 2) | 0, (cv.height / 2) | 0, 1, 1,
-                                    gl.RGBA, gl.UNSIGNED_BYTE, px);
-                                (globalThis as any).__mbPixelPre = Array.from(px);
-                            } catch { /* probe */ }
-                            origRender(renderer, scene, camera, st, ts);
-                            try {
-                                const gl2 = renderer.getContext();
-                                const cv2 = renderer.domElement;
-                                const px2 = new Uint8Array(4);
-                                gl2.readPixels((cv2.width / 2) | 0, (cv2.height / 2) | 0, 1, 1,
-                                    gl2.RGBA, gl2.UNSIGNED_BYTE, px2);
-                                (globalThis as any).__mbPixelPost = Array.from(px2);
-                            } catch { /* probe */ }
-                        };
-                    }
-                } catch {}
-                self.m_batchedModelRenderer = new MBBatchedModelRenderer(
-                    this.mapView, self, this.m_batchedModelSources ?? []);
             } catch (e) {
                 (globalThis as any).__mbBatchedInitErr = String(e);
                 // eslint-disable-next-line no-console
@@ -2322,6 +2313,16 @@ export class MBStyleDataSource extends TileDataSource {
                                     gerr: (globalThis as any).__mbShadowGridErr,
                                     perr: (globalThis as any).__mbShadowPassErr,
                                     batched: (globalThis as any).__mbBatched,
+                                    dsErr: (globalThis as any).__mbBatchedDsErr,
+                                    dsRegistered: (self as any).m_batchedDsRegistered === true ? 1 : 0,
+                                    iifeEntered: (globalThis as any).__mbIifeEntered ?? 0,
+                                    wireCount: (globalThis as any).__mbBatchedWire ?? 0,
+                                    dsNames: (() => {
+                                        try {
+                                            return ((self.mapView as any).m_tileDataSources ?? [])
+                                                .map((d: any) => d.name);
+                                        } catch { return 'err'; }
+                                    })(),
                                     rootKidsWill: (globalThis as any).__mbRootKidsWill,
                                     renderPath: (globalThis as any).__mbRenderPath,
                                     pixelPre: (globalThis as any).__mbPixelPre,
@@ -2366,6 +2367,7 @@ export class MBStyleDataSource extends TileDataSource {
                                 ribbonShaders: (globalThis as any).__mbRibbonProbe ?? [],
                             };
                             (globalThis as any).__mbProbeDump = dump;
+                            (dump as any).nonce = performance.now();
                             const sig = dump.yellow.join('|') + '#' + dump.black.join('|') + '#' + inventory.length + '#' + JSON.stringify(dump.shadow?.grid ?? '') + (dump.shadow?.gerr ? '#E' + dump.shadow.gerr : '') + (dump.shadow?.perr ? '#P' + dump.shadow.perr : '') + '#B' + JSON.stringify([dump.shadow?.runs ?? 0, dump.shadow?.srcs ?? 0, dump.shadow?.ierr ?? '', dump.shadow?.batched ?? null]);
                             const st = (globalThis as any).__mbProbePost ??= { n: 0, sig: '' };
                             const fb = (window as any).__karma__?.config?.args
@@ -2399,9 +2401,6 @@ export class MBStyleDataSource extends TileDataSource {
                 }
                 if (self.m_modelRenderer) {
                     self.m_modelRenderer.run();
-                }
-                if (self.m_batchedModelRenderer) {
-                    self.m_batchedModelRenderer.run();
                 }
                 // §518: loadModels instances (source-registry path) share the
                 // RTE problem — keep them at absolute − eye (see
