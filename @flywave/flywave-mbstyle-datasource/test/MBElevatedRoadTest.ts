@@ -437,3 +437,63 @@ function shoelace(ring: Array<{ x: number; y: number }>): number {
     }
     return a / 2;
 }
+
+describe('MBTileDataEmitter sea-mode ground-scale (§548)', () => {
+    function runSeaZs(layoutExtra: Record<string, unknown>, exaggeration: number | null): number[] {
+        const style: any = {
+            version: 8,
+            sources: {},
+            layers: [{
+                id: 'elev',
+                type: 'line',
+                source: 'geojson',
+                layout: {
+                    'line-elevation-reference': 'sea',
+                    'line-z-offset': ['literal', 1000],
+                    ...layoutExtra,
+                },
+                paint: { 'line-color': '#0000ff', 'line-width': 3 },
+            }],
+        };
+        const evaluator = new MBLayerEvaluator(style);
+        const tileKey = TileKey.fromRowColumnLevel(0, 0, 0);
+        const decodeInfo = createDecodeInfo(tileKey);
+        const emitter = new MBTileDataEmitter(tileKey, decodeInfo, 0);
+        if (exaggeration !== null) emitter.setTerrainExaggeration(exaggeration);
+
+        const line = {
+            positions: [
+                new THREE.Vector2(0, 0),
+                new THREE.Vector2(2048, 2048),
+                new THREE.Vector2(4096, 4096),
+            ],
+        };
+        const props = {};
+        const matched = evaluator.evaluate('geojson', '', { type: 'LineString', properties: props }, 0, 'line');
+        emitter.processLineFeature('geojson', 4096, [line as any], props, undefined, matched);
+
+        const decodedTile = emitter.getDecodedTile();
+        const pos = decodedTile.geometries[0].vertexAttributes.find((a: any) => a.name === 'position');
+        const arr = new Float32Array(pos.buffer);
+        const zs: number[] = [];
+        for (let i = 2; i < arr.length; i += 3) zs.push(arr[i]);
+        return zs;
+    }
+
+    it('scales sea z-offset by mix(1, exaggeration, ground-scale)', () => {
+        // exaggeration 2, ground-scale 0.5 → factor 1.5 → z = 1000×1.5 = 1500.
+        const zs = runSeaZs({ 'line-elevation-ground-scale': 0.5 }, 2);
+        for (const z of zs) expect(z).to.be.closeTo(1500, 1e-3);
+    });
+
+    it('keeps the z-offset at exaggeration 1 (default)', () => {
+        const zs = runSeaZs({ 'line-elevation-ground-scale': 0.5 }, null);
+        for (const z of zs) expect(z).to.be.closeTo(1000, 1e-3);
+    });
+
+    it('applies ground-scale only for sea reference (mgl gate)', () => {
+        const zs = runSeaZs(
+            { 'line-elevation-reference': 'ground', 'line-elevation-ground-scale': 1 }, 2);
+        for (const z of zs) expect(z).to.be.closeTo(1000, 1e-3);
+    });
+});

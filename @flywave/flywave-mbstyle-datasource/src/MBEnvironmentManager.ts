@@ -479,6 +479,11 @@ export class MBEnvironmentManager {
     private m_lastExaggeration = 1.0;
     private m_terrainRteListener: (() => void) | null = null;
 
+    /** §548: live exaggeration (mgl u_exaggeration) for elevation consumers. */
+    get currentTerrainExaggeration(): number {
+        return this.m_lastExaggeration;
+    }
+
     /** Multi-tile terrain controller (null if no terrain or single-tile fallback). */
     get terrainController(): TerrainController | null { return this.m_terrainController; }
     private m_backgroundQuad: THREE.Mesh | null = null;

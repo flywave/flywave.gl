@@ -430,6 +430,15 @@ export class MBTileDataEmitter {
     }
     private m_terrainSampler: ((x: number, y: number) => number) | null = null;
 
+    /**
+     * §548: live terrain exaggeration (mgl u_exaggeration). Scales sea-level
+     * line z-offsets by mix(1, exaggeration, line-elevation-ground-scale).
+     */
+    setTerrainExaggeration(v: number): void {
+        this.m_terrainExaggeration = Number.isFinite(v) && v > 0 ? v : 1;
+    }
+    private m_terrainExaggeration = 1;
+
     /** §514: style declares terrain (mgl terrainEnabled equivalent). */
     setStyleHasTerrain(v: boolean): void {
         this.m_styleHasTerrain = v;
@@ -2716,6 +2725,28 @@ export class MBTileDataEmitter {
                             total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
                             cum.push(total);
                         }
+                        // §548: line-elevation-ground-scale (data-driven,
+                        // sea reference only — mgl line_bucket
+                        // isSeaLevelReference gate). mix(1, exaggeration, gs)
+                        // scales the z-offset when terrain exaggeration ≠ 1.
+                        let zK = 1;
+                        if (lineElevRef === 'sea' && this.m_terrainExaggeration !== 1) {
+                            const gsRaw = layer.layoutDefs?.['line-elevation-ground-scale']
+                                ?? layer.layout?.['line-elevation-ground-scale'];
+                            if (gsRaw !== undefined && gsRaw !== null) {
+                                let gs = gsRaw;
+                                if (typeof gs === 'object') {
+                                    gs = MBExpressionEngine.evaluate(gs, {
+                                        zoom: this.m_zoom,
+                                        feature: { properties, id: featureId } as any,
+                                    } as any);
+                                }
+                                const gsn = Number(gs);
+                                if (Number.isFinite(gsn) && gsn > 0) {
+                                    zK = 1 + (this.m_terrainExaggeration - 1) * Math.min(1, gsn);
+                                }
+                            }
+                        }
                         ptHeights = [];
                         for (let i = 0; i < pts.length; i++) {
                             const progress = progressTotal > 0
@@ -2727,19 +2758,28 @@ export class MBTileDataEmitter {
                                 lineProgress: progress,
                             };
                             const v = Number(MBExpressionEngine.evaluate(zOffsetRaw!, ctxLine));
-                            ptHeights.push(Number.isFinite(v) ? v : 0);
+                            ptHeights.push((Number.isFinite(v) ? v : 0) * zK);
                         }
                     }
                 }
 
                 const worldPts: number[] = [];
                 let pathMaxH = 0;
+                // §548: offset lines ride the DEM when terrain is live —
+                // mgl line.vertex.glsl `ele = sample_elevation(offset_pos)
+                // + scaled_z_offset` (fill-extrusion §279 sampler pattern).
+                const cwLine = this.m_decodeInfo.center;
                 for (let pi = 0; pi < pts.length; pi++) {
                     const pt = pts[pi];
                     const w = this.project(pt);
                     const h = ptHeights ? ptHeights[pi] : 0;
                     if (h > pathMaxH) pathMaxH = h;
-                    worldPts.push(w.x, w.y, w.z + h);
+                    let baseZ = w.z;
+                    if (useZOffsetMode && this.m_terrainSampler) {
+                        const g = this.m_terrainSampler(w.x + cwLine.x, w.y + cwLine.y);
+                        if (Number.isFinite(g)) baseZ = g;
+                    }
+                    worldPts.push(w.x, w.y, baseZ + h);
                 }
                 if (pathMaxH > 0) this.noteGeometryHeight(pathMaxH);
 

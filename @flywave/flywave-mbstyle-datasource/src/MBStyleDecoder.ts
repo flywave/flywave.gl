@@ -608,6 +608,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_terrainSampler: ((x: number, y: number) => number) | null = null;
     /** Style declares terrain — mgl terrainEnabled equivalent (§514). */
     private m_styleHasTerrain = false;
+    /** §548: live terrain exaggeration (line-elevation-ground-scale). */
+    private m_terrainExaggeration = 1;
     private m_terrainHeightScale = 1;
     private m_iconDepthTest = false;
     private m_heightScaleScaleFromTerrainFlag = false;
@@ -740,6 +742,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             this.m_terrainSampler =
                 customOptions!.terrainElevationSampler as
                 ((x: number, y: number) => number) | null;
+        }
+        // §548: live terrain exaggeration (line-elevation-ground-scale).
+        if (customOptions?.terrainExaggeration !== undefined) {
+            const e = Number(customOptions.terrainExaggeration);
+            this.m_terrainExaggeration = Number.isFinite(e) && e > 0 ? e : 1;
         }
         // §289: sec(lat) factor for style meters → world-z (same scale the
         // sampler bakes into ground elevations).
@@ -935,6 +942,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             emitter.setTerrainSampler(this.m_terrainSampler);
         }
         emitter.setStyleHasTerrain(this.m_styleHasTerrain);
+        // §548: live exaggeration for line-elevation-ground-scale.
+        emitter.setTerrainExaggeration(this.m_terrainExaggeration);
 
         const processor = new MBStyleDataProcessor(
             tileKey, decodeInfo,

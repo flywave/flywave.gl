@@ -2412,6 +2412,9 @@ export class MBStyleDataSource extends TileDataSource {
                             ctl.sampleElevation(wx, wy),
                         terrainHeightScale: ctl.sampleSecLat ?? 1,
                         terrainHeightScaleFromTerrain: true,
+                        // §548: live exaggeration (line-elevation-ground-scale).
+                        terrainExaggeration:
+                            (this.m_environment as any).currentTerrainExaggeration ?? 1,
                     } as any);
                 }
             } catch {}
@@ -4019,13 +4022,17 @@ export class MBStyleDataSource extends TileDataSource {
             const mbZoom = boxZoom !== undefined && this.mapView.projection?.type === 1
                 ? boxZoom
                 : Math.max(0, camZoom - 1);
-            (this.decoder as any).configure?.(undefined, {
-                mapboxZoom: mbZoom,
-            } as any);
             // mgl dynamic terrain exaggeration: re-evaluate the (possibly
             // zoom-interpolated) exaggeration at the live zoom — in-place
             // uniform refresh, no rebuild.
             (this.m_environment as any)?.updateTerrainExaggeration?.(mbZoom);
+            // §548: keep the decoder's exaggeration live for
+            // line-elevation-ground-scale (mixed into offset z at emit).
+            const ex = (this.m_environment as any).currentTerrainExaggeration;
+            this.decoder.configure(undefined, {
+                mapboxZoom: mbZoom,
+                ...(Number.isFinite(ex) ? { terrainExaggeration: ex } : {}),
+            } as any);
         } catch {}
     }
 

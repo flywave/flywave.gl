@@ -6184,3 +6184,15 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **验证（代码侧全绿，渲染批测攒批）**：node 端到端——重打包 GLB 经 GLTFLoader.parse 产出 4 mesh（2 feature mesh、20609 tris），4 mesh POSITION min/max 与 accessor 声明吻合（量化容差内），partId 直方图与独立解码逐位一致；mesh_features 拆分→9 sub-mesh {wall×2,door×2,roof×2,window×2,logo×1}，窗 roughness=0.4/emissive 注入/vertexColors 断言过。单测 `MBDracoDecoderTest` 6 例入库（GLB 容器解析/重打包合法性/POSITION 边界/partId 稳定性/mesh_features 检测/拆分），全量 296 passing（+6）、tsc 绿。**渲染验证攒批项**：landmark-emission-strength（基线 264389，命中标志 `__mbBatched.parsed>0`+`decoded>0`）+ landmark-emission-strength-lod + model-layer 域复测（3 tiles 命中窗口已由 modelsPending 挂钩延长）。
 
 **遗留/下会话**：① 逐 part 的 `model-height-based-emissive-strength-multiplier`（heightBased 五元组，mgl a3/b0/b1/b2 编码）未实现——fixture 有设值，为 landmark 亮度精调项；② per-vertex AO（LOD mesh 的 4444 alpha 通道）未消费（mgl 仅 isLodMesh 乘 AO）；③ 3d-intersections 剩余项（terrain×structures、tunnel-enterance 深度重建、line-cross-slope/ground-scale）下一批次。
+
+**§548. 会话续记——line-elevation-ground-scale 全链落地（sea 参考逐特性 exaggeration 混合 + offset 线地形采样）（2026-08-29 续六）**：
+
+**mgl 语义（line_bucket.ts + line.vertex.glsl 实证）**：`line-elevation-ground-scale` 是 layout DataDrivenProperty（默认 0，clamp [0,1]），**仅 `line-elevation-reference: 'sea'` 时生效**（bucket `isSeaLevelReference` 门）；shader 端 `scaled_z_offset = a_z_offset × mix(1.0, u_exaggeration, a_elevation_ground_scale)`——地形 exaggeration≠1 时海平面参考线的 z-offset 随 exaggeration 按比例抬升（0=固定海拔、1=完全随地形夸张）。offset 线本体的地形贴合：`ele = sample_elevation(offset_pos) + scaled_z_offset`。夹具 `terrain/lines-elevated-ground-scale-1/2`。
+
+**实现（四点接线）**：① `MBEnvironmentManager` 增公开 getter `currentTerrainExaggeration`（`m_lastExaggeration` 即 mgl u_exaggeration，动态 exaggeration 的每帧求值已在册）；② `MBStyleDataSource` 两处接线——terrain 采样器 configure 块附带 `terrainExaggeration`，每帧 `updateTerrainExaggeration` 后的 decoder.configure（mapboxZoom 同一调用）并入该键（读数在 update 之后，无帧延迟）；③ `MBStyleDecoder` 存 `m_terrainExaggeration` → `emitter.setTerrainExaggeration`；④ emitter offset 模式（sea/ground 逐顶点求值路径）：sea 参考时逐特性求值 `line-elevation-ground-scale`（layoutDefs 原始表达式，per-feature），z-offset 乘 `1+(exaggeration−1)×gs`；且 **offset 线在有 DEM 采样器时逐顶点贴合地形**（`sampler(w.x+cw.x, w.y+cw.y)` 替代平面 w.z 作基座，fill-extrusion §279 同款 cw 中心补偿），无采样器时路径逐位不变。
+
+**零回归构造**：当前 3d-intersections/elevated-line 域均无地形（sampler=null）且 exaggeration=1 → 因子恒 1、采样分支不进——与既有通过项逐像素同。真收益在 terrain 批次（lines-elevated-ground-scale-1/2 需 DEM+exaggeration>1 的引擎地形渲染）。
+
+**`line-cross-slope` 定性（未实现，engine 相邻）**：mgl 语义=offset 型线的三种横断面——`crossSlope≥1` 垂直线（ribbon 半宽转竖直高度 `2×tileToMeter×outset×top×pixelsToTileUnits`，**屏幕像素→世界每帧变**，mgl 在 shader 做而我们几何烘焙架构无法逐帧）；`<1` 水平线（`max(地形@中心±extrude)` 逐顶点 DEM 采样、烘焙可行但我们的 SolidLine ribbon 横断面由引擎几何生成、emitter 无左右缘顶点控制权）；undefined=随坡（现行为）。render-tests 无独立 cross-slope 夹具（§513 的"各 1 例"实为 ground-scale 两例）——记档为引擎侧遗留，不阻塞。
+
+**验证**：单测 +3（exaggeration 2×gs 0.5→z 1500、默认 1→1000、ground 参考门→1000），全量 299 passing（+3）、tsc 绿。渲染验证攒批（terrain 域批测时一并验收）。
