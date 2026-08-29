@@ -6328,3 +6328,15 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 
 **③ 剩余差距定性（442k）**：current 渲染右侧存在 expected 没有的大面积蓝色墙体——颜色恰为还原表达式的 rgba(0,149,230)→rgba(100,189,255) 蓝带，疑为该 `model-color` 表达式被应用到过宽的 part 集合（match 桶泄漏/mix-intensity 全乘），或 maxDisplayLevel 放宽后调度了 mgl 不显示的更高 level 瓦片（过采样几何）。**下轮入口**：①检查 mesh_features part match 桶绑定（`get part` 过滤是否只命中目标 part）；②对比 mgl tile 调度上界（overzoom 语义 vs flywave displayLevel）确认无多余几何；③per-part 色求值失败兜底链复查。测试基建：`MBSTYLE_BATCHEDDBG=1` 传 mbbatchdbg karma 参数（run-mbstyle-render-tests.js 已接）。单测/tsc 绿。
 
+
+**§555. mesh_features V2 打包对齐 + meshopt 分支 per-part styling 接线 + LOD AO（2026-08-30 续）**：
+
+**① V1/V2 半区交换（mgl tiled_3d_model_bucket.ts:740-756 权威)**：`updateNodeFeatureVertices` 按 `ModelTraits.HasMeshoptCompression`（=glTF `extensionsUsed` 含 `EXT_meshopt_compression`）取 shift——V2：colorShift=0/idShift=16（**color 低 16 位、part 在 16..19 位**），V1 相反。我方 splitByPart/refreshSplit 原硬编码 V1 布局 → meshopt 瓦片 part 从颜色位读取（乱分类，wall 顶点随机落 window 桶变蓝+metalness=1）。修复：decoder 出 `meshoptV2`/`featureAoAlpha` 逐 prim，两处 buildPrimitiveMesh + meshopt traverse 落 `geometry.userData.__mbFeatV2/__mbFeatLod`，解码按 shift。
+
+**② meshopt 属性名归一**：meshopt tiler 命名 `_FEATURE_ID_RGBA4444`（GLTFLoader→`_feature_id_rgba4444`），Draco 瓦片是 `_FEATURE_RGBA4444`（decoder 手工读）——MBMeshFeatures 只认后者 → meshopt 瓦片 FEATURE_ATTR 从未命中。meshopt traverse 里归一为 `_feature_rgba4444`。
+
+**③ meshopt 分支 hasMeshFeatures 恒 false 破案**：该变量只在 Draco 分支赋值 → mbx-lod/mbx-meshopt 瓦片从未走 applyMeshFeatures（whole-tile applyLayerPaint 兜底）。补 `MAPBOX_mesh_features` 探测（同处 parseGlb 已有 json）。
+
+**④ LOD AO 顶点色乘法**（§553 遗留④）：mgl `buildMeshFeatureArray isLodMesh` 把 4444 alpha（baked AO）乘进 rgb——仅 LOD 瓦片（mbx_bvh 标记），非 LOD alpha 任意值（可 0）绝不乘。expandAlpha4444 + `__mbFeatLod` 门。
+
+**验证困境（未闭环，下轮第一查）**：indirect 家族复测像素逐位不变（doors 442181/-lod 416294/update 260574/doors 587578/doors-lod 613748），且本轮 mbbatchdbg 下 **[MBBatchedTile] diag 零输出**（上一轮仅 1 条 meshopt=false）——meshopt 分支疑似根本未执行，与 §553 记录的"duplicate-model-layer-lod 红/绿翻转=DS 注册顺序竞态"同族：karma 单页多测试顺序下 batched DS 的注册/复用（`getDataSourceByName` 命中旧实例 return 分支不走新 paint）可疑。**下轮**：①单测单独跑 -lod 夹具验证 meshopt 分支 diag；②查 MBStyleDataSource:1450 `ds.setPaint` 复用分支是否覆盖 hasMeshFeatures 探测链；③确认非 direct-render 夹具（museum-lod 族）像素收益。
