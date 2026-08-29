@@ -22,7 +22,6 @@
  */
 
 import * as THREE from 'three';
-import { TileKey, webMercatorTilingScheme } from '@flywave/flywave-geoutils';
 import { applyMglModelLighting } from './MBModelRenderer';
 import { decodeGlbTile, TileMaterialData, TilePrimitiveData } from './MBDracoDecoder';
 import { applyMeshFeatures } from './MBMeshFeatures';
@@ -103,12 +102,17 @@ export class MBBatchedModelRenderer {
             // the pitched-back camera, not the geoCenter target).
             e.model.position.copy(e.anchor).sub(this.m_eye);
         }
+        // §549 CRITICAL: the engine clears the root via
+        // `m_sceneRoot.children.length = 0`, which does NOT reset
+        // child.parent — a `parent !== root` guard would skip the re-add
+        // forever. Force the link every frame.
         if (this.m_carrierGroup.parent !== root) {
-            root.add(this.m_carrierGroup);
+            this.m_carrierGroup.parent = null;
         }
+        root.add(this.m_carrierGroup);
         if (st) {
             st.rendered = keep.length;
-            st.inRoot = this.m_carrierGroup.parent === root ? 1 : 0;
+            st.inRoot = root.children.indexOf(this.m_carrierGroup) >= 0 ? 1 : 0;
             const eng = root.children[0];
             if (eng) {
                 st.engCtor = eng.constructor.name;
@@ -271,19 +275,23 @@ export class MBBatchedModelRenderer {
      * tiling scheme — hand-rolled normalized unproject landed in a different
      * frame) plus the world-units-per-GLB-unit scale for the x/y grid.
      */
+    /**
+     * Tile anchor in absolute ENGINE world units plus the world-units per
+     * GLB-unit scale. §549: the engine's tile frame (MBTileDataEmitter
+     * tile2world) is PLANE web-mercator arithmetic — x = (col/2^z)·R,
+     * y = (row/2^z)·R south-positive, R = equatorial circumference. Going
+     * through `mapView.projection.projectPoint(getGeoBox(...))` instead
+     * produced a different (non-linear / globe-or-custom) mapping and the
+     * anchor landed kilometres away from the camera.
+     */
     private computeAnchor(z: number, x: number, y: number):
         { x: number; y: number; w: number } {
-        const pr = this.m_mapView.projection;
-        const tileKey = TileKey.fromRowColumnLevel(y, x, z);
-        const geoBox = webMercatorTilingScheme.getGeoBox(tileKey);
-        const pSW = pr.projectPoint(geoBox.southWest, { x: 0, y: 0, z: 0 });
-        const pNE = pr.projectPoint(geoBox.northEast, { x: 0, y: 0, z: 0 });
-        const spanX = Math.abs(pNE.x - pSW.x);
-        const w = spanX / 8192;
+        const R = 40075016.686; // EarthConstants.EQUATORIAL_CIRCUMFERENCE
+        const n = Math.pow(2, z);
         return {
-            x: Math.min(pSW.x, pNE.x),
-            y: Math.min(pSW.y, pNE.y),
-            w,
+            x: (x / n) * R,
+            y: (y / n) * R,
+            w: R / n / 8192,
         };
     }
 

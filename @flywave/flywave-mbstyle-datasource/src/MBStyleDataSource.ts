@@ -2006,7 +2006,32 @@ export class MBStyleDataSource extends TileDataSource {
                         const origRender = mrm.render.bind(mrm);
                         mrm.render = function(renderer: any, scene: any, camera: any, st: boolean, ts: any) {
                             (self.m_batchedModelRenderer as any)?.attachForRender?.(self.mapView, scene);
+                            (globalThis as any).__mbRenderPath = {
+                                camIsRte: camera === (self.mapView as any).m_rteCamera ? 1 : 0,
+                                camIsMain: camera === (self.mapView as any).camera ? 1 : 0,
+                                anyEffect: !!(mrm as any).m_anyEffectEnabled,
+                                hasComposer: !!((mrm as any).m_composer),
+                                sceneIsMain: scene === (self.mapView as any).scene ? 1 : 0,
+                                rootKids: (self.mapView as any).m_sceneRoot?.children?.length ?? -1,
+                            };
+                            // §549 pixel A/B around the actual render call.
+                            try {
+                                const gl = renderer.getContext();
+                                const cv = renderer.domElement;
+                                const px = new Uint8Array(4);
+                                gl.readPixels((cv.width / 2) | 0, (cv.height / 2) | 0, 1, 1,
+                                    gl.RGBA, gl.UNSIGNED_BYTE, px);
+                                (globalThis as any).__mbPixelPre = Array.from(px);
+                            } catch { /* probe */ }
                             origRender(renderer, scene, camera, st, ts);
+                            try {
+                                const gl2 = renderer.getContext();
+                                const cv2 = renderer.domElement;
+                                const px2 = new Uint8Array(4);
+                                gl2.readPixels((cv2.width / 2) | 0, (cv2.height / 2) | 0, 1, 1,
+                                    gl2.RGBA, gl2.UNSIGNED_BYTE, px2);
+                                (globalThis as any).__mbPixelPost = Array.from(px2);
+                            } catch { /* probe */ }
                         };
                     }
                 } catch {}
@@ -2298,6 +2323,9 @@ export class MBStyleDataSource extends TileDataSource {
                                     perr: (globalThis as any).__mbShadowPassErr,
                                     batched: (globalThis as any).__mbBatched,
                                     rootKidsWill: (globalThis as any).__mbRootKidsWill,
+                                    renderPath: (globalThis as any).__mbRenderPath,
+                                    pixelPre: (globalThis as any).__mbPixelPre,
+                                    pixelPost: (globalThis as any).__mbPixelPost,
                                     rootKids: (() => {
                                         try {
                                             const root = (self.mapView as any).m_sceneRoot;
