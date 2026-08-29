@@ -164,6 +164,10 @@ function expand4444(color: number): [number, number, number, number] {
     return [r, g, b, a];
 }
 
+function expandAlpha4444(color: number): number {
+    return ((color & 0x000F) | ((color & 0x000F) << 4)) / 255;
+}
+
 function srgbToLinear(c: number): number {
     return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
@@ -646,6 +650,15 @@ function splitByPart(
     if (!feature || !index) return;
     const u16 = feature.array as Uint16Array;
     const vertCount = feature.count;
+    // mgl V1/V2 halves are swapped (updateNodeFeatureVertices): V2
+    // (EXT_meshopt_compression) packs the color in the LOW 16 bits and the
+    // part id in bits 16..19; V1 the other way around.
+    const v2 = geometry.userData?.__mbFeatV2 === true;
+    const colorShift = v2 ? 0 : 16;
+    const idShift = v2 ? 16 : 0;
+    // LOD meshes encode baked ambient occlusion in the 4444 alpha; non-LOD
+    // alpha is arbitrary (even 0) and must NOT darken (mgl isLodMesh).
+    const aoFromAlpha = geometry.userData?.__mbFeatLod === true;
 
     // Per-vertex partId + the mixed, linear-space vertex color.
     const partOf = new Uint8Array(vertCount);
@@ -655,17 +668,21 @@ function splitByPart(
     const partFirstColor = new Map<number, [number, number, number]>();
     for (let i = 0; i < vertCount; i++) {
         const u32 = (u16[i * 2] | (u16[i * 2 + 1] << 16)) >>> 0;
-        const rawPart = u32 & 0xf;
+        const rawPart = (u32 >>> idShift) & 0xf;
         const partId = rawPart < parts.length ? rawPart : 0;
         partOf[i] = partId;
         const style = parts[partId];
-        let [r, g, b] = expand4444((u32 >>> 16) & 0xffff);
+        let [r, g, b] = expand4444((u32 >>> colorShift) & 0xffff);
         if (!partFirstColor.has(partId)) partFirstColor.set(partId, [r, g, b]);
         if (style.mix > 0) {
             // mgl lerps in sRGB byte space before the shader converts.
             r = Math.round(r + (style.colorSrgb[0] - r) * style.mix);
             g = Math.round(g + (style.colorSrgb[1] - g) * style.mix);
             b = Math.round(b + (style.colorSrgb[2] - b) * style.mix);
+        }
+        if (aoFromAlpha) {
+            const a = expandAlpha4444((u32 >>> colorShift) & 0xffff);
+            r *= a; g *= a; b *= a;
         }
         colors[i * 3] = srgbToLinear(r / 255);
         colors[i * 3 + 1] = srgbToLinear(g / 255);
@@ -794,18 +811,26 @@ function refreshSplit(mesh: THREE.Mesh, parts: PartStyle[]): void {
     const u16 = feature.array as Uint16Array;
     const vertCount = feature.count;
     const colors = colorAttr.array as Float32Array;
+    const v2 = geometry.userData?.__mbFeatV2 === true;
+    const colorShift = v2 ? 0 : 16;
+    const idShift = v2 ? 16 : 0;
+    const aoFromAlpha = geometry.userData?.__mbFeatLod === true;
     const partFirstColor = new Map<number, [number, number, number]>();
     for (let i = 0; i < vertCount; i++) {
         const u32 = (u16[i * 2] | (u16[i * 2 + 1] << 16)) >>> 0;
-        const rawPart = u32 & 0xf;
+        const rawPart = (u32 >>> idShift) & 0xf;
         const partId = rawPart < parts.length ? rawPart : 0;
         const style = parts[partId] ?? parts[0];
-        let [r, g, b] = expand4444((u32 >>> 16) & 0xffff);
+        let [r, g, b] = expand4444((u32 >>> colorShift) & 0xffff);
         if (!partFirstColor.has(partId)) partFirstColor.set(partId, [r, g, b]);
         if (style.mix > 0) {
             r = Math.round(r + (style.colorSrgb[0] - r) * style.mix);
             g = Math.round(g + (style.colorSrgb[1] - g) * style.mix);
             b = Math.round(b + (style.colorSrgb[2] - b) * style.mix);
+        }
+        if (aoFromAlpha) {
+            const a = expandAlpha4444((u32 >>> colorShift) & 0xffff);
+            r *= a; g *= a; b *= a;
         }
         colors[i * 3] = srgbToLinear(r / 255);
         colors[i * 3 + 1] = srgbToLinear(g / 255);

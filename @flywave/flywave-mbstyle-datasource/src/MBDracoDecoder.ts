@@ -137,6 +137,14 @@ export interface TilePrimitiveData {
     features: Uint16Array | null;
     indices: Uint32Array;
     materialIndex: number;
+    /**
+     * mgl V2 tile (EXT_meshopt_compression): featureColor sits in the LOW 16
+     * bits and the part id in bits 16..19 — the V1 halves are swapped
+     * (tiled_3d_model_bucket updateNodeFeatureVertices).
+     */
+    meshoptV2?: boolean;
+    /** LOD tile: the 4444 alpha is baked AO (mgl isLodMesh rgb multiply). */
+    featureAoAlpha?: boolean;
 }
 
 /** glTF material subset the tile renderer needs (spec defaults applied). */
@@ -184,6 +192,13 @@ export interface TileMaterialized {
  */
 export async function decodeGlbTile(buffer: ArrayBuffer): Promise<TileMaterialized> {
     const { json, bin } = parseGlb(buffer);
+    // mgl ModelTraits.HasMeshoptCompression — V2 feature packing.
+    const meshoptV2 = Array.isArray(json.extensionsUsed)
+        && json.extensionsUsed.includes('EXT_meshopt_compression');
+    // LOD tiles (newer tiler, mbx_bvh) encode baked ambient occlusion in the
+    // vertex-color alpha — mgl multiplies it into rgb for lodMeshes only.
+    const isLod = Array.isArray(json.extensionsUsed)
+        && json.extensionsUsed.includes('mbx_bvh');
     const draco = await loadDracoModule();
     const nodes: TilePrimitiveData[][] = [];
     let meshIdx = -1;
@@ -254,6 +269,8 @@ export async function decodeGlbTile(buffer: ArrayBuffer): Promise<TileMaterializ
                     positions, normals, uvs, features,
                     indices,
                     materialIndex: prim.material ?? 0,
+                    meshoptV2,
+                    featureAoAlpha: isLod || undefined,
                 });
                 draco.destroy(geometry);
                 draco.destroy(decoder);

@@ -268,6 +268,8 @@ export class MBBatchedModelRenderer {
             // Name matches the lowercase attribute GLTFLoader would produce;
             // MBMeshFeatures consumes it for per-part styling.
             geo.setAttribute('_feature_rgba4444', new THREE.BufferAttribute(prim.features, 2));
+            geo.userData.__mbFeatV2 = prim.meshoptV2 === true;
+            geo.userData.__mbFeatLod = prim.featureAoAlpha === true;
         }
         geo.setIndex(new THREE.BufferAttribute(prim.indices, 1));
 

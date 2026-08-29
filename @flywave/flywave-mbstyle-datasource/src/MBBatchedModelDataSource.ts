@@ -208,10 +208,20 @@ class MBBatchedModelDecoder implements ITileDecoder {
             // them through GLTFLoader (native EXT_meshopt_compression +
             // KHR_mesh_quantization + textures), main thread like mgl.
             let meshopt = false;
+            // LOD tiles (mbx_bvh, newer tiler) encode baked AO in the feature
+            // vertex-color alpha — mgl isLodMesh multiplies it into rgb.
+            let isLodTile = false;
+            // Meshopt tiles can carry MAPBOX_mesh_features too (mbx-lod) —
+            // the per-part styling path must not be Draco-only.
+            let mbxFeatures = false;
             try {
                 const { json } = parseGlb(data);
                 meshopt = Array.isArray(json?.extensionsUsed)
                     && json.extensionsUsed.includes('EXT_meshopt_compression');
+                isLodTile = Array.isArray(json?.extensionsUsed)
+                    && json.extensionsUsed.includes('mbx_bvh');
+                mbxFeatures = Array.isArray(json?.extensionsUsed)
+                    && json.extensionsUsed.includes('MAPBOX_mesh_features');
             } catch { /* fall through to the Draco path */ }
 
             const w = EQUATORIAL_CIRCUMFERENCE / Math.pow(2, tileKey.level) / TILE_GRID;
@@ -223,6 +233,7 @@ class MBBatchedModelDecoder implements ITileDecoder {
             const aoIntensity = this.evalPaintNumber('model-ambient-occlusion-intensity', 1);
 
             if (meshopt) {
+                hasMeshFeatures = mbxFeatures;
                 // Grid-space parsed scene (per-node matrices land the models
                 // in the SAME 8192 grid as the Draco tiles, y south-positive,
                 // z meters) — mirror at the GROUP level here. The negative
@@ -248,6 +259,24 @@ class MBBatchedModelDecoder implements ITileDecoder {
                         }
                     }
                     if (o.isMesh) {
+                        // V2 tile: featureColor in the LOW 16 bits, part id
+                        // in bits 16..19 (mgl updateNodeFeatureVertices swaps
+                        // the V1 halves under EXT_meshopt_compression). The
+                        // meshopt tiler names the attribute _FEATURE_ID_RGBA4444
+                        // (Draco tiles: _FEATURE_RGBA4444) — normalize it so
+                        // MBMeshFeatures finds one canonical name.
+                        const geo: THREE.BufferGeometry | undefined = o.geometry;
+                        if (geo?.getAttribute) {
+                            if (!geo.getAttribute('_feature_rgba4444')
+                                && geo.getAttribute('_feature_id_rgba4444')) {
+                                geo.setAttribute('_feature_rgba4444',
+                                    geo.getAttribute('_feature_id_rgba4444'));
+                            }
+                            if (geo.getAttribute('_feature_rgba4444')) {
+                                geo.userData.__mbFeatV2 = true;
+                                if (isLodTile) geo.userData.__mbFeatLod = true;
+                            }
+                        }
                         // Filter at DRAW visibility (mgl getNodesInfo) — the
                         // Draco branch does the same per primitive.
                         o.visible = this.nodePassesFilter(
@@ -628,6 +657,8 @@ class MBBatchedModelDecoder implements ITileDecoder {
             // Name matches the lowercase attribute GLTFLoader would produce;
             // MBMeshFeatures consumes it for per-part styling.
             geo.setAttribute('_feature_rgba4444', new THREE.BufferAttribute(prim.features, 2));
+            geo.userData.__mbFeatV2 = prim.meshoptV2 === true;
+            geo.userData.__mbFeatLod = prim.featureAoAlpha === true;
         }
         // The y mirror flips the triangle winding — reverse it so front faces
         // stay front faces under the (positive) tile scale.
