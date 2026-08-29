@@ -86,7 +86,22 @@ function parseRgbaBytes(v: any): [number, number, number, number] | null {
     return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] !== undefined ? Number(m[4]) : 1];
 }
 
-function evalPart(paint: any, zoom: number, part: string): PartStyle {
+/** CSS keyword / hsl() fallback via THREE (e.g. "red", "hsl(0,0%,100%)"). */
+function parseCssColor(v: string): [number, number, number, number] | null {
+    const t = v.trim().toLowerCase();
+    const isKeyword = /^[a-z]+$/.test(t)
+        && (THREE.Color as any).NAMES?.[t] !== undefined;
+    if (!isKeyword && !/^hsla?\(/.test(t)) return null;
+    try {
+        const c = new THREE.Color();
+        c.setStyle(t, THREE.SRGBColorSpace);
+        return [Math.round(c.r * 255), Math.round(c.g * 255), Math.round(c.b * 255), 1];
+    } catch {
+        return null;
+    }
+}
+
+function evalPart(paint: any, zoom: number, part: string, brightness = 0): PartStyle {
     const props = part ? { part } : {};
     const evalRaw = (raw: any): any => {
         if (raw === undefined || raw === null) return undefined;
@@ -94,6 +109,7 @@ function evalPart(paint: any, zoom: number, part: string): PartStyle {
             if (typeof raw !== 'object') return raw;
             return MBExpressionEngine.evaluate(raw, {
                 zoom,
+                brightness,
                 feature: { type: 'Point', properties: props, id: 0 },
             } as any);
         } catch {
@@ -103,7 +119,9 @@ function evalPart(paint: any, zoom: number, part: string): PartStyle {
     const colorRaw = paint?.['model-color'];
     const colorEval = typeof colorRaw === 'object' && colorRaw !== null
         ? evalRaw(colorRaw) : colorRaw;
-    const colorSrgb = parseRgbaBytes(colorEval) ?? [255, 255, 255, 1];
+    const colorSrgb = parseRgbaBytes(colorEval)
+        ?? (typeof colorEval === 'string' ? parseCssColor(colorEval) : null)
+        ?? [255, 255, 255, 1];
     const num = (raw: any, dflt: number): number => {
         const v = evalRaw(raw);
         const n = Number(v);
@@ -178,7 +196,7 @@ export function applyModelFrontCutoff(
         for (const mesh of meshes) {
             const mat: any = mesh.material;
             if (mat && mesh.userData.__mbBaseOpacity !== undefined) {
-                mat.opacity = mesh.userData.__mbBaseOpacity;
+                mat.opacity = mesh.userData.__mbBaseOpacity * (mesh.userData.__mbFarCutoff ?? 1);
             }
             mesh.userData.__mbCamColOp = undefined;
         }
@@ -190,7 +208,7 @@ export function applyModelFrontCutoff(
         for (const mesh of meshes) {
             const mat: any = mesh.material;
             if (mat && mesh.userData.__mbBaseOpacity !== undefined) {
-                mat.opacity = mesh.userData.__mbBaseOpacity;
+                mat.opacity = mesh.userData.__mbBaseOpacity * (mesh.userData.__mbFarCutoff ?? 1);
             }
         }
         return;
@@ -255,7 +273,7 @@ export function applyModelFrontCutoff(
             }
         } catch { nodeOpacity = 1; }
 
-        const factor = camCol * nodeOpacity;
+        const factor = camCol * nodeOpacity * (mesh.userData.__mbFarCutoff ?? 1);
         const mat: any = mesh.material;
         if (mat && mesh.userData.__mbBaseOpacity !== undefined) {
             const base = mesh.userData.__mbBaseOpacity;
@@ -263,6 +281,73 @@ export function applyModelFrontCutoff(
             mat.opacity = opacity;
             mat.transparent = opacity < 1 || mat.userData.__mbForceTransparent === true;
         }
+    }
+}
+
+/**
+ * mgl getCutoffParams + calculateFarCutoffOpacity (src/render/cutoff.ts,
+ * draw_model.ts): `model-cutoff-fade-range` fades nodes that are CLOSER than
+ * an automatic far-cutoff line before the LOD tile cover switches. The line
+ * sits at 1.4× camera-to-center distance scaled by a half-rate exponential
+ * (2^(dz·0.85) above the sources' min zoom), with a 1.3×screenHeight fade
+ * band, ramped in over a 15°..30° pitch window. Per node: linearized anchor
+ * depth → opacity = clamp((linDepth − start)/(fade − start)).
+ * Stores the factor per mesh (__mbFarCutoff) — applyModelFrontCutoff
+ * multiplies it into the final material opacity.
+ */
+export function applyModelFarCutoff(
+    groups: Iterable<THREE.Object3D>,
+    mv: any,
+    zoom: number,
+    minCutoffZoom: number,
+    evalNum: (key: string, dflt: number) => number,
+): void {
+    const fadeRange = evalNum('model-cutoff-fade-range', 0);
+    const reset = (): void => {
+        for (const group of groups) {
+            group.traverse((o: any) => {
+                if (o.isMesh) o.userData.__mbFarCutoff = undefined;
+            });
+        }
+    };
+    if (!(fadeRange > 0)) return reset();
+    const camera: any = mv?.camera;
+    if (!camera) return reset();
+    const pitch = Number(mv?.pitch ?? 0);
+    const activationThreshold = 30;
+    if (pitch < activationThreshold - 15) return reset();
+    const near = camera.near ?? 1;
+    const far = camera.far ?? near * 10;
+    const zRange = far - near;
+    if (zRange <= 0) return reset();
+    const camPos = camera.position;
+    const target: any = mv?.m_targetWorldPos ?? camPos;
+    const camToCenter = Math.max(camPos.distanceTo(target), 1);
+    const height = (mv?.getCanvasClientSize?.()?.height) ?? 512;
+    const fadeRangePixels = fadeRange * height * 1.3;
+    const zoomScale = Math.pow(2, Math.max(zoom - minCutoffZoom, 0) * 0.85);
+    const cutoffDistance = camToCenter * 1.4 * zoomScale;
+    const t = Math.min(Math.max((pitch - (activationThreshold - 15)) / 15, 0), 1);
+    const activation = t * t * (3 - 2 * t); // smoothstep
+    // lerp(farZ + fadeRangePixels, cutoffDistance, activation)
+    const eff = (far + fadeRangePixels) + (cutoffDistance - (far + fadeRangePixels)) * activation;
+    const clamped = Math.min(fadeRangePixels, eff - near);
+    const relStart = (eff - near) / zRange;
+    const relFade = (eff - clamped - near) / zRange;
+    const view = new THREE.Matrix4();
+    const p = new THREE.Vector3();
+    for (const group of groups) {
+        group.traverse((o: any) => {
+            if (!o.isMesh) return;
+            try {
+                o.updateWorldMatrix(true, false);
+                p.setFromMatrixPosition(o.matrixWorld).applyMatrix4(
+                    view.copy(camera.matrixWorldInverse));
+                const linearDepth = (-p.z - near) / zRange;
+                o.userData.__mbFarCutoff = relFade === relStart ? 1
+                    : Math.min(Math.max((linearDepth - relStart) / (relFade - relStart), 0), 1);
+            } catch { o.userData.__mbFarCutoff = undefined; }
+        });
     }
 }
 
@@ -446,6 +531,27 @@ function buildNodeLightsMesh(
 }
 
 /**
+ * mgl style.ts getBrightness: the `measure-light` `brightness` global —
+ * relative luminance of the 3D lights configuration, averaged directional
+ * (with the polar-angle falloff) and ambient. lighting3DState colors are
+ * already linear (sRGB^2.2 · intensity), so the luminance weights apply
+ * directly; polarIntensity = 1 − polar°/90.
+ */
+export function mglMeasureLightBrightness(dataSource: any): number {
+    try {
+        const ls = dataSource?.m_environment?.lighting3DState;
+        if (!ls) return 0;
+        const lum = (c: number[]) =>
+            0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        const polarDeg = Math.acos(Math.min(Math.max(ls.dir[2], -1), 1)) * 180 / Math.PI;
+        const polarIntensity = 1 - Math.min(Math.max(polarDeg, 0), 90) / 90;
+        return (lum(ls.directionalColorLinear) * polarIntensity + lum(ls.ambientColorLinear)) / 2;
+    } catch {
+        return 0;
+    }
+}
+
+/**
  * Apply MAPBOX_mesh_features per-part styling to a parsed GLB tile scene.
  * `paint` is the raw layer paint (may hold data-driven expressions
  * evaluated per part with the part name property).
@@ -457,7 +563,8 @@ export function applyMeshFeatures(
     dataSource: any,
 ): void {
     try {
-        const parts = PART_NAMES.map(name => evalPart(paint, zoom, name));
+        const brightness = mglMeasureLightBrightness(dataSource);
+        const parts = PART_NAMES.map(name => evalPart(paint, zoom, name, brightness));
         const meshes: THREE.Mesh[] = [];
         root.traverse(o => {
             const mesh = o as THREE.Mesh;

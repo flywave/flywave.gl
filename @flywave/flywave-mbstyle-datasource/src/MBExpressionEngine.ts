@@ -23,6 +23,12 @@ export interface MBExpressionContext {
      * lineMetrics).
      */
     lineProgress?: number;
+    /**
+     * mgl `measure-light` `brightness` global (style.ts getBrightness): the
+     * relative luminance of the 3D lights configuration —
+     * (directionalLuminance·polarFactor + ambientLuminance) / 2.
+     */
+    brightness?: number;
 }
 
 type CompiledExpression = (ctx: MBExpressionContext) => MBValue;
@@ -844,8 +850,35 @@ export class MBExpressionEngine {
                 return typeof locales === 'string' ? locales : 'en';
             }
 
-            case 'rgb': {
-                const r = Math.round(Number(this.exec(args[0], ctx)));
+            // mgl style-spec `random` (definitions/index.ts): deterministic
+            // mulberry32 draw seeded by the (string→hashString | number) seed.
+            case 'random': {
+                const min = Number(this.exec(args[0], ctx));
+                const max = Number(this.exec(args[1], ctx));
+                if (!(max > min)) return min;
+                const seed = args.length > 2 ? this.exec(args[2], ctx) : undefined;
+                let seedVal: number;
+                if (typeof seed === 'string') {
+                    let hash = 0;
+                    for (let i = 0; i < seed.length; i++) {
+                        hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+                        hash = hash & hash;
+                    }
+                    seedVal = hash;
+                } else if (typeof seed === 'number') {
+                    seedVal = seed;
+                } else {
+                    return min;
+                }
+                let a = seedVal | 0;
+                a = (a + 0x6d2b79f5) | 0;
+                let t = Math.imul(a ^ (a >>> 15), 1 | a);
+                t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+                const r = ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+                return min + r * (max - min);
+            }
+
+            case 'rgb': {                const r = Math.round(Number(this.exec(args[0], ctx)));
                 const g = Math.round(Number(this.exec(args[1], ctx)));
                 const b = Math.round(Number(this.exec(args[2], ctx)));
                 return MBExpressionEngine.rgbToHex(r, g, b, 1);

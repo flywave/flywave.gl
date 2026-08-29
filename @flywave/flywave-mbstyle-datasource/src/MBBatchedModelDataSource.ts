@@ -35,7 +35,7 @@ import { DecodedTile, ITileDecoder, OptionsMap, TileInfo } from '@flywave/flywav
 import type { Projection } from '@flywave/flywave-geoutils';
 import { applyMglModelLighting, syncMglModelLighting } from './MBModelRenderer';
 import { decodeGlbTile, parseGlb, TileMaterialData, TileMaterialized, TilePrimitiveData } from './MBDracoDecoder';
-import { applyMeshFeatures, applyModelFrontCutoff } from './MBMeshFeatures';
+import { applyMeshFeatures, applyModelFrontCutoff, applyModelFarCutoff, mglMeasureLightBrightness } from './MBMeshFeatures';
 import { MBExpressionEngine } from './MBExpressionEngine';
 
 /** GLB quantized grid extent per axis (mgl tiled 3D models). */
@@ -121,6 +121,8 @@ class MBBatchedModelDecoder implements ITileDecoder {
     private m_envProvider: any;
     private m_zoomProvider: () => number = () => 0;
     private m_filter: any;
+    /** mgl painter.minCutoffZoom = the sources' max minzoom (far-cutoff line). */
+    private m_minCutoffZoom = 14;
     /** Built tile groups (node-filter runtime updates walk these). */
     private m_builtGroups = new Set<THREE.Object3D>();
 
@@ -152,6 +154,7 @@ class MBBatchedModelDecoder implements ITileDecoder {
             this.m_filter = custom.filter;
             this.applyNodeFilter();
         }
+        if (custom?.minCutoffZoom !== undefined) this.m_minCutoffZoom = custom.minCutoffZoom;
     }
 
     /**
@@ -243,9 +246,23 @@ class MBBatchedModelDecoder implements ITileDecoder {
                         }
                     }
                     if (o.isMesh) {
+                        // Filter at DRAW visibility (mgl getNodesInfo) — the
+                        // Draco branch does the same per primitive.
+                        o.visible = this.nodePassesFilter(
+                            o.userData.__mbNodeId, o.userData.__mbNodeHeight ?? 0);
+                        // mgl model.fragment.glsl: meshes without a NORMAL
+                        // attribute get a derivative-based flat normal
+                        // (normalize(cross(fdx,fdy))) — three's flatShading is
+                        // the same mechanism; without it the zero normal makes
+                        // the lighting collapse to black (§552 -lod regression).
+                        if (!o.geometry?.getAttribute?.('normal')) {
+                            for (const m of mats) m.flatShading = true;
+                        }
                         o.geometry?.computeBoundingBox?.();
                         if (o.geometry?.boundingBox) {
                             o.userData.__mbNodeBox = o.geometry.boundingBox;
+                            // mgl getNodeHeight — the filter feature's height.
+                            o.userData.__mbNodeHeight = o.geometry.boundingBox.max?.z ?? 0;
                         }
                         const m0: any = Array.isArray(o.material) ? o.material[0] : o.material;
                         o.userData.__mbBaseOpacity = m0?.opacity ?? 1;
@@ -457,6 +474,7 @@ class MBBatchedModelDecoder implements ITileDecoder {
             if (typeof raw !== 'object') return raw;
             return MBExpressionEngine.evaluate(raw, {
                 zoom: this.m_zoomProvider(),
+                brightness: mglMeasureLightBrightness(this.m_envProvider),
                 feature: { type: 'Point', properties: {}, id: 0 },
             } as any);
         } catch {
@@ -535,6 +553,9 @@ class MBBatchedModelDecoder implements ITileDecoder {
         try {
             const mv: any = (this.m_envProvider as any)?.mapView;
             if (mv) {
+                applyModelFarCutoff(this.m_builtGroups, mv, this.m_zoomProvider(),
+                    this.m_minCutoffZoom,
+                    (k: string, d: number) => this.evalPaintNumber(k, d));
                 applyModelFrontCutoff(this.m_builtGroups, this.m_paint, mv,
                     (k: string, d: [number, number, number]) => this.evalPaintVec(k, d));
             }
@@ -623,6 +644,9 @@ class MBBatchedModelDecoder implements ITileDecoder {
                 m ? m.emissiveFactor[1] : 0,
                 m ? m.emissiveFactor[2] : 0),
             side: m?.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+            // mgl falls back to derivative flat normals when the primitive
+            // carries no NORMAL attribute (model.fragment.glsl getNormal).
+            flatShading: !prim.normals,
         });
         if (m?.baseColorFactor && m.baseColorFactor[3] < 1) {
             mat.transparent = true;
@@ -656,6 +680,7 @@ class MBBatchedModelDecoder implements ITileDecoder {
                 try {
                     return MBExpressionEngine.evaluate(raw, {
                         zoom: this.m_zoomProvider(),
+                        brightness: mglMeasureLightBrightness(this.m_envProvider),
                         feature: { type: 'Point', properties: {}, id: 0 },
                     } as any);
                 } catch {
@@ -671,6 +696,10 @@ class MBBatchedModelDecoder implements ITileDecoder {
             if (colorRaw !== undefined) {
                 const colorEval = evalRaw(colorRaw);
                 const c = new THREE.Color();
+                // mgl paint default model-color is #ffffff — an evaluation
+                // failure must fall back to WHITE, not three's default black
+                // (mix=1 paints would otherwise go fully black).
+                c.setStyle('#ffffff', THREE.SRGBColorSpace);
                 try {
                     if (typeof colorEval === 'string') c.setStyle(colorEval, THREE.SRGBColorSpace);
                     else if (Array.isArray(colorEval)) c.setRGB(colorEval[0], colorEval[1], colorEval[2], THREE.SRGBColorSpace);
@@ -768,7 +797,8 @@ export class MBBatchedModelDataSource extends TileDataSource<MBBatchedModelTile>
         const decoder = new MBBatchedModelDecoder(
             options.paint, options.envProvider,
             options.zoomProvider ?? (() => 0), pending);
-        decoder.configure(undefined, { filter: options.filter } as any);
+        decoder.configure(undefined, { filter: options.filter,
+            minCutoffZoom: options.minzoom ?? 14 } as any);
         const dsOptions: TileDataSourceOptions = {
             name: options.name,
             tilingScheme: webMercatorTilingScheme,

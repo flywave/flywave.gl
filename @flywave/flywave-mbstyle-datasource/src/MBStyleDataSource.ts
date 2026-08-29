@@ -1384,6 +1384,109 @@ export class MBStyleDataSource extends TileDataSource {
             if (src) layerCounts.set(src, (layerCounts.get(src) ?? 0) + 1);
         }
 
+            // §540: batched-model sources — tile = whole GLB file; handled by
+            // MBBatchedModelRenderer (independent of the tile decode pipeline).
+            {
+                (globalThis as any).__mbBatchedWire =
+                    ((globalThis as any).__mbBatchedWire ?? 0) + 1;
+                const batched: any[] = [];
+                // Wiring→registration bridge: modelsPending stays true from
+                // the moment the source list is built until the regular
+                // DataSource is registered, so the harness settle loop cannot
+                // capture inside the gap (after registration the DS's own
+                // fetch/decode window takes over).
+                // NOTE: there is no local `self` in this method — everything
+                // below MUST go through `this` (bare `self` would resolve to
+                // the window global and silently never attach).
+                const wiring = { remaining: 0 };
+                (this as any).m_batchedModelWirings ??= [];
+                (this as any).m_batchedModelWirings.push(wiring);
+                for (const [sid, src] of sources) {
+                    if ((src as any).type !== 'batched-model') continue;
+                    const spec = (style.sources as any)?.[sid] as any;
+                    const tpl = spec?.tiles ?? (src as any).tiles;
+                    if (!Array.isArray(tpl) || tpl.length === 0) continue;
+                    // mgl creates a bucket (node set) PER model layer over the
+                    // source — two layers with opposite filters render
+                    // complementary subsets (landmark-duplicate-filtered-*).
+                    const modelLayers = (style.layers as any[]).filter(
+                        (l: any) => l.type === 'model' && l.source === sid);
+                    if (modelLayers.length === 0) modelLayers.push(undefined);
+                    for (const layer of modelLayers) {
+                        const layerSuffix = layer ? '-' + String(layer.id).replace(/[^a-zA-Z0-9-]/g, '') : '';
+                        batched.push({
+                            sourceId: sid,
+                            tiles: tpl,
+                            maxzoom: (src as any).maxzoom ?? spec?.maxzoom ?? 22,
+                            paint: layer?.paint ?? {},
+                            layer,
+                        });
+                        // §549/§537: register a REGULAR TileDataSource for the
+                        // batched-model source — the engine scheduler requests
+                        // the GLB tiles and TileObjectRenderer draws tile.objects,
+                        // the only channel the render loop reliably draws.
+                        wiring.remaining++;
+                        void (async () => {
+                            (globalThis as any).__mbIifeEntered = ((globalThis as any).__mbIifeEntered ?? 0) + 1;
+                            try {
+                                const dsName = sid + '-mbbatched' + layerSuffix;
+                                // addDataSource attaches the mapView BEFORE
+                                // connect() runs, so this.mapView is normally set
+                                // already; poll briefly for pre-attach callers.
+                                let waitI = -1;
+                                for (let i = 0; i < 100 && !this.mapView; i++) {
+                                    waitI = i;
+                                    await new Promise(r => setTimeout(r, 50));
+                                }
+                                (globalThis as any).__mbIifeWait = waitI;
+                                const mv: any = this.mapView;
+                                if (!mv) {
+                                    (globalThis as any).__mbIifeErr = 'mapView never attached';
+                                    return;
+                                }
+                                let ds: any = mv.getDataSourceByName?.(dsName);
+                                if (ds) {
+                                    ds.setPaint?.(layer?.paint ?? {});
+                                    ds.setFilter?.(layer?.filter);
+                                    return;
+                                }
+                                ds = new MBBatchedModelDataSource({
+                                    name: dsName,
+                                    srcTemplate: tpl[0],
+                                    maxzoom: (src as any).maxzoom ?? spec?.maxzoom ?? 14,
+                                    minzoom: (src as any).minzoom ?? spec?.minzoom,
+                                    paint: layer?.paint ?? {},
+                                    filter: layer?.filter,
+                                    envProvider: this,
+                                    zoomProvider: () => this.mapView?.zoomLevel ?? 0,
+                                });
+                                // Regular registration: attach → connect → theme.
+                                // addDataSource pushes the source into
+                                // m_tileDataSources synchronously, so tiles are
+                                // scheduled even if the theme step is slow.
+                                await mv.addDataSource(ds);
+                                (this as any).m_batchedModelDataSources ??= [];
+                                (this as any).m_batchedModelDataSources.push(ds);
+                                (ds as any).__mbLayerId = layer?.id;
+                                (this as any).m_batchedDsRegistered = true;
+                                // §549 census: isDataSourceEnabled additionally
+                                // requires m_connectedDataSources (set after the
+                                // theme step) — record it so a disabled source is
+                                // distinguishable from a failed registration.
+                                (globalThis as any).__mbBatchedDsEnabled =
+                                    mv.isDataSourceEnabled?.(ds) === true ? 1 : 0;
+                            } catch (e: any) {
+                                (globalThis as any).__mbIifeErr = String(e?.stack ?? e).slice(0, 200);
+                            } finally {
+                                wiring.remaining--;
+                            }
+                        })();
+                    }
+                }
+                this.m_batchedModelSources = batched;
+                (this.m_batchedModelRenderer as any)?.setSources?.(batched);
+            }
+
         // Priority 1: best vector tile source.
         let bestVectorSourceId: string | null = null;
         let bestVectorCount = 0;
@@ -1491,108 +1594,6 @@ export class MBStyleDataSource extends TileDataSource {
             if (extras.length > 0) {
                 delegate = new MBExtraVectorSourcesProvider(
                     delegate, extras, tileSize > 256);
-            }
-            // §540: batched-model sources — tile = whole GLB file; handled by
-            // MBBatchedModelRenderer (independent of the tile decode pipeline).
-            {
-                (globalThis as any).__mbBatchedWire =
-                    ((globalThis as any).__mbBatchedWire ?? 0) + 1;
-                const batched: any[] = [];
-                // Wiring→registration bridge: modelsPending stays true from
-                // the moment the source list is built until the regular
-                // DataSource is registered, so the harness settle loop cannot
-                // capture inside the gap (after registration the DS's own
-                // fetch/decode window takes over).
-                // NOTE: there is no local `self` in this method — everything
-                // below MUST go through `this` (bare `self` would resolve to
-                // the window global and silently never attach).
-                const wiring = { remaining: 0 };
-                (this as any).m_batchedModelWirings ??= [];
-                (this as any).m_batchedModelWirings.push(wiring);
-                for (const [sid, src] of sources) {
-                    if ((src as any).type !== 'batched-model') continue;
-                    const spec = (style.sources as any)?.[sid] as any;
-                    const tpl = spec?.tiles ?? (src as any).tiles;
-                    if (!Array.isArray(tpl) || tpl.length === 0) continue;
-                    // mgl creates a bucket (node set) PER model layer over the
-                    // source — two layers with opposite filters render
-                    // complementary subsets (landmark-duplicate-filtered-*).
-                    const modelLayers = (style.layers as any[]).filter(
-                        (l: any) => l.type === 'model' && l.source === sid);
-                    if (modelLayers.length === 0) modelLayers.push(undefined);
-                    for (const layer of modelLayers) {
-                        const layerSuffix = layer ? '-' + String(layer.id).replace(/[^a-zA-Z0-9-]/g, '') : '';
-                        batched.push({
-                            sourceId: sid,
-                            tiles: tpl,
-                            maxzoom: (src as any).maxzoom ?? spec?.maxzoom ?? 22,
-                            paint: layer?.paint ?? {},
-                            layer,
-                        });
-                        // §549/§537: register a REGULAR TileDataSource for the
-                        // batched-model source — the engine scheduler requests
-                        // the GLB tiles and TileObjectRenderer draws tile.objects,
-                        // the only channel the render loop reliably draws.
-                        wiring.remaining++;
-                        void (async () => {
-                            (globalThis as any).__mbIifeEntered = ((globalThis as any).__mbIifeEntered ?? 0) + 1;
-                            try {
-                                const dsName = sid + '-mbbatched' + layerSuffix;
-                                // addDataSource attaches the mapView BEFORE
-                                // connect() runs, so this.mapView is normally set
-                                // already; poll briefly for pre-attach callers.
-                                let waitI = -1;
-                                for (let i = 0; i < 100 && !this.mapView; i++) {
-                                    waitI = i;
-                                    await new Promise(r => setTimeout(r, 50));
-                                }
-                                (globalThis as any).__mbIifeWait = waitI;
-                                const mv: any = this.mapView;
-                                if (!mv) {
-                                    (globalThis as any).__mbIifeErr = 'mapView never attached';
-                                    return;
-                                }
-                                let ds: any = mv.getDataSourceByName?.(dsName);
-                                if (ds) {
-                                    ds.setPaint?.(layer?.paint ?? {});
-                                    ds.setFilter?.(layer?.filter);
-                                    return;
-                                }
-                                ds = new MBBatchedModelDataSource({
-                                    name: dsName,
-                                    srcTemplate: tpl[0],
-                                    maxzoom: (src as any).maxzoom ?? spec?.maxzoom ?? 14,
-                                    minzoom: (src as any).minzoom ?? spec?.minzoom,
-                                    paint: layer?.paint ?? {},
-                                    filter: layer?.filter,
-                                    envProvider: this,
-                                    zoomProvider: () => this.mapView?.zoomLevel ?? 0,
-                                });
-                                // Regular registration: attach → connect → theme.
-                                // addDataSource pushes the source into
-                                // m_tileDataSources synchronously, so tiles are
-                                // scheduled even if the theme step is slow.
-                                await mv.addDataSource(ds);
-                                (this as any).m_batchedModelDataSources ??= [];
-                                (this as any).m_batchedModelDataSources.push(ds);
-                                (ds as any).__mbLayerId = layer?.id;
-                                (this as any).m_batchedDsRegistered = true;
-                                // §549 census: isDataSourceEnabled additionally
-                                // requires m_connectedDataSources (set after the
-                                // theme step) — record it so a disabled source is
-                                // distinguishable from a failed registration.
-                                (globalThis as any).__mbBatchedDsEnabled =
-                                    mv.isDataSourceEnabled?.(ds) === true ? 1 : 0;
-                            } catch (e: any) {
-                                (globalThis as any).__mbIifeErr = String(e?.stack ?? e).slice(0, 200);
-                            } finally {
-                                wiring.remaining--;
-                            }
-                        })();
-                    }
-                }
-                this.m_batchedModelSources = batched;
-                (this.m_batchedModelRenderer as any)?.setSources?.(batched);
             }
             this.m_delegatingProvider.delegate = delegate;
             this.m_currentSourceId = bestVectorSourceId;
