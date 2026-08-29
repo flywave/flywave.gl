@@ -6,18 +6,22 @@
  * axis, z in meters). This renderer mirrors MBModelRenderer's per-frame
  * pattern: for each registered source it fetches the tile covering GLB for
  * the live camera tile (round(zoom) clamped to the source maxzoom), loads it
- * with GLTFLoader (Draco-capable), and instantiates ONE group per tile —
- * placed at the tile's NW-corner world position with scale = span/8192 on
- * x/y (z stays meters, matching the engine's altitude units) and rebased by
- * −eye every frame (RTE, see MBModelRenderer §518 note).
+ * with GLTFLoader after MBDracoDecoder decoded Draco on the main thread
+ * (§547 — DRACOLoader's worker never spawns in the karma page), and
+ * instantiates ONE group per tile — placed at the tile's NW-corner world
+ * position with scale = span/8192 on x/y (z stays meters: the GLB vertex z
+ * is meters while x/y are the tile's 8192 grid, matching mgl's
+ * zScaleMatrix=[1,1,pixelsPerMeter] treatment) and rebased by −eye every
+ * frame (RTE, see MBModelRenderer §518 note).
  *
- * Model-layer paint styling: the layer's evaluated paint (model-color×mix,
- * emissive, roughness, opacity) is applied to the whole tile group —
- * MAPBOX_mesh_features per-feature styling is a二期 item.
+ * Model-layer paint styling: MAPBOX_mesh_features tiles get mgl's per-part
+ * table (MBMeshFeatures); plain tiles get the layer's whole-tile paint.
  */
 
 import * as THREE from 'three';
 import { applyMglModelLighting } from './MBModelRenderer';
+import { decodeGlbDraco } from './MBDracoDecoder';
+import { applyMeshFeatures, hasMeshFeatures } from './MBMeshFeatures';
 
 interface BatchedSource {
     sourceId: string;
@@ -132,7 +136,17 @@ export class MBBatchedModelRenderer {
             .then(async buf => {
                 const loader = this.m_loader ?? (this.m_loader = await this.makeLoader());
                 stat.ok++;
-                loader.parse(buf, '', (gltf: any) => {
+                // §547: decode Draco on the page main thread and hand
+                // GLTFLoader an uncompressed GLB (DRACOLoader's Blob-URL
+                // worker never spawns in the karma page — §545).
+                let glb = buf;
+                try {
+                    glb = await decodeGlbDraco(buf);
+                    stat.decoded = (stat.decoded ?? 0) + 1;
+                } catch (e: any) {
+                    stat.decodeErr = String(e).slice(0, 200);
+                }
+                loader.parse(glb, '', (gltf: any) => {
                     stat.parsed++;
                     for (const e of this.m_entries) {
                         if (e.key === key) (e as any).__parsed = true;
@@ -141,9 +155,17 @@ export class MBBatchedModelRenderer {
                     group.name = 'MBBatchedModelTile';
                     const model = gltf.scene;
                     this.placeModel(group, model, z, x, y);
-                    // whole-tile single style (§539 phase 1): the model layer's
-                    // evaluated paint (mix/emissive/roughness/opacity).
-                    this.applyLayerPaint(group, (src as any).paint ?? {});
+                    const paint = (src as any).paint ?? {};
+                    if (hasMeshFeatures(buf)) {
+                        // §547: per-part styling over MAPBOX_mesh_features
+                        // (mgl PartNames table + 4444 vertex-color bake).
+                        applyMeshFeatures(group, paint,
+                            this.m_mapView?.zoomLevel ?? 0, this.m_dataSource);
+                    } else {
+                        // whole-tile single style (§539 phase 1): the model
+                        // layer's evaluated paint (mix/emissive/roughness/opacity).
+                        this.applyLayerPaint(group, paint);
+                    }
                     const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;
                     void scene;
                     group.position.copy(pendingGroup.position);
@@ -160,21 +182,10 @@ export class MBBatchedModelRenderer {
     }
 
     private async makeLoader(): Promise<any> {
+        // §547: no DRACOLoader — tiles are pre-decoded by MBDracoDecoder
+        // (main thread) and arrive here as plain uncompressed GLBs.
         const mod: any = await import('three/examples/jsm/loaders/GLTFLoader.js');
-        const loader = new mod.GLTFLoader();
-        try {
-            const dracoMod: any = await import('three/examples/jsm/loaders/DRACOLoader.js');
-            const draco = new dracoMod.DRACOLoader();
-            // §544: serve the decoder from the fixtures dir — /base/node_modules is
-                // NOT karma-servable, and a 404 decoder script hangs the parse
-                // silently (this was the landmark blank root cause).
-                draco.setDecoderPath('/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/models/draco/');
-            // §542: force the JS decoder — the wasm worker path hangs silently
-            // in the karma/SwiftShader page.
-            draco.setDecoderConfig({ type: 'js' });
-            loader.setDRACOLoader(draco);
-        } catch {}
-        return loader;
+        return new mod.GLTFLoader();
     }
 
     /**
