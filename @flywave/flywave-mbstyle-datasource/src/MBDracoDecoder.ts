@@ -128,6 +128,142 @@ function viewBytes(bin: Uint8Array, json: any, bufferViewIndex: number): Uint8Ar
     return bin.subarray(start, start + bv.byteLength);
 }
 
+/** §549: one decoded GLB primitive, ready for THREE.BufferGeometry. */
+export interface TilePrimitiveData {
+    positions: Float32Array;
+    normals: Float32Array | null;
+    uvs: Float32Array | null;
+    /** VEC2 UINT16 feature values (2 per vertex) when present. */
+    features: Uint16Array | null;
+    indices: Uint32Array;
+    materialIndex: number;
+}
+
+/** glTF material subset the tile renderer needs (spec defaults applied). */
+export interface TileMaterialData {
+    baseColorFactor: [number, number, number, number];
+    roughnessFactor: number;
+    metallicFactor: number;
+    emissiveFactor: [number, number, number];
+    doubleSided: boolean;
+    /** true when the material carries an occlusion/AO texture. */
+    hasOcclusion: boolean;
+}
+
+export interface TileMaterialized {
+    nodes: TilePrimitiveData[][];
+    materials: TileMaterialData[];
+    hasMeshFeatures: boolean;
+}
+
+/**
+ * §549: decode a batched-model GLB tile straight into structured typed
+ * arrays (mgl converts GLBs manually — convertModel — rather than using a
+ * general glTF loader, whose async image pipeline hangs intermittently in
+ * the karma page). Positions are raw tile-grid/mixed units; the renderer
+ * applies the tile transform. Non-position attributes and materials follow
+ * glTF defaults where absent.
+ */
+export async function decodeGlbTile(buffer: ArrayBuffer): Promise<TileMaterialized> {
+    const { json, bin } = parseGlb(buffer);
+    const draco = await loadDracoModule();
+    const nodes: TilePrimitiveData[][] = [];
+    for (const mesh of json.meshes ?? []) {
+        const prims: TilePrimitiveData[] = [];
+        for (const prim of mesh.primitives ?? []) {
+            const config = prim.extensions?.[DRACO_EXT];
+            if (!config) continue;
+            const bytes = viewBytes(bin, json, config.bufferView);
+            // mgl creates a fresh Decoder per primitive (loadDracoMesh).
+            const decoder = new draco.Decoder();
+            try {
+                const geometry = new draco.Mesh();
+                const ok = decoder.DecodeArrayToMesh(bytes, bytes.byteLength, geometry);
+                const okFlag = typeof ok === 'object' && ok !== null && typeof ok.ok === 'function'
+                    ? ok.ok() : !!ok;
+                if (!okFlag) throw new Error('DecodeArrayToMesh failed');
+
+                // Indices: sized by the original accessor (tiler guarantees
+                // count/componentType match — mgl reads them the same way).
+                const indexAccessor = json.accessors[prim.indices];
+                const idxType = COMPONENT_TYPES[indexAccessor.componentType];
+                const indicesSize = indexAccessor.count * idxType.bytes;
+                const ptr = draco._malloc(indicesSize);
+                if (idxType.bytes === 2) decoder.GetTrianglesUInt16Array(geometry, indicesSize, ptr);
+                else decoder.GetTrianglesUInt32Array(geometry, indicesSize, ptr);
+                // three's build exposes heap views (HEAPU8/HEAPF32) instead
+                // of `memory`; read the wasm heap fresh after each Get call.
+                const indicesBuffer = draco.HEAPU8.buffer.slice(ptr, ptr + indicesSize);
+                draco._free(ptr);
+                let indices: Uint32Array;
+                if (idxType.bytes === 2) {
+                    const u16 = new Uint16Array(indicesBuffer);
+                    indices = new Uint32Array(u16.length);
+                    indices.set(u16);
+                } else {
+                    indices = new Uint32Array(indicesBuffer);
+                }
+
+                let positions: Float32Array | null = null;
+                let normals: Float32Array | null = null;
+                let uvs: Float32Array | null = null;
+                let features: Uint16Array | null = null;
+                for (const attributeName of Object.keys(config.attributes)) {
+                    const attribute = decoder.GetAttributeByUniqueId(geometry, config.attributes[attributeName]);
+                    const accessor = json.accessors[prim.attributes[attributeName]];
+                    const type = COMPONENT_TYPES[accessor.componentType];
+                    const numComponents = COMPONENT_COUNT[accessor.type];
+                    const dataSize = accessor.count * numComponents * type.bytes;
+                    const ptr2 = draco._malloc(dataSize);
+                    decoder.GetAttributeDataArrayForAllPoints(geometry, attribute, draco[type.dt], dataSize, ptr2);
+                    const bufferSlice = draco.HEAPU8.buffer.slice(ptr2, ptr2 + dataSize);
+                    draco._free(ptr2);
+                    if (attributeName === 'POSITION') {
+                        positions = new Float32Array(bufferSlice);
+                    } else if (attributeName === 'NORMAL') {
+                        normals = new Float32Array(bufferSlice);
+                    } else if (attributeName === 'TEXCOORD_0') {
+                        uvs = new Float32Array(bufferSlice);
+                    } else if (attributeName === '_FEATURE_RGBA4444') {
+                        features = new Uint16Array(bufferSlice);
+                    }
+                }
+                if (!positions) throw new Error('primitive without POSITION');
+
+                prims.push({
+                    positions, normals, uvs, features,
+                    indices,
+                    materialIndex: prim.material ?? 0,
+                });
+                draco.destroy(geometry);
+                draco.destroy(decoder);
+            } catch (e) {
+                try { draco.destroy(decoder); } catch { /* noop */ }
+                throw e;
+            }
+        }
+        if (prims.length > 0) nodes.push(prims);
+    }
+
+    const materials: TileMaterialData[] = (json.materials ?? []).map((m: any) => {
+        const pbr = m.pbrMetallicRoughness ?? {};
+        const e = m.emissiveFactor ?? [0, 0, 0];
+        return {
+            baseColorFactor: pbr.baseColorFactor ?? [1, 1, 1, 1],
+            roughnessFactor: pbr.roughnessFactor ?? 1,
+            metallicFactor: pbr.metallicFactor ?? 1,
+            emissiveFactor: [e[0] ?? 0, e[1] ?? 0, e[2] ?? 0],
+            doubleSided: !!m.doubleSided,
+            hasOcclusion: !!m.occlusionTexture,
+        };
+    });
+
+    const hasFeatures = !!((Array.isArray(json.extensionsUsed) &&
+        json.extensionsUsed.includes('MAPBOX_mesh_features')) ||
+        json.asset?.extras?.MAPBOX_mesh_features);
+    return { nodes, materials, hasMeshFeatures: hasFeatures };
+}
+
 /**
  * Decode every Draco primitive of a GLB tile and repack it as an
  * uncompressed GLB. Non-Draco tiles pass through unchanged (same buffer).

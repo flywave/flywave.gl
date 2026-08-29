@@ -6196,3 +6196,22 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **`line-cross-slope` 定性（未实现，engine 相邻）**：mgl 语义=offset 型线的三种横断面——`crossSlope≥1` 垂直线（ribbon 半宽转竖直高度 `2×tileToMeter×outset×top×pixelsToTileUnits`，**屏幕像素→世界每帧变**，mgl 在 shader 做而我们几何烘焙架构无法逐帧）；`<1` 水平线（`max(地形@中心±extrude)` 逐顶点 DEM 采样、烘焙可行但我们的 SolidLine ribbon 横断面由引擎几何生成、emitter 无左右缘顶点控制权）；undefined=随坡（现行为）。render-tests 无独立 cross-slope 夹具（§513 的"各 1 例"实为 ground-scale 两例）——记档为引擎侧遗留，不阻塞。
 
 **验证**：单测 +3（exaggeration 2×gs 0.5→z 1500、默认 1→1000、ground 参考门→1000），全量 299 passing（+3）、tsc 绿。渲染验证攒批（terrain 域批测时一并验收）。
+
+
+**§549. 会话续记——渲染验证批测开战：landmark 主线程解码全链打通 + 三大渲染阻断破案两起 + carrier 挂载通道就位（2026-08-29 续七）**：
+
+**§547/§548 首验（karma 单跑 landmark-emission-strength ±lod，MB_NO_WEBPACK_CACHE=1 + DECODEDBG）**：probe 实锤 **decoded=3 / parsed=3 / rendered=3 / placeOk=3**——主线程 Draco 解码 + GLB 解析在 karma 页面**完全打通**（§542-§546 的挂起终态终结）；但 mismatch 与基线逐位相同（264389/314352）→ 模型未上屏。逐层取证破案：
+
+**① 挂载时序坑（已修）**：run() 每帧 group.position=−eye **覆盖** placeModel 设置的 origin−eye → 模型瞬移到世界原点。修 = MBModelRenderer 同款：子节点持绝对锚点、组只做 −eye 回流。
+
+**② 归一化帧坑（已修）**：placeModel 用 `pr.unprojectPoint(北向归一化 y)` —— flywave 投影 y 南向正（§541），需 `1−y/n` 翻转；翻后 modelPos 与 eye 同帧 ✓。且引擎 `getGeoBox(fromRowColumnLevel(y,x,z))+projectPoint` 与手搓翻转**逐位一致**（帧自洽互证）。
+
+**③ GLTFLoader.parse 间歇挂起（已根治）**：decode 后 loader.parse 回调时有时无（onError 也不触发）——GLTFLoader 异步图像管线在 karma 页面不稳定。**弃用 GLTFLoader**：`decodeGlbTile` 结构化解码（POSITION/NORMAL/UV/_FEATURE_RGBA4444/indices 直出 typed arrays，材质按 glTF 默认映射 MeshStandardMaterial；tile 的 JPEG 是 occlusion/AO 非 baseColor 可弃）——同步构建场景，mgl convertModel 同哲学。根除 parsed=0 波动。
+
+**④ 渲染管线大战（未竟，通道已就位）**：模型进引擎帧仍零光栅化（glCalls 恒 40=主渲染残留、红显+depthTest=false+renderOrder 9999 仍逐位基线）。排除矩阵：visible/layers(mask=1,test=true)/frustumCulled=false/材质/深度/时序/camera near-far(178.9/1e6)/root 挂载(WillRender+ mrm.render patch 双窗口，inRoot=1)**全部通过仍不画**。两个引擎级发现：**(a) flywave `camera.position == projectPoint(geoCenter)`（逐位）——RTE 减数与 geoCenter 投影同值**；**(b) §197 的"pitch 70 scene-object filtering"再确认**：m_sceneRoot（引擎 tile 渲染根，每帧 `children.length=0` 重建）之外的 m_scene 顶层对象在 landmark 夹具不产生 draw call。头号嫌疑=**THREE 双实例**（mbstyle 与 mapview 各持 three；鸭子类型虽兼容但 WebGLProperties/program 缓存按对象引用——待下会话用原型链对比一锤定音）。**通道就位**：carrierGroup 挂 m_sceneRoot（engine tile 渲染根）经 mapRenderingManager.render monkey-patch 在主渲染前 add（attachForRender），位置语义已验证同帧——下会话一旦定位真因即可点亮。
+
+**§548 首验顺延**：ground-scale 两夹具在 terrain 域（DEM+exaggeration 引擎地形渲染），landmark 阻塞解除后一并批测。
+
+**工具入库**：probe dump 通道（mb-probe-dumps POST）、`__mbBatched` 全字段统计（fetch/ok/decoded/parsed/rendered/placeOk/v0World/relView/inRoot/raPixel）、rendering-test-results/mbstyle-s549* 十余轮取证存档。
+
+**下会话入口**：① THREE 双实例验证（attachForRender 里比较 `this.m_carrierGroup.constructor` 原型与 engine root.children[0] 的 constructor）；② 若双实例实锤→carrierGroup 改用 mapview 的 THREE 构造（import 侧对齐）或全局单例化；③ landmark 上屏后按 §547 清单批测（mix/emissive/roughness 逐 part、mesh_features、extent 校准）；④ model-layer 域复测 + terrain ground-scale + 3d-intersections 全域对照（§517 基线 5.16M）。

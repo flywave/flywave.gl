@@ -1993,6 +1993,23 @@ export class MBStyleDataSource extends TileDataSource {
             } catch {}
             try {
                 const { MBBatchedModelRenderer } = await import('./MBBatchedModelRenderer');
+                // §549: patch MapRenderingManager.render — add the batched
+                // models into the engine root at the last moment before the
+                // actual renderer.render (engine scene filtering wipes plain
+                // scene-attach and WillRender-window adds; the tile-pipeline
+                // root is the reliably rendered location).
+                try {
+                    const mrm = (self.mapView as any).mapRenderingManager;
+                    if (mrm && !mrm.__mbPatched) {
+                        mrm.__mbPatched = true;
+                        (globalThis as any).__mbPatchedOk = 1;
+                        const origRender = mrm.render.bind(mrm);
+                        mrm.render = function(renderer: any, scene: any, camera: any, st: boolean, ts: any) {
+                            (self.m_batchedModelRenderer as any)?.attachForRender?.(self.mapView, scene);
+                            origRender(renderer, scene, camera, st, ts);
+                        };
+                    }
+                } catch {}
                 self.m_batchedModelRenderer = new MBBatchedModelRenderer(
                     this.mapView, self, this.m_batchedModelSources ?? []);
             } catch (e) {
@@ -2036,6 +2053,12 @@ export class MBStyleDataSource extends TileDataSource {
 
             const placement = this.m_symbolPlacement;
             this.mapView.addEventListener(MapViewEventNames.WillRender, () => {
+                try {
+                    (globalThis as any).__mbRootKidsWill =
+                        ((self.mapView as any).m_sceneRoot?.children ?? []).map((c: any) => ({
+                            name: c.name, kids: c.children?.length ?? 0,
+                        }));
+                } catch { /* probe only */ }
                 // §282 probe: flag-free census — meshes with tall geometry
                 // (extrusion candidates) right before the main render.
                 const root = (this.mapView as any).m_sceneRoot as THREE.Object3D | undefined;
@@ -2236,6 +2259,19 @@ export class MBStyleDataSource extends TileDataSource {
                                     pat: t?._patternName ?? undefined,
                                     prepass: t?._mbElevPrepass ?? undefined,
                                     nvert: o.geometry?.attributes?.position?.count ?? 0,
+                                    // §549: engine-geometry frame calibration —
+                                    // first vertex in world space (same RTE
+                                    // frame the batched probes report).
+                                    w0: (() => {
+                                        try {
+                                            const pa = o.geometry?.attributes?.position;
+                                            if (!pa || pa.count === 0) return undefined;
+                                            const v = new THREE.Vector3(
+                                                pa.getX(0), pa.getY(0), pa.getZ(0))
+                                                .applyMatrix4(o.matrixWorld);
+                                            return [+v.x.toFixed(0), +v.y.toFixed(0), +v.z.toFixed(0)];
+                                        } catch { return undefined; }
+                                    })(),
                                     matc: m?.color ? m.color.toArray().map((n: number) => Number(n.toFixed(2))) : undefined,
                                     vis: o.visible ? 1 : 0,
                                     cw: m?.colorWrite === false ? 0 : 1,
@@ -2261,6 +2297,33 @@ export class MBStyleDataSource extends TileDataSource {
                                     gerr: (globalThis as any).__mbShadowGridErr,
                                     perr: (globalThis as any).__mbShadowPassErr,
                                     batched: (globalThis as any).__mbBatched,
+                                    rootKidsWill: (globalThis as any).__mbRootKidsWill,
+                                    rootKids: (() => {
+                                        try {
+                                            const root = (self.mapView as any).m_sceneRoot;
+                                            return (root?.children ?? []).map((c: any) => ({
+                                                name: c.name, vis: c.visible,
+                                                kids: c.children?.length ?? 0,
+                                                pos: [+c.position.x.toFixed(0), +c.position.y.toFixed(0), +c.position.z.toFixed(0)],
+                                            }));
+                                        } catch (e: any) { return String(e).slice(0, 80); }
+                                    })(),
+                                    batchedScene: (() => {
+                                        try {
+                                            const cam = (self.mapView as any)?.camera;
+                                            const pr = (self.m_batchedModelRenderer as any)?.probe?.() ?? [];
+                                            return pr.map((e: any) => {
+                                                if (!e.meshes) return e;
+                                                return { ...e, meshes: e.meshes.map((m: any) => {
+                                                    const ndc = new THREE.Vector3(
+                                                        m.v0[0], m.v0[1], m.v0[2]).project(cam);
+                                                    return { ...m, ndc: [+ndc.x.toFixed(3), +ndc.y.toFixed(3), +ndc.z.toFixed(3)] };
+                                                }) };
+                                            });
+                                        } catch (e: any) {
+                                            return [{ err: String(e).slice(0, 120) }];
+                                        }
+                                    })(),
                                     perr2: (globalThis as any).__mbBatched?.parseErr,
                                     wire: (globalThis as any).__mbBatchedWire,
                                     runs: (globalThis as any).__mbBatchedRun,

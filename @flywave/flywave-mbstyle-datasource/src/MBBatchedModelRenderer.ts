@@ -1,27 +1,31 @@
 /**
- * §540: batched-model source support (mgl `tiled_3d_model_source`).
+ * §540/§547/§549: batched-model source support (mgl `tiled_3d_model_source`).
  *
  * A `type: "batched-model"` source's tiles are whole GLB files whose vertex
  * positions live in the tile's LOCAL QUANTIZED GRID (extent ≈ 8192 units per
- * axis, z in meters). This renderer mirrors MBModelRenderer's per-frame
- * pattern: for each registered source it fetches the tile covering GLB for
- * the live camera tile (round(zoom) clamped to the source maxzoom), loads it
- * with GLTFLoader after MBDracoDecoder decoded Draco on the main thread
- * (§547 — DRACOLoader's worker never spawns in the karma page), and
- * instantiates ONE group per tile — placed at the tile's NW-corner world
- * position with scale = span/8192 on x/y (z stays meters: the GLB vertex z
- * is meters while x/y are the tile's 8192 grid, matching mgl's
- * zScaleMatrix=[1,1,pixelsPerMeter] treatment) and rebased by −eye every
- * frame (RTE, see MBModelRenderer §518 note).
+ * axis) while z is METERS (probe: Frauenkirche z max 101.15 ≈ its 99 m
+ * tower; mgl renders tile models with zScaleMatrix = [1,1,pixelsPerMeter]).
+ * For each registered source this renderer fetches the tile covering GLB for
+ * the live camera tile (round(zoom) clamped to the source maxzoom), decodes
+ * Draco on the page main thread (§547 — DRACOLoader's Blob-URL worker never
+ * spawns in the karma page; GLTFLoader's async image pipeline additionally
+ * hangs there intermittently, so the scene is built directly — mgl converts
+ * GLBs manually through convertModel for the same reason), and rides the
+ * ENGINE's render path: the model group is pushed into a RENDERED tile's
+ * `objects` array (§549 — TileObjectsRenderer re-adds tile.objects to
+ * m_sceneRoot each frame with its own RTE rebase; scene-attached meshes are
+ * dropped by the engine's scene filtering at high pitch, §197 red probe
+ * 0 px at 70, re-confirmed with a minimal red-box test).
  *
  * Model-layer paint styling: MAPBOX_mesh_features tiles get mgl's per-part
  * table (MBMeshFeatures); plain tiles get the layer's whole-tile paint.
  */
 
 import * as THREE from 'three';
+import { TileKey, webMercatorTilingScheme } from '@flywave/flywave-geoutils';
 import { applyMglModelLighting } from './MBModelRenderer';
-import { decodeGlbDraco } from './MBDracoDecoder';
-import { applyMeshFeatures, hasMeshFeatures } from './MBMeshFeatures';
+import { decodeGlbTile, TileMaterialData, TilePrimitiveData } from './MBDracoDecoder';
+import { applyMeshFeatures } from './MBMeshFeatures';
 
 interface BatchedSource {
     sourceId: string;
@@ -31,18 +35,21 @@ interface BatchedSource {
 }
 
 interface TileEntry {
-    group: THREE.Group;
-    source: BatchedSource;
     key: string;
-    loaded: boolean;
+    source: BatchedSource;
+    /** Model group in GLB-local coordinates (scaled; anchor applied per frame). */
+    model: THREE.Group | null;
+    /** Absolute world anchor of the model (the tile's corner in engine units). */
+    anchor: THREE.Vector3;
+    __parsed: boolean;
 }
 
 export class MBBatchedModelRenderer {
-    private m_renderer: THREE.WebGLRenderer | null = null;
     private m_entries: TileEntry[] = [];
     private m_inflight = new Set<string>();
-    private m_loader: any = null;
     private m_eye = new THREE.Vector3();
+    private m_carrier: any = null;
+    private m_carrierGroup: THREE.Group | null = null;
 
     constructor(
         private m_mapView: any,
@@ -50,23 +57,71 @@ export class MBBatchedModelRenderer {
         private m_sources: BatchedSource[],
     ) {}
 
-    /** Per-frame entry point. */
+    /** Per-frame entry point (AfterRender). */
     run(): void {
         (globalThis as any).__mbBatchedRun = ((globalThis as any).__mbBatchedRun ?? 0) + 1;
         if (this.m_sources.length === 0) return;
-        const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;
-        if (!scene) return;
 
         this.updateEye();
         this.requestTiles();
+        const st: any = (globalThis as any).__mbBatched;
+        if (st) {
+            st.rendered = this.m_entries.filter(e => e.__parsed && e.model).length;
+            const cam = (this.m_mapView as any)?.camera;
+            if (cam) { st.camNear = cam.near; st.camFar = cam.far; }
+        }
+    }
 
-        for (const e of this.m_entries) {
-            e.group.position.set(-this.m_eye.x, -this.m_eye.y, -this.m_eye.z);
+    /**
+     * §549: called from the datasource's WillRender listener — AFTER the
+     * engine's per-frame `m_sceneRoot.children.length = 0` and tile loop,
+     * BEFORE the main render. Models are added straight to m_sceneRoot with
+     * their RTE position (absolute anchor − camera position), so the main
+     * render draws them this very frame. (tile.objects riding was tried and
+     * the tile loop still skipped the group — the engine's per-frame root
+     * rebuild only re-adds objects its own pipeline owns.)
+     */
+    attachForRender(mapView: any, scene: any): void {
+        const stat0: any = (globalThis as any).__mbBatched;
+        if (stat0) stat0.attach = (stat0.attach ?? 0) + 1;
+        if (this.m_sources.length === 0) return;
+        const root = mapView?.m_sceneRoot;
+        if (!root || !scene) return;
+        this.updateEye();
+        const st: any = (globalThis as any).__mbBatched;
+        if (!this.m_carrierGroup) {
+            this.m_carrierGroup = new THREE.Group();
+            this.m_carrierGroup.name = 'MBBatchedCarrier';
+            this.m_carrierGroup.renderOrder = 10;
+        }
+        const keep = this.m_entries.filter(e => e.__parsed && e.model);
+        for (const e of keep) {
+            if (e.model.parent !== this.m_carrierGroup) {
+                this.m_carrierGroup.add(e.model);
+            }
+            // RTE: engine subtracts the camera position (m_camera.position —
+            // the pitched-back camera, not the geoCenter target).
+            e.model.position.copy(e.anchor).sub(this.m_eye);
+        }
+        if (this.m_carrierGroup.parent !== root) {
+            root.add(this.m_carrierGroup);
+        }
+        if (st) {
+            st.rendered = keep.length;
+            st.inRoot = this.m_carrierGroup.parent === root ? 1 : 0;
         }
     }
 
     private updateEye(): void {
         try {
+            // §549: the engine's rebase subtracts THIS.m_CAMERA.position (the
+            // actual camera, pitched back from the map target) — geoCenter is
+            // the TARGET point and diverges from it by the pitch offset.
+            const camPos = (this.m_mapView as any)?.camera?.position;
+            if (camPos) {
+                this.m_eye.copy(camPos);
+                return;
+            }
             const gc = this.m_mapView.geoCenter;
             const pr = this.m_mapView.projection;
             if (gc && pr) {
@@ -82,26 +137,17 @@ export class MBBatchedModelRenderer {
         const zoom = mapView.zoomLevel ?? 0;
         const cam = mapView.geoCenter;
         if (!cam) return;
-        try {
-            const pr = mapView.projection;
-            const w = pr.projectPoint(cam, { x: 0, y: 0, z: 0 });
-            void w;
-        } catch {}
 
         for (const src of this.m_sources) {
             const z = Math.min(Math.round(zoom), src.maxzoom);
             const n = Math.pow(2, z);
-            // camera lon/lat → tile x/y (mercator).
-            let lon = cam.longitude, lat = cam.latitude;
-            void lon; void lat;
             // Standard web-mercator tile coords (NORTH-up y, per the GLB
             // file naming) — NOT the engine projection's south-positive y.
-            const tx = Math.floor(((lon + 180) / 360) * n);
-            const mercN = Math.log(Math.tan(Math.PI * 0.25 + (lat * Math.PI / 180) * 0.5));
+            const tx = Math.floor(((cam.longitude + 180) / 360) * n);
+            const mercN = Math.log(Math.tan(Math.PI * 0.25 + (cam.latitude * Math.PI / 180) * 0.5));
             const ty = Math.max(0, Math.min(n - 1,
                 Math.floor(((1 - mercN / Math.PI) / 2) * n)));
-            void tx; void ty;
-            // center tile + 4 neighbors (pitch-70 views span multiple tiles).
+            // center tile + 8 neighbors (pitch-70 views span multiple tiles).
             for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
                 const x = tx + dx, y = ty + dy;
                 if (x < 0 || y < 0 || x >= n || y >= n) continue;
@@ -119,12 +165,9 @@ export class MBBatchedModelRenderer {
             .replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y))
             .replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
         this.m_inflight.add(key);
-        // track the pending tile so isLoading() covers the Draco window.
-        const pendingGroup = new THREE.Group();
-        pendingGroup.name = 'MBBatchedModelTile:' + key;
-        const sceneNow = this.m_mapView?.m_scene as THREE.Scene | undefined;
-        sceneNow?.add(pendingGroup);
-        this.m_entries.push({ group: pendingGroup, source: src, key, loaded: false });
+        // track the pending tile so isLoading() covers the decode window.
+        const entry: TileEntry = { key, source: src, model: null, anchor: new THREE.Vector3(), __parsed: false };
+        this.m_entries.push(entry);
         const stat: any = ((globalThis as any).__mbBatched ??= { fetch: 0, ok: 0, parsed: 0, err: '' });
         stat.fetch++;
         void fetch(url)
@@ -134,121 +177,107 @@ export class MBBatchedModelRenderer {
                 return r.arrayBuffer();
             })
             .then(async buf => {
-                const loader = this.m_loader ?? (this.m_loader = await this.makeLoader());
                 stat.ok++;
-                // §547: decode Draco on the page main thread and hand
-                // GLTFLoader an uncompressed GLB (DRACOLoader's Blob-URL
-                // worker never spawns in the karma page — §545).
-                let glb = buf;
+                // §547/§549: decode Draco on the page main thread and build
+                // the THREE scene directly (see header).
                 try {
-                    glb = await decodeGlbDraco(buf);
+                    const tile = await decodeGlbTile(buf);
                     stat.decoded = (stat.decoded ?? 0) + 1;
-                } catch (e: any) {
-                    stat.decodeErr = String(e).slice(0, 200);
-                }
-                loader.parse(glb, '', (gltf: any) => {
-                    stat.parsed++;
-                    for (const e of this.m_entries) {
-                        if (e.key === key) (e as any).__parsed = true;
+                    const model = new THREE.Group();
+                    model.name = 'MBBatchedModelTile';
+                    for (const prims of tile.nodes) {
+                        for (const prim of prims) {
+                            model.add(this.buildPrimitiveMesh(prim, tile.materials));
+                        }
                     }
-                    const group = new THREE.Group();
-                    group.name = 'MBBatchedModelTile';
-                    const model = gltf.scene;
-                    this.placeModel(group, model, z, x, y);
+                    const anchor = this.computeAnchor(z, x, y);
+                    model.scale.set(anchor.w, anchor.w, 1);
+                    entry.model = model;
+                    entry.anchor.set(anchor.x, anchor.y, 0);
                     const paint = (src as any).paint ?? {};
-                    if (hasMeshFeatures(buf)) {
+                    if (tile.hasMeshFeatures) {
                         // §547: per-part styling over MAPBOX_mesh_features
                         // (mgl PartNames table + 4444 vertex-color bake).
-                        applyMeshFeatures(group, paint,
+                        applyMeshFeatures(model, paint,
                             this.m_mapView?.zoomLevel ?? 0, this.m_dataSource);
                     } else {
                         // whole-tile single style (§539 phase 1): the model
                         // layer's evaluated paint (mix/emissive/roughness/opacity).
-                        this.applyLayerPaint(group, paint);
+                        this.applyLayerPaint(model, paint);
                     }
-                    const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;
-                    void scene;
-                    group.position.copy(pendingGroup.position);
-                    for (const child of [...group.children]) pendingGroup.add(child);
-                    pendingGroup.visible = true;
-                }, (e: any) => {
-                    stat.parseErr = String(e).slice(0, 200);
-                    for (const en of this.m_entries) {
-                        if (en.key === key) (en as any).__parsed = true;
-                    }
-                });
+                    stat.parsed++;
+                } catch (e: any) {
+                    stat.parseErr = String(e?.stack ?? e).slice(0, 200);
+                } finally {
+                    entry.__parsed = true;
+                }
             })
-            .catch((e: any) => { stat.err = 'FETCH ' + String(e).slice(0, 120) + ' ' + url.slice(-60); });
+            .catch((e: any) => {
+                stat.err = 'FETCH ' + String(e).slice(0, 120) + ' ' + url.slice(-60);
+                entry.__parsed = true;
+            });
     }
 
-    private async makeLoader(): Promise<any> {
-        // §547: no DRACOLoader — tiles are pre-decoded by MBDracoDecoder
-        // (main thread) and arrive here as plain uncompressed GLBs.
-        const mod: any = await import('three/examples/jsm/loaders/GLTFLoader.js');
-        return new mod.GLTFLoader();
+    /** Build one decoded primitive into a THREE mesh (glTF material map). */
+    private buildPrimitiveMesh(
+        prim: TilePrimitiveData, materials: TileMaterialData[],
+    ): THREE.Mesh {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(prim.positions, 3));
+        if (prim.normals) geo.setAttribute('normal', new THREE.BufferAttribute(prim.normals, 3));
+        if (prim.uvs) geo.setAttribute('uv', new THREE.BufferAttribute(prim.uvs, 2));
+        if (prim.features) {
+            // Name matches the lowercase attribute GLTFLoader would produce;
+            // MBMeshFeatures consumes it for per-part styling.
+            geo.setAttribute('_feature_rgba4444', new THREE.BufferAttribute(prim.features, 2));
+        }
+        geo.setIndex(new THREE.BufferAttribute(prim.indices, 1));
+
+        const m = materials[prim.materialIndex] ?? materials[0];
+        const mat = new THREE.MeshStandardMaterial({
+            // glTF factors are linear; THREE.Color components are working
+            // (linear) space — no further conversion.
+            color: new THREE.Color(
+                m ? m.baseColorFactor[0] : 1,
+                m ? m.baseColorFactor[1] : 1,
+                m ? m.baseColorFactor[2] : 1),
+            metalness: m ? m.metallicFactor : 1,
+            roughness: m ? m.roughnessFactor : 1,
+            emissive: new THREE.Color(
+                m ? m.emissiveFactor[0] : 0,
+                m ? m.emissiveFactor[1] : 0,
+                m ? m.emissiveFactor[2] : 0),
+            side: m?.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+        });
+        if (m?.baseColorFactor && m.baseColorFactor[3] < 1) {
+            mat.transparent = true;
+            mat.opacity = m.baseColorFactor[3];
+        }
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.renderOrder = 10;
+        mesh.frustumCulled = false;
+        return mesh;
     }
 
     /**
-     * Scale a loaded GLB tile scene from its local quantized grid (8192
-     * units, z meters) into world space at the tile's NW corner.
+     * Tile anchor in absolute engine world units (from the ENGINE's own
+     * tiling scheme — hand-rolled normalized unproject landed in a different
+     * frame) plus the world-units-per-GLB-unit scale for the x/y grid.
      */
-    private placeModel(group: THREE.Group, model: THREE.Object3D, z: number, x: number, y: number): void {
-        try {
-            const pr = this.m_mapView.projection;
-            const { GeoCoordinates } = this.merc();
-            const n = Math.pow(2, z);
-            const unit = pr.unitScale ?? 40075016.686;
-            const lonNW = (x / n) * 360 - 180;
-            const lonSE = ((x + 1) / n) * 360 - 180;
-            // NW/SW world corners from the projection (same frame as RTE rebase).
-            const latOf = (ty: number): any => {
-                const wp = new (this.merc().MercatorProjection)();
-                return wp.unprojectPoint({ x: (x + 0.5) / n * unit, y: (ty + 0.5) / n * unit, z: 0 });
-            };
-            const gcNW = (() => {
-                const geo = pr.unprojectPoint({ x: (x / n) * unit, y: (y / n) * unit, z: 0 });
-                return geo;
-            })();
-            const gcSE = (() => {
-                const geo = pr.unprojectPoint({ x: ((x + 1) / n) * unit, y: ((y + 1) / n) * unit, z: 0 });
-                return geo;
-            })();
-            void latOf;
-            const pNW = pr.projectPoint(gcNW, { x: 0, y: 0, z: 0 });
-            const pSE = pr.projectPoint(gcSE, { x: 0, y: 0, z: 0 });
-            const spanX = Math.abs(pSE.x - pNW.x);
-            const spanY = Math.abs(pSE.y - pNW.y);
-            const s = spanX / 8192;
-            const origin = new THREE.Vector3(
-                Math.min(pNW.x, pSE.x),
-                Math.min(pNW.y, pSE.y),
-                0,
-            );
-            group.add(model);
-            // local grid (x east, y south, 8192/axis; z meters) → world.
-            model.scale.set(s, s, 1);
-            model.position.set(0, 0, 0);
-            group.position.set(
-                origin.x - this.m_eye.x,
-                origin.y - this.m_eye.y,
-                -this.m_eye.z,
-            );
-            group.renderOrder = 10;
-            group.traverse((o: any) => {
-                o.renderOrder = 10;
-                o.frustumCulled = false;
-                if (o.isMesh && o.material) {
-                    // Engine z unit is meters only for z; keep x/y non-uniform.
-                    o.layers.enable(0);
-                }
-            });
-            (group.userData as any)._mbSpan = [spanX, spanY];
-            void lonSE; void GeoCoordinates;
-        } catch {}
-    }
-
-    private merc(): any {
-        return require('@flywave/flywave-geoutils');
+    private computeAnchor(z: number, x: number, y: number):
+        { x: number; y: number; w: number } {
+        const pr = this.m_mapView.projection;
+        const tileKey = TileKey.fromRowColumnLevel(y, x, z);
+        const geoBox = webMercatorTilingScheme.getGeoBox(tileKey);
+        const pSW = pr.projectPoint(geoBox.southWest, { x: 0, y: 0, z: 0 });
+        const pNE = pr.projectPoint(geoBox.northEast, { x: 0, y: 0, z: 0 });
+        const spanX = Math.abs(pNE.x - pSW.x);
+        const w = spanX / 8192;
+        return {
+            x: Math.min(pSW.x, pNE.x),
+            y: Math.min(pSW.y, pNE.y),
+            w,
+        };
     }
 
     /** Called by the datasource once sources are known. */
@@ -256,25 +285,25 @@ export class MBBatchedModelRenderer {
         this.m_sources = sources;
     }
 
-    /** §542: true while GLB tiles are fetching or Draco-parsing. */
+    /** §542: true while GLB tiles are fetching or decoding. */
     isLoading(): boolean {
         return this.m_inflight.size > 0 ||
-            this.m_entries.some(e => !(e as any).__parsed);
+            this.m_entries.some(e => !e.__parsed);
     }
 
     get sources(): BatchedSource[] {
         return this.m_sources;
     }
 
-    /** Apply layer paint styling to a tile group (whole-tile, §539 phase 1). */
-    applyLayerPaint(group: THREE.Group, paint: any): void {
+    /** Apply layer paint styling to a tile model (whole-tile, §539 phase 1). */
+    applyLayerPaint(model: THREE.Group, paint: any): void {
         try {
-            applyMglModelLighting(this.m_dataSource, group,
+            applyMglModelLighting(this.m_dataSource, model,
                 Number(paint?.['model-emissive-strength'] ?? 0));
             const mixI = Number(paint?.['model-color-mix-intensity'] ?? 0);
             const color = paint?.['model-color'];
             if (mixI > 0 && color) {
-                group.traverse((o: any) => {
+                model.traverse((o: any) => {
                     const mesh = o as THREE.Mesh;
                     if (!mesh.isMesh) return;
                     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
@@ -290,7 +319,7 @@ export class MBBatchedModelRenderer {
             }
             const op = Number(paint?.['model-opacity'] ?? 1);
             if (op < 1) {
-                group.traverse((o: any) => {
+                model.traverse((o: any) => {
                     const mesh = o as THREE.Mesh;
                     if (!mesh.isMesh) return;
                     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
