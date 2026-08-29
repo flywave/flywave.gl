@@ -109,6 +109,13 @@ export class MBBatchedModelRenderer {
         if (st) {
             st.rendered = keep.length;
             st.inRoot = this.m_carrierGroup.parent === root ? 1 : 0;
+            const eng = root.children[0];
+            if (eng) {
+                st.engCtor = eng.constructor.name;
+                st.ourCtor = this.m_carrierGroup.constructor.name;
+                // §549 decisive: cross-instance instanceof (false ⇒ dual THREE).
+                st.engIsOurObj3D = eng instanceof THREE.Object3D ? 1 : 0;
+            }
         }
     }
 
