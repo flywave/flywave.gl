@@ -133,6 +133,11 @@ export class MBBatchedModelRenderer {
         }
 
 
+        // §549: force the carrier (and probe box) into the engine root.
+        if (this.m_carrierGroup.parent !== root) {
+            this.m_carrierGroup.parent = null;
+        }
+        root.add(this.m_carrierGroup);
         if (st) {
             st.rendered = keep.length;
             st.inRoot = root.children.indexOf(this.m_carrierGroup) >= 0 ? 1 : 0;
