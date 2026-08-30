@@ -6536,3 +6536,7 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **§583. materials 包研读——§582 定性部分修正+最终疑难聚焦（2026-08-30 终章）**：
 
 `[MBAnchorH]` 直方图修正 §582 烟枪：**80× MeshStandardMaterial（锚点齐全 ok=1）+ 仅 1× ShaderMaterial（无锚点）**——fill/extrusion 主力材质的 include 锚点存在，注入路径本应有效；MapMeshStandardMaterial（MapMeshMaterials.ts:1020）链式 onBeforeCompile ✓ 兼容。**最终聚焦**：调试读出位于 `if (uMBShadowIntensity > 0.0)` 内且先于越界检查——**读出 0px ⇒ shader 内 intensity 恒 0 ⇒ 刷新值未达被绘制材质的 uniform**，与"[MBRefresh] 可达 + 82 uuid 交集 + 81 次带补丁编译"三方证据矛盾——唯一剩余解释为**编译时的 uniforms 对象与刷新循环持有的引用分裂**（三次 git checkout 反复增删 §581/§581b 修复造成当前库内数组修复在而 cacheKey 修复缺的混合态嫌疑最大）。**重启清单**：①恢复 cacheKey 基线（d4a6e827 内容核对）；②一次 shadowdbg=3 复测读出；③仍 0px 则 onBeforeRender 打断点取 draw 材质 uniforms 实值（最后手段）。本轮零代码变更，工作树净。会话累计 §554–§583 共 66 提交。
+
+**§584. fill 接收器重启清单执行——draw 断点终局数据（第 12 轮，挂起收口，2026-08-30 终章二）**：
+
+重启清单三步执行：①cacheKey 基线确认**已在库内**（此前 grep 误判混合态）；②shadowdbg=3 读出复测（干净态）仍 **0 px**；③`[MBDrawBP]` onBeforeRender 断点：**MeshStandardMaterial 绘制时 hasU=true / intensity=1 / injected=true（114 次 draw）**——uniform 在 draw 时确为 1！`[MBFragDump2]`：ShaderMaterial（1 个）fragment 无锚点（已知）；MeshStandardMaterial 逐项 ✓（锚点/编译/注入/刷新/draw 值五方全绿）。**矛盾终局**：draw 时 intensity=1 + 补丁代码在 shader 内 + 读出仍不出现——剩余解释仅 ①程序缓存命中的是无补丁变体（customProgramCacheKey 在多材质共享 technique 下仍碰撞）②渲染走不经过这些 onBeforeRender 物件的第二几何（实例化克隆）。**需要 GPU 级调试器（SpectorJS/canvas preserveDrawingBuffer+断点）或引擎渲染层源码级走查**——黑盒通道 12 轮后正式穷尽。本轮零净代码变更，工作树净。fill-shadow 及三远带域挂起为引擎调试专项。
