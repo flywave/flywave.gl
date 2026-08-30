@@ -592,7 +592,7 @@ export function applyMeshFeatures(
         root.traverse(o => {
             const mesh = o as THREE.Mesh;
             if (mesh.isMesh && !mesh.geometry.getAttribute(FEATURE_ATTR) && !mesh.userData.__mbPart) {
-                applyMglModelLighting(dataSource, mesh, parts[0].emissive);
+                applyMglModelLighting(dataSource, mesh, parts[0].emissive, undefined, undefined, 0);
                 root.userData.__mbFeatFeatureless.push(mesh);
             }
         });
@@ -679,7 +679,6 @@ function splitByPart(
         partOf[i] = partId;
         const style = parts[partId];
         let [r, g, b] = expand4444((u32 >>> colorShift) & 0xffff);
-        if (!partFirstColor.has(partId)) partFirstColor.set(partId, [r, g, b]);
         if (style.mix > 0) {
             // mgl lerps in sRGB byte space before the shader converts.
             r = Math.round(r + (style.colorSrgb[0] - r) * style.mix);
@@ -690,6 +689,10 @@ function splitByPart(
             const a = expandAlpha4444((u32 >>> colorShift) & 0xffff);
             r *= a; g *= a; b *= a;
         }
+        // mgl buildMeshFeatureArray: the door-light feature array receives
+        // the POST-mix a0/a1 bytes (mixA=1 → pure style color), not the raw
+        // tiler color.
+        if (!partFirstColor.has(partId)) partFirstColor.set(partId, [r, g, b]);
         colors[i * 3] = srgbToLinear(r / 255);
         colors[i * 3 + 1] = srgbToLinear(g / 255);
         colors[i * 3 + 2] = srgbToLinear(b / 255);
@@ -763,7 +766,7 @@ function splitByPart(
         sub.userData.__mbMatBaseOpacity = (mat.opacity ?? 1);
         if (mat.transparent) (mat.userData ??= {}).__mbForceTransparent = true;
         const hr = mbHeightRampUniforms(style.heightEmission, bboxZMin, bboxZMax);
-        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr);
+        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr, 0);
         sub.userData.__mbHrParams = hr;
         subMeshes.push(sub);
     }
@@ -844,6 +847,10 @@ function refreshSplit(mesh: THREE.Mesh, parts: PartStyle[]): void {
             const a = expandAlpha4444((u32 >>> colorShift) & 0xffff);
             r *= a; g *= a; b *= a;
         }
+        // mgl buildMeshFeatureArray: the door-light feature array receives
+        // the POST-mix a0/a1 bytes (mixA=1 → pure style color), not the raw
+        // tiler color.
+        if (!partFirstColor.has(partId)) partFirstColor.set(partId, [r, g, b]);
         colors[i * 3] = srgbToLinear(r / 255);
         colors[i * 3 + 1] = srgbToLinear(g / 255);
         colors[i * 3 + 2] = srgbToLinear(b / 255);

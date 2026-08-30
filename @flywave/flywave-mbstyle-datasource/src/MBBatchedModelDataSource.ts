@@ -261,6 +261,18 @@ class MBBatchedModelDecoder implements ITileDecoder {
                             break;
                         }
                     }
+                    // mgl convertFootprints: nodes carrying
+                    // mapbox:footprint:id/version are footprint-only and are
+                    // REMOVED after their geometry is parsed into node.footprint
+                    // — they must never render.
+                    for (let p: any = o; p; p = p.parent) {
+                        if (p.userData?.['mapbox:footprint:id'] !== undefined
+                            || p.userData?.['mapbox:footprint:version'] !== undefined) {
+                            o.userData.__mbFootprint = true;
+                            o.visible = false;
+                            break;
+                        }
+                    }
                     if (o.isMesh) {
                         // V2 tile: featureColor in the LOW 16 bits, part id
                         // in bits 16..19 (mgl updateNodeFeatureVertices swaps
@@ -281,8 +293,9 @@ class MBBatchedModelDecoder implements ITileDecoder {
                             }
                         }
                         // Filter at DRAW visibility (mgl getNodesInfo) — the
-                        // Draco branch does the same per primitive.
-                        o.visible = this.nodePassesFilter(
+                        // Draco branch does the same per primitive. Footprint
+                        // nodes stay hidden (mgl removes them entirely).
+                        o.visible = !o.userData.__mbFootprint && this.nodePassesFilter(
                             o.userData.__mbNodeId, o.userData.__mbNodeHeight ?? 0);
                         // mgl model.fragment.glsl: meshes without a NORMAL
                         // attribute get a derivative-based flat normal

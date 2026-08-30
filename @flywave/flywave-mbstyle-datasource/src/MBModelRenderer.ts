@@ -123,6 +123,10 @@ export function applyMglModelLighting(
     emissiveStrength: number,
     tint?: { color: number[]; mix: number },
     heightRamp?: { b0: number; b1: number; power: number; start: number; range: number },
+    // mgl u_emissive_strength (the final unlit mix factor): 0 for
+    // mesh-features tiles (draw_model.ts: hasMapboxFeatures ? 0 : rmea.z),
+    // defaults to emissiveStrength for classic model layers.
+    unlitMix?: number,
 ): void {
     const ls = dataSource?.m_environment?.lighting3DState;
     model.traverse((o) => {
@@ -148,6 +152,7 @@ export function applyMglModelLighting(
                 shader.uniforms.uMB3DDirColor = { value: ls2 ? ls2.directionalColorLinear : [1, 1, 1] };
                 shader.uniforms.uMB3DDir = { value: ls2 ? ls2.dir : [0, 0, 1] };
                 shader.uniforms.uMB3DEmissive = { value: emissiveStrength ?? 0 };
+                shader.uniforms.uMB3DUnlit = { value: unlitMix ?? emissiveStrength ?? 0 };
                 shader.uniforms.uMB3DTint = { value: tint?.color ?? [0, 0, 0] };
                 shader.uniforms.uMB3DTintA = { value: tint?.mix ?? 0 };
                 shader.uniforms.uMBHbs = { value: [hr.b0, hr.b1, hr.power, hr.start] };
@@ -164,6 +169,7 @@ export function applyMglModelLighting(
                     // paint dependent — refreshed in place by
                     // MBMeshFeatures.refreshMeshFeatures.
                     emis: shader.uniforms.uMB3DEmissive,
+                    unlit: shader.uniforms.uMB3DUnlit,
                     hbs: shader.uniforms.uMBHbs,
                     hbsRange: shader.uniforms.uMBHbsRange,
                 };
@@ -171,6 +177,7 @@ export function applyMglModelLighting(
                     'void main() {',
                     `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
                      uniform float uMB3DEmissive;
+                     uniform float uMB3DUnlit;
                      uniform vec3 uMB3DTint; uniform float uMB3DTintA;
                      uniform vec4 uMBHbs; uniform float uMBHbsRange;
                      varying float vMbLocalZ;
@@ -219,6 +226,14 @@ export function applyMglModelLighting(
                          #endif
                          vec3 mbDirView = normalize((viewMatrix * vec4(uMB3DDir, 0.0)).xyz);
                          vec3 mbUpView = normalize((viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
+                         // NOTE: a faithful Cook-Torrance port of mgl
+                         // computeLightContribution (F_SchlickFast/V_GGXFast/
+                         // D_GGX/EnvBRDFApprox) was measured WORSE on the
+                         // landmark fixtures than this calibrated hemisphere
+                         // approximation (+38k on doors-no-shadows-lod) — the
+                         // residual is in the light-direction/brightness
+                         // domain, not the BRDF shape. Keep mbK until that is
+                         // solved (§557).
                          float mbNdotL = clamp(dot(mbN, mbDirView), 0.0, 1.0);
                          float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
                          float mbAmbDir = mix(1.0 - 0.3 * min(mbDirLum, 1.0), 1.0, min(dot(mbN, mbDirView) + 1.0, 1.0));
@@ -228,8 +243,9 @@ export function applyMglModelLighting(
                          // mgl applies the occlusion texture to the LIT color
                          // only (model.fragment.glsl: diffuse *= ao / color *=
                          // ao) — the emissive color_mix target is not darkened.
+                         float mbAo = 1.0;
                          #ifdef USE_AOMAP
-                             float mbAo = (texture2D(aoMap, vAoMapUv).r - 1.0) * aoMapIntensity + 1.0;
+                             mbAo = (texture2D(aoMap, vAoMapUv).r - 1.0) * aoMapIntensity + 1.0;
                              mbLit *= mbAo;
                          #endif
                          // model-height-based-emissive-strength-multiplier:
@@ -237,7 +253,13 @@ export function applyMglModelLighting(
                          // t the height ramp over the mesh-local z (mgl
                          // model.fragment.glsl v_height_based_emission_params).
                          float mbRes = uMB3DEmissive * (uMBHbs.w + uMBHbsRange * pow(clamp(vMbLocalZ * uMBHbs.x + uMBHbs.y, 0.0, 1.0), uMBHbs.z));
-                         gl_FragColor.rgb = mix(mbLit, mbAlbedo, min(mbRes, 1.0));
+                         vec3 mbColor = mix(mbLit, mbAlbedo, min(mbRes, 1.0));
+                         // mgl model.fragment.glsl tail: a SECOND mix toward
+                         // unlitColor = baseColor * ao (+ emissiveFactor) by
+                         // u_emissive_strength — coherence with other layers;
+                         // this is what keeps part-styled windows bright.
+                         vec3 mbUnlit = mbAlbedo * mbAo;
+                         gl_FragColor.rgb = mix(mbColor, mbUnlit, clamp(uMB3DUnlit, 0.0, 1.0));
                      }`
                 );
             };
