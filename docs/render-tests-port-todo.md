@@ -6512,3 +6512,7 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **§578. 远带根因第五轮下钻——三连证伪与真因锁定：fill 接收器从未注入（2026-08-30 续二十九）**：
 
 差分探针链（shadows-casting 单夹具）：①**NDC 投影**：91 实例 **88 个 in-frustum**（z=0.24-0.33 健康深度）——几何完全正确；②**材质 clippingPlanes**：403 材质 0 裁剪面——排除；③**红材质 ABTEST**：312 暗红采样出现（mismatch 375224→395986）——**树 mesh 确实渲染**，可见性理论终局证伪（§577b 组重基零像素另有解释）。**真因（色带取证）**：远带差异 = **地面阴影着色**——expected 远带大片 (0,0,0) 黑（黑 ambient 0.4 → ground shadow factor 0）+ 亮 (199,199,180)；我方远带灰 102 无黑。**fill 接收器探针**：`__mbShadowUniforms` 在该夹具 tile.objects 上**零命中**——fill 材质的阴影接收注入链从未触发（远带地面永不受影）。**下轮入口（单点）**：为何 patchTileMaterials 的注入循环对该夹具零注入——候选：fill 的 technique 分类被 `_isRaster/_isLineRibbon` 类守卫误伤、`tile.objects` 为空（fill 走引擎自绘而非 tile.objects）、或 shadowState 在注入窗口为 null（时序）。一轮诊断可定位。三大远带残差域（远树带现确认为地面阴影域非覆盖域/远景暗带/elevated-symbols）需分别复核是否同域。探针已清，工作树净。
+
+**§579. fill 接收器零注入诊断（注入≠生效，材质生命周期缺口，2026-08-30 续三十）**：
+
+注入循环探针：**tiles=1 objs=162 guardSkip=1 injected=161**——注入本身正常（非守卫误伤/非 objects 为空/非时序）。真因下移：`__mbShadowUniforms` 在 onBeforeCompile 内创建，而**材质在注入前已编译**——onBeforeCompile 后置修改不触发重编译。尝试两连修复均零像素：①`needsUpdate=true`（three 程序缓存键不变，重建复用未打补丁程序）；②`customProgramCacheKey` 破缓存（shadowdbg=3 调试读出仍不出现=**打补丁的 161 个材质根本不是最终渲染的材质**——引擎在 patch 与 render 之间存在材质池化/克隆/替换层）。**下轮入口**：在引擎 renderObject 链上抓真正渲染的 fill 材质实例（onBeforeRender 时记录 material.uuid），与被 patch 的 161 个做交集——空集则需改在渲染材质出现点注入（MapRenderingManager/technique 创建处）。§578 的三域同源复核继续挂起此修复。工作树净。
