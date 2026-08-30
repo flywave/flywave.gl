@@ -6496,3 +6496,9 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **elevated-symbols-icons-and-text（42775）像素取证**（复用 full572 结果零成本）：差异带分布 **top(y<170)=1850 / mid=1017 / bottom=628 采样点——53% 在远带** → 该族剩余头部与 §566/§573 单瓦片覆盖同根因（远景 elevated 道路/符号未渲染），近带为桥区细节（side-skirt/厚度域，P3.7 ElevatedStructures）。
 
 **covering 探针下钻（§573 档案补充）**：FrustumIntersection 细分循环插桩实测 **lodStop at z16、entries=2**（shadows-casting zoom17.5/pitch60）——细分到达 z16 即因 `shouldSubdivide`（§317 mgl 距离 LOD）停止且全集仅 2 瓦片；pitch-60 frustum 的地面足迹本应横跨多个 z16 瓦片 → **远瓦片在逐瓦片剔除（extendedFrustumCulling/mapTileCuller 或 getTileKeyEntry 的 area=0 路径）被移除**。引擎侧修复入口进一步收窄到 computeTileAreaAndDistance 的 intersects 判定链（FrustumIntersection.ts:462-477）。**数据源侧该域确认无通道**（§567+本节双重负结果）。探针已清（工作树净）。
+
+**§576. 引擎 covering 修复认领——修 A 第一轮（假说证伪+结构性错配定性，回退收口，2026-08-30 续二十六）**：
+
+实施修 A：FrustumIntersection 相机相对系剔除（updateFrustum 以 camPos 重基 viewProjection、computeTileAreaAndDistance 平移 bounds、MapTileCuller.setup 偏移）——**双夹具零像素变化**（375224/42775 逐位）→ **float32 精度假说证伪**（karma 确认源码编译路径 tsconfig.karma 映射 ✓ 非解析问题）。已回退（零收益不动引擎核心）。
+
+**结构性错配定性（新）**：覆盖链实际形态 = 引擎按 view zoom 枚举 **z16** cell（lodStop z16/entries=2），DS 的 maxDataLevel=15 把请求钳到 z15 父瓦片——**双 z16 cell 共享同一 z15 解码**（n=1 实证），z15 数据的 far-band 特征经 projectWorld 落到 cell 外的世界坐标，被引擎逐 cell 渲染裁剪（§567 实锤）。mgl 的正确形态 = covering 直接在 data zoom（z15）取多瓦片。**修复正解（下轮）**：VisibleTileSet/DS 交互层把"请求 level>maxDataLevel 时的覆盖钳制"从 cell→parent 解码改为**covering 在 data level 枚举**（引擎侧），或 DS 侧 per-feature 实例（modelInstances 已绝对世界坐标）绕过 cell 裁剪的渲染通道（MBModelRenderer 挂载点调研）。三残差域（远树带/远景暗带/elevated-symbols 远带）继续挂起该根因。
