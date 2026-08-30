@@ -6602,3 +6602,7 @@ GPU 级替代取证（SpectorJS 离线不可用，改 in-page）：①`[MBProg]`
 变体"quad 并入主 pass"（m_scene + renderOrder −3000）：**375224 逐位基线**——**§549 的渲染清单排除对普通子树是绝对的**（该 quad 在 m_scene 中不被渲染，与 24 轮前的 carrierGroup 结论一致）。至此终局修复单的所有数据源侧变体穷尽：**唯一剩余 = MapView.render() 渲染循环内一行级插入**（在 `renderer.render(scene, camera)` 前先 `renderer.render(m_groundScene, m_groundCamera)`，或暴露 pre-scene hook 供 DS 注册）——属 @flywave/flywave-mapview 的 API 级扩展。已回退（375224 复核，工作树净）。
 
 **会话收束声明（§554–§597，86 提交）**：远带三域以五证闭环（机制/帧/采样/阻断者/语义）+ 三变体穷尽（LEQUAL/主 pass/无门）+ 一行级引擎修复单移交告终。主线成果保持：阴影链全语料 −49.6万（151 例 PASS）、indirect 家族 −36.6%、globe 两子项、interpolate 全局修复、4 子系统修活。
+
+**§598. pre-scene hook 引擎插入+终局确认（第 26 轮，会话真·收束，2026-08-30 终章十六）**：
+
+**引擎 API 落地**：`MapRenderingManager.render` 暴露 `preSceneHook(renderer)`（direct path、renderer.render(scene) 之前、默认 null 零影响）——§597 修复单的一行级插入以正式 API 形态实现并提交。**接线实测（无门 ABTEST）**：shadows-casting 仍 375224——hook 下层绘制链路通，但远带随即被**全视口不透明 fill 'land'（z15 大瓦片）覆盖**（§588 早已实测其覆盖 102 色）——**与 §585 终局汇聚**：远带阴影的最终落点仍是"引擎实际渲染的 fill 材质实例接收阴影"（那批实例与被 patch 的不同、渲染清单不走 scene graph——§585/§597 双重实锤的引擎渲染管线内部机制）。**收束**：DS 层 26 轮 + 引擎 hook API 已提供；剩余唯一未知 = 引擎 fill 渲染实例的产生点（TileGeometryCreator→实际 draw 的中间层），需要引擎开发者在源码内定位（黑盒外）。基线复核 375224/557228/613094 全部不变，工作树净（引擎 hook 为唯一提交）。会话 §554–§598 共 87 提交。
