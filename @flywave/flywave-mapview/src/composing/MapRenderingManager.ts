@@ -371,9 +371,20 @@ export class MapRenderingManager implements IMapRenderingManager {
         if (this.m_composer && this.m_anyEffectEnabled) {
             this.m_composer.render();
         } else {
+            // §598 pre-scene hook: datasources may register an underlay draw
+            // (mgl background-tile semantics — e.g. the shadowed ground quad
+            // must composite BENEATH all scene content, impossible from any
+            // post-render callback because translucent geometry writes
+            // depth-only prepasses there).
+            if (this.preSceneHook) {
+                try { this.preSceneHook(renderer); } catch { /* optional */ }
+            }
             renderer.render(scene, camera);
         }
     }
+
+    /** §598: optional underlay draw executed right before the scene render. */
+    preSceneHook: ((renderer: THREE.WebGLRenderer) => void) | null = null;
 
     setSize(width: number, height: number) {
         this.m_width = width;
