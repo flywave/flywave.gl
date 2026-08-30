@@ -6462,3 +6462,7 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **§571. 阴影默认开启评估（61 例对拍矩阵，决策=暂保持 opt-in，2026-08-30 续十九）**：
 
 MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线）：**净 −100k**——头部收益 landmark-mbx-shadows-lod 361013→**130066**（−231k）、quantization-shadows −12k×2、shadows-roads-depth −8.3k、road-extend-tilecover −12.4k、shadows-junction −1.1k。**回归簇**（默认开启的阻塞项）：①**正交相机族** camera-orthographic-zero-pitch +52.9k/text +12k——阴影 pass 假设透视 RTE，正交投影下地面 quad 的角点反投影失真；②**lighting-3d-mode/shadow 接收器族** draw-layer-lines/slot +27k×2、shimmering +27k、fill-extrusion-translucent +15k——§562 的 model 阴影接收注入对 fill-extrusion 主导的场景过量压暗；③depth-occlusion/multiline-shadow +3.5k。**决策**：保持 MBSTYLE_SHADOW=1 opt-in；默认开启的前置=正交相机 guard + lighting-3d-mode 族接收器强度校准。收益侧数据已备（−100k 待解锁）。
+
+**§571b. 阴影正交相机 guard（ortho 家族 12 例全回基线，2026-08-30 续二十）**：
+
+§571 回归簇①已修：mgl 测试样式把根级 `camera-projection` 归一进 `camera` 对象（探针实证 keys=camera/proj=undefined → camera={"camera-projection":"orthographic"}）——两级查找 `style.camera ?? style` 后 `setOrthographicStyle` 整体跳过阴影 pass。**ortho 家族 12 例全部 ±0 回基线**（含 with-shadows 全系与 zero-pitch 的 −53k 回归清零）；−231k 的 landmark-mbx-shadows-lod 与 quantization-shadows 收益保留。**阴影默认开启的剩余前置**：仅 lighting-3d-mode 接收器族（draw-layer-lines/slot +27k×2、shimmering +27k、fill-extrusion-translucent +15k、depth-occlusion/multiline +3.5k，合计 ~+72k）——疑 §562 的 model 阴影接收注入在 fill-extrusion 主导场景的直射项压暗过量，下轮逐夹具定强度后可评估转默认（当前净收益 ~−125k 待解锁）。
