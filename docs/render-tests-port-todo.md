@@ -6408,3 +6408,11 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **② 树木实例**：MBModelEmit 探针实证 emission 正常进入（tree-layer-not-receiving points=1 id=1622885437583883=pbf id），早先"placements=0"系 once-flag 探针在瓦片解码完成前触发的误读（第二次踩同一坑，记档：模型域探针必须 defer 到首帧后）。**空间取证**：我方树木 bbox(x136-1008,y0-632) vs expected(x112-1016,y0-632)——**位置正确、密度减半**（green 采样 592/1139）。候选根因：(a) filter `< (%id 6) 3` 或 model-id `%4` 的 feature-id 域差异（我方已用 pbf id，理论同 mgl）；(b) **overzoom 瓦片域**——source maxzoom 15、view zoom 17.5，mgl 从 z15 父瓦片按 covering 复制特征，我方可能只解码单瓦片 → 密度减半的量级吻合。**下轮第一查**：MBExtraVectorSourcesProvider/extras 的 overzoom covering 复制语义（对照 mgl tile covering `source.maxzoom` clamp）。
 
 **③ 本轮无代码提交**（工作树净，377046 复核稳定）；两次探针均以删除收尾。
+
+**§564. 门灯 beam 从未绘制破案（ShaderMaterial 重写）+ overzoom 假说证伪（2026-08-30 续八）**：
+
+**① overzoom covering 假说证伪**：MBExtraVectorSourcesProvider 已有 maxzoom clamp（lvl>>shift 取父瓦片 ✓ mgl 语义）；逐层发射计数探针实证两 tree 层均发射（47+44=91 placements，filter `<`/`>=` 引擎离线验证互补正确）——**密度减半定性转移至渲染侧**（可见性/缩放域，592/1139 的 green 采样受 model-color %6 桶影响：white/gray 桶不计入 green，疑 scale 或 id→桶映射域），记档。
+
+**② 门灯 beam 从未绘制（决定性）**：红材质不透明 A/B **零红像素** → karma 日志 `THREE.WebGLProgram: VALIDATE_STATUS false — FRAGMENT varying vNormal does not match any VERTEX varying`——beam 的 onBeforeCompile 补丁在 MeshBasicMaterial 上 GL 校验失败，mesh 被静默跳过（历史上 beam 从未上屏）。重写为全控 ShaderMaterial（mbC4f attribute + mgl a_color_4f 距离衰减公式逐行照搬；sRGB 色直写——raw material 无 colorspace_fragment）。refreshSplit 句柄同步改 `mat.__mbLightsU` + `uMBLightsColor` vec3（sRGB 直存，不再 linear 化）。
+
+**效果**：beam 覆盖域对齐（cyan 采样 8701 vs exp 9874、同 bbox (0-1020, 0-732/780)）；**doors-no-shadows 442181→424977（−1.7万）**、door-light-museum −1.7k、-lod −0.3k；update-doors 565702（+7.8k，夜间 beam 色偏暗：直色输出 G 亏半、premultiplied A/B 更差已试，疑合成链色彩空间——记档下轮）。**方法论**：karma 日志中的 THREE.WebGLProgram 错误此前从未被检索——'渲染缺失'类排查第一步应 grep shader 错误。
