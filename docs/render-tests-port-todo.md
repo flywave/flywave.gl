@@ -6478,3 +6478,11 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **修复（双门控）**：quad 仅当风格无 (a) 数值 opacity<1 的层、(b) fill/line 层时绘制（landmark 族=background+model ✓ 保留收益）。**默认翻转**：shadowdbg 缺省 1（0=关/2=跳 pass/3+=debug 读出），§522 取证门退役。
 
 **效果**：landmark-mbx 13 例净 **−716872**（lod 357403→**109369**、meshopt-lod −10.9万、castro-theater-quantization −16.8万、highlights −7.1万、meshopt −9.8万）；lighting-3d-mode 回归簇全回基线（translucent/shimmering/draw-layer-lines/slot ±0）；3d-intersections 阴影族维持收益（roads-depth −8.1k/junction −1.1k）。**residual**：+2.6k dynamic-terrain-disabled、+1.3k meshopt-colors-lod。**遗留**：全语料批测（含无 cast-shadows 家族的零影响验证——pass 对无 shadowLightState 风格早退）建议下轮一次全量。
+
+**§573. 引擎级 covering 问题——协作评估档案（供引擎侧专项，2026-08-30 续二十三）**：
+
+**现象**：pitch-60 视口仅解码 1 个数据瓦片（shadows-casting 实测 `[MBTileCover] n=1 keys=15/5242/12664`），远带内容（树木/阴影/远景）缺失；mgl 在 data-zoom clamp 后按视口∩地面取 covering（多瓦片）。
+
+**证据链**：①§566 探针 n=1（zoom 17.5/pitch 60/source maxzoom 15）；②§567 邻瓦片环实验：pseudo-extras 走 decodeTileWithSources 偏移合并（DecodeInfo center 差移顶点）——**合并不生效**，同 cell extras（dx=0）能渲染、dx=±tile-span 不能 → **引擎按 CELL 边界裁剪瓦片几何**（渲染侧，非解码侧）；③§566 排除：far-cutoff 默认禁用/frustumCulled=false/camera far 充裕/depthTest 无关（depthTest=false A/B 远树仍零出现=非遮挡）。
+
+**引擎侧入口（代码定位）**：`@flywave/flywave-mapview/src/FrustumIntersection.ts`（frustum ∩ tileBounds 逐级细分，:468-476 双路径 sphere/plane）；疑点=pitch 下细分/边界判定使兄弟瓦片未入集，或与 TileDataSource storageLevelOffset 的 level 折算交互。**修 A（covering 外扩）**=pitch 视口 frustum 地面足迹覆盖多瓦片；**修 B（逐 cell 裁剪放宽）**=允许合并几何越 cell 渲染（风险=瓦片重复/抗锯齿缝）。**验证夹具**：buildings-trees-shadows-casting（远树带 592/1139 green 采样）、landmark-update-doors 远景暗带。数据源层通道已穷尽（§567 负结果），须引擎侧认领。
