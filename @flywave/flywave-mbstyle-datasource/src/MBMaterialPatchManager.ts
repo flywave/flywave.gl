@@ -109,11 +109,6 @@ export class MBMaterialPatchManager {
                             if ((material as any).__mbShadowInjected) { if (stat) stat.already++; continue; }
                             if (stat) stat.injected++;
                             this.injectGroundShadow(material as any);
-                            (material as any).needsUpdate = true;
-                            const mat0 = material as any;
-                            const origKey0 = mat0.customProgramCacheKey?.bind(mat0);
-                            mat0.customProgramCacheKey = (): string =>
-                                (origKey0 ? origKey0() : 'mb') + '-mbshadow';
                         }
                     }
                 }
@@ -2379,6 +2374,13 @@ export class MBMaterialPatchManager {
     private injectGroundShadow(material: any): void {
         if (material.__mbShadowInjected) return;
         material.__mbShadowInjected = true;
+        // §585: break the program cache on BOTH injection paths — the
+        // creation path previously kept the shared technique cacheKey and
+        // could resolve to a sibling's unpatched program.
+        const origKey = material.customProgramCacheKey?.bind(material);
+        material.customProgramCacheKey = (): string =>
+            (origKey ? origKey() : 'mb') + '-mbshadow';
+        material.needsUpdate = true;
         const orig = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
             if (orig) orig.call(material, shader);
