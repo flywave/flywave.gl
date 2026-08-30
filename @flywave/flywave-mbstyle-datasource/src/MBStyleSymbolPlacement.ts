@@ -258,6 +258,33 @@ export class MBStyleSymbolPlacement {
             return box;
         };
 
+        // mgl CollisionGroups: metadata.test.crossSourceCollisions === false
+        // puts each source in its own collision group — boxes only collide
+        // within the same source (icon/text-no-cross-source-collision).
+        const mbStyle: any = (this.m_dataSource as any).m_runtime?.style
+            ?? ((this.m_dataSource as any).m_styleManager as any)?.m_style;
+        const crossSourceCollisions =
+            mbStyle?.metadata?.test?.crossSourceCollisions !== false;
+        const layerSource = new Map<string, string>();
+        if (!crossSourceCollisions) {
+            for (const l of mbStyle?.layers ?? []) {
+                if (l?.id && l?.source) layerSource.set(l.id, String(l.source));
+            }
+        }
+        const collisionGroupOf = (el: any): string | undefined =>
+            crossSourceCollisions ? undefined
+                : String(el?.userData?._sourceId
+                    ?? el?.dataSourceName
+                    ?? layerSource.get(String(el?.poiInfo?.technique?._layerId
+                        ?? el?.technique?._layerId ?? '')))
+                    || undefined;
+        // The engine-level overlap flags were relaxed for csc=false (see
+        // MBTileDataEmitter) so the engine's own placement never culls —
+        // derive the mgl verdict allow-overlap from the STYLE layout alone
+        // (these fixtures never set *-allow-overlap), not from the relaxed
+        // engine flags.
+        const verdictAllowOf = crossSourceCollisions ? null : (e: Entry) => false;
+
         // Gather per-element screen data (dedupe across tile levels by
         // featureId+text — mgl keeps one placement per feature).
         interface Entry {
@@ -268,6 +295,9 @@ export class MBStyleSymbolPlacement {
             iconAllowOverlap: boolean;
             iconRect: [number, number, number, number] | null; // cx, cy, w, h
             textRect: [number, number, number, number] | null;
+            // mgl collisionGroupID (placement.ts CollisionGroups): per-source
+            // group when the style disables cross-source collisions.
+            collisionGroup?: string;
         }
         const entries: Entry[] = [];
         const seen = new Set<string>();
@@ -395,6 +425,7 @@ export class MBStyleSymbolPlacement {
                         iconAllowOverlap: iconAllow,
                         iconRect,
                         textRect,
+                        collisionGroup: collisionGroupOf(el),
                     });
                 }
             }
@@ -479,19 +510,22 @@ export class MBStyleSymbolPlacement {
             let first = true;
             for (const rect of [e.iconRect, e.textRect]) {
                 if (!rect) { first = false; continue; }
-                const allow = first ? e.iconAllowOverlap : e.allowOverlap;
+                const allow = verdictAllowOf
+                    ? verdictAllowOf(e)
+                    : (first ? e.iconAllowOverlap : e.allowOverlap);
                 first = false;
                 // CollisionIndex x/y are the TOP-LEFT corner.
                 const lx = rect[0] - rect[2] / 2;
                 const ly = rect[1] - rect[3] / 2;
                 const fits = index.canPlace(lx, ly, rect[2], rect[3],
-                    allow, e.priority);
+                    allow, e.priority, e.collisionGroup);
                 if (fits) {
                     index.insert({
                         x: lx, y: ly, w: rect[2], h: rect[3],
                         featureId: String(e.el.featureId ?? e.el.text ?? ''),
                         allowOverlap: allow,
                         priority: e.priority,
+                        groupId: e.collisionGroup,
                     });
                     pushRect(rect, placedBoxes);
                     anyPlaced = true;

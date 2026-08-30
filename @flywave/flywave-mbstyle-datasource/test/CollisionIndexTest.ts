@@ -71,4 +71,15 @@ describe('CollisionIndex', () => {
         }
         expect(idx.placedCount).to.equal(100);
     });
+    it('crossSourceCollisions=false: same group collides, other group does not (mgl CollisionGroups)', () => {
+        const idx = new CollisionIndex();
+        const box = { x: 100, y: 100, w: 50, h: 50, featureId: 'a', allowOverlap: false, priority: 0 };
+        idx.insert({ ...box, groupId: 'source1' });
+        // Same group: rejected.
+        expect(idx.canPlace(120, 120, 50, 50, false, 0, 'source1')).to.be.false;
+        // Other group: mgl CollisionGroups predicate isolates sources.
+        expect(idx.canPlace(120, 120, 50, 50, false, 0, 'source2')).to.be.true;
+        // Default single-group (crossSourceCollisions true) still rejects.
+        expect(idx.canPlace(120, 120, 50, 50, false, 0)).to.be.false;
+    });
 });

@@ -702,6 +702,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_terrainSampler: ((x: number, y: number) => number) | null = null;
     /** Style declares terrain — mgl terrainEnabled equivalent (§514). */
     private m_styleHasTerrain = false;
+    private m_crossSourceCollisions = true;
     /** §548: live terrain exaggeration (line-elevation-ground-scale). */
     private m_terrainExaggeration = 1;
     private m_terrainHeightScale = 1;
@@ -791,6 +792,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             // only pay it when the style actually references HD road
             // elevation (mgl parses the elevation layer for every tile, but
             // only HD styles consume it).
+            this.m_crossSourceCollisions =
+                (style as any).metadata?.test?.crossSourceCollisions !== false;
             this.m_styleUsesHdElevation = (style.layers ?? []).some((l: any) => {
                 const ref = l.layout?.['fill-elevation-reference']
                     ?? l.layout?.['line-elevation-reference']
@@ -1036,6 +1039,10 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             emitter.setTerrainSampler(this.m_terrainSampler);
         }
         emitter.setStyleHasTerrain(this.m_styleHasTerrain);
+        // mgl crossSourceCollisions=false (test metadata): the engine's own
+        // POI placement must not cull across sources — placement verdicts
+        // come from MBStyleSymbolPlacement's per-source collision groups.
+        emitter.setCrossSourceCollisions(this.m_crossSourceCollisions);
         // §548: live exaggeration for line-elevation-ground-scale.
         emitter.setTerrainExaggeration(this.m_terrainExaggeration);
 

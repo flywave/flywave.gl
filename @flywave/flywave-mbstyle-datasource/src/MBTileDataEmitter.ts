@@ -431,6 +431,16 @@ export class MBTileDataEmitter {
     private m_terrainSampler: ((x: number, y: number) => number) | null = null;
 
     /**
+     * mgl crossSourceCollisions=false (test metadata): the engine's own POI
+     * placement must not cull anything — MBStyleSymbolPlacement's per-source
+     * collision groups own the placement verdicts (element.visible).
+     */
+    setCrossSourceCollisions(enabled: boolean): void {
+        this.m_crossSourceCollisions = enabled;
+    }
+    private m_crossSourceCollisions = true;
+
+    /**
      * §548: live terrain exaggeration (mgl u_exaggeration). Scales sea-level
      * line z-offsets by mix(1, exaggeration, line-elevation-ground-scale).
      */
@@ -1154,7 +1164,8 @@ export class MBTileDataEmitter {
                     // Native PoiBuilder reads `iconMayOverlap`/`iconReserveSpace`
                     // (NOT `mayOverlap`/`reserveSpace`); map `icon-allow-overlap` /
                     // `icon-ignore-placement` onto the native prop names.
-                    props.iconMayOverlap = l['icon-allow-overlap'] === true;
+                    props.iconMayOverlap = l['icon-allow-overlap'] === true
+                        || !this.m_crossSourceCollisions;
                     // mgl "symbols before 3D": symbol layers preceding
                     // fill-extrusion layers are depth-covered by the
                     // buildings (static per-style flag from the decoder).
@@ -1165,9 +1176,12 @@ export class MBTileDataEmitter {
                     // distanceScale equals that curve exactly at 0.5. The old
                     // constant 0 made far icons full-size at high pitch.
                     props.distanceScale = 0.5;
-                    props.mayOverlap = l['icon-allow-overlap'] === true;
-                    props.iconReserveSpace = l['icon-ignore-placement'] !== true;
-                    props.reserveSpace = l['icon-ignore-placement'] !== true;
+                    props.mayOverlap = l['icon-allow-overlap'] === true
+                        || !this.m_crossSourceCollisions;
+                    props.iconReserveSpace = l['icon-ignore-placement'] !== true
+                        && this.m_crossSourceCollisions;
+                    props.reserveSpace = l['icon-ignore-placement'] !== true
+                        && this.m_crossSourceCollisions;
                     if (l.visibility === 'none') props.enabled = false;
                 } else if (symbolMode === 'text' || (symbolMode === undefined && l['text-field'])) {
                     props.technique = 'text';
@@ -1267,6 +1281,11 @@ export class MBTileDataEmitter {
                     // distance — disable flywave's perspective distance scaling
                     // (default 0.5 shrinks off-center labels by up to ~25%).
                     props.distanceScale = 0;
+                    // Text: engine culling stays UNRELAXED even when
+                    // crossSourceCollisions=false — the upstream mgl expected
+                    // for text-no-cross-source-collision is an all-black frame
+                    // (label-generation artifact), so engine-side culling
+                    // scores closer; grouping verdicts alone can't reach it.
                     props.reserveSpace = l['text-ignore-placement'] !== true;
                     const textOffset = l['text-offset'] as number[] | undefined;
                     if (Array.isArray(textOffset)) {

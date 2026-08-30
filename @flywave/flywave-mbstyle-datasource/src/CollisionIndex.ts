@@ -6,6 +6,13 @@ export interface CollisionBox {
     featureId: string | number;
     allowOverlap: boolean;
     priority: number;
+    /**
+     * mgl CollisionGroups (placement.ts:125): when crossSourceCollisions is
+     * false, one source == one group and a box only collides with boxes of
+     * the SAME group (predicate on collisionGroupID). Undefined = the
+     * default single group (crossSourceCollisions true).
+     */
+    groupId?: string;
 }
 
 interface GridCell {
@@ -49,6 +56,7 @@ export class CollisionIndex {
         x: number, y: number, w: number, h: number,
         allowOverlap: boolean,
         priority: number,
+        groupId?: string,
     ): boolean {
         if (allowOverlap) return true;
 
@@ -58,6 +66,7 @@ export class CollisionIndex {
             if (!cell) continue;
             for (const other of cell.boxes) {
                 if (other.allowOverlap) continue;
+                if (groupId !== undefined && other.groupId !== groupId) continue;
                 if (this.intersects(x, y, w, h, other.x, other.y, other.w, other.h)) {
                     // mgl placeCollisionBox: ANY intersection with an
                     // already-placed box rejects — placement order (sorted
