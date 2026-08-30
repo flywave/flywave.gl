@@ -6596,3 +6596,9 @@ GPU 级替代取证（SpectorJS 离线不可用，改 in-page）：①`[MBProg]`
 **§596. z-only 写入者身份破案（第 24 轮，远带线终章，2026-08-30 终章十四）**：
 
 引擎侧定位：`DepthPrePass.ts:98`——**半透明网格（本夹具 fill-extrusion-opacity 0.4）的深度预 pass 克隆**：`createDepthPrePassMaterial` 以 `colorWrite=false` 写入挤出体剪影深度。**全案闭环**：远带被挤出体剪影的 z-only 深度覆盖（大体积 translucent 挤出群横跨视口）→ quad LESS/LEQUAL 恒拒 → 22-23 轮"远带不变"的物理根源。**与 §572b 门控的关系**：translucent 门本就为此类风格关 quad（+27k 教训）——**正确语义不是共存而是分层**：mgl 在主 pass 内先画受影背景再叠 translucent（render-to-texture 地形链的等价物），AfterRender overlay 无法复刻该层序。**终局修复单（引擎侧，更新）**：将阴影地面 quad 以受影背景形式并入主渲染 pass（mgl background-tile 语义）或改 DepthPrePass 前置写入后由 quad 以 EqualDepth 复用其深度（②变体：depthFunc=EQUAL @ 预 pass 深度）——后者仍需 quad 知晓预 pass 深度帧，属引擎接口级。**数据源层 24 轮正式终结**：机制✓帧✓采样✓阻断者身份✓语义定性✓。工作树净（375224 复核），会话 §554–§596 共 85 提交。
+
+**§597. 终局修复单第三变体实验（第 25 轮，渲染清单排除实锤，会话收束，2026-08-30 终章十五）**：
+
+变体"quad 并入主 pass"（m_scene + renderOrder −3000）：**375224 逐位基线**——**§549 的渲染清单排除对普通子树是绝对的**（该 quad 在 m_scene 中不被渲染，与 24 轮前的 carrierGroup 结论一致）。至此终局修复单的所有数据源侧变体穷尽：**唯一剩余 = MapView.render() 渲染循环内一行级插入**（在 `renderer.render(scene, camera)` 前先 `renderer.render(m_groundScene, m_groundCamera)`，或暴露 pre-scene hook 供 DS 注册）——属 @flywave/flywave-mapview 的 API 级扩展。已回退（375224 复核，工作树净）。
+
+**会话收束声明（§554–§597，86 提交）**：远带三域以五证闭环（机制/帧/采样/阻断者/语义）+ 三变体穷尽（LEQUAL/主 pass/无门）+ 一行级引擎修复单移交告终。主线成果保持：阴影链全语料 −49.6万（151 例 PASS）、indirect 家族 −36.6%、globe 两子项、interpolate 全局修复、4 子系统修活。
