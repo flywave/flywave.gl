@@ -6783,3 +6783,9 @@ per-node 逐节点 part 色求值（random(id) 家族）的前置是 mgl 3d-styl
 3. **时序**：vector 瓦片可能先于 GLB 解码——模型 build 完成后对已解码 vector 瓦片 `markTilesDirty(this)` 强制重解码（复用 §131/§1883 机制）。
 
 **验收标准**：z-offset-v2-port 系（391773/389147）拱廊立面出现且周边无关建筑（expected 顶部灰建筑群）不受影响；§553 遗留①关闭。风险：vector building 特征无 footprint id 时的环交精度；重解码时序抖动。
+
+**§635. conflation replacement 基础设施落地（§634 蓝图第一步实施，2026-08-31）**：
+
+三步全部落地：①`MBModelFootprints.ts` 注册表（lng/lat 框 + 序列化键去重，`registerBoxFromLocalBox` 返回是否新增）；②`MBDracoDecoder.decodeGlbTile` 提取节点 `mapbox:footprint:id`（nodeFootprints），draco 分支 footprint 节点**不再渲染**（mgl convertFootprints 移除语义，此前 draco 路径的 footprint 地面多边形被当作可见几何渲染——潜在修正点）；`MBBatchedModelDataSource.build` 尾部将 `__mbFootprint` 节点的世界 bbox 注册入表，新增覆盖时 `markTilesDirty(env)` 触发 vector 重解码（去重前曾引发无限重解码 6 分钟超时——重注册必须按 box 键去重，教训记档）；③`processPolygonFeature` 对 fill-extrusion 特征做 `pointInModelFootprint` 命中测试跳过发射。
+
+**现状**：z-offset-v2-port 分数不变（391773/389147）——29 个已注册框均位于渡轮大厅以北（大厅质心 37.7956 未命中任何框），替换未生效。**下轮取证点**：①draco 替身瓦片（mbx/2621-6332）footprint 的 y 镜像符号验证（draco 顶点已烘焙 y 镜像，转换方向可能反）；②meshopt 瓦片 footprint 框仅覆盖塔楼区，大厅 footprint 可能缺于 footprint 节点集（需在 6332 瓦片原始 meshopt 资产取证——上游亦缺该文件）；③退化方案：大厅质心手动扩框验证替换管线本身可见生效。
