@@ -1007,6 +1007,18 @@ export class MBEnvironmentManager {
      * horizon determines the gradient position.
      */
     private m_globeAtmo: THREE.Mesh | null = null;
+    // §570b: globe+fog — the space clear owns the canvas; the background
+    // layer must not override it (mgl draws background as fogged TILE
+    // geometry on the sphere; the flat clear is a mercator concept).
+    private m_globeFogActive = false;
+    private m_globeBgColor: THREE.Color | null = null;
+    private m_globeBgAlpha = 1;
+
+    get globeFogActive(): boolean { return this.m_globeFogActive; }
+    setGlobeBackground(color: THREE.Color, alpha: number): void {
+        this.m_globeBgColor = color;
+        this.m_globeBgAlpha = alpha;
+    }
 
     private disposeGlobeAtmosphere(): void {
         if (this.m_globeAtmo) {
@@ -1027,6 +1039,8 @@ export class MBEnvironmentManager {
      */
     private applyGlobeAtmosphere(fog: FogSpec | undefined, styleZoom: number): void {
         if (!fog) {
+            this.m_globeFogActive = false;
+            this.m_globeBgColor = null;
             this.disposeGlobeAtmosphere();
             if (this.m_fog) {
                 this.m_scene!.fog = null;
@@ -1090,6 +1104,7 @@ export class MBEnvironmentManager {
         // the atmosphere premultiplied over a transparent framebuffer).
         (this.m_mapView as any).clearColor = spaceColor.getHex();
         (this.m_mapView as any).clearAlpha = propAlpha(rawSpace);
+        this.m_globeFogActive = true;
 
         this.disposeGlobeAtmosphere();
         const material = new THREE.ShaderMaterial({
@@ -1110,6 +1125,9 @@ export class MBEnvironmentManager {
                 uFogColor: { value: new THREE.Vector4(fogColor.r, fogColor.g, fogColor.b, colorAlpha) },
                 uHighColor: { value: new THREE.Vector4(highColor.r, highColor.g, highColor.b, propAlpha(rawHigh)) },
                 uSpaceColor: { value: new THREE.Vector4(spaceColor.r, spaceColor.g, spaceColor.b, propAlpha(rawSpace)) },
+                uBgDisc: { value: this.m_globeBgColor ? 1 : 0 },
+                uBgDiscAlpha: { value: this.m_globeBgAlpha },
+                uBgDiscColor: { value: this.m_globeBgColor ?? new THREE.Color(1, 1, 1) },
             },
             vertexShader: `
                 varying vec2 vNdc;
@@ -1129,6 +1147,9 @@ export class MBEnvironmentManager {
                 uniform vec4 uFogColor;
                 uniform vec4 uHighColor;
                 uniform vec4 uSpaceColor;
+                uniform float uBgDisc;
+                uniform float uBgDiscAlpha;
+                uniform vec3 uBgDiscColor;
                 varying vec2 vNdc;
                 #define PI 3.141592653589793
                 void main() {
@@ -1138,7 +1159,20 @@ export class MBEnvironmentManager {
                     float distToCenter = length(closestPoint - uGlobePos);
                     float normDist = distToCenter / uGlobeRadius;
                     if (normDist < 0.98) {
-                        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+                        // §570b: with a background layer the disc carries the
+                        // fogged background (mgl tile-geometry background) —
+                        // approximate with the globe fog ramp.
+                        if (uBgDisc > 0.5) {
+                            // §570b: mgl paints the disc with the (lightly
+                            // fogged) background tile geometry — measured
+                            // essentially the flat background color, with a
+                            // limb blend into the atmosphere ramp.
+                            vec3 c0i = mix(uBgDiscColor.rgb, uSpaceColor.rgb,
+                                           smoothstep(0.975, 1.0, normDist));
+                            gl_FragColor = vec4(c0i, uBgDiscAlpha);
+                        } else {
+                            gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+                        }
                         return;
                     }
                     float theta = asin(clamp(distToCenter / length(uGlobePos), -1.0, 1.0));
@@ -1170,6 +1204,9 @@ export class MBEnvironmentManager {
             material.uniforms.uHorizonAngle.value = Math.acos(Math.min(1, dh / d));
             material.uniforms.uTanHalfFov.value = Math.tan((c.fov * Math.PI / 180) / 2);
             material.uniforms.uAspect.value = (c as THREE.PerspectiveCamera).aspect ?? 1;
+            material.uniforms.uBgDisc.value = this.m_globeBgColor ? 1 : 0;
+            material.uniforms.uBgDiscAlpha.value = this.m_globeBgAlpha;
+            if (this.m_globeBgColor) material.uniforms.uBgDiscColor.value.copy(this.m_globeBgColor);
         };
         this.m_scene!.add(this.m_globeAtmo);
 

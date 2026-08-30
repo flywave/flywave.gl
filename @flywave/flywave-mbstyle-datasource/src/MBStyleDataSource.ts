@@ -4078,6 +4078,15 @@ export class MBStyleDataSource extends TileDataSource {
                     }
                 }
                 if (this.mapView) {
+                    // §570b: on globe with fog the atmosphere's SPACE color owns
+                    // the canvas clear; the background becomes the fogged disc.
+                    try {
+                        if (this.m_environment?.globeFogActive
+                            && Number((this.mapView as any).projection?.type) === 1) {
+                            this.m_environment.setGlobeBackground(new THREE.Color(color), opacity);
+                            return;
+                        }
+                    } catch { /* fall through to the flat path */ }
                     const c = new THREE.Color(color);
                     // Mapbox 3D `lights` (lighting-3d-mode): the background is a
                     // ground layer → `color * u_ground_radiance` (mix toward

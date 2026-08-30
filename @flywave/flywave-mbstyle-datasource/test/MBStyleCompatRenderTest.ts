@@ -697,8 +697,16 @@ async function processOperations(
                 // §273: the fog branch (globe atmosphere + glow-progress
                 // content fog vs mercator chain) depends on the projection —
                 // rebuild it after the swap.
-                const fogEnv = (dataSource as any).m_environment;
-                fogEnv?.refreshFog?.();
+                // §570b: the background also re-applies AFTER the fog rebuild
+                // (arbitration reads globeFogActive) — every pre-swap
+                // applyBackgroundColor ran as mercator (flat clear); on globe
+                // the space clear + fogged disc must take over.
+                const fogEnv0 = (dataSource as any).m_environment;
+                fogEnv0?.refreshFog?.();
+                try {
+                    (dataSource as any).applyBackgroundColor?.(
+                        (dataSource as any).styleManager?.getStyle());
+                } catch { /* best-effort */ }
                 break;
             }
             case "setLights":
