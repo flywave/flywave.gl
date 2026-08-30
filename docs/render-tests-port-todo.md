@@ -6686,3 +6686,7 @@ CPU 侧投影（box 四角 × matrixWorld × 逻辑相机 vp）：**inst5（早�
 **§618. RTE 帧投影裁决（第 46 轮，破案：位置错误 ~6 瓦片，2026-08-30 终章三十六）**：
 
 RTE 帧（getRteCamera）投影探针——**同帧对比**：inst5（可见中心树）w=844；inst400（邻瓦片树）**w=8012**、ndc(-0.47, 1.57)（顶边外）。**破案**：邻瓦片树不是"零光栅化"，而是**位置错误**——落在 ~7200m 外（≈6 个 z15 瓦片距），全部出屏 → 2403 draw call 全部画在屏外 → 像素逐位不变。与 §616 数据自洽（draw✓但屏外）。**根因方向（具体 bug）**：`decodeTileWithSources` 对 instancesOnly 子瓦片虽传入 exKey，但 emitter 的实例世界坐标仍有 cell 帧残留（疑 `m_decodeInfo`/`worldPerLinUnit`/projectWorld 缓存跨调用泄漏，或 stash 时机导致 child 解码用了 cell 的 DecodeInfo）。**下轮入口（单点）**：在 emitter 实例 push 处 dump 邻瓦片实例的 (x,y) vs 手算该邻瓦片中心的绝对坐标，一次定位残留源。46 轮调查由此从"GPU 之谜"翻转为"确定的位置计算 bug"——SpectorJS 依赖解除。会话 §554–§618 共 107 提交，工作树净（375224 复核）。
+
+**§619. 实例坐标对拍（第 47 轮，decode 位置证明正确，§618 结论修正，会话终局，2026-08-30 终章三十七）**：
+
+逐瓦片 dump（emitter push 处，per-tile 首实例 vs 该瓦片 DecodeInfo.center）：**6 个瓦片（5241-5243 × 12663-12664）的 center 与 firstInst 全部一致对应**（如 5243/12664 center=6412761,24586429 / inst=6412229,24587045——同瓦片内偏移 ~1km 以内合法）——**decode 链实例坐标正确，§618 的"cell 帧残留"假设否定**。§618 的 w=8012 系探针在 setTimeout(4s) 时测到解码翻腾期的陈旧 matrixWorld（或 rebase 换算现象），非位置 bug。**47 轮终局归档**：decode✓/placement✓/instantiate✓/scene✓/drawcall✓（2403/帧）——所有 CPU 层环节全部实证正确，像素贡献为 0 的矛盾**只剩 GPU 帧下的变换/重基换算一层**（真 SpectorJS 域）。工作树净（375224 复核），会话 §554–§619 共 108 提交。
