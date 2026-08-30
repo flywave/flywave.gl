@@ -6758,3 +6758,5 @@ per-node 逐节点 part 色求值（random(id) 家族）的前置是 mgl 3d-styl
 | window 天侧 | (8,111,166) | (48,159,189) | 同上，expected 面内均匀（无逐面明暗） |
 
 **判定**：光照洗涤注入**存在且在工作**（`applyMglModelLighting`→uMB3DAmb/uMB3DDirColor 半球近似，§557），但蓝通道系统性压制：pattern = expected 相对我方 B 通道一致偏高、面内明暗变化更平（expected window 面内均匀=近似逐面 NdotL 项过强）。两点定位：① hemisphere 近似的 `mbK` 蓝/红通道响应曲线（·mgl computeLightContribution 的白光在被照面产生近白洗涤，我方 B 被线性乘法吃掉——albedo 顶点色按 sRGB 字节直写而 three 按线性消费，B=102/255 的低值最受伤）；② expected window 面内均匀提示 mgl 对 features-tile 的 lit 项权重更低（unlit 占比更高）。**修复方向**（引擎/数据源 shader 注入层，下轮）：把 splitByPart 顶点色的 baked 值做 sRGBToLinear 后再写 attribute（或 shader 内转换）——B 通道 0.4→0.132 的线性化将同时抬升受洗墙体的蓝通道并压 window 饱和度，与 expected 双向吻合。
+
+**§631b. 更正（同日）**：§631 的"顶点色 sRGB 直写嫌疑"**证伪**——splitByPart/refreshSplit 的 `colors[]` 早已 `srgbToLinear()` 转换后写入（MBMeshFeatures.ts :704/:873）。蓝通道压制的候选收窄至：① hemisphere `mbK` 的 `mbAmbDir/mbVert` 校准项本身（白光 ambient 0.3 线性=0.3，乘到 albedo 上三通道等权——无法解释 B 选择性压制，指向 mbLit 之后的 sRGB 输出编码与 mgl 输出路径的曲线差）；② mgl 对 features-tile 的 unlit 占比更高（expected window 面内均匀佐证）。下轮：对 `uMB3DUnlit` 做 0.2/0.4 小步 A/B（一行常量改动，doors 批 + xray/duplicate 回归对照），若 window 去饱和与墙体 B 抬升同时收敛即锁定。
