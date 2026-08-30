@@ -6736,3 +6736,7 @@ mgl `hillshade_program.ts:74-91` 方向合成语义完整解码：azimuthal=pain
 **§628. model-layer §554 路线——引擎颜色格式化丢 alpha 破案（2026-08-30 续廿六）**：
 
 landmark-part-styling-indirect-doors（model-color 为 `["match",["get","part"],…]` 多分支 + window 分支 `interpolate(measure-light)` 蓝色 rgba α=0.8~0.9）放大对拍：我方 window 渲染为**不透明饱和蓝**、expected 为 α≈0.875 半透明蓝（可透视）。node 离线实证：`["rgba",0,149,230,0.8]` 端点在 `MBExpressionEngine.rgbToHex` 求值时即降级 '#rrggbb'（alpha 丢弃），后续 interpolate 按 1↔1 不透明端点插值。**修复**：rgbToHex 对 a<1 输出 `rgba(r, g, b, a)`（不用 #rrggbbaa——THREE.Color.setStyle 拒绝 8 位 hex 并退化为 white，实测）。**验收**：doors **424977→264130（−38%）**、-lod **348115→265396（−24%）**；回归批（text-anchor 10 例 ±34~42 噪声、raster-opacity 3 例 0、background-color 0、image_raster-opacity 1）无退化；单测 300 绿。对拍方法论记档：fixture 蓝图定位优先放大 actual/expected 局部读色值（本例从"match 桶泄漏"假设转为"alpha 丢失"实锤，全靠局部色值对比）；另 karma 启动必须在仓库根（cwd 在包内时 ChromeHeadlessNoSandbox launcher 不注册）。
+
+**§629. indirect-update 家族批测——§628 alpha 修复受益面量化（2026-08-30 续廿七）**：
+
+对照 §628 修复前基线（mbstyle-rerun-3di-ml，本会话起点）：indirect-update **857513→241519（−72%）**、update-doors **616617→553860（−10%）**、update-doors-lod **613755→519421（−15%）**；同批 xray/duplicate/emission-strength 与 §553 值逐位一致（不透明 model-color 不受影响，反向验证修复精确性）。update 家族剩余残差定性（actual/expected 放大对拍）：几何与部件对位良好，残差在**色域饱和度/亮度域**——我方 window 带亮蓝、door 光束过饱和、墙体偏暗棕，expected 整体柔和（mix 后受光照洗涤 + alpha 合成的复合效果）。属 §554 遗留②（featureless tile 逐节点逐 part 色求值）与 lighting 洗涤校准的后续工作，本轮不再展开。
