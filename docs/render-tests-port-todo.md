@@ -6626,3 +6626,7 @@ GPU 级替代取证（SpectorJS 离线不可用，改 in-page）：①`[MBProg]`
 **§603. 树位置配对裁决（第 31 轮，'树小'定案，2026-08-30 终章二十一）**：
 
 green 像素最近邻直方图（cur 1455 / exp 3717 采样，面积比 1:2.55）：**cur→exp 方向全部命中 ≤64px（63% 在 ≤8px）**——我方每棵树都与 expected 某树重叠（**位置正确、无缺树**）；**exp→cur 方向仅 27% ≤8px、大质量落在 16-64px**——expected 的树覆盖面积 ≈2.5× 于我方。**裁决：'树小'**（canopy 面积不足），非缺树/非错位。**根因候选（按序）**：①model-scale 的 %id 桶在实例化端的单位换算（§564 离线验证引擎正确，但 MBModelRenderer 实例矩阵的 scale 应用链未对拍 mgl evaluateTransform 的语义——mgl model-scale 单位=米×地球半径比？）；②glb 模型自身基准尺寸差异（lod2 glb 的内在 scale）；③rotation 桶（%id 4 的 50°/120° 旋转改变投影面积）。**下轮单点**：dump 3 棵已配对树的（实例 scale 矩阵 vs mgl calculateModelMatrix 同 id）对拍。会话 §554–§603 共 92 提交。
+
+**§604. 实例 scale 对拍（第 32 轮，桶分布正确，根因收窄到帧换算，2026-08-30 终章二十二）**：
+
+`[MBScale]` 直方图：**[3,3.25,3]×32 / [5.2,5.1,5.1]×31 / [1.8,1.9,1.8]×28**——model-scale 的 %id 桶在实例化端**分布完全正确**（1/3 均分）。**根因收窄**：mgl `calculateModelMatrix` 的世界矩阵 = `translate(px) × scale(modelPixelsPerMeter) × rotationScaleYZFlip(orientation+rotation, paintScale)`——**glb(米) 先乘 pixelsPerMeter 进入 mercator 像素世界，paintScale 在其内层**；我方矩阵 = `rotation × scale(paintScale) × glb(米)` 直挂引擎世界帧——**缺 mpp 帧换算因子**（z17.5 时 ≈6.7，但实测面积比仅 1:2.55 → 直径 1.6×——非纯 mpp 差，疑引擎帧本身已部分缩放或 glb 基准不同）。**下轮单点**：dump 我方树的最终 world matrix 三轴长度 vs mgl 同 id 矩阵三轴长度（一次对拍定差商），再按差商补换算因子。会话 §554–§604 共 93 提交。
