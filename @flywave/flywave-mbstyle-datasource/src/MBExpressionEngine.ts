@@ -1362,6 +1362,12 @@ export class MBExpressionEngine {
     private static rgbToHex(r: number, g: number, b: number, a: number): string {
         const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
         const hex = (v: number) => clamp(v).toString(16).padStart(2, '0');
+        // mgl color values keep their alpha: a partial-alpha stop must not
+        // degrade to '#rrggbb' or a later interpolate/step over it renders
+        // opaque (§628 — model-color window alpha 0.8 was lost here). rgba()
+        // form — THREE.Color.setStyle rejects 8-digit hex (falls back to
+        // white), so rgba() is the only universally parseable form.
+        if (a < 1) return `rgba(${clamp(r)}, ${clamp(g)}, ${clamp(b)}, ${+((a * 1000) / 1000).toFixed(4)})`;
         return `#${hex(r)}${hex(g)}${hex(b)}`;
     }
 
