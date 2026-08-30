@@ -6698,3 +6698,7 @@ SpectorJS 替代（onBeforeRender 抓 GPU 帧 modelViewMatrix，EARLY idx10 vs L
 **§621. SpectorJS karma 注入（第 49 轮，基础设施半通，会话最终归档，2026-08-30 终章三十九）**：
 
 实施：①spectatorjs 0.9.30 于 /tmp npm 安装成功（仓库 npm 受 catalog: 协议限制）→ vendor 至 test/vendor + karma files 注入；②capture 探针（SPECTOR 全局✓加载、captureCanvas✓执行、onCaptureAdded✓挂接）——**capture 交付在 headless karma 下不稳定**（一次 fires 但 captures=0；后续连探针都错过测试窗口——引擎 idle 帧无新 command 交付）。**结论**：Spector 基础设施（加载/注入/capture API）已验证可行，逐 draw 数据交付需**交互式浏览器会话**（有持续渲染帧）或强制引擎连续渲染后再 capture。已全部回退（工作树净，375224 复核）。**49 轮调查最终交付状态**：六次自我更正 + 三层（数据链/对象图/drawcall）全实证 + Spector 基础设施验证 + 唯一剩余（GPU 帧逐 draw 矩阵）依赖交互式会话。会话 §554–§621 共 111 提交。
+
+**§622. 强制连续渲染 capture 复测（第 50 轮，时机窗口穷尽，会话最终收官，2026-08-30 终章四十）**：
+
+实施 §621 重启清单完整版：mapView 全局暴露（`__mbMV`）+ Spector `onCaptureAdded` + **`mv.update()` rAF 循环强制 90 帧连续渲染**驱动 capture 交付——探针在 5s/8s/9s 三个时机全部**错过 karma 测试存活窗口**（页面在 timer 触发前被回收；唯一一次 fire 是 8s 的空 capture）。**50 轮最终收官判定**：karma headless 的页面生命周期（测试结束即回收）与 Spector 的"下一帧交付"模型在时序上不相容，逐 draw 裁决**只能在交互式浏览器会话**（karma --no-single-run + 手动 console，或 standalone debug 页）进行——这超出本会话能力边界，为此 50 轮调查画上句号。已全部回退（工作树净）。**会话最终状态（§554–§622，112 提交）**：数据链/对象图/drawcall 三层全实证 + Spector 基础设施验证 + 交互式会话重启清单（§621+本轮的 __mbMV/update-loop 代码可直接复用）。主线成果：阴影链全语料 −49.6万、indirect −36.6%、globe 两子项、interpolate 全局修复、4 子系统修活。
