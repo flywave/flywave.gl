@@ -1,77 +1,69 @@
 import * as THREE from 'three';
 
 /**
- * §634 conflation replacement registry: world-space (lng/lat) bounding boxes
- * of GLB model footprint nodes (`mapbox:footprint:id`). mgl's conflation
- * replaces fill-extrusion buildings with 3D models where they overlap — the
- * data source skips extruding a polygon whose centroid falls inside a model
- * footprint box.
+ * §634/§638 conflation replacement registry: world-space (lng/lat) footprint
+ * RINGS of GLB model footprint nodes (`mapbox:footprint:id`). mgl's
+ * conflation replaces fill-extrusion buildings with 3D models where their
+ * footprints overlap — the data source skips extruding a polygon whose
+ * representative point falls inside a model footprint ring.
+ * Ring (not bbox) matching: bbox approximation over-suppressed adjacent
+ * buildings in the conflation-padding fixtures (§638: intersect-padding-lod
+ * +39432).
  */
-export interface ModelFootprintBox {
+export interface ModelFootprint {
+    ring: number[][]; // [lng, lat][]
     minLng: number;
     minLat: number;
     maxLng: number;
     maxLat: number;
 }
 
-const boxes: ModelFootprintBox[] = [];
+const footprints: ModelFootprint[] = [];
 const seen = new Set<string>();
-const MAX_BOXES = 50000;
+const MAX_FOOTPRINTS = 20000;
 
-/** Registers a box; returns false when it was already registered (re-decode
- * of the same tile) so callers only react to genuinely new coverage. */
-export function registerModelFootprintBox(box: ModelFootprintBox): boolean {
-    const key = `${box.minLng.toFixed(7)},${box.minLat.toFixed(7)},${box.maxLng.toFixed(7)},${box.maxLat.toFixed(7)}`;
+/** Registers a footprint ring (dedup by rounded vertices). Returns false when
+ * already registered (re-decode of the same tile) so callers only react to
+ * genuinely new coverage. */
+export function registerModelFootprintRing(ring: number[][]): boolean {
+    if (ring.length < 3) return false;
+    const key = ring.map((p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`).join(';');
     if (seen.has(key)) return false;
     seen.add(key);
-    if (boxes.length < MAX_BOXES) boxes.push(box);
+    if (footprints.length >= MAX_FOOTPRINTS) return true;
+    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+    for (const p of ring) {
+        if (p[0] < minLng) minLng = p[0];
+        if (p[0] > maxLng) maxLng = p[0];
+        if (p[1] < minLat) minLat = p[1];
+        if (p[1] > maxLat) maxLat = p[1];
+    }
+    footprints.push({ ring, minLng, minLat, maxLng, maxLat });
     return true;
 }
 
-export function getModelFootprintBoxes(): readonly ModelFootprintBox[] {
-    return boxes;
-}
-
 export function getModelFootprintBoxCount(): number {
-    return boxes.length;
+    return footprints.length;
 }
 
-/** True when (lng, lat) falls inside any registered model footprint box. */
-export function pointInModelFootprint(lng: number, lat: number): boolean {
-    for (const b of boxes) {
-        if (lng >= b.minLng && lng <= b.maxLng && lat >= b.minLat && lat <= b.maxLat) {
-            return true;
+function pointInRing(lng: number, lat: number, ring: number[][]): boolean {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i][0], yi = ring[i][1];
+        const xj = ring[j][0], yj = ring[j][1];
+        if (((yi > lat) !== (yj > lat)) &&
+            (lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi)) {
+            inside = !inside;
         }
     }
-    return false;
+    return inside;
 }
 
-/** Convert a tile-local Box3 (x east m, y south m, centered on tile center)
- * into a lng/lat footprint box and register it. */
-export function registerBoxFromLocalBox(
-    box: THREE.Box3,
-    centerLng: number,
-    centerLat: number,
-    /** meshopt grid y is NORTH-positive (loader centers with +4096 offset);
-     * draco vertices have the y mirror baked (south-positive). */
-    yNorthPositive: boolean,
-): boolean {
-    if (!isFinite(box.min.x) || !isFinite(box.max.x) || !isFinite(box.min.y) || !isFinite(box.max.y)) {
-        return false;
+/** True when (lng, lat) falls inside any registered model footprint ring. */
+export function pointInModelFootprint(lng: number, lat: number): boolean {
+    for (const fp of footprints) {
+        if (lng < fp.minLng || lng > fp.maxLng || lat < fp.minLat || lat > fp.maxLat) continue;
+        if (pointInRing(lng, lat, fp.ring)) return true;
     }
-    const cosLat = Math.max(0.01, Math.cos(centerLat * Math.PI / 180));
-    const metersPerDegLng = 111320 * cosLat;
-    const metersPerDegLat = 110574;
-    const minLng = centerLng + box.min.x / metersPerDegLng;
-    const maxLng = centerLng + box.max.x / metersPerDegLng;
-    let minLat: number, maxLat: number;
-    if (yNorthPositive) {
-        minLat = centerLat + box.min.y / metersPerDegLat;
-        maxLat = centerLat + box.max.y / metersPerDegLat;
-    } else {
-        // local y SOUTH-positive: y max = southern edge = min lat.
-        minLat = centerLat - box.max.y / metersPerDegLat;
-        maxLat = centerLat - box.min.y / metersPerDegLat;
-    }
-    return registerModelFootprintBox({ minLng, minLat, maxLng, maxLat });
+    return false;
 }

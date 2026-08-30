@@ -36,7 +36,7 @@ import type { Projection } from '@flywave/flywave-geoutils';
 import { applyMglModelLighting, syncMglModelLighting } from './MBModelRenderer';
 import { refreshMeshFeatures } from './MBMeshFeatures';
 import { decodeGlbTile, parseGlb, TileMaterialData, TileMaterialized, TilePrimitiveData } from './MBDracoDecoder';
-import { getModelFootprintBoxCount, registerBoxFromLocalBox } from './MBModelFootprints';
+import { getModelFootprintBoxCount, registerModelFootprintRing } from './MBModelFootprints';
 import { applyMeshFeatures, applyModelFrontCutoff, applyModelFarCutoff, mglMeasureLightBrightness } from './MBMeshFeatures';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { shadowCasters } from './MBShadowRenderer';
@@ -479,12 +479,30 @@ class MBBatchedModelDecoder implements ITileDecoder {
             try {
                 inner.updateMatrixWorld(true);
                 const n = Math.pow(2, tileKey.level);
+                const latRad = tileCenterLatRad(tileKey);
+                const cLat = latRad * 180 / Math.PI;
                 const cLng = (tileKey.column + 0.5) / n * 360 - 180;
-                const cLat = tileCenterLatRad(tileKey) * 180 / Math.PI;
+                const cosLat = Math.max(0.01, Math.cos(latRad));
+                const metersPerDegLng = 111320 * cosLat;
+                const metersPerDegLat = 110574;
                 const beforeBoxes = getModelFootprintBoxCount();
+                const v = new THREE.Vector3();
                 inner.traverse((o: any) => {
                     if (!o.isMesh || o.userData?.__mbFootprint !== true) return;
-                    registerBoxFromLocalBox(new THREE.Box3().setFromObject(o), cLng, cLat, meshopt);
+                    const pos = o.geometry?.getAttribute?.('position');
+                    if (!pos || pos.count < 3) return;
+                    // Node world transform → tile-center meters (x east, y
+                    // north) → lng/lat ring. matrixWorld carries the meshopt/
+                    // draco y-mirror conventions, so no local sign handling.
+                    const ring: number[][] = [];
+                    for (let i = 0; i < pos.count; i++) {
+                        v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+                        ring.push([
+                            cLng + v.x / metersPerDegLng,
+                            cLat + v.y / metersPerDegLat,
+                        ]);
+                    }
+                    registerModelFootprintRing(ring);
                 });
                 // Models arrived after the vector tiles decoded: force a
                 // re-decode so the extrusion suppression takes effect. Only on
