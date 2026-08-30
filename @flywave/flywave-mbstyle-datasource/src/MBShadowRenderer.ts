@@ -53,6 +53,16 @@ export class MBShadowRenderer {
     private m_matrix = new THREE.Matrix4();
     private m_enabled = false;
     private m_intensity = 0;
+    // §560: ground shadow receiver — mgl shades the BACKGROUND as a ground
+    // layer (`background × groundRadiance × groundShadow`); our background is
+    // the engine clearColor, so an mgl-style screen-space quad (fog-renderer
+    // pattern — NDC rasterization at depth ≈1, world position from
+    // unprojecting the screen corners onto the z=0 ground plane) carries the
+    // shadow factor over true background fragments only.
+    private m_groundQuad: THREE.Mesh | null = null;
+    private m_groundUniforms: any = null;
+    private m_groundScene = new THREE.Scene();
+    private m_groundCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
     constructor(
         private m_mapView: any,
@@ -66,6 +76,11 @@ export class MBShadowRenderer {
     setLightState(enabled: boolean, intensity: number): void {
         this.m_enabled = enabled;
         this.m_intensity = intensity;
+        if (!this.enabled && this.m_groundQuad) {
+            this.m_groundScene.remove(this.m_groundQuad);
+            this.m_groundQuad = null;
+            this.m_groundUniforms = null;
+        }
     }
 
     get enabled(): boolean {
@@ -80,6 +95,140 @@ export class MBShadowRenderer {
             matrix: this.m_matrix,
             intensity: this.m_intensity,
         };
+    }
+
+    private ensureGroundQuad(): void {
+        if (this.m_groundQuad) return;
+        const geo = new THREE.PlaneGeometry(2, 2);
+        const mat = new THREE.ShaderMaterial({
+            uniforms: {
+                uMBGC: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
+                uMBProjView: { value: new THREE.Matrix4() },
+                uMBEye: { value: new THREE.Vector3() },
+                uMBShadowMap: { value: null },
+                uMBShadowMatrix: { value: new THREE.Matrix4() },
+                uMBGroundShadowFactor: { value: new THREE.Vector3(0, 0, 0) },
+                uMBGroundColor: { value: new THREE.Color(0xffffff) },
+            },
+            vertexShader: `
+                varying vec3 vMBWorldPos;
+                uniform vec3 uMBGC[4];
+                uniform mat4 uMBProjView;
+                void main() {
+                    vMBWorldPos = mix(mix(uMBGC[0], uMBGC[1], uv.x),
+                                      mix(uMBGC[3], uMBGC[2], uv.x), uv.y);
+                    // Route through the REAL camera so the varying gets
+                    // perspective-correct interpolation (an NDC quad with
+                    // w=1 interpolates world pos affinely — wrong), while
+                    // forcing depth ~1 (behind all content).
+                    vec4 cp = uMBProjView * vec4(vMBWorldPos, 1.0);
+                    gl_Position = vec4(cp.xy, 0.9999 * cp.w, cp.w);
+                }`,
+            fragmentShader: `
+                varying vec3 vMBWorldPos;
+                uniform sampler2D uMBShadowMap;
+                uniform mat4 uMBShadowMatrix;
+                uniform vec3 uMBGroundShadowFactor;
+                uniform vec3 uMBGroundColor;
+                uniform vec3 uMBEye;
+                void main() {
+                    vec4 mbShadowUv = uMBShadowMatrix * vec4(vMBWorldPos - uMBEye, 1.0);
+                    float mbLit = 1.0;
+                    if (mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
+                        mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
+                        vec4 mbPk = texture2D(uMBShadowMap, mbShadowUv.xy);
+                        float mbShadowDepth = mbPk.r + mbPk.g / 255.0;
+                        mbLit = mbShadowUv.z <= mbShadowDepth + 0.002 ? 1.0 : 0.0;
+                    }
+                    // The engine clear color reaches the canvas in sRGB; our
+                    // raw ShaderMaterial output must be encoded to match
+                    // (mgl blends the factor in sRGB space — we compose in
+                    // linear and encode once, so the factor stays linear).
+                    vec3 mbOut = uMBGroundColor * mix(uMBGroundShadowFactor, vec3(1.0), mbLit);
+                    gl_FragColor = vec4(pow(mbOut, vec3(1.0 / 2.2)), 1.0);
+                }`,
+            depthTest: true,
+            depthWrite: false,
+        });
+        const quad = new THREE.Mesh(geo, mat);
+        quad.name = 'MBShadowGroundQuad';
+        quad.frustumCulled = false;
+        this.m_groundQuad = quad;
+        this.m_groundScene.add(quad);
+        this.m_groundUniforms = mat.uniforms;
+    }
+
+    /** Unproject one NDC corner onto the z=0 ground plane (far clamp on sky). */
+    private cornerOnGround(
+        cam: THREE.PerspectiveCamera, camPos: THREE.Vector3,
+        ndcX: number, ndcY: number, far: number, out: THREE.Vector3,
+    ): void {
+        // Standard unproject: NDC (z=-1, near plane) → view → world.
+        const v = new THREE.Vector4(ndcX, ndcY, -1, 1)
+            .applyMatrix4(cam.projectionMatrixInverse);
+        const dir = new THREE.Vector3(v.x / v.w, v.y / v.w, v.z / v.w)
+            .applyMatrix4(cam.matrixWorld)
+            .sub(camPos)
+            .normalize();
+        const t = dir.z < -1e-6 ? -camPos.z / dir.z : far;
+        out.copy(camPos).addScaledVector(dir, Math.min(Math.abs(t), far));
+    }
+
+    private syncGroundQuad(center: THREE.Vector3, radius: number, eye: THREE.Vector3): void {
+        this.ensureGroundQuad();
+        const renderer = this.m_mapView?.renderer as THREE.WebGLRenderer | undefined;
+        // The RTE render camera keeps an IDENTITY world matrix (rebase lives
+        // in the projection) — useless for unprojection. The logical camera
+        // carries the real view; the quad itself is screen-space so the
+        // render camera is our own ortho anyway.
+        const cam = this.m_mapView?.camera as THREE.PerspectiveCamera | undefined;
+        if (!renderer || !cam) return;
+        cam.updateMatrixWorld();
+        const camPos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
+        const far = radius * 8;
+        const corners = this.m_groundUniforms.uMBGC.value as THREE.Vector3[];
+        this.cornerOnGround(cam, camPos, -1, -1, far, corners[0]);
+        this.cornerOnGround(cam, camPos, 1, -1, far, corners[1]);
+        this.cornerOnGround(cam, camPos, 1, 1, far, corners[2]);
+        this.cornerOnGround(cam, camPos, -1, 1, far, corners[3]);
+        // The shadow camera lives in the eye-rebased scene frame — bring the
+        // absolute-world corners into the SAME frame (casters' worldPos z
+        // also carries −eye.z, so the ground plane here is z = −eye.z).
+        // Corners stay ABSOLUTE — the fragment shader rebases by uMBEye.
+        this.m_groundUniforms.uMBProjView.value
+            .multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+        this.m_groundUniforms.uMBEye.value.copy(eye);
+        this.m_groundUniforms.uMBShadowMap.value = this.m_shTex;
+        this.m_groundUniforms.uMBShadowMatrix.value = this.m_matrix;
+        // mgl calculateGroundShadowFactor: shadow = ambient/(ambient+dir·NdotL)
+        // per channel, sRGB-encoded (shadow_utils.ts) — NOT 1 − shadow-intensity.
+        {
+            const ls = (this.m_dataSource as any).m_environment?.lighting3DState;
+            const f = this.m_groundUniforms.uMBGroundShadowFactor.value;
+            if (ls) {
+                const ndl = Math.max(ls.dir[2], 0);
+                for (let i = 0; i < 3; i++) {
+                    const a = ls.ambientColorLinear[i];
+                    const d = ls.directionalColorLinear[i] * ndl;
+                    f.setComponent(i, a > 0 ? a / (a + d) : 0);
+                }
+            }
+        }
+        // The clear color already carries color × groundRadiance (mgl
+        // background semantics — MBStyleDataSource.applyBackgroundColor).
+        const clear = (this.m_mapView as any).clearColor;
+        if (clear !== undefined) this.m_groundUniforms.uMBGroundColor.value.setHex(clear);
+        // Draw over the finished frame (AfterRender pattern).
+        const prevAutoClear = renderer.autoClear;
+        const prevRT = renderer.getRenderTarget();
+        try {
+            renderer.autoClear = false;
+            renderer.setRenderTarget(null);
+            renderer.render(this.m_groundScene, this.m_groundCamera);
+        } finally {
+            renderer.autoClear = prevAutoClear;
+            renderer.setRenderTarget(prevRT);
+        }
     }
 
     /** Per-frame entry point (AfterRender; one-frame uniform lag like heatmap). */
@@ -123,7 +272,10 @@ export class MBShadowRenderer {
                 preserveDrawingBuffer: true,
             });
             this.m_shRenderer.setSize(size, size, false);
-            this.m_shRenderer.setClearColor(0x000000, 1);
+            // §522 root cause: the packed-depth canvas must clear to WHITE
+            // (depth 1 = far) — a black clear reads as depth 0 (nearest) and
+            // shadows the ENTIRE ground (the frozen "uniform darkening").
+            this.m_shRenderer.setClearColor(0xffffff, 1);
             this.m_shTex = new THREE.CanvasTexture(canvas);
             this.m_shTex.minFilter = THREE.NearestFilter;
             this.m_shTex.magFilter = THREE.NearestFilter;
@@ -137,31 +289,66 @@ export class MBShadowRenderer {
         if (target && Number.isFinite(target.x) && Number.isFinite(target.y) && Number.isFinite(target.z)) {
             center.copy(target);
         }
+        const eye = new THREE.Vector3();
         try {
             const gc = (this.m_mapView as any).geoCenter;
             const pr = (this.m_mapView as any).projection;
             if (gc && pr) {
-                const eye = pr.projectPoint(gc, { x: 0, y: 0, z: 0 });
-                center.sub(eye as any);
+                const e = pr.projectPoint(gc, { x: 0, y: 0, z: 0 });
+                eye.set((e as any).x, (e as any).y, (e as any).z ?? 0);
+                center.sub(eye);
             }
         } catch {}
         if (!Number.isFinite(center.x) || !Number.isFinite(center.y) || !Number.isFinite(center.z)) {
             center.set(0, 0, 0);
         }
-        const lightDir = (this.m_dataSource as any).m_environment
-            ?.lighting3DState?.dir as THREE.Vector3 | undefined;
-        if (!lightDir) return;
+        // §560: the shadow camera uses the mgl-EXACT direction conversion
+        // (sphericalDirectionToCartesian: a = azimuth + 90°) — the general
+        // lighting state's 90−az is a §455 wall-shading calibration and
+        // points the shadow the mirrored way.
+        const dirProp = (this.m_dataSource as any).m_environment
+            ?.m_3DDirectional?.direction as [number, number] | undefined;
+        const dirArr = (this.m_dataSource as any).m_environment
+            ?.lighting3DState?.dir as number[] | undefined;
+        if (!dirProp && !dirArr) return;
+        let lightDir: THREE.Vector3;
+        if (dirProp) {
+            const a = (dirProp[0] + 90) * Math.PI / 180;
+            const pl = dirProp[1] * Math.PI / 180;
+            lightDir = new THREE.Vector3(
+                Math.cos(a) * Math.sin(pl), Math.sin(a) * Math.sin(pl), Math.cos(pl));
+        } else {
+            const d = dirArr!;
+            lightDir = new THREE.Vector3(d[0], d[1], d[2]);
+        }
+        if (!Number.isFinite(lightDir.x)) return;
 
-        const radius = Math.max(50, (this.m_mapView as any).targetDistance ?? 500);
+        // §560: frame the ortho around the CASTERS' union AABB (worldCenter
+        // sits at the camera target, but tiles can be a km+ away — a
+        // targetDistance-sized box missed them entirely).
+        const casterBox = new THREE.Box3();
+        let haveBox = false;
+        for (const obj of shadowCasters) {
+            obj.updateWorldMatrix?.(true, false);
+            const b = new THREE.Box3().setFromObject(obj);
+            if (!b.isEmpty()) { casterBox.union(b); haveBox = true; }
+        }
+        let frameCenter = center.clone();
+        let radius = Math.max(50, (this.m_mapView as any).targetDistance ?? 500);
+        if (haveBox) {
+            frameCenter = casterBox.getCenter(new THREE.Vector3());
+            const sz = casterBox.getSize(new THREE.Vector3());
+            radius = Math.max(50, Math.max(sz.x, sz.y, 1) * 0.75);
+        }
         this.m_shadowCamera.left = -radius;
         this.m_shadowCamera.right = radius;
         this.m_shadowCamera.top = radius;
         this.m_shadowCamera.bottom = -radius;
         this.m_shadowCamera.near = 0.1;
         this.m_shadowCamera.far = radius * 4;
-        this.m_shadowCamera.position.copy(center).addScaledVector(lightDir, radius * 2);
+        this.m_shadowCamera.position.copy(frameCenter).addScaledVector(lightDir, radius * 2);
         this.m_shadowCamera.up.set(0, 0, 1);
-        this.m_shadowCamera.lookAt(center);
+        this.m_shadowCamera.lookAt(frameCenter);
         this.m_shadowCamera.updateProjectionMatrix();
         this.m_shadowCamera.updateMatrixWorld();
 
@@ -205,7 +392,7 @@ export class MBShadowRenderer {
             }
         }
         // §530 probe: 8×8 sample of the depth canvas (shadowdbg diagnostics).
-        if ((globalThis as any).__mbDecodeDbg) {
+        if ((globalThis as any).__mbDecodeDbg || (globalThis as any).__mbShadowEnable) {
             try {
                 const c2: HTMLCanvasElement = (this as any).__mbDbg2d ??
                     ((this as any).__mbDbg2d = document.createElement('canvas'));
@@ -229,6 +416,11 @@ export class MBShadowRenderer {
                     grid.push(row);
                 }
                 (globalThis as any).__mbShadowGrid = grid;
+                if (!((globalThis as any).__mbShadowGridLogged)) {
+                    (globalThis as any).__mbShadowGridLogged = true;
+                    // eslint-disable-next-line no-console
+                    console.log('[MBShadowGrid] ' + JSON.stringify(grid));
+                }
                 // §533: the census dump signature now includes the grid, so
                 // the (proven-reachable) census POST carries it.
             } catch (e) {
@@ -245,6 +437,8 @@ export class MBShadowRenderer {
                 0, 0, 0.5, 0.5,
                 0, 0, 0, 1,
             ));
+
+        this.syncGroundQuad(center, radius, eye);
     }
 
     dispose(): void {

@@ -2414,7 +2414,7 @@ export class MBMaterialPatchManager {
                         }
                     }`,
                 );
-            shader.uniforms.uMBShadowDbg = { value: (globalThis as any).__mbShadowEnable ? 1 : 0 };
+            shader.uniforms.uMBShadowDbg = { value: (globalThis as any).__mbShadowDbg ? 1 : 0 };
         };
     }
 

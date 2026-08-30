@@ -38,6 +38,7 @@ import { refreshMeshFeatures } from './MBMeshFeatures';
 import { decodeGlbTile, parseGlb, TileMaterialData, TileMaterialized, TilePrimitiveData } from './MBDracoDecoder';
 import { applyMeshFeatures, applyModelFrontCutoff, applyModelFarCutoff, mglMeasureLightBrightness } from './MBMeshFeatures';
 import { MBExpressionEngine } from './MBExpressionEngine';
+import { shadowCasters } from './MBShadowRenderer';
 
 /** GLB quantized grid extent per axis (mgl tiled 3D models). */
 const TILE_GRID = 8192;
@@ -444,6 +445,16 @@ class MBBatchedModelDecoder implements ITileDecoder {
             outer.userData.tileKey = tileKey;
             // Runtime node-filter updates re-walk every built group.
             this.m_builtGroups.add(outer);
+            // §560: batched-model buildings are shadow CASTERS (mgl
+            // shadow_renderer renders every model node into the depth map).
+            // Layer 1 per descendant (three tests per-renderable layers);
+            // door-light beams (mgl isLight meshes) never cast.
+            outer.traverse((o: any) => {
+                const m = o.isMesh && o.material
+                    ? (Array.isArray(o.material) ? o.material[0] : o.material) : null;
+                if (!(m as any)?.__mbIsLights) o.layers.enable(1);
+            });
+            shadowCasters.add(outer);
 
             // World-space height bound for the tile bounding box (z already
             // scaled by secLat inside `inner`).

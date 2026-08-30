@@ -122,6 +122,9 @@ function discoverTests(): TestEntry[] {
     const dbg = Number((window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shadowdbg="))?.slice("shadowdbg=".length) ?? 0);
     if (dbg >= 1) (globalThis as any).__mbShadowEnable = true;
+    // Debug readout (receiver color = intensity/depth/uv.z) is a SEPARATE
+    // gate — enabling shadows must not corrupt the pixel comparison.
+    if (dbg >= 3) (globalThis as any).__mbShadowDbg = true;
     // §525 A/B: shadowdbg=2 opens the gate but SKIPS the depth pass —
     // discriminates depth-pass side effects from the patcher/lighting path.
     if (dbg === 2) (globalThis as any).__mbShadowSkipPass = true;
