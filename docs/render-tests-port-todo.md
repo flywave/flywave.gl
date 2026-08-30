@@ -6434,3 +6434,7 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **§568. globe 相机距离再标定——像素实测推翻 §78 旧值（方向翻转，2026-08-30 续十二）**：
 
 转向 globe 大类（84 例）第一步行标定。**像素级 limb 测量（globe-default 512px，中心行亮度剖面）**：我方亮带过渡 x≈96/448 → r≈192px → θ=atan(192/768)=14.03° → **d≈4.13R**；expected 过渡 x≈96/416 → r≈160px → **d≈4.91R**（与 mgl 公式 4.71-4.91R 区间吻合 ✓）。**关键修正：§78 记档的"我方 5.7R 偏远/globe 偏小"已过时**——§9f7fa341 的 harness 相机语义改造后方向翻转，现状为**偏近 ~16%**。**探针陷阱再证**：逻辑相机 position.length()=10.44R 与渲染尺寸反推的 4.13R 不符（RTE 双相机帧，§560 同款）——globe 域的距离真值只能由像素 limb 反推。**修复方向（下轮）**：定位 sphere 渲染相机的实际距离来源（zoomLevel→position 链，重点 MapView.ts:3132 calculateDistanceFromZoomLevel 调用点与 harness lookAtPoint 的 sphere 分支），目标 d×1.186；§79 的黑屏教训=两个距离函数必须同步改+pitch 钳制链。本轮零代码变更（探针已清，142737 基线复核）。
+
+**§568b. sphere 世界尺度约定发现（globe 修复前置条件，2026-08-30 续十三）**：
+
+追进引擎相机链：lookAtImpl → calculateDistanceFromZoomLevel（focal·C/256·2^z）→ zoomLevel=1（mgl z0+1）→ **d_ground=9.44R、相机-球心=10.44R（与探针吻合 ✓）**。但像素 limb 192px 反推 tanθ=192/768=0.25 → θ=14°，而 asin(R/10.44R)=5.5°——**渲染出的球是透视几何预期的 2.6×**：引擎 sphere 管线必有一层世界归一化/尺度约定（unit-sphere 或半径≠R），R-ratio 分析在其上失效。**修复前置**：先测绘引擎 sphere 的实际半径/世界单位（顶点坐标量级探针或 TilingScheme/TileGeometry 源码审读），才能定 d 的正确目标；mgl 侧锚点=limb r_exp=160px（θ=atan(160/768)，focal=768@512px·fov36.87°）。§79 黑屏教训继续有效（双距离函数+pitch 曲率钳制联动）。本轮零代码变更。
