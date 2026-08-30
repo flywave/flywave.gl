@@ -6448,3 +6448,7 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **§569b. globe-circle 内容域首诊（2026-08-30 续十六）**：
 
 按 §569 新入口做 globe-circle/default（49160）目视对拍：**expected=navy 盘+红 circle 阵（~30 个）+盘外 space 黑**；**ours=满屏白（背景层平面铺屏）+~8 个 circle**。两个缺陷定性：①**背景层未上球**——mgl 在 globe 把 background 绘制到球面（随后被 globe content fog 的 glow-progress ramp 压向 space/high 色 → navy 盘）；我方 applyBackgroundColor 走平面 clearColor（还覆盖了 fog 分支设置的 space clearColor——两个子系统争抢 clearColor 的冲突首次实证）。②circle 数量 ~8/30——geojson 也走瓦片化解码，受 §566 单瓦片 covering 限制（引擎级，已记档）。**globe 族内容域工作项**：(a) background-on-sphere 通道（球面 quad/经纬网格或 shader 球投影）；(b) clearColor 归属仲裁（globe+fog 时 background 不得覆盖 space clearColor）；(c) circle 覆盖随引擎 covering。本轮零代码变更；§569+§569b 两个文档提交。
+
+**§570. globe background-on-sphere 首轮实现（负结果收口，关键时序事实，2026-08-30 续十七）**：
+
+实现并实测 §569b 工作项①：applyBackgroundColor 加 globe+fog 仲裁（跳过平面 clear、记录盘面色）+ atmosphere shader 盘内 fog ramp 填充（space→high smoothstep）+ terrain base 同步 space 色。**三轮实测全部回到基线（49160/9035/142737 逐位）**，破案出两个时序/结构事实：①**全部 applyBackgroundColor 调用（实测 6 次）都发生在 setProjection 之前**（projType=0）——仲裁条件永假；投影切换后无人重导背景色，白 blob 的真正来源是**已覆盖 cell 的引擎表面**（切换前烘焙的白 clearColor/或 m_plane/tile 底色，atmosphere 只改 clearColor 不及该表面，terrainController 为 null 本夹具无 terrain）；②**always-disc 填充实测更差**（default 49160→61848、-zoomed 9035→34937）——ramp 猜测覆盖/干扰了 circle 内容域，mgl 的盘面色分布需要按 fog 公式（glow_progress）精确复刻而非 smoothstep 目测。**代码已回退（零净变更）**。**下轮正确入口**：在 setProjection 切换后触发一次 applyBackgroundColor 重导（时序修复，让仲裁可达）+ 从 expected 采样盘面色径向剖面定 ramp 参数（数据驱动而非目测）。
