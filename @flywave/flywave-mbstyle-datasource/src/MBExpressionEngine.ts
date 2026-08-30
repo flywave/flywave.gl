@@ -412,15 +412,26 @@ export class MBExpressionEngine {
             }
 
             case 'distance-from-center': {
-                // Distance (meters) from the feature to the map center. Uses the
-                // feature's first vertex (`_geom.coordinates` = [lng, lat]) and
-                // the map center supplied on the expression context.
+                // mgl transform.ts calculateDistanceTileData + evaluation_context
+                // distanceFromCenter: the feature's offset from the map center
+                // projected on the SCREEN-UP ground direction (bearing rotated),
+                // in camera pixels normalized by the viewport height — NOT plain
+                // meters. Filter thresholds (0.6/0.8/1/1.2) are viewport-height
+                // fractions. The old haversine-meters return culled every POI.
                 const from = feature?._geom?.coordinates;
                 const center = (ctx as any).center;
                 if (!Array.isArray(from) || from.length < 2 || !Array.isArray(center) || center.length < 2) {
                     return 0;
                 }
-                return MBExpressionEngine.haversine(from[1], from[0], center[1], center[0]);
+                const latR = (center[1] as number) * Math.PI / 180;
+                const dE = (from[0] - center[0]) * Math.PI / 180 * 6378137 * Math.cos(latR);
+                const dN = (from[1] - center[1]) * Math.PI / 180 * 6378137;
+                const bearing = ((ctx as any).bearing ?? 0) * Math.PI / 180;
+                // Screen-up ground direction at camera bearing θ: (−sin θ, cos θ).
+                const distUp = dE * -Math.sin(bearing) + dN * Math.cos(bearing);
+                const mppGround = 156543.03392 * Math.cos(latR) / Math.pow(2, ctx.zoom ?? 0);
+                const viewportHeight = (ctx as any)._viewportHeight ?? 1024;
+                return distUp / (mppGround * viewportHeight);
             }
 
             case 'config': {

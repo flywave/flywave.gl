@@ -1026,6 +1026,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         // Bearing resolves `*-translate-anchor: viewport` (mapbox rotates the
         // viewport translate by -bearing in the map frame).
         emitter.setBearing(this.m_bearing);
+        // `distance-from-center` filter evaluation needs the camera bearing too (§632).
+        this.m_layerEvaluator?.setFilterBearing?.(this.m_bearing);
         // Hand the cached real-font metrics to the emitter so text shaping
         // (line breaking, anchor placement) uses accurate advance widths.
         if (this.m_glyphMetrics.size > 0) {

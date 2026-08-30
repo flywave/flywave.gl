@@ -346,6 +346,13 @@ function isExpr(v: any): v is ExpressionSpecification {
 import { applyColorTheme, parseCssColor, ColorThemeLut } from './MBColorTheme';
 
 export class MBLayerEvaluator {
+    /** Camera bearing for `distance-from-center` filter evaluation (§632). */
+    m_filterBearing = 0;
+
+    setFilterBearing(bearing: number): void {
+        this.m_filterBearing = bearing;
+    }
+
     private m_layersBySource: Map<string, Map<string, PreprocessedLayer[]>> = new Map();
 
     /** Reserved source key for the per-tile background fill (§236). */
@@ -591,7 +598,7 @@ export class MBLayerEvaluator {
 
         const results: EvaluatedLayer[] = [];
 
-        const ctx: MBExpressionContext = { zoom, pitch, feature, featureState, _config: this.m_config, brightness, worldview, center } as any;
+        const ctx: MBExpressionContext = { zoom, pitch, feature, featureState, _config: this.m_config, brightness, worldview, center, bearing: this.m_filterBearing } as any;
 
         for (const pl of candidates) {
             if (pl.visibility === 'none') continue;
