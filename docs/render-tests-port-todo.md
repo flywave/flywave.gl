@@ -6352,3 +6352,15 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **③ albedo 纹理剥离**：mgl a_pbr 路径顶点色替换 glTF albedo——mbx-lod 内嵌基色纹理（KHR_texture_transform），splitByPart 置 vertexColors 时 `mat.map=null`+needsUpdate（此前 Draco 瓦片无纹理故从未暴露）。
 
 **效果**：doors-no-shadows-lod 416294→**392306**（−2.4万）；非 lod 用例逐位不变（V1 路径未动，无回归）。**遗留（下轮 ROI）**：①roof 应橙(252,163,0)现蓝灰、wall 应黄现灰蓝——mix=1 已证生效（探针 mix0=1/col0=[245,224,102]），疑 mgl 灯光 uniform 与 vertexColors 组合下的色域问题（update-doors-lod 613748 同族）；②update-doors(非lod) 587578 为 indirect 家族新头部，待查。探针法记档：mbbatchdbg=1 + vertParts 直方图是 part 域对齐的 fastest 反馈环。
+
+**§557. -lod 剩余域批次——footprint 剔除 + mgl 尾部第二混合 + PBR port 定性（2026-08-30 续三）**：
+
+**① footprint 节点剔除（−4.4万）**：mgl `convertFootprints` 把带 `mapbox:footprint:id/version` extras 的节点整体 REMOVE（仅解析为 node.footprint 供相机碰撞）——mbx-lod Default Scene 里 POSITION-only 灰面即此类。我方 meshopt traverse 标记 `__mbFootprint` 并在 nodePassesFilter 覆盖 visible 前生效（第一版被覆盖=零像素教训）。doors-no-shadows-lod 392306→**348115**；白斑同步消失（(350,300) 白 255→背景灰 137 对齐）。
+
+**② 门灯定性（-lod 非问题）**：mbx-lod 节点 extras 无 `lights`（只有 V1 mbx 有）——mgl 同样不渲染 -lod 门灯；expected 的青色像素是 door PART 表面。门灯特性数组颜色改 post-mix（mgl a0/a1 为 lerp 后样式色；实测该瓦片 raw 门色本就近青，无像素变化，语义修正留档）。
+
+**③ mgl 尾部第二混合落地**：model.fragment.glsl 末段 `color = mix(color, unlitColor=baseColor*ao+emissiveFactor, u_emissive_strength)`——新 uniform `uMB3DUnlit`（features 瓦片按 draw_model.ts:1402 `hasMapboxFeatures?0:rmea.z` 门 0，经典 model 层=emissive）。features 瓦片被门 0 故 indirect 家族无变化；经典路径语义齐备。
+
+**④ Cook-Torrance PBR 全量 port 实测回退（重要负结果）**：F_SchlickFast/V_GGXFast/D_GGX/EnvBRDFApprox + 半球 indirect 逐式移植后 doors-no-shadows-lod 348115→386217（+3.8万），emission-strength 41885→38676 改善、-lod 39860→41307 回归，museum z-offset 族 ±3k 噪声带。**手算验证 R/G 通道与 mgl 公式吻合（NdotL≈0.6、amb 0.3 复算 lit=(239,229,129)≈expected(240,230,162) 的 RG）但 B 通道系统性偏暗 → 残差在灯光方向/亮度域（uMB3DDir 帧约定或 flat normal 符号 mgl 有 `cross*−1` 非 FLIP_Y 分支），非 BRDF 形状**。已回退至 §455 校准的 mbK 半球近似（恢复 348115），代码注释留指针。
+
+**⑤ update-doors（587578）定性（未修）**：夜间 setLights（amb 0.005/dir 0.1/direction[150,54]）+ setZoom 20.68 的 V1 瓦片。三域残差：(a) window 夜间发光域——ours (6,149,228) 纯样式色 vs expected (48,159,189)（同 §④ 灯光域）；(b) 门灯 beam 位置/遮挡——expected (512,350)/(650,*) 有青 beam 我方背景灰（lights=2 存在、falloff 公式已对齐，疑 zScale/矩阵或 depthTest 时序）；(c) 背景夜间压暗不足——ours (71,71,71) vs expected (23,23,23)（§553 的 applyBackgroundColor 重导链未覆盖此夹具路径）。**下轮入口**：先攻 (c) 背景压暗（独立、可快验），再 (a) 灯光域残差（§④ B 通道之谜——查 lighting3DState.dir 的 polar/azimuth 帧与 mgl u_lighting_directional_dir 逐分量对拍）。
