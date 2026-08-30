@@ -6793,3 +6793,8 @@ per-node 逐节点 part 色求值（random(id) 家族）的前置是 mgl 3d-styl
 **§636. conflation y 镜像修正 + 抑制链闭环（2026-08-31 续）**：
 
 §635 的"29 框位于大厅以北"实锤为 **y 镜像符号错**：meshopt 网格 y 是**北正**（loader 以 +4096 偏移居中，非南正），draco 顶点烘焙镜像为南正——`registerBoxFromLocalBox` 增 `yNorthPositive` 参数分路转换。**抑制命中实证**：重解码中 fill-extrusion 特征 `pointInModelFootprint` hit=true（111 框），跳过发射生效。**剩余断点（唯一个）**：capture 与重解码的渲染时序——`markTilesDirty` 触发的 vector 重解码在静态相机 harness 的 capture 窗口内不落地（修复前后 actual 逐位 0 px 差异实证；tilesPending settle 不覆盖 dirty 周期）。**下轮入口（引擎/harness 协同）**：①capture 前等待 dirty 重解码完成（harness tilesPending 扩展识别 markTilesDirty 周期）；②或改用引擎渲染时序内的抑制（模型覆盖检测移入 patcher 逐帧）。dfc far-cull 6 例 A/B 顺延。
+
+**§637. conflation 时序修复 + facade 残差最终定性（2026-08-31 续）**：
+
+①实现 §636 入口：MBStyleDataSource 增 `notifyConflationCoverageAdded()/conflationSettled()`（dirty 周期跟踪，batched DS 新增 footprint 覆盖时通知），harness 在 model/raster settle 后增 conflation 周期等待（20×update+500ms 有界+尾帧）。**结果：分数仍逐位不变（391773/389147）且命中日志证实抑制在重解码中生效** → 结论修正：**渡轮码头的白色平面板不是被抑制的 fill-extrusion，而是替代 GLB（mbx/2621-6332 的 draco 版）自身的简化大厅网格**——expected 的拱廊细节来自上游缺失的 mbx-meshopt/2621-6332（量化版，本仓库与上游均不存在），属**资产保真度边界**，非 conflation 问题。conflation 基础设施保留（语义正确、无回归，真实 conflation 场景可用）。
+②dfc far-cull 常数 A/B 停止：cosP 移除/符号翻转/常数倍缩放三变异均产生逐位相同分数——verdict 对 dfc 尺度不敏感（标签 dfc 值聚类远离阈值），残差为标签位置/内容差异，非常数标定可收敛。
