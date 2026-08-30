@@ -856,7 +856,6 @@ function refreshSplit(mesh: THREE.Mesh, parts: PartStyle[]): void {
         const partId = rawPart < parts.length ? rawPart : 0;
         const style = parts[partId] ?? parts[0];
         let [r, g, b] = expand4444((u32 >>> colorShift) & 0xffff);
-        if (!partFirstColor.has(partId)) partFirstColor.set(partId, [r, g, b]);
         if (style.mix > 0) {
             r = Math.round(r + (style.colorSrgb[0] - r) * style.mix);
             g = Math.round(g + (style.colorSrgb[1] - g) * style.mix);
@@ -868,7 +867,8 @@ function refreshSplit(mesh: THREE.Mesh, parts: PartStyle[]): void {
         }
         // mgl buildMeshFeatureArray: the door-light feature array receives
         // the POST-mix a0/a1 bytes (mixA=1 → pure style color), not the raw
-        // tiler color.
+        // tiler color — a pre-mix store here would win on first-occurrence
+        // and re-tint the beams with the raw tiler color (§565).
         if (!partFirstColor.has(partId)) partFirstColor.set(partId, [r, g, b]);
         colors[i * 3] = srgbToLinear(r / 255);
         colors[i * 3 + 1] = srgbToLinear(g / 255);
