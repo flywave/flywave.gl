@@ -6524,3 +6524,7 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **§581. fill 接收器第八轮——重编译打通，采样链断点下移（2026-08-30 续三十二）**：
 
 发现 §579 的 needsUpdate+cacheKey 双修复**首测带 tsc 残错**（karma 用旧 bundle）——本轮干净复测：`[MBOBC2]` **确认重编译已触发**（onBeforeCompile 死点打通，修复已提交为语义基线）。**视觉仍零变化** → 断点下移至采样链：shadowdbg=3 调试读出在地面色上仍不出现 → 候选收窄为 ①渲染的 fill draw call 用的仍不是这 162 材质（需 WebGL 层材质断点/引擎 renderObjects 材质引用追踪）②intensity 刷新未达（refresh 循环虽修了数组路径，但 shadowState→uniforms 的链可能仍有中间层）。**下轮**：在 refresh 循环内直接断言 uList 数量>0 + intensity 值（一行探针），若非零则转 WebGL draw call 材质追踪。三域同源复核继续挂起。
+
+**§581b. fill 接收器第九轮——刷新链打通，终极断点=draw call 材质选择（2026-08-30 续三十三）**：
+
+重应用被 §580 回退误伤的 refresh 数组修复（`[MBRefresh] uListFirst=1` 确认刷新可达）+ §581 重编译基线——**编译 ✓ 刷新 ✓ 注入 ✓ 材质稳定 ✓ 全链打通**，但 shadowdbg=3 调试读出仍 **0 px**：**引擎渲染 fill draw call 使用的材质实例仍非这 162 个被 patch 的**（唯一自洽解释；[MBOBC2] 仅触发一次亦佐证——多数材质从未走到渲染编译）。**终极入口（下轮）**：放弃 tile.objects 黑盒，直接在引擎 WebGLRenderer.render 前 hook（renderer.info.programs 对比 / onBeforeRender 抓 draw 材质 uuid）或审 MapRenderingManager→TileObjectRenderer 的 fill 材质创建源。regression 复核：两修复零回归（抽样净 −11.1万全为已知后修状态）。fill-shadow 线挂起为引擎渲染材质选择专项。
