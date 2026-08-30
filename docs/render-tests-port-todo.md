@@ -6370,3 +6370,15 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 逐式核验 mgl `lightsUniformValues/calculateGroundRadiance`：夜间（amb 0.005/dir 0.1/polar 54°）ground radiance = 0.005+0.1×cos54°=0.0638 linear → sRGB≈0.27 → 白背景 ×0.27 ≈ **70/255——与我方 71 逐位吻合，背景压暗链无缺陷**（假说 (c) 否定）。expected 的大片 (23,23,23) 暗区 = **cast-shadows:true + shadow-intensity:1 的建筑物投在地面/背景上的阴影**（mgl shadow_renderer 对 ground 层含 background 着色）——我方 MBShadowRenderer 未覆盖 clearColor 背景/无 drape 地面。**update-doors 三域修正为**：(a) window 夜间发光标定（灯光域，§557④ B 通道之谜）；(b) 门灯 beam 位置/遮挡；(c→) 地面阴影（新头部，需 shadow pass 对背景/地面 quad 的覆盖）。另记：mgl `sphericalDirectionToCartesian` az 转 **a=az+90（数学 CCW）**，而我方 §455 校准为 90−az——两帧在 polar 项（z=cos p）等价、在 xy 墙面照明不等价，是 (a) 域的第一嫌疑，下轮用 az 逐值 A/B 对拍。
 
 **§559. az 帧约定 A/B 实测（负结果收口）**：mgl 真值 `sphericalDirectionToCartesian` a=az+90（数学 CCW）。A/B 实测（两处 directionalVec 同改）：doors-no-shadows-lod 348115→391478（**+4.3万**，默认方向 [210,30] 全程），update-doors 587578→**563012**（−2.4万，setLights 后 [150,54] 主导帧）。净负——**90−az 校准保留**（§455 经验值），az+90 的方向差说明灯光域残差与方向约定纠缠但非单一根因：doors-no-shadows-lod 在 90−az 下更优意味着该夹具残差的主项不是方向（或存在反向补偿误差），update-doors 在 az+90 下更优意味着其 (a) 域确有方向成分。已回退，双数据点记档供下轮（如需精确解：逐 surface NdotL 对拍而非整图 A/B）。
+
+**§560. 地面阴影全链落地 + §522 根因破案（2026-08-30 续五，MBSTYLE_SHADOW=1 opt-in）**：
+
+按 §558 定性实现 MBShadowRenderer 对地面/背景的阴影覆盖，迭代过程连环破案（每步 karma 单夹具 + console 探针）：
+
+**① §522 历史冻结根因**：阴影深度画布 `setClearColor(0x000000)` ——打包深度里 0=最近，黑底=全画布"最近"→全地面入影（§522 的"pixel-identical across framings"即此）。改 **白底清除（深度 1=远）**。旧坏 pass 在 buildings-trees-shadows-casting 曾 856405；新 pass 377046 vs 无影基线 375224。
+
+**② 接收者渲染路径连环坑（全部实证）**：(a) 引擎不渲染 m_scene 普通子树（§549）——quad 须自有 scene+AfterRender 主 renderer 合成（fog-renderer 模式）；(b) 深度精度——世界 z quad 在 RTE 巨 far 下与建筑深度同量级会盖内容，改 NDC 光栅 z=0.9999·w；(c) NDC w=1 的 varying 世界坐标是**仿射**插值——须经真相机 projView 路由取得正确 w；(d) 相机选取——m_rteCamera matrixWorld=恒等（rebase 在投影里），unproject 用 mapView.camera（真实矩阵）；(e) 眼重定位**含 z**（casters worldPos z 带眼偏移，实测 -192.5）；(f) 裸 ShaderMaterial 无 colorspace_fragment 自动 sRGB 编码——输出须 pow(1/2.2)（16 假黑教训）。
+
+**③ mgl 语义对齐**：shadow factor = `calculateGroundShadowFactor` 逐通道 `ambient/(ambient+dir·NdotL_ground)`（**非 1−shadow-intensity**；夜景 amb 0.005/dir 0.0588 → 0.078 线性）——手算 sRGB(0.078)×71≈21 与 expected 暗区 15-23 吻合。阴影相机取景=casters 联合 AABB（targetDistance 框漏 1.5km 外瓦片）；lightDir 裸数组 Vector3.copy=NaN 矩阵；方向用 mgl 精确 az+90（90−az 会镜像 x）。
+
+**效果**：update-doors 587578→**587145**、-lod 613748→**613094**、(350,650) 逐位 73=73。**默认仍关**（MBSTYLE_SHADOW=1 开）：净收益小，遗留=远景区（(350,250) 应影未影——ortho 盒仅罩 casters，远处地面点出界即 lit）与门灯 beam 遮挡。**下轮**：①ortho 盒外扩至 quad 远角范围；②门灯 beam 深度参与；③shadows-casting 夹具全亮差距（375k 主体是树木/建筑自阴影未做——接收者注入仅 fill/extrusion 族）。
