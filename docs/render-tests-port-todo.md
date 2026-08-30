@@ -6606,3 +6606,7 @@ GPU 级替代取证（SpectorJS 离线不可用，改 in-page）：①`[MBProg]`
 **§598. pre-scene hook 引擎插入+终局确认（第 26 轮，会话真·收束，2026-08-30 终章十六）**：
 
 **引擎 API 落地**：`MapRenderingManager.render` 暴露 `preSceneHook(renderer)`（direct path、renderer.render(scene) 之前、默认 null 零影响）——§597 修复单的一行级插入以正式 API 形态实现并提交。**接线实测（无门 ABTEST）**：shadows-casting 仍 375224——hook 下层绘制链路通，但远带随即被**全视口不透明 fill 'land'（z15 大瓦片）覆盖**（§588 早已实测其覆盖 102 色）——**与 §585 终局汇聚**：远带阴影的最终落点仍是"引擎实际渲染的 fill 材质实例接收阴影"（那批实例与被 patch 的不同、渲染清单不走 scene graph——§585/§597 双重实锤的引擎渲染管线内部机制）。**收束**：DS 层 26 轮 + 引擎 hook API 已提供；剩余唯一未知 = 引擎 fill 渲染实例的产生点（TileGeometryCreator→实际 draw 的中间层），需要引擎开发者在源码内定位（黑盒外）。基线复核 375224/557228/613094 全部不变，工作树净（引擎 hook 为唯一提交）。会话 §554–§598 共 87 提交。
+
+**§599. 渲染实例产生点源码走查+地形平面假设证伪（第 27 轮，会话最终收束，2026-08-30 终章十七）**：
+
+**源码走查结果**：`TileGeometryCreator`（:585 `objects = tile.objects`，:848 `objects.push(object)`）——**引擎创建的渲染实例就是 tile.objects**，与 patcher 走查集合相同（§578 的 82 uuid 交集印证）。**地形平面假设证伪**：MapTerrainMaterial 注入阴影采样后远带逐位不变（该夹具无 setTerrain → terrainController 无 mesh）。**最终因果链（27 轮合并）**：远带 102 = **lit clearColor（211×0.483）本身**；pre-scene hook 下层绘制会被**全视口不透明背景/fill 层覆盖**（§598 实测）；overlay 通道被 DepthPrePass 深度拒绝（§596）——**三层通道全部实测封死，唯一通路只剩"引擎在 clearColor 之后的背景绘制层"（即 mgl 的 background-tile draw 发生位置）接收阴影采样**——这是 MapView 渲染管线中背景 quad/平面材质的产生点（applyBackground* 系），属引擎背景渲染子系统，非 fill/terrain。**移交清单（引擎开发者最小修复）**：MapView 的背景绘制层（clearColor 之外若存在背景 quad/平面）挂入 shadow 采样 uniform（§560-§599 的全部基础设施已就绪：MBShadowRenderer.getShadowUniforms + m_matrix + m_shTex）。工作树净，会话 §554–§599 共 88 提交。
