@@ -117,6 +117,20 @@ export function syncMglModelLighting(model: THREE.Object3D, dataSource: any): vo
     });
 }
 
+// §562: per-frame shadow-uniform refresh targets (MBModelRenderer.run /
+// MBStyleDataSource AfterRender) — mgl re-uploads shadow uniforms every draw.
+const mbShadowLitUniforms = new Set<any>();
+
+export function syncModelShadowUniforms(shadowState: {
+    map: any; matrix: any; intensity: number;
+} | null): void {
+    for (const u of mbShadowLitUniforms) {
+        u.map.value = shadowState?.map ?? null;
+        if (shadowState) u.matrix.value.copy(shadowState.matrix);
+        u.intensity.value = shadowState?.intensity ?? 0;
+    }
+}
+
 export function applyMglModelLighting(
     dataSource: any,
     model: THREE.Object3D,
@@ -157,6 +171,17 @@ export function applyMglModelLighting(
                 shader.uniforms.uMB3DTintA = { value: tint?.mix ?? 0 };
                 shader.uniforms.uMBHbs = { value: [hr.b0, hr.b1, hr.power, hr.start] };
                 shader.uniforms.uMBHbsRange = { value: hr.range };
+                // §562: model self/ground-shadow reception (mgl
+                // shadowed_light_factor_normal replaces NdotL in the direct
+                // term). Intensity 0 keeps non-shadow styles untouched.
+                shader.uniforms.uMBShMap = { value: null as any };
+                shader.uniforms.uMBShMatrix = { value: new THREE.Matrix4() };
+                shader.uniforms.uMBShIntensity = { value: 0 };
+                mbShadowLitUniforms.add(mat.userData.__mbShU = {
+                    map: shader.uniforms.uMBShMap,
+                    matrix: shader.uniforms.uMBShMatrix,
+                    intensity: shader.uniforms.uMBShIntensity,
+                });
                 // Runtime `setLights`: keep the uniform OBJECTS so a per-frame
                 // sync can refresh their values without a recompile (mirrors
                 // mgl re-uploading u_lighting_* every draw).
@@ -180,7 +205,11 @@ export function applyMglModelLighting(
                      uniform float uMB3DUnlit;
                      uniform vec3 uMB3DTint; uniform float uMB3DTintA;
                      uniform vec4 uMBHbs; uniform float uMBHbsRange;
+                     uniform sampler2D uMBShMap;
+                     uniform mat4 uMBShMatrix;
+                     uniform float uMBShIntensity;
                      varying float vMbLocalZ;
+                     varying vec3 vMbWorldPos;
                      vec3 mbAlbedo = vec3(1.0);
                      void main() {`
                 );
@@ -190,8 +219,14 @@ export function applyMglModelLighting(
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
                     `varying float vMbLocalZ;
+                     varying vec3 vMbWorldPos;
                      void main() {
                          vMbLocalZ = position.z;`
+                );
+                shader.vertexShader = shader.vertexShader.replace(
+                    '#include <project_vertex>',
+                    '#include <project_vertex>\n' +
+                    'vMbWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;'
                 );
                 // Capture the glTF albedo AFTER the base-color texture —
                 // that is the `albedo` mgl's getBaseColor feeds apply_lighting.
@@ -235,6 +270,17 @@ export function applyMglModelLighting(
                          // domain, not the BRDF shape. Keep mbK until that is
                          // solved (§557).
                          float mbNdotL = clamp(dot(mbN, mbDirView), 0.0, 1.0);
+                         // §562: mgl shadowed_light_factor_normal REPLACES the
+                         // direct-term NdotL (ambient untouched).
+                         if (uMBShIntensity > 0.0) {
+                             vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos, 1.0);
+                             if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
+                                 mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
+                                 vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
+                                 float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
+                                 mbNdotL *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
+                             }
+                         }
                          float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
                          float mbAmbDir = mix(1.0 - 0.3 * min(mbDirLum, 1.0), 1.0, min(dot(mbN, mbDirView) + 1.0, 1.0));
                          float mbVert = mix(0.92, 1.0, dot(mbN, mbUpView) * 0.5 + 0.5);

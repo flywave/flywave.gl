@@ -2170,7 +2170,7 @@ export class MBStyleDataSource extends TileDataSource {
                     }
                 }
             });
-            this.mapView.addEventListener(MapViewEventNames.AfterRender, () => {
+            this.mapView.addEventListener(MapViewEventNames.AfterRender, async () => {
                 // §550 DIAG (karma arg `mbbatchdbg=1`, see MBBatchedModelDataSource):
                 // batched-model regular-DS chain state, frame-capped.
                 {
@@ -2556,6 +2556,12 @@ export class MBStyleDataSource extends TileDataSource {
                     const sl = self.m_environment?.shadowLightState;
                     self.m_shadowRenderer.setLightState(!!sl, sl?.intensity ?? 0);
                     self.m_shadowRenderer.run();
+                    // §562: model materials sample the shadow map in their
+                    // direct lighting term (mgl shadowed_light_factor_normal).
+                    try {
+                        const { syncModelShadowUniforms } = await import('./MBModelRenderer');
+                        syncModelShadowUniforms(self.m_shadowRenderer.getShadowUniforms());
+                    } catch { /* best-effort */ }
                 }
                 if (self.m_atmosphereRenderer) {
                     self.m_atmosphereRenderer.run();
