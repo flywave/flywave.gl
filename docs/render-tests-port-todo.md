@@ -6811,3 +6811,7 @@ landmark-conflation 8 例（conflation replacement 的直接测试域）vs ml-fi
 
 ①footprint 三角形剖分匹配**证伪回退**：footprint 节点几何是**轮廓点序列**而非三角剖分——按 3 顶点分组构造伪三角形覆盖巨面积，index-overflow 90634→378318、intersect-padding 42102→160060（+67 万回退）。已 `git checkout` 回 §639 环版本（681987，当前最优）。内环/洞精确匹配需真三角剖分（earcut）或轮廓分段——成本/收益记档待评估。
 ②elevated-symbols-lighting-terrain-enabled 2 例 +14k 回归取证：actual/expected 对拍显示差异**与 dfc 标签无关**——expected 全场景深蓝灰（雾/光照洗涤 + 斜向阴影边界），我方为未洗涤浅灰路面 + 粗糙阴影四边形——是 **lighting-3d-mode 光照模型域**残差（§455-464/§562 系），非 dfc 放行标签问题。dfc 修复在此域无回归责任。
+
+**§641. conflation 轮廓分段 + even-odd 多环匹配（§640 遗留落地，2026-08-31）**：
+
+`MBModelFootprints` 重写为**轮廓组模型**：footprint 节点顶点序列（可能拼接外环+洞多轮廓）按边长 >4× 中位数断点分段为多轮廓，注册为组；命中测试 = 组内 even-odd XOR（精确支持洞）。**验收**：conflation 8 例 681987 → **670880（较基线 −150,969）**：index-overflow-lod 110825→100615、padding-lod 65920→65023、其余 6 例逐位不变，**无一例恶化**。padding-lod 仍余 +11.7k（padding 语义边界，非洞匹配可消）。conflation 子系统至此闭环。
