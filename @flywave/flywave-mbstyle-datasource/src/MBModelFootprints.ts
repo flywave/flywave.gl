@@ -32,6 +32,10 @@ export function getModelFootprintBoxes(): readonly ModelFootprintBox[] {
     return boxes;
 }
 
+export function getModelFootprintBoxCount(): number {
+    return boxes.length;
+}
+
 /** True when (lng, lat) falls inside any registered model footprint box. */
 export function pointInModelFootprint(lng: number, lat: number): boolean {
     for (const b of boxes) {
@@ -48,17 +52,26 @@ export function registerBoxFromLocalBox(
     box: THREE.Box3,
     centerLng: number,
     centerLat: number,
+    /** meshopt grid y is NORTH-positive (loader centers with +4096 offset);
+     * draco vertices have the y mirror baked (south-positive). */
+    yNorthPositive: boolean,
 ): boolean {
     if (!isFinite(box.min.x) || !isFinite(box.max.x) || !isFinite(box.min.y) || !isFinite(box.max.y)) {
-        return;
+        return false;
     }
     const cosLat = Math.max(0.01, Math.cos(centerLat * Math.PI / 180));
     const metersPerDegLng = 111320 * cosLat;
     const metersPerDegLat = 110574;
     const minLng = centerLng + box.min.x / metersPerDegLng;
     const maxLng = centerLng + box.max.x / metersPerDegLng;
-    // local y is SOUTH-positive: y min = northern edge = max lat.
-    const minLat = centerLat - box.max.y / metersPerDegLat;
-    const maxLat = centerLat - box.min.y / metersPerDegLat;
+    let minLat: number, maxLat: number;
+    if (yNorthPositive) {
+        minLat = centerLat + box.min.y / metersPerDegLat;
+        maxLat = centerLat + box.max.y / metersPerDegLat;
+    } else {
+        // local y SOUTH-positive: y max = southern edge = min lat.
+        minLat = centerLat - box.max.y / metersPerDegLat;
+        maxLat = centerLat - box.min.y / metersPerDegLat;
+    }
     return registerModelFootprintBox({ minLng, minLat, maxLng, maxLat });
 }

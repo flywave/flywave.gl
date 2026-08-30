@@ -36,7 +36,7 @@ import type { Projection } from '@flywave/flywave-geoutils';
 import { applyMglModelLighting, syncMglModelLighting } from './MBModelRenderer';
 import { refreshMeshFeatures } from './MBMeshFeatures';
 import { decodeGlbTile, parseGlb, TileMaterialData, TileMaterialized, TilePrimitiveData } from './MBDracoDecoder';
-import { registerBoxFromLocalBox } from './MBModelFootprints';
+import { getModelFootprintBoxCount, registerBoxFromLocalBox } from './MBModelFootprints';
 import { applyMeshFeatures, applyModelFrontCutoff, applyModelFarCutoff, mglMeasureLightBrightness } from './MBMeshFeatures';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { shadowCasters } from './MBShadowRenderer';
@@ -481,21 +481,17 @@ class MBBatchedModelDecoder implements ITileDecoder {
                 const n = Math.pow(2, tileKey.level);
                 const cLng = (tileKey.column + 0.5) / n * 360 - 180;
                 const cLat = tileCenterLatRad(tileKey) * 180 / Math.PI;
-                let added = 0;
+                const beforeBoxes = getModelFootprintBoxCount();
                 inner.traverse((o: any) => {
                     if (!o.isMesh || o.userData?.__mbFootprint !== true) return;
-                    if (registerBoxFromLocalBox(new THREE.Box3().setFromObject(o), cLng, cLat)) added++;
+                    registerBoxFromLocalBox(new THREE.Box3().setFromObject(o), cLng, cLat, meshopt);
                 });
                 // Models arrived after the vector tiles decoded: force a
                 // re-decode so the extrusion suppression takes effect. Only on
                 // genuinely NEW coverage — re-registers must not loop.
-                if (added > 0) {
+                if (getModelFootprintBoxCount() > beforeBoxes) {
                     const env: any = this.m_envProvider;
                     env?.mapView?.markTilesDirty?.(env);
-                    for (const b of getModelFootprintBoxes()) {
-                        // eslint-disable-next-line no-console
-                        console.log('[MBFPB] ' + JSON.stringify(b));
-                    }
                 }
             } catch { /* conflation is best-effort */ }
 
