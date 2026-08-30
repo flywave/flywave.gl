@@ -6540,3 +6540,7 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **§584. fill 接收器重启清单执行——draw 断点终局数据（第 12 轮，挂起收口，2026-08-30 终章二）**：
 
 重启清单三步执行：①cacheKey 基线确认**已在库内**（此前 grep 误判混合态）；②shadowdbg=3 读出复测（干净态）仍 **0 px**；③`[MBDrawBP]` onBeforeRender 断点：**MeshStandardMaterial 绘制时 hasU=true / intensity=1 / injected=true（114 次 draw）**——uniform 在 draw 时确为 1！`[MBFragDump2]`：ShaderMaterial（1 个）fragment 无锚点（已知）；MeshStandardMaterial 逐项 ✓（锚点/编译/注入/刷新/draw 值五方全绿）。**矛盾终局**：draw 时 intensity=1 + 补丁代码在 shader 内 + 读出仍不出现——剩余解释仅 ①程序缓存命中的是无补丁变体（customProgramCacheKey 在多材质共享 technique 下仍碰撞）②渲染走不经过这些 onBeforeRender 物件的第二几何（实例化克隆）。**需要 GPU 级调试器（SpectorJS/canvas preserveDrawingBuffer+断点）或引擎渲染层源码级走查**——黑盒通道 12 轮后正式穷尽。本轮零净代码变更，工作树净。fill-shadow 及三远带域挂起为引擎调试专项。
+
+**§585. fill 阴影接收器终局破案（第 13 轮，2026-08-30 终章三）**：
+
+GPU 级替代取证（SpectorJS 离线不可用，改 in-page）：①`[MBProg]` **带 -mbshadow 后缀的 WebGLProgram 实存**（mbshadow=2，含 physical,STANDARD）——补丁程序已构建；②创建路径 cacheKey 统一（消除最后一个碰撞面）+ 读出复测仍 0px；③**无条件红色覆写 ABTEST：0 红像素**——被 patch 的 fill 材质**从不光栅化任何像素**。**终局结论**：可见 fill 由**引擎独立的平铺绘制路径**（§518 记档的"mapview depthTest=false 按样式序平铺 fill"机制）渲染，tile.objects 上的 114 次 draw 均为屏外/拾取/微型几何。13 轮矛盾（intensity=1@draw+补丁在码+0px）就此闭环：**fill-shadow 的正确注入点是引擎平铺 fill 路径的材质源**（非 tile.objects）。双路 cacheKey 修复保留为语义基线（375224 复核零变化）。三远带域解锁路径=定位引擎平铺 fill 的材质创建点并注入。
