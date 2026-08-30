@@ -113,9 +113,46 @@ export class MBMaterialPatchManager {
                     }
                 }
             }
+            // §586: the engine builds the RENDERED fill materials in its own
+            // factory (DecodedTileHelpers.createMaterial — the tile.objects
+            // materials never rasterize, §585). Sweep the scene per frame for
+            // engine-created instances (they carry technique.id as name) and
+            // inject them too.
+            if (shadowState) {
+                const scene: any = (this.m_dataSource as any).mapView?.m_scene;
+                if (scene) {
+                    scene.traverse((o: any) => {
+                        if (!o.isMesh || !o.visible) return;
+                        const raw = o.material;
+                        const mats: any[] = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+                        for (const m of mats) {
+                            if (!m || m.__mbShadowInjected) continue;
+                            if (m.__mbShadowSkipped) continue;
+                            const t = String(m.type ?? '');
+                            if (t !== 'MeshStandardMaterial' && t !== 'MeshBasicMaterial') {
+                                m.__mbShadowSkipped = true; continue;
+                            }
+                            this.injectGroundShadow(m);
+                        }
+                    });
+                }
+            }
             const identity = shadowState ? null : new THREE.Matrix4();
+            const refreshTargets: any[] = [];
             for (const tile of tiles) {
-                for (const obj of tile.objects ?? []) {
+                for (const obj of tile.objects ?? []) refreshTargets.push(obj);
+            }
+            {
+                const scene: any = (this.m_dataSource as any).mapView?.m_scene;
+                const seen = new Set<any>();
+                if (scene) {
+                    scene.traverse((o: any) => {
+                        if (o.isMesh && !seen.has(o)) { seen.add(o); refreshTargets.push(o); }
+                    });
+                }
+            }
+            for (const obj of refreshTargets) {
+                {
                     const raw = (obj as any).material;
                     const uList: any[] = Array.isArray(raw)
                         ? raw.map((m: any) => m?.__mbShadowUniforms).filter(Boolean)
