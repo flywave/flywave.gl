@@ -497,43 +497,43 @@ function buildNodeLightsMesh(
         g.setAttribute('position', new THREE.BufferAttribute(geo.positions, 3));
         g.setAttribute('mbC4f', new THREE.BufferAttribute(geo.c4f, 4));
         g.setIndex(new THREE.BufferAttribute(geo.indices, 1));
-        const mat: any = new THREE.MeshBasicMaterial({
-            color: new THREE.Color(
-                srgbToLinear(doorColorBytes[0] / 255),
-                srgbToLinear(doorColorBytes[1] / 255),
-                srgbToLinear(doorColorBytes[2] / 255)),
+        // §564: a plain ShaderMaterial — the previous onBeforeCompile patch
+        // over MeshBasicMaterial failed GL validation (varying mismatch) and
+        // the beams were silently never drawn. Raw GLSL1, sRGB color written
+        // directly (no colorspace_fragment in raw materials).
+        const mat: any = new THREE.ShaderMaterial({
+            uniforms: {
+                uMBLightsColor: {
+                    value: new THREE.Vector3(
+                        doorColorBytes[0] / 255, doorColorBytes[1] / 255, doorColorBytes[2] / 255),
+                },
+                uMBLightsE: { value: doorEmissive },
+            },
+            vertexShader: `
+                attribute vec4 mbC4f;
+                varying vec4 vMbC4f;
+                void main() {
+                    vMbC4f = mbC4f;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }`,
+            fragmentShader: `
+                uniform vec3 uMBLightsColor;
+                uniform float uMBLightsE;
+                varying vec4 vMbC4f;
+                void main() {
+                    // mgl model.fragment.glsl light-geometry falloff.
+                    float mbD = length(vec2(1.3 * max(0.0, abs(vMbC4f.x) - vMbC4f.z), vMbC4f.y));
+                    mbD += mix(0.5, 0.0, clamp(uMBLightsE - 1.0, 0.0, 1.0));
+                    float mbA = clamp(1.0 - mbD * mbD, 0.0, 1.0);
+                    if (mbA <= 0.0) discard;
+                    gl_FragColor = vec4(uMBLightsColor, mbA);
+                }`,
             transparent: true,
             depthWrite: false,
             side: THREE.DoubleSide,
         });
-        mat.onBeforeCompile = (shader: any) => {
-            shader.uniforms.uMBLightsE = { value: doorEmissive };
-            // Indirect-update handle (refreshMeshFeatures).
-            (mat as any).__mbLightsU = shader.uniforms.uMBLightsE;
-            shader.vertexShader = shader.vertexShader
-                .replace('void main() {',
-                    `attribute vec4 mbC4f;
-                     varying vec4 vMbC4f;
-                     void main() {
-                         vMbC4f = mbC4f;`)
-                // three expands color_vertex etc.; keep them intact.
-                .replace('#include <begin_vertex>',
-                    '#include <begin_vertex>');
-            shader.fragmentShader = shader.fragmentShader
-                .replace('void main() {',
-                    `uniform float uMBLightsE;
-                     varying vec4 vMbC4f;
-                     void main() {`)
-                .replace('#include <opaque_fragment>',
-                    `#include <opaque_fragment>
-                     {
-                         // mgl model.fragment.glsl light-geometry falloff.
-                         float mbD = length(vec2(1.3 * max(0.0, abs(vMbC4f.x) - vMbC4f.z), vMbC4f.y));
-                         mbD += mix(0.5, 0.0, clamp(uMBLightsE - 1.0, 0.0, 1.0));
-                         gl_FragColor.a *= clamp(1.0 - mbD * mbD, 0.0, 1.0);
-                         if (gl_FragColor.a <= 0.0) discard;
-                     }`);
-        };
+        // Indirect-update handle (refreshMeshFeatures) — the emissive term.
+        (mat as any).__mbLightsU = mat.uniforms.uMBLightsE;
         const mesh = new THREE.Mesh(g, mat);
         (mat as any).__mbIsLights = true;
         mesh.renderOrder = 11;
@@ -793,6 +793,17 @@ function splitByPart(
         if (lightsMesh) {
             lightsMesh.userData.__mbNodeId = mesh.userData?.__mbNodeId;
             parent.add(lightsMesh);
+            if (!(globalThis as any).__mbBeamLogged) {
+                (globalThis as any).__mbBeamLogged = true;
+                lightsMesh.geometry.computeBoundingBox();
+                const bb = lightsMesh.geometry.boundingBox;
+                // eslint-disable-next-line no-console
+                console.log('[MBBeam] zScale=' + (mesh.userData?.__mbZScale ?? -1)
+                    + ' pos=' + lightsMesh.position.toArray().map((n: number) => n.toFixed(1))
+                    + ' bbMin=' + bb?.min.toArray().map((n: number) => n.toFixed(1))
+                    + ' bbMax=' + bb?.max.toArray().map((n: number) => n.toFixed(1))
+                    + ' tris=' + (lightsMesh.geometry.getIndex()?.count ?? 0) / 3);
+            }
         }
     }
     // Indirect-update bookkeeping (see refreshMeshFeatures): everything a
@@ -885,13 +896,13 @@ function refreshSplit(mesh: THREE.Mesh, parts: PartStyle[]): void {
     if (split.lightsMesh) {
         const doorColor = partFirstColor.get(DOOR_PART);
         const mat: any = split.lightsMesh.material;
-        if (doorColor && mat?.color) {
-            mat.color.setRGB(
-                srgbToLinear(doorColor[0] / 255),
-                srgbToLinear(doorColor[1] / 255),
-                srgbToLinear(doorColor[2] / 255));
+        // §564 ShaderMaterial: the door tint is an sRGB vec3 uniform (raw
+        // output, no colorspace_fragment).
+        if (doorColor && mat?.uniforms?.uMBLightsColor) {
+            mat.uniforms.uMBLightsColor.value.set(
+                doorColor[0] / 255, doorColor[1] / 255, doorColor[2] / 255);
         }
-        const u = mat?.userData?.__mbLightsU;
+        const u = mat?.__mbLightsU;
         if (u) u.value = parts[DOOR_PART]?.emissive ?? u.value;
     }
 }
