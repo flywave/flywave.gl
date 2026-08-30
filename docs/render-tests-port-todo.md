@@ -6806,3 +6806,8 @@ landmark-conflation 8 例（conflation replacement 的直接测试域）vs ml-fi
 **§639. conflation 升级环相交（§638 下轮入口落地，2026-08-31）**：
 
 `MBModelFootprints` 重写为**环存储 + 射线法 PIP**（bbox 仅快拒）；捕获改为 `node.matrixWorld` 变换的 footprint 几何顶点 → lng/lat 环（meshopt/draco 的 y 镜像约定由 matrixWorld 统一吸收，消除本地符号分支——此前 bbox 版的 y 镜像错位即此根因）。**验收**：conflation 8 例 821849 → **681987（净 −139,862）**，较 bbox 版再 −74k；§638 的回归大幅收敛：intersect-padding-lod +39432→+12640、index-overflow-lod +13866→+3624；buckingham 182348→140348 再改善。**残差**：仅外环 PIP（忽略内环/洞）的边界带，padding-lod 仍 +12.6k（padding 语义对边界极敏感）——下轮可补内环（node geometry 的多环）或 padding 常数微调。
+
+**§640. conflation 三角形版证伪 + elevated-lighting 回归定性（2026-08-31）**：
+
+①footprint 三角形剖分匹配**证伪回退**：footprint 节点几何是**轮廓点序列**而非三角剖分——按 3 顶点分组构造伪三角形覆盖巨面积，index-overflow 90634→378318、intersect-padding 42102→160060（+67 万回退）。已 `git checkout` 回 §639 环版本（681987，当前最优）。内环/洞精确匹配需真三角剖分（earcut）或轮廓分段——成本/收益记档待评估。
+②elevated-symbols-lighting-terrain-enabled 2 例 +14k 回归取证：actual/expected 对拍显示差异**与 dfc 标签无关**——expected 全场景深蓝灰（雾/光照洗涤 + 斜向阴影边界），我方为未洗涤浅灰路面 + 粗糙阴影四边形——是 **lighting-3d-mode 光照模型域**残差（§455-464/§562 系），非 dfc 放行标签问题。dfc 修复在此域无回归责任。
