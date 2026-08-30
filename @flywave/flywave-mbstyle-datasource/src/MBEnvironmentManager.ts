@@ -2724,7 +2724,7 @@ export class MBEnvironmentManager {
         const sources = style.sources ?? {};
         for (const [sourceId, src] of Object.entries(sources)) {
             const source = src as any;
-            if (source.type !== 'image' && source.type !== 'canvas') continue;
+            if (source.type !== 'image' && source.type !== 'canvas' && source.type !== 'video') continue;
             if (!source.coordinates || source.coordinates.length < 4) continue;
 
             // One quad PER raster layer referencing this source (mgl applies
@@ -2755,6 +2755,66 @@ export class MBEnvironmentManager {
                     // values pass through the renderer's linear→sRGB output
                     // encode a second time (measured ~1.35× too bright).
                     texture.colorSpace = THREE.SRGBColorSpace;
+                } else if (source.type === 'video') {
+                    // mgl VideoSource: <video> element + VideoTexture. The
+                    // render-test fixture URLs point at mapbox's static CDN —
+                    // resolve them to the vendored copy (offline determinism);
+                    // other URLs load as-is.
+                    const vendored: Array<[RegExp, string]> = [
+                        [/^https:\/\/static\.assets\.mapbox\.com\/mapbox-gl-js\/drone\.mp4$/,
+                            '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/drone.mp4'],
+                        [/^https:\/\/static\.assets\.mapbox\.com\/mapbox-gl-js\/drone\.webm$/,
+                            '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/drone.webm'],
+                    ];
+                    const candidates: string[] = (source.urls ?? [])
+                        .map((u: string) => {
+                            for (const [re, local] of vendored) {
+                                if (re.test(u)) return local;
+                            }
+                            return u;
+                        });
+                    const videoEl = document.createElement('video');
+                    videoEl.crossOrigin = 'anonymous';
+                    videoEl.muted = true;
+                    videoEl.loop = true;
+                    videoEl.setAttribute('playsinline', '');
+                    texture = await new Promise<THREE.Texture | null>((resolve) => {
+                        let settled = false;
+                        // If the video never becomes usable the source stays
+                        // inert (no quad) — mgl-like.
+                        const timer = setTimeout(() => {
+                            if (!settled) { settled = true; resolve(null); }
+                        }, 10000);
+                        videoEl.oncanplay = () => {
+                            if (settled) return;
+                            settled = true;
+                            clearTimeout(timer);
+                            videoEl.play().catch(() => {});
+                            const vt = new THREE.VideoTexture(videoEl);
+                            vt.colorSpace = THREE.SRGBColorSpace;
+                            resolve(vt);
+                        };
+                        videoEl.onloadeddata = () => {
+                            // Render-test determinism: park on an early frame
+                            // (mgl captures shortly after the source loads).
+                            try { videoEl.currentTime = 0.04; } catch {}
+                        };
+                        videoEl.onerror = () => {
+                            if (settled) return;
+                            settled = true;
+                            clearTimeout(timer);
+                            resolve(null);
+                        };
+                        for (const u of candidates) {
+                            const srcEl = document.createElement('source');
+                            srcEl.src = u;
+                            videoEl.appendChild(srcEl);
+                        }
+                        videoEl.load();
+                    });
+                    if (!texture) continue;
+                    texture.minFilter = THREE.LinearFilter;
+                    texture.magFilter = THREE.LinearFilter;
                 } else {
                     const imgUrl = (source.url ?? '').replace(
                         /^local:\/\//,
