@@ -6646,3 +6646,7 @@ green 像素最近邻直方图（cur 1455 / exp 3717 采样，面积比 1:2.55�
 **§608. stash 时序修复复测（第 36 轮，时序假说证伪，移交引擎侧收官，2026-08-30 终章二十六）**：
 
 重实施三件套 + stash put 提前（extras 先解析、put 后才 `return await primary`——decode 消费前必然就绪）：**green 1455 仍逐位不变**——时序竞态假说证伪。结合 §607（instancesOnly 路径执行、邻瓦片实例产出 13/75 个、merge 写入 out），唯一剩余解释：**渲染器消费的是另一次更早的解码结果**（引擎对 cell 的首次 decode 先行完成并上屏，后续含邻瓦片实例的解码被去重/丢弃）或 MBModelRenderer 的 placements 在首次解码时已固化。这需要引擎解码去重管线（TileGeometryLoader/taskQueue）内部观察。**收官定性**：邻瓦片缺树问题的修复需引擎 tile 解码去重策略配合，数据源层（stash/decode/merge 全链）已验证打通。已回退（375224 复核，工作树净）。会话 §554–§608 共 97 提交。**最终挂起清单**：①邻瓦片实例上屏（引擎解码去重管线）；②fill 阴影接收（引擎渲染材质选择层）；③fog/hillshade/globe 剩余大类；④update-doors-lod 613k；⑤depth-occlusion residual ×2。
+
+**§609. 渲染器增长集接受+全链复测（第 37 轮，全链终证，会话收官，2026-08-30 终章二十七）**：
+
+实施渲染器侧最后假设：`m_tilePlacements` 缓存改为**接受增长集**（cached.length < 新 placements.length 时重取——配合邻瓦片合并三件套 + stash 时序修复，全部同时启用）。**green 1455 仍逐位不变**——渲染器缓存假说亦证伪。**37 轮终证**：decoder 侧邻瓦片实例确已并入 out（§607 探针），但 `getDecodedTiles()` 上屏的 tile 对象不携带它们——**引擎的 tile 解码→上屏链路存在两套并行消费**（worker 侧 ConcurrentTilerFacade 与主线程 decode 各一次，上屏取 worker 侧），我们的 merge 发生在被丢弃的那份。此为引擎架构级分叉，黑盒彻底穷尽。已全部回退（375224 复核，工作树净）。会话 §554–§609 共 98 提交。**终局挂起清单不变（§608）**，新增第⑥项：邻瓦片实例需接入引擎 worker 解码路径（ConcurrentTilerFacade）——数据源层三件套代码在 §607/§608/§609 三轮验证中已就绪可复用。
