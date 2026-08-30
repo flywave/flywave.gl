@@ -6532,3 +6532,7 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **§582. fill 接收器第十轮——烟枪实证与 wrap 尝试（收口挂起，2026-08-30 续三十四）**：
 
 **烟枪**：`[MBAnchor] type=ShaderMaterial hasCommon=true hasOpaque=false hasProjV=false`——引擎 fill technique 材质是**无 three include 锚点的 ShaderMaterial**，injectGroundShadow 的两个 replace **静默 no-op**（uniforms 创建了、shader 从未采样——九轮之谜的完整解释）。**draw 材质交集**：patched 162 ∩ scene 可见 mesh 材质 = **82**（确在渲染集）。**wrap 尝试**（改写其 main 为 mbShadowOrigMain + 追加 wrapper 乘 gl_FragColor）：加 gl_FragColor/GLSL 守卫后仍有 **2 个 ShaderMaterial "Fragment shader is not compiled"**、视觉零变化——回退（破坏性>收益）。**结论**：fill-shadow 正确集成需在 @flywave/flywave-materials 包层面（理解其 shader 组装/out 变量/precision 约定后定点注入），数据源层黑盒通道到此为止。已固化资产：§581b 的数组 refresh+重编译基线（语义正确、零回归）保留。三域同源复核与远带修复挂起此集成。工作树净。
+
+**§583. materials 包研读——§582 定性部分修正+最终疑难聚焦（2026-08-30 终章）**：
+
+`[MBAnchorH]` 直方图修正 §582 烟枪：**80× MeshStandardMaterial（锚点齐全 ok=1）+ 仅 1× ShaderMaterial（无锚点）**——fill/extrusion 主力材质的 include 锚点存在，注入路径本应有效；MapMeshStandardMaterial（MapMeshMaterials.ts:1020）链式 onBeforeCompile ✓ 兼容。**最终聚焦**：调试读出位于 `if (uMBShadowIntensity > 0.0)` 内且先于越界检查——**读出 0px ⇒ shader 内 intensity 恒 0 ⇒ 刷新值未达被绘制材质的 uniform**，与"[MBRefresh] 可达 + 82 uuid 交集 + 81 次带补丁编译"三方证据矛盾——唯一剩余解释为**编译时的 uniforms 对象与刷新循环持有的引用分裂**（三次 git checkout 反复增删 §581/§581b 修复造成当前库内数组修复在而 cacheKey 修复缺的混合态嫌疑最大）。**重启清单**：①恢复 cacheKey 基线（d4a6e827 内容核对）；②一次 shadowdbg=3 复测读出；③仍 0px 则 onBeforeRender 打断点取 draw 材质 uniforms 实值（最后手段）。本轮零代码变更，工作树净。会话累计 §554–§583 共 66 提交。
