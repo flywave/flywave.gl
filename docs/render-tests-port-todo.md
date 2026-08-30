@@ -6382,3 +6382,13 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **③ mgl 语义对齐**：shadow factor = `calculateGroundShadowFactor` 逐通道 `ambient/(ambient+dir·NdotL_ground)`（**非 1−shadow-intensity**；夜景 amb 0.005/dir 0.0588 → 0.078 线性）——手算 sRGB(0.078)×71≈21 与 expected 暗区 15-23 吻合。阴影相机取景=casters 联合 AABB（targetDistance 框漏 1.5km 外瓦片）；lightDir 裸数组 Vector3.copy=NaN 矩阵；方向用 mgl 精确 az+90（90−az 会镜像 x）。
 
 **效果**：update-doors 587578→**587145**、-lod 613748→**613094**、(350,650) 逐位 73=73。**默认仍关**（MBSTYLE_SHADOW=1 开）：净收益小，遗留=远景区（(350,250) 应影未影——ortho 盒仅罩 casters，远处地面点出界即 lit）与门灯 beam 遮挡。**下轮**：①ortho 盒外扩至 quad 远角范围；②门灯 beam 深度参与；③shadows-casting 夹具全亮差距（375k 主体是树木/建筑自阴影未做——接收者注入仅 fill/extrusion 族）。
+
+**§561. interpolate 引擎尾停顿破案 + 阴影远景区 + 门灯法线镜像（2026-08-30 续六）**：
+
+**① 现代 interpolate 算子伪停顿（全局性引擎 bug，决定性）**：`MBExpressionEngine` case 'interpolate' 的 `if (args.length % 2 === 0) stops.push([last, exec(last)])` ——args=[mode,input,...2N 个停顿] **恒为偶数**，条件恒真：每个表达式都追加伪停顿 `[lastInput, lastInput]`。后果：超界输入返回垃圾停顿值；**降序输出段塌缩 0**（input≥伪停顿时直接返回其值 0——门 emissive `interpolate(brightness,0→2.2,0.2→0.0)` 夜间应为 1.95 却恒 0，门面全黑）。node 离线复现（door=0/win=0.97 同输入矛盾）定位，删除推送。**效果：update-doors 587578→557853（−3.0万）**，门 emissive 夜间全亮 (0,255,204)≈expected(0,255,230)；+shadow 557420（历史最优）。回归：update/update-lod +3~5k（window emissive 求值域变化），emission-strength/doors-no-shadows(-lod)/无影基线逐位不变。
+
+**② 阴影 ortho 远景区**：取景盒折叠地面 quad 四远角（cornerOnGround 后并入 casterBox）——update-doors (350,250) 远景暗带未恢复（该点采样白=无 caster 覆盖，疑 expected 该处为暗建筑面而非地面影）。
+
+**③ 门灯几何法线 y 镜像**：GLB y-mirror 翻转手性，挤出法线须同步镜像否则 beam 嵌入墙内（mgl 沿 +normal 挤出于未镜像帧）。本夹具像素无变化（门朝向未受 y 镜像影响），语义修正留档。
+
+**剩余（update-doors 557k 三域）**：(a) window 夜间透明度/背景合成——ours (6,149,228) 纯样式色 α.8 压暗影地 vs exp (48,159,189)（mgl opacity 链含 rmea.w×(1−d²)，且其后景亮度不同）；(b) x=350 列 y450-560 的门/beam 整列缺失；(c) 远景暗带。**引擎修复的全局性提醒**：所有 interpolate 表达式求值已变，其他家族（raster-color/hillshade zoom 函数等）重跑可能有双向移动，下轮批测须全量盘点一次。
