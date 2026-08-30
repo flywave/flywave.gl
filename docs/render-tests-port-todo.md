@@ -6470,3 +6470,11 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **§572. lighting-3d-mode 阴影回归簇校准尝试（零效果收口——回归源非接收器，2026-08-30 续二十一）**：
 
 按 §571b 前置实施内容阴影因子校准：patchManager 接收器的 `×(1−intensity)` 整色乘（mgl 语义=阴影只替换直射 NdotL、ambient 保留）改为 `amb/(amb+dir·ndl)` 内容因子（calculateGroundShadowFactor 同式，含 CPU 端 lighting3DState 求值 + uniform 注入）。**实测零像素效果**——draw-layer-lines/slot +27443、shimmering +27102、translucent +15470 与改前逐位相同（唯二变化 line-emissive-in-shadows −12.3k×2 系自身波动）。**结论：该回归簇的来源不是接收器暗度**——接收器改动完全不影响输出，说明这些场景的 +27k 机制在别处（候选：§530 记档的第二 WebGL 上下文对 SwiftShader 主渲染的状态扰动在 WillRender 深度 pass 之外的残留、或 ground quad AfterRender 合成对该族内容层的干扰）。代码已回退。**下轮隔离 A/B 三件套**：①enable+跳过深度 pass+跳过 quad（纯 flag）；②enable+深度 pass+跳过 quad；③enable+全链——定位扰动源后才能评估转默认。
+
+**§572c. 阴影链转默认开启（landmark-mbx 家族净 −71.7万，本会话最大单批收益，2026-08-30 续二十二）**：
+
+§572 的三件套隔离 A/B 执行：**depth pass 开 + quad 关 = 逐位基线**（draw-layer-lines/shimmering）→ 回归源锁定为地面 overlay quad。根因：引擎对**平铺 fill/line 层用 depthTest=false 按样式序绘制**（§518 既有记档）+ 半透明 paint 不写深度——quad 的 LESS 深度判定在这些场景失效、整片盖住内容。mgl 语义 = 地面阴影在半透明/平铺内容**之下**合成（receivers 逐片元采样），AfterRender overlay 无法复刻该层序。
+
+**修复（双门控）**：quad 仅当风格无 (a) 数值 opacity<1 的层、(b) fill/line 层时绘制（landmark 族=background+model ✓ 保留收益）。**默认翻转**：shadowdbg 缺省 1（0=关/2=跳 pass/3+=debug 读出），§522 取证门退役。
+
+**效果**：landmark-mbx 13 例净 **−716872**（lod 357403→**109369**、meshopt-lod −10.9万、castro-theater-quantization −16.8万、highlights −7.1万、meshopt −9.8万）；lighting-3d-mode 回归簇全回基线（translucent/shimmering/draw-layer-lines/slot ±0）；3d-intersections 阴影族维持收益（roads-depth −8.1k/junction −1.1k）。**residual**：+2.6k dynamic-terrain-disabled、+1.3k meshopt-colors-lod。**遗留**：全语料批测（含无 cast-shadows 家族的零影响验证——pass 对无 shadowLightState 风格早退）建议下轮一次全量。
