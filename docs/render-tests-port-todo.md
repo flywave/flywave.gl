@@ -6520,3 +6520,7 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **§580. fill 接收器第七轮——材质稳定性实证+编译链死点（收口，2026-08-30 续三十一）**：
 
 本轮三探针：①材质数组假设修复（refresh 循环 ?. 吞数组）——零像素；②`[MBOBC]`：**注入后的 onBeforeCompile 从未触发**（无 cacheKey 修复时）；③`[MBMatId]`：**162 材质 3 秒后 162 全同 uuid**——引擎不替换材质（池化假说证伪）。结合 §579（needsUpdate+customProgramCacheKey 双修复亦零像素）：其他 patch 位点均正确链式保留 orig ✓ 无覆盖——**断点在 three 程序生命周期更深处**（候选：这些 technique 材质经引擎自定义 program 缓存/WebGLRenderer 层绕过 onBeforeCompile 重建，或 needsUpdate 后引擎每帧重置 version）。**该线挂起为专项**（建议从引擎侧 MapRenderingManager 的 material→program 流向入手），阴影链在其他域的收益（−49.6万）不受影响。本轮零代码变更（探针全清，工作树净）。
+
+**§581. fill 接收器第八轮——重编译打通，采样链断点下移（2026-08-30 续三十二）**：
+
+发现 §579 的 needsUpdate+cacheKey 双修复**首测带 tsc 残错**（karma 用旧 bundle）——本轮干净复测：`[MBOBC2]` **确认重编译已触发**（onBeforeCompile 死点打通，修复已提交为语义基线）。**视觉仍零变化** → 断点下移至采样链：shadowdbg=3 调试读出在地面色上仍不出现 → 候选收窄为 ①渲染的 fill draw call 用的仍不是这 162 材质（需 WebGL 层材质断点/引擎 renderObjects 材质引用追踪）②intensity 刷新未达（refresh 循环虽修了数组路径，但 shadowState→uniforms 的链可能仍有中间层）。**下轮**：在 refresh 循环内直接断言 uList 数量>0 + intensity 值（一行探针），若非零则转 WebGL draw call 材质追踪。三域同源复核继续挂起。
