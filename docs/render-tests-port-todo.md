@@ -6694,3 +6694,7 @@ RTE 帧（getRteCamera）投影探针——**同帧对比**：inst5（可见中�
 **§620. GPU 帧 modelViewMatrix 探针（第 48 轮，会话终局归档，2026-08-30 终章三十八）**：
 
 SpectorJS 替代（onBeforeRender 抓 GPU 帧 modelViewMatrix，EARLY idx10 vs LATE idx91）：两者读数**完全相同**（mvCol30=0,0,0、camPos=0,0,0=RTE 原点相机 ✓）——onBeforeRender 时点该矩阵尚未填充（three 在其后写入），探针**不具裁决力**。**48 轮调查的最终边界**：CPU 全环节（decode/placement/instantiate/scene/drawcall 计数）实证正确；GPU 帧的逐 draw 矩阵/顶点数据**在任何 in-page 钩子之外**，唯真 SpectorJS（联网环境）可达。**重启清单（SpectorJS 会话）**：①npm i spectorjs；②karma 注入 Spector + capture 一帧；③按 draw 列表对比 idx<91 与 idx≥91 树的 modelViewMatrix/顶点位置；④差异即修复点（预期在引擎 per-object rebase 链 TileGeometryCreator→sceneRoot 挂载对非 tile 对象的矩阵处理）。会话 §554–§620 共 109 提交，工作树净（375224 复核）。主线成果与全部调查档案完整沉淀。
+
+**§621. SpectorJS karma 注入（第 49 轮，基础设施半通，会话最终归档，2026-08-30 终章三十九）**：
+
+实施：①spectatorjs 0.9.30 于 /tmp npm 安装成功（仓库 npm 受 catalog: 协议限制）→ vendor 至 test/vendor + karma files 注入；②capture 探针（SPECTOR 全局✓加载、captureCanvas✓执行、onCaptureAdded✓挂接）——**capture 交付在 headless karma 下不稳定**（一次 fires 但 captures=0；后续连探针都错过测试窗口——引擎 idle 帧无新 command 交付）。**结论**：Spector 基础设施（加载/注入/capture API）已验证可行，逐 draw 数据交付需**交互式浏览器会话**（有持续渲染帧）或强制引擎连续渲染后再 capture。已全部回退（工作树净，375224 复核）。**49 轮调查最终交付状态**：六次自我更正 + 三层（数据链/对象图/drawcall）全实证 + Spector 基础设施验证 + 唯一剩余（GPU 帧逐 draw 矩阵）依赖交互式会话。会话 §554–§621 共 111 提交。
