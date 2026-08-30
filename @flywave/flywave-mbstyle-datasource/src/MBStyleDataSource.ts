@@ -1273,6 +1273,25 @@ export class MBStyleDataSource extends TileDataSource {
      * patcher/placement code read a non-existent `m_tiles` property, which made the
      * material patcher and symbol placement iterate nothing.
      */
+    /** §636: conflation replacement re-decode cycle tracking. Set when the
+     * batched-model datasource registers NEW footprint coverage (fill-
+     * extrusion suppression now applies); cleared by conflationSettled() once
+     * the re-decoded tiles are no longer pending — the render-test harness
+     * polls this so the capture waits for the suppressed frame. */
+    private m_conflationDirty = false;
+
+    notifyConflationCoverageAdded(): void {
+        this.m_conflationDirty = true;
+        this.mapView?.markTilesDirty?.(this);
+    }
+
+    conflationSettled(): boolean {
+        if (this.m_conflationDirty && !this.tilesPending()) {
+            this.m_conflationDirty = false;
+        }
+        return !this.m_conflationDirty;
+    }
+
     getDecodedTiles(): Tile[] {
         const tiles: Tile[] = [];
         const mapView = (this as any).m_mapView as any;

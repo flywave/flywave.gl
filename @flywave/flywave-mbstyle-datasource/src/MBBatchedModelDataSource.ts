@@ -490,8 +490,7 @@ class MBBatchedModelDecoder implements ITileDecoder {
                 // re-decode so the extrusion suppression takes effect. Only on
                 // genuinely NEW coverage — re-registers must not loop.
                 if (getModelFootprintBoxCount() > beforeBoxes) {
-                    const env: any = this.m_envProvider;
-                    env?.mapView?.markTilesDirty?.(env);
+                    (this.m_envProvider as any)?.notifyConflationCoverageAdded?.();
                 }
             } catch { /* conflation is best-effort */ }
 

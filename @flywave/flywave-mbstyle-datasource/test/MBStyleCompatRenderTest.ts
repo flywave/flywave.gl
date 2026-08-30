@@ -321,6 +321,41 @@ async function renderFrames(
         });
     }
 
+    // §636 conflation replacement: model footprint coverage can register
+    // AFTER the vector tiles decoded (GLB decode is async), triggering a
+    // markTilesDirty re-decode during which fill-extrusion faces are
+    // suppressed. Poll the conflation cycle to a settled state (bounded)
+    // with real frames so the capture shows the replaced scene.
+    if (typeof (dataSource as any).conflationSettled === "function") {
+        const hasFillExtrusion = ((dataSource as any).styleManager?.getStyle?.()?.layers ?? []).some(
+            (l: any) => l.type === "fill-extrusion",
+        );
+        if (hasFillExtrusion || hasModel) {
+            for (let i = 0; i < 20; i++) {
+                if ((dataSource as any).conflationSettled()) break;
+                await new Promise<void>((resolve) => {
+                    const handler = () => {
+                        mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
+                        resolve();
+                    };
+                    mapView.addEventListener(MapViewEventNames.AfterRender, handler);
+                    mapView.update();
+                    setTimeout(resolve, 500);
+                });
+            }
+            // One extra frame so the re-decoded (suppressed) content draws.
+            await new Promise<void>((resolve) => {
+                const handler = () => {
+                    mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
+                    resolve();
+                };
+                mapView.addEventListener(MapViewEventNames.AfterRender, handler);
+                mapView.update();
+                setTimeout(handler, 500);
+            });
+        }
+    }
+
     const hasRaster = ((dataSource as any).styleManager?.getStyle?.()?.layers ?? []).some(
         (l: any) => l.type === "raster",
     );
