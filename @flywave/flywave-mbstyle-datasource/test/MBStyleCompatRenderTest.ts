@@ -356,6 +356,102 @@ async function renderFrames(
         }
     }
 
+    // §642 SpectorJS 交互式裁决（§621-§622 重启清单落地版）：capture+dump
+    // 在测试存活窗口内 await 完成（§622 的失败根因是单跑模式下定时器被页面
+    // 回收——本块在测试体内 await onCapture，规避该时序）。karma 参数
+    // spectrcapture=1 启用。产物：每 draw 的 program + 最近 modelView 矩阵
+    // 摘要 + instanceMatrix buffer 内容，供邻瓦片树像素贡献为零之谜做逐
+    // draw 裁决。
+    {
+        const spy = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("spectrcapture="))?.slice("spectrcapture=".length);
+        if (spy === "1" && hasModel) {
+            const mv: any = mapView;
+            (window as any).__mbMV = mv;
+            const canvas: HTMLCanvasElement = mv.canvas ?? mv.renderer?.domElement;
+            try {
+                const bundleUrl = "/base/@flywave/flywave-mbstyle-datasource/test/vendor/spector.bundle.js";
+                const text = await fetch(bundleUrl).then((r) => r.text());
+                // eslint-disable-next-line no-new-func
+                (0, eval)(text + "\n;window.SPECTOR = SPECTOR;");
+                const spector = new (window as any).SPECTOR.Spector();
+                (window as any).__mbSpector = spector;
+                spector.spyCanvases();
+                // eslint-disable-next-line no-console
+                console.log("[MBSpec] spector ready, capturing next frame");
+                const capture: any = await new Promise<any>((resolve) => {
+                    const timer = setTimeout(() => resolve(null), 30000);
+                    spector.onCapture.add((c: any) => {
+                        clearTimeout(timer);
+                        resolve(c);
+                    });
+                    spector.captureNextFrame(canvas);
+                    // Force real frames so the capture delivers.
+                    let n = 0;
+                    const tick = () => {
+                        mv.update();
+                        if (++n < 120 && !(window as any).__mbSpecDone) requestAnimationFrame(tick);
+                    };
+                    tick();
+                });
+                (window as any).__mbSpecDone = true;
+                if (!capture) {
+                    // eslint-disable-next-line no-console
+                    console.log("[MBSpec] capture TIMEOUT");
+                } else {
+                    const cmds: any[] = capture.commands ?? [];
+                    // eslint-disable-next-line no-console
+                    console.log("[MBSpec] commands=" + cmds.length);
+                    // Introspection: shape of commands
+                    const kinds: Record<string, number> = {};
+                    for (const c of cmds) kinds[c.name ?? "?"] = (kinds[c.name ?? "?"] ?? 0) + 1;
+                    // eslint-disable-next-line no-console
+                    console.log("[MBSpecI] kinds=" + JSON.stringify(kinds));
+                    const sampleDraw = cmds.find((c: any) => /draw/i.test(c.name ?? ""));
+                    if (sampleDraw) {
+                        // eslint-disable-next-line no-console
+                        console.log("[MBSpecI] drawKeys=" + JSON.stringify(Object.keys(sampleDraw))
+                            + " sample=" + JSON.stringify(sampleDraw).slice(0, 600));
+                    }
+                    const sampleU = cmds.find((c: any) => /uniformMatrix/i.test(c.name ?? ""));
+                    if (sampleU) {
+                        // eslint-disable-next-line no-console
+                        console.log("[MBSpecI] uniKeys=" + JSON.stringify(Object.keys(sampleU))
+                            + " sample=" + JSON.stringify(sampleU).slice(0, 600));
+                    }
+                    let curProg: any = "?";
+                    const lastMatByLoc: Record<string, string> = {};
+                    let drawIdx = 0;
+                    for (const c of cmds) {
+                        const name = c.name ?? "";
+                        const args: any = c.commandArguments;
+                        if (name === "useProgram") {
+                            curProg = args?.[0]?.__SPECTOR_Object_TAG?.id ?? curProg;
+                        } else if (name === "uniformMatrix4fv") {
+                            const m = args?.[2];
+                            const loc = args?.[0]?.__SPECTOR_Object_TAG?.id ?? "?";
+                            if (m && m["15"] !== undefined) {
+                                lastMatByLoc[loc] = `tx(${m["12"].toFixed(1)},${m["13"].toFixed(1)},${m["14"].toFixed(1)})`
+                                    + ` w${m["15"].toFixed(2)}`;
+                            }
+                        } else if (name === "drawElements" || name === "drawArrays") {
+                            drawIdx++;
+                            const cnt = args?.[1] ?? "?";
+                            const mats = Object.keys(lastMatByLoc).map((k) => `L${k}:${lastMatByLoc[k]}`).join(" ");
+                            // eslint-disable-next-line no-console
+                            console.log("[MBSpec] D" + drawIdx + " prog=" + curProg + " cnt=" + cnt + " " + mats);
+                        }
+                    }
+                    // eslint-disable-next-line no-console
+                    console.log("[MBSpec] DONE draws=" + drawIdx);
+                }
+            } catch (e) {
+                // eslint-disable-next-line no-console
+                console.log("[MBSpec] ERROR " + (e as Error)?.message);
+            }
+        }
+    }
+
     const hasRaster = ((dataSource as any).styleManager?.getStyle?.()?.layers ?? []).some(
         (l: any) => l.type === "raster",
     );
