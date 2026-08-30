@@ -6642,3 +6642,7 @@ green 像素最近邻直方图（cur 1455 / exp 3717 采样，面积比 1:2.55�
 **§607. 邻瓦片 extras 合并首轮实施（解码✓渲染未达，时序疑点，2026-08-30 终章二十五）**：
 
 实施完整链路：①`MBPendingSourceTile.instancesOnly` 标记；②extras provider 钳制层 fetch 主瓦片后并发取 8 邻瓦片入 stash；③`decodeTileWithSources` 对 instancesOnly **只并入 modelInstances**（邻瓦片网格几何仍会被 cell 裁剪，§567 教训规避）。**探针结果**：邻瓦片解码**成功产出实例**（15/5242/12663→13 个、15/5243/12664→75 个）——机制全通；但**渲染 green 采样 1455 逐位不变**。疑点：**stash 时序竞态**（stash 在 primary 返回后 put，而该 cell 的 decode 可能已消费旧 stash/或已完成后 stash 才到——渲染用的解码结果先于邻瓦片就绪）。已全部回退（375224 复核，工作树净）。**下轮单点**：stash put 提前到 primary await 之前（邻瓦片 fetch 与 primary 并发、put 在 decode 前）+ 重测。会话 §554–§607 共 96 提交。
+
+**§608. stash 时序修复复测（第 36 轮，时序假说证伪，移交引擎侧收官，2026-08-30 终章二十六）**：
+
+重实施三件套 + stash put 提前（extras 先解析、put 后才 `return await primary`——decode 消费前必然就绪）：**green 1455 仍逐位不变**——时序竞态假说证伪。结合 §607（instancesOnly 路径执行、邻瓦片实例产出 13/75 个、merge 写入 out），唯一剩余解释：**渲染器消费的是另一次更早的解码结果**（引擎对 cell 的首次 decode 先行完成并上屏，后续含邻瓦片实例的解码被去重/丢弃）或 MBModelRenderer 的 placements 在首次解码时已固化。这需要引擎解码去重管线（TileGeometryLoader/taskQueue）内部观察。**收官定性**：邻瓦片缺树问题的修复需引擎 tile 解码去重策略配合，数据源层（stash/decode/merge 全链）已验证打通。已回退（375224 复核，工作树净）。会话 §554–§608 共 97 提交。**最终挂起清单**：①邻瓦片实例上屏（引擎解码去重管线）；②fill 阴影接收（引擎渲染材质选择层）；③fog/hillshade/globe 剩余大类；④update-doors-lod 613k；⑤depth-occlusion residual ×2。
