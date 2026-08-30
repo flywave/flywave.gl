@@ -6728,3 +6728,7 @@ mgl `hillshade_program.ts:74-91` 方向合成语义完整解码：azimuthal=pain
 **③ image-source（hourglass/non-convex-coords，各 38928/38956 = baseline8 逐位）**：两夹具 `projection: globe`——expected 为平面图像 warp 帧而我方渲染真实球体（globe raster/TerrainDraping bail 同型，报告 #2 引擎专项）。image quad 单应 warp 通道本身在 flat 投影已验证（§canvas/default PASS），此 2 例属 **globe draping 冻结域**，非 image-source 实现缺陷。
 
 **本轮净变化**：零代码行为变化（实验全部回退，单测 300 绿，工作树净）。baseline 报告数据源层可动 ROI 项至此全部处置完毕（已修 / 定级引擎冻结域并附证据链）。
+
+**§627. 符号深度管线引擎侧两轮实验（§626 后续，2026-08-30 续廿五）**：
+
+沿 verifier 指引入口开工引擎侧：①`emitTextGeometry`/textPath **+1m z 偏置**（mgl depthEpsilon 等价）→ 24677/12696（±噪声）；②`SdfTextMaterial`（flywave-text-canvas TextMaterials.ts，depthTest:true 路径确认是 TextCanvas 渲染链）**polygonOffset -2/-2** → 24673/12656 **逐位不变**（bundle 实证改动已编译进 karma 包）。两实验均已回退（工作树净）。**结论**：dynamic-filter point 夹具的"蓝点盖字"非文字深度败北（任何文字侧深度优势都无效），而是**高 pitch（73.5°）下 circle 点位/相机标度与 mgl 的投影差**——我方近排 circle 与标签同屏重叠、mgl 的对应 circle 缺席（远排两者一致）——属引擎高 pitch 点投影标定域（与 §128-141 相机-地形标度冻结族同型）。另记：harness 夹具样式嵌于 render-tests-index.ts（style.json 直改不生效），后续 fixture A/B 须改 index 或 loader。**下一引擎入口**（若立项）：MapViewPoints/circle 屏幕投影链 vs mgl circle-pitch-alignment+深度语义的逐 draw 对拍。
