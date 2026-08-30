@@ -6400,3 +6400,11 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **② model 材质阴影接收注入**：applyMglModelLighting 补 uMBShMap/uMBShMatrix/uMBShIntensity + vMbWorldPos varying——直射项 `mbNdotL *= shadowed_light_factor`（mgl 语义：阴影因子只替换直射 NdotL，ambient 项不动）；mbShadowLitUniforms 注册表 + AfterRender `syncModelShadowUniforms` 每帧刷新；intensity=0 门保证非阴影样式零影响（update-doors 557420 逐位不变）。
 
 **③ update-doors 剩余域收敛定性**：(a) window 夜间差异（ours (6,149,228) vs exp (48,159,189)）反推为**后景亮度**：exp = 0.75×(0,149,230)+0.25×~190 的混合——mgl 的 window 后景是亮墙（阴影未覆盖），我方后景在影中（16）→ window 域与阴影覆盖域纠缠，非 opacity 链本身（rmea.w×baseColor.w×u_opacity 我方已同构）；(b) x=350 列 y450-560 门列缺失待查；(c) 远景暗带=无 caster 覆盖。**shadows-casting 新定性**：主体差距非自阴影——exp (10,43,17) 深绿树/(0,0,0) 黑影/(160,167,159) 亮楼 vs 我方满屏灰背景=**黑 ambient（rgba(0,0,0) 0.4）语义未落地 + 树木实例缺失**（model-rotation match/% 表达式族疑点），自阴影注入已就绪待其修复后生效。
+
+**§563. shadows-casting 树木域排查（诊断收口，无代码变更）**：
+
+**① 黑 ambient 语义**：`rgba(0,0,0)×0.4` 解析链验证正常（parseMBColor→[0,0,0]→ambientColorLinear=0→mbK ambient 项=0）——非根因。
+
+**② 树木实例**：MBModelEmit 探针实证 emission 正常进入（tree-layer-not-receiving points=1 id=1622885437583883=pbf id），早先"placements=0"系 once-flag 探针在瓦片解码完成前触发的误读（第二次踩同一坑，记档：模型域探针必须 defer 到首帧后）。**空间取证**：我方树木 bbox(x136-1008,y0-632) vs expected(x112-1016,y0-632)——**位置正确、密度减半**（green 采样 592/1139）。候选根因：(a) filter `< (%id 6) 3` 或 model-id `%4` 的 feature-id 域差异（我方已用 pbf id，理论同 mgl）；(b) **overzoom 瓦片域**——source maxzoom 15、view zoom 17.5，mgl 从 z15 父瓦片按 covering 复制特征，我方可能只解码单瓦片 → 密度减半的量级吻合。**下轮第一查**：MBExtraVectorSourcesProvider/extras 的 overzoom covering 复制语义（对照 mgl tile covering `source.maxzoom` clamp）。
+
+**③ 本轮无代码提交**（工作树净，377046 复核稳定）；两次探针均以删除收尾。
