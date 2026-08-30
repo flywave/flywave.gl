@@ -94,6 +94,7 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
             // "@flywave/flywave-utils/**/*.ts",
             // "@flywave/flywave-geoutils/**/*.ts",
             // "@flywave/flywave-map-controls/**/*.ts",
+            { pattern: "@flywave/flywave-mbstyle-datasource/test/vendor/*.js", included: false, served: true },
             "@flywave/flywave-mbstyle-datasource/test/MBStyleCompatRenderTest.ts",
             // "@flywave/flywave-mapview/**/*.ts",
             // "@flywave/flywave-mapview-decoder/**/*.ts",
