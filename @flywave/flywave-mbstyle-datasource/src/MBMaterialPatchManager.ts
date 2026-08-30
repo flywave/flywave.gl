@@ -109,6 +109,11 @@ export class MBMaterialPatchManager {
                             if ((material as any).__mbShadowInjected) { if (stat) stat.already++; continue; }
                             if (stat) stat.injected++;
                             this.injectGroundShadow(material as any);
+                            (material as any).needsUpdate = true;
+                            const mat0 = material as any;
+                            const origKey0 = mat0.customProgramCacheKey?.bind(mat0);
+                            mat0.customProgramCacheKey = (): string =>
+                                (origKey0 ? origKey0() : 'mb') + '-mbshadow';
                         }
                     }
                 }
