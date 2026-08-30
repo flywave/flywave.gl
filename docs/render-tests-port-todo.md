@@ -6544,3 +6544,7 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **§585. fill 阴影接收器终局破案（第 13 轮，2026-08-30 终章三）**：
 
 GPU 级替代取证（SpectorJS 离线不可用，改 in-page）：①`[MBProg]` **带 -mbshadow 后缀的 WebGLProgram 实存**（mbshadow=2，含 physical,STANDARD）——补丁程序已构建；②创建路径 cacheKey 统一（消除最后一个碰撞面）+ 读出复测仍 0px；③**无条件红色覆写 ABTEST：0 红像素**——被 patch 的 fill 材质**从不光栅化任何像素**。**终局结论**：可见 fill 由**引擎独立的平铺绘制路径**（§518 记档的"mapview depthTest=false 按样式序平铺 fill"机制）渲染，tile.objects 上的 114 次 draw 均为屏外/拾取/微型几何。13 轮矛盾（intensity=1@draw+补丁在码+0px）就此闭环：**fill-shadow 的正确注入点是引擎平铺 fill 路径的材质源**（非 tile.objects）。双路 cacheKey 修复保留为语义基线（375224 复核零变化）。三远带域解锁路径=定位引擎平铺 fill 的材质创建点并注入。
+
+**§586. 引擎渲染材质扫描注入+远带终局架构定性（2026-08-30 终章四）**：
+
+`[MBSweep]` 直方图：scene 569 mesh 材质中 **MeshBasicMaterial-n×81（无名的引擎 fill 材质）** 从未被任何通道注入——patchTileMaterials 增加 per-frame m_scene traverse（MeshStandard/Basic 幂等注入）+ refresh 并入 scene meshes。**视觉仍零变化（375224）→ 远带终局定性**：该夹具远带显示色是 **clearColor（不可受影）**——§572b 的 quad 门控（fill/line 层在）正确禁用了 overlay；mgl 远带黑 = **背景以瓦片几何绘制并受影**。**解锁 = mgl background-as-tiles 架构**（背景层按 covering 生成可受影瓦片网格，替代 clearColor+overlay 组合）——引擎/DS 联合的最后一个架构项。零回归复核（抽样 −11.1万全为已知态）。三远带域（shadows-casting/update-doors/elevated-symbols）此前 53% 远带同属"背景不可受影"域假设成立度待该架构落地后统一复核。
