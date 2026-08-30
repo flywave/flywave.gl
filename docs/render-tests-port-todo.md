@@ -6422,3 +6422,7 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **① 夜间 beam 色偏暗根因**：refreshSplit 顶点循环残留 **pre-mix** 的 partFirstColor 存储（首现即胜）——运行时 setLights/setZoom 重导后 beam 被 raw tiler 色 (≈(0,43,63)) 重染而非样式青（splitByPart 的 post-mix 存储被 §557 修过，refreshSplit 漏修——反推像素显示 ours 色非 cyan 直接锁定）。删除后 **update-doors 565702→544349（−2.1万）**，beam 像素 (45,139,120)≈exp(52,126,119)。premultipliedAlpha 配对 A/B 与 straight 逐位相同（SwiftShader 语义下无差），留 straight。landmark 家族 8 例无回归。
 
 **② shadows-casting 远树带定性**：行剖面取证——y400-425（近景）cur≈exp、y225-375（远景）cur 0-12 vs exp 18-47：**树木缺失呈距离带状**（远处缺、近处全）。排查：model-cutoff-fade-range 该夹具未设（默认 [0,0]→我们的 applyModelFarCutoff 正确禁用 ✓ 非根因）；%6 色桶/%3 scale 桶引擎离线全对。**候选**：MBModelRenderer per-feature 实例的远景剔除域（frustumCulled 包围盒/矩阵）、或 lod2 GLB 分级加载。update-doors 累计：857513→**544349**（−36.6%）；doors-no-shadows-lod 348115 / doors-no-shadows 424977。
+
+**§566. 远树带根因收口——单瓦片覆盖（引擎 covering 域，2026-08-30 续十）**：
+
+**排除链**（每步单夹具 A/B）：far-cutoff 默认禁用 ✓ 非根因；frustumCulled=false 实例无 CPU 剔除 ✓；camera far=1e6 充裕（near=225/camZ=459，pitch 60 地平距 ~800m）✓；**depthTest=false A/B 远树仍零出现** → 非遮挡。**决定性探针：`[MBTileCover] n=1 keys=15/12664/5242`——整个 pitch-60 视口只解码了 1 个 z15 瓦片**。远带树木位于相邻瓦片，从未加载。mgl 在 data zoom（clamp 15）按视口∩地面取 covering（pitch 拉远后横跨多瓦片）；引擎的 covering 只覆盖屏幕平面 bounds → 单瓦片。**该根因大概率同时解释 update-doors 远景暗带（无 caster=邻瓦片未加载）及一切"远景内容缺失"族**。**修复方向（下轮）**：DS 层扩 covering——TileDataSource 定制请求邻瓦片环（MBBatchedModelRenderer ±1 环先例），或引擎 covering 按 pitch 外扩；涉及调度域需评估瓦片数放大副作用。工作树已还原复核（375224 基线）。
