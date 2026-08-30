@@ -707,8 +707,15 @@ async function processOperations(
                 const fogEnv0 = (dataSource as any).m_environment;
                 fogEnv0?.refreshFog?.();
                 try {
-                    (dataSource as any).applyBackgroundColor?.(
-                        (dataSource as any).styleManager?.getStyle());
+                    const st = (dataSource as any).styleManager?.getStyle() ?? {};
+                    // §572d: viewport-aligned backgrounds own a fullscreen
+                    // quad — re-applying the flat clear double-tints
+                    // (viewport-alignment-globe +5.8k measured).
+                    const hasViewportBg = ((st.layers ?? []) as any[])
+                        .some((l: any) => l?.paint?.['background-pitch-alignment'] === 'viewport');
+                    if (!hasViewportBg) {
+                        (dataSource as any).applyBackgroundColor?.(st);
+                    }
                 } catch { /* best-effort */ }
                 break;
             }
