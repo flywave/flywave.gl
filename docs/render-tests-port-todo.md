@@ -6714,3 +6714,7 @@ mgl `placement.ts CollisionGroups`（:125-155）语义移植：`metadata.test.cr
 `applyImageSources` 接受 `type:'video'`（此前源分派无 video 分支→层静默丢弃）：`<video>` 元素 + `THREE.VideoTexture`（canplay 门 + 10s 超时惰性——视频不可用则无 quad，mgl 同态），复用 image quad 的**单应 warp** 通道与 raster paint 链。fixture 的 mapbox CDN URL（drone.mp4/webm）正则解析到 vendored 本地资产（`test/rendering/integration/drone.mp4`，7.9MB 入库）；`onloadeddata` 停靠 currentTime=0.04 早期帧保证播放确定性。
 
 **验收**：video/default **150271→148456**——结构性缺口（无源分支→整层白屏）关闭；残差 = CDN 上 drone.mp4 已被重新编码，与 expected 生成期（多年前）版本不可逐位对齐 + 视频运动帧域。**A/B 排除**：SRGB/NoColorSpace 色彩空间标注（148456 vs 148668）、停靠帧 vs 连续播放（148516）均无实质影响——残差不可收敛于数据源层。video/projected 79659 不变（albers 自定义投影 raster/sprite drape 冻结域，报告 #5）。单测 300 绿。
+
+**§625. hillshade illumination-direction 重做评估（baseline 报告 ROI #7 之 hillshade 项 / 报告 #16，2026-08-30 续廿三）**：
+
+mgl `hillshade_program.ts:74-91` 方向合成语义完整解码：azimuthal=paint direction（viewport anchor 再减地图转角）；anchor='map' 且 enable3dLights 时**替换**为 directional light 方位角。A/B 实测（align-with-directional-light，基线 36408）：①显式 paint 335→37433；②anchor=map+灯光方位 200°→41283——**两方向接线均劣于常量 315**。判定：expected 生成期 enable3dLights() 疑未生效（生成期 mgl 版本或光照模式开关），且本夹具方向敏感度仅 ~1-5k px；家族残差主导（~36k）= emissive-strength/ground-radiance 校准（`apply_lighting_with_emission_ground`，u_emissive_strength 消费者缺位），非方位角。**决策**：常量 315 维持，三点实验数据与语义解码留注代码处（MBMaterialPatchManager.ts ~:3815）；本轮无代码行为变化（仅注释）。上轮（2026-08-29）+60k 回归根因同步破案：evaluator 默认值系 spec-335（新版 spec），经其求值会把全部默认夹具 315→335。
