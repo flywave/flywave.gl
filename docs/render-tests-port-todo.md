@@ -6490,3 +6490,9 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **§574. 阴影默认后全语料终验（774 例，净 −49.6万，2026-08-30 续二十四）**：
 
 全语料批测（774 渲染夹具，382 例与最新存档可比）：**净 −496,004，回归仅 3 例 >2k**。**头部收益全在 3d-intersections**（该族灯光带 cast-shadows）：elevated-symbols-icons-and-text 81174→42775（−3.8万）、viewport-aligned −3.6万、mixed −3.0万、ortho-camera −2.3万、tooling-support −1.95万、**munich-overview 23700→6231（−74%）**、elevated-wireframe −1.9万等十余例。回归：viewport-alignment-globe +5.8k（§572d 已修：§570b 重导对 viewport 背景双着色，gated，复核回 54512）；depth-occlusion dynamic-terrain-disabled 对 +2.6k×2（residual 记档）。**全语料 151 例 0 px（PASS）**。阴影链转默认终验通过：无 cast-shadows 风格零影响（pass 早退理论保证+774 例实证）。
+
+**§575. elevated-symbols 残差定性 + covering 探针下钻（引擎档案补充，2026-08-30 续二十五）**：
+
+**elevated-symbols-icons-and-text（42775）像素取证**（复用 full572 结果零成本）：差异带分布 **top(y<170)=1850 / mid=1017 / bottom=628 采样点——53% 在远带** → 该族剩余头部与 §566/§573 单瓦片覆盖同根因（远景 elevated 道路/符号未渲染），近带为桥区细节（side-skirt/厚度域，P3.7 ElevatedStructures）。
+
+**covering 探针下钻（§573 档案补充）**：FrustumIntersection 细分循环插桩实测 **lodStop at z16、entries=2**（shadows-casting zoom17.5/pitch60）——细分到达 z16 即因 `shouldSubdivide`（§317 mgl 距离 LOD）停止且全集仅 2 瓦片；pitch-60 frustum 的地面足迹本应横跨多个 z16 瓦片 → **远瓦片在逐瓦片剔除（extendedFrustumCulling/mapTileCuller 或 getTileKeyEntry 的 area=0 路径）被移除**。引擎侧修复入口进一步收窄到 computeTileAreaAndDistance 的 intersects 判定链（FrustumIntersection.ts:462-477）。**数据源侧该域确认无通道**（§567+本节双重负结果）。探针已清（工作树净）。
