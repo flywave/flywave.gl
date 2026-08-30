@@ -6516,3 +6516,7 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **§579. fill 接收器零注入诊断（注入≠生效，材质生命周期缺口，2026-08-30 续三十）**：
 
 注入循环探针：**tiles=1 objs=162 guardSkip=1 injected=161**——注入本身正常（非守卫误伤/非 objects 为空/非时序）。真因下移：`__mbShadowUniforms` 在 onBeforeCompile 内创建，而**材质在注入前已编译**——onBeforeCompile 后置修改不触发重编译。尝试两连修复均零像素：①`needsUpdate=true`（three 程序缓存键不变，重建复用未打补丁程序）；②`customProgramCacheKey` 破缓存（shadowdbg=3 调试读出仍不出现=**打补丁的 161 个材质根本不是最终渲染的材质**——引擎在 patch 与 render 之间存在材质池化/克隆/替换层）。**下轮入口**：在引擎 renderObject 链上抓真正渲染的 fill 材质实例（onBeforeRender 时记录 material.uuid），与被 patch 的 161 个做交集——空集则需改在渲染材质出现点注入（MapRenderingManager/technique 创建处）。§578 的三域同源复核继续挂起此修复。工作树净。
+
+**§580. fill 接收器第七轮——材质稳定性实证+编译链死点（收口，2026-08-30 续三十一）**：
+
+本轮三探针：①材质数组假设修复（refresh 循环 ?. 吞数组）——零像素；②`[MBOBC]`：**注入后的 onBeforeCompile 从未触发**（无 cacheKey 修复时）；③`[MBMatId]`：**162 材质 3 秒后 162 全同 uuid**——引擎不替换材质（池化假说证伪）。结合 §579（needsUpdate+customProgramCacheKey 双修复亦零像素）：其他 patch 位点均正确链式保留 orig ✓ 无覆盖——**断点在 three 程序生命周期更深处**（候选：这些 technique 材质经引擎自定义 program 缓存/WebGLRenderer 层绕过 onBeforeCompile 重建，或 needsUpdate 后引擎每帧重置 version）。**该线挂起为专项**（建议从引擎侧 MapRenderingManager 的 material→program 流向入手），阴影链在其他域的收益（−49.6万）不受影响。本轮零代码变更（探针全清，工作树净）。
