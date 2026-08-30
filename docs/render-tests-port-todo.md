@@ -6744,3 +6744,17 @@ landmark-part-styling-indirect-doors（model-color 为 `["match",["get","part"],
 **§630. §554 遗留②边界裁定（2026-08-30 续廿八）**：
 
 per-node 逐节点 part 色求值（random(id) 家族）的前置是 mgl 3d-style 的 per-node feature id 语义——但 vendored mapbox-gl-js（src/ 仅 core+style-spec）**不含 3d-style/model bucket 源码**（find 实证），语义无法对照落地，盲实现违反"严格对照 mgl 代码"原则。裁定：挂起直至①vendored mgl 补充 3d-style 源码，或②联网环境从 mapbox 内部包（@mapbox/tiny3d 等）取证 node feature id 的构造约定。本轮 indirect-update 批测（§629）与 §628 修复为本轮全部交付。
+
+**§631. indirect-update-doors 色值对拍表（§629 色域定性→量化，2026-08-30 续廿九）**：
+
+同位置逐点采样（几何已对位，1024²，ours→expected）：
+
+| 部位 | ours | expected | 差异特征 |
+|---|---|---|---|
+| 墙体(暗面) | (54,48,16) | (60,58,41) | **B 通道 ×2.5 被压** |
+| 墙体2 | (57,51,18) | (57,55,39) | 同上 B 压制 |
+| 门灯 cyan | (0,255,204) | (0,255,230) | **B +26**（=model-color 原值 vs +蓝洗） |
+| window 带 | (7,147,225) | (48,159,189) | R +41 / B −41（去饱和） |
+| window 天侧 | (8,111,166) | (48,159,189) | 同上，expected 面内均匀（无逐面明暗） |
+
+**判定**：光照洗涤注入**存在且在工作**（`applyMglModelLighting`→uMB3DAmb/uMB3DDirColor 半球近似，§557），但蓝通道系统性压制：pattern = expected 相对我方 B 通道一致偏高、面内明暗变化更平（expected window 面内均匀=近似逐面 NdotL 项过强）。两点定位：① hemisphere 近似的 `mbK` 蓝/红通道响应曲线（·mgl computeLightContribution 的白光在被照面产生近白洗涤，我方 B 被线性乘法吃掉——albedo 顶点色按 sRGB 字节直写而 three 按线性消费，B=102/255 的低值最受伤）；② expected window 面内均匀提示 mgl 对 features-tile 的 lit 项权重更低（unlit 占比更高）。**修复方向**（引擎/数据源 shader 注入层，下轮）：把 splitByPart 顶点色的 baked 值做 sRGBToLinear 后再写 attribute（或 shader 内转换）——B 通道 0.4→0.132 的线性化将同时抬升受洗墙体的蓝通道并压 window 饱和度，与 expected 双向吻合。
