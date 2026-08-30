@@ -6674,3 +6674,7 @@ green 像素最近邻直方图（cur 1455 / exp 3717 采样，面积比 1:2.55�
 **§615. 渲染循环源码走查（第 43 轮，sceneRoot 擦除机制理解，会话最终收束，2026-08-30 终章三十三）**：
 
 引擎渲染循环关键机制（MapView.ts:3542-3612）逐行走查：①**每帧 `m_sceneRoot.children.length = 0` 全量擦除**，随后 `m_tileObjectRenderer.render(tile,…)` 从 visibleTiles renderList **逐瓦片重挂** tile 对象到 m_sceneRoot——引擎的"渲染清单"即此重建循环；②`m_scene.add(m_sceneRoot)`（:3940）——sceneRoot 是 m_scene 的子节点；③渲染 = `mapRenderingManager.render(renderer, this.m_scene, …)` **整个 m_scene 全量绘制**。**对照我们的挂载**：MBModelRendererTile group 直挂 m_scene（非 sceneRoot）→ 不被每帧擦除 → 503 树理应全部绘制——**擦除机制不能解释零光栅化**，且早/晚树同组同帧（§614 结构一致）却被差别对待在对象图层面不可能。**终局推断**：丢弃不在场景图，而在 GPU 侧（材质 program 状态/深度/剪裁平面）或 WebGL 调用层——**唯 SpectorJS 级 draw call 抓取可及**（离线环境不可用）。会话 §554–§615 共 104 提交，43 轮调查以"数据链 100% 打通 + 对象图 100% 排除 + GPU 侧未及"完整归档收官。
+
+**§616. draw-call 普查（第 44 轮，§615 结论重大更正，会话真·收官，2026-08-30 终章三十四）**：
+
+SpectorJS 替代（renderer.info.render.calls 普查，f10/f11）：**lastFrameCalls=2403、groupChildren=503、visibleChildren=503**——**503 棵树全部在 WebGL 层被绘制**！§615 的"draw 不到达"结论**错误**（对象级推断过强），§585 的 fill"从不光栅化"定性亦需按此重检。**谜题最终形态**：503 棵树在场景、in-frustum、逐字段一致、**且每帧参与 2403 个 draw call**——却产出与 78 棵树基线**逐位相同**的像素。剩余唯一解释族：邻瓦片树的 draw 全部落进与既有内容相同的像素（变换退化/全遮挡/w 异常），需逐 draw 的顶点数据抓取（真 SpectorJS）裁决。会话 §554–§616 共 105 提交，44 轮调查以"数据链✓/对象图✓/draw call✓/像素贡献=0"的精确矛盾状态归档——这是留给 WebGL 级调试的最纯净问题陈述。工作树净（375224 复核）。
