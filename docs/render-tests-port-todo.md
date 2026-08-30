@@ -6426,3 +6426,7 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **§566. 远树带根因收口——单瓦片覆盖（引擎 covering 域，2026-08-30 续十）**：
 
 **排除链**（每步单夹具 A/B）：far-cutoff 默认禁用 ✓ 非根因；frustumCulled=false 实例无 CPU 剔除 ✓；camera far=1e6 充裕（near=225/camZ=459，pitch 60 地平距 ~800m）✓；**depthTest=false A/B 远树仍零出现** → 非遮挡。**决定性探针：`[MBTileCover] n=1 keys=15/12664/5242`——整个 pitch-60 视口只解码了 1 个 z15 瓦片**。远带树木位于相邻瓦片，从未加载。mgl 在 data zoom（clamp 15）按视口∩地面取 covering（pitch 拉远后横跨多瓦片）；引擎的 covering 只覆盖屏幕平面 bounds → 单瓦片。**该根因大概率同时解释 update-doors 远景暗带（无 caster=邻瓦片未加载）及一切"远景内容缺失"族**。**修复方向（下轮）**：DS 层扩 covering——TileDataSource 定制请求邻瓦片环（MBBatchedModelRenderer ±1 环先例），或引擎 covering 按 pitch 外扩；涉及调度域需评估瓦片数放大副作用。工作树已还原复核（375224 基线）。
+
+**§567. 远树带修复尝试——邻瓦片环实测被引擎逐瓦片裁剪（负结果收口，2026-08-30 续十一）**：
+
+按 §566 根因实现数据源侧修复：MBExtraVectorSourcesProvider 加 8-邻瓦片环（covering≤2 的启发式门，防正常覆盖时内容重复），邻瓦片以 pseudo-extras 走既有 decodeTileWithSources 偏移合并链（DecodeInfo center 差移顶点）。**实测（探针 [MBRing] stash=9 cells=1）环触发、邻瓦片数据取到、合并执行——但像素零变化**。定性：**引擎按 CELL 边界裁剪瓦片几何**——同 cell 的 extras（trees 源 clamp 到同 z15 同 cell，dx=0）能渲染，而 dx=±tile-span 的邻瓦片几何被裁（近树可见/偏移树不可见的对照实锤）。**结论：远带修复需引擎级**——瓦片 covering 按 pitch 外扩或逐瓦片 clip 放宽，数据源层通道已穷尽（与 §549 上屏问题同族：引擎逐瓦片域）。实验代码已回退（375227→375224 基线复核），§566 的单瓦片覆盖根因 + 本节的"引擎逐瓦片裁剪"实锤共同构成引擎侧修复的完整依据。
