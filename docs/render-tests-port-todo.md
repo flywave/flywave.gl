@@ -6718,3 +6718,13 @@ mgl `placement.ts CollisionGroups`（:125-155）语义移植：`metadata.test.cr
 **§625. hillshade illumination-direction 重做评估（baseline 报告 ROI #7 之 hillshade 项 / 报告 #16，2026-08-30 续廿三）**：
 
 mgl `hillshade_program.ts:74-91` 方向合成语义完整解码：azimuthal=paint direction（viewport anchor 再减地图转角）；anchor='map' 且 enable3dLights 时**替换**为 directional light 方位角。A/B 实测（align-with-directional-light，基线 36408）：①显式 paint 335→37433；②anchor=map+灯光方位 200°→41283——**两方向接线均劣于常量 315**。判定：expected 生成期 enable3dLights() 疑未生效（生成期 mgl 版本或光照模式开关），且本夹具方向敏感度仅 ~1-5k px；家族残差主导（~36k）= emissive-strength/ground-radiance 校准（`apply_lighting_with_emission_ground`，u_emissive_strength 消费者缺位），非方位角。**决策**：常量 315 维持，三点实验数据与语义解码留注代码处（MBMaterialPatchManager.ts ~:3815）；本轮无代码行为变化（仅注释）。上轮（2026-08-29）+60k 回归根因同步破案：evaluator 默认值系 spec-335（新版 spec），经其求值会把全部默认夹具 315→335。
+
+**§626. dynamic-filter/image-source 取证收口（2026-08-30 续廿四）**：
+
+**① icon-no-cross-source-collision 残差 390 复核**：像素分布带状图与 expected 逐带一致（x/y 各 9 带计数差 <6%）——icon-offset x/y 渲染均正确生效，先前"icon-offset x 分量缺失"判定**更正**：残差为簇内 AA/半像素边缘带（阈值 66 近失），无结构缺陷可修。
+
+**② dynamic-filter 家族（25 例 20.6 万）取证**：line/point distance-nofilter 与 baseline8 逐位同值（12656/24673），确认未动域。放大对拍：a) 文字取值**正确**（distance 字符串 "-0.25/-0.50/-0.75" 原样显示，`MBExpressionEngine.get` 字符串透传 node 实证）；b) 真实差异 = **circle 与文字同点深度合成**（mgl `depthModeForSublayer` per-layer 深度切片使后层文字恒胜；我方真实深度下 circle 点 quad 覆盖文字中段字符，视觉呈"末位裁切"）；实验：emitTextGeometry/textPath +1m z 偏置**无效**（24677/12696，±噪声）已回退——文字与 circle 的深度序在引擎渲染管线内部（textElement 渲染通道对场景几何的深度测试），数据源层偏置不可达。c) 预期另有高 pitch（73.5°）近排 circle 的 mgl 缺席域。**定级：引擎符号深度管线专项**，与 port-todo :3041 fog/深度语义冻结域同族。
+
+**③ image-source（hourglass/non-convex-coords，各 38928/38956 = baseline8 逐位）**：两夹具 `projection: globe`——expected 为平面图像 warp 帧而我方渲染真实球体（globe raster/TerrainDraping bail 同型，报告 #2 引擎专项）。image quad 单应 warp 通道本身在 flat 投影已验证（§canvas/default PASS），此 2 例属 **globe draping 冻结域**，非 image-source 实现缺陷。
+
+**本轮净变化**：零代码行为变化（实验全部回退，单测 300 绿，工作树净）。baseline 报告数据源层可动 ROI 项至此全部处置完毕（已修 / 定级引擎冻结域并附证据链）。
