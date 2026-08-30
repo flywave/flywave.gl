@@ -6548,3 +6548,7 @@ GPU 级替代取证（SpectorJS 离线不可用，改 in-page）：①`[MBProg]`
 **§586. 引擎渲染材质扫描注入+远带终局架构定性（2026-08-30 终章四）**：
 
 `[MBSweep]` 直方图：scene 569 mesh 材质中 **MeshBasicMaterial-n×81（无名的引擎 fill 材质）** 从未被任何通道注入——patchTileMaterials 增加 per-frame m_scene traverse（MeshStandard/Basic 幂等注入）+ refresh 并入 scene meshes。**视觉仍零变化（375224）→ 远带终局定性**：该夹具远带显示色是 **clearColor（不可受影）**——§572b 的 quad 门控（fill/line 层在）正确禁用了 overlay；mgl 远带黑 = **背景以瓦片几何绘制并受影**。**解锁 = mgl background-as-tiles 架构**（背景层按 covering 生成可受影瓦片网格，替代 clearColor+overlay 组合）——引擎/DS 联合的最后一个架构项。零回归复核（抽样 −11.1万全为已知态）。三远带域（shadows-casting/update-doors/elevated-symbols）此前 53% 远带同属"背景不可受影"域假设成立度待该架构落地后统一复核。
+
+**§587. background-as-tiles 实施尝试——quad 重开三级 A/B（负结果，gate 维持，2026-08-30 终章五）**：
+
+三级 A/B：①去 fill/line 腿（仅半透明门）——draw-layer-lines/shimmering 回归值重现（92978/267901）、shadows-casting 不变（其 extrusion-opacity 0.4 仍触发半透明门）；②完全无门——shadows-casting **377046（+1822）**且**远带逐位不变（102 灰主导无黑）**：quad 几何覆盖远带但**阴影采样为 lit**——远带变黑还需阴影深度图覆盖该区域的长投影（polar 70° 长影域标定，direction [120,70]）。已回退至 §572c 提交态（375224 复核）。**结论**：background-as-tiles 的完整解锁 = ①quad 无门重开 + ②长投影标定（阴影相机沿光轴 far 扩展/深度精度）+ ③draw-layer 族阴影位置校准（§571 的 +27k 簇根源）三件联动——单开任一均负收益。挂起为联合校准专项。工作树净。
