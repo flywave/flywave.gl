@@ -6416,3 +6416,9 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **② 门灯 beam 从未绘制（决定性）**：红材质不透明 A/B **零红像素** → karma 日志 `THREE.WebGLProgram: VALIDATE_STATUS false — FRAGMENT varying vNormal does not match any VERTEX varying`——beam 的 onBeforeCompile 补丁在 MeshBasicMaterial 上 GL 校验失败，mesh 被静默跳过（历史上 beam 从未上屏）。重写为全控 ShaderMaterial（mbC4f attribute + mgl a_color_4f 距离衰减公式逐行照搬；sRGB 色直写——raw material 无 colorspace_fragment）。refreshSplit 句柄同步改 `mat.__mbLightsU` + `uMBLightsColor` vec3（sRGB 直存，不再 linear 化）。
 
 **效果**：beam 覆盖域对齐（cyan 采样 8701 vs exp 9874、同 bbox (0-1020, 0-732/780)）；**doors-no-shadows 442181→424977（−1.7万）**、door-light-museum −1.7k、-lod −0.3k；update-doors 565702（+7.8k，夜间 beam 色偏暗：直色输出 G 亏半、premultiplied A/B 更差已试，疑合成链色彩空间——记档下轮）。**方法论**：karma 日志中的 THREE.WebGLProgram 错误此前从未被检索——'渲染缺失'类排查第一步应 grep shader 错误。
+
+**§565. 夜间 beam 色偏暗破案（refreshSplit pre-mix 残留）+ shadows-casting 远树带定性（2026-08-30 续九）**：
+
+**① 夜间 beam 色偏暗根因**：refreshSplit 顶点循环残留 **pre-mix** 的 partFirstColor 存储（首现即胜）——运行时 setLights/setZoom 重导后 beam 被 raw tiler 色 (≈(0,43,63)) 重染而非样式青（splitByPart 的 post-mix 存储被 §557 修过，refreshSplit 漏修——反推像素显示 ours 色非 cyan 直接锁定）。删除后 **update-doors 565702→544349（−2.1万）**，beam 像素 (45,139,120)≈exp(52,126,119)。premultipliedAlpha 配对 A/B 与 straight 逐位相同（SwiftShader 语义下无差），留 straight。landmark 家族 8 例无回归。
+
+**② shadows-casting 远树带定性**：行剖面取证——y400-425（近景）cur≈exp、y225-375（远景）cur 0-12 vs exp 18-47：**树木缺失呈距离带状**（远处缺、近处全）。排查：model-cutoff-fade-range 该夹具未设（默认 [0,0]→我们的 applyModelFarCutoff 正确禁用 ✓ 非根因）；%6 色桶/%3 scale 桶引擎离线全对。**候选**：MBModelRenderer per-feature 实例的远景剔除域（frustumCulled 包围盒/矩阵）、或 lod2 GLB 分级加载。update-doors 累计：857513→**544349**（−36.6%）；doors-no-shadows-lod 348115 / doors-no-shadows 424977。
