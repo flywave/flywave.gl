@@ -178,6 +178,8 @@ export interface TileMaterialized {
     meshIndices: number[];
     /** Per-mesh glTF node `extras.lights` (base64 door-light definitions). */
     nodeLights: (string | undefined)[];
+    /** Per-mesh glTF node `mapbox:footprint:id` (§634 conflation key). */
+    nodeFootprints: (string | undefined)[];
     /** Per-mesh glTF node `extras.anchor` (grid units — model-scale pivot). */
     nodeAnchors: ([number, number] | undefined)[];
 }
@@ -322,15 +324,20 @@ export async function decodeGlbTile(buffer: ArrayBuffer): Promise<TileMaterializ
     const nodeIds: (string | undefined)[] = new Array((json.meshes ?? []).length).fill(undefined);
     const nodeLights: (string | undefined)[] = new Array((json.meshes ?? []).length).fill(undefined);
     const nodeAnchors: ([number, number] | undefined)[] = new Array((json.meshes ?? []).length).fill(undefined);
+    // §634 conflation: `mapbox:footprint:id` per footprint-only node.
+    const nodeFootprints: (string | undefined)[] = new Array((json.meshes ?? []).length).fill(undefined);
     for (const n of json.nodes ?? []) {
         if (n.mesh === undefined || n.mesh >= nodeIds.length) continue;
         if (n.extras?.id !== undefined) nodeIds[n.mesh] = String(n.extras.id);
         if (typeof n.extras?.lights === 'string') nodeLights[n.mesh] = n.extras.lights;
+        if (n.extras?.['mapbox:footprint:id'] !== undefined) {
+            nodeFootprints[n.mesh] = String(n.extras['mapbox:footprint:id']);
+        }
         if (Array.isArray(n.extras?.anchor) && n.extras.anchor.length >= 2) {
             nodeAnchors[n.mesh] = [Number(n.extras.anchor[0]), Number(n.extras.anchor[1])];
         }
     }
-    return { nodes, materials, hasMeshFeatures: hasFeatures, textures, nodeIds, meshIndices, nodeLights, nodeAnchors };
+    return { nodes, materials, hasMeshFeatures: hasFeatures, textures, nodeIds, meshIndices, nodeLights, nodeAnchors, nodeFootprints };
 }
 
 /**

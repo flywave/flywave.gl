@@ -36,6 +36,7 @@ import type { Projection } from '@flywave/flywave-geoutils';
 import { applyMglModelLighting, syncMglModelLighting } from './MBModelRenderer';
 import { refreshMeshFeatures } from './MBMeshFeatures';
 import { decodeGlbTile, parseGlb, TileMaterialData, TileMaterialized, TilePrimitiveData } from './MBDracoDecoder';
+import { registerBoxFromLocalBox } from './MBModelFootprints';
 import { applyMeshFeatures, applyModelFrontCutoff, applyModelFarCutoff, mglMeasureLightBrightness } from './MBMeshFeatures';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { shadowCasters } from './MBShadowRenderer';
@@ -368,6 +369,14 @@ class MBBatchedModelDecoder implements ITileDecoder {
                             mesh.userData.__mbNodeBox = b;
                         }
                         mesh.userData.__mbBaseOpacity = (mesh.material as any)?.opacity ?? 1;
+                        // §634 conflation: footprint-only nodes are removed by
+                        // mgl (convertFootprints) — never render them.
+                        if (tileData.nodeFootprints?.[meshIdx] !== undefined) {
+                            mesh.userData.__mbFootprint = true;
+                            mesh.visible = false;
+                            inner.add(mesh);
+                            continue;
+                        }
                         // Filter at DRAW visibility (mgl getNodesInfo picks at
                         // draw) — building everything keeps runtime setFilter
                         // widenings possible without a re-decode.
@@ -463,6 +472,32 @@ class MBBatchedModelDecoder implements ITileDecoder {
                 const box = new THREE.Box3().setFromObject(inner);
                 if (isFinite(box.max.z)) maxZ = box.max.z;
             } catch { /* keep the data-source-level bound */ }
+
+            // §634 conflation replacement: register every footprint node's
+            // world bbox so fill-extrusion features under the model can be
+            // suppressed at decode time (mgl model-layer conflation).
+            try {
+                inner.updateMatrixWorld(true);
+                const n = Math.pow(2, tileKey.level);
+                const cLng = (tileKey.column + 0.5) / n * 360 - 180;
+                const cLat = tileCenterLatRad(tileKey) * 180 / Math.PI;
+                let added = 0;
+                inner.traverse((o: any) => {
+                    if (!o.isMesh || o.userData?.__mbFootprint !== true) return;
+                    if (registerBoxFromLocalBox(new THREE.Box3().setFromObject(o), cLng, cLat)) added++;
+                });
+                // Models arrived after the vector tiles decoded: force a
+                // re-decode so the extrusion suppression takes effect. Only on
+                // genuinely NEW coverage — re-registers must not loop.
+                if (added > 0) {
+                    const env: any = this.m_envProvider;
+                    env?.mapView?.markTilesDirty?.(env);
+                    for (const b of getModelFootprintBoxes()) {
+                        // eslint-disable-next-line no-console
+                        console.log('[MBFPB] ' + JSON.stringify(b));
+                    }
+                }
+            } catch { /* conflation is best-effort */ }
 
             stat.parsed = (stat.parsed ?? 0) + 1;
             return {

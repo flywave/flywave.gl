@@ -5,6 +5,7 @@ import {
 } from '@flywave/flywave-datasource-protocol';
 import { Projection, TileKey } from '@flywave/flywave-geoutils';
 import { ThemedTileDecoder } from '@flywave/flywave-mapview-decoder/index-worker';
+import { pointInModelFootprint } from './MBModelFootprints';
 import { OmvDataAdapter } from '@flywave/flywave-vectortile-datasource/adapters/omv/OmvDataAdapter';
 import { GeoJsonDataAdapter } from '@flywave/flywave-vectortile-datasource/adapters/geojson/GeoJsonDataAdapter';
 import { DecodeInfo } from '@flywave/flywave-vectortile-datasource/DecodeInfo';
@@ -571,7 +572,15 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_worldview, this.m_center,
         );
         if (matched.length === 0 || !this.m_emitter) return;
-        const visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
+        let visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
+        // §634 conflation replacement: fill-extrusion polygons inside a model
+        // footprint are REPLACED by the 3D model (mgl model-layer conflation)
+        // — skip emitting them.
+        const extLayers = visible.filter(l => l.type === 'fill-extrusion');
+        if (extLayers.length > 0 && pointInModelFootprint(coords[0], coords[1])) {
+            visible = visible.filter(l => l.type !== 'fill-extrusion');
+            if (visible.length === 0) return;
+        }
         if (visible.length === 0) return;
 
         // Circle layers render one circle per polygon ring vertex.
