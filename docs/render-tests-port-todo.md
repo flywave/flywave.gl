@@ -6444,3 +6444,7 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **§569. globe 距离链解析收口——假项目撤销（2026-08-30 续十五）**：
 
 按 §568c 前置清单逐项核验：①`camera.fov = radToDeg(verticalFov)`（CameraUtils.ts:84）——**fov 存的就是度**，§568 探针的 2112° 系本人二次换算（36.87°×180/π），无单位污染；②harness MapView 构造显式 `fovCalculation: fixed 36.8699°`（mgl transform.ts:247 同值）+ maxZoomLevel 25 + z_engine=mgl+1（§12.76）；③**距离公式解析对拍**：我方 d=focal·C/(256·2^z_engine) 与 mgl d=ccd·C/(512·2^z_mgl) 在 256/512 画布下均逐位相等（256px: focal 383.5→d=30.0M=4.71R；512px: 768→60.0M=9.44R 两方同值）。**结论：globe zoom→相机距离链已对齐，§78 的 5.7R 系 fov-40/z 偏移旧时代数据、§568 的 4.13R 系环形大气 limb 误读——sphere 距离改造项目撤销（§79 黑屏正是破坏了本已成立的 parity）**。globe 族 84 例的真实残差域回归内容层：globe-default 142737（暗盘/卫星瓦片域）、globe-circle default 49160（cur/exp 剖面左半大幅差异——circle 投影域）、symbol/atmosphere 残余。下轮 globe 入口改为 globe-circle 内容域逐夹具分析。
+
+**§569b. globe-circle 内容域首诊（2026-08-30 续十六）**：
+
+按 §569 新入口做 globe-circle/default（49160）目视对拍：**expected=navy 盘+红 circle 阵（~30 个）+盘外 space 黑**；**ours=满屏白（背景层平面铺屏）+~8 个 circle**。两个缺陷定性：①**背景层未上球**——mgl 在 globe 把 background 绘制到球面（随后被 globe content fog 的 glow-progress ramp 压向 space/high 色 → navy 盘）；我方 applyBackgroundColor 走平面 clearColor（还覆盖了 fog 分支设置的 space clearColor——两个子系统争抢 clearColor 的冲突首次实证）。②circle 数量 ~8/30——geojson 也走瓦片化解码，受 §566 单瓦片 covering 限制（引擎级，已记档）。**globe 族内容域工作项**：(a) background-on-sphere 通道（球面 quad/经纬网格或 shader 球投影）；(b) clearColor 归属仲裁（globe+fog 时 background 不得覆盖 space clearColor）；(c) circle 覆盖随引擎 covering。本轮零代码变更；§569+§569b 两个文档提交。
