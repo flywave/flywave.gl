@@ -6772,3 +6772,14 @@ per-node 逐节点 part 色求值（random(id) 家族）的前置是 mgl 3d-styl
 **§633. elevated/guard-rail 批测量化 + facade 残差定位（2026-08-31）**：
 
 **① 3d-intersections elevated/guard-rail 16 例批测（含 §632 dfc 修复与本会话累计收敛）：baseline8 2403784 → 1350301（**−105 万 px，−44%**）**。头部：oriented-text 174993→38030、guard-rail-color 202957→66991（−136k）、viewport-aligned 154475→66579（−88k）、mixed 145501→55802（−90k）。唯二回归：elevated-symbols-lighting-terrain-enabled 系 2 例各 +14k（dfc 修复后 pitch>40 分支放行的标签增量，待光照域校准）。**② z-offset-v2-port 模型立面残差定位**：mbx-meshopt/2621-6332-14.glb 资产补齐后（draco 分支正常解码）像素逐位不变 → 渲染的 GLB 被 **fill-extrusion 大厅完全遮盖**。expected 的拱廊立面 = GLB 模型替代 fill-extrusion 的效果——即 §553 遗留①的 **conflation replacement 子系统**（mgl model 层存在时替换同位 extrusion）：模型在 conflation 替换语义下的层序/可见性是我们的缺失面。**下轮入口**：①conflation replacement——model 覆盖区抑制 fill-extrusion 的对应面（数据源/patcher 层或引擎层序）；②dfc 归一化常数标定（far-cull 系 ±）。回归面：elevated-lighting-terrain 2 例 +28k 记档。
+
+**§634. conflation replacement 实现蓝图（§633 入口①的落地设计，2026-08-31）**：
+
+**数据源实证**：GLB 每个模型节点带 `extras["mapbox:footprint:id"]`（OSM 式建筑 id，2621-6331 瓦片 40 节点中 20 个为 footprint 节点，mesh 与 footprint 分离）——**匹配键在 GLB 内**，无需 mgl 3d-style 源码。
+
+**实现蓝图（三步，预计 2-3 轮会话）**：
+1. **footprint 捕获**（MBBatchedModelDataSource.build + parseMeshoptScene traverse）：对带 `mapbox:footprint:id` 的节点，取其 mesh geometry 的外环顶点（grid 8192 系，y 南正、z 米），经节点矩阵+瓦片中心换算为世界坐标多边形；与 `__mbNodeId` 一起存入 `dataSource.m_modelFootprints`（{id, worldRing}[]）。现逻辑仅 `visible=false` 隐藏 footprint 节点（:266-273），需在其处同步捕获。
+2. **替换匹配**（MBStyleDataProcessor.processPolygonFeature 或 emitter 的 fill-extrusion 分支）：对 extrusion 特征取底面多边形，与 m_modelFootprints 做 2D 相交（先 bbox 后环交）；命中 → 跳过发射（或 `props.enabled=false`）。vector 特征与模型分属不同 decode 管线：footprint 注册表挂 MBBatchedModelDataSource 静态/实例态，emitter 经 datasource 引用查询。
+3. **时序**：vector 瓦片可能先于 GLB 解码——模型 build 完成后对已解码 vector 瓦片 `markTilesDirty(this)` 强制重解码（复用 §131/§1883 机制）。
+
+**验收标准**：z-offset-v2-port 系（391773/389147）拱廊立面出现且周边无关建筑（expected 顶部灰建筑群）不受影响；§553 遗留①关闭。风险：vector building 特征无 footprint id 时的环交精度；重解码时序抖动。
