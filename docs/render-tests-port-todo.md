@@ -6452,3 +6452,9 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **§570. globe background-on-sphere 首轮实现（负结果收口，关键时序事实，2026-08-30 续十七）**：
 
 实现并实测 §569b 工作项①：applyBackgroundColor 加 globe+fog 仲裁（跳过平面 clear、记录盘面色）+ atmosphere shader 盘内 fog ramp 填充（space→high smoothstep）+ terrain base 同步 space 色。**三轮实测全部回到基线（49160/9035/142737 逐位）**，破案出两个时序/结构事实：①**全部 applyBackgroundColor 调用（实测 6 次）都发生在 setProjection 之前**（projType=0）——仲裁条件永假；投影切换后无人重导背景色，白 blob 的真正来源是**已覆盖 cell 的引擎表面**（切换前烘焙的白 clearColor/或 m_plane/tile 底色，atmosphere 只改 clearColor 不及该表面，terrainController 为 null 本夹具无 terrain）；②**always-disc 填充实测更差**（default 49160→61848、-zoomed 9035→34937）——ramp 猜测覆盖/干扰了 circle 内容域，mgl 的盘面色分布需要按 fog 公式（glow_progress）精确复刻而非 smoothstep 目测。**代码已回退（零净变更）**。**下轮正确入口**：在 setProjection 切换后触发一次 applyBackgroundColor 重导（时序修复，让仲裁可达）+ 从 expected 采样盘面色径向剖面定 ramp 参数（数据驱动而非目测）。
+
+**§570b. background-on-sphere 落地（globe-circle 家族净 −9.4k，2026-08-30 续十八）**：
+
+按 §570 下轮正确入口实现闭环：①**时序修复**——setProjection handler 在 fog rebuild 之后追加 applyBackgroundColor 重导（§570 实锤的"6 次全在切换前"被打通，仲裁可达）；②**globe+fog clearColor 仲裁**——space clear 拥有画布，背景色经 setGlobeBackground 记入 env；③**盘内填充**——平背景色 + 窄 limb blend（smoothstep 0.975-1.0 入 space）；关键修正：expected 盘面**数据驱动实测为白色平色**（§569b/§570 的 navy 目视读反），ramp 猜测（space→high）实测 +8k 已弃。
+
+**验收**：globe-circle 10 例净 **−9.4k**（default-zoomed 9035→**3076**、near-horizon −3.1k、vertical 族 4 例 −0.5~1.4k、near-transition −9；default +2.2k=其 circle 错位域、horizontal +0.8k）；mercator 零回归（background-color 6 例 5 PASS 逐位、fog/default 448 逐位）；globe-default 142737 不变（无背景层→正确无盘填充）。**遗留**：globe-circle default 的 circle 错位（covering 域）与盘外 limb 亮度（atmosphere 外圈 ramp）；globe-default 142737=卫星瓦片暗盘域。
