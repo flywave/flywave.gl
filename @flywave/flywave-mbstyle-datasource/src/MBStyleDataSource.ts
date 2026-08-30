@@ -1019,16 +1019,26 @@ class MBExtraVectorSourcesProvider extends DataProvider {
                     TileKey.fromRowColumnLevel(y, x, lvl), abortSignal);
                 if (bytes instanceof ArrayBuffer || bytes instanceof Uint8Array) {
                     stash.push({ sourceId: ex.sourceId, z: lvl, x, y, bytes });
+                    const n = 1 << lvl;
+                    await Promise.all([[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]].map(async ([dx,dy]) => {
+                        const nx = x+dx, ny = y+dy;
+                        if (nx<0||ny<0||nx>=n||ny>=n) return;
+                        try {
+                            const nb = await ex.provider.getTile(TileKey.fromRowColumnLevel(ny,nx,lvl), abortSignal);
+                            if (nb instanceof ArrayBuffer || nb instanceof Uint8Array) {
+                                stash.push({ sourceId: ex.sourceId, z: lvl, x: nx, y: ny, bytes: nb, instancesOnly: true });
+                            }
+                        } catch {}
+                    }));
                 }
             } catch {
                 // Missing quarter → its layers stay empty.
             }
         }));
-        const data = await primary;
         if (stash.length > 0) {
             mbPendingSourceTilesPut(mbCellTileKeyString(tileKey), stash);
         }
-        return data;
+        return await primary;
     }
 
     protected async connect(): Promise<void> {

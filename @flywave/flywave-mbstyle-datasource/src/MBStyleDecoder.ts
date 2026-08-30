@@ -78,6 +78,7 @@ export interface MBPendingSourceTile {
     x: number;
     y: number;
     bytes: ArrayBufferLike;
+    instancesOnly?: boolean;
 }
 
 const s_pendingSourceTiles = new Map<string, MBPendingSourceTile[]>();
@@ -1227,6 +1228,16 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     const child = await this.decodeThemedTile(
                         ex.bytes as any, exKey, undefined as any, projection, zoom);
                     if (!child) continue;
+                    if (ex.instancesOnly) {
+                        const childAny0 = child as any;
+                        if (childAny0.modelInstances?.length) {
+                            outAny.modelInstances = [
+                                ...(outAny.modelInstances ?? []),
+                                ...childAny0.modelInstances,
+                            ];
+                        }
+                        continue;
+                    }
                     const nTech = out.techniques.length;
                     out.techniques.push(...child.techniques);
                     const childInfo = new DecodeInfo(projection, exKey, this.m_storageLevelOffset);

@@ -446,7 +446,17 @@ export class MBModelRenderer {
 
         const tiles: Tile[] = this.m_dataSource.getDecodedTiles?.() ?? [];
         for (const tile of tiles) {
-            if (this.m_tilePlacements.has(tile)) continue;
+            const cachedPl = this.m_tilePlacements.get(tile);
+            if (cachedPl) {
+                const dNow: any = (tile as any)?.decodedTile;
+                const nNow = dNow?.modelInstances?.length
+                    ?? (tile as any).modelInstances?.length ?? 0;
+                if (cachedPl.placements.length >= nNow) continue;
+                cachedPl.placements = [...(dNow?.modelInstances
+                    ?? (tile as any).modelInstances)];
+            } else if (this.m_tilePlacements.has(tile)) {
+                continue;
+            }
             const decoded = (tile as any)?.decodedTile as any;
             // `modelInstances` survives decodedTile clearing (Tile.removeDecodedTile
             // stashes it on the tile) — the transient window alone is racy.
@@ -475,11 +485,8 @@ export class MBModelRenderer {
             }
         }
 
-        const placed = this.processPending();
-
-        // Async GLTF/Draco loads finish after the tiles settle; keep the
-        // render loop alive (isDynamicFrame) until every placement has its
-        // instance, so the harness's settled-frame capture includes them.
+        // `pending` keeps the loop alive across async loads; `placed` requests
+        // one more frame after the last instantiation.
         let pending = false;
         for (const { placements } of this.m_tilePlacements.values()) {
             for (let i = 0; i < placements.length; i++) {
@@ -487,9 +494,7 @@ export class MBModelRenderer {
             }
             if (pending) break;
         }
-        // `pending` keeps the loop alive across async loads; `placed` requests
-        // one more frame after the last instantiation (objects added during
-        // AfterRender are otherwise never rendered).
+        const placed = this.processPending();
         if (pending || placed > 0) { this.m_extraFrames = 3; }
         if (this.m_extraFrames > 0) { this.m_extraFrames--; this.m_mapView.update?.(); }
     }

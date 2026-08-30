@@ -685,27 +685,31 @@ export class MBExpressionEngine {
 
             case '+': {
                 let sum = 0;
-                for (const arg of args) sum += this.exec(arg, ctx) as number;
+                for (const arg of args) sum += Number(this.exec(arg, ctx)); // §613 BigInt ids
                 return sum;
             }
             case '-': {
-                if (args.length === 1) return -(this.exec(args[0], ctx) as number);
-                let result = this.exec(args[0], ctx) as number;
+                if (args.length === 1) return -Number(this.exec(args[0], ctx));
+                let result = Number(this.exec(args[0], ctx)); // §613 BigInt ids
                 for (let i = 1; i < args.length; i++) result -= this.exec(args[i], ctx) as number;
                 return result;
             }
             case '*': {
                 let result = 1;
-                for (const arg of args) result *= this.exec(arg, ctx) as number;
+                for (const arg of args) result *= Number(this.exec(arg, ctx)); // §613 BigInt ids
                 return result;
             }
             case '/': {
-                let result = this.exec(args[0], ctx) as number;
-                for (let i = 1; i < args.length; i++) result /= this.exec(args[i], ctx) as number;
+                let result = Number(this.exec(args[0], ctx)); // §613 BigInt ids
+                for (let i = 1; i < args.length; i++) result /= Number(this.exec(args[i], ctx));
                 return result;
             }
             case '%':
-                return (this.exec(args[0], ctx) as number) % (this.exec(args[1], ctx) as number);
+                // MVT feature ids can arrive as BigInt — JS cannot mix the
+                // types, the throw killed the WHOLE filter evaluation and
+                // dropped the feature from every layer (§613: half the
+                // trees missing on buildings-trees-shadows-casting).
+                return Number(this.exec(args[0], ctx)) % Number(this.exec(args[1], ctx));
 
             case '^':
                 return Math.pow(this.exec(args[0], ctx) as number, this.exec(args[1], ctx) as number);
