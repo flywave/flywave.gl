@@ -6528,3 +6528,7 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **§581b. fill 接收器第九轮——刷新链打通，终极断点=draw call 材质选择（2026-08-30 续三十三）**：
 
 重应用被 §580 回退误伤的 refresh 数组修复（`[MBRefresh] uListFirst=1` 确认刷新可达）+ §581 重编译基线——**编译 ✓ 刷新 ✓ 注入 ✓ 材质稳定 ✓ 全链打通**，但 shadowdbg=3 调试读出仍 **0 px**：**引擎渲染 fill draw call 使用的材质实例仍非这 162 个被 patch 的**（唯一自洽解释；[MBOBC2] 仅触发一次亦佐证——多数材质从未走到渲染编译）。**终极入口（下轮）**：放弃 tile.objects 黑盒，直接在引擎 WebGLRenderer.render 前 hook（renderer.info.programs 对比 / onBeforeRender 抓 draw 材质 uuid）或审 MapRenderingManager→TileObjectRenderer 的 fill 材质创建源。regression 复核：两修复零回归（抽样净 −11.1万全为已知后修状态）。fill-shadow 线挂起为引擎渲染材质选择专项。
+
+**§582. fill 接收器第十轮——烟枪实证与 wrap 尝试（收口挂起，2026-08-30 续三十四）**：
+
+**烟枪**：`[MBAnchor] type=ShaderMaterial hasCommon=true hasOpaque=false hasProjV=false`——引擎 fill technique 材质是**无 three include 锚点的 ShaderMaterial**，injectGroundShadow 的两个 replace **静默 no-op**（uniforms 创建了、shader 从未采样——九轮之谜的完整解释）。**draw 材质交集**：patched 162 ∩ scene 可见 mesh 材质 = **82**（确在渲染集）。**wrap 尝试**（改写其 main 为 mbShadowOrigMain + 追加 wrapper 乘 gl_FragColor）：加 gl_FragColor/GLSL 守卫后仍有 **2 个 ShaderMaterial "Fragment shader is not compiled"**、视觉零变化——回退（破坏性>收益）。**结论**：fill-shadow 正确集成需在 @flywave/flywave-materials 包层面（理解其 shader 组装/out 变量/precision 约定后定点注入），数据源层黑盒通道到此为止。已固化资产：§581b 的数组 refresh+重编译基线（语义正确、零回归）保留。三域同源复核与远带修复挂起此集成。工作树净。
