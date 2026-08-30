@@ -6392,3 +6392,11 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **③ 门灯几何法线 y 镜像**：GLB y-mirror 翻转手性，挤出法线须同步镜像否则 beam 嵌入墙内（mgl 沿 +normal 挤出于未镜像帧）。本夹具像素无变化（门朝向未受 y 镜像影响），语义修正留档。
 
 **剩余（update-doors 557k 三域）**：(a) window 夜间透明度/背景合成——ours (6,149,228) 纯样式色 α.8 压暗影地 vs exp (48,159,189)（mgl opacity 链含 rmea.w×(1−d²)，且其后景亮度不同）；(b) x=350 列 y450-560 的门/beam 整列缺失；(c) 远景暗带。**引擎修复的全局性提醒**：所有 interpolate 表达式求值已变，其他家族（raster-color/hillshade zoom 函数等）重跑可能有双向移动，下轮批测须全量盘点一次。
+
+**§562. interpolate 修复盘点 + model 阴影接收注入 + update-doors 域收敛（2026-08-30 续七）**：
+
+**① 引擎修复全量盘点（无隐性回归）**：raster-color + hillshade 两族 65 例路径键控对拍（按 mbstyle-render-* 相对路径消除跨目录重名）：唯一显著移动 hillshade/MAPSNAT-3205 **−6k 改善**；其余 ±1.5k 噪声带（31 same）；raster-color expression 0 / nearest 323 保持。教训记档：对拍必须按全路径键控（'default'/'literal' 在 raster-elevation/measure-light/raster-color 多目录重名，早先 +4.1万 的"回归"全系重名误报）。
+
+**② model 材质阴影接收注入**：applyMglModelLighting 补 uMBShMap/uMBShMatrix/uMBShIntensity + vMbWorldPos varying——直射项 `mbNdotL *= shadowed_light_factor`（mgl 语义：阴影因子只替换直射 NdotL，ambient 项不动）；mbShadowLitUniforms 注册表 + AfterRender `syncModelShadowUniforms` 每帧刷新；intensity=0 门保证非阴影样式零影响（update-doors 557420 逐位不变）。
+
+**③ update-doors 剩余域收敛定性**：(a) window 夜间差异（ours (6,149,228) vs exp (48,159,189)）反推为**后景亮度**：exp = 0.75×(0,149,230)+0.25×~190 的混合——mgl 的 window 后景是亮墙（阴影未覆盖），我方后景在影中（16）→ window 域与阴影覆盖域纠缠，非 opacity 链本身（rmea.w×baseColor.w×u_opacity 我方已同构）；(b) x=350 列 y450-560 门列缺失待查；(c) 远景暗带=无 caster 覆盖。**shadows-casting 新定性**：主体差距非自阴影——exp (10,43,17) 深绿树/(0,0,0) 黑影/(160,167,159) 亮楼 vs 我方满屏灰背景=**黑 ambient（rgba(0,0,0) 0.4）语义未落地 + 树木实例缺失**（model-rotation match/% 表达式族疑点），自阴影注入已就绪待其修复后生效。
