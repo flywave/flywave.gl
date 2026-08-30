@@ -6802,3 +6802,7 @@ per-node 逐节点 part 色求值（random(id) 家族）的前置是 mgl 3d-styl
 **§638. conflation 家族批测——抑制可见生效确认（2026-08-31 续）**：
 
 landmark-conflation 8 例（conflation replacement 的直接测试域）vs ml-final/rerun 基线：buckingham-lod **236457→129636（−107k）**、thin-pillars −9869/−13526、index-overflow −5；回归：intersect-padding-lod **+39432**、index-overflow-lod +13866、intersect-padding +6363、buckingham +4773。**净 −65,787 px**——conflation 抑制管线可见生效实锤（buckingham-lod 的 −107k 即替换语义生效）。回归四例定性：box 抑制在 -lod 变体的覆盖/边界过度（footprint bbox 相交近似 vs mgl 的 footprint 精确环交——粗框把 padding 测试中应保留的相邻 building 也抑制了）。**下轮**：①把 bbox 相交升级为 footprint 环相交（footprint 节点几何本就是环）；②或 bbox 内缩（shrink 1-2m）去除贴边误命中。net 仍为正收益（−65.8k），无回退必要。
+
+**§639. conflation 升级环相交（§638 下轮入口落地，2026-08-31）**：
+
+`MBModelFootprints` 重写为**环存储 + 射线法 PIP**（bbox 仅快拒）；捕获改为 `node.matrixWorld` 变换的 footprint 几何顶点 → lng/lat 环（meshopt/draco 的 y 镜像约定由 matrixWorld 统一吸收，消除本地符号分支——此前 bbox 版的 y 镜像错位即此根因）。**验收**：conflation 8 例 821849 → **681987（净 −139,862）**，较 bbox 版再 −74k；§638 的回归大幅收敛：intersect-padding-lod +39432→+12640、index-overflow-lod +13866→+3624；buckingham 182348→140348 再改善。**残差**：仅外环 PIP（忽略内环/洞）的边界带，padding-lod 仍 +12.6k（padding 语义对边界极敏感）——下轮可补内环（node geometry 的多环）或 padding 常数微调。
