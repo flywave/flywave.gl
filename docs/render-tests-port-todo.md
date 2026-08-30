@@ -6815,3 +6815,11 @@ landmark-conflation 8 例（conflation replacement 的直接测试域）vs ml-fi
 **§641. conflation 轮廓分段 + even-odd 多环匹配（§640 遗留落地，2026-08-31）**：
 
 `MBModelFootprints` 重写为**轮廓组模型**：footprint 节点顶点序列（可能拼接外环+洞多轮廓）按边长 >4× 中位数断点分段为多轮廓，注册为组；命中测试 = 组内 even-odd XOR（精确支持洞）。**验收**：conflation 8 例 681987 → **670880（较基线 −150,969）**：index-overflow-lod 110825→100615、padding-lod 65920→65023、其余 6 例逐位不变，**无一例恶化**。padding-lod 仍余 +11.7k（padding 语义边界，非洞匹配可消）。conflation 子系统至此闭环。
+
+**§642. 树之谜破案——Spector 捕获贯通+邻瓦片实例偏移错位定量（2026-08-31 重大突破）**：
+
+SpectorJS 捕获在 karma 内贯通（§621-§622 判定的"时序不相容"被**测试体内 await onCapture** 方案解决：spector.bundle vendor+`{pattern,included:false}` 服务项+captureNextFrame+自驱 rAF 帧循环）。shadows-casting 首次获得逐 draw GPU 数据（8878 commands/2403 drawElements/prog=5 模型 draw 9044）。
+
+**决定性发现**：499 个唯一树组位置（≈§611 的 503 placements ✓）全部被 GPU 绘制，位移分布 **≤2.2km**——无 7200m 错位（§618 假象）、无零矩阵退化（§616"零贡献"非 GPU 变换异常）。**根因定量**：z18.5 视距 ~300m，邻瓦片 412 树的实例世界偏移落在 ≤2.2km——**偏移换算缺一个 ~2^(level差) 级因子**（z14 存储 vs z18.5 显示的 cell→world 转换），导致树全部出屏零像素。**50 轮之谜的最终答案：不是 GPU 之谜，是实例偏移换算少乘一个 zoom 级因子**——数据源层可修！
+
+**下轮（单点）**：MBPendingSourceTile.instancesOnly 邻瓦片实例的 cell→world 偏移换算对拍（§619 曾按 DecodeInfo.center 验证"正确"但该验证只对了瓦片内相对位置，未对世界缩放）；修正后 shadows-casting 系 4 例 ~250 万 px 预期大幅收敛。
