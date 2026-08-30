@@ -6740,3 +6740,7 @@ landmark-part-styling-indirect-doors（model-color 为 `["match",["get","part"],
 **§629. indirect-update 家族批测——§628 alpha 修复受益面量化（2026-08-30 续廿七）**：
 
 对照 §628 修复前基线（mbstyle-rerun-3di-ml，本会话起点）：indirect-update **857513→241519（−72%）**、update-doors **616617→553860（−10%）**、update-doors-lod **613755→519421（−15%）**；同批 xray/duplicate/emission-strength 与 §553 值逐位一致（不透明 model-color 不受影响，反向验证修复精确性）。update 家族剩余残差定性（actual/expected 放大对拍）：几何与部件对位良好，残差在**色域饱和度/亮度域**——我方 window 带亮蓝、door 光束过饱和、墙体偏暗棕，expected 整体柔和（mix 后受光照洗涤 + alpha 合成的复合效果）。属 §554 遗留②（featureless tile 逐节点逐 part 色求值）与 lighting 洗涤校准的后续工作，本轮不再展开。
+
+**§630. §554 遗留②边界裁定（2026-08-30 续廿八）**：
+
+per-node 逐节点 part 色求值（random(id) 家族）的前置是 mgl 3d-style 的 per-node feature id 语义——但 vendored mapbox-gl-js（src/ 仅 core+style-spec）**不含 3d-style/model bucket 源码**（find 实证），语义无法对照落地，盲实现违反"严格对照 mgl 代码"原则。裁定：挂起直至①vendored mgl 补充 3d-style 源码，或②联网环境从 mapbox 内部包（@mapbox/tiny3d 等）取证 node feature id 的构造约定。本轮 indirect-update 批测（§629）与 §628 修复为本轮全部交付。
