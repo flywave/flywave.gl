@@ -6789,3 +6789,7 @@ per-node 逐节点 part 色求值（random(id) 家族）的前置是 mgl 3d-styl
 三步全部落地：①`MBModelFootprints.ts` 注册表（lng/lat 框 + 序列化键去重，`registerBoxFromLocalBox` 返回是否新增）；②`MBDracoDecoder.decodeGlbTile` 提取节点 `mapbox:footprint:id`（nodeFootprints），draco 分支 footprint 节点**不再渲染**（mgl convertFootprints 移除语义，此前 draco 路径的 footprint 地面多边形被当作可见几何渲染——潜在修正点）；`MBBatchedModelDataSource.build` 尾部将 `__mbFootprint` 节点的世界 bbox 注册入表，新增覆盖时 `markTilesDirty(env)` 触发 vector 重解码（去重前曾引发无限重解码 6 分钟超时——重注册必须按 box 键去重，教训记档）；③`processPolygonFeature` 对 fill-extrusion 特征做 `pointInModelFootprint` 命中测试跳过发射。
 
 **现状**：z-offset-v2-port 分数不变（391773/389147）——29 个已注册框均位于渡轮大厅以北（大厅质心 37.7956 未命中任何框），替换未生效。**下轮取证点**：①draco 替身瓦片（mbx/2621-6332）footprint 的 y 镜像符号验证（draco 顶点已烘焙 y 镜像，转换方向可能反）；②meshopt 瓦片 footprint 框仅覆盖塔楼区，大厅 footprint 可能缺于 footprint 节点集（需在 6332 瓦片原始 meshopt 资产取证——上游亦缺该文件）；③退化方案：大厅质心手动扩框验证替换管线本身可见生效。
+
+**§636. conflation y 镜像修正 + 抑制链闭环（2026-08-31 续）**：
+
+§635 的"29 框位于大厅以北"实锤为 **y 镜像符号错**：meshopt 网格 y 是**北正**（loader 以 +4096 偏移居中，非南正），draco 顶点烘焙镜像为南正——`registerBoxFromLocalBox` 增 `yNorthPositive` 参数分路转换。**抑制命中实证**：重解码中 fill-extrusion 特征 `pointInModelFootprint` hit=true（111 框），跳过发射生效。**剩余断点（唯一个）**：capture 与重解码的渲染时序——`markTilesDirty` 触发的 vector 重解码在静态相机 harness 的 capture 窗口内不落地（修复前后 actual 逐位 0 px 差异实证；tilesPending settle 不覆盖 dirty 周期）。**下轮入口（引擎/harness 协同）**：①capture 前等待 dirty 重解码完成（harness tilesPending 扩展识别 markTilesDirty 周期）；②或改用引擎渲染时序内的抑制（模型覆盖检测移入 patcher 逐帧）。dfc far-cull 6 例 A/B 顺延。
