@@ -6798,3 +6798,7 @@ per-node 逐节点 part 色求值（random(id) 家族）的前置是 mgl 3d-styl
 
 ①实现 §636 入口：MBStyleDataSource 增 `notifyConflationCoverageAdded()/conflationSettled()`（dirty 周期跟踪，batched DS 新增 footprint 覆盖时通知），harness 在 model/raster settle 后增 conflation 周期等待（20×update+500ms 有界+尾帧）。**结果：分数仍逐位不变（391773/389147）且命中日志证实抑制在重解码中生效** → 结论修正：**渡轮码头的白色平面板不是被抑制的 fill-extrusion，而是替代 GLB（mbx/2621-6332 的 draco 版）自身的简化大厅网格**——expected 的拱廊细节来自上游缺失的 mbx-meshopt/2621-6332（量化版，本仓库与上游均不存在），属**资产保真度边界**，非 conflation 问题。conflation 基础设施保留（语义正确、无回归，真实 conflation 场景可用）。
 ②dfc far-cull 常数 A/B 停止：cosP 移除/符号翻转/常数倍缩放三变异均产生逐位相同分数——verdict 对 dfc 尺度不敏感（标签 dfc 值聚类远离阈值），残差为标签位置/内容差异，非常数标定可收敛。
+
+**§638. conflation 家族批测——抑制可见生效确认（2026-08-31 续）**：
+
+landmark-conflation 8 例（conflation replacement 的直接测试域）vs ml-final/rerun 基线：buckingham-lod **236457→129636（−107k）**、thin-pillars −9869/−13526、index-overflow −5；回归：intersect-padding-lod **+39432**、index-overflow-lod +13866、intersect-padding +6363、buckingham +4773。**净 −65,787 px**——conflation 抑制管线可见生效实锤（buckingham-lod 的 −107k 即替换语义生效）。回归四例定性：box 抑制在 -lod 变体的覆盖/边界过度（footprint bbox 相交近似 vs mgl 的 footprint 精确环交——粗框把 padding 测试中应保留的相邻 building 也抑制了）。**下轮**：①把 bbox 相交升级为 footprint 环相交（footprint 节点几何本就是环）；②或 bbox 内缩（shrink 1-2m）去除贴边误命中。net 仍为正收益（−65.8k），无回退必要。
