@@ -336,6 +336,19 @@ export class MBShadowRenderer {
         let frameCenter = center.clone();
         let radius = Math.max(50, (this.m_mapView as any).targetDistance ?? 500);
         if (haveBox) {
+            // §561: the receiver quad spans the whole view ∩ ground — fold
+            // its far corners into the framing box so distant ground points
+            // stay inside the ortho (out-of-bounds uv reads as lit).
+            const corner = new THREE.Vector3();
+            try {
+                camera.updateMatrixWorld();
+                const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
+                for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+                    this.cornerOnGround(camera, camPos, cx, cy, radius * 8, corner);
+                    corner.sub(eye);
+                    casterBox.expandByPoint(corner);
+                }
+            } catch { /* framing stays caster-only */ }
             frameCenter = casterBox.getCenter(new THREE.Vector3());
             const sz = casterBox.getSize(new THREE.Vector3());
             radius = Math.max(50, Math.max(sz.x, sz.y, 1) * 0.75);

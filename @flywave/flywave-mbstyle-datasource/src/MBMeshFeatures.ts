@@ -414,7 +414,15 @@ function buildLightsGeometry(
     const indices = new Uint32Array(lights.length * 12);
     const MY = (y: number) => GRID - y; // GLB grid y-south → engine y-north
     let v = 0, t = 0;
-    for (const light of lights) {
+    for (const light0 of lights) {
+        // The GLB grid y runs south; positions mirror via MY(y) — a mirror
+        // flips handedness, so the extrusion NORMAL must mirror too or the
+        // beam extrudes INTO the wall on mirrored doors (mgl calculateLightsMesh
+        // extrudes along +normal in the unmirrored tile frame).
+        const light = {
+            ...light0,
+            normal: [light0.normal[0], -light0.normal[1], light0.normal[2]] as [number, number, number],
+        };
         const fallOff = Math.min(10, Math.max(4, 1.3 * light.height)) * zScale;
         const tangent = [-light.normal[1], light.normal[0], 0];
         const horizontalSpread = Math.min(0.29, 0.1 * light.width / light.depth);

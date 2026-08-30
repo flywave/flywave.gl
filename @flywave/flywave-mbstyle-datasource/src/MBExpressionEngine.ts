@@ -580,9 +580,12 @@ export class MBExpressionEngine {
                 for (let i = 2; i < args.length - 1; i += 2) {
                     stops.push([args[i] as number, this.exec(args[i + 1], ctx)]);
                 }
-                if (args.length % 2 === 0) {
-                    stops.push([args[args.length - 1] as number, this.exec(args[args.length - 1], ctx)]);
-                }
+                // NOTE: args = [mode, input, s1, v1, ..., sN, vN] — the count
+                // is ALWAYS even (2 + 2N). An earlier `args.length % 2 === 0`
+                // guard fired on EVERY expression, appending a spurious
+                // [lastInput, lastInput] stop: out-of-range inputs returned
+                // the garbage stop and DESCENDING outputs (e.g. door
+                // emissive 2.2→0.0) collapsed to 0.
 
                 if (input <= stops[0][0]) return stops[0][1];
                 if (input >= stops[stops.length - 1][0]) return stops[stops.length - 1][1];
