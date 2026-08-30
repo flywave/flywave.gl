@@ -6638,3 +6638,7 @@ green 像素最近邻直方图（cur 1455 / exp 3717 采样，面积比 1:2.55�
 **§606. 配对树 RGB 对拍（第 34 轮，颜色域证伪+密度真相，2026-08-30 终章二十四）**：
 
 聚类对拍：**exp 177 簇 vs cur 78 簇**（96 对距离 <20px）；逐对 3×3 采样 RGB 双方同属绿色族且明度相近（如 exp(30,75,36) vs cur(24,79,25)）——**颜色域证伪**（§605 假设否定）。**真相回归覆盖域**：expected 的树簇数 ≈2.27× 我方——**视口在 z15 跨多个瓦片，mgl 按 covering 取全部、我方仅解码中心 cell 的那片**（§566 的单瓦片 covering，但其作用对象是**树的宿主 vector tile 而非早先假设的背景**）。此前 33 轮的"位置全命中"是因为 96 对均来自中心瓦片；缺的 ~99 簇在邻瓦片。**修复入口（明确）**：trees extras provider 的邻瓦片合并（§567 的 pseudo-extras 机制对 **vector 主源**重做——上次因 dx≠0 几何被逐 cell 裁剪失败，但树是 modelInstances（绝对世界坐标、场景级挂载），**不受 cell 裁剪**——§577 已证 scene 挂载渲染）——将邻瓦片 pbf 以 extras 解码并入其 modelInstances 即可。会话 §554–§606 共 95 提交。
+
+**§607. 邻瓦片 extras 合并首轮实施（解码✓渲染未达，时序疑点，2026-08-30 终章二十五）**：
+
+实施完整链路：①`MBPendingSourceTile.instancesOnly` 标记；②extras provider 钳制层 fetch 主瓦片后并发取 8 邻瓦片入 stash；③`decodeTileWithSources` 对 instancesOnly **只并入 modelInstances**（邻瓦片网格几何仍会被 cell 裁剪，§567 教训规避）。**探针结果**：邻瓦片解码**成功产出实例**（15/5242/12663→13 个、15/5243/12664→75 个）——机制全通；但**渲染 green 采样 1455 逐位不变**。疑点：**stash 时序竞态**（stash 在 primary 返回后 put，而该 cell 的 decode 可能已消费旧 stash/或已完成后 stash 才到——渲染用的解码结果先于邻瓦片就绪）。已全部回退（375224 复核，工作树净）。**下轮单点**：stash put 提前到 primary await 之前（邻瓦片 fetch 与 primary 并发、put 在 decode 前）+ 重测。会话 §554–§607 共 96 提交。
