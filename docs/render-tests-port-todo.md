@@ -6690,3 +6690,7 @@ RTE 帧（getRteCamera）投影探针——**同帧对比**：inst5（可见中�
 **§619. 实例坐标对拍（第 47 轮，decode 位置证明正确，§618 结论修正，会话终局，2026-08-30 终章三十七）**：
 
 逐瓦片 dump（emitter push 处，per-tile 首实例 vs 该瓦片 DecodeInfo.center）：**6 个瓦片（5241-5243 × 12663-12664）的 center 与 firstInst 全部一致对应**（如 5243/12664 center=6412761,24586429 / inst=6412229,24587045——同瓦片内偏移 ~1km 以内合法）——**decode 链实例坐标正确，§618 的"cell 帧残留"假设否定**。§618 的 w=8012 系探针在 setTimeout(4s) 时测到解码翻腾期的陈旧 matrixWorld（或 rebase 换算现象），非位置 bug。**47 轮终局归档**：decode✓/placement✓/instantiate✓/scene✓/drawcall✓（2403/帧）——所有 CPU 层环节全部实证正确，像素贡献为 0 的矛盾**只剩 GPU 帧下的变换/重基换算一层**（真 SpectorJS 域）。工作树净（375224 复核），会话 §554–§619 共 108 提交。
+
+**§620. GPU 帧 modelViewMatrix 探针（第 48 轮，会话终局归档，2026-08-30 终章三十八）**：
+
+SpectorJS 替代（onBeforeRender 抓 GPU 帧 modelViewMatrix，EARLY idx10 vs LATE idx91）：两者读数**完全相同**（mvCol30=0,0,0、camPos=0,0,0=RTE 原点相机 ✓）——onBeforeRender 时点该矩阵尚未填充（three 在其后写入），探针**不具裁决力**。**48 轮调查的最终边界**：CPU 全环节（decode/placement/instantiate/scene/drawcall 计数）实证正确；GPU 帧的逐 draw 矩阵/顶点数据**在任何 in-page 钩子之外**，唯真 SpectorJS（联网环境）可达。**重启清单（SpectorJS 会话）**：①npm i spectorjs；②karma 注入 Spector + capture 一帧；③按 draw 列表对比 idx<91 与 idx≥91 树的 modelViewMatrix/顶点位置；④差异即修复点（预期在引擎 per-object rebase 链 TileGeometryCreator→sceneRoot 挂载对非 tile 对象的矩阵处理）。会话 §554–§620 共 109 提交，工作树净（375224 复核）。主线成果与全部调查档案完整沉淀。
