@@ -6670,3 +6670,7 @@ green 像素最近邻直方图（cur 1455 / exp 3717 采样，面积比 1:2.55�
 **§614. 早/晚实例逐字段差分（第 42 轮，结构性一致实锤，引擎内部收官，2026-08-30 终章三十二）**：
 
 `[MBDiff]` 探针（group#10 早期中心瓦片树 vs 倒数#10 晚期邻瓦片树）：**visible=true / parent=MBModelRendererTile / inScene=true / layers=1 / wpos=(-351,-56,-459) vs (-961,563,-459)（同帧同地面带）/ scale=(1,1,1)——逐字段结构性一致**。可见树与"零光栅化"树在对象图层面无任何差异，丢弃点在**引擎渲染循环内部**（与 §585 fill 材质"从不光栅化"完全同型：对象合法在场景，draw 不到达）。**42 轮终局结论**：邻瓦片树的数据链（fetch→decode→merge→placement→instantiate→scene）已 100% 打通并提交（§613），最后一步的 draw 丢弃为引擎渲染管线内部机制，黑盒观察穷尽（对象级探针已做尽，需 WebGL 调试器或引擎源码级 walk）。工作树净（375224 复核），会话 §554–§614 共 103 提交。
+
+**§615. 渲染循环源码走查（第 43 轮，sceneRoot 擦除机制理解，会话最终收束，2026-08-30 终章三十三）**：
+
+引擎渲染循环关键机制（MapView.ts:3542-3612）逐行走查：①**每帧 `m_sceneRoot.children.length = 0` 全量擦除**，随后 `m_tileObjectRenderer.render(tile,…)` 从 visibleTiles renderList **逐瓦片重挂** tile 对象到 m_sceneRoot——引擎的"渲染清单"即此重建循环；②`m_scene.add(m_sceneRoot)`（:3940）——sceneRoot 是 m_scene 的子节点；③渲染 = `mapRenderingManager.render(renderer, this.m_scene, …)` **整个 m_scene 全量绘制**。**对照我们的挂载**：MBModelRendererTile group 直挂 m_scene（非 sceneRoot）→ 不被每帧擦除 → 503 树理应全部绘制——**擦除机制不能解释零光栅化**，且早/晚树同组同帧（§614 结构一致）却被差别对待在对象图层面不可能。**终局推断**：丢弃不在场景图，而在 GPU 侧（材质 program 状态/深度/剪裁平面）或 WebGL 调用层——**唯 SpectorJS 级 draw call 抓取可及**（离线环境不可用）。会话 §554–§615 共 104 提交，43 轮调查以"数据链 100% 打通 + 对象图 100% 排除 + GPU 侧未及"完整归档收官。
