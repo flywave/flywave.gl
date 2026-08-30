@@ -6438,3 +6438,5 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **§568b. sphere 世界尺度约定发现（globe 修复前置条件，2026-08-30 续十三）**：
 
 追进引擎相机链：lookAtImpl → calculateDistanceFromZoomLevel（focal·C/256·2^z）→ zoomLevel=1（mgl z0+1）→ **d_ground=9.44R、相机-球心=10.44R（与探针吻合 ✓）**。但像素 limb 192px 反推 tanθ=192/768=0.25 → θ=14°，而 asin(R/10.44R)=5.5°——**渲染出的球是透视几何预期的 2.6×**：引擎 sphere 管线必有一层世界归一化/尺度约定（unit-sphere 或半径≠R），R-ratio 分析在其上失效。**修复前置**：先测绘引擎 sphere 的实际半径/世界单位（顶点坐标量级探针或 TilingScheme/TileGeometry 源码审读），才能定 d 的正确目标；mgl 侧锚点=limb r_exp=160px（θ=atan(160/768)，focal=768@512px·fov36.87°）。§79 黑屏教训继续有效（双距离函数+pitch 曲率钳制联动）。本轮零代码变更。
+
+**§568c. globe 探查收口（方法论警示，2026-08-30 续十四）**：进一步追进发现 globe-default 的"limb"实为**卫星瓦片缺失下的暗盘+大气亮环**——亮度剖面是环形而非盘形，边缘估计 ±30px 摆动（r 结论在 160-224px 间翻转），§568 的 4.13R/4.91R 数字仅由环带外沿粗估、**不可作修复锚点**。SphereProjection.ts:442 实证世界球半径=EQUATORIAL_RADIUS（真实米制，无归一化层）——探针 10.44R 与"像素反推"的矛盾更可能源于 fov 字段单位污染（cam.fov 读出 36.87° 字面值=0.6435rad 的度数误存）与 limb 测量歧义的叠加。**globe 专项重启前置**：①用带明确海岸线 fill 的 globe fixture（globe-geojson/fill）测 limb；②读 m_camera.fov 的写入链确认单位；③再定距离目标。本轮共 3 个文档提交（§568/568b/568c），零代码变更，工作树净。
