@@ -6614,3 +6614,7 @@ GPU 级替代取证（SpectorJS 离线不可用，改 in-page）：①`[MBProg]`
 **§600. 背景绘制层接入实验（第 28 轮，underlay 槽位打通+采样域残余，2026-08-30 终章十八）**：
 
 **①红色下层测绘（决定性）**：pre-scene hook（需同步解除 translucent 门——§598 测试漏此步故无观测）绘红色全屏 quad → **远带 (255,0,0) 实红**——underlay 槽位对远带像素完全可见，"clear 区域"由下层直接呈现，通道成立。②真阴影 quad 换入同槽位：远带仍 102——quad 渲染 ✓ 但**采样返回 lit**（lit 输出=clearColor 精确不可见），与 §590 grid（casters 集中一小块、远带 uv 空）一致。**残余（最终收敛为纯校准项）**：远带地面点 uv 与 caster 覆盖的几何关系——expected 黑带需 556m 级长影落在远带方位；az 双约定 + 长影扩展均已试，grid 未变——疑点收敛到 **caster 集本身**（extrusion 的 fill-extrusion-opacity 0.4 是否被 §572b 门控误伤而未注册/未渲染入深度图；trees 的 model-cast-shadows=false 正确排除）。下轮单点：dump 深度图中 extrusion 剪影（80 casters 中按 userData 分类计数）。已回退（375224 复核）。**通道结论**：underlay 槽位+解除 translucent 门 = 远带阴影的正确落点（红测已证），唯一剩余是深度图 caster 覆盖校准。会话 §554–§600 共 89 提交。
+
+**§601. caster 集完整性终验（第 29 轮，远带线收官，2026-08-30 终章十九）**：
+
+`[MBKind]` 分类 dump：**80 casters 全部为无名 tile 对象（=extrusion），maxHeight=202.4m**——caster 集完整、无门控误伤（trees cast-shadows=false 正确排除）。**综合 29 轮的最终几何判定**：远带地面点距塔群 ~600m、单塔影长 556m 且仅当塔位于光向正后方才命中——**expected 黑带与本地几何阴影的可达性存疑**：候选来源转为 (a) mgl 对 model-cast-shadows:false 的处理差异（或 not-receiving 层仍投影）、(b) DEM/terrain 阴影、(c) expected 黑带实为远处树群自渲染（深色非纯黑区被阈值合并）。**收官定性**：通道（underlay 槽位）✓、caster 完整 ✓、帧对齐 ✓、机制（雾变体证明为阴影）✓——四个环节全部实证打通；唯一未闭合 = expected 黑带的**产生者身份**（建筑 vs 树 vs 地形），需 mgl 侧 A/B（如去掉树层重渲染 expected）而非我方盲调。工作树净（375224 基线），会话 §554–§601 共 90 提交。三域定量同源复核挂起同一黑带身份裁决。
