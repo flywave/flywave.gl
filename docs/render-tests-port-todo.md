@@ -6430,3 +6430,7 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 **§567. 远树带修复尝试——邻瓦片环实测被引擎逐瓦片裁剪（负结果收口，2026-08-30 续十一）**：
 
 按 §566 根因实现数据源侧修复：MBExtraVectorSourcesProvider 加 8-邻瓦片环（covering≤2 的启发式门，防正常覆盖时内容重复），邻瓦片以 pseudo-extras 走既有 decodeTileWithSources 偏移合并链（DecodeInfo center 差移顶点）。**实测（探针 [MBRing] stash=9 cells=1）环触发、邻瓦片数据取到、合并执行——但像素零变化**。定性：**引擎按 CELL 边界裁剪瓦片几何**——同 cell 的 extras（trees 源 clamp 到同 z15 同 cell，dx=0）能渲染，而 dx=±tile-span 的邻瓦片几何被裁（近树可见/偏移树不可见的对照实锤）。**结论：远带修复需引擎级**——瓦片 covering 按 pitch 外扩或逐瓦片 clip 放宽，数据源层通道已穷尽（与 §549 上屏问题同族：引擎逐瓦片域）。实验代码已回退（375227→375224 基线复核），§566 的单瓦片覆盖根因 + 本节的"引擎逐瓦片裁剪"实锤共同构成引擎侧修复的完整依据。
+
+**§568. globe 相机距离再标定——像素实测推翻 §78 旧值（方向翻转，2026-08-30 续十二）**：
+
+转向 globe 大类（84 例）第一步行标定。**像素级 limb 测量（globe-default 512px，中心行亮度剖面）**：我方亮带过渡 x≈96/448 → r≈192px → θ=atan(192/768)=14.03° → **d≈4.13R**；expected 过渡 x≈96/416 → r≈160px → **d≈4.91R**（与 mgl 公式 4.71-4.91R 区间吻合 ✓）。**关键修正：§78 记档的"我方 5.7R 偏远/globe 偏小"已过时**——§9f7fa341 的 harness 相机语义改造后方向翻转，现状为**偏近 ~16%**。**探针陷阱再证**：逻辑相机 position.length()=10.44R 与渲染尺寸反推的 4.13R 不符（RTE 双相机帧，§560 同款）——globe 域的距离真值只能由像素 limb 反推。**修复方向（下轮）**：定位 sphere 渲染相机的实际距离来源（zoomLevel→position 链，重点 MapView.ts:3132 calculateDistanceFromZoomLevel 调用点与 harness lookAtPoint 的 sphere 分支），目标 d×1.186；§79 的黑屏教训=两个距离函数必须同步改+pitch 钳制链。本轮零代码变更（探针已清，142737 基线复核）。
