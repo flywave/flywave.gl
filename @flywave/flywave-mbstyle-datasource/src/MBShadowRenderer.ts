@@ -53,6 +53,7 @@ export class MBShadowRenderer {
     private m_matrix = new THREE.Matrix4();
     private m_enabled = false;
     private m_intensity = 0;
+    private m_orthoStyle = false;
     // §560: ground shadow receiver — mgl shades the BACKGROUND as a ground
     // layer (`background × groundRadiance × groundShadow`); our background is
     // the engine clearColor, so an mgl-style screen-space quad (fog-renderer
@@ -81,6 +82,17 @@ export class MBShadowRenderer {
             this.m_groundQuad = null;
             this.m_groundUniforms = null;
         }
+    }
+
+    /**
+     * §571: orthographic-camera styles — the ground receiver unprojects
+     * view rays with the perspective assumption and the depth pass frames
+     * around the RTE target distance; under an ortho projection both are
+     * wrong (camera-orthographic-zero-pitch +53k measured). Skip entirely.
+     */
+    setOrthographicStyle(ortho: boolean): void {
+        this.m_orthoStyle = ortho;
+        if (ortho) this.setLightState(false, 0);
     }
 
     get enabled(): boolean {
@@ -242,6 +254,7 @@ export class MBShadowRenderer {
         // before visual calibration. Opt back in per-run via the forensic
         // karma arg gate `shadowdbg=1` (window.__mbShadowEnable).
         if (!(globalThis as any).__mbShadowEnable) return;
+        if (this.m_orthoStyle) return;
         if (!this.m_enabled || this.m_intensity <= 0) return;
         const renderer = this.m_mapView?.renderer as THREE.WebGLRenderer | undefined;
         const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;

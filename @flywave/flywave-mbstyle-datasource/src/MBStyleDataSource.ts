@@ -2554,6 +2554,11 @@ export class MBStyleDataSource extends TileDataSource {
                 // (same as heatmap).
                 if (self.m_shadowRenderer) {
                     const sl = self.m_environment?.shadowLightState;
+                    // mgl test styles normalize the root camera-projection
+                    // into a `camera` object — honor both shapes.
+                    const camSpec: any = (style as any).camera ?? style;
+                    self.m_shadowRenderer.setOrthographicStyle(
+                        camSpec['camera-projection'] === 'orthographic');
                     self.m_shadowRenderer.setLightState(!!sl, sl?.intensity ?? 0);
                     self.m_shadowRenderer.run();
                     // §562: model materials sample the shadow map in their
