@@ -6630,3 +6630,7 @@ green 像素最近邻直方图（cur 1455 / exp 3717 采样，面积比 1:2.55�
 **§604. 实例 scale 对拍（第 32 轮，桶分布正确，根因收窄到帧换算，2026-08-30 终章二十二）**：
 
 `[MBScale]` 直方图：**[3,3.25,3]×32 / [5.2,5.1,5.1]×31 / [1.8,1.9,1.8]×28**——model-scale 的 %id 桶在实例化端**分布完全正确**（1/3 均分）。**根因收窄**：mgl `calculateModelMatrix` 的世界矩阵 = `translate(px) × scale(modelPixelsPerMeter) × rotationScaleYZFlip(orientation+rotation, paintScale)`——**glb(米) 先乘 pixelsPerMeter 进入 mercator 像素世界，paintScale 在其内层**；我方矩阵 = `rotation × scale(paintScale) × glb(米)` 直挂引擎世界帧——**缺 mpp 帧换算因子**（z17.5 时 ≈6.7，但实测面积比仅 1:2.55 → 直径 1.6×——非纯 mpp 差，疑引擎帧本身已部分缩放或 glb 基准不同）。**下轮单点**：dump 我方树的最终 world matrix 三轴长度 vs mgl 同 id 矩阵三轴长度（一次对拍定差商），再按差商补换算因子。会话 §554–§604 共 93 提交。
+
+**§605. 差商 A/B 双向证伪（第 33 轮，全局 scale 假设否定，2026-08-30 终章二十三）**：
+
+数值裁决：mgl `getMetersPerPixelAtLatitude`（mercator_coordinate.ts:52，512 基）@z17.5/lat37.78 → **mpp=0.334（ppm=2.997）**。经验差商 A/B：**k=1.75 → 424022（更差）、k=1/1.75 → 383384（更差）、基线 375224 最优**——**全局 scale 因子假设双向证伪**：green 面积差 1:2.55 并非树整体偏小，最可能是**颜色/明度域**（expected 树为饱和绿/我方经光照偏灰——green 分类器 g>r+15 的判定随明度漂移；§603 的"面积"实为"分类命中数"）。已回退。**下轮入口（颜色域）**：对配对树采样中心 RGB 均值对拍（ours vs exp 各 10 棵），若色差显著则查 model-color 桶（%id 6 的 orange/gray/white/pink/yellow/green）与 mgl tint 的色彩空间。会话 §554–§605 共 94 提交。
