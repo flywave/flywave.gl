@@ -6466,3 +6466,7 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **§571b. 阴影正交相机 guard（ortho 家族 12 例全回基线，2026-08-30 续二十）**：
 
 §571 回归簇①已修：mgl 测试样式把根级 `camera-projection` 归一进 `camera` 对象（探针实证 keys=camera/proj=undefined → camera={"camera-projection":"orthographic"}）——两级查找 `style.camera ?? style` 后 `setOrthographicStyle` 整体跳过阴影 pass。**ortho 家族 12 例全部 ±0 回基线**（含 with-shadows 全系与 zero-pitch 的 −53k 回归清零）；−231k 的 landmark-mbx-shadows-lod 与 quantization-shadows 收益保留。**阴影默认开启的剩余前置**：仅 lighting-3d-mode 接收器族（draw-layer-lines/slot +27k×2、shimmering +27k、fill-extrusion-translucent +15k、depth-occlusion/multiline +3.5k，合计 ~+72k）——疑 §562 的 model 阴影接收注入在 fill-extrusion 主导场景的直射项压暗过量，下轮逐夹具定强度后可评估转默认（当前净收益 ~−125k 待解锁）。
+
+**§572. lighting-3d-mode 阴影回归簇校准尝试（零效果收口——回归源非接收器，2026-08-30 续二十一）**：
+
+按 §571b 前置实施内容阴影因子校准：patchManager 接收器的 `×(1−intensity)` 整色乘（mgl 语义=阴影只替换直射 NdotL、ambient 保留）改为 `amb/(amb+dir·ndl)` 内容因子（calculateGroundShadowFactor 同式，含 CPU 端 lighting3DState 求值 + uniform 注入）。**实测零像素效果**——draw-layer-lines/slot +27443、shimmering +27102、translucent +15470 与改前逐位相同（唯二变化 line-emissive-in-shadows −12.3k×2 系自身波动）。**结论：该回归簇的来源不是接收器暗度**——接收器改动完全不影响输出，说明这些场景的 +27k 机制在别处（候选：§530 记档的第二 WebGL 上下文对 SwiftShader 主渲染的状态扰动在 WillRender 深度 pass 之外的残留、或 ground quad AfterRender 合成对该族内容层的干扰）。代码已回退。**下轮隔离 A/B 三件套**：①enable+跳过深度 pass+跳过 quad（纯 flag）；②enable+深度 pass+跳过 quad；③enable+全链——定位扰动源后才能评估转默认。
