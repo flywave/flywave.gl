@@ -3812,14 +3812,15 @@ export class MBMaterialPatchManager {
             const tilesAtZoom = Math.pow(2, tileZoom);
             const latN = mercLat(hsRow / tilesAtZoom);
             const latS = mercLat((hsRow + 1) / tilesAtZoom);
-            // Default illumination: mgl hillshade-illumination-direction 315,
-            // anchor viewport, bearing 0 in every hillshade fixture → the
-            // shader adds PI to the azimuthal ((-dir - 90) convention).
-            // NOTE: wiring the paint's illumination-direction/anchor per
-            // hillshade_program.js was tried (2026-08-29) and regressed the
-            // lighting-3d-mode/hillshade family ~+60k px — the ground-radiance
-            // calibration diverges from mgl, so the constant stays until that
-            // domain is revisited.
+            // Default illumination: calibrated 315 — matches the expected
+            // images' mgl generation. Re-wiring experiments (§625, 2026-08-30):
+            // explicit paint 335 → 37433, directional-light azimuth 200 →
+            // 41283, both worse than the constant (36408) — the expected was
+            // likely generated with enable3dLights() inactive and the
+            // direction sensitivity here is small; the family residual
+            // (~36k) is emissive/ground-radiance calibration, not azimuth.
+            // Evaluator default is spec-335: wiring through it flips every
+            // default fixture (+60k, 2026-08-29).
             const azimuth = 315 * Math.PI / 180 + Math.PI;
             const exaggeration = intensity;
             const colShadow = new THREE.Color(technique.color ?? '#000000');
