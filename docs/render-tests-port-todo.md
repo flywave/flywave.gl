@@ -6552,3 +6552,7 @@ GPU 级替代取证（SpectorJS 离线不可用，改 in-page）：①`[MBProg]`
 **§587. background-as-tiles 实施尝试——quad 重开三级 A/B（负结果，gate 维持，2026-08-30 终章五）**：
 
 三级 A/B：①去 fill/line 腿（仅半透明门）——draw-layer-lines/shimmering 回归值重现（92978/267901）、shadows-casting 不变（其 extrusion-opacity 0.4 仍触发半透明门）；②完全无门——shadows-casting **377046（+1822）**且**远带逐位不变（102 灰主导无黑）**：quad 几何覆盖远带但**阴影采样为 lit**——远带变黑还需阴影深度图覆盖该区域的长投影（polar 70° 长影域标定，direction [120,70]）。已回退至 §572c 提交态（375224 复核）。**结论**：background-as-tiles 的完整解锁 = ①quad 无门重开 + ②长投影标定（阴影相机沿光轴 far 扩展/深度精度）+ ③draw-layer 族阴影位置校准（§571 的 +27k 簇根源）三件联动——单开任一均负收益。挂起为联合校准专项。工作树净。
+
+**§588. 长投影标定+quad 无门联合 ABTEST（第 16 轮，负结果收口，2026-08-30 终章六）**：
+
+实施三件联动之①+②：阴影 ortho 盒按长影足迹扩展（tan(polar)·maxHeight 沿地面逆光向，polar 70° 实测 direction [120,70]）+ quad 完全无门。**结果：377046（与 §587 无门单开逐位相同）、远带 (102,102,102) 逐位不变、shadowdbg=3 读出仍 0px**。**关键再定性**：远带显示色 102 ≠ clearColor 73 ——**远带是 z15 大瓦片 fill 'land' 的覆盖区**（fill 延伸全视口），quad（仅填 depth==clear 区）从结构上就与此无关；远带变黑的唯一通道 = **fill 接收器生效**——而 §586 场景扫描已注入这批 MeshBasicMaterial、§585 cacheKey 已统一，读出仍不出现 → fill 渲染链在引擎内还有一层未识别的机制（第 16 轮同墙）。已全部回退（375224 复核，工作树净）。**最终结论**：该线需引擎源码级走查 fill 渲染管线（非黑盒可及），三远带域挂起不变。会话 §554–§588 共 77 提交。
