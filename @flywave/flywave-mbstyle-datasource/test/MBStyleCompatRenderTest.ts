@@ -119,15 +119,18 @@ function discoverTests(): TestEntry[] {
     if (dbg === "1") (globalThis as any).__mbDecodeDbg = true;
 }
 {
-    const dbg = Number((window as any).__karma__?.config?.args?.find?.((a: string) =>
-        a.startsWith("shadowdbg="))?.slice("shadowdbg=".length) ?? 0);
-    if (dbg >= 1) (globalThis as any).__mbShadowEnable = true;
+    const dbg = String((window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shadowdbg="))?.slice("shadowdbg=".length) ?? "1");
+    // §572c: the shadow chain is calibrated (ground quad gated to true
+    // background, ortho guard, content receivers) — DEFAULT ON. shadowdbg=0
+    // disables for A/B; shadowdbg>=3 adds the receiver debug readout.
+    if (dbg !== "0") (globalThis as any).__mbShadowEnable = true;
     // Debug readout (receiver color = intensity/depth/uv.z) is a SEPARATE
     // gate — enabling shadows must not corrupt the pixel comparison.
-    if (dbg >= 3) (globalThis as any).__mbShadowDbg = true;
+    if (Number(dbg) >= 3) (globalThis as any).__mbShadowDbg = true;
     // §525 A/B: shadowdbg=2 opens the gate but SKIPS the depth pass —
     // discriminates depth-pass side effects from the patcher/lighting path.
-    if (dbg === 2) (globalThis as any).__mbShadowSkipPass = true;
+    if (dbg === "2") (globalThis as any).__mbShadowSkipPass = true;
 }
 const ALL_TESTS = discoverTests();
 console.log(`[MBStyleCompat] ${ALL_TESTS.length} compatible tests loaded`);

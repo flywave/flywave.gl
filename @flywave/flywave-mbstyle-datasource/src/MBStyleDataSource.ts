@@ -2559,6 +2559,21 @@ export class MBStyleDataSource extends TileDataSource {
                     const camSpec: any = (style as any).camera ?? style;
                     self.m_shadowRenderer.setOrthographicStyle(
                         camSpec['camera-projection'] === 'orthographic');
+                    // §572b: the ground overlay quad may only composite over
+                    // TRUE background. (a) translucent layer paints (numeric
+                    // opacity < 1) don't write depth; (b) plain fill/line
+                    // layers are painted with depthTest=false in style order
+                    // (§518) — they leave no depth either and the quad would
+                    // cover them (draw-layer-lines +27k measured).
+                    self.m_shadowRenderer.setStyleHasTranslucent(
+                        ((style.layers ?? []) as any[]).some((l: any) =>
+                            l?.type === 'fill' || l?.type === 'line'
+                            || ['fill-opacity', 'line-opacity', 'fill-extrusion-opacity',
+                                'raster-opacity', 'model-opacity', 'background-opacity',
+                                'circle-opacity'].some((k: string) => {
+                                    const v = l?.paint?.[k];
+                                    return typeof v === 'number' && v > 0 && v < 0.999;
+                                })));
                     self.m_shadowRenderer.setLightState(!!sl, sl?.intensity ?? 0);
                     self.m_shadowRenderer.run();
                     // §562: model materials sample the shadow map in their

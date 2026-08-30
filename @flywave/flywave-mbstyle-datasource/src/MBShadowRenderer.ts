@@ -54,6 +54,7 @@ export class MBShadowRenderer {
     private m_enabled = false;
     private m_intensity = 0;
     private m_orthoStyle = false;
+    private m_styleHasTranslucent = false;
     // §560: ground shadow receiver — mgl shades the BACKGROUND as a ground
     // layer (`background × groundRadiance × groundShadow`); our background is
     // the engine clearColor, so an mgl-style screen-space quad (fog-renderer
@@ -93,6 +94,11 @@ export class MBShadowRenderer {
     setOrthographicStyle(ortho: boolean): void {
         this.m_orthoStyle = ortho;
         if (ortho) this.setLightState(false, 0);
+    }
+
+    /** §572b: translucent layers over the background — see syncGroundQuad. */
+    setStyleHasTranslucent(t: boolean): void {
+        this.m_styleHasTranslucent = t;
     }
 
     get enabled(): boolean {
@@ -187,6 +193,11 @@ export class MBShadowRenderer {
     }
 
     private syncGroundQuad(center: THREE.Vector3, radius: number, eye: THREE.Vector3): void {
+        // §572b: translucent content renders without depth writes — a
+        // post-main overlay quad would paint OVER it (mgl composites ground
+        // shadows underneath). Skip the quad for such styles (the depth pass
+        // still feeds material receivers).
+        if (this.m_styleHasTranslucent) return;
         this.ensureGroundQuad();
         const renderer = this.m_mapView?.renderer as THREE.WebGLRenderer | undefined;
         // The RTE render camera keeps an IDENTITY world matrix (rebase lives
