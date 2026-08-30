@@ -6486,3 +6486,7 @@ MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线�
 **证据链**：①§566 探针 n=1（zoom 17.5/pitch 60/source maxzoom 15）；②§567 邻瓦片环实验：pseudo-extras 走 decodeTileWithSources 偏移合并（DecodeInfo center 差移顶点）——**合并不生效**，同 cell extras（dx=0）能渲染、dx=±tile-span 不能 → **引擎按 CELL 边界裁剪瓦片几何**（渲染侧，非解码侧）；③§566 排除：far-cutoff 默认禁用/frustumCulled=false/camera far 充裕/depthTest 无关（depthTest=false A/B 远树仍零出现=非遮挡）。
 
 **引擎侧入口（代码定位）**：`@flywave/flywave-mapview/src/FrustumIntersection.ts`（frustum ∩ tileBounds 逐级细分，:468-476 双路径 sphere/plane）；疑点=pitch 下细分/边界判定使兄弟瓦片未入集，或与 TileDataSource storageLevelOffset 的 level 折算交互。**修 A（covering 外扩）**=pitch 视口 frustum 地面足迹覆盖多瓦片；**修 B（逐 cell 裁剪放宽）**=允许合并几何越 cell 渲染（风险=瓦片重复/抗锯齿缝）。**验证夹具**：buildings-trees-shadows-casting（远树带 592/1139 green 采样）、landmark-update-doors 远景暗带。数据源层通道已穷尽（§567 负结果），须引擎侧认领。
+
+**§574. 阴影默认后全语料终验（774 例，净 −49.6万，2026-08-30 续二十四）**：
+
+全语料批测（774 渲染夹具，382 例与最新存档可比）：**净 −496,004，回归仅 3 例 >2k**。**头部收益全在 3d-intersections**（该族灯光带 cast-shadows）：elevated-symbols-icons-and-text 81174→42775（−3.8万）、viewport-aligned −3.6万、mixed −3.0万、ortho-camera −2.3万、tooling-support −1.95万、**munich-overview 23700→6231（−74%）**、elevated-wireframe −1.9万等十余例。回归：viewport-alignment-globe +5.8k（§572d 已修：§570b 重导对 viewport 背景双着色，gated，复核回 54512）；depth-occlusion dynamic-terrain-disabled 对 +2.6k×2（residual 记档）。**全语料 151 例 0 px（PASS）**。阴影链转默认终验通过：无 cast-shadows 风格零影响（pass 早退理论保证+774 例实证）。
