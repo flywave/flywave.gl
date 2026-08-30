@@ -6458,3 +6458,7 @@ f14 重跑（fixtures 目录服务解码器已生效）：parsed 仍 0、无 par
 按 §570 下轮正确入口实现闭环：①**时序修复**——setProjection handler 在 fog rebuild 之后追加 applyBackgroundColor 重导（§570 实锤的"6 次全在切换前"被打通，仲裁可达）；②**globe+fog clearColor 仲裁**——space clear 拥有画布，背景色经 setGlobeBackground 记入 env；③**盘内填充**——平背景色 + 窄 limb blend（smoothstep 0.975-1.0 入 space）；关键修正：expected 盘面**数据驱动实测为白色平色**（§569b/§570 的 navy 目视读反），ramp 猜测（space→high）实测 +8k 已弃。
 
 **验收**：globe-circle 10 例净 **−9.4k**（default-zoomed 9035→**3076**、near-horizon −3.1k、vertical 族 4 例 −0.5~1.4k、near-transition −9；default +2.2k=其 circle 错位域、horizontal +0.8k）；mercator 零回归（background-color 6 例 5 PASS 逐位、fog/default 448 逐位）；globe-default 142737 不变（无背景层→正确无盘填充）。**遗留**：globe-circle default 的 circle 错位（covering 域）与盘外 limb 亮度（atmosphere 外圈 ramp）；globe-default 142737=卫星瓦片暗盘域。
+
+**§571. 阴影默认开启评估（61 例对拍矩阵，决策=暂保持 opt-in，2026-08-30 续十九）**：
+
+MBSTYLE_SHADOW=1 全 "shadow" 家族批测（61 例可比 vs 存档无影基线）：**净 −100k**——头部收益 landmark-mbx-shadows-lod 361013→**130066**（−231k）、quantization-shadows −12k×2、shadows-roads-depth −8.3k、road-extend-tilecover −12.4k、shadows-junction −1.1k。**回归簇**（默认开启的阻塞项）：①**正交相机族** camera-orthographic-zero-pitch +52.9k/text +12k——阴影 pass 假设透视 RTE，正交投影下地面 quad 的角点反投影失真；②**lighting-3d-mode/shadow 接收器族** draw-layer-lines/slot +27k×2、shimmering +27k、fill-extrusion-translucent +15k——§562 的 model 阴影接收注入对 fill-extrusion 主导的场景过量压暗；③depth-occlusion/multiline-shadow +3.5k。**决策**：保持 MBSTYLE_SHADOW=1 opt-in；默认开启的前置=正交相机 guard + lighting-3d-mode 族接收器强度校准。收益侧数据已备（−100k 待解锁）。
