@@ -121,12 +121,17 @@ export class MBMaterialPatchManager {
             const identity = shadowState ? null : new THREE.Matrix4();
             for (const tile of tiles) {
                 for (const obj of tile.objects ?? []) {
-                    const u = (obj as any).material?.__mbShadowUniforms;
-                    if (!u) continue;
-                    u.uMBShadowMap.value = shadowState?.map ?? null;
-                    if (shadowState) u.uMBShadowMatrix.value.copy(shadowState.matrix);
-                    else if (identity) u.uMBShadowMatrix.value.copy(identity);
-                    u.uMBShadowIntensity.value = shadowState?.intensity ?? 0;
+                    const raw = (obj as any).material;
+                    const uList: any[] = Array.isArray(raw)
+                        ? raw.map((m: any) => m?.__mbShadowUniforms).filter(Boolean)
+                        : (raw?.__mbShadowUniforms ? [raw.__mbShadowUniforms] : []);
+                    if (uList.length === 0) continue;
+                    for (const u of uList) {
+                        u.uMBShadowMap.value = shadowState?.map ?? null;
+                        if (shadowState) u.uMBShadowMatrix.value.copy(shadowState.matrix);
+                        else if (identity) u.uMBShadowMatrix.value.copy(identity);
+                        u.uMBShadowIntensity.value = shadowState?.intensity ?? 0;
+                    }
                 }
             }
         }
