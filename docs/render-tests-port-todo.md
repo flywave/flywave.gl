@@ -6900,3 +6900,7 @@ model-source-feature-properties 系（light-overrides/multiple-features/feature-
 **§652. mercator 拉伸假说实证否定（2026-08-31 续十）**：
 
 按 mgl getMetersPerPixelAtLatitude 纬度缩放推导"模型应随 1/cos(lat) 拉伸"并在 instantiate/loadModels 两处实现 k 预乘（x/y only、setPosition 前，mgl T·S(ppm)·R·S·F 同位）——**实证否定回退**：indirect-update-doors（Munich 48°，k=1.5）358758→541104（+18.2 万）、trees-zoom-based-scale（SF 37.8°，k=1.26）177163→198783（+2.2 万）、lat-0 对照 multiple-meshes 逐位不变。结论：**mgl 的模型像素尺寸事实上纬度无关**（1:1 world-unit=ground-meter 已与 expected 匹配；mgl 的模型渲染链或是恒定 px 因子或其 ppm 被其它项抵消——3d-style 源码无 model.fragment.glsl 无法终裁）。模型尺寸维持 1:1。per-part 子系统与 modeldiralt 门保留。单测 300 绿、tsc 绿。
+
+**§653. 相机距离标定深挖（§652 后续，2026-08-31 续十一）**：
+
+ego 夹具实测相机 80.7m vs mgl 同参 61.4m，比值 = 1/cos(40.7°) 精确——**flywave calculateDistanceFromZoomLevel = focal×C/(512×2^z)（等距圆柱、纬度无关）**，mgl cameraToCenter×mpp = focal×C×cos/(512×2^z)。两套相机语义的世界帧不同：flywave 世界 x/y = 等距圆柱米（地面几何在 tile2world 已含 mercator 拉伸），mgl 世界 = mercator 像素（同样拉伸）——**地面几何两套一致**；分歧仅在模型尺寸链：mgl scaleXY=1/mpp(lat) 使模型随地面同拉伸（真实尺寸），flywave 模型 1:1 世界单位 = cos(lat)× 偏小。已恢复 k 预乘（§652 恢复提交）——几何对齐 mgl；分数影响被 part 色彩域（§633 蓝色墙）掩蔽，色彩/光照标定为下一步。相机 z 语义（geoCenter.alt=46.5 疑为相机高度）记档待查。
