@@ -1,7 +1,8 @@
-# mbstyle 渲染测试未对齐项分析报告（2026-08-29）
+# mbstyle 渲染测试未对齐项分析报告（2026-08-29；2026-08-31 增量见文末）
 
 > 数据源：`rendering-test-results/mbstyle-baseline8/web-Edge-150.0.0.0-Linux`（807 例，641 FAIL）
 > + 重跑 `rendering-test-results/mbstyle-rerun-3di-ml`（filter=3d-intersections model-layer，195 例，当前代码）
+> + 增量：`rendering-test-results/mbstyle-fix-0831-all`（model-layer 全量重跑，feat/mbstyle-datasource + §659-§661 修复）
 > 根因调研：4 个并行代码级调研 + 既有 docs（render-tests-port-todo.md § 编号）核对。
 
 ## 一、baseline8 过时性结论（重要）
@@ -58,3 +59,31 @@
 7. **crossSourceCollisions 分组**（⭐⭐）；**video vendored mp4 + VideoTexture 链**（⭐⭐）。
 8. **model-layer 新家族（indirect-update/meshopt）延续 §553 路线**（大头，但属既有专项）。
 9. 排查回归：landmark-z-offset-munich-3d-hidden（8962→50607）。
+
+---
+
+## 四、2026-08-31 增量：model-layer 逐例根因与已落地修复（§659-§661）
+
+### 已修复（代码已入库，本分支）
+
+> 全量对拍（24 例配对，mbstyle-ml-0831 vs mbstyle-fix-0831-all）：**净 −43,051 px**；最大受益 landmark-conflation-buckingham-lod 175139→137078（−38k，§659 真旋转修复）、default-orientation −11.5k。数值上"退化"的 add-layer（42596→54218）实为空白→正确渲染后更多树像素计入比对，视觉是改善。
+
+| # | 修复 | 用例 | 效果 |
+|---|---|---|---|
+| §659 | **glTF→世界系转换改真旋转**：mgl COORD_SPACE_TRANSFORM (x,z,y) 是左手镜像半边；经渲染帧 y 镜像（§643）共轭后应为 Rx(+90°)=(x,−z,y)。MBStyleDataSource.loadModels + MBModelRenderer.instantiate 两处 flip 矩阵改 (0,0,−1) 行 | default-orientation 14343→2865 px（−80%，几何/朝向精确对齐）；y 不对称模型整体受益 | 残余 2865 px = 明暗标定（§661） |
+| §660 | **运行时 addLayer 通知数据源**：MBStyleRuntime addLayer/removeLayer/moveLayer 补 m_onChange()（markTilesDirty 重解码）；onChange 回调补 updateModelRegistry（新 model 层 + expectPlacements） | geojson-source-with-schema-add-layer 从**整幅空白**→ 33 棵树全部渲染（几何正确） | 残余 54218→54912/61441 px 全为光照域 |
+| — | harness addModel op 补 updateModelRegistry + reloadSources（addLayer 的重解码先于模型注册，需二次解码） | 同上 | — |
+
+### 已定性、未收敛（下一步主攻）
+
+1. **§661 模型光照过曝（全 model-layer 头号根因）**：无 `lights` 样式走 §557 半球分支时 uMB3DAmb/uMB3DDirColor 缺省 [1,1,1] → mbK = amb·(~1)+dir·NdotL ≥ 1 削顶。已试强制无灯样式走 legacy 分支（uMBPortMode<0.5 && uMBHas3DLights>0.5 才进半球）——**像素完全不变**（environment-test 17580 不动），证明 legacy 分支同样削顶：white albedo 下 clamp(direct)+0.65·indirect+intensityFactor 仍 ≥1。environment-test 实测：**33 球位置全部正确**（黑材质排与 expected 逐像素吻合），白/金属两排因过曝成纯白在浅背景上"消失" → 纯光照标定问题。mgl model.fragment.glsl 的 legacy intensityFactor/env_light 端到端数学需重新对照（§654 蓝图未完成的 indirect+direct 分路）。
+2. **ground-shadow-fog 家族（17.1 万 px ×2）**：探针实证三处断层——(a) road 线层/water fill 完全未上屏（同源建筑正常，解码 67 geos 正常 → 渲染端丢线）; (b) ground-shadow 平面锚在**世界原点** (0,500,0)（ndc=NaN），未锚到场景下方 → 名字的"地面阴影"整体缺失; (c) ambient=0 时建筑呈黑剪影（extruded-polygon 光照未按 mgl direct-only 语义）。加上 pitch70 贴地取景偏远景，属复合场景，依赖 1+3d-intersections 链。
+3. **density-reduction（4760 px）**：树排布/数量正确（allow-density-reduction 未实现但该例值为 false 不影响）；残差 = 同 §661 光照（期望深绿 vs 实际浅绿削顶）。
+
+### 重开计划（按 ROI，2026-08-31 会话末更新）
+
+1. ~~**§661 legacy 光照端到端对照**~~ → **已落地（§661，todo 文档）**：根 style.light 是 spherical [1.15, 210, 30]（intensity 缺省 **0.5**）→cartesian→lightPos=[−x,−y,z]；uMB3DLegacyPos 此前是死 uniform。修后 geojson-source-with-schema(-add-layer) **54912→43723（−20%）**；environment-test 逐位不变（需再核该夹具是否带 lights 块——带则归 §557 分支标定）。遗留：anchor viewport 的 −angle 旋转。
+2. ⭐⭐⭐ **ground-shadow 地面锚定**：ground-shadow 平面跟随场景锚点（勿用世界原点），接 shadow-intensity 到 extruded/ground 层。
+3. ⭐⭐ ground-shadow-fog 线层丢失：nvert=561 ShaderMaterial v0w=(0,500,0) 即第 2 条的同一错锚；修完后复查 road/water。
+4. ⭐⭐ MAPS3D-1159 回归（7149→14108）：§659 后 y 镜像过矫正或该例 orientation 语义特殊，单独对拍。
+5. ⭐ 三例 harness/杂项：add-layer 与 baseline 的 61441 vs 54912 差值（addLayer 触发的二次重解码可能重复放置模型，需查 MBModelRenderer 去重）。
