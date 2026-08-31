@@ -7014,3 +7014,7 @@ createTextElements 原型级包装成功（模块 init 即装、早于 decode）
 **§676. 相机取景偏移定性——尺度差 4-6×（2026-09-01 末）**：
 
 side-by-side 定案：expected 为近景（建筑充满画面、地面阴影可见），我方为远景（城市缩至顶部条带，橙色车模型却 ~100px 显著偏大）——**尺度差 ≈4-6×**（远超 bearing 符号/1-cos 因子），bearing 直通 A/B 略差（0.609 vs 0.639，保持取负）。第一性推导验证：flyway zoom=mgl zoom+log2(pr=2) 恰为现 +1 约定（ccd_px=h/(2tan fov)，ccd_m=ccd_px×mpp，pr 同时缩放 focal——约定自洽），故 4-6× 残差**不在 zoom+1/pr 域**，必在：①flyway calculateDistanceFromZoomLevel 内部常数（512 vs mgl 256 的 tile scheme 差已由 +1 吸收，但 fov 差 40°vs36.87° 会让 focal 差 ~8%——量级不足）；②**mgl cameraToCenterDistance 的 CSS/device px 语义**（h_css vs h_dev：canvas.width=1024 设备、CSS=512——若 flyway focal 用了 device 1024 而 mgl 用 CSS 512，即 2×；叠加 alt/pivot 域 = 观测 4×）；③pitch 枢轴（mgl 绕 center 俯仰、target 恒居中）。**下轮入口**：打印 flyway lookAtImpl 的 focal/d 计算栈，对照 mgl cameraToCenterDistance=h_css/(2·tan(fov/2))·mpp 逐项核对（§651 遗留的 geoCenter.alt 语义一并核对）。该专项影响全部 pitched/zoom 夹具。单测 300 绿、tsc 绿。
+
+**§677. 白屏根因修复——挤出注入块结构重组（2026-09-01 续八）**：
+
+**根因定案**：§669 编辑在 injectExtrusion3DLighting 引入了**第二个 void main() 前置 replace**，第二个 replace 匹配第一个替换产物中的 'void main() {' 再次前置 → uniform 重复声明（uMB3DAmb/fogMglShift redefinition）→ **fragment 编译失败 → 挤出 mesh 整片不可见（白屏）**。此前多轮"干预无效/分数冻结"皆因材质从未真正编译。修复：合并为单一前置块（含 fogMgl*/uMbMetersPerUnit/fogColor/fogAlpha/vMbWallH），patchExtrusionMaterial 补 material.fog=false（编译掉 chunk 雾，防双重洗涤），uMbMetersPerUnit 每帧经 __mbExtFogU 刷新（C/(512×2^zoom)）。**验证**：建筑重新渲染，fogT 读数随深度 0→1 正确分布（fogt=1 探针）。分数 170766/170095 暂高于 150155（白屏态把不匹配像素"藏"进了雾白），但渲染管线首次完全正确——mgl fog + 光照 + 渐变全链路生效。**下轮**：相机取景偏移（§675 dy216/dx-256）修复后，fog 洗涤幅度对照 expected 微调。单测 300 绿、tsc 绿。

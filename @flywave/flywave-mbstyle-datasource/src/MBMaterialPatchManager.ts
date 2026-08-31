@@ -951,6 +951,9 @@ export class MBMaterialPatchManager {
                 'void main() {',
                 `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
                  uniform mat3 uMB3DViewToWorld; uniform float uMB3DEmissive; uniform float uMB3DDbg;
+                 uniform float fogMglShift; uniform float fogMglDistCam; uniform vec2 fogMglRange;
+                 uniform float uMbMetersPerUnit; uniform vec3 fogColor; uniform float fogAlpha;
+                 varying float vMbWallH;
                  vec3 mbBaseColor = vec3(1.0);
                  void main() {`
             );
@@ -980,16 +983,6 @@ export class MBMaterialPatchManager {
                 `#include <begin_vertex>
                  vMbWallH = clamp(extrusionAxis.z / max(extrusionAxis.z + extrusionAxis.w, 0.001), 0.0, 1.0);`
             );
-            shader.fragmentShader = shader.fragmentShader.replace(
-                'void main() {',
-                `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
-                 uniform mat3 uMB3DViewToWorld; uniform float uMB3DEmissive; uniform float uMB3DDbg;
-                 uniform float fogMglShift; uniform float fogMglDistCam; uniform vec2 fogMglRange;
-                 varying float vMbWallH;
-                 vec3 mbBaseColor = vec3(1.0);
-                 void main() {`
-            );
-
             // Capture the UNLIT material color before three's lighting pass —
             // the scene DirectionalLight (added by applyLights) shades the
             // standard material with three's own model; the mapbox
@@ -3165,6 +3158,10 @@ export class MBMaterialPatchManager {
         const lightState = (this.m_dataSource as any).m_environment?.extrusionLightState;
         const use3DLights = lightState?.use3DLights === true;
         const emissiveStrength = Number(paint['fill-extrusion-emissive-strength'] ?? 0);
+        // §673: the extrusion shader applies mgl fog ITSELF (self-drawn, see
+        // injectExtrusion3DLighting) — three's chunk fog must stay compiled
+        // out (material.fog=false) or it double-washes toward fogColor.
+        if (use3DLights) (material as any).fog = false;
         // (3D lighting injection moved to the END of this method: earlier
         // placement let later onBeforeCompile assignments in this function
         // capture a pre-injection chain snapshot, silently dropping the
