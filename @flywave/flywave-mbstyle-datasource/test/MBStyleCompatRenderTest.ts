@@ -118,6 +118,14 @@ function discoverTests(): TestEntry[] {
         a.startsWith("modeldiralt="))?.slice("modeldiralt=".length);
     if (alt === "1") (globalThis as any).__mbModelDirAlt = true;
 }
+{
+    // §655: model-shader lighting port A/B (modellightport=1 → the mgl
+    // model.fragment.glsl Cook-Torrance + indirect env; default = the
+    // §557 hemisphere approximation).
+    const port = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("modellightport="))?.slice("modellightport=".length);
+    if (port === "1") (globalThis as any).__mbModelLightPort = true;
+}
 // Decode census: per-tile technique/vertex counts (is content reaching the
 // emitter at all — data vs render side split for blank domains).
 {
