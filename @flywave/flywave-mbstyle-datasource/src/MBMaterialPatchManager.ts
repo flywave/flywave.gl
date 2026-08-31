@@ -1051,8 +1051,9 @@ export class MBMaterialPatchManager {
                      mbOut = mix(mbOut, fogColor, clamp(mbFogFactor, 0.0, 1.0));
                      gl_FragColor.rgb = mbOut;
                      if (uMB3DDbg > 1.5) {
-                         // §669: fogT readout (grey = per-fragment mgl fog t).
-                         gl_FragColor.rgb = vec3(clamp(mbT, 0.0, 1.0));
+                         // §678: distance readout — grey = log2(metres)/16
+                         // (metres = view length × uMbMetersPerUnit).
+                         gl_FragColor.rgb = vec3(clamp(log2(max(mbLen, 1.0)) / 16.0, 0.0, 1.0));
                      } else if (uMB3DDbg > 0.5) {
                          // Debug readback: R = NdotL (signed 0.5+0.5*n),
                          // G/B = dir.x/dir.y (0.5+0.5*v) — wall azimuth probe.

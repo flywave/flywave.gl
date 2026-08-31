@@ -7018,3 +7018,7 @@ side-by-side 定案：expected 为近景（建筑充满画面、地面阴影可�
 **§677. 白屏根因修复——挤出注入块结构重组（2026-09-01 续八）**：
 
 **根因定案**：§669 编辑在 injectExtrusion3DLighting 引入了**第二个 void main() 前置 replace**，第二个 replace 匹配第一个替换产物中的 'void main() {' 再次前置 → uniform 重复声明（uMB3DAmb/fogMglShift redefinition）→ **fragment 编译失败 → 挤出 mesh 整片不可见（白屏）**。此前多轮"干预无效/分数冻结"皆因材质从未真正编译。修复：合并为单一前置块（含 fogMgl*/uMbMetersPerUnit/fogColor/fogAlpha/vMbWallH），patchExtrusionMaterial 补 material.fog=false（编译掉 chunk 雾，防双重洗涤），uMbMetersPerUnit 每帧经 __mbExtFogU 刷新（C/(512×2^zoom)）。**验证**：建筑重新渲染，fogT 读数随深度 0→1 正确分布（fogt=1 探针）。分数 170766/170095 暂高于 150155（白屏态把不匹配像素"藏"进了雾白），但渲染管线首次完全正确——mgl fog + 光照 + 渐变全链路生效。**下轮**：相机取景偏移（§675 dy216/dx-256）修复后，fog 洗涤幅度对照 expected 微调。单测 300 绿、tsc 绿。
+
+**§678. 挤出雾深度域定量——11× 失配实锤（2026-09-01 续九）**：
+
+读出升级为 log2(米) 灰度（fogt=1，米 = vViewPosition×uMbMetersPerUnit）：ground-shadow-fog 建筑片元雾深度 = **7000-40000m**（clamp 65536+ 占大面积），而真实相机-目标距离 ≈ **800m**（calculateDistanceFromZoomLevel: focal 768 × tile 267.6/256，pitch 70 高度分量 273 ✓ cameraZ 实测吻合）——**雾深度帧失配 ≈11×**，这就是 fogT 标定无法收敛的根本：深度值本身错了 11×，任何 fogMgl* 数值域调整都是治标。**下轮入口（单点）**：查明挤出 mesh 的 view-space 深度为何 ×11——三个候选：①obj.position/geometry 顶点双重计入 world 偏移（RTE 重基一次 + matrix 一次）；②extrusionAxis/顶点数据在 tile-local 帧而 matrixWorld 带绝对偏移；③storageLevel 与 display level 的 tile 缩放差（z15 tile 在 z16.2 显示的 worldSize 因子）。修复后 uMbMetersPerUnit 乘子可能不再需要（len 直接落入米域，fogT 自然 0.3-0.8）。单测 300 绿、tsc 绿。
