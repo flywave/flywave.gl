@@ -370,9 +370,16 @@ export function applyMglModelLighting(
                          float mbD = mbA4 / (3.14159265 * mbDen * mbDen);
                          vec3 mbSpecTerm = mbF * mbVis * mbD;
                          vec3 mbCol;
-                         if (uMBPortMode < 0.5) {
+                         if (uMBPortMode < 0.5 && uMBHas3DLights > 0.5) {
                              // §557 hemisphere approximation (the calibrated
-                             // default; shadows replace the direct NdotL).
+                             // default for 3D-lit styles; shadows replace the
+                             // direct NdotL). Styles WITHOUT a lights block
+                             // must fall through to the legacy branch — the
+                             // hemisphere uniforms default to [1,1,1] there
+                             // and washed every unlit style out to albedo×2
+                             // (environment-test white rows, light-green
+                             // trees); mgl lights those with the legacy
+                             // u_lightpos path.
                              vec3 mbDirView = normalize((viewMatrix * vec4(uMB3DDir, 0.0)).xyz);
                              vec3 mbUpView = normalize((viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
                              float mbNdotL = clamp(dot(mbN0, mbDirView), 0.0, 1.0);
@@ -787,9 +794,14 @@ export class MBModelRenderer {
             .multiply(new THREE.Matrix4().makeRotationX(-rotation[0] * D2R))
             .multiply(new THREE.Matrix4().makeRotationY(-rotation[1] * D2R))
             .multiply(new THREE.Matrix4().makeScale(scale[0], scale[1], scale[2]))
+            // glTF Y-up → our Z-up: mgl's swap (x,z,y) is the left-handed
+            // MIRROR half of the frame conversion; conjugated by the
+            // render-frame y mirror (§643/§653, diag(1,−1,1)) it becomes the
+            // proper rotation Rx(+90°) = (x,−z,y) — the mirror version
+            // rendered y-asymmetric models (arrow) upside down.
             .multiply(new THREE.Matrix4().set(
                 1, 0, 0, 0,
-                0, 0, 1, 0,
+                0, 0, -1, 0,
                 0, 1, 0, 0,
                 0, 0, 0, 1));
         // §652(恢复): mercator ground-stretch — the world frame's x/y are

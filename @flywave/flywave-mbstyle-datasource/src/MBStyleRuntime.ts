@@ -203,6 +203,10 @@ export class MBStyleRuntime {
             layers.push(layer);
         }
         this.rebuildEvaluator();
+        // mgl repaints on addLayer — the datasource must re-decode tiles so
+        // decode-time placements (model layers over geojson/vector sources)
+        // see the new layer (model placements are emitted during decode).
+        this.m_onChange();
     }
 
     /**
@@ -213,6 +217,7 @@ export class MBStyleRuntime {
         if (idx >= 0) {
             this.m_style.layers.splice(idx, 1);
             this.rebuildEvaluator();
+            this.m_onChange();
         }
     }
 
@@ -235,6 +240,7 @@ export class MBStyleRuntime {
             layers.push(layer);
         }
         this.rebuildEvaluator();
+        this.m_onChange();
     }
 
     /**

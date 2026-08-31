@@ -922,6 +922,17 @@ async function processOperations(
                         try {
                             await (dataSource as any).loadModels?.(style);
                         } catch {}
+                        // Publish the updated registry (the added model is
+                        // usually referenced by decode-time placements) and
+                        // re-decode so those placements emit with the model
+                        // resolvable — addLayer's dirty pass ran earlier,
+                        // before this model was registered.
+                        try {
+                            (dataSource as any).updateModelRegistry?.(style);
+                        } catch {}
+                        try {
+                            await (dataSource as any).reloadSources?.();
+                        } catch {}
                     }
                 }
                 break;

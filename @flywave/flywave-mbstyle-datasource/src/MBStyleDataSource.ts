@@ -1941,6 +1941,13 @@ export class MBStyleDataSource extends TileDataSource {
             // bakes lazily.
             this.applyBackgroundColor(this.m_runtime!.style);
             this.m_terrainDraping?.requestBake?.();
+            // Layer mutations (addLayer/removeLayer/moveLayer) can add or
+            // remove model layers — refresh the per-feature renderer's
+            // layer list + expectPlacements so decode-time placements are
+            // picked up (mgl re-queries model buckets on every repaint).
+            try {
+                this.updateModelRegistry(this.m_runtime!.style);
+            } catch {}
             if (this.mapView) {
                 this.mapView.markTilesDirty(this);
             }
@@ -3125,9 +3132,16 @@ export class MBStyleDataSource extends TileDataSource {
                             .multiply(new THREE.Matrix4().makeRotationX(-(rot[0] ?? 0) * D2R))
                             .multiply(new THREE.Matrix4().makeRotationY(-(rot[1] ?? 0) * D2R))
                             .multiply(new THREE.Matrix4().makeScale(sc[0], sc[1], sc[2]))
+                            // glTF Y-up → our Z-up: mgl's swap (x,z,y) is the
+                            // left-handed MIRROR half of the frame conversion;
+                            // our render frame is y-mirrored vs mgl (§643),
+                            // conjugating by diag(1,−1,1) turns it into the
+                            // proper rotation Rx(+90°) = (x,−z,y) — the
+                            // mirror version rendered y-asymmetric models
+                            // (arrow) upside down.
                             .multiply(new THREE.Matrix4().set(
                                 1, 0, 0, 0,
-                                0, 0, 1, 0,
+                                0, 0, -1, 0,
                                 0, 1, 0, 0,
                                 0, 0, 0, 1));
                         // §652(恢复): mercator ground-stretch x/y — see
@@ -3144,6 +3158,20 @@ export class MBStyleDataSource extends TileDataSource {
                     if ((globalThis as any).__mbDecodeDbg) {
                         // eslint-disable-next-line no-console
                         console.log(`[MBModelAdd] ${def.url.split('/').pop()} pos=(${model.position.x.toFixed(1)},${model.position.y.toFixed(1)},${model.position.z.toFixed(1)}) scale=${JSON.stringify(effScale)} autoUpdate=${model.matrixAutoUpdate}`);
+                        // §-temp: world placement of child meshes (node
+                        // transform preservation check — environment-test
+                        // sphere rows collapsed on screen).
+                        try {
+                            model.updateMatrixWorld(true);
+                            let n = 0;
+                            model.traverse((o: any) => {
+                                if (n >= 8 || !o.isMesh) return;
+                                n++;
+                                const wp = o.getWorldPosition(new THREE.Vector3());
+                                // eslint-disable-next-line no-console
+                                console.log(`[MBModelMesh] ${o.name} world=(${wp.x.toFixed(2)},${wp.y.toFixed(2)},${wp.z.toFixed(2)}) kids=${o.children.length} mat=${o.material?.type} metal=${o.material?.metalness} metalMap=${!!o.material?.metalnessMap} roughMap=${!!o.material?.roughnessMap}`);
+                            });
+                        } catch {}
                     }
                     // §651: model-source per-part styling — data-driven paint
                     // evaluates per PART (material name) with the model

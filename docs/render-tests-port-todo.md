@@ -6920,3 +6920,9 @@ ego 夹具实测相机 80.7m vs mgl 同参 61.4m，比值 = 1/cos(40.7°) 精确
 **§656. 批处理路径 mercator 拉伸实测——混合结果回退（2026-08-31 续十四）**：
 
 用户报告 z-offset-v2 系"河流绘制在建筑物之上"（模型偏小→河流透出）。批处理网格缩放（computeScale 等距圆柱）加 k=1/cos(lat) 拉伸实测：z-offset-v2 394027→311845（−21%）✓ 但 station +6.4万/lod +6.6万/highlights +6.8万 ✗ 净恶化——**mesh_features 瓦片的放置必须跟随 TILESET 自身的 transform 矩阵语义**（tiled_3d_model_bucket 的 node/tile 矩阵链），而非公式拉伸。已回退，留注释与 tiled_3d_model_bucket.ts 参照（mgl buildMeshFeatureArray 的 4444 解码/LOD AO 乘法/partPbrTable 已核对我方实现一致）。§651 per-part 子系统、§647 UV/metal 修正保留。单测 300 绿、tsc 绿。
+
+**§659. glTF Y-up 帧转换修正 + 无 lights 样式 legacy 光路门 + addLayer 重解码（2026-08-31 续十五）**：
+
+三修一批（工作区遗留改动整理落地）：①**glTF Y-up→Z-up 转换修正**——mgl 的 (x,z,y) swap 是左手镜像半变换，被我方渲染帧 y 镜像（§643/§653 diag(1,−1,1)）共轭后应为真旋转 Rx(+90°)=(x,−z,y)；镜像版把 y 非对称模型（箭头等）上下颠倒。instantiate 与 loadModels 两处同步（MBStyleDataSource.ts / MBModelRenderer.ts）。②**uMBHas3DLights 门**——无 lights 块的样式不再走 §557 半球近似（其 uniform 缺省 [1,1,1] 把无灯样式洗成 albedo×2：environment-test 白行、浅绿树），回落 legacy u_lightpos 光路（对照 model.fragment.glsl 非 LIGHTING_3D_MODE 分支）。③**addLayer/removeLayer/moveLayer 触发 m_onChange 重解码** + updateModelRegistry 刷新（mgl 每次 repaint 重查 model bucket；decode 期 placement 依赖层清单）——MBStyleRuntime 三个变更方法补 onChange；harness addModels op 后补 updateModelRegistry+reloadSources（addLayer 的 dirty pass 早于模型注册）。
+
+**验证**（4 夹具定向批测 vs ml-0831 基线）：default-orientation **14343→2865（−80%）**、multiple-meshes 5558→4807（−13%，姿态无回归）、environment-test 19557→17580（−10%）、geojson-source-with-schema-add-layer **树上屏**（旧渲染全空白→新渲染 35 棵树布局与 expected 一致；分数 42596→54912 为空白帧巧合低分，结构性通过；残余=背景色黑/白 + 树光照亮度域）。单测 300 绿、tsc 绿。
