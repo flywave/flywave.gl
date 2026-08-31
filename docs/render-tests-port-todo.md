@@ -6988,3 +6988,5 @@ createTextElements 原型级包装成功（模块 init 即装、早于 decode）
 **§670. 白洗免疫性二分定案（2026-09-01 续三）**：
 
 系统性二分（渐变禁用/MB_RASTER 分支/雾引用快照化/allTiles 撤销）全部无效——ground-shadow-fog 分数恒 150155、像素恒纯白 (255,255,255)×7680 采样。**结论：白色覆盖层与挤出材质完全解耦**（材质 fragment 改动零效果），且 fogDebugT=2 未雾化模式下同样白——白层画在内容之后/之上。头号嫌疑锁定：**MBShadowRenderer 地面 quad**（该夹具 cast-shadows+shadow-intensity 1.0；quad 白色、depthTest:false、经 preSceneHook 下层通道绘制；ambient=0 时 uMBGroundShadowFactor=0 → 全阴影暗色……但实测白——若 quad 绘制时序已变为内容之后，或 factor=1 全亮，即整屏白罩，城市透出成"淡化"）。次嫌疑：MBBackgroundFogRenderer 雾带 overlay 的深度掩蔽失效。**下轮入口**：①shadowdbg=0（MBSTYLE 环境变量已支持）A/B——若白洗消失即坐实地面 quad；②Spector capture 检查 draw 顺序与 quad 的 DepthState。单测 300 绿、tsc 绿。
+
+**§670 追加（A/B 实证）**：shadowdbg=0 A/B：149950（仅 −205）——shadow 地面 quad 排除。白罩唯一剩余嫌疑 = **MBBackgroundFogRenderer 雾带 overlay**（半透明白、内容之后绘制）：mgl 中雾只进内容 fragment 与背景，雾带不盖内容；我方雾带若 renderOrder/深度掩蔽失效即整城淡化。fogprobe=2 的全白亦自洽（探针同时去掉雾带自身着色→不透明白 quad）。**下轮入口**：MBBackgroundFogRenderer 雾带 quads 的 renderOrder/depthTest/深度掩蔽检查（内容深度写穿雾带→城市可见；对比 fill-extrusion 材质的 depthWrite 状态）。单测 300 绿、tsc 绿。
