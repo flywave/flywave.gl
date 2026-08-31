@@ -6984,3 +6984,7 @@ createTextElements 原型级包装成功（模块 init 即装、早于 decode）
 **§669. 挤出 mgl 雾接入完成 + 白洗残差定性（2026-09-01 续二）**：
 
 ①extrusion 注入补 `#define MB_RASTER_MGL_FOG 1`（§244 同款）——雾分支从 km 缩放默认支切到 mgl 标定支（fogMgl* 由引用绑定供数）；②发现并修复引用绑定的**模板写穿**：fogColor/fogNear/fogFar/fogDensity 不可按引用绑定（three 每帧 refreshFogUniforms 把 scene.fog 原始值写回共享模板，污染 env 标定值→全城白洗），已从绑定列表剔除；③extrusionAxis 声明加条件守卫（引擎材质可能已自带声明，重复声明→GLSL 失败→白渲）。**现状**：ground-shadow-fog 150155（较 §667 前 −12%），城市已从纯黑剪影变为"白雾洗涤过但过度淡化"——extrusion 的 fogT 数值域偏饱和（疑 distCam/深度单位在高 zoom 下的标定），或墙面基色在雾后过暗。**下轮入口**：用 fogDebugT=2（UNFOGGED 基色模式，fog_fragment chunk 已内建）对比 extrusion 的未雾化基色与 expected 的墙面/屋顶亮度，标定 fogMglRange/fogMglShift 在挤出深度域的数值（或为 extrusion 注入专用的 fogT 缩放常量）。②1024-symbol 的 diff 已定性：**所有标签小幅位移+墨迹差异（非双发、非累积）**——属文字渲染标定域（SDF/墨迹，报告 #25 冻结家族），265311 的收敛归入该域统筹。单测 300 绿、tsc 绿。
+
+**§670. 白洗免疫性二分定案（2026-09-01 续三）**：
+
+系统性二分（渐变禁用/MB_RASTER 分支/雾引用快照化/allTiles 撤销）全部无效——ground-shadow-fog 分数恒 150155、像素恒纯白 (255,255,255)×7680 采样。**结论：白色覆盖层与挤出材质完全解耦**（材质 fragment 改动零效果），且 fogDebugT=2 未雾化模式下同样白——白层画在内容之后/之上。头号嫌疑锁定：**MBShadowRenderer 地面 quad**（该夹具 cast-shadows+shadow-intensity 1.0；quad 白色、depthTest:false、经 preSceneHook 下层通道绘制；ambient=0 时 uMBGroundShadowFactor=0 → 全阴影暗色……但实测白——若 quad 绘制时序已变为内容之后，或 factor=1 全亮，即整屏白罩，城市透出成"淡化"）。次嫌疑：MBBackgroundFogRenderer 雾带 overlay 的深度掩蔽失效。**下轮入口**：①shadowdbg=0（MBSTYLE 环境变量已支持）A/B——若白洗消失即坐实地面 quad；②Spector capture 检查 draw 顺序与 quad 的 DepthState。单测 300 绿、tsc 绿。

@@ -203,7 +203,7 @@ export class MBMaterialPatchManager {
             }
         }
 
-        for (const tile of allTiles) {
+        for (const tile of tiles) {
             if (!tile.objects || tile.objects.length === 0) continue;
 
             const state = this.m_patchedTiles.get(tile);
@@ -909,7 +909,7 @@ export class MBMaterialPatchManager {
                 'fogGlobeMode', 'fogGlobeCenter', 'fogGlobeScale',
                 'fogGlobeRadius', 'fogGlobeTransition', 'fogGlobeRange',
             ]) {
-                if (fogLib[k]) shader.uniforms[k] = fogLib[k];
+                if (fogLib[k] && !shader.uniforms[k]) shader.uniforms[k] = { value: fogLib[k].value };
             }
             // §668: world-copy tiles (offset ±1) must not emit text/POI
             // elements — the text renderer projects them WITHOUT the world
@@ -984,7 +984,7 @@ export class MBMaterialPatchManager {
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <color_fragment>',
                 `mbBaseColor = diffuseColor.rgb;
-                 mbBaseColor.rgb *= (1.0 - 0.5 * (1.0 - clamp(vMbWallH, 0.0, 1.0)));
+                 // mbBaseColor.rgb *= (1.0 - 0.5 * (1.0 - clamp(vMbWallH, 0.0, 1.0)));
                  #include <color_fragment>`
             );
             shader.fragmentShader = shader.fragmentShader.replace(

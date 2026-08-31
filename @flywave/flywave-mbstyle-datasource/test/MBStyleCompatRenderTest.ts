@@ -162,6 +162,17 @@ function discoverTests(): TestEntry[] {
     }
 }
 {
+    // §669: fog t-profile probe — fogprobe=1 renders the fog t profile,
+    // fogprobe=2 renders the UNFOGGED base color (fog_fragment chunk).
+    const v = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("fogprobe="))?.slice("fogprobe=".length);
+    if (v !== undefined) {
+        (globalThis as any).__mbFogDebugT = Number(v);
+        // eslint-disable-next-line no-console
+        console.log(`[MBFogProbe] __mbFogDebugT=${Number(v)}`);
+    }
+}
+{
     const dbg = String((window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shadowdbg="))?.slice("shadowdbg=".length) ?? "1");
     // §572c: the shadow chain is calibrated (ground quad gated to true
