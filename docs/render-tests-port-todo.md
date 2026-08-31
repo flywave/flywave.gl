@@ -6886,3 +6886,7 @@ git 二分（aba771e4 29638 → 16ea8329 370625，单夹具三轮）：回归引
 **§649. 模型光照方向 A/B（§648 后续，2026-08-31 续七）**：
 
 模型 shader 直射方向两约定 A/B（`modeldiralt` karma 门 + modelLightDir/syncMglModelLighting 共用换算）：mgl sphericalDirectionToCartesian（az+90，§560 shadow 路径实测）vs lighting3DState 的 §455 挤出约定（90−az）。landmark-mbx-meshopt-colors 单测 az+90 = 348895 vs 370625（−22k）✓；但 part-styling 家族回归批（21 例，12 例完成）**净 +37.7 万**：indirect-update-doors-lod −160585 / update-doors −37979 改善，而 indirect-doors-no-shadows **+232528** / update-lod +102898 / update +91389 / door-light-munich-museum-lod +85398 恶化——两夹具群方向响应相反（疑 V1/V2 tile 版本或实例朝向差异），一刀切不可行。**回退默认 90−az**，`modeldiralt=1` 门保留供分域标定。模型光照标定专项继续：需要 draw_model.ts 的逐部件 light-id→uniform 映射语义（mgl 按 light 实例上传 u_lighting_*，非全局单灯）。单测 300 绿、tsc 绿。
+
+**§650. ego-car 家族取证（2026-08-31 续八）**：
+
+model-source-feature-properties 系（light-overrides/multiple-features/feature-state）探针实证：[MBModelAdd] ego_car.glb 两实例加载+入场景 ✓、[MBRebase] 重基后 pos=(14.5,66.4,−46.5) 眼相对 ✓、registry=2 ✓——loadModels 全链通但画布仍灰（车不光栅化）。剩余解释均在 mgl location-indicator 渲染通道 + per-part 求值内（model-type location-indicator 专用 pass、materialOverrides/nodeOverrides 逐 part、feature-state 车灯）：需 port model_source.ts + draw_model.ts 的 model-feature bucket 语义（spec modelSourceModel schema 已抄录 v8.json modelSourceModel 节点）。探针资产：[MBRebase]（重基后矩阵平移+子节点数+材质类型）。单测 300 绿。

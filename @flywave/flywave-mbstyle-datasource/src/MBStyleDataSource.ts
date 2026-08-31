@@ -2623,6 +2623,12 @@ export class MBStyleDataSource extends TileDataSource {
                                 if (model.matrixAutoUpdate === false) {
                                     model.matrix.setPosition(model.position);
                                 }
+                                if ((globalThis as any).__mbDecodeDbg
+                                    && !((globalThis as any).__mbRebaseLogged)) {
+                                    (globalThis as any).__mbRebaseLogged = true;
+                                    // eslint-disable-next-line no-console
+                                    console.log(`[MBRebase] pos=(${model.position.x.toFixed(1)},${model.position.y.toFixed(1)},${model.position.z.toFixed(1)}) matrixT=(${model.matrix.elements[12].toFixed(1)},${model.matrix.elements[13].toFixed(1)},${model.matrix.elements[14].toFixed(1)}) children=${model.children.length} mats=${JSON.stringify((model.children[0] as any)?.material?.type ?? '?')}`);
+                                }
                             }
                         }
                     } catch {}
