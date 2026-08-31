@@ -3009,9 +3009,21 @@ export class MBStyleDataSource extends TileDataSource {
                 for (const def of modelDefs) {
                     if (!def.url) continue;
                     let gltf: any;
-                    try { gltf = await loader.loadAsync(def.url); } catch { continue; }
+                    try { gltf = await loader.loadAsync(def.url); } catch (e) {
+                        if ((globalThis as any).__mbDecodeDbg) {
+                            // eslint-disable-next-line no-console
+                            console.log(`[MBModelLoad] FAIL ${def.url}: ${String(e).slice(0, 160)}`);
+                        }
+                        continue;
+                    }
 
                     const model = gltf.scene.clone(true);
+                    // §647: clamp metallic≈1 materials (no envMap → pitch
+                    // black in three's PBR; mgl keeps the base color visible).
+                    try {
+                        const { fixupModelMaterials } = await import('./MBModelRenderer');
+                        fixupModelMaterials(model);
+                    } catch {}
                     // Float32 frustum culling at world-scale coordinates is
                     // meters-off and flips between frames (see
                     // MBModelRenderer.instantiate) — rely on GPU clipping.
@@ -3109,6 +3121,10 @@ export class MBStyleDataSource extends TileDataSource {
                         model.matrix.copy(m);
                     }
 
+                    if ((globalThis as any).__mbDecodeDbg) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBModelAdd] ${def.url.split('/').pop()} pos=(${model.position.x.toFixed(1)},${model.position.y.toFixed(1)},${model.position.z.toFixed(1)}) scale=${JSON.stringify(effScale)} autoUpdate=${model.matrixAutoUpdate}`);
+                    }
                     scene.add(model);
                 }
             } catch {}

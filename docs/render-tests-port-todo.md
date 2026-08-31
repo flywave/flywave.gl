@@ -6866,3 +6866,15 @@ SpectorJS 捕获在 karma 内贯通（§621-§622 判定的"时序不相容"被*
 - **model-no-texcooords-textures 441835**：BoomBoxNoUV 仍未上屏（待探针：模型加载 vs 材质无 UV 渲染路径）。
 - **lighting-3d-mode/no-ambient、no-directional 逐位不变**：maple2.glb scale10 + translation[0,80,0] 与 model-normals 的 duck（scale100）同链路但鸭上屏树未上屏——下轮单点探针（模型尺寸 vs 相机距离核算）。
 - **trees-transition-update 全黑**：树已实例化（[MBScene] 3183 Mesh）但渲染黑色=无 lights 样式的模型材质域（多例同族：multiple-meshes 黑车、emissive-factor 黑 puck）——统一为**模型默认光照专项**（对照 3d-style draw_model.ts 默认灯组语义）。
+
+**§647. 模型材质域——金属黑/自发光丢失修复（2026-08-31 续五）**：
+
+用户点名第三批（pbr-light、no-texcooords、feature-state、light-overrides、fill-extrusion--default、lighting-3d-mode 四例、emissive-factor）复核后实装两修：
+
+①**metallic≈1 材质钳制（fixupModelMaterials）**：low-poly-car.gltf 显式 metallicFactor:1、BoomBoxNoUV.glb 缺省 metallic=1（glTF 缺省即 1）——three MeshStandard 金属无环境贴图时漫反射为零→整车/整模纯黑（multiple-meshes 黑车、no-texcooords 灰模）。无 envMap 且 metalness>0.5 时钳为 0，基色纹理得以显示。
+
+②**原生 emissive 回加**：applyMglModelLighting 的片元注入整体覆写 gl_FragColor，把 three 的 totalEmissiveRadiance（GLB emissiveFactor，如 puck 的蓝身/白圈）一并丢弃——model-emissive-factor 的刻意近黑灯光下 puck 渲染近黑。修复：emissivemap_fragment 处捕获 mbEmissive，尾段 `+ mbEmissive` 回加。
+
+③**无 UV 网格回退 baseColor**（fixup 扩展）：无 TEXCOORD_0 的 mesh 采样 baseColorTexture 会钳到 (0,0) texel——整模单一杂色（no-texcooords 的灰上灰）；回退 material.map=null 用 baseColorFactor（mgl 同语义）。
+
+**验证**：multiple-meshes 22692→19793（车纹理/位置正确，黑→橙纹理）、model-no-texcooords-textures 439703→293687（−33%，BoomBox 白模上屏）、model-emissive-factor 14123→13745（**蓝白 puck 完整上屏**，残余=亚像素偏移/AA）、model-pbr-light 468607→465373。探针资产：[MBModelAdd]（loadModels 入场景态）、[MBModelLoad]（加载失败）。未动域重申：ego-car per-part 子系统、globe convertModelMatrix、zoom25+ 相机语义（BoomBox 尺寸显示 fly23 钳制与 mgl 真 zoom 分歧待一次专项标定）。单测 300 绿、tsc 绿。

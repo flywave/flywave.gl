@@ -211,6 +211,7 @@ export function applyMglModelLighting(
                      varying float vMbLocalZ;
                      varying vec3 vMbWorldPos;
                      vec3 mbAlbedo = vec3(1.0);
+                     vec3 mbEmissive = vec3(0.0);
                      void main() {`
                 );
                 // a_pbr height ramp: mgl evaluates the ramp against the mesh
@@ -249,6 +250,16 @@ export function applyMglModelLighting(
                      #ifdef USE_COLOR
                          mbAlbedo = diffuseColor.rgb;
                      #endif`
+                );
+                // §647: capture the glTF emissive (emissiveFactor →
+                // material.emissive, e.g. the puck's blue body) — the tail
+                // below overwrites gl_FragColor and used to discard it,
+                // rendering emissive-only materials pitch black under the
+                // fixture's deliberately near-black lights.
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <emissivemap_fragment>',
+                    `#include <emissivemap_fragment>
+                     mbEmissive = totalEmissiveRadiance;`
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <opaque_fragment>',
@@ -305,7 +316,7 @@ export function applyMglModelLighting(
                          // u_emissive_strength — coherence with other layers;
                          // this is what keeps part-styled windows bright.
                          vec3 mbUnlit = mbAlbedo * mbAo;
-                         gl_FragColor.rgb = mix(mbColor, mbUnlit, clamp(uMB3DUnlit, 0.0, 1.0));
+                         gl_FragColor.rgb = mix(mbColor, mbUnlit, clamp(uMB3DUnlit, 0.0, 1.0)) + mbEmissive;
                      }`
                 );
             };
@@ -324,6 +335,35 @@ async function getSharedGLTFLoader(): Promise<GLTFLoaderType> {
         loader.setDRACOLoader(draco);
     } catch {}
     return loader;
+}
+
+/** §647: glTF PBR materials with metallic ≈ 1 (the glTF default when
+ * metallicFactor is omitted!) have ZERO diffuse reflection — with no
+ * environment map three renders them pitch black (low-poly-car,
+ * BoomBoxNoUV: the black-car / blank-model family). mgl's model PBR keeps
+ * the base-color texture visible via its procedural environment; clamp
+ * metalness so the base color shows. */
+export function fixupModelMaterials(root: THREE.Object3D): void {
+    root.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        // §647: meshes without UVs must not sample the base-color texture —
+        // three clamps to texel (0,0) and paints the whole mesh in one
+        // arbitrary texel color (model-no-texcooords-textures: the boombox
+        // rendered gray-on-gray instead of its white baseColorFactor; mgl
+        // falls back to the factor when TEXCOORD_0 is absent).
+        const hasUV = !!(mesh.geometry?.attributes?.uv);
+        for (const mat of mats as any[]) {
+            if (!mat) continue;
+            if (!hasUV && mat.map) { mat.map = null; mat.needsUpdate = true; }
+            if (mat.__mbMetalFixed) continue;
+            mat.__mbMetalFixed = true;
+            if (!mat.envMap && typeof mat.metalness === 'number' && mat.metalness > 0.5) {
+                mat.metalness = 0;
+            }
+        }
+    });
 }
 
 /** §645: model URIs that are absolute URLs (per-feature `model-uri`
@@ -568,6 +608,7 @@ export class MBModelRenderer {
         group: THREE.Group,
     ): void {
         const model = prototype.clone(true);
+        fixupModelMaterials(model);
         model.position.set(placement.x, placement.y, placement.z);
 
         // §519: mgl model_util.rotationScaleYZFlipMatrix — the model local
