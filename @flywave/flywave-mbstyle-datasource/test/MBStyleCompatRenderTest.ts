@@ -276,6 +276,58 @@ async function renderFrames(
         });
     }
 
+    // §662 scene census: what is actually in the graph at render time —
+    // tile-object duplication (same key decoded/re-added twice), orphan
+    // meshes at degenerate positions, per-material buckets. decodedbg=1.
+    // Runs on the NEXT AfterRender (tile objects only live inside the render
+    // pass — m_sceneRoot is cleared post-frame).
+    if ((globalThis as any).__mbDecodeDbg) {
+        try {
+            const dump = () => {
+                try {
+                    const counts: Record<string, number> = {};
+                    const samples: string[] = [];
+                    const walk = (root: any, tag: string) => {
+                        root?.traverse?.((o: any) => {
+                            if (!o.isMesh && !o.isPoints && !o.isLine) return;
+                            const key = `${tag}|${o.name || 'unnamed'}|${o.geometry?.type ?? '?'}|${Array.isArray(o.material) ? o.material.map((m: any) => m?.type).join('+') : o.material?.type}`;
+                            counts[key] = (counts[key] ?? 0) + 1;
+                            if (samples.length < 16) {
+                                o.updateWorldMatrix?.(true, false);
+                                const e = o.matrixWorld?.elements ?? [0, 0, 0];
+                                const pos = o.position;
+                                samples.push(`${key} local=(${pos.x?.toFixed?.(1)},${pos.y?.toFixed?.(1)},${pos.z?.toFixed?.(1)}) world=(${e[12]?.toFixed?.(1)},${e[13]?.toFixed?.(1)},${e[14]?.toFixed?.(1)}) nvert=${o.geometry?.attributes?.position?.count ?? '?'}`);
+                            }
+                        });
+                    };
+                    const tiles = (dataSource as any).getDecodedTiles?.() ?? [];
+                    for (const t of tiles) {
+                        const tk = t.tileKey ? `${t.tileKey.level}/${t.tileKey.column}/${t.tileKey.row}` : '?';
+                        const dt: any = (t as any).decodedTile ?? {};
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBTileInfo] ${tk} objects=${(t.objects ?? []).length} geos=${dt.geometries?.length ?? '?'} techs=${dt.techniques?.length ?? '?'} poi=${dt.poiGeometries?.length ?? '?'} textPath=${dt.textPathGeometries?.length ?? '?'}`);
+                        const objs = (t as any).objects ?? [];
+                        for (const o of objs) walk(o, `tile${tk}`);
+                    }
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBSceneDump] nTiles=${tiles.length} tiles=${JSON.stringify(counts)}`);
+                    for (const s of samples) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBSceneObj] ${s}`);
+                    }
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBSceneDump] err ' + e);
+                }
+            };
+            mapView.addEventListener(MapViewEventNames.AfterRender, dump);
+            mapView.update();
+        } catch (e) {
+            // eslint-disable-next-line no-console
+            console.log('[MBSceneDump] setup err ' + e);
+        }
+    }
+
     // Multi-tile vector styles: sibling tiles decode asynchronously and can
     // finish after the settled frame — poll until every cached tile's
     // geometry is loaded (bounded), keeping real frames alive, so the
