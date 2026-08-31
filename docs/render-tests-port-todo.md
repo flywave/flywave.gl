@@ -6904,3 +6904,11 @@ model-source-feature-properties 系（light-overrides/multiple-features/feature-
 **§653. 相机距离标定深挖（§652 后续，2026-08-31 续十一）**：
 
 ego 夹具实测相机 80.7m vs mgl 同参 61.4m，比值 = 1/cos(40.7°) 精确——**flywave calculateDistanceFromZoomLevel = focal×C/(512×2^z)（等距圆柱、纬度无关）**，mgl cameraToCenter×mpp = focal×C×cos/(512×2^z)。两套相机语义的世界帧不同：flywave 世界 x/y = 等距圆柱米（地面几何在 tile2world 已含 mercator 拉伸），mgl 世界 = mercator 像素（同样拉伸）——**地面几何两套一致**；分歧仅在模型尺寸链：mgl scaleXY=1/mpp(lat) 使模型随地面同拉伸（真实尺寸），flywave 模型 1:1 世界单位 = cos(lat)× 偏小。已恢复 k 预乘（§652 恢复提交）——几何对齐 mgl；分数影响被 part 色彩域（§633 蓝色墙）掩蔽，色彩/光照标定为下一步。相机 z 语义（geoCenter.alt=46.5 疑为相机高度）记档待查。
+
+**§654. mgl model.fragment.glsl 全文在库 + 金属 indirect 项移植路线（2026-08-31 续十二）**：
+
+**源码发现**：3d-style/shaders/model.fragment.glsl（610 行）完整在库——mgl 模型 PBR 全语义可精确对照。关键语义：①非 LIGHTING_3D_MODE（无 3D 灯样式）= legacy 光路（u_lightpos/u_lightcolor/u_lightintensity，legacy light 缺省 white/1/[1.15,2,1.55]）+ **indirect = EnvBRDFApprox(specular,rough,NdotV)×env_light(0.65) + diffuse×0.65**；②metallic 材质 diffuseColor×(1−metallic)=0，可见性全靠 indirect spec 项（EnvBRDFApprox 纯数学无贴图）——金属黑根因=我方缺失该项；③`color += emissive.rgb`（GLB emissive 恒加）+ unlit mix；④LIGHTING_3D_MODE 路径 env_light = u_lighting_ambient_color×calculate_ambient_directional_factor。
+
+**envMap 路线否定**：flat cube/equirect 环境贴图两种构造在 SwiftShader 无头渲染器均静默破坏材质（PMREM 生成失败→模型消失，multiple-meshes/pbr-light 回到空白值）——已回退，metalness 钳制（§647 已验证近似）保留。
+
+**下批移植蓝图（照 model.fragment.glsl 逐段）**：patched tail 内计算 indirect = EnvBRDFApprox(mix(f0,albedo,metallic), rough, NdotV)×0.65 + diffuse×(1−metal)×0.65（pure math 无贴图，无头环境可行）；direct 按 LIGHTING_3D_MODE 有无分路；`color += emissive`；unlit mix。uniforms 补 uMB3DMetallic/Roughness（material.metalness/roughness）。覆盖面：multiple-meshes 黑车、pbr-light、emissive-factor、doors 色彩域、树色——模型光照域全家。单测 300 绿、tsc 绿。

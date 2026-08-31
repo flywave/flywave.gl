@@ -367,6 +367,13 @@ async function getSharedGLTFLoader(): Promise<GLTFLoaderType> {
  * BoomBoxNoUV: the black-car / blank-model family). mgl's model PBR keeps
  * the base-color texture visible via its procedural environment; clamp
  * metalness so the base color shows. */
+/** §647: model material fixups — meshes without UVs fall back to
+ * baseColorFactor (three would clamp-sample the texture at texel (0,0)).
+ * §654: the envMap variant of the mgl indirect term (flat cube/equirect
+ * environment) is NON-VIABLE in the SwiftShader headless renderer — the
+ * PMREM generation silently breaks the material (models vanish); the mgl
+ * indirect term must be computed in-shader via EnvBRDFApprox (pure math,
+ * see model.fragment.glsl) — next-session port blueprint in §654. */
 export function fixupModelMaterials(root: THREE.Object3D): void {
     root.traverse((o) => {
         const mesh = o as THREE.Mesh;
@@ -383,7 +390,14 @@ export function fixupModelMaterials(root: THREE.Object3D): void {
             if (!hasUV && mat.map) { mat.map = null; mat.needsUpdate = true; }
             if (mat.__mbMetalFixed) continue;
             mat.__mbMetalFixed = true;
-            if (!mat.envMap && typeof mat.metalness === 'number' && mat.metalness > 0.5) {
+            // §647: metallic ≈ 1 materials (the glTF DEFAULT when
+            // metallicFactor is omitted) have zero diffuse — without an
+            // environment map three renders them pitch black. Clamp so the
+            // base color shows (mgl keeps metallic but lights metals via its
+            // indirect env term — §654 notes the in-shader EnvBRDF port as
+            // the full-parity follow-up; the envMap route is non-viable in
+            // the SwiftShader headless renderer).
+            if (typeof mat.metalness === 'number' && mat.metalness > 0.5 && !mat.envMap) {
                 mat.metalness = 0;
             }
         }
