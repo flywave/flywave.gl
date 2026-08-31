@@ -409,13 +409,15 @@ export class MBEnvironmentManager {
         // convention (sphericalDirectionToCartesian, az+90) vs the §455
         // extrusion-calibrated (90−az); the two differ by a 180° azimuth
         // rotation, which flips which walls catch the directional light.
-        // §682: mgl-faithful azimuth (sphericalDirectionToCartesian az+90,
-        // confirmed A/B better on ground-shadow-fog −6k); the §455 90−az
-        // form lit the opposite wall set.
+        // §682/§686: mgl-faithful azimuth (sphericalDirectionToCartesian
+        // az+90) PLUS the render-frame y mirror (our world y = −mgl y,
+        // §643) — without the mirror the lit-wall set is mirrored about the
+        // x-axis and the camera-visible walls all read unlit (ground-shadow
+        // -fog black-wall family).
         const azRad = (direction[0] + 90) * Math.PI / 180;
         const dirVec: [number, number, number] = [
             Math.cos(azRad) * Math.sin(p),
-            Math.sin(azRad) * Math.sin(p),
+            -Math.sin(azRad) * Math.sin(p),
             Math.cos(p),
         ];
 

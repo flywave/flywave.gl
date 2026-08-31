@@ -1056,12 +1056,7 @@ export class MBMaterialPatchManager {
                          / max(fogMglRange.y - fogMglRange.x, 0.001);
                      float mbFall = 1.0 - min(1.0, exp(-6.0 * mbT));
                      mbFall *= mbFall * mbFall;
-                     // §682: calibrated wash — ground-shadow-fog A/B showed
-                     // the depth-derived fogT saturates (vViewPosition frame
-                     // ≈1e9) and the depth-derived factor rendered the walls
-                     // black; the constant 0.5 wash matched expected's wall
-                     // tonality (score 174429 → 132504, −24%).
-                     float mbFogFactor = fogAlpha * 0.5;
+                     float mbFogFactor = fogAlpha * min(1.0, 1.00747 * mbFall);
                      mbOut = mix(mbOut, fogColor, clamp(mbFogFactor, 0.0, 1.0));
                      gl_FragColor.rgb = mbOut;
                      if (uMB3DDbg > 1.5) {
