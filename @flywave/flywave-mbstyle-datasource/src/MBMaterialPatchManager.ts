@@ -181,6 +181,22 @@ export class MBMaterialPatchManager {
                         u.uMBShadowIntensity.value = shadowState?.intensity ?? 0;
                     }
                 }
+                // §672: refresh the extrusion self-drawn mgl fog uniforms
+                // (zoom-dependent meters/unit + live fogMgl* values).
+                const fogRaw = (obj as any).material;
+                const fogMats: any[] = Array.isArray(fogRaw) ? fogRaw : (fogRaw ? [fogRaw] : []);
+                for (const m of fogMats) {
+                    const fu = m?.__mbExtFogU;
+                    if (!fu) continue;
+                    const lib2 = (THREE.UniformsLib as any).fog;
+                    fu.uMbMetersPerUnit.value = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                        (512 * Math.pow(2, (this.m_dataSource as any).mapView?.zoomLevel ?? 16));
+                    fu.fogMglShift.value = lib2.fogMglShift.value;
+                    fu.fogMglDistCam.value = lib2.fogMglDistCam.value;
+                    (fu.fogMglRange.value as THREE.Vector2).copy(lib2.fogMglRange.value);
+                    fu.fogAlpha.value = lib2.fogAlpha.value;
+                    (fu.fogColor.value as THREE.Color).copy(lib2.fogColor.value);
+                }
             }
         }
         this.m_lastShadowActive = !!shadowState;
@@ -899,6 +915,10 @@ export class MBMaterialPatchManager {
             // (fogAlpha/fogMgl*) stay at their clone-time values (0) and the
             // extrusions never fog.
             const fogLib = (THREE.UniformsLib as any).fog;
+            const mv0 = (this.m_dataSource as any).mapView;
+            const mpu0 = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                (512 * Math.pow(2, mv0?.zoomLevel ?? 16));
+            shader.uniforms.uMbMetersPerUnit = { value: mpu0 };
             // NOTE: do NOT bind fogColor/fogNear/fogFar/fogDensity — three's
             // per-frame refreshFogUniforms writes scene.fog values straight
             // into these shared objects, clobbering the env's calibrated mgl
@@ -912,6 +932,9 @@ export class MBMaterialPatchManager {
             ]) {
                 if (fogLib[k] && !shader.uniforms[k]) shader.uniforms[k] = { value: fogLib[k].value };
             }
+            // §672: per-frame refreshable handle (zoom-dependent meters/unit
+            // + live fogMgl* values).
+            (material as any).__mbExtFogU = shader.uniforms;
             // §668: world-copy tiles (offset ±1) must not emit text/POI
             // elements — the text renderer projects them WITHOUT the world
             // offset, stacking every copy's labels onto the primary copy
@@ -1039,8 +1062,8 @@ export class MBMaterialPatchManager {
                          // §670: mgl fog applied in-shader (chunk fog compiled
                          // out). Depth scale 0.4 calibrated on
                          // ground-shadow-fog (see §671).
-                         float mbLen = length(vViewPosition);
-                         float mbT = (fogMglShift * (mbLen * 0.4) / max(fogMglDistCam, 1.0)
+                         float mbLen = length(vViewPosition) * uMbMetersPerUnit;
+                         float mbT = (fogMglShift * mbLen / max(fogMglDistCam, 1.0)
                              - (fogMglRange.x + fogMglShift))
                              / max(fogMglRange.y - fogMglRange.x, 0.001);
                          float mbFall = 1.0 - min(1.0, exp(-6.0 * mbT));

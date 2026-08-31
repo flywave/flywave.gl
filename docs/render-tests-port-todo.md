@@ -6998,3 +6998,7 @@ createTextElements 原型级包装成功（模块 init 即装、早于 decode）
 **§672. fogT 读出修正与单位域定案（2026-09-01 续五）**：
 
 读出分支修至雾前输出后复测：extrusion 的 raw fogT 仍**全饱和 =1**——定量结论：挤出片元的 vViewPosition 量级 ≈1e9（RTE 引擎绝对帧），而 mgl 公式期望**米制**深度（distCamM≈1e3-1e4）；两者差一个 **meters-per-engine-unit** 转换（= EarthC/worldSize = C/(512×2^z)，随 zoom 变化）。**修复公式（下轮直接落地）**：在 injectExtrusion3DLighting 注入块加 `uniform float uMbMetersPerUnit;`（CPU 侧 = EarthC/(512×2^zoomLevel)，env 每帧喂或按 zoom 变化重编译），fogT 计算改用 `mbLen * uMbMetersPerUnit`（替换 0.4 经验缩放）——单位正确后 mgl 公式自然给出 expected 的洗涤幅度（shift=1.5/range=[−0.5,3.0] 无需再调）。§671 的 0.4 经验值即该转换缺失下的补丁，一并移除。单测 300 绿、tsc 绿。
+
+**§673. uMbMetersPerUnit 接线落地 + 残余白洗状态（2026-09-01 末）**：
+
+①uMbMetersPerUnit uniform 落地：编译期初值 = EarthC/(512×2^zoomLevel)，每帧经 __mbExtFogU 句柄刷新（patchTileMaterials 的 refreshTargets 循环），fogT 公式改为 `shift·(len×mpu)/distCam`（替换 0.4 经验缩放）——米制转换链路完整。②重测 ground-shadow-fog **仍 150155 且画面近全白**：读数分支（雾前输出）仍饱和 → vViewPosition 实测量级 ≥1e9（非此前估的 2.7e8），或 MB_RASTER_MGL_FOG define 与 material.fog=false 的组合仍让某条雾路径生效——读出基础设施需一次无雾环境的基准标定（先空跑 fogprobe=2 + 移除 define 确认真基色）。③定案补充：白罩的"白色"= fogColor 白 + fogT 饱和，数学自洽；剩余工作是**单位域标定**（engine-unit→mgl-fog-unit 的真实换算常数）——已有 fogt=1/lightdbg=1/fogprobe=1|2 全套读数工具，标定循环可在数轮内完成。单测 300 绿、tsc 绿。
