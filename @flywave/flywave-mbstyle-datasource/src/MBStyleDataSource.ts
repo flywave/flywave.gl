@@ -2624,10 +2624,9 @@ export class MBStyleDataSource extends TileDataSource {
                                     model.matrix.setPosition(model.position);
                                 }
                                 if ((globalThis as any).__mbDecodeDbg
-                                    && !((globalThis as any).__mbRebaseLogged)) {
-                                    (globalThis as any).__mbRebaseLogged = true;
+                                    && ((globalThis as any).__mbRebaseN = ((globalThis as any).__mbRebaseN ?? 0) + 1) <= 6) {
                                     // eslint-disable-next-line no-console
-                                    console.log(`[MBRebase] pos=(${model.position.x.toFixed(1)},${model.position.y.toFixed(1)},${model.position.z.toFixed(1)}) matrixT=(${model.matrix.elements[12].toFixed(1)},${model.matrix.elements[13].toFixed(1)},${model.matrix.elements[14].toFixed(1)}) children=${model.children.length} mats=${JSON.stringify((model.children[0] as any)?.material?.type ?? '?')}`);
+                                    console.log(`[MBRebase] id=${model.userData?._mbModelSource?.entryId} base=(${base.x.toFixed(1)},${base.y.toFixed(1)},${base.z.toFixed(1)}) eye=(${eye.x.toFixed(1)},${eye.y.toFixed(1)},${eye.z.toFixed(1)}) geoCenter=(${gc.latitude?.toFixed?.(6)},${gc.longitude?.toFixed?.(6)} alt=${(gc.altitude ?? 0).toFixed?.(1)}) pos=(${model.position.x.toFixed(1)},${model.position.y.toFixed(1)},${model.position.z.toFixed(1)})`);
                                 }
                             }
                         }
@@ -2952,6 +2951,9 @@ export class MBStyleDataSource extends TileDataSource {
                 orientation?: number[];
                 scale?: number | number[];
                 translation?: number[];
+                /** §651: registry key — the model feature id. */
+                id?: string;
+                sourceId?: string;
             }> = [];
 
             // Inline models (mapbox HD: layer.models = { id: { uri, position } })
@@ -2972,7 +2974,7 @@ export class MBStyleDataSource extends TileDataSource {
                 const source = sourceId ? (style.sources as any)[sourceId] : null;
                 const sourceModels = source?.models;
                 if (sourceModels && typeof sourceModels === 'object') {
-                    for (const m of Object.values(sourceModels) as any[]) {
+                    for (const [entryKey, m] of Object.entries(sourceModels) as any[]) {
                         if (m?.uri) {
                             modelDefs.push({
                                 url: resolveUrl(m.uri),
@@ -2980,6 +2982,10 @@ export class MBStyleDataSource extends TileDataSource {
                                 orientation: m.orientation,
                                 scale: m.scale,
                                 translation: m.translation,
+                                // §651: the registry key — the model feature's id
+                                // for per-part paint + feature-state evaluation.
+                                id: entryKey,
+                                sourceId,
                             });
                         }
                     }
@@ -3131,6 +3137,19 @@ export class MBStyleDataSource extends TileDataSource {
                         // eslint-disable-next-line no-console
                         console.log(`[MBModelAdd] ${def.url.split('/').pop()} pos=(${model.position.x.toFixed(1)},${model.position.y.toFixed(1)},${model.position.z.toFixed(1)}) scale=${JSON.stringify(effScale)} autoUpdate=${model.matrixAutoUpdate}`);
                     }
+                    // §651: model-source per-part styling — data-driven paint
+                    // evaluates per PART (material name) with the model
+                    // feature's id + feature state; node rotations come from
+                    // feature states via nodeOverrides names.
+                    if (def.id && def.sourceId) {
+                        model.userData._mbModelSource = {
+                            layerId: layer.id, entryId: def.id, sourceId: def.sourceId,
+                        };
+                        try {
+                            this.applyModelSourcePartStyling(
+                                model, layer, def.id, (style as any).zoom ?? 0);
+                        } catch {}
+                    }
                     scene.add(model);
                 }
             } catch {}
@@ -3225,6 +3244,101 @@ export class MBStyleDataSource extends TileDataSource {
     }
 
     /** Theme a loaded glTF from its pristine snapshot (idempotent). */
+    /**
+     * §651: model-source per-part styling — mgl evaluates the model layer's
+     * data-driven paint per PART (the mesh's material name) with the model
+     * feature's `id` and its feature state, and applies feature-state node
+     * rotations for `nodeOverrides` names (doors/hood/trunk). Re-runnable:
+     * `setFeatureState` / `setPaintProperty` ops call
+     * `applyModelSourcePartStylingAll` to re-tint the live instances.
+     */
+    private applyModelSourcePartStyling(
+        model: any,
+        layer: any,
+        entryId: string,
+        zoom: number,
+    ): void {
+        const paint = layer?.paint ?? {};
+        const states = (this as any).m_featureStates as Map<any, any> | undefined;
+        const state = states?.get(entryId) ?? {};
+        const evalFor = (part: string) => (name: string): any => {
+            const raw = paint[name];
+            if (raw === undefined || raw === null) return undefined;
+            try {
+                return MBExpressionEngine.evaluate(raw, {
+                    zoom,
+                    feature: {
+                        type: 'Point',
+                        properties: { part, id: entryId },
+                        id: entryId,
+                    },
+                    featureState: state,
+                } as any);
+            } catch {
+                return undefined;
+            }
+        };
+        model.traverse((o: any) => {
+            if (!o.isMesh || !o.material) return;
+            const part = o.material.name || o.name || '';
+            const ev = evalFor(part);
+            const color = ev('model-color');
+            const mixRaw = ev('model-color-mix-intensity');
+            const mix = mixRaw === undefined || mixRaw === null ? 1 : Number(mixRaw);
+            const emis = Number(ev('model-emissive-strength') ?? 0);
+            const clone = o.material.clone();
+            if (color !== undefined && typeof color === 'string') {
+                const c = new THREE.Color();
+                try { c.setStyle(color); } catch {}
+                if (mix >= 0.999) {
+                    // mgl mix(color, albedo, 1) = the tint replaces the base
+                    // color — drop the base texture so the tint is pure.
+                    clone.map = null;
+                    clone.color.copy(c);
+                } else if (mix > 0) {
+                    clone.color.multiply(c);
+                }
+            }
+            if (emis > 0) {
+                clone.emissive = (clone.emissive ?? new THREE.Color()).copy(clone.color);
+                clone.emissiveIntensity = emis;
+            }
+            o.material = clone;
+        });
+        // feature-state node rotations (nodeOverrides names): state values
+        // are [x, y, z] euler degrees in the node's local frame.
+        model.traverse((o: any) => {
+            const rot = state?.[o.name];
+            if (Array.isArray(rot) && rot.length === 3) {
+                o.rotation.set(
+                    (rot[0] ?? 0) * Math.PI / 180,
+                    (rot[1] ?? 0) * Math.PI / 180,
+                    (rot[2] ?? 0) * Math.PI / 180,
+                );
+            }
+        });
+    }
+
+    /** §651: re-run per-part styling for every live model-source instance
+     * (feature-state / paint ops). */
+    applyModelSourcePartStylingAll(): void {
+        const style = this.m_styleManager.getStyle();
+        if (!style) return;
+        const layersById = new Map<string, any>();
+        for (const l of style.layers ?? []) layersById.set(l.id, l);
+        for (const entry of (this as any).m_loadedModels ?? []) {
+            const model = entry.model;
+            const meta = model.userData?._mbModelSource;
+            if (!meta) continue;
+            const layer = layersById.get(meta.layerId) ?? entry.layer;
+            if (!layer) continue;
+            try {
+                this.applyModelSourcePartStyling(
+                    model, layer, meta.entryId, meta.zoom ?? 0);
+            } catch {}
+        }
+    }
+
     private applyThemeToModel(model: any, layer: any): void {
         try {
             const useTheme = layer?.paint?.['model-color-use-theme'] ?? 'default';
@@ -4032,6 +4146,9 @@ export class MBStyleDataSource extends TileDataSource {
             currentSourceId: this.m_currentSourceId,
             featureStates: (this as any).m_featureStates,
         } as any);
+        // §651: model-source per-part paints read feature states — re-tint
+        // the live registry instances (ego-car family).
+        try { this.applyModelSourcePartStylingAll(); } catch {}
     }
 
     /** Remove ALL feature states (mgl removeFeatureState({source}) form). */

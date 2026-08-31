@@ -6890,3 +6890,9 @@ git 二分（aba771e4 29638 → 16ea8329 370625，单夹具三轮）：回归引
 **§650. ego-car 家族取证（2026-08-31 续八）**：
 
 model-source-feature-properties 系（light-overrides/multiple-features/feature-state）探针实证：[MBModelAdd] ego_car.glb 两实例加载+入场景 ✓、[MBRebase] 重基后 pos=(14.5,66.4,−46.5) 眼相对 ✓、registry=2 ✓——loadModels 全链通但画布仍灰（车不光栅化）。剩余解释均在 mgl location-indicator 渲染通道 + per-part 求值内（model-type location-indicator 专用 pass、materialOverrides/nodeOverrides 逐 part、feature-state 车灯）：需 port model_source.ts + draw_model.ts 的 model-feature bucket 语义（spec modelSourceModel schema 已抄录 v8.json modelSourceModel 节点）。探针资产：[MBRebase]（重基后矩阵平移+子节点数+材质类型）。单测 300 绿。
+
+**§651. model-source per-part/feature-state 子系统落地（2026-08-31 续九）**：
+
+实现（loadModels 路径）：①registry entry 携带 id/sourceId（model feature id）；②applyModelSourcePartStyling：逐 mesh（part = material.name）求值 model-color/model-color-mix-intensity/model-emissive-strength，上下文含 feature id + featureState（m_featureStates 按 registry id）；mix≥1 时弃 baseColorTexture 纯 tint；emission>0 时 emissive=部件色×强度（feature-state 车灯）；③feature-state 节点旋转（nodeOverrides 名 → state[x,y,z] 度，车门/盖/箱）；④setFeatureState/clearFeatureStates 后 applyModelSourcePartStylingAll 重着色（userData._mbModelSource 记账）。
+
+**验证遗留**：ego-car 三例分数暂逐位不变——探针实证车已渲染（画布 117 = olive 车身×光照）但**相机标定偏差**：flywave geoCenter alt=46.5 + 水平 66 → 相机距目标 80.7m，而 mgl 同参数相机距目标 ≈61.5m（1.31×，画布 128 时车被单辆填满 vs mgl 双车可见）。根因 = flywave zoom→相机距离换算在小画布/高 zoom 与 mgl cameraToCenterDistance（0.5/tan(fov/2)×height×mpp）的标度差——**相机距离标定专项**（影响所有小画布高 zoom 夹具的尺寸一致性）。单测 300 绿、tsc 绿。
