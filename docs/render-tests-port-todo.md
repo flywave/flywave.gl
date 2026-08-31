@@ -7006,3 +7006,7 @@ createTextElements 原型级包装成功（模块 init 即装、早于 decode）
 **§674. ground-shadow-fog 残差主因定案——相机取景偏移（2026-09-01 续六）**：
 
 内容掩膜（灰度<200）互相关扫描：ours vs expected 最优相关 0.538 @ (dy=160,dx=130) 且在扫描边界未收敛、(0,0) 处 −0.063——**我方相机取景相对 mgl 整体偏移超过 160px/130px（向下+向右）**，非白像素总量 ours 173k ≈ expected 179k（内容量一致）。定案：①该夹具残差的主导项 = **相机取景/lookAt 语义偏移**（pitch 70 + geoCenter/alt 域，§651/§653 相机标定家族），材质/雾工作（§667 渐变、§671 自绘雾）本身正确但被取景偏移淹没；②此前 fogT 饱和读数与"白洗"解读作废——真实状态是内容画在了画布的错误区域。**下轮入口（相机标定专项首个单点）**：①用该夹具（单方向 pitch70+geoCenter）对照 mgl transform 语义核 flyway lookAt 的 pitch 枢轴/距离（§653 已记录 flyway calculateDistanceFromZoomLevel 与 mgl cameraToCenterDistance 的 1/cos 差）；②dy≈+160 的偏移量可反推相机高度/俯仰枢轴的修正量。②修复优先级：相机取景影响**所有** pitched 夹具，标定一次全局受益。单测 300 绿、tsc 绿（本轮另修复：挤出注入块结构重组，消除遗留调试行的无条件覆写——该 bug 使此前全部材质干预不可见）。
+
+**§675. 相机取景偏移量化（2026-09-01 续七）**：
+
+全范围互相关扫描（步长 8）：粗扫最优 (dy=+216, dx=−256) 相关 0.639，细扫未收敛（峰在边缘）——取景偏移超过 ±256px 扫描窗，或非纯平移（含旋转分量）。dx≈−256=半幅宽 + dy≈+216 的组合指向 **bearing 264 的 yaw 语义**（flyway setCameraGeolocationAndZoom 的 yawDeg CCW 约定 × style.bearing CW 的符号/角度转换，applyCameraSettings.ts:4523 取负后 = −264°≡+96°，若引擎内部另有归一化即产生视角旋转）或 pitch 枢轴偏移。**下轮入口**：①A/B bearing 符号与取值（±264、±96）单夹具重测，观察取景回归；②对照 mgl transform 的 bearing→角动公式（mapbox bearing CW，north-up 相机方位角 = −bearing）；③pitch 70 枢轴点核对（mgl 相机绕 center 俯仰，target 恒在画布中心）。相机标定专项（§651/§653/§674/§675）影响全部 pitched 夹具。单测 300 绿、tsc 绿。
