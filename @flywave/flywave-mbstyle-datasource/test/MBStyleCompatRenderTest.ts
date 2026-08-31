@@ -299,7 +299,7 @@ async function renderFrames(
                                 (mat0 as any)?.__mbMglLit ? 'model' : '',
                                 (mat0 as any)?.__mbStructLit ? 'struct' : ''
                             ].filter(Boolean).join(',') || 'none';
-                            const key = `${tag}|${o.name || 'unnamed'}|${Array.isArray(o.material) ? o.material.map((m: any) => m?.type).join('+') : o.material?.type}|${flags}|c=${mat0?.color?.getHexString?.() ?? '?'}|pre=${(mat0 as any)?.isDepthPrepassMaterial ? 1 : 0}|df=${(mat0 as any)?.depthFunc ?? '?'}|cw=${(mat0 as any)?.colorWrite ?? '?'}`;
+                            const key = `${tag}|${o.name || 'unnamed'}|${Array.isArray(o.material) ? o.material.map((m: any) => m?.type).join('+') : o.material?.type}|${flags}|c=${mat0?.color?.getHexString?.() ?? '?'}|pre=${(mat0 as any)?.isDepthPrepassMaterial ? 1 : 0}|df=${(mat0 as any)?.depthFunc ?? '?'}|ro=${o.renderOrder}|g=${o.geometry?.uuid?.slice?.(0, 8) ?? '?'}`;
                             counts[key] = (counts[key] ?? 0) + 1;
                             if (samples.length < 16) {
                                 o.updateWorldMatrix?.(true, false);
