@@ -146,9 +146,9 @@ function discoverTests(): TestEntry[] {
                 }
                 const orig = proto.createTextElements;
                 proto.createTextElements = function (tile: any, decodedTile: any, filter: any) {
-                    const before = tile.textElementGroups?.size ?? 0;
+                    const before = tile.textElementGroups?.count?.() ?? 0;
                     orig.call(this, tile, decodedTile, filter);
-                    const after = tile.textElementGroups?.size ?? 0;
+                    const after = tile.textElementGroups?.count?.() ?? 0;
                     // eslint-disable-next-line no-console
                     console.log(`[MBText] tile=${tile.tileKey?.level}/${tile.tileKey?.column}/${tile.tileKey?.row} offset=${tile.offset} textGeos=${decodedTile.textGeometries?.length ?? 0} added=${after - before} total=${after} calls=${((window as any).__mbCTE = ((window as any).__mbCTE ?? 0) + 1)}`);
                 };
