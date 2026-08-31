@@ -859,7 +859,7 @@ export class MBMaterialPatchManager {
             if ((globalThis as any).__mbDecodeDbg
                 && ((globalThis as any).__mbExtLitCnt = ((globalThis as any).__mbExtLitCnt ?? 0) + 1) <= 4) {
                 // eslint-disable-next-line no-console
-                console.log(`[MBExtLit] ls=${ls ? JSON.stringify({ amb: ls.ambientColorLinear, dirC: ls.directionalColorLinear, dir: ls.dir.map((n: number) => n.toFixed(2)) }) : 'null'} emissive=${emissiveStrength}`);
+                console.log(`[MBExtLit] ls=${ls ? JSON.stringify({ amb: ls.ambientColorLinear, dirC: ls.directionalColorLinear, dir: ls.dir.map((n: number) => n.toFixed(2)) }) : 'null'} emissive=${emissiveStrength} type=${material.type} replaced=${shader.fragmentShader.includes('uMB3DDir') ? 1 : 0} hasOpaque=${shader.fragmentShader.includes('opaque_fragment') ? 1 : 0} fsLen=${shader.fragmentShader.length}`);
             }
             shader.uniforms.uMB3DAmb = { value: ls ? ls.ambientColorLinear : [1, 1, 1] };
             shader.uniforms.uMB3DDirColor = { value: ls ? ls.directionalColorLinear : [1, 1, 1] };
@@ -925,6 +925,11 @@ export class MBMaterialPatchManager {
                      }
                  }`
             );
+            if ((globalThis as any).__mbDecodeDbg
+                && ((globalThis as any).__mbExtLitCnt2 = ((globalThis as any).__mbExtLitCnt2 ?? 0) + 1) <= 4) {
+                // eslint-disable-next-line no-console
+                console.log(`[MBExtLit] applied replaced=${shader.fragmentShader.includes('uMB3DDir') ? 1 : 0} hasOpaqueBefore=${shader.fragmentShader.includes('opaque_fragment') ? 1 : 0} fsLen=${shader.fragmentShader.length}`);
+            }
         };
         material.needsUpdate = true;
     }
