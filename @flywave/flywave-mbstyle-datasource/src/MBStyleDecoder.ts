@@ -1163,7 +1163,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 this.m_omvAdapter.process(buffer as ArrayBuffer, decodeInfo, processor);
                 if ((globalThis as any).__mbDecodeDbg) {
                     // eslint-disable-next-line no-console
-                    console.log(`[MBTileDec] z=${tileKey.level} x=${tileKey.column} y=${tileKey.row} ext=${emitter.extents} geos=${emitter.getDecodedTile().geometries.length} techs=${emitter.getDecodedTile().techniques.length} pts=${(this as any).__mbPtTotal ?? ''}`);
+                    const dt: any = emitter.getDecodedTile();
+                    console.log(`[MBTileDec] z=${tileKey.level} x=${tileKey.column} y=${tileKey.row} ext=${emitter.extents} geos=${dt.geometries.length} techs=${dt.techniques.length} textGeos=${dt.textGeometries?.length ?? 0} textPath=${dt.textPathGeometries?.length ?? 0} poi=${dt.poiGeometries?.length ?? 0} pts=${(this as any).__mbPtTotal ?? ''}`);
                     (this as any).__mbPtTotal = 0;
                 }
             } else if (typeof data === 'string') {

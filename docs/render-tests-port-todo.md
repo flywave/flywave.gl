@@ -6968,3 +6968,7 @@ ego 夹具实测相机 80.7m vs mgl 同参 61.4m，比值 = 1/cos(40.7°) 精确
 **§665. Spector 逐 draw 定位 + fog 绑定生效确认（2026-09-01）**：
 
 §642 Spector 基建用于 ground-shadow-fog：capture 198 commands / 76 drawElements / 8+ programs。**决定性事实**：prog4 与 prog14 各 65 draws、总 55989 indices——两份子数据源镜像内容**重复绘制**；组合探针（LIGHTDBG+DECODEDBG 同时开）实证 **patched 材质可见且 mgl fog_fragment 已生效**（调试色 (158,149,189) 呈雾渐变——uniform 引用绑定兑现）。墙面暗度的剩余来源定位为引擎 vertexColors 纵向渐变因子（diffuseColor 在 color_fragment 已含 per-vertex 暗化，与 mgl 的 vertical-gradient 幅度不同）——下一步：injectExtrusion3DLighting 里剥离/重标定 vertexColor 因子，或对齐 mgl 的 wall gradient 公式。此前各干预分数不变的原因收敛为：**全部干预作用于已被上采样覆盖的 draw**（绘制顺序 z-fight），或墙面暗度被 vertexColors 主导、雾变化被淹没。edge 隐藏/fog 引用/allTiles 保留（parity 正确、无回归）。单测 300 绿、tsc 绿。
+
+**§666. 1024-symbol textElement 通道普查探针（2026-09-01 续）**：
+
+[MBPoi]（PoiManager.addPois 包装）+ [MBText]（TileGeometryCreator.createTextElements 包装）+ [MBTileDec] 扩展（textGeos/textPath/poi 计数）三探针入库。实测：每次 decode 产出 **textGeometries=1 + poiGeometries=1**（1034 点特征聚合批），3 次 decode × 3 个世界副本条目；addPois/createTextElements 包装未触发（poiManager/textChannels 在探测窗口外或通道不同——标签渲染实际入口仍待一次 runtime 断点）。累积假说的验证路径已铺好：下轮在 createTextElements 真实入口（或 MapAnchor/textElementsRenderer 侧）断点计数 per-tile textElement 总量随帧变化，若随 decode 次数增长即确认"旧集未清"，修 Tile 重replace时的 clearTextElements 链；若恒定则双影来自渲染期（碰撞/重复放置）。单测 300 绿、tsc 绿。
