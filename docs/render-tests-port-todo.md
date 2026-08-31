@@ -6878,3 +6878,7 @@ SpectorJS 捕获在 karma 内贯通（§621-§622 判定的"时序不相容"被*
 ③**无 UV 网格回退 baseColor**（fixup 扩展）：无 TEXCOORD_0 的 mesh 采样 baseColorTexture 会钳到 (0,0) texel——整模单一杂色（no-texcooords 的灰上灰）；回退 material.map=null 用 baseColorFactor（mgl 同语义）。
 
 **验证**：multiple-meshes 22692→19793（车纹理/位置正确，黑→橙纹理）、model-no-texcooords-textures 439703→293687（−33%，BoomBox 白模上屏）、model-emissive-factor 14123→13745（**蓝白 puck 完整上屏**，残余=亚像素偏移/AA）、model-pbr-light 468607→465373。探针资产：[MBModelAdd]（loadModels 入场景态）、[MBModelLoad]（加载失败）。未动域重申：ego-car per-part 子系统、globe convertModelMatrix、zoom25+ 相机语义（BoomBox 尺寸显示 fly23 钳制与 mgl 真 zoom 分歧待一次专项标定）。单测 300 绿、tsc 绿。
+
+**§648. landmark-mbx-meshopt-colors +34万回归二分定性（2026-08-31 续六）**：
+
+git 二分（aba771e4 29638 → 16ea8329 370625，单夹具三轮）：回归引入提交 = **9cf56967（§553）**。定性：**非逻辑回归**——§553 为该夹具启用了 per-part 着色（此前 hasMeshFeatures 恒 false → 回落原生 glTF 材质，"碰巧"接近 expected 29638）；激活后白墙 albedo × 模型 shader 光照 mbK≈0.475 → 181 灰，expected 同面 = 白 × 0.69 → 217 灰（像素采样实测）。差值 0.215 ≈ 直射项 0.5×NdotL 整体缺失/方向差——即 §557 已注记的**模型灯光方向/亮度域标定残差**（模型 fragment 对照 draw_model.ts；全局改方向会回归 doors 系既有标定）。mbx-meshopt-colors 归入"模型默认光照标定"专项，与无 lights 黑材质域同批处理。
