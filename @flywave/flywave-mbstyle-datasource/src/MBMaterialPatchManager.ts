@@ -844,6 +844,15 @@ export class MBMaterialPatchManager {
     private injectExtrusion3DLighting(material: THREE.Material, emissiveStrength: number): void {
         if ((material as any).__mbExtrusion3DLit) return;
         (material as any).__mbExtrusion3DLit = true;
+        // §585 parity: break the program cache — without this the shared
+        // technique cacheKey resolves to a cached UNPATCHED program (the
+        // edits below never compile) and the extrusions render with three's
+        // own scene lighting, which is BLACK for 3D-lights styles with
+        // ambient intensity 0 (ground-shadow-fog family).
+        const origKey = material.customProgramCacheKey?.bind(material);
+        material.customProgramCacheKey = (): string =>
+            (origKey ? origKey() : 'mb') + '-mbext3d';
+        material.needsUpdate = true;
 
         const origOnCompile = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
@@ -1204,6 +1213,17 @@ export class MBMaterialPatchManager {
                 }
                 break;
             case 'extruded-polygon':
+                // mgl draws roof-outline edges ONLY when
+                // fill-extrusion-edge-radius > 0 (draw_fill_extrusion.ts edge
+                // pass; default radius 0 = no edges). The engine always emits
+                // the EdgeMaterial LineSegments with the adapter's red
+                // fallback when lineColor is unset — rendering dense red
+                // outlines that read as black silhouette noise (ground-shadow
+                // -fog family). Hide them unless an edge radius is requested.
+                if ((obj as any).isLine &&
+                    Number(paint['fill-extrusion-edge-radius'] ?? 0) <= 0) {
+                    obj.visible = false;
+                }
                 if (technique._layerId && paint['building-color']) {
                     this.patchBuildingMaterial(material, technique);
                 } else {
