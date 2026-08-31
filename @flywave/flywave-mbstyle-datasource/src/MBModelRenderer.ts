@@ -660,6 +660,19 @@ export class MBModelRenderer {
                 0, 0, 1, 0,
                 0, 1, 0, 0,
                 0, 0, 0, 1));
+        // §652(恢复): mercator ground-stretch — the world frame's x/y are
+        // EQUATORIAL meters (tile2world), so one GROUND meter at latitude φ
+        // spans 1/cos(φ) world units. mgl calculateModelMatrix:211 uses
+        // scaleXY = modelPixelsPerMeter = 1/mpp(position.lat) — lat-scaled —
+        // so its models keep true size relative to the mercator-stretched
+        // ground; ours rendered cos(lat)× small relative to fills/streets
+        // (§605 tree-area 1:2.55 residual). mgl scaleZ stays 1 (z = meters in
+        // both frames) — x/y only, outside the rotation (T·S(ppm)·R·S·F).
+        // NOTE: score impact is masked by the part-color domain (§633
+        // 蓝色墙) — geometric parity first, color calibration next.
+        const lat = Math.atan(Math.sinh(Math.PI * (2 * (placement.y / 40075017) - 1)));
+        const k = 1 / Math.max(1e-6, Math.cos(lat));
+        m.premultiply(new THREE.Matrix4().makeScale(k, k, 1));
         const translation = sanitizeVec((placement as any).translation) ??
             sanitizeVec(technique._modelTranslation);
         if (translation) {

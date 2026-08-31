@@ -3128,6 +3128,12 @@ export class MBStyleDataSource extends TileDataSource {
                                 0, 0, 1, 0,
                                 0, 1, 0, 0,
                                 0, 0, 0, 1));
+                        // §652(恢复): mercator ground-stretch x/y — see
+                        // MBModelRenderer.instantiate (mgl scaleXY =
+                        // modelPixelsPerMeter, lat-scaled).
+                        const kG = 1 / Math.max(1e-6, Math.cos(
+                            Math.atan(Math.sinh(Math.PI * (2 * ((lng + 180) / 360) - 1)))));
+                        m.premultiply(new THREE.Matrix4().makeScale(kG, kG, 1));
                         m.setPosition(model.position);
                         model.matrixAutoUpdate = false;
                         model.matrix.copy(m);
