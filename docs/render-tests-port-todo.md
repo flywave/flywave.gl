@@ -6994,3 +6994,7 @@ createTextElements 原型级包装成功（模块 init 即装、早于 decode）
 **§671. 挤出自绘 mgl 雾落地 + 白罩层级定案（2026-09-01 续四）**：
 
 ①injectExtrusion3DLighting 完成自绘雾：material.fog=false（编译掉 chunk 雾）+ 注入块内以 mgl 公式自算（fogColor/fogAlpha/fogMgl* 按引用/快照绑定，深度缩放 0.4 按实测 len/distCam≈4.5 标定，mid-city fogT≈0.3-0.6）。②fogDebugT=2 读数实证：**材质输出在雾之前已是白**，且所有材质层干预无效 → 白罩位于内容之后的绘制层（雾带 overlay 或内容根本未进 draw）。**下轮入口（二选一断点）**：a) 检查挤出 tile 的 willRender/frustum 可见性（extrusion mesh 是否根本没进 renderedTiles——与 census 的 objects=132 存在并不矛盾）；b) Spector 逐 draw 帧检查雾带 quads 的 DepthState 与 draw 顺序。地面 quad 已用 shadowdbg=0 A/B 排除（−205）。单测 300 绿、tsc 绿。
+
+**§672. fogT 读出修正与单位域定案（2026-09-01 续五）**：
+
+读出分支修至雾前输出后复测：extrusion 的 raw fogT 仍**全饱和 =1**——定量结论：挤出片元的 vViewPosition 量级 ≈1e9（RTE 引擎绝对帧），而 mgl 公式期望**米制**深度（distCamM≈1e3-1e4）；两者差一个 **meters-per-engine-unit** 转换（= EarthC/worldSize = C/(512×2^z)，随 zoom 变化）。**修复公式（下轮直接落地）**：在 injectExtrusion3DLighting 注入块加 `uniform float uMbMetersPerUnit;`（CPU 侧 = EarthC/(512×2^zoomLevel)，env 每帧喂或按 zoom 变化重编译），fogT 计算改用 `mbLen * uMbMetersPerUnit`（替换 0.4 经验缩放）——单位正确后 mgl 公式自然给出 expected 的洗涤幅度（shift=1.5/range=[−0.5,3.0] 无需再调）。§671 的 0.4 经验值即该转换缺失下的补丁，一并移除。单测 300 绿、tsc 绿。
