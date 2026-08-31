@@ -6916,3 +6916,7 @@ ego 夹具实测相机 80.7m vs mgl 同参 61.4m，比值 = 1/cos(40.7°) 精确
 **§655. 旋转取负修正（§653 帧镜像的完整推论，2026-08-31 续十三）**：
 
 逐像素差分（multiple-meshes，限定 expected 不透明区）实锤模型**旋转/镜像错**（橙车与车窗面板互换 = ~90° 偏航差）。根因：渲染世界帧 y = −mgl 像素帧 y（§643 translation-y 取负已实证同款镜像）→ 三个欧拉角的旋转向全部翻转。修复：instantiate/loadModels 两处 Rz/Rx/Ry 角度取负。**验证：multiple-meshes 19793→5558（−72%）、model-rotation 4920→4718、trees-zoom-based-scale −259**——模型姿态对齐 mgl。[MBLight] 探针入库（patch 触达+材质态）。单测 300 绿、tsc 绿。
+
+**§656. 批处理路径 mercator 拉伸实测——混合结果回退（2026-08-31 续十四）**：
+
+用户报告 z-offset-v2 系"河流绘制在建筑物之上"（模型偏小→河流透出）。批处理网格缩放（computeScale 等距圆柱）加 k=1/cos(lat) 拉伸实测：z-offset-v2 394027→311845（−21%）✓ 但 station +6.4万/lod +6.6万/highlights +6.8万 ✗ 净恶化——**mesh_features 瓦片的放置必须跟随 TILESET 自身的 transform 矩阵语义**（tiled_3d_model_bucket 的 node/tile 矩阵链），而非公式拉伸。已回退，留注释与 tiled_3d_model_bucket.ts 参照（mgl buildMeshFeatureArray 的 4444 解码/LOD AO 乘法/partPbrTable 已核对我方实现一致）。§651 per-part 子系统、§647 UV/metal 修正保留。单测 300 绿、tsc 绿。

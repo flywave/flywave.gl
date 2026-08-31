@@ -230,6 +230,13 @@ export class MBBatchedModelRenderer {
                         }
                     }
                     model.scale.set(this.computeScale(z), this.computeScale(z), 1);
+                    // §656: the mercator ground-stretch (x/y × 1/cos(lat),
+                    // mgl modelPixelsPerMeter semantics) was tested here —
+                    // MIXED results (z-offset-v2 −82k but station/highlights
+                    // +66~68k): the mesh_features tile placement must follow
+                    // the TILESET's own transform matrix semantics, not a
+                    // blanket formula — see §656 notes. Reverted pending the
+                    // tiled_3d_model_bucket transform port.
                     entry.model = model;
                     entry.x = x; entry.y = y; entry.z = z;
                     const paint = (src as any).paint ?? {};
