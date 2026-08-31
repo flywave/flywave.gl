@@ -305,10 +305,20 @@ async function renderFrames(
                         const tk = t.tileKey ? `${t.tileKey.level}/${t.tileKey.column}/${t.tileKey.row}` : '?';
                         const dt: any = (t as any).decodedTile ?? {};
                         // eslint-disable-next-line no-console
-                        console.log(`[MBTileInfo] ${tk} objects=${(t.objects ?? []).length} geos=${dt.geometries?.length ?? '?'} techs=${dt.techniques?.length ?? '?'} poi=${dt.poiGeometries?.length ?? '?'} textPath=${dt.textPathGeometries?.length ?? '?'}`);
+                        console.log(`[MBTileInfo] ${tk} storage=${(t as any).storageLevel} objects=${(t.objects ?? []).length} geos=${dt.geometries?.length ?? '?'} techs=${dt.techniques?.length ?? '?'} poi=${dt.poiGeometries?.length ?? '?'} textPath=${dt.textPathGeometries?.length ?? '?'}`);
                         const objs = (t as any).objects ?? [];
                         for (const o of objs) walk(o, `tile${tk}`);
                     }
+                    // §662: ALL cached tiles across every datasource (labels may
+                    // live on a child datasource of the composite).
+                    try {
+                        const cache = (mapView as any).m_visibleTiles?.m_dataSourceCache;
+                        cache?.m_tileCache?.forEach?.((t: any, k: string) => {
+                            const objs = (t as any).objects ?? [];
+                            // eslint-disable-next-line no-console
+                            console.log(`[MBAllTiles] key=${k} ds=${t.dataSource?.name ?? '?'} key2=${t.tileKey?.level}/${t.tileKey?.column}/${t.tileKey?.row} storage=${(t as any).storageLevel} objects=${objs.length}`);
+                        });
+                    } catch (e) { /* noop */ }
                     // eslint-disable-next-line no-console
                     console.log(`[MBSceneDump] nTiles=${tiles.length} tiles=${JSON.stringify(counts)}`);
                     for (const s of samples) {
