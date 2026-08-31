@@ -932,7 +932,7 @@ export class MBEnvironmentManager {
         // Feed the fog color alpha into the shared fog-uniform template so
         // recompiled materials pick up the mapbox opacity ramp's alpha scale.
         (THREE.UniformsLib.fog as any).fogAlpha.value = alpha;
-        const dbgT = MBEnvironmentManager.fogDebugTProbe;
+        const dbgT = MBEnvironmentManager.fogDebugTProbe ?? (globalThis as any).__mbFogDebugT ?? 0;
         (THREE.UniformsLib.fog as any).fogDebugT.value = dbgT;
         for (const lib of Object.values(THREE.ShaderLib)) {
             const u = (lib as any).uniforms;
