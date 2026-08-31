@@ -899,14 +899,29 @@ export class MBMaterialPatchManager {
             // (fogAlpha/fogMgl*) stay at their clone-time values (0) and the
             // extrusions never fog.
             const fogLib = (THREE.UniformsLib as any).fog;
+            // NOTE: do NOT bind fogColor/fogNear/fogFar/fogDensity — three's
+            // per-frame refreshFogUniforms writes scene.fog values straight
+            // into these shared objects, clobbering the env's calibrated mgl
+            // values for every other material (white-out regression §664).
             for (const k of [
                 'fogAlpha', 'fogHorizonBlend', 'fogCamHeight', 'fogDebugT',
                 'fogMglShift', 'fogMglDistCam', 'fogMglRange', 'fogVertLimit',
                 'fogGlobeMode', 'fogGlobeCenter', 'fogGlobeScale',
                 'fogGlobeRadius', 'fogGlobeTransition', 'fogGlobeRange',
-                'fogColor', 'fogNear', 'fogFar', 'fogDensity',
             ]) {
                 if (fogLib[k]) shader.uniforms[k] = fogLib[k];
+            }
+            // §668: world-copy tiles (offset ±1) must not emit text/POI
+            // elements — the text renderer projects them WITHOUT the world
+            // offset, stacking every copy's labels onto the primary copy
+            // (extent/1024-symbol triple-label smear). mgl's world copies sit
+            // off-canvas at these views, so the visible outcome of skipping
+            // matches mgl.
+            if (!(globalThis as any).__mbWorldCopyTextGated) {
+                (globalThis as any).__mbWorldCopyTextGated = true;
+                import('./MBCompatEngineTextGate')
+                    .then((m: any) => m.installWorldCopyTextGate())
+                    .catch(() => {});
             }
             shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
@@ -920,12 +935,23 @@ export class MBMaterialPatchManager {
             // standard material with three's own model; the mapbox
             // LIGHTING_3D_MODE formula must REPLACE that, not multiply onto it
             // (the double-shading produced wall NdotL factors 2× mapbox's).
+            // Only declare extrusionAxis when the shader doesn't already
+            // declare it (engine materials may carry their own declaration —
+            // a duplicate breaks GLSL compilation and renders white).
+            if (!shader.vertexShader.includes('attribute vec4 extrusionAxis')) {
+                shader.vertexShader = shader.vertexShader.replace(
+                    '#include <common>',
+                    `#include <common>
+                     attribute vec4 extrusionAxis;
+                     varying float vMbWallH;`
+                );
+            } else if (!shader.vertexShader.includes('varying float vMbWallH')) {
+                shader.vertexShader = shader.vertexShader.replace(
+                    '#include <common>',
+                    '#include <common>\nvarying float vMbWallH;'
+                );
+            }
             shader.vertexShader = shader.vertexShader.replace(
-                '#include <common>',
-                `#include <common>
-                 attribute vec4 extrusionAxis;
-                 varying float vMbWallH;`
-            ).replace(
                 '#include <begin_vertex>',
                 `#include <begin_vertex>
                  vMbWallH = clamp(extrusionAxis.z / max(extrusionAxis.z + extrusionAxis.w, 0.001), 0.0, 1.0);`
@@ -938,6 +964,12 @@ export class MBMaterialPatchManager {
                  vec3 mbBaseColor = vec3(1.0);
                  void main() {`
             );
+            // §664/§668: use the mgl fog branch (fogMgl* uniforms fed by the
+            // env) for extrusions — the chunk's default km-scale branch
+            // saturates at this view and washes the whole city to fog color.
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <fog_pars_fragment>',
+                '#include <fog_pars_fragment>\n#define MB_RASTER_MGL_FOG 1');
             // Capture the UNLIT material color before three's lighting pass —
             // the scene DirectionalLight (added by applyLights) shades the
             // standard material with three's own model; the mapbox
