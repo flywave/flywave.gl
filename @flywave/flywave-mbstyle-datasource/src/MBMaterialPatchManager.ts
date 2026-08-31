@@ -834,7 +834,19 @@ export class MBMaterialPatchManager {
                      float mbAmbDir = mix(mbDirFactorMin, 1.0, min(mbNdotL + 1.0, 1.0));
                      float mbVert = mix(0.92, 1.0, dot(mbN3, mbUpView) * 0.5 + 0.5);
                      vec3 mbK = uMB3DAmb * (mbVert * mbAmbDir) + uMB3DDirColor * max(mbNdotL, 0.0);
-                     gl_FragColor.rgb = mbBaseColor * mbK;
+                     vec3 mbOut = mbBaseColor * mbK;
+                     // §664: re-apply three's fog (our opaque_fragment write
+                     // bypasses fog_fragment) — see injectExtrusion3DLighting.
+                     #ifdef USE_FOG
+                         float mbFogF = 0.0;
+                         #ifdef FOG_EXP2
+                             mbFogF = 1.0 - exp(-fogDensity * fogDensity * vMBViewPos.z * vMBViewPos.z);
+                         #else
+                             mbFogF = smoothstep(fogNear, fogFar, -vMBViewPos.z);
+                         #endif
+                         mbOut = mix(mbOut, fogColor, mbFogF);
+                     #endif
+                     gl_FragColor.rgb = mbOut;
                  }`
             );
         };
@@ -926,7 +938,23 @@ export class MBMaterialPatchManager {
                      // color_srgb·k^(1/2.2) — the mapbox result. Applying
                      // pow(k,1/2.2) directly would double the exponent.
                      vec3 mbLit = mbBaseColor * mbK;
-                     gl_FragColor.rgb = mix(mbLit, mbBaseColor, uMB3DEmissive);
+                     vec3 mbOut = mix(mbLit, mbBaseColor, uMB3DEmissive);
+                     // §664: our write REPLACES gl_FragColor AFTER
+                     // fog_fragment already ran — without re-applying the
+                     // fog the extrusions render unfogged (ground-shadow-fog
+                     // family: white-fog styles kept black walls instead of
+                     // washing them toward the fog color). Mirror three's
+                     // fog_fragment chunk exactly.
+                     #ifdef USE_FOG
+                         float mbFogF = 0.0;
+                         #ifdef FOG_EXP2
+                             mbFogF = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
+                         #else
+                             mbFogF = smoothstep(fogNear, fogFar, vFogDepth);
+                         #endif
+                         mbOut = mix(mbOut, fogColor, mbFogF);
+                     #endif
+                     gl_FragColor.rgb = mbOut;
                      if (uMB3DDbg > 0.5) {
                          // Debug readback: R = NdotL (signed 0.5+0.5*n),
                          // G/B = dir.x/dir.y (0.5+0.5*v) — wall azimuth probe.
