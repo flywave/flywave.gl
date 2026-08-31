@@ -454,7 +454,8 @@ export function applyMglModelLighting(
                              vec3 mbTinted = mix(mbAlbedo, uMB3DTint, uMB3DTintA);
                              vec3 mbUnlit = mbTinted * mbAo + mbEmissive;
                              gl_FragColor.rgb = mix(mbCol, mbUnlit, clamp(uMB3DUnlit, 0.0, 1.0));
-                         }`
+                         }
+                     }`
                 );
             };
             mat.needsUpdate = true;
