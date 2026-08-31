@@ -75,6 +75,22 @@ export class MBMaterialPatchManager {
     patchTileMaterials(): void {
         const tiles = this.m_dataSource.getDecodedTiles();
 
+        // §664: the visible-tile cache holds MIRRORED entries per child
+        // datasource (vector vs model-source delegates) with identical
+        // geometry — only this.m_dataSource's copies were patched, and the
+        // unpatched twin (ambient 0 → black) overdraws the lit one
+        // (ground-shadow-fog black-silhouette family). Patch those too.
+        const allTiles: any[] = [...tiles];
+        try {
+            const cache = (this.m_dataSource as any).mapView?.m_visibleTiles
+                ?.m_dataSourceCache;
+            cache?.m_tileCache?.forEach?.((t: any) => {
+                if (t.dataSource !== (this.m_dataSource as any) && !allTiles.includes(t)) {
+                    allTiles.push(t);
+                }
+            });
+        } catch {}
+
         // Per-frame shadow uniforms for ground-fill receivers (mgl ground
         // shadow): refreshed from MBShadowRenderer's latest depth pass.
         const shadowState = (this.m_dataSource as any).m_shadowRenderer
@@ -139,7 +155,7 @@ export class MBMaterialPatchManager {
             }
             const identity = shadowState ? null : new THREE.Matrix4();
             const refreshTargets: any[] = [];
-            for (const tile of tiles) {
+            for (const tile of allTiles) {
                 for (const obj of tile.objects ?? []) refreshTargets.push(obj);
             }
             {
@@ -177,7 +193,7 @@ export class MBMaterialPatchManager {
         const sig = ls ? ls.groundRadiance.map(v => v.toFixed(4)).join(',') : '';
         if (sig !== this.m_lastLightSig) {
             this.m_lastLightSig = sig;
-            for (const tile of tiles) {
+            for (const tile of allTiles) {
                 for (const obj of tile.objects ?? []) {
                     const m = (obj as any).material as THREE.Material | undefined;
                     if (m && (m as any).__mbGroundLitHandler) {
@@ -187,7 +203,7 @@ export class MBMaterialPatchManager {
             }
         }
 
-        for (const tile of tiles) {
+        for (const tile of allTiles) {
             if (!tile.objects || tile.objects.length === 0) continue;
 
             const state = this.m_patchedTiles.get(tile);
@@ -834,19 +850,7 @@ export class MBMaterialPatchManager {
                      float mbAmbDir = mix(mbDirFactorMin, 1.0, min(mbNdotL + 1.0, 1.0));
                      float mbVert = mix(0.92, 1.0, dot(mbN3, mbUpView) * 0.5 + 0.5);
                      vec3 mbK = uMB3DAmb * (mbVert * mbAmbDir) + uMB3DDirColor * max(mbNdotL, 0.0);
-                     vec3 mbOut = mbBaseColor * mbK;
-                     // §664: re-apply three's fog (our opaque_fragment write
-                     // bypasses fog_fragment) — see injectExtrusion3DLighting.
-                     #ifdef USE_FOG
-                         float mbFogF = 0.0;
-                         #ifdef FOG_EXP2
-                             mbFogF = 1.0 - exp(-fogDensity * fogDensity * vMBViewPos.z * vMBViewPos.z);
-                         #else
-                             mbFogF = smoothstep(fogNear, fogFar, -vMBViewPos.z);
-                         #endif
-                         mbOut = mix(mbOut, fogColor, mbFogF);
-                     #endif
-                     gl_FragColor.rgb = mbOut;
+                     gl_FragColor.rgb = mbBaseColor * mbK;
                  }`
             );
         };
@@ -888,6 +892,22 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMB3DViewToWorld = { value: viewToWorld };
             shader.uniforms.uMB3DEmissive = { value: ls ? emissiveStrength : 0 };
             shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbLightDbg ? 1 : 0 };
+            // §664: bind the engine's mgl-fog uniforms (fog_fragment override)
+            // BY REFERENCE to the live UniformsLib.fog template the env feeds
+            // every frame. Built-in materials clone ShaderLib uniforms at
+            // program build, so without this the custom fog uniforms
+            // (fogAlpha/fogMgl*) stay at their clone-time values (0) and the
+            // extrusions never fog.
+            const fogLib = (THREE.UniformsLib as any).fog;
+            for (const k of [
+                'fogAlpha', 'fogHorizonBlend', 'fogCamHeight', 'fogDebugT',
+                'fogMglShift', 'fogMglDistCam', 'fogMglRange', 'fogVertLimit',
+                'fogGlobeMode', 'fogGlobeCenter', 'fogGlobeScale',
+                'fogGlobeRadius', 'fogGlobeTransition', 'fogGlobeRange',
+                'fogColor', 'fogNear', 'fogFar', 'fogDensity',
+            ]) {
+                if (fogLib[k]) shader.uniforms[k] = fogLib[k];
+            }
             shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
                 `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
@@ -938,23 +958,11 @@ export class MBMaterialPatchManager {
                      // color_srgb·k^(1/2.2) — the mapbox result. Applying
                      // pow(k,1/2.2) directly would double the exponent.
                      vec3 mbLit = mbBaseColor * mbK;
-                     vec3 mbOut = mix(mbLit, mbBaseColor, uMB3DEmissive);
-                     // §664: our write REPLACES gl_FragColor AFTER
-                     // fog_fragment already ran — without re-applying the
-                     // fog the extrusions render unfogged (ground-shadow-fog
-                     // family: white-fog styles kept black walls instead of
-                     // washing them toward the fog color). Mirror three's
-                     // fog_fragment chunk exactly.
-                     #ifdef USE_FOG
-                         float mbFogF = 0.0;
-                         #ifdef FOG_EXP2
-                             mbFogF = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
-                         #else
-                             mbFogF = smoothstep(fogNear, fogFar, vFogDepth);
-                         #endif
-                         mbOut = mix(mbOut, fogColor, mbFogF);
-                     #endif
-                     gl_FragColor.rgb = mbOut;
+                     // §664: fog is applied by the engine's overridden
+                     // fog_fragment (mgl formula) AFTER this block — the
+                     // mgl-fog uniforms above are bound by reference so the
+                     // per-frame env feed reaches this program.
+                     gl_FragColor.rgb = mix(mbLit, mbBaseColor, uMB3DEmissive);
                      if (uMB3DDbg > 0.5) {
                          // Debug readback: R = NdotL (signed 0.5+0.5*n),
                          // G/B = dir.x/dir.y (0.5+0.5*v) — wall azimuth probe.
@@ -965,7 +973,7 @@ export class MBMaterialPatchManager {
             if ((globalThis as any).__mbDecodeDbg
                 && ((globalThis as any).__mbExtLitCnt2 = ((globalThis as any).__mbExtLitCnt2 ?? 0) + 1) <= 4) {
                 // eslint-disable-next-line no-console
-                console.log(`[MBExtLit] applied replaced=${shader.fragmentShader.includes('uMB3DDir') ? 1 : 0} hasOpaqueBefore=${shader.fragmentShader.includes('opaque_fragment') ? 1 : 0} fsLen=${shader.fragmentShader.length}`);
+                console.log(`[MBExtLit] applied replaced=${shader.fragmentShader.includes('uMB3DDir') ? 1 : 0} hasOpaqueBefore=${shader.fragmentShader.includes('opaque_fragment') ? 1 : 0} fsLen=${shader.fragmentShader.length} mFog=${(material as any).fog} sceneFog=${!!((this.m_dataSource as any).mapView?.scene?.fog)} fogType=${((this.m_dataSource as any).mapView?.scene?.fog)?.type ?? 'null'}`);
             }
         };
         material.needsUpdate = true;
