@@ -7022,3 +7022,7 @@ side-by-side 定案：expected 为近景（建筑充满画面、地面阴影可�
 **§678. 挤出雾深度域定量——11× 失配实锤（2026-09-01 续九）**：
 
 读出升级为 log2(米) 灰度（fogt=1，米 = vViewPosition×uMbMetersPerUnit）：ground-shadow-fog 建筑片元雾深度 = **7000-40000m**（clamp 65536+ 占大面积），而真实相机-目标距离 ≈ **800m**（calculateDistanceFromZoomLevel: focal 768 × tile 267.6/256，pitch 70 高度分量 273 ✓ cameraZ 实测吻合）——**雾深度帧失配 ≈11×**，这就是 fogT 标定无法收敛的根本：深度值本身错了 11×，任何 fogMgl* 数值域调整都是治标。**下轮入口（单点）**：查明挤出 mesh 的 view-space 深度为何 ×11——三个候选：①obj.position/geometry 顶点双重计入 world 偏移（RTE 重基一次 + matrix 一次）；②extrusionAxis/顶点数据在 tile-local 帧而 matrixWorld 带绝对偏移；③storageLevel 与 display level 的 tile 缩放差（z15 tile 在 z16.2 显示的 worldSize 因子）。修复后 uMbMetersPerUnit 乘子可能不再需要（len 直接落入米域，fogT 自然 0.3-0.8）。单测 300 绿、tsc 绿。
+
+**§679. 深度 11× 失配的层级解释——z15 fallback 未放大（2026-09-01 续十）**：
+
+ground-shadow-fog 当前帧结构分析：近场（画面下 70%）完全空 → 显示层级 z16 的本地瓦片不存在（请求空/404），可见城市 = **z15 fallback 瓦片（15/5241/12664，132 objects）未按 overzoom 放大**渲染在远处条带——mgl 的 overzoom 会把 z15 内容放大 2×(zoom差)铺满视口（expected 的近景大建筑即来自此）。这同时解释了：①雾深度 11× 失配（z15 内容按未放大帧放置→片元深度落在错误距离带）；②相机取景"偏移"的部分观感（内容缩小+上移）。**下轮入口（单点）**：核对我们 fallback 瓦片的 storageLevel/center 声明（flyway TileObjectsRenderer 依据 tile 的 storage level 与 display zoom 计算放大倍率；若我方把 z15 fallback 瓦片错标为 z16 storage 或 center 帧错误，即 1:1 渲染）。修复后 z15 内容放大 2×铺满视口，雾深度自然落米域，fogT 无需再调。单测 300 绿、tsc 绿。
