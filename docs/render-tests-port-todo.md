@@ -7010,3 +7010,7 @@ createTextElements 原型级包装成功（模块 init 即装、早于 decode）
 **§675. 相机取景偏移量化（2026-09-01 续七）**：
 
 全范围互相关扫描（步长 8）：粗扫最优 (dy=+216, dx=−256) 相关 0.639，细扫未收敛（峰在边缘）——取景偏移超过 ±256px 扫描窗，或非纯平移（含旋转分量）。dx≈−256=半幅宽 + dy≈+216 的组合指向 **bearing 264 的 yaw 语义**（flyway setCameraGeolocationAndZoom 的 yawDeg CCW 约定 × style.bearing CW 的符号/角度转换，applyCameraSettings.ts:4523 取负后 = −264°≡+96°，若引擎内部另有归一化即产生视角旋转）或 pitch 枢轴偏移。**下轮入口**：①A/B bearing 符号与取值（±264、±96）单夹具重测，观察取景回归；②对照 mgl transform 的 bearing→角动公式（mapbox bearing CW，north-up 相机方位角 = −bearing）；③pitch 70 枢轴点核对（mgl 相机绕 center 俯仰，target 恒在画布中心）。相机标定专项（§651/§653/§674/§675）影响全部 pitched 夹具。单测 300 绿、tsc 绿。
+
+**§676. 相机取景偏移定性——尺度差 4-6×（2026-09-01 末）**：
+
+side-by-side 定案：expected 为近景（建筑充满画面、地面阴影可见），我方为远景（城市缩至顶部条带，橙色车模型却 ~100px 显著偏大）——**尺度差 ≈4-6×**（远超 bearing 符号/1-cos 因子），bearing 直通 A/B 略差（0.609 vs 0.639，保持取负）。第一性推导验证：flyway zoom=mgl zoom+log2(pr=2) 恰为现 +1 约定（ccd_px=h/(2tan fov)，ccd_m=ccd_px×mpp，pr 同时缩放 focal——约定自洽），故 4-6× 残差**不在 zoom+1/pr 域**，必在：①flyway calculateDistanceFromZoomLevel 内部常数（512 vs mgl 256 的 tile scheme 差已由 +1 吸收，但 fov 差 40°vs36.87° 会让 focal 差 ~8%——量级不足）；②**mgl cameraToCenterDistance 的 CSS/device px 语义**（h_css vs h_dev：canvas.width=1024 设备、CSS=512——若 flyway focal 用了 device 1024 而 mgl 用 CSS 512，即 2×；叠加 alt/pivot 域 = 观测 4×）；③pitch 枢轴（mgl 绕 center 俯仰、target 恒居中）。**下轮入口**：打印 flyway lookAtImpl 的 focal/d 计算栈，对照 mgl cameraToCenterDistance=h_css/(2·tan(fov/2))·mpp 逐项核对（§651 遗留的 geoCenter.alt 语义一并核对）。该专项影响全部 pitched/zoom 夹具。单测 300 绿、tsc 绿。
