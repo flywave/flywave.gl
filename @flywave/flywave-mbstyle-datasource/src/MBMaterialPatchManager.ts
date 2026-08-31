@@ -920,10 +920,40 @@ export class MBMaterialPatchManager {
             // standard material with three's own model; the mapbox
             // LIGHTING_3D_MODE formula must REPLACE that, not multiply onto it
             // (the double-shading produced wall NdotL factors 2× mapbox's).
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <common>',
+                `#include <common>
+                 attribute vec4 extrusionAxis;
+                 varying float vMbWallH;`
+            ).replace(
+                '#include <begin_vertex>',
+                `#include <begin_vertex>
+                 vMbWallH = clamp(extrusionAxis.z / max(extrusionAxis.z + extrusionAxis.w, 0.001), 0.0, 1.0);`
+            );
+            shader.fragmentShader = shader.fragmentShader.replace(
+                'void main() {',
+                `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
+                 uniform mat3 uMB3DViewToWorld; uniform float uMB3DEmissive; uniform float uMB3DDbg;
+                 varying float vMbWallH;
+                 vec3 mbBaseColor = vec3(1.0);
+                 void main() {`
+            );
+            // Capture the UNLIT material color before three's lighting pass —
+            // the scene DirectionalLight (added by applyLights) shades the
+            // standard material with three's own model; the mapbox
+            // LIGHTING_3D_MODE formula must REPLACE that, not multiply onto it
+            // (the double-shading produced wall NdotL factors 2× mapbox's).
+            // §667: capture BEFORE three's color_fragment multiplies in the
+            // engine's per-vertex gradient (vertexColors) — that factor
+            // darkens walls far below mgl's vertical gradient and read as a
+            // black silhouette under ambient-0 styles. mgl shades walls with
+            // its own mild gradient: top color → ~0.75 at the base
+            // (fill-extrusion-vertical-gradient, default true).
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <color_fragment>',
-                `#include <color_fragment>
-                 mbBaseColor = diffuseColor.rgb;`
+                `mbBaseColor = diffuseColor.rgb;
+                 mbBaseColor.rgb *= (1.0 - 0.5 * (1.0 - clamp(vMbWallH, 0.0, 1.0)));
+                 #include <color_fragment>`
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <opaque_fragment>',

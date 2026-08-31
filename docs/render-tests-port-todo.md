@@ -6972,3 +6972,7 @@ ego 夹具实测相机 80.7m vs mgl 同参 61.4m，比值 = 1/cos(40.7°) 精确
 **§666. 1024-symbol textElement 通道普查探针（2026-09-01 续）**：
 
 [MBPoi]（PoiManager.addPois 包装）+ [MBText]（TileGeometryCreator.createTextElements 包装）+ [MBTileDec] 扩展（textGeos/textPath/poi 计数）三探针入库。实测：每次 decode 产出 **textGeometries=1 + poiGeometries=1**（1034 点特征聚合批），3 次 decode × 3 个世界副本条目；addPois/createTextElements 包装未触发（poiManager/textChannels 在探测窗口外或通道不同——标签渲染实际入口仍待一次 runtime 断点）。累积假说的验证路径已铺好：下轮在 createTextElements 真实入口（或 MapAnchor/textElementsRenderer 侧）断点计数 per-tile textElement 总量随帧变化，若随 decode 次数增长即确认"旧集未清"，修 Tile 重replace时的 clearTextElements 链；若恒定则双影来自渲染期（碰撞/重复放置）。单测 300 绿、tsc 绿。
+
+**§667. 挤出纵向渐变重标定落地——ground-shadow-fog 黑剪影收敛 −12%（2026-09-01 续）**：
+
+injectExtrusion3DLighting：①基色捕获改到 three color_fragment **之前**（剥离引擎 vertexColors 纵向暗化——ambient-0 样式下读作黑剪影的元凶）；②按 mgl fill-extrusion-vertical-gradient（缺省 on）用 emitter 的 extrusionAxis 属性（顶 (0,0,h,1)/底 (0,0,0,0)）重标定墙面渐变：baseColor ×= 1−0.5×(1−clamp(z/(z+w)))。**实测**：ground-shadow-fog **170801→150155（−12%）**、-hard-cutoff 170195→150262（−12%）；哨兵 fill-extrusion--default 100130 逐位不变、multiple-meshes 4807 不变——无回归。单测 300 绿、tsc 绿。
