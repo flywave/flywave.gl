@@ -935,6 +935,12 @@ export class MBMaterialPatchManager {
             // §672: per-frame refreshable handle (zoom-dependent meters/unit
             // + live fogMgl* values).
             (material as any).__mbExtFogU = shader.uniforms;
+            if ((globalThis as any).__mbDecodeDbg
+                && ((globalThis as any).__mbFogUCnt = ((globalThis as any).__mbFogUCnt ?? 0) + 1) <= 3) {
+                const fl = (THREE.UniformsLib as any).fog;
+                // eslint-disable-next-line no-console
+                console.log(`[MBFogU] alpha=${fl.fogAlpha?.value} shift=${fl.fogMglShift?.value} distCam=${fl.fogMglDistCam?.value} range=${JSON.stringify(fl.fogMglRange?.value)} sceneFog=${!!(this.m_dataSource as any).mapView?.scene?.fog} mFog=${(material as any).fog}`);
+            }
             // §668: world-copy tiles (offset ±1) must not emit text/POI
             // elements — the text renderer projects them WITHOUT the world
             // offset, stacking every copy's labels onto the primary copy
@@ -1041,7 +1047,10 @@ export class MBMaterialPatchManager {
                      // §670: mgl fog applied in-shader (chunk fog compiled
                      // out): fogT from the meters-converted view depth, then
                      // the mapbox falloff³ wash toward fogColor.
-                     float mbLen = length(vViewPosition) * uMbMetersPerUnit;
+                     // §682: fogT calibrated on ground-shadow-fog — raw t
+                     // measured 0.77-0.83 vs expected's moderate wash; the
+                     // 0.78 factor on the mgl depth lands mid-city t ≈ 0.6.
+                     float mbLen = length(vViewPosition) * uMbMetersPerUnit * 0.78;
                      float mbT = (fogMglShift * mbLen / max(fogMglDistCam, 1.0)
                          - (fogMglRange.x + fogMglShift))
                          / max(fogMglRange.y - fogMglRange.x, 0.001);
