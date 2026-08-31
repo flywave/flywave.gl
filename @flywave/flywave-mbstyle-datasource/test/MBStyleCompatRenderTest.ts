@@ -111,6 +111,13 @@ function discoverTests(): TestEntry[] {
         a.startsWith("rasuvdbg="))?.slice("rasuvdbg=".length);
     if (dbg === "1") (globalThis as any).__mbRasUvDbg = true;
 }
+{
+    // §649: model-shader light-direction convention A/B (mgl az+90 vs the
+    // §455 extrusion 90−az carried by lighting3DState).
+    const alt = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("modeldiralt="))?.slice("modeldiralt=".length);
+    if (alt === "1") (globalThis as any).__mbModelDirAlt = true;
+}
 // Decode census: per-tile technique/vertex counts (is content reaching the
 // emitter at all — data vs render side split for blank domains).
 {

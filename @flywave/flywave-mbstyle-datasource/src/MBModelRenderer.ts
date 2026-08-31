@@ -94,6 +94,29 @@ export function mbHeightRampUniforms(
     return { b0: 0, b1: 1, power: 1, start: 255 / 256, range: 0 };
 }
 
+/** §649: the model-shader light direction. A/B on the part-styling family:
+ * mgl az+90 convention (§560 shadow-path) improves indirect-update-doors-lod
+ * −160k / update-doors −38k but REGRESSES indirect-doors-no-shadows +232k /
+ * update +91k / door-light-lod +85k — the two fixture groups respond in
+ * OPPOSITE directions (net +377k), so the §455 extrusion convention (90−az,
+ * ls.dir) stays the default. The `modeldiralt=1` karma arg re-enables the
+ * az+90 frame for follow-up per-fixture calibration. */
+export function modelLightDir(dataSource: any): [number, number, number] {
+    const ls = dataSource?.m_environment?.lighting3DState;
+    if (!ls) return [0, 0, 1];
+    if ((globalThis as any).__mbModelDirAlt) {
+        const dirProp = dataSource?.m_environment?.m_3DDirectional?.direction;
+        const az = ((dirProp?.[0] ?? 210) + 90) * Math.PI / 180;
+        const pl = (dirProp?.[1] ?? 30) * Math.PI / 180;
+        return [
+            Math.cos(az) * Math.sin(pl),
+            Math.sin(az) * Math.sin(pl),
+            Math.cos(pl),
+        ];
+    }
+    return ls.dir;
+}
+
 /**
  * Refresh the captured 3D-lighting uniforms of every mgl-lit material under
  * `model` from the CURRENT lighting3DState (mgl re-uploads u_lighting_*
@@ -103,6 +126,7 @@ export function mbHeightRampUniforms(
 export function syncMglModelLighting(model: THREE.Object3D, dataSource: any): void {
     const ls = dataSource?.m_environment?.lighting3DState;
     if (!ls) return;
+    const dir = modelLightDir(dataSource);
     model.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
@@ -112,7 +136,7 @@ export function syncMglModelLighting(model: THREE.Object3D, dataSource: any): vo
             if (!u) continue;
             u.amb.value = ls.ambientColorLinear;
             u.dirColor.value = ls.directionalColorLinear;
-            u.dir.value = ls.dir;
+            u.dir.value = dir;
         }
     });
 }
@@ -164,7 +188,7 @@ export function applyMglModelLighting(
                 const ls2 = dataSource?.m_environment?.lighting3DState;
                 shader.uniforms.uMB3DAmb = { value: ls2 ? ls2.ambientColorLinear : [1, 1, 1] };
                 shader.uniforms.uMB3DDirColor = { value: ls2 ? ls2.directionalColorLinear : [1, 1, 1] };
-                shader.uniforms.uMB3DDir = { value: ls2 ? ls2.dir : [0, 0, 1] };
+                shader.uniforms.uMB3DDir = { value: modelLightDir(dataSource) };
                 shader.uniforms.uMB3DEmissive = { value: emissiveStrength ?? 0 };
                 shader.uniforms.uMB3DUnlit = { value: unlitMix ?? emissiveStrength ?? 0 };
                 shader.uniforms.uMB3DTint = { value: tint?.color ?? [0, 0, 0] };
