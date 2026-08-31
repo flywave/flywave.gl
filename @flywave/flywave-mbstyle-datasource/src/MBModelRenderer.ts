@@ -208,20 +208,26 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBPortMode = {
                     value: (globalThis as any).__mbModelLightPort ? 1 : 0,
                 };
-                // §655: legacy light defaults (mgl light property: white,
-                // intensity 1, position [1.15, 2, 1.55]) — the non-3D-light
-                // model path (u_lightpos/u_lightcolor/u_lightintensity).
-                shader.uniforms.uMB3DLegacyPos = {
-                    value: (dataSource?.m_environment as any)?.legacyLightState?.pos
-                        ?? new THREE.Vector3(1.15, 2, 1.55).normalize(),
-                };
-                shader.uniforms.uMB3DLegacyColor = {
-                    value: (dataSource?.m_environment as any)?.legacyLightState?.color
-                        ?? [1, 1, 1],
-                };
-                shader.uniforms.uMB3DLegacyInt = {
-                    value: (dataSource?.m_environment as any)?.legacyLightState?.intensity ?? 1,
-                };
+                // §661: legacy light defaults — mgl model_program.ts reads the
+                // root style light (spec defaults: position [1.15, 210, 30]
+                // spherical, intensity 0.5, white, anchor viewport), converts
+                // spherical→cartesian and uploads lightPos = [-x, -y, z]. The
+                // environment's modelLegacyLight carries that vector in our
+                // render frame (y mirrored, §643).
+                {
+                    const mll = (dataSource?.m_environment as any)?.modelLegacyLight;
+                    shader.uniforms.uMB3DLegacyPos = {
+                        value: mll
+                            ? mll.dir.clone()
+                            : new THREE.Vector3(-0.2875, -0.4980, 0.9959).normalize(),
+                    };
+                    shader.uniforms.uMB3DLegacyColor = {
+                        value: mll?.color ?? [1, 1, 1],
+                    };
+                    shader.uniforms.uMB3DLegacyInt = {
+                        value: mll?.intensity ?? 0.5,
+                    };
+                }
                 shader.uniforms.uMBHas3DLights = {
                     value: ls2 ? 1 : 0,
                 };
@@ -440,18 +446,31 @@ export function applyMglModelLighting(
                              vec3 mbTinted = mix(mbAlbedo, uMB3DTint, uMB3DTintA);
                              vec3 mbUnlit = mbTinted * mbAo + mbEmissive;
                              gl_FragColor.rgb = mix(mbCol, mbUnlit, clamp(uMB3DUnlit, 0.0, 1.0));
-                         } else {
-                             // §655 port: legacy light path (u_lightpos/color/
-                             // intensity) — diffuseLambertian / PI; env_light
-                             // = vec3(0.65) constant; intensityFactor.
-                             vec3 mbDiffTerm = (1.0 - mbF) * mbDiffC / 3.14159265;
-                             vec3 mbDirect = (mbSpecTerm + mbDiffTerm) * mbNdotL * uMB3DLegacyColor;
-                             vec3 mbEnvLight = vec3(0.65);
-                             vec3 mbIndSpec = EnvBRDFApproxMb(mbSpecC, mbR, mbNdotV);
-                             vec3 mbIndirect = mbIndSpec * mbEnvLight + mbDiffC * mbEnvLight;
-                             mbCol = clamp(mbDirect, 0.0, 1.0) + mbIndirect;
-                             float mbLum = dot(mbDiffTerm, vec3(0.2126, 0.7152, 0.0722));
-                             mbCol *= mix(1.0 - uMB3DLegacyInt, max(1.0 - mbLum + uMB3DLegacyInt, 1.0), mbNdotL);
+                        } else {
+                            // §661: legacy light path — u_lightpos drives the
+                            // DIRECT term (view-transformed, mgl anchor
+                            // viewport); the shared mbSpecTerm above uses the
+                            // 3D-lights dir so recompute F/V/D here.
+                            vec3 mbLLeg = normalize((viewMatrix * vec4(uMB3DLegacyPos, 0.0)).xyz);
+                            vec3 mbHLeg = normalize(mbV + mbLLeg);
+                            float mbNL = clamp(dot(mbN0, mbLLeg), 0.0, 1.0);
+                            float mbNH = clamp(dot(mbN0, mbHLeg), 0.0, 1.0);
+                            float mbVH = clamp(dot(mbV, mbHLeg), 0.0, 1.0);
+                            vec3 mbFLeg = mbSpecC + (vec3(1.0) - mbSpecC) * pow(1.0 - mbVH, 5.0);
+                            float mbGXVL = mbNL * (mbNdotV * (1.0 - mbAR) + mbAR);
+                            float mbGXLL = mbNdotV * (mbNL * (1.0 - mbAR) + mbAR);
+                            float mbVisL = 0.5 / (mbGXVL + mbGXLL);
+                            float mbDenL = (mbNH * mbA4 - mbNH) * mbNH + 1.0;
+                            float mbDLeg = mbA4 / (3.14159265 * mbDenL * mbDenL);
+                            vec3 mbSpecLeg = mbFLeg * mbVisL * mbDLeg;
+                            vec3 mbDiffLeg = (1.0 - mbFLeg) * mbDiffC / 3.14159265;
+                            vec3 mbDirect = (mbSpecLeg + mbDiffLeg) * mbNL * uMB3DLegacyColor;
+                            vec3 mbEnvLight = vec3(0.65);
+                            vec3 mbIndSpec = EnvBRDFApproxMb(mbSpecC, mbR, mbNdotV);
+                            vec3 mbIndirect = mbIndSpec * mbEnvLight + mbDiffC * mbEnvLight;
+                            mbCol = clamp(mbDirect, 0.0, 1.0) + mbIndirect;
+                            float mbLum = dot(mbDiffLeg, vec3(0.2126, 0.7152, 0.0722));
+                            mbCol *= mix(1.0 - uMB3DLegacyInt, max(1.0 - mbLum + uMB3DLegacyInt, 1.0), mbNL);
                              float mbAo = 1.0;
                              #ifdef USE_AOMAP
                                  mbAo = (texture2D(aoMap, vAoMapUv).r - 1.0) * aoMapIntensity + 1.0;

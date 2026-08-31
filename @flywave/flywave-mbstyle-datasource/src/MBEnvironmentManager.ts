@@ -571,9 +571,46 @@ export class MBEnvironmentManager {
      */
     private m_lightAzimuthalPolar: [number, number] = [210, 30];
 
+    /**
+     * §661: mgl model_program.ts legacy light state for MODEL meshes —
+     * position is spherical [radial, azimuthal, polar] (spec default
+     * [1.15, 210, 30], intensity 0.5, white, anchor viewport) converted via
+     * sphericalPositionToCartesian and then lightPos = [-x, -y, z]. `dir` is
+     * that vector in OUR render frame (y mirrored, §643). intensity 0.5 (NOT
+     * 1) feeds the shader's intensityFactor — the oversaturation fix.
+     */
+    modelLegacyLight: {
+        dir: THREE.Vector3;
+        color: [number, number, number];
+        intensity: number;
+        anchor: string;
+    } = {
+        dir: new THREE.Vector3(),
+        color: [1, 1, 1],
+        intensity: 0.5,
+        anchor: 'viewport',
+    };
+
+    private updateModelLegacyLight(legacyLight: any): void {
+        const sph = Array.isArray(legacyLight?.position) && legacyLight.position.length >= 3
+            ? legacyLight.position : [1.15, 210, 30];
+        const a = (sph[1] + 90) * Math.PI / 180;
+        const p = sph[2] * Math.PI / 180;
+        const lx = sph[0] * Math.cos(a) * Math.sin(p);
+        const ly = sph[0] * Math.sin(a) * Math.sin(p);
+        const lz = sph[0] * Math.cos(p);
+        // mgl model_program lightPos = [-x, -y, z]; our frame mirrors y.
+        this.modelLegacyLight.dir.set(-lx, ly, lz).normalize();
+        const col = new THREE.Color(this.themeLightColor(legacyLight?.color ?? '#ffffff'));
+        this.modelLegacyLight.color = [col.r, col.g, col.b];
+        this.modelLegacyLight.intensity = legacyLight?.intensity ?? 0.5;
+        this.modelLegacyLight.anchor = legacyLight?.anchor ?? 'viewport';
+    }
+
     applyLights(lights: Light3DProperties[] | undefined, legacyLight?: any): void {
         if (!this.m_scene) return;
         this.clearLights();
+        this.updateModelLegacyLight(legacyLight);
         this.m_lightAzimuthalPolar =
             Array.isArray(legacyLight?.position) && legacyLight.position.length >= 3
                 ? [legacyLight.position[1], legacyLight.position[2]]
