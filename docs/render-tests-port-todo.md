@@ -7042,3 +7042,7 @@ ground-shadow-fog 源声明 `maxzoom: 15`，display(flyway) 17.2 → 请求 z16 
 **§683. 方位角翻转默认化 + 家族回归验证（2026-09-01 续十二）**：
 
 az+90 翻转默认化（lighting3DState.dir），3d-intersections 家族复测：全部与 ml-0831 逐位一致（该家族 legacy 光不受影响，无回归）——mgl 忠实方位角成为挤出 3D 光照缺省。ground-shadow-fog 系 az 翻转收益 −6k 保持。单测 300 绿、tsc 绿。
+
+**§684. pitch A/B 数据与标定路径结论（2026-09-01 续十三）**：
+
+pitchab 扫描数据（flyway tilt = 70+delta）：0→174429、−10→178143、−20→170336、−30→163696、−35→157660、−40→153409、−45→145122、−50→138170、−55→133752、−58→131005、−60→129202、−62→127920、−65→126884、−68→125918、−70→125164、−72→124632、−75→124200、−80→123623、−100→140725（回升=过冲）。**互相关复核（pitch −40 帧）**：内容量 ours 109501 vs expected 90368，最优相关仅 0.522 @ (320,−384) 仍在边界——**未收敛，取景偏移非纯平移（含旋转/尺度分量）**。结论：该夹具的取景对齐需要 mgl transform.js 语义级移植（pitch 枢轴 + cameraToCenterDistance + CSS/device px），A/B 扫描已穷尽经验路径。**下轮入口**：对照 mgl transform.js 的 `cameraForTransform`/`_calcFromMatrix`（pitch 枢轴绕 center、ccd=0.5/tan(fov/2)×height×pixelsPerMercatorPixel）逐项移植到 applyCameraSettings 或 lookAt 调用路径——确认 flyway 的 focal（CSS px）与 mgl 的 ccd（CSS×pixelsPerMercatorPixel）在 pr=2 域的等价性。单测 300 绿、tsc 绿。
