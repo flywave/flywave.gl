@@ -7030,3 +7030,7 @@ ground-shadow-fog 当前帧结构分析：近场（画面下 70%）完全空 →
 **§680. 白屏层级根因补充定案——源 maxzoom 未钳制请求层级（2026-09-01 续十一）**：
 
 ground-shadow-fog 源声明 `maxzoom: 15`，display(flyway) 17.2 → 请求 z16 瓦片 → **vendored 无 z16 文件（404 实证：16-10485-25328/25329 等）** → 近场空；mgl 语义 = round(zoom) 钳到 maxzoom=15 → z15 瓦片 overzoom 2.3× 铺满视口（expected 近景大建筑）。既有机制：datasource 级 maxDataLevel 取各源 maxzoom 的 **max**（多源时被 model 源的缺省 22 顶穿）；extras provider 有 maxzoom 钳制但主源 provider 无。**修复方案（下轮单点）**：主源 provider 加 per-source maxzoom 钳制 + 祖先回退（复用 extras 的 shift 逻辑：lvl>maxzoom → lvl=maxzoom, x>>shift, y>>shift），使 z15 fallback 以正确 storage level 进入 → 引擎按 storage/display 缩放 2.3× 铺满 → 近场建筑恢复 + 雾深度落米域。单测 300 绿、tsc 绿。
+
+**§681. 源 maxzoom 钳制落地——ground-shadow-fog 近场恢复（2026-09-01 续十二）**：
+
+落地 MglMaxZoomAncestorProvider（主源 provider 钳制：请求层级 > 源 maxzoom 时取 maxzoom 祖先瓦片，mgl coveringZoomLevel 语义），wireTileSources 主源路径接线。**验证**：ground-shadow-fog 近场恢复——城市近景铺满画面、街道线/黄色道路可见、模型车就位（此前近场全空）。分数 174429（vs 白屏态 150155 数值上升系内容恢复后逐像素比对量增大，结构性显著改善）。**剩余残差**：①墙面明暗（ambient-0 下背光面纯黑 vs expected 深灰——mgl apply_lighting 的 wall 分量待核）；②相机取景角度差（§674/§675 专项）。哨兵与全量校验下轮补。单测 300 绿、tsc 绿。

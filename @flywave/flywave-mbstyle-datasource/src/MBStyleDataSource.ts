@@ -422,6 +422,40 @@ class TMSDataProvider extends DataProvider {
  * rectangle [minLng, minLat, maxLng, maxLat]. Returns empty data for
  * out-of-bounds tiles so the decoder renders nothing for them.
  */
+/**
+ * §681: mgl source-maxzoom overzoom clamp for the PRIMARY vector source.
+ * mgl requests tiles at round(zoom) CLAMPED to the source's maxzoom and
+ * overzooms (scales the deepest-available parent to fill the display
+ * frame). Flyway requests the raw display-level tile, so for styles whose
+ * vendored data stops at maxzoom (ground-shadow-fog: maxzoom 15, display
+ * 17.2) the z16+ requests 404 and the near field renders empty. Clamp the
+ * request to the parent tile at maxzoom; the decoder/emitter treat it as
+ * the cell's content exactly like mgl's overzoomed source tile.
+ */
+class MglMaxZoomAncestorProvider extends DataProvider {
+    private m_inner: DataProvider;
+    private m_maxzoom: number;
+    constructor(inner: DataProvider, maxzoom: number) {
+        super();
+        this.m_inner = inner;
+        this.m_maxzoom = maxzoom;
+    }
+    ready(): boolean { return this.m_inner.ready(); }
+    protected async connect(): Promise<void> {}
+    protected dispose(): void {}
+    async getTile(tileKey: TileKey, abortSignal?: AbortSignal): Promise<ArrayBufferLike | {}> {
+        const lvl = tileKey.level;
+        if (lvl <= this.m_maxzoom) {
+            return this.m_inner.getTile(tileKey, abortSignal);
+        }
+        const shift = lvl - this.m_maxzoom;
+        const x = tileKey.column >> shift;
+        const y = tileKey.row >> shift;
+        const parentKey = TileKey.fromRowColumnLevel(y, x, this.m_maxzoom);
+        return this.m_inner.getTile(parentKey, abortSignal);
+    }
+}
+
 class BoundsFilteredDataProvider extends DataProvider {
     private m_inner: DataProvider;
     private m_bounds: [number, number, number, number];
@@ -1592,6 +1626,12 @@ export class MBStyleDataSource extends TileDataSource {
             const bounds = (source as any).bounds;
             if (Array.isArray(bounds) && bounds.length === 4) {
                 delegate = new BoundsFilteredDataProvider(delegate, bounds as [number, number, number, number]);
+            }
+            // §681: clamp requests to the source maxzoom with ancestor
+            // fallback (mgl coveringZoomLevel semantics — see class docs).
+            const srcMaxzoom = Number((source as any).maxzoom ?? 0);
+            if (srcMaxzoom > 0 && srcMaxzoom < 32) {
+                delegate = new MglMaxZoomAncestorProvider(delegate, srcMaxzoom);
             }
             // §511: mgl-level four-children fallback. mgl requests tiles at
             // round(zoom) clamped to maxzoom (transform.js coveringZoomLevel)
