@@ -179,8 +179,15 @@ export function applyMglModelLighting(
         }
         for (const mat of mats as any[]) {
             if (!mat || mat.__mbMglLit) continue;
-            if (!ls) { mat.__mbMglLit = true; continue; }
+            // §655: patch unconditionally — the ported model.fragment.glsl
+            // handles both the 3D-lights and the legacy-light paths (styles
+            // without lights rendered native black: no scene lights).
             mat.__mbMglLit = true;
+            if ((globalThis as any).__mbDecodeDbg
+                && ((globalThis as any).__mbLitCnt = ((globalThis as any).__mbLitCnt ?? 0) + 1) <= 6) {
+                // eslint-disable-next-line no-console
+                console.log(`[MBLight] patch mat=${mat.name ?? '?'} type=${mat.type} metal=${mat.metalness} has3D=${ls ? 1 : 0}`);
+            }
             const origOnCompile = mat.onBeforeCompile;
             mat.onBeforeCompile = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(mat, shader);
@@ -191,6 +198,27 @@ export function applyMglModelLighting(
                 shader.uniforms.uMB3DDir = { value: modelLightDir(dataSource) };
                 shader.uniforms.uMB3DEmissive = { value: emissiveStrength ?? 0 };
                 shader.uniforms.uMB3DUnlit = { value: unlitMix ?? emissiveStrength ?? 0 };
+                // §655: per-material PBR factors (model.fragment.glsl
+                // u_metallicFactor / u_roughnessFactor).
+                shader.uniforms.uMB3DMetal = { value: mat.metalness ?? 0 };
+                shader.uniforms.uMB3DRough = { value: mat.roughness ?? 0.5 };
+                // §655: legacy light defaults (mgl light property: white,
+                // intensity 1, position [1.15, 2, 1.55]) — the non-3D-light
+                // model path (u_lightpos/u_lightcolor/u_lightintensity).
+                shader.uniforms.uMB3DLegacyPos = {
+                    value: (dataSource?.m_environment as any)?.legacyLightState?.pos
+                        ?? new THREE.Vector3(1.15, 2, 1.55).normalize(),
+                };
+                shader.uniforms.uMB3DLegacyColor = {
+                    value: (dataSource?.m_environment as any)?.legacyLightState?.color
+                        ?? [1, 1, 1],
+                };
+                shader.uniforms.uMB3DLegacyInt = {
+                    value: (dataSource?.m_environment as any)?.legacyLightState?.intensity ?? 1,
+                };
+                shader.uniforms.uMBHas3DLights = {
+                    value: ls2 ? 1 : 0,
+                };
                 shader.uniforms.uMB3DTint = { value: tint?.color ?? [0, 0, 0] };
                 shader.uniforms.uMB3DTintA = { value: tint?.mix ?? 0 };
                 shader.uniforms.uMBHbs = { value: [hr.b0, hr.b1, hr.power, hr.start] };
@@ -232,10 +260,22 @@ export function applyMglModelLighting(
                      uniform sampler2D uMBShMap;
                      uniform mat4 uMBShMatrix;
                      uniform float uMBShIntensity;
+                     uniform float uMB3DMetal; uniform float uMB3DRough;
+                     uniform vec3 uMB3DLegacyPos; uniform vec3 uMB3DLegacyColor; uniform float uMB3DLegacyInt;
+                     uniform float uMBHas3DLights;
                      varying float vMbLocalZ;
                      varying vec3 vMbWorldPos;
                      vec3 mbAlbedo = vec3(1.0);
                      vec3 mbEmissive = vec3(0.0);
+                     // mgl model.fragment.glsl EnvBRDFApprox (Unreal 4).
+                     vec3 EnvBRDFApproxMb(vec3 specularColor, float roughness, float NdotV) {
+                         vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
+                         vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+                         vec4 r = roughness * c0 + c1;
+                         float a004 = min(r.x * r.x, exp2(-9.28 * NdotV)) * r.x + r.y;
+                         vec2 AB = vec2(-1.04, 1.04) * a004 + r.zw;
+                         return specularColor * AB.x + AB.y;
+                     }
                      void main() {`
                 );
                 // a_pbr height ramp: mgl evaluates the ramp against the mesh
@@ -289,58 +329,95 @@ export function applyMglModelLighting(
                     '#include <opaque_fragment>',
                     `#include <opaque_fragment>
                      {
+                         // §655: faithful port of 3d-style/shaders/model.fragment.glsl
+                         // (Cook-Torrance PBR + env 0.65 indirect + emissive +
+                         // unlit mix). Replaces the hemisphere approximation.
                          #ifdef FLAT_SHADED
-                             vec3 mbN = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+                             vec3 mbN0 = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
                          #else
-                             vec3 mbN = normalize(vNormal);
+                             vec3 mbN0 = normalize(vNormal);
                          #endif
-                         vec3 mbDirView = normalize((viewMatrix * vec4(uMB3DDir, 0.0)).xyz);
-                         vec3 mbUpView = normalize((viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
-                         // NOTE: a faithful Cook-Torrance port of mgl
-                         // computeLightContribution (F_SchlickFast/V_GGXFast/
-                         // D_GGX/EnvBRDFApprox) was measured WORSE on the
-                         // landmark fixtures than this calibrated hemisphere
-                         // approximation (+38k on doors-no-shadows-lod) — the
-                         // residual is in the light-direction/brightness
-                         // domain, not the BRDF shape. Keep mbK until that is
-                         // solved (§557).
-                         float mbNdotL = clamp(dot(mbN, mbDirView), 0.0, 1.0);
-                         // §562: mgl shadowed_light_factor_normal REPLACES the
-                         // direct-term NdotL (ambient untouched).
-                         if (uMBShIntensity > 0.0) {
-                             vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos, 1.0);
-                             if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
-                                 mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
-                                 vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
-                                 float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
-                                 mbNdotL *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
+                         // mgl transformed_normal: xy flipped (fill-extrusion
+                         // normal convention).
+                         vec3 mbN = vec3(-mbN0.xy, mbN0.z);
+                         vec3 mbV = normalize(vViewPosition);
+                         float mbNdotV = clamp(abs(dot(mbN0, mbV)), 0.001, 1.0);
+                         float mbR = clamp(uMB3DRough, 0.04, 1.0);
+                         float mbAR = mbR * mbR;
+                         vec3 mbDiffC = mbAlbedo * (vec3(1.0) - vec3(0.04)) * (1.0 - uMB3DMetal);
+                         vec3 mbSpecC = mix(vec3(0.04), mbAlbedo, uMB3DMetal);
+                         vec3 mbL = normalize(uMB3DDir);
+                         vec3 mbH = normalize(mbV + mbL);
+                         float mbNdotL = clamp(dot(mbN0, mbL), 0.0, 1.0);
+                         float mbNdotH = clamp(dot(mbN0, mbH), 0.0, 1.0);
+                         float mbVdotH = clamp(dot(mbV, mbH), 0.0, 1.0);
+                         // F_SchlickFast
+                         vec3 mbF = mbSpecC + (vec3(1.0) - mbSpecC) * pow(1.0 - mbVdotH, 5.0);
+                         // V_GGXFast
+                         float mbGXV = mbNdotL * (mbNdotV * (1.0 - mbAR) + mbAR);
+                         float mbGXL = mbNdotV * (mbNdotL * (1.0 - mbAR) + mbAR);
+                         float mbVis = 0.5 / (mbGXV + mbGXL);
+                         // D_GGX
+                         float mbA4 = mbAR * mbAR;
+                         float mbDen = (mbNdotH * mbA4 - mbNdotH) * mbNdotH + 1.0;
+                         float mbD = mbA4 / (3.14159265 * mbDen * mbDen);
+                         vec3 mbSpecTerm = mbF * mbVis * mbD;
+                         vec3 mbCol;
+                         if (uMBHas3DLights > 0.5) {
+                             // LIGHTING_3D_MODE: diffuseLambertian without PI;
+                             // env_light = u_lighting_ambient_color ×
+                             // calculate_ambient_directional_factor(normal).
+                             vec3 mbDiffTerm = (1.0 - mbF) * mbDiffC;
+                             vec3 mbDiffTermL = mbDiffTerm;
+                             float mbLF = clamp(dot(mbN, uMB3DDir), 0.0, 1.0);
+                             if (uMBShIntensity > 0.0) {
+                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos, 1.0);
+                                 if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
+                                     mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
+                                     vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
+                                     float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
+                                     mbLF *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
+                                 }
                              }
+                             vec3 mbDirect = (mbSpecTerm + mbDiffTermL) * mbLF * uMB3DDirColor;
+                             float mbNdotLDir = dot(mbN, uMB3DDir);
+                             float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
+                             float mbDirMin = 1.0 - 0.3 * min(mbDirLum, 1.0);
+                             float mbADF = mix(mbDirMin, 1.0, min(mbNdotLDir + 1.0, 1.0))
+                                 * mix(0.92, 1.0, mbN0.z * 0.5 + 0.5);
+                             vec3 mbEnvLight = uMB3DAmb * mbADF;
+                             vec3 mbIndirect = EnvBRDFApproxMb(mbSpecC, mbR, mbNdotV) * mbEnvLight
+                                 + mbDiffC * mbEnvLight;
+                             mbCol = clamp(mbDirect, 0.0, 1.0) + mbIndirect;
+                             mbCol *= 1.0;
+                         } else {
+                             // legacy light path: diffuseLambertian / PI;
+                             // env_light = vec3(0.65) constant.
+                             vec3 mbDiffTerm = (1.0 - mbF) * mbDiffC / 3.14159265;
+                             vec3 mbDirect = (mbSpecTerm + mbDiffTerm) * mbNdotL * uMB3DLegacyColor;
+                             vec3 mbEnvLight = vec3(0.65);
+                             vec3 mbIndSpec = EnvBRDFApproxMb(mbSpecC, mbR, mbNdotV);
+                             vec3 mbIndirect = mbIndSpec * mbEnvLight + mbDiffC * mbEnvLight;
+                             mbCol = clamp(mbDirect, 0.0, 1.0) + mbIndirect;
+                             float mbLum = dot(mbDiffTerm, vec3(0.2126, 0.7152, 0.0722));
+                             mbCol *= mix(1.0 - uMB3DLegacyInt, max(1.0 - mbLum + uMB3DLegacyInt, 1.0), mbNdotL);
                          }
-                         float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
-                         float mbAmbDir = mix(1.0 - 0.3 * min(mbDirLum, 1.0), 1.0, min(dot(mbN, mbDirView) + 1.0, 1.0));
-                         float mbVert = mix(0.92, 1.0, dot(mbN, mbUpView) * 0.5 + 0.5);
-                         vec3 mbK = uMB3DAmb * (mbVert * mbAmbDir) + uMB3DDirColor * mbNdotL;
-                         vec3 mbLit = mbAlbedo * mbK;
-                         // mgl applies the occlusion texture to the LIT color
-                         // only (model.fragment.glsl: diffuse *= ao / color *=
-                         // ao) — the emissive color_mix target is not darkened.
+                         // Ambient occlusion on the composed color.
                          float mbAo = 1.0;
                          #ifdef USE_AOMAP
                              mbAo = (texture2D(aoMap, vAoMapUv).r - 1.0) * aoMapIntensity + 1.0;
-                             mbLit *= mbAo;
+                             mbCol *= mbAo;
                          #endif
-                         // model-height-based-emissive-strength-multiplier:
-                         // resEmission = emissive * (start + range * t^power),
-                         // t the height ramp over the mesh-local z (mgl
-                         // model.fragment.glsl v_height_based_emission_params).
+                         // Emission: the glTF emissiveFactor flows through
+                         // material.emissive (three) — restored natively in
+                         // the opaque output; keep the composition additive.
+                         mbCol += mbEmissive;
+                         // model-height-based-emission-strength-multiplier
+                         // (mesh_features a_pbr resEmission × height ramp).
                          float mbRes = uMB3DEmissive * (uMBHbs.w + uMBHbsRange * pow(clamp(vMbLocalZ * uMBHbs.x + uMBHbs.y, 0.0, 1.0), uMBHbs.z));
-                         vec3 mbColor = mix(mbLit, mbAlbedo, min(mbRes, 1.0));
-                         // mgl model.fragment.glsl tail: a SECOND mix toward
-                         // unlitColor = baseColor * ao (+ emissiveFactor) by
-                         // u_emissive_strength — coherence with other layers;
-                         // this is what keeps part-styled windows bright.
-                         vec3 mbUnlit = mbAlbedo * mbAo;
-                         gl_FragColor.rgb = mix(mbColor, mbUnlit, clamp(uMB3DUnlit, 0.0, 1.0)) + mbEmissive;
+                         vec3 mbTinted = mix(mbAlbedo, uMB3DTint, uMB3DTintA);
+                         vec3 mbUnlit = mbTinted * mbAo + mbEmissive;
+                         gl_FragColor.rgb = mix(mbCol, mbUnlit, clamp(uMB3DUnlit, 0.0, 1.0));
                      }`
                 );
             };
@@ -665,9 +742,13 @@ export class MBModelRenderer {
             sanitizeVec(technique._modelScale) ?? [1, 1, 1];
         const D2R = Math.PI / 180;
         const m = new THREE.Matrix4()
-            .multiply(new THREE.Matrix4().makeRotationZ(rotation[2] * D2R))
-            .multiply(new THREE.Matrix4().makeRotationX(rotation[0] * D2R))
-            .multiply(new THREE.Matrix4().makeRotationY(rotation[1] * D2R))
+            // §653: the render world frame mirrors mgl's pixel frame in y
+            // (fly y = −mgl y; cf. the §643 translation-y negate) — the
+            // euler angles flip sign accordingly, else models yaw/roll the
+            // mirrored way (multiple-meshes: body/window panels swapped).
+            .multiply(new THREE.Matrix4().makeRotationZ(-rotation[2] * D2R))
+            .multiply(new THREE.Matrix4().makeRotationX(-rotation[0] * D2R))
+            .multiply(new THREE.Matrix4().makeRotationY(-rotation[1] * D2R))
             .multiply(new THREE.Matrix4().makeScale(scale[0], scale[1], scale[2]))
             .multiply(new THREE.Matrix4().set(
                 1, 0, 0, 0,

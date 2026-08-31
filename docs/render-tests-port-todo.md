@@ -6912,3 +6912,7 @@ ego 夹具实测相机 80.7m vs mgl 同参 61.4m，比值 = 1/cos(40.7°) 精确
 **envMap 路线否定**：flat cube/equirect 环境贴图两种构造在 SwiftShader 无头渲染器均静默破坏材质（PMREM 生成失败→模型消失，multiple-meshes/pbr-light 回到空白值）——已回退，metalness 钳制（§647 已验证近似）保留。
 
 **下批移植蓝图（照 model.fragment.glsl 逐段）**：patched tail 内计算 indirect = EnvBRDFApprox(mix(f0,albedo,metallic), rough, NdotV)×0.65 + diffuse×(1−metal)×0.65（pure math 无贴图，无头环境可行）；direct 按 LIGHTING_3D_MODE 有无分路；`color += emissive`；unlit mix。uniforms 补 uMB3DMetallic/Roughness（material.metalness/roughness）。覆盖面：multiple-meshes 黑车、pbr-light、emissive-factor、doors 色彩域、树色——模型光照域全家。单测 300 绿、tsc 绿。
+
+**§655. 旋转取负修正（§653 帧镜像的完整推论，2026-08-31 续十三）**：
+
+逐像素差分（multiple-meshes，限定 expected 不透明区）实锤模型**旋转/镜像错**（橙车与车窗面板互换 = ~90° 偏航差）。根因：渲染世界帧 y = −mgl 像素帧 y（§643 translation-y 取负已实证同款镜像）→ 三个欧拉角的旋转向全部翻转。修复：instantiate/loadModels 两处 Rz/Rx/Ry 角度取负。**验证：multiple-meshes 19793→5558（−72%）、model-rotation 4920→4718、trees-zoom-based-scale −259**——模型姿态对齐 mgl。[MBLight] 探针入库（patch 触达+材质态）。单测 300 绿、tsc 绿。

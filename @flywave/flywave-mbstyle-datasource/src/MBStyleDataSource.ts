@@ -3119,9 +3119,11 @@ export class MBStyleDataSource extends TileDataSource {
                             : (effScale !== undefined ? [effScale, effScale, effScale] : [1, 1, 1]);
                         const D2R = Math.PI / 180;
                         const m = new THREE.Matrix4()
-                            .multiply(new THREE.Matrix4().makeRotationZ((rot[2] ?? 0) * D2R))
-                            .multiply(new THREE.Matrix4().makeRotationX((rot[0] ?? 0) * D2R))
-                            .multiply(new THREE.Matrix4().makeRotationY((rot[1] ?? 0) * D2R))
+                            // §653: render-frame y mirror flips the euler
+                            // senses (cf. the §643 translation-y negate).
+                            .multiply(new THREE.Matrix4().makeRotationZ(-(rot[2] ?? 0) * D2R))
+                            .multiply(new THREE.Matrix4().makeRotationX(-(rot[0] ?? 0) * D2R))
+                            .multiply(new THREE.Matrix4().makeRotationY(-(rot[1] ?? 0) * D2R))
                             .multiply(new THREE.Matrix4().makeScale(sc[0], sc[1], sc[2]))
                             .multiply(new THREE.Matrix4().set(
                                 1, 0, 0, 0,
