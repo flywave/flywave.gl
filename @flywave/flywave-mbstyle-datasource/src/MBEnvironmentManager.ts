@@ -405,9 +405,17 @@ export class MBEnvironmentManager {
         // mgl's empirical θ 300, wall NdotL factor exactly 2× off).
         const a = (90 - direction[0]) * Math.PI / 180;
         const p = direction[1] * Math.PI / 180;
+        // §682: A/B gate (extaz180=1 karma arg) — the mgl-faithful azimuth
+        // convention (sphericalDirectionToCartesian, az+90) vs the §455
+        // extrusion-calibrated (90−az); the two differ by a 180° azimuth
+        // rotation, which flips which walls catch the directional light.
+        // §682: mgl-faithful azimuth (sphericalDirectionToCartesian az+90,
+        // confirmed A/B better on ground-shadow-fog −6k); the §455 90−az
+        // form lit the opposite wall set.
+        const azRad = (direction[0] + 90) * Math.PI / 180;
         const dirVec: [number, number, number] = [
-            Math.cos(a) * Math.sin(p),
-            Math.sin(a) * Math.sin(p),
+            Math.cos(azRad) * Math.sin(p),
+            Math.sin(azRad) * Math.sin(p),
             Math.cos(p),
         ];
 

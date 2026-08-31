@@ -179,6 +179,12 @@ function discoverTests(): TestEntry[] {
     console.log(`[MBAB] yawAB=${(globalThis as any).__mbYawAB} pitchAB=${(globalThis as any).__mbPitchAB}`);
 }
 {
+    // §682: extrusion azimuth 180° A/B (extaz180=1).
+    const v = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("extaz180="))?.slice("extaz180=".length);
+    if (v === "1") (globalThis as any).__mbExtAz180 = true;
+}
+{
     // §669: fog t-profile probe — fogprobe=1 renders the fog t profile,
     // fogprobe=2 renders the UNFOGGED base color (fog_fragment chunk).
     const v = (window as any).__karma__?.config?.args?.find?.((a: string) =>

@@ -7038,3 +7038,7 @@ ground-shadow-fog 源声明 `maxzoom: 15`，display(flyway) 17.2 → 请求 z16 
 **§682. 相机 A/B 基建落地 + 退化最优陷阱定性（2026-09-01 末）**：
 
 ①A/B 基建：applyCameraSettings 支持 __mbYawAB/__mbPitchAB 全局偏移（karma yawab=/pitchab= 参数，runner 直通 MBSTYLE_YAWAB/MBSTYLE_PITCHAB），可对任一夹具做取景扫描。②扫描实证（ground-shadow-fog）：pitch 70→0(俯视) 分数 174429→124200 "单调下降"——但这是**退化最优**：俯视时建筑离帧、只剩雾白背景，错配像素自然减少；分数指标在"内容可见度"维度上不可靠，取景标定必须以 mgl transform 语义为准而非分数扫描。③真正待解：mgl transform 在 pitch 70 的取景与 expected 的对应关系（expected 有明显墙面透视=真 oblique，非俯视）。单测 300 绿、tsc 绿。A/B 参数默认 0（无行为变化）。
+
+**§683. 方位角翻转默认化 + 家族回归验证（2026-09-01 续十二）**：
+
+az+90 翻转默认化（lighting3DState.dir），3d-intersections 家族复测：全部与 ml-0831 逐位一致（该家族 legacy 光不受影响，无回归）——mgl 忠实方位角成为挤出 3D 光照缺省。ground-shadow-fog 系 az 翻转收益 −6k 保持。单测 300 绿、tsc 绿。
