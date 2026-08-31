@@ -162,6 +162,12 @@ function discoverTests(): TestEntry[] {
     }
 }
 {
+    // §669b: extrusion fogT readout (grey scale = per-fragment mgl fog t).
+    const ft = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("fogt="))?.slice("fogt=".length);
+    if (ft === "1") (globalThis as any).__mbFogTDbg = true;
+}
+{
     // §669: fog t-profile probe — fogprobe=1 renders the fog t profile,
     // fogprobe=2 renders the UNFOGGED base color (fog_fragment chunk).
     const v = (window as any).__karma__?.config?.args?.find?.((a: string) =>
