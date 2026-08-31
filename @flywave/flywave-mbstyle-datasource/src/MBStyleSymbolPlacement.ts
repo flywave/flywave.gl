@@ -740,6 +740,16 @@ export class MBStyleSymbolPlacement {
 
         for (const tile of tiles) {
                 if (!tile.objects) continue;
+                if ((globalThis as any).__mbDecodeDbg
+                    && ((globalThis as any).__mbSymCnt = ((globalThis as any).__mbSymCnt ?? 0) + 1) <= 6) {
+                    let symN = 0;
+                    for (const obj of tile.objects) {
+                        const tn = obj.userData?.technique?.name;
+                        if (tn === 'text' || tn === 'labeled-icon') symN++;
+                    }
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBSymTiles] key=${tile.tileKey?.level}/${tile.tileKey?.column}/${tile.tileKey?.row} offset=${tile.offset} objects=${tile.objects.length} symObjs=${symN}`);
+                }
 
                 for (const obj of tile.objects) {
                     if (!obj.userData?.technique) continue;

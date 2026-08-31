@@ -856,6 +856,11 @@ export class MBMaterialPatchManager {
             const viewToWorld = camera
                 ? new THREE.Matrix3().setFromMatrix4(camera.matrixWorld)
                 : new THREE.Matrix3();
+            if ((globalThis as any).__mbDecodeDbg
+                && ((globalThis as any).__mbExtLitCnt = ((globalThis as any).__mbExtLitCnt ?? 0) + 1) <= 4) {
+                // eslint-disable-next-line no-console
+                console.log(`[MBExtLit] ls=${ls ? JSON.stringify({ amb: ls.ambientColorLinear, dirC: ls.directionalColorLinear, dir: ls.dir.map((n: number) => n.toFixed(2)) }) : 'null'} emissive=${emissiveStrength}`);
+            }
             shader.uniforms.uMB3DAmb = { value: ls ? ls.ambientColorLinear : [1, 1, 1] };
             shader.uniforms.uMB3DDirColor = { value: ls ? ls.directionalColorLinear : [1, 1, 1] };
             shader.uniforms.uMB3DDir = { value: ls ? ls.dir : [0, 0, 1] };

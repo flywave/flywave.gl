@@ -285,6 +285,8 @@ async function renderFrames(
         try {
             const dump = () => {
                 try {
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBCamDump] zoomLevel=${(mapView as any).zoomLevel} cameraZ=${(mapView as any).camera?.position?.z?.toFixed?.(1)} canvas=${mapView.canvas?.width}x${mapView.canvas?.height} pr=${(mapView as any).pixelRatio}`);
                     const counts: Record<string, number> = {};
                     const samples: string[] = [];
                     const walk = (root: any, tag: string) => {
