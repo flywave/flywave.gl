@@ -131,7 +131,35 @@ function discoverTests(): TestEntry[] {
 {
     const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("decodedbg="))?.slice("decodedbg=".length);
-    if (dbg === "1") (globalThis as any).__mbDecodeDbg = true;
+    if (dbg === "1") {
+        (globalThis as any).__mbDecodeDbg = true;
+        // §667: prototype-level createTextElements census — installed at
+        // module init so it precedes any tile decode.
+        import('@flywave/flywave-mapview/src/geometry/TileGeometryCreator')
+            .then((mod: any) => {
+                const Ctor = mod.TileGeometryCreator;
+                const proto = Ctor?.prototype;
+                if (!proto?.createTextElements) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBText] wrap FAIL no proto');
+                    return;
+                }
+                const orig = proto.createTextElements;
+                proto.createTextElements = function (tile: any, decodedTile: any, filter: any) {
+                    const before = tile.textElementGroups?.size ?? 0;
+                    orig.call(this, tile, decodedTile, filter);
+                    const after = tile.textElementGroups?.size ?? 0;
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBText] tile=${tile.tileKey?.level}/${tile.tileKey?.column}/${tile.tileKey?.row} offset=${tile.offset} textGeos=${decodedTile.textGeometries?.length ?? 0} added=${after - before} total=${after} calls=${((window as any).__mbCTE = ((window as any).__mbCTE ?? 0) + 1)}`);
+                };
+                // eslint-disable-next-line no-console
+                console.log('[MBText] createTextElements wrapped');
+            })
+            .catch((e: any) => {
+                // eslint-disable-next-line no-console
+                console.log('[MBText] wrap ERROR ' + (e as Error)?.message);
+            });
+    }
 }
 {
     const dbg = String((window as any).__karma__?.config?.args?.find?.((a: string) =>
@@ -274,40 +302,6 @@ async function renderFrames(
             mapView.addEventListener(MapViewEventNames.FrameComplete, handler);
             mapView.update();
         });
-    }
-
-    // §665: POI/textElement accumulation census (1024-symbol double-label
-    // family). Wrap PoiManager.addPois to count per-tile invocations and the
-    // resulting textElement totals. decodedbg=1.
-    if ((globalThis as any).__mbDecodeDbg && !(window as any).__mbPoiProbe) {
-        try {
-            (window as any).__mbPoiProbe = true;
-            const pm: any = (mapView as any).poiManager;
-            if (pm?.addPois) {
-                const orig = pm.addPois.bind(pm);
-                pm.addPois = (tile: any, decodedTile: any) => {
-                    const before = tile.textElementGroups?.size ?? 0;
-                    orig(tile, decodedTile);
-                    const after = tile.textElementGroups?.size ?? 0;
-                    // eslint-disable-next-line no-console
-                    console.log(`[MBPoi] tile=${tile.tileKey?.level}/${tile.tileKey?.column}/${tile.tileKey?.row} offset=${tile.offset} pois=${decodedTile.poiGeometries?.length ?? 0} textElems=${after - before} total=${after} addPoisCalls=${((window as any).__mbPoiCalls = ((window as any).__mbPoiCalls ?? 0) + 1)}`);
-                };
-            }
-            // §665b: textGeometries channel (TileGeometryCreator.createTextElements)
-            const tgc: any = (await import(
-                '@flywave/flywave-mapview/src/geometry/TileGeometryCreator'
-            ) as any).TileGeometryCreator?.instance;
-            if (tgc?.createTextElements) {
-                const origCTE = tgc.createTextElements.bind(tgc);
-                tgc.createTextElements = (tile: any, decodedTile: any, filter: any) => {
-                    const before = tile.textElementGroups?.size ?? 0;
-                    origCTE(tile, decodedTile, filter);
-                    const after = tile.textElementGroups?.size ?? 0;
-                    // eslint-disable-next-line no-console
-                    console.log(`[MBText] tile=${tile.tileKey?.level}/${tile.tileKey?.column}/${tile.tileKey?.row} offset=${tile.offset} textGeos=${decodedTile.textGeometries?.length ?? 0} added=${after - before} total=${after}`);
-                };
-            }
-        } catch { /* probe is best-effort */ }
     }
 
     // §662 scene census: what is actually in the graph at render time —

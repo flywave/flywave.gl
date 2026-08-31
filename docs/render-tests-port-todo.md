@@ -6976,3 +6976,7 @@ ego 夹具实测相机 80.7m vs mgl 同参 61.4m，比值 = 1/cos(40.7°) 精确
 **§667. 挤出纵向渐变重标定落地——ground-shadow-fog 黑剪影收敛 −12%（2026-09-01 续）**：
 
 injectExtrusion3DLighting：①基色捕获改到 three color_fragment **之前**（剥离引擎 vertexColors 纵向暗化——ambient-0 样式下读作黑剪影的元凶）；②按 mgl fill-extrusion-vertical-gradient（缺省 on）用 emitter 的 extrusionAxis 属性（顶 (0,0,h,1)/底 (0,0,0,0)）重标定墙面渐变：baseColor ×= 1−0.5×(1−clamp(z/(z+w)))。**实测**：ground-shadow-fog **170801→150155（−12%）**、-hard-cutoff 170195→150262（−12%）；哨兵 fill-extrusion--default 100130 逐位不变、multiple-meshes 4807 不变——无回归。单测 300 绿、tsc 绿。
+
+**§668. 1024-symbol textElement 通道断点结果（2026-09-01 续）**：
+
+createTextElements 原型级包装成功（模块 init 即装、早于 decode）：**3 次调用**（三个世界副本条目各一次）、textGeos=1/次，但 **added=0、total=0**——textElement 不落在 tile.textElementGroups：createTextElements 内部走**异步 text shaping**，要素经其它入口进 textElementsRenderer。累积定位下移一层：断点应在 text shaping 完成回调（TextElementBuilder/字体加载 then 分支）或 textElementsRenderer 的元素注册处，对比渲染帧总数随 re-decode 次数的增长。另：3 次 decode 的 textGeos 每次都是全量 1 批（1034 特征），若旧 Tile 替换未通知渲染器注销旧元素，即 3×标签——与多尺寸叠印（不同启动时刻 zoom 不同→text-size 表达式求值不同）组合成最终画面。单测 300 绿、tsc 绿。
