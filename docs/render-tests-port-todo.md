@@ -6896,3 +6896,7 @@ model-source-feature-properties 系（light-overrides/multiple-features/feature-
 实现（loadModels 路径）：①registry entry 携带 id/sourceId（model feature id）；②applyModelSourcePartStyling：逐 mesh（part = material.name）求值 model-color/model-color-mix-intensity/model-emissive-strength，上下文含 feature id + featureState（m_featureStates 按 registry id）；mix≥1 时弃 baseColorTexture 纯 tint；emission>0 时 emissive=部件色×强度（feature-state 车灯）；③feature-state 节点旋转（nodeOverrides 名 → state[x,y,z] 度，车门/盖/箱）；④setFeatureState/clearFeatureStates 后 applyModelSourcePartStylingAll 重着色（userData._mbModelSource 记账）。
 
 **验证遗留**：ego-car 三例分数暂逐位不变——探针实证车已渲染（画布 117 = olive 车身×光照）但**相机标定偏差**：flywave geoCenter alt=46.5 + 水平 66 → 相机距目标 80.7m，而 mgl 同参数相机距目标 ≈61.5m（1.31×，画布 128 时车被单辆填满 vs mgl 双车可见）。根因 = flywave zoom→相机距离换算在小画布/高 zoom 与 mgl cameraToCenterDistance（0.5/tan(fov/2)×height×mpp）的标度差——**相机距离标定专项**（影响所有小画布高 zoom 夹具的尺寸一致性）。单测 300 绿、tsc 绿。
+
+**§652. mercator 拉伸假说实证否定（2026-08-31 续十）**：
+
+按 mgl getMetersPerPixelAtLatitude 纬度缩放推导"模型应随 1/cos(lat) 拉伸"并在 instantiate/loadModels 两处实现 k 预乘（x/y only、setPosition 前，mgl T·S(ppm)·R·S·F 同位）——**实证否定回退**：indirect-update-doors（Munich 48°，k=1.5）358758→541104（+18.2 万）、trees-zoom-based-scale（SF 37.8°，k=1.26）177163→198783（+2.2 万）、lat-0 对照 multiple-meshes 逐位不变。结论：**mgl 的模型像素尺寸事实上纬度无关**（1:1 world-unit=ground-meter 已与 expected 匹配；mgl 的模型渲染链或是恒定 px 因子或其 ppm 被其它项抵消——3d-style 源码无 model.fragment.glsl 无法终裁）。模型尺寸维持 1:1。per-part 子系统与 modeldiralt 门保留。单测 300 绿、tsc 绿。
