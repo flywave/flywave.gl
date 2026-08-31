@@ -1020,16 +1020,23 @@ class MBExtraVectorSourcesProvider extends DataProvider {
             try {
                 const bytes = await ex.provider.getTile(
                     TileKey.fromRowColumnLevel(y, x, lvl), abortSignal);
-                if (bytes instanceof ArrayBuffer || bytes instanceof Uint8Array) {
-                    stash.push({ sourceId: ex.sourceId, z: lvl, x, y, bytes });
+                if (typeof bytes === 'string' || bytes instanceof ArrayBuffer || bytes instanceof Uint8Array) {
+                    const push = (bb: ArrayBufferLike | string, xx: number, yy: number, inst: boolean) => {
+                        // §644: geojson extras carry a JSON string payload —
+                        // decodeThemedTile's GeoJSON branch parses it.
+                        stash.push(typeof bb === 'string'
+                            ? { sourceId: ex.sourceId, z: lvl, x: xx, y: yy, bytes: undefined as unknown as ArrayBufferLike, payload: bb, instancesOnly: inst }
+                            : { sourceId: ex.sourceId, z: lvl, x: xx, y: yy, bytes: bb, instancesOnly: inst });
+                    };
+                    push(bytes, x, y, false);
                     const n = 1 << lvl;
                     await Promise.all([[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]].map(async ([dx,dy]) => {
                         const nx = x+dx, ny = y+dy;
                         if (nx<0||ny<0||nx>=n||ny>=n) return;
                         try {
                             const nb = await ex.provider.getTile(TileKey.fromRowColumnLevel(ny,nx,lvl), abortSignal);
-                            if (nb instanceof ArrayBuffer || nb instanceof Uint8Array) {
-                                stash.push({ sourceId: ex.sourceId, z: lvl, x: nx, y: ny, bytes: nb, instancesOnly: true });
+                            if (typeof nb === 'string' || nb instanceof ArrayBuffer || nb instanceof Uint8Array) {
+                                push(nb, nx, ny, true);
                             }
                         } catch {}
                     }));
@@ -1606,8 +1613,41 @@ export class MBStyleDataSource extends TileDataSource {
                 provider: DataProvider;
                 maxzoom: number;
             }> = [];
+            const hasPointSortKeyLayerV = ((style.layers ?? []) as any[]).some(l =>
+                l?.layout?.['circle-sort-key'] !== undefined ||
+                l?.layout?.['symbol-sort-key'] !== undefined);
             for (const [extraId, extraSource] of sources) {
                 if (extraId === bestVectorSourceId) continue;
+                // §644: GeoJSON sources ride the same extras-stash beside a
+                // vector primary — previously they were only wired when NO
+                // vector source existed, so model/fill layers over a geojson
+                // source silently never decoded (powerplants family).
+                if ((extraSource as any).type === 'geojson') {
+                    const geoJsonSpec = (style.sources as any)?.[extraId] as any;
+                    let data: any = geoJsonSpec?.data;
+                    if (typeof data === 'string' && data.trim() !== '') {
+                        try {
+                            const url = data.replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
+                            const resp = await fetch(url);
+                            data = await resp.json();
+                        } catch { data = null; }
+                    }
+                    if (data) {
+                        extras.push({
+                            sourceId: extraId,
+                            provider: new GeoJSONDataProvider(data, {
+                                cluster: geoJsonSpec?.cluster,
+                                clusterRadius: geoJsonSpec?.clusterRadius,
+                                clusterMaxZoom: geoJsonSpec?.clusterMaxZoom,
+                                clusterProperties: geoJsonSpec?.clusterProperties,
+                                keepPointsEverywhere: hasPointSortKeyLayerV,
+                            }),
+                            // GeoJSON serves every zoom (tile-bounds filtered).
+                            maxzoom: 22,
+                        });
+                    }
+                    continue;
+                }
                 if ((extraSource as any).type !== 'vector') continue;
                 if ((layerCounts.get(extraId) ?? 0) === 0) continue;
                 const exSpec = (style.sources as any)?.[extraId] as any;
@@ -4307,16 +4347,26 @@ export class MBStyleDataSource extends TileDataSource {
         // by 2·bearing (180° for a bearing-90 test). Negate to match.
         const bearing = -(style.bearing ?? 0);
 
-        try {
-            // §643: mgl render tests place cameras at style zoom 21–27 (model
-            // closeups); the engine default maxZoomLevel is 20 and lookAtImpl
-            // clamps the zoom → camera distance (blank/over-far model-source
-            // fixtures). Lift the limit to the style's zoom for this map;
-            // tile requests stay clamped by each source's own maxzoom
-            // (overzoom path unchanged).
-            if (zoom > (this.mapView as any).maxZoomLevel) {
-                (this.mapView as any).maxZoomLevel = zoom;
-            }
+            try {
+                // §643: mgl render tests place cameras at style zoom 21–27 (model
+                // closeups); the engine default maxZoomLevel is 20 and lookAtImpl
+                // clamps the zoom → camera distance (blank/over-far model-source
+                // fixtures). Lift the limit to the style's zoom for this map;
+                // tile requests stay clamped by each source's own maxzoom
+                // (overzoom path unchanged). Cap at mgl Map's default maxZoom
+                // of 22 — styles asking zoom 24–27 render through that clamp
+                // (multiple-meshes expected: car sized at zoom 22, not 24).
+                const camZoom = Math.min(zoom, 23 /* mgl 22 + 1 convention */);
+                // §644: ASSIGN (not only raise) — the test harness constructs
+                // MapView with maxZoomLevel: 25, so a raise-only lift never
+                // engaged and zoom-24+ styles rendered 4× too close (the
+                // multiple-meshes family). mgl clamps its camera at maxZoom
+                // 22; floor at the engine default 20 for low-zoom styles.
+                (this.mapView as any).maxZoomLevel = Math.max(20, camZoom);
+                if ((globalThis as any).__mbDecodeDbg) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBCam] styleZoom=${style.zoom} flyZoom=${zoom} camZoom=${camZoom} maxZoomLevel=${(this.mapView as any).maxZoomLevel}`);
+                }
             // Import GeoCoordinates dynamically to avoid circular dependency issues
             const { GeoCoordinates } = require('@flywave/flywave-geoutils');
             const geoCoord = new GeoCoordinates(center[1], center[0]);

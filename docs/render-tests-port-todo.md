@@ -6833,3 +6833,13 @@ SpectorJS 捕获在 karma 内贯通（§621-§622 判定的"时序不相容"被*
 **验证**：translation 5095→5011（图像对位，残余=模型无光照平面着色）、external-gltf-files −47%、embedded-gltf-without-normals −45%、fog-default/padded-terrain 模型渲染恢复（残余=地形纹理/雾域）；model-with-ao/normal-emission-occlusion-maps/model-scale/rts/opacity 短暂 +0.1~1.4万（渲染后外观域，方向正确）。pbr-light 332401→435536→632501→332401 逐轮漂移 = 极限 zoom(25)+scale(1400) 下捕获时序敏感（flaky）。单测 300 绿、tsc 绿。
 
 **附带交付**：①阴影地面 quad 迁移 preSceneHook underlay 通道（引擎 §598 API + §600 红测通道；§572b translucent 门废止）+ §561 角点折叠废止（caster 紧框 ×1.5 边距）——shadows 家族验证无回归但采样仍未上屏（casting 逐位不变，待查接收端）；②MBPendingSourceTile stash 改 sticky（§612 f5=503→f6-f8=0 翻转修复）+ s_activeSourceMergeKeys 重入门卫（cell key ≡ storage key 时的无限递归）+ connect 时 epoch 清空。③**§630 冻结解除**：vendored 仓库 `mapbox-gl-js/3d-style/` 完整存在（data/model.ts calculateModelMatrix、render/draw_model.ts、shaders/_prelude_shadow 等）——模型光照/PBR/阴影对齐（§631c 蓝通道压制、pbr-light、默认灯光）从此可严格对照 mgl 源码施工。对比工具：/tmp/mbreport/server.js + compare.js（新旧基线并读）。
+
+**§644. 第二批空白/未上屏用例集中修复——geojson 模型源接线 + 相机 maxZoom 赋值修正（2026-08-31 续二）**：
+
+用户点名 13 例（models-on-globe*、multiple-*、npot-mipmaps、powerplants-*）集中处置。两根因：
+
+①**geojson 模型源从未接线**：wireTileSources 的 vector 优先分支只接 vector extras，GeoJSON 源仅在"无任何 vector 源"时才走 composite——powerplants 族（geojson 点要素 + model 层 + 根级 style.models 注册表）的 154 个点从未解码（探针实证：processPointFeature 零调用）。修复：vector 分支内把 geojson 源建为 GeoJSONDataProvider 并入 extras stash（MBPendingSourceTile 增 `payload?: string`，extras provider 接受字符串载荷，decodeTileWithSources 传 payload 走 GeoJSON 分支；邻居瓦片 instancesOnly 复用既有语义）。实证链：[MBPt] 要素解码→[MBModelBr] model-id 求值（step 表达式→'power_plant'）→渲染器实例化。**powerplants-float-zoom-lod 冷却塔上屏**（位置/尺度正确，残差=黑材质光照域）。
+
+②**maxZoom 抬升被 harness 覆盖**：MBStyleCompatRenderTest 自建 MapView 时已设 maxZoomLevel:25，§643 的"只升不降"永不触发，zoom-24 样式按 flyZoom 25 渲染 → 车大 4.3 倍（multiple-meshes 294537）。改为**直接赋值** `maxZoomLevel = max(20, min(flyZoom, 23))`（mgl Map 相机钳制 maxZoom 22；22692，−92%）。
+
+**批测结果（vs 修复前）**：multiple-meshes 15429→22692（渲染恢复，尺寸修正）、multiple-primitives 27141→28449、npot-mipmaps 68293→66196、mixed-opacity 73464→80014、zero-terrain 102912→123454、translated-missing-terrain 107127→137744（均渲染恢复；残余=材质光照/地形高程域）、float-zoom-lod 173612→177514（塔上屏）。**未动域（定性+参照）**：models-on-globe ×2、powerplants-fog-globe ×2、globe-lod 逐位不变——globe 投影的模型矩阵需 port mgl convertModelMatrix（3d-style/util/model_util.ts:134-176，ECEF 帧换算+pixelsToEcef 缩放，引擎 Spherical 投影域）；powerplants-fog-mercator 的雾过浓掩盖塔体（报告 #7 fog 冻结域）。探针资产（dbg 门控）：[MBCam]（styleZoom/flyZoom/camZoom/maxZoomLevel）、[MBPt]（点要素解码+匹配层）、[MBModelBr]（model 分支进入+modelId）。单测 300 绿、tsc 绿。

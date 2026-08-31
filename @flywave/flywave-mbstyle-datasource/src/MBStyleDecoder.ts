@@ -79,6 +79,9 @@ export interface MBPendingSourceTile {
     x: number;
     y: number;
     bytes: ArrayBufferLike;
+    /** §644: GeoJSON-format extras carry a JSON string payload instead of
+     * binary bytes — decodeThemedTile's GeoJSON branch parses it. */
+    payload?: string;
     instancesOnly?: boolean;
 }
 
@@ -428,6 +431,11 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_worldview, this.m_center,
         );
         if (matched.length === 0 || !this.m_emitter) return;
+        if ((globalThis as any).__mbDecodeDbg
+            && ((globalThis as any).__mbPtCnt = ((globalThis as any).__mbPtCnt ?? 0) + 1) <= 10) {
+            // eslint-disable-next-line no-console
+            console.log(`[MBPt] src=${effectiveSourceId} layer=${layer} matched=${matched.map(l => `${l.id}:${l.type}`).join(',')} props=${JSON.stringify(properties).slice(0, 100)}`);
+        }
         const visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
         if (visible.length === 0) return;
         this.m_emitter.processPointFeature(layer, extents, this.transformPoints(geometry, extents), properties, featureId, visible);
@@ -1269,8 +1277,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 try {
                     const exKey = TileKey.fromRowColumnLevel(ex.y, ex.x, ex.z);
                     this.m_currentSourceId = ex.sourceId;
+                    // §644: geojson extras carry a JSON string payload (the
+                    // GeoJSON decode branch parses it); vector extras the raw
+                    // MVT bytes.
                     const child = await this.decodeThemedTile(
-                        ex.bytes as any, exKey, undefined as any, projection, zoom);
+                        (ex.payload ?? ex.bytes) as any, exKey, undefined as any, projection, zoom);
                     if (!child) continue;
                     if (ex.instancesOnly) {
                         const childAny0 = child as any;

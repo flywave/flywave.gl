@@ -4182,6 +4182,11 @@ export class MBTileDataEmitter {
                     };
                     // model-id: layout, data-driven — resolve the registry key.
                     let modelId: any = layer.layout?.['model-id'] ?? properties?.['model-id'] ?? '';
+                    if ((globalThis as any).__mbDecodeDbg
+                        && ((globalThis as any).__mbModelBrCnt = ((globalThis as any).__mbModelBrCnt ?? 0) + 1) <= 8) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBModelBr] layer=${layer.id} modelId=${typeof modelId === 'object' ? '[expr]' : JSON.stringify(modelId)} pts=${points.length} registry=${Object.keys((this as any).m_modelRegistry ?? {}).length}`);
+                    }
                     if (typeof modelId === 'object') {
                         try {
                             modelId = MBExpressionEngine.evaluate(modelId, {
