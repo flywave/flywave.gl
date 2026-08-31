@@ -377,6 +377,10 @@ class MBStyleDataProcessor implements IGeometryProcessor {
      */
     applyProbedMvtExtent(data: ArrayBuffer | Uint8Array): void {
         const probed = this.probeMvtExtent(data);
+        if ((globalThis as any).__mbDecodeDbg) {
+            // eslint-disable-next-line no-console
+            console.log(`[MBExt] probed=${probed} last=${this.m_lastExtents}`);
+        }
         if (probed > 0 && probed !== this.m_lastExtents) {
             this.m_lastExtents = probed;
             this.m_emitter?.setExtents(probed);
@@ -1157,6 +1161,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     this.finalizeElevationPass();
                 }
                 this.m_omvAdapter.process(buffer as ArrayBuffer, decodeInfo, processor);
+                if ((globalThis as any).__mbDecodeDbg) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBTileDec] z=${tileKey.level} x=${tileKey.column} y=${tileKey.row} ext=${emitter.extents} geos=${emitter.getDecodedTile().geometries.length} techs=${emitter.getDecodedTile().techniques.length} pts=${(this as any).__mbPtTotal ?? ''}`);
+                    (this as any).__mbPtTotal = 0;
+                }
             } else if (typeof data === 'string') {
                 // GeoJSON string from GeoJSONDataProvider
                 // The GeoJSON adapter projects through webMercatorProjection
