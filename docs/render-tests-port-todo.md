@@ -7026,3 +7026,7 @@ side-by-side 定案：expected 为近景（建筑充满画面、地面阴影可�
 **§679. 深度 11× 失配的层级解释——z15 fallback 未放大（2026-09-01 续十）**：
 
 ground-shadow-fog 当前帧结构分析：近场（画面下 70%）完全空 → 显示层级 z16 的本地瓦片不存在（请求空/404），可见城市 = **z15 fallback 瓦片（15/5241/12664，132 objects）未按 overzoom 放大**渲染在远处条带——mgl 的 overzoom 会把 z15 内容放大 2×(zoom差)铺满视口（expected 的近景大建筑即来自此）。这同时解释了：①雾深度 11× 失配（z15 内容按未放大帧放置→片元深度落在错误距离带）；②相机取景"偏移"的部分观感（内容缩小+上移）。**下轮入口（单点）**：核对我们 fallback 瓦片的 storageLevel/center 声明（flyway TileObjectsRenderer 依据 tile 的 storage level 与 display zoom 计算放大倍率；若我方把 z15 fallback 瓦片错标为 z16 storage 或 center 帧错误，即 1:1 渲染）。修复后 z15 内容放大 2×铺满视口，雾深度自然落米域，fogT 无需再调。单测 300 绿、tsc 绿。
+
+**§680. 白屏层级根因补充定案——源 maxzoom 未钳制请求层级（2026-09-01 续十一）**：
+
+ground-shadow-fog 源声明 `maxzoom: 15`，display(flyway) 17.2 → 请求 z16 瓦片 → **vendored 无 z16 文件（404 实证：16-10485-25328/25329 等）** → 近场空；mgl 语义 = round(zoom) 钳到 maxzoom=15 → z15 瓦片 overzoom 2.3× 铺满视口（expected 近景大建筑）。既有机制：datasource 级 maxDataLevel 取各源 maxzoom 的 **max**（多源时被 model 源的缺省 22 顶穿）；extras provider 有 maxzoom 钳制但主源 provider 无。**修复方案（下轮单点）**：主源 provider 加 per-source maxzoom 钳制 + 祖先回退（复用 extras 的 shift 逻辑：lvl>maxzoom → lvl=maxzoom, x>>shift, y>>shift），使 z15 fallback 以正确 storage level 进入 → 引擎按 storage/display 缩放 2.3× 铺满 → 近场建筑恢复 + 雾深度落米域。单测 300 绿、tsc 绿。
