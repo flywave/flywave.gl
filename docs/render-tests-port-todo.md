@@ -6843,3 +6843,15 @@ SpectorJS 捕获在 karma 内贯通（§621-§622 判定的"时序不相容"被*
 ②**maxZoom 抬升被 harness 覆盖**：MBStyleCompatRenderTest 自建 MapView 时已设 maxZoomLevel:25，§643 的"只升不降"永不触发，zoom-24 样式按 flyZoom 25 渲染 → 车大 4.3 倍（multiple-meshes 294537）。改为**直接赋值** `maxZoomLevel = max(20, min(flyZoom, 23))`（mgl Map 相机钳制 maxZoom 22；22692，−92%）。
 
 **批测结果（vs 修复前）**：multiple-meshes 15429→22692（渲染恢复，尺寸修正）、multiple-primitives 27141→28449、npot-mipmaps 68293→66196、mixed-opacity 73464→80014、zero-terrain 102912→123454、translated-missing-terrain 107127→137744（均渲染恢复；残余=材质光照/地形高程域）、float-zoom-lod 173612→177514（塔上屏）。**未动域（定性+参照）**：models-on-globe ×2、powerplants-fog-globe ×2、globe-lod 逐位不变——globe 投影的模型矩阵需 port mgl convertModelMatrix（3d-style/util/model_util.ts:134-176，ECEF 帧换算+pixelsToEcef 缩放，引擎 Spherical 投影域）；powerplants-fog-mercator 的雾过浓掩盖塔体（报告 #7 fog 冻结域）。探针资产（dbg 门控）：[MBCam]（styleZoom/flyZoom/camZoom/maxZoomLevel）、[MBPt]（点要素解码+匹配层）、[MBModelBr]（model 分支进入+modelId）。单测 300 绿、tsc 绿。
+
+**§645. 第三批——imports 本地化、URL 型 modelId、vec3 插值（2026-08-31 续三）**：
+
+用户点名 5 例（models-on-globe*2、vector-layer-external-models-import、trees-zoom-based-scale、trees-transition-update）。三修复：
+
+①**harness localizeStyle 递归 imports**：import 片段内的 sources（mapbox 矢量底图、models-source geojson）从未被 local://→/base/ 本地化——矢量瓦片请求静默失败（census 实证：仅背景 quad 解码，无 land/road），geojson 因 datasource 自带 local:// 重写而幸存。修复后 vector-layer-external-models-import **113474→40430（−64%，与其非 import 孪生用例同值=渲染一致）**。
+
+②**URL 型 modelId 回退**：mgl external-models 夹具的 model-uri 为逐要素绝对 URL（死端口 dev-server/GitHub raw），registry 未命中即被丢弃。processPending 增回退：URL 型 modelId 经 rewriteModelUrl 重写至本地模型库（basename）。与①共同作用。
+
+③**interpolate 数组分量插值**：evalZoom=17.5 正确但 model-scale `interpolate 17→[1,1,1] 18→[10,10,10]` 求值=[1,1,1]——两处插值循环的兜底 `return a` 把 vec3 stop 原样返回（未进任何 typeof 分支）。补分量插值后 trees-zoom-based-scale 树按 5.5× 正确渲染（169076→177163，分数微升=全尺寸树叶级细节差异，结构性正确）。
+
+**trees-transition-update 定性**：ops（setPaintProperty model-scale/rotation/color red）触发重评估后树已实例化（[MBScene] 3183 Mesh ✓）但渲染黑色——style 无 lights 时模型材质光照域（与 multiple-meshes 黑车同族）；黑背景=该夹具无 background 层（clearColor）✓正常。**globe 对（models-on-globe×2）不动**：需 port mgl convertModelMatrix（3d-style/util/model_util.ts:134-176：mercToEcef 缩放+coordinateFrameAtEcef 切平面帧+globeECEFUnitsToPixelScale=worldSize/512），与 flywave 球体帧对齐留作引擎专项。单测 300 绿、tsc 绿。

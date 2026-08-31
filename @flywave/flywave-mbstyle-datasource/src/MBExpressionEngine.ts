@@ -210,6 +210,14 @@ export class MBExpressionEngine {
                 if (typeof a === 'number' && typeof b === 'number') {
                     return a + (b - a) * curve;
                 }
+                // §645: componentwise number-array interpolation (model-scale
+                // vec3 stops) — see the case 'interpolate' equivalent.
+                if (Array.isArray(a) && Array.isArray(b)
+                    && a.length === b.length
+                    && a.every((x: any) => typeof x === 'number')
+                    && b.every((x: any) => typeof x === 'number')) {
+                    return a.map((x: number, i: number) => x + ((b[i] as number) - x) * curve);
+                }
                 if (typeof a === 'string' && typeof b === 'string' && a[0] === '#') {
                     return this.interpolateColor(a, b, curve);
                 }
@@ -630,6 +638,18 @@ export class MBExpressionEngine {
 
                         if (typeof a === 'number' && typeof b === 'number') {
                             return a + (b - a) * t;
+                        }
+
+                        // §645: mgl interpolates NUMBER ARRAYS componentwise —
+                        // model-scale vec3 stops (trees-zoom-based-scale:
+                        // interpolate 17→[1,1,1] 18→[10,10,10] at 17.5 must
+                        // give [5.5,5.5,5.5]); the old fall-through returned
+                        // the LOWER stop verbatim (trees at 1× instead of 5.5×).
+                        if (Array.isArray(a) && Array.isArray(b)
+                            && a.length === b.length
+                            && a.every((x: any) => typeof x === 'number')
+                            && b.every((x: any) => typeof x === 'number')) {
+                            return a.map((x: number, i: number) => x + ((b[i] as number) - x) * t);
                         }
 
                         // Color interpolation for ANY parseable color strings —

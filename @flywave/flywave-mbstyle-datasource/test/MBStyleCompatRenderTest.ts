@@ -151,29 +151,40 @@ function localizeUrl(u: string): string {
 
 function localizeStyle(style: any): any {
     const s = JSON.parse(JSON.stringify(style));
-    for (const [, src] of Object.entries(s.sources ?? {})) {
-        const source = src as any;
-        // mgl's test harness (integration/lib/transform-request.js) rewrites
-        // api.mapbox.com tile URLs to the local `tiles/<id>/` fixtures. Mirror
-        // that for named `mapbox://` sources: raster → png, vector → mvt,
-        // raster-array → mrt (local fixtures use `{z}-{x}-{y}.{ext}` naming).
-        if (typeof source.url === 'string' && source.url.startsWith('mapbox://')) {
-            const id = source.url.replace('mapbox://', '').split('?')[0];
-            const ext = source.type === 'raster-array' ? 'mrt'
-                : source.type === 'raster' ? 'png' : 'mvt';
-            source.tiles = [`local://tiles/${id}/{z}-{x}-{y}.${ext}`];
-            delete source.url;
+    const localizeSources = (st: any) => {
+        for (const [, src] of Object.entries(st.sources ?? {})) {
+            const source = src as any;
+            // mgl's test harness (integration/lib/transform-request.js) rewrites
+            // api.mapbox.com tile URLs to the local `tiles/<id>/` fixtures. Mirror
+            // that for named `mapbox://` sources: raster → png, vector → mvt,
+            // raster-array → mrt (local fixtures use `{z}-{x}-{y}.{ext}` naming).
+            if (typeof source.url === 'string' && source.url.startsWith('mapbox://')) {
+                const id = source.url.replace('mapbox://', '').split('?')[0];
+                const ext = source.type === 'raster-array' ? 'mrt'
+                    : source.type === 'raster' ? 'png' : 'mvt';
+                source.tiles = [`local://tiles/${id}/{z}-{x}-{y}.${ext}`];
+                delete source.url;
+            }
+            if (source.tiles) {
+                source.tiles = source.tiles.map((t: string) => localizeUrl(t));
+            }
+            if (source.url) source.url = localizeUrl(source.url);
+            if (typeof source.data === "string") {
+                source.data = localizeUrl(source.data);
+            }
         }
-        if (source.tiles) {
-            source.tiles = source.tiles.map((t: string) => localizeUrl(t));
-        }
-        if (source.url) source.url = localizeUrl(source.url);
-        if (typeof source.data === "string") {
-            source.data = localizeUrl(source.data);
-        }
-    }
+    };
+    localizeSources(s);
     if (s.sprite) s.sprite = localizeUrl(s.sprite);
     if (s.glyphs) s.glyphs = localizeUrl(s.glyphs);
+    // §645: import fragments carry their own sources (vector basemaps,
+    // geojson model sources) — localize them too, or every local:// tile
+    // template inside an import stays unfetchable (the
+    // vector-layer-external-models-import fixture rendered only its
+    // background layer).
+    for (const imp of s.imports ?? []) {
+        if (imp?.data) localizeSources(imp.data);
+    }
     return s;
 }
 

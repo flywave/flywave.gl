@@ -326,6 +326,24 @@ async function getSharedGLTFLoader(): Promise<GLTFLoaderType> {
     return loader;
 }
 
+/** §645: model URIs that are absolute URLs (per-feature `model-uri`
+ * properties in mgl external-model fixtures) point at fixture-generation-era
+ * hosts (dead dev-server ports, GitHub raw) — the corpus ships every
+ * referenced model in the local models dir, so rewrite to the basename.
+ * `local://` gets the standard integration-root rewrite. */
+export function rewriteModelUrl(url: string): string {
+    if (!url) return url;
+    if (url.startsWith('local://')) {
+        return url.replace(/^local:\/\//,
+            '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
+    }
+    if (/^https?:\/\//i.test(url)) {
+        const base = '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/models/';
+        return base + url.split('/').pop();
+    }
+    return url;
+}
+
 export class MBModelRenderer {
     /** Root-level `style.models` registry: modelId → resolved GLTF url. */
     private m_registry = new Map<string, string>();
@@ -687,7 +705,11 @@ export class MBModelRenderer {
                 // §518: model-id is data-driven — the per-feature evaluated
                 // value rides the placement; technique.modelId is the fallback.
                 const modelId = (placement as any).modelId ?? technique.modelId ?? '';
-                const url = this.m_registry.get(String(modelId));
+                // §645: a registry miss falls back to treating the modelId
+                // itself as a URL (per-feature `model-uri` fixtures) — legacy
+                // hosts are rewritten to the local corpus.
+                const url = this.m_registry.get(String(modelId))
+                    ?? (/^[a-z]+:\/\//i.test(String(modelId)) ? rewriteModelUrl(String(modelId)) : undefined);
                 if (!url) { done.add(i); (placement as any).__placed = true; continue; }
                 const prototype = this.m_prototypes.get(url);
                 if (prototype && prototype !== 'loading' && prototype !== 'failed') {
