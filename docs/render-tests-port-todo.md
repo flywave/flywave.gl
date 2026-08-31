@@ -7002,3 +7002,7 @@ createTextElements 原型级包装成功（模块 init 即装、早于 decode）
 **§673. uMbMetersPerUnit 接线落地 + 残余白洗状态（2026-09-01 末）**：
 
 ①uMbMetersPerUnit uniform 落地：编译期初值 = EarthC/(512×2^zoomLevel)，每帧经 __mbExtFogU 句柄刷新（patchTileMaterials 的 refreshTargets 循环），fogT 公式改为 `shift·(len×mpu)/distCam`（替换 0.4 经验缩放）——米制转换链路完整。②重测 ground-shadow-fog **仍 150155 且画面近全白**：读数分支（雾前输出）仍饱和 → vViewPosition 实测量级 ≥1e9（非此前估的 2.7e8），或 MB_RASTER_MGL_FOG define 与 material.fog=false 的组合仍让某条雾路径生效——读出基础设施需一次无雾环境的基准标定（先空跑 fogprobe=2 + 移除 define 确认真基色）。③定案补充：白罩的"白色"= fogColor 白 + fogT 饱和，数学自洽；剩余工作是**单位域标定**（engine-unit→mgl-fog-unit 的真实换算常数）——已有 fogt=1/lightdbg=1/fogprobe=1|2 全套读数工具，标定循环可在数轮内完成。单测 300 绿、tsc 绿。
+
+**§674. ground-shadow-fog 残差主因定案——相机取景偏移（2026-09-01 续六）**：
+
+内容掩膜（灰度<200）互相关扫描：ours vs expected 最优相关 0.538 @ (dy=160,dx=130) 且在扫描边界未收敛、(0,0) 处 −0.063——**我方相机取景相对 mgl 整体偏移超过 160px/130px（向下+向右）**，非白像素总量 ours 173k ≈ expected 179k（内容量一致）。定案：①该夹具残差的主导项 = **相机取景/lookAt 语义偏移**（pitch 70 + geoCenter/alt 域，§651/§653 相机标定家族），材质/雾工作（§667 渐变、§671 自绘雾）本身正确但被取景偏移淹没；②此前 fogT 饱和读数与"白洗"解读作废——真实状态是内容画在了画布的错误区域。**下轮入口（相机标定专项首个单点）**：①用该夹具（单方向 pitch70+geoCenter）对照 mgl transform 语义核 flyway lookAt 的 pitch 枢轴/距离（§653 已记录 flyway calculateDistanceFromZoomLevel 与 mgl cameraToCenterDistance 的 1/cos 差）；②dy≈+160 的偏移量可反推相机高度/俯仰枢轴的修正量。②修复优先级：相机取景影响**所有** pitched 夹具，标定一次全局受益。单测 300 绿、tsc 绿（本轮另修复：挤出注入块结构重组，消除遗留调试行的无条件覆写——该 bug 使此前全部材质干预不可见）。

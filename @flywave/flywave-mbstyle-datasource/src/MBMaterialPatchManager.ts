@@ -989,12 +989,7 @@ export class MBMaterialPatchManager {
                  vec3 mbBaseColor = vec3(1.0);
                  void main() {`
             );
-            // §664/§668: use the mgl fog branch (fogMgl* uniforms fed by the
-            // env) for extrusions — the chunk's default km-scale branch
-            // saturates at this view and washes the whole city to fog color.
-            shader.fragmentShader = shader.fragmentShader.replace(
-                '#include <fog_pars_fragment>',
-                '#include <fog_pars_fragment>\n#define MB_RASTER_MGL_FOG 1');
+
             // Capture the UNLIT material color before three's lighting pass —
             // the scene DirectionalLight (added by applyLights) shades the
             // standard material with three's own model; the mapbox
@@ -1050,28 +1045,22 @@ export class MBMaterialPatchManager {
                      // mgl-fog uniforms above are bound by reference so the
                      // per-frame env feed reaches this program.
                      vec3 mbOut = mix(mbLit, mbBaseColor, uMB3DEmissive);
+                     // §670: mgl fog applied in-shader (chunk fog compiled
+                     // out): fogT from the meters-converted view depth, then
+                     // the mapbox falloff³ wash toward fogColor.
+                     float mbLen = length(vViewPosition) * uMbMetersPerUnit;
+                     float mbT = (fogMglShift * mbLen / max(fogMglDistCam, 1.0)
+                         - (fogMglRange.x + fogMglShift))
+                         / max(fogMglRange.y - fogMglRange.x, 0.001);
+                     float mbFall = 1.0 - min(1.0, exp(-6.0 * mbT));
+                     mbFall *= mbFall * mbFall;
+                     float mbFogFactor = fogAlpha * min(1.0, 1.00747 * mbFall);
+                     mbOut = mix(mbOut, fogColor, clamp(mbFogFactor, 0.0, 1.0));
+                     gl_FragColor.rgb = mbOut;
                      if (uMB3DDbg > 1.5) {
-                         // §669: fogT readout — output BEFORE fog so the raw
-                         // t is readable.
-                         float mbLen = length(vViewPosition);
-                         float mbT = (fogMglShift * (mbLen * 0.15) / max(fogMglDistCam, 1.0)
-                             - (fogMglRange.x + fogMglShift))
-                             / max(fogMglRange.y - fogMglRange.x, 0.001);
+                         // §669: fogT readout (grey = per-fragment mgl fog t).
                          gl_FragColor.rgb = vec3(clamp(mbT, 0.0, 1.0));
-                     } else {
-                         // §670: mgl fog applied in-shader (chunk fog compiled
-                         // out). Depth scale 0.4 calibrated on
-                         // ground-shadow-fog (see §671).
-                         float mbLen = length(vViewPosition) * uMbMetersPerUnit;
-                         float mbT = (fogMglShift * mbLen / max(fogMglDistCam, 1.0)
-                             - (fogMglRange.x + fogMglShift))
-                             / max(fogMglRange.y - fogMglRange.x, 0.001);
-                         float mbFall = 1.0 - min(1.0, exp(-6.0 * mbT));
-                         mbFall *= mbFall * mbFall;
-                         float mbFogFactor = fogAlpha * min(1.0, 1.00747 * mbFall);
-                         mbOut = mix(mbOut, fogColor, clamp(mbFogFactor, 0.0, 1.0));
-                         gl_FragColor.rgb = mbOut;
-                     }
+                     } else if (uMB3DDbg > 0.5) {
                          // Debug readback: R = NdotL (signed 0.5+0.5*n),
                          // G/B = dir.x/dir.y (0.5+0.5*v) — wall azimuth probe.
                          gl_FragColor.rgb = vec3(0.5 + 0.5 * mbNdotL, 0.5 + 0.5 * mbDirView.x, 0.5 + 0.5 * mbDirView.z);
