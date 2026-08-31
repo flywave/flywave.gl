@@ -973,7 +973,7 @@ export class MBMaterialPatchManager {
             if ((globalThis as any).__mbDecodeDbg
                 && ((globalThis as any).__mbExtLitCnt2 = ((globalThis as any).__mbExtLitCnt2 ?? 0) + 1) <= 4) {
                 // eslint-disable-next-line no-console
-                console.log(`[MBExtLit] applied replaced=${shader.fragmentShader.includes('uMB3DDir') ? 1 : 0} hasOpaqueBefore=${shader.fragmentShader.includes('opaque_fragment') ? 1 : 0} fsLen=${shader.fragmentShader.length} mFog=${(material as any).fog} sceneFog=${!!((this.m_dataSource as any).mapView?.scene?.fog)} fogType=${((this.m_dataSource as any).mapView?.scene?.fog)?.type ?? 'null'}`);
+                console.log(`[MBExtLit] applied replaced=${shader.fragmentShader.includes('uMB3DDir') ? 1 : 0} dbg=${shader.uniforms.uMB3DDbg?.value} lightdbgFlag=${!!(globalThis as any).__mbLightDbg} mFog=${(material as any).fog} sceneFog=${!!((this.m_dataSource as any).mapView?.scene?.fog)} fogType=${((this.m_dataSource as any).mapView?.scene?.fog)?.type ?? 'null'}`);
             }
         };
         material.needsUpdate = true;
