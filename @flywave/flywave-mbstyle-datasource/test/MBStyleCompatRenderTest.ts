@@ -292,7 +292,14 @@ async function renderFrames(
                     const walk = (root: any, tag: string) => {
                         root?.traverse?.((o: any) => {
                             if (!o.isMesh && !o.isPoints && !o.isLine) return;
-                            const key = `${tag}|${o.name || 'unnamed'}|${o.geometry?.type ?? '?'}|${Array.isArray(o.material) ? o.material.map((m: any) => m?.type).join('+') : o.material?.type}`;
+                            const mat0: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                            const flags = [
+                                (mat0 as any)?.__mbExtrusion3DLit ? 'ext3d' : '',
+                                (mat0 as any)?.__mbLitPatched ? 'legacy' : '',
+                                (mat0 as any)?.__mbMglLit ? 'model' : '',
+                                (mat0 as any)?.__mbStructLit ? 'struct' : ''
+                            ].filter(Boolean).join(',') || 'none';
+                            const key = `${tag}|${o.name || 'unnamed'}|${Array.isArray(o.material) ? o.material.map((m: any) => m?.type).join('+') : o.material?.type}|${flags}|c=${mat0?.color?.getHexString?.() ?? '?'}|pre=${(mat0 as any)?.isDepthPrepassMaterial ? 1 : 0}|df=${(mat0 as any)?.depthFunc ?? '?'}|cw=${(mat0 as any)?.colorWrite ?? '?'}`;
                             counts[key] = (counts[key] ?? 0) + 1;
                             if (samples.length < 16) {
                                 o.updateWorldMatrix?.(true, false);
