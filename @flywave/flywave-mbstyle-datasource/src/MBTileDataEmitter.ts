@@ -4185,7 +4185,7 @@ export class MBTileDataEmitter {
                     if ((globalThis as any).__mbDecodeDbg
                         && ((globalThis as any).__mbModelBrCnt = ((globalThis as any).__mbModelBrCnt ?? 0) + 1) <= 8) {
                         // eslint-disable-next-line no-console
-                        console.log(`[MBModelBr] layer=${layer.id} modelId=${typeof modelId === 'object' ? '[expr]' : JSON.stringify(modelId)} pts=${points.length} registry=${Object.keys((this as any).m_modelRegistry ?? {}).length}`);
+                        console.log(`[MBModelBr] layer=${layer.id} modelId=${typeof modelId === 'object' ? '[expr]' : JSON.stringify(modelId)} pts=${points.length} registry=${Object.keys((this as any).m_modelRegistry ?? {}).length} evalZoom=${this.m_zoom} scale=${JSON.stringify(evalVec3('model-scale'))}`);
                     }
                     if (typeof modelId === 'object') {
                         try {

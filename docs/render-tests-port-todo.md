@@ -6855,3 +6855,14 @@ SpectorJS 捕获在 karma 内贯通（§621-§622 判定的"时序不相容"被*
 ③**interpolate 数组分量插值**：evalZoom=17.5 正确但 model-scale `interpolate 17→[1,1,1] 18→[10,10,10]` 求值=[1,1,1]——两处插值循环的兜底 `return a` 把 vec3 stop 原样返回（未进任何 typeof 分支）。补分量插值后 trees-zoom-based-scale 树按 5.5× 正确渲染（169076→177163，分数微升=全尺寸树叶级细节差异，结构性正确）。
 
 **trees-transition-update 定性**：ops（setPaintProperty model-scale/rotation/color red）触发重评估后树已实例化（[MBScene] 3183 Mesh ✓）但渲染黑色——style 无 lights 时模型材质光照域（与 multiple-meshes 黑车同族）；黑背景=该夹具无 background 层（clearColor）✓正常。**globe 对（models-on-globe×2）不动**：需 port mgl convertModelMatrix（3d-style/util/model_util.ts:134-176：mercToEcef 缩放+coordinateFrameAtEcef 切平面帧+globeECEFUnitsToPixelScale=worldSize/512），与 flywave 球体帧对齐留作引擎专项。单测 300 绿、tsc 绿。
+
+**§646. 第二批用户点名用例复核（2026-08-31 续四）**：
+
+11 例修复后重跑（run22-24）：**model-normals 49644→8017（−84%，鸭上屏）**、model-shadow 131011→89313（−32%）；powerplants-float-zoom-lod 塔上屏、vector-layer-external-models-import −64% 均已兑现。逐位不变（未受修复影响，独立域）：
+
+- **ego-car 家族**（model-state/feature-state 76483、model-source-feature-properties/light-overrides 6936、multiple-features 7876）：需 mgl model-source 的 per-part 求值语义（spec modelMaterialOverrides/modelNodeOverrides：按 material/node 名暴露 part，paint `match(get part)` 逐 part 求值 + feature-state 车灯颜色 + model-type location-indicator 通道）——独立子系统待立项。
+- **model-emissive-factor 14123**：puck 渲染但近黑——GLB 自带 emissiveFactor 未到达输出（applyMglModelLighting 材质链把 emissive 吞掉）；归模型光照/材质域。
+- **model-pbr-light**（332401→468607→332401 逐轮漂移）= zoom25+scale1400 捕获时序 flaky + PBR 材质域。
+- **model-no-texcooords-textures 441835**：BoomBoxNoUV 仍未上屏（待探针：模型加载 vs 材质无 UV 渲染路径）。
+- **lighting-3d-mode/no-ambient、no-directional 逐位不变**：maple2.glb scale10 + translation[0,80,0] 与 model-normals 的 duck（scale100）同链路但鸭上屏树未上屏——下轮单点探针（模型尺寸 vs 相机距离核算）。
+- **trees-transition-update 全黑**：树已实例化（[MBScene] 3183 Mesh）但渲染黑色=无 lights 样式的模型材质域（多例同族：multiple-meshes 黑车、emissive-factor 黑 puck）——统一为**模型默认光照专项**（对照 3d-style draw_model.ts 默认灯组语义）。
