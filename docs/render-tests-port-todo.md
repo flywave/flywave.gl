@@ -7034,3 +7034,7 @@ ground-shadow-fog 源声明 `maxzoom: 15`，display(flyway) 17.2 → 请求 z16 
 **§681. 源 maxzoom 钳制落地——ground-shadow-fog 近场恢复（2026-09-01 续十二）**：
 
 落地 MglMaxZoomAncestorProvider（主源 provider 钳制：请求层级 > 源 maxzoom 时取 maxzoom 祖先瓦片，mgl coveringZoomLevel 语义），wireTileSources 主源路径接线。**验证**：ground-shadow-fog 近场恢复——城市近景铺满画面、街道线/黄色道路可见、模型车就位（此前近场全空）。分数 174429（vs 白屏态 150155 数值上升系内容恢复后逐像素比对量增大，结构性显著改善）。**剩余残差**：①墙面明暗（ambient-0 下背光面纯黑 vs expected 深灰——mgl apply_lighting 的 wall 分量待核）；②相机取景角度差（§674/§675 专项）。哨兵与全量校验下轮补。单测 300 绿、tsc 绿。
+
+**§682. 相机 A/B 基建落地 + 退化最优陷阱定性（2026-09-01 末）**：
+
+①A/B 基建：applyCameraSettings 支持 __mbYawAB/__mbPitchAB 全局偏移（karma yawab=/pitchab= 参数，runner 直通 MBSTYLE_YAWAB/MBSTYLE_PITCHAB），可对任一夹具做取景扫描。②扫描实证（ground-shadow-fog）：pitch 70→0(俯视) 分数 174429→124200 "单调下降"——但这是**退化最优**：俯视时建筑离帧、只剩雾白背景，错配像素自然减少；分数指标在"内容可见度"维度上不可靠，取景标定必须以 mgl transform 语义为准而非分数扫描。③真正待解：mgl transform 在 pitch 70 的取景与 expected 的对应关系（expected 有明显墙面透视=真 oblique，非俯视）。单测 300 绿、tsc 绿。A/B 参数默认 0（无行为变化）。

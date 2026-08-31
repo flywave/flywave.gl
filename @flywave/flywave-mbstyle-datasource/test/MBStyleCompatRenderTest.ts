@@ -168,6 +168,17 @@ function discoverTests(): TestEntry[] {
     if (ft === "1") (globalThis as any).__mbFogTDbg = true;
 }
 {
+    // §682: camera A/B offsets (yaw/pitch degrees) for framing calibration.
+    const yawAB = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("yawab="))?.slice("yawab=".length);
+    const pitchAB = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("pitchab="))?.slice("pitchab=".length);
+    if (yawAB !== undefined) (globalThis as any).__mbYawAB = Number(yawAB);
+    if (pitchAB !== undefined) (globalThis as any).__mbPitchAB = Number(pitchAB);
+    // eslint-disable-next-line no-console
+    console.log(`[MBAB] yawAB=${(globalThis as any).__mbYawAB} pitchAB=${(globalThis as any).__mbPitchAB}`);
+}
+{
     // §669: fog t-profile probe — fogprobe=1 renders the fog t profile,
     // fogprobe=2 renders the UNFOGGED base color (fog_fragment chunk).
     const v = (window as any).__karma__?.config?.args?.find?.((a: string) =>

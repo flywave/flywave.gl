@@ -4560,7 +4560,10 @@ export class MBStyleDataSource extends TileDataSource {
         // (MapView.ts:2378/2405 "yaw is counter-clockwise"). Passing bearing
         // directly yaws the camera by the wrong sign — the whole view is rotated
         // by 2·bearing (180° for a bearing-90 test). Negate to match.
-        const bearing = -(style.bearing ?? 0);
+        const bearing = -(style.bearing ?? 0)
+            + Number((globalThis as any).__mbYawAB ?? 0);
+        const pitchAB = pitch
+            + Number((globalThis as any).__mbPitchAB ?? 0);
 
             try {
                 // §643: mgl render tests place cameras at style zoom 21–27 (model
@@ -4585,7 +4588,7 @@ export class MBStyleDataSource extends TileDataSource {
             // Import GeoCoordinates dynamically to avoid circular dependency issues
             const { GeoCoordinates } = require('@flywave/flywave-geoutils');
             const geoCoord = new GeoCoordinates(center[1], center[0]);
-            this.mapView.setCameraGeolocationAndZoom(geoCoord, zoom, bearing, pitch);
+            this.mapView.setCameraGeolocationAndZoom(geoCoord, zoom, bearing, pitchAB);
             // §274: sphere camera framing — mgl exact. mgl places the globe
             // center at plane z = −ws/2π and the camera at z = ccd·conv
             // (globe_util calculateGlobePosMatrix + transform
