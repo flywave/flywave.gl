@@ -86,6 +86,7 @@ const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): voi
         const gui = new GUI();
         new PostProcessingGUIModule(mapView, gui).open();
         setupOutlineGui(mapView, gui);
+        setupDynamicBloomGui(mapView, gui);
     });
 };
 
@@ -423,6 +424,127 @@ const addGlowingObjectsToMap = (mapView: MapView): void => {
     });
 };
 
+// ==================== Dynamic bloom spawn/despawn test ====================
+// Repro for the "global flicker when dynamically adding/removing objects" issue:
+// every addBloomObject/removeBloomObject sets vrm.needsUpdate = true, which
+// disposes and rebuilds the ENTIRE post-processing node graph (all passes +
+// shader recompilation) on each spawn/despawn, instead of just touching the
+// affected material's mrtNode.
+
+const dynamicBloomObjects: any[] = [];
+let dynamicSpawnTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Dynamically create a glowing object and register it for selective bloom.
+ * @param mapView Map view instance
+ * @returns The spawned mesh
+ */
+const spawnDynamicBloomObject = (mapView: MapView): any => {
+    const mesh = createPulsingGlow(
+        Math.random() > 0.5 ? new SphereGeometry(25, 12, 12) : new BoxGeometry(40, 40, 40),
+        new Color().setHSL(Math.random(), 0.9, 0.6).getHex(),
+        2 + Math.random() * 3
+    );
+    // @ts-ignore
+    mesh.anchor = new GeoCoordinates(
+        36.4902 + (Math.random() - 0.5) * 0.002,
+        118.1742 + (Math.random() - 0.5) * 0.002,
+        500 + Math.random() * 200
+    );
+    mapView.mapAnchors.add(mesh);
+    // Tag as glowing. This call (and its remove counterpart) is what
+    // currently triggers the global VRM pipeline rebuild.
+    mapView.mapRenderingManager.addBloomObject(mesh);
+    dynamicBloomObjects.push(mesh);
+    mapView.update();
+    return mesh;
+};
+
+/**
+ * Remove a dynamically spawned glowing object (bloom registration included).
+ * @param mapView Map view instance
+ * @param mesh Mesh previously returned by spawnDynamicBloomObject
+ */
+const despawnDynamicBloomObject = (mapView: MapView, mesh: any): void => {
+    const index = dynamicBloomObjects.indexOf(mesh);
+    if (index === -1) return;
+    dynamicBloomObjects.splice(index, 1);
+    mapView.mapRenderingManager.removeBloomObject(mesh);
+    mapView.mapAnchors.remove(mesh);
+    mapView.update();
+};
+
+/**
+ * Wire a dat.GUI folder that spawns/despawns glowing objects at runtime,
+ * with an optional auto spawn/despawn loop to amplify the flicker.
+ * @param mapView Map view instance
+ * @param gui Root dat.GUI instance
+ */
+const setupDynamicBloomGui = (mapView: MapView, gui: GUI): void => {
+    const state = { count: 0, auto: false };
+    const dynamicFolder = gui.addFolder("Dynamic bloom (spawn/despawn test)");
+    const syncCount = () => {
+        state.count = dynamicBloomObjects.length;
+    };
+    dynamicFolder.add(state, "count").listen().name("live count");
+    dynamicFolder
+        .add(
+            {
+                spawn: () => {
+                    spawnDynamicBloomObject(mapView);
+                    syncCount();
+                }
+            },
+            "spawn"
+        )
+        .name("spawn one");
+    dynamicFolder
+        .add(
+            {
+                despawn: () => {
+                    const oldest = dynamicBloomObjects[0];
+                    if (oldest != null) despawnDynamicBloomObject(mapView, oldest);
+                    syncCount();
+                }
+            },
+            "despawn"
+        )
+        .name("despawn oldest");
+    dynamicFolder
+        .add(
+            {
+                clear: () => {
+                    while (dynamicBloomObjects.length > 0) {
+                        despawnDynamicBloomObject(mapView, dynamicBloomObjects[0]);
+                    }
+                    syncCount();
+                }
+            },
+            "clear"
+        )
+        .name("despawn all");
+    dynamicFolder
+        .add(state, "auto")
+        .name("auto loop")
+        .onChange((value: boolean) => {
+            if (dynamicSpawnTimer != null) {
+                clearInterval(dynamicSpawnTimer);
+                dynamicSpawnTimer = null;
+            }
+            if (value) {
+                dynamicSpawnTimer = setInterval(() => {
+                    // Keep a bounded population: spawn one, then retire the
+                    // oldest once the cap is reached.
+                    spawnDynamicBloomObject(mapView);
+                    if (dynamicBloomObjects.length > 12) {
+                        despawnDynamicBloomObject(mapView, dynamicBloomObjects[0]);
+                    }
+                    syncCount();
+                }, 700);
+            }
+        });
+};
+
 /**
  * Start animation loop
  * @param objects Animated objects that need to be updated
@@ -435,6 +557,13 @@ const startAnimationLoop = (objects: any[]): void => {
         objects.forEach(group => {
             if (group.userData.update) {
                 group.userData.update(delta);
+            }
+        });
+
+        // Dynamically spawned glowing objects pulse too
+        dynamicBloomObjects.forEach(mesh => {
+            if (mesh.userData.update) {
+                mesh.userData.update(delta);
             }
         });
 

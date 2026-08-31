@@ -16,7 +16,7 @@ import { uniform, vec3 } from "three/tsl";
 
 import { type IPassManager } from "./IPassManager";
 import { type IViewRenderManager, type AntialiasingMode } from "./vrm";
-import { TranslucentLayerEffect } from "./vrm/TranslucentLayerEffect";
+import { TranslucentLayerEffect, OUTLINE_LAYER_BIT } from "./vrm/TranslucentLayerEffect";
 
 export enum MSAASampling {
     Level_0 = 0,
@@ -124,10 +124,20 @@ export class MapRenderingManager implements IMapRenderingManager {
         luminancePassThreshold: 0.0
     };
 
-    outline = {
+    /**
+     * Selective outline config. `enabled` is selection-driven: any
+     * `addOutlineObject` call turns the effect on, the last
+     * `removeOutlineObject` turns it off. `xray: true` (default) outlines
+     * the FULL silhouette including geometry hidden behind occluders
+     * (outline-only mask prepass in ViewRenderManager); `hiddenColor`
+     * optionally recolors those occluded ring sections.
+     */
+    outline: IOutlineEffect = {
         enabled: false,
         thickness: 2,
-        color: "#ffffff"
+        color: "#ffffff",
+        xray: true,
+        hiddenColor: undefined
     };
 
     vignette = {
@@ -218,6 +228,8 @@ export class MapRenderingManager implements IMapRenderingManager {
         vrm.config.outline.enabled = this.outline.enabled;
         vrm.config.outline.thickness = this.outline.thickness;
         vrm.config.outline.color = this.outline.color;
+        vrm.config.outline.xray = this.outline.xray !== false;
+        vrm.config.outline.hiddenColor = this.outline.hiddenColor;
 
         vrm.config.vignette.enabled = this.vignette.enabled;
         vrm.config.vignette.offset = this.vignette.offset;
@@ -254,7 +266,7 @@ export class MapRenderingManager implements IMapRenderingManager {
             this.m_pendingBloomObjects = [];
             for (const obj of this.m_pendingOutlineObjects) {
                 vrm.outlineObjects.add(obj);
-                this.applyOutlineMaskNode(obj, 1);
+                this.applyOutlineLayer(obj, true);
             }
             this.m_pendingOutlineObjects = [];
         }
@@ -291,9 +303,11 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
     }
 
-    updateOutline(options: { thickness: number; color: string }): void {
-        this.outline.thickness = options.thickness;
-        this.outline.color = options.color;
+    updateOutline(options: Partial<IOutlineEffect>): void {
+        // `enabled` is deprecated (selection-driven); ignore it here.
+        const { enabled: _ignored, ...config } = options;
+        Object.assign(this.outline, config);
+        this.syncConfigToViewRenderManager();
     }
 
     addBloomObject(object: THREE.Object3D): void {
@@ -301,7 +315,6 @@ export class MapRenderingManager implements IMapRenderingManager {
         const vrm = this.viewRenderManager;
         if (vrm == null) return;
         vrm.bloomObjects.add(object);
-        vrm.needsUpdate = true;
         this.applyBloomMrtNode(object, 1);
     }
     removeBloomObject(object: THREE.Object3D): void {
@@ -310,7 +323,6 @@ export class MapRenderingManager implements IMapRenderingManager {
         if (vrm == null) return;
         if (!vrm.bloomObjects.has(object)) return;
         vrm.bloomObjects.delete(object);
-        vrm.needsUpdate = true;
         this.applyBloomMrtNode(object, 0);
     }
     private applyBloomMrtNode(object: THREE.Object3D, intensity: number): void {
@@ -333,10 +345,6 @@ export class MapRenderingManager implements IMapRenderingManager {
         if (bloomIntensity != null) {
             entries.bloomIntensity = uniform(bloomIntensity);
         }
-        const outlineMask = mat.userData?.__outlineMask;
-        if (outlineMask != null) {
-            entries.outlineMask = uniform(outlineMask);
-        }
         const layerId = mat.userData?.__translucentLayerId;
         if (layerId != null) {
             entries.translucentLayerId = uniform(layerId);
@@ -356,7 +364,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         if (vrm == null) return;
         vrm.outlineObjects.add(object);
         vrm.needsUpdate = true;
-        this.applyOutlineMaskNode(object, 1);
+        this.applyOutlineLayer(object, true);
     }
 
     removeOutlineObject(object: THREE.Object3D): void {
@@ -365,22 +373,26 @@ export class MapRenderingManager implements IMapRenderingManager {
         if (vrm == null) return;
         if (!vrm.outlineObjects.has(object)) return;
         vrm.outlineObjects.delete(object);
-        this.applyOutlineMaskNode(object, 0);
+        this.applyOutlineLayer(object, false);
         if (vrm.outlineObjects.size === 0) {
-            // Last selection gone: drop the outline pass + MRT channel on the
-            // next node graph rebuild.
+            // Last selection gone: drop the outline pass on the next node
+            // graph rebuild.
             this.outline.enabled = false;
             vrm.needsUpdate = true;
         }
     }
 
-    private applyOutlineMaskNode(object: THREE.Object3D, mask: number): void {
+    /**
+     * Tags/untags an object (whole subtree) with OUTLINE_LAYER_BIT. The
+     * ViewRenderManager renders only bit-11 objects into the outline mask
+     * pass, so no material modification is involved.
+     */
+    private applyOutlineLayer(object: THREE.Object3D, enable: boolean): void {
         object.traverse(child => {
-            const mat = (child as THREE.Mesh).material as BloomMrtMaterial | undefined;
-            if (mat != null) {
-                mat.userData = mat.userData ?? {};
-                mat.userData.__outlineMask = mask;
-                this.rebuildMrtNode(mat);
+            if (enable) {
+                child.layers.enable(OUTLINE_LAYER_BIT);
+            } else {
+                child.layers.disable(OUTLINE_LAYER_BIT);
             }
         });
     }
