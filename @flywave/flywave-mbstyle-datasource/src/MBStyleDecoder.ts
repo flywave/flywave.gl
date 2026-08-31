@@ -83,6 +83,11 @@ export interface MBPendingSourceTile {
 }
 
 const s_pendingSourceTiles = new Map<string, MBPendingSourceTile[]>();
+/** §643: merge re-entrancy guard — with a sticky stash, a child extra whose
+ * tileKey string equals the merging CELL key (zoom ≡ storage level, 256px
+ * cells) would re-take the same stash inside its own merge and recurse
+ * forever. The take-consume semantics of §518 masked this collision. */
+const s_activeSourceMergeKeys = new Set<string>();
 
 export function mbPendingSourceTilesPut(key: string, tiles: MBPendingSourceTile[]): void {
     if (s_pendingSourceTiles.size > 64) {
@@ -92,10 +97,24 @@ export function mbPendingSourceTilesPut(key: string, tiles: MBPendingSourceTile[
     s_pendingSourceTiles.set(key, tiles);
 }
 
+/**
+ * §643: the stash is STICKY — take() no longer consumes it. The engine
+ * re-decodes live tiles repeatedly (mask updates, dirty marks, tile churn:
+ * §612 measured the merged 503-instance decode alive for exactly ONE frame,
+ * f5, before a stash-less re-decode reverted it to the 91 base instances —
+ * the flip-flop that kept neighbor-tile trees out of every captured frame).
+ * Retaining the last stash per cell makes every re-decode re-merge. Entries
+ * are replaced on the next provider fetch and dropped wholesale via
+ * mbPendingSourceTilesClear() when a style (re)wires its sources.
+ */
 export function mbPendingSourceTilesTake(key: string): MBPendingSourceTile[] | undefined {
-    const v = s_pendingSourceTiles.get(key);
-    if (v) s_pendingSourceTiles.delete(key);
-    return v;
+    return s_pendingSourceTiles.get(key);
+}
+
+/** §643: epoch reset — called when a datasource (re)wires its extras so a
+ * new style can never decode a previous style's stashed bytes. */
+export function mbPendingSourceTilesClear(): void {
+    s_pendingSourceTiles.clear();
 }
 
 export function mbCellTileKeyString(k: { level: number; column: number; row: number }): string {
@@ -1024,11 +1043,18 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         }
         // §518: extra vector sources fetched by the provider for this cell —
         // decode each against its own tileKey + sourceId and merge.
-        const pendingSources = mbPendingSourceTilesTake(
-            mbCellTileKeyString(tileKey));
-        if (pendingSources && pendingSources.length > 0) {
-            return this.decodeTileWithSources(
-                data, tileKey, projection, pendingSources, zoom);
+        const cellKeyStr = mbCellTileKeyString(tileKey);
+        if (!s_activeSourceMergeKeys.has(cellKeyStr)) {
+            const pendingSources = mbPendingSourceTilesTake(cellKeyStr);
+            if (pendingSources && pendingSources.length > 0) {
+                s_activeSourceMergeKeys.add(cellKeyStr);
+                try {
+                    return await this.decodeTileWithSources(
+                        data, tileKey, projection, pendingSources, zoom);
+                } finally {
+                    s_activeSourceMergeKeys.delete(cellKeyStr);
+                }
+            }
         }
         const decodeInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
         const emitter = new MBTileDataEmitter(tileKey, decodeInfo, zoom);

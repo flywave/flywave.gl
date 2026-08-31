@@ -54,13 +54,17 @@ export class MBShadowRenderer {
     private m_enabled = false;
     private m_intensity = 0;
     private m_orthoStyle = false;
-    private m_styleHasTranslucent = false;
     // §560: ground shadow receiver — mgl shades the BACKGROUND as a ground
     // layer (`background × groundRadiance × groundShadow`); our background is
     // the engine clearColor, so an mgl-style screen-space quad (fog-renderer
     // pattern — NDC rasterization at depth ≈1, world position from
     // unprojecting the screen corners onto the z=0 ground plane) carries the
-    // shadow factor over true background fragments only.
+    // shadow factor. §643: the quad draws in the engine's preSceneHook
+    // (underlay, direct path) — MapView clears the frame then renders with
+    // autoClear=false, so the quad lies BENEATH all scene content (mgl
+    // composites ground shadows underneath; the old AfterRender overlay
+    // channel painted over depth-less fill/line layers and needed the §572b
+    // translucent gate, which disabled the quad for virtually every style).
     private m_groundQuad: THREE.Mesh | null = null;
     private m_groundUniforms: any = null;
     private m_groundScene = new THREE.Scene();
@@ -72,6 +76,9 @@ export class MBShadowRenderer {
     ) {
         // Casters-only camera: meshes are opted in via layers.enable(1).
         this.m_shadowCamera.layers.set(1);
+        (this.m_mapView?.mapRenderingManager as any).preSceneHook = (
+            renderer: THREE.WebGLRenderer,
+        ) => this.drawGroundQuad(renderer);
     }
 
     /** Update enable/intensity from the current 3D-lights state. */
@@ -96,10 +103,8 @@ export class MBShadowRenderer {
         if (ortho) this.setLightState(false, 0);
     }
 
-    /** §572b: translucent layers over the background — see syncGroundQuad. */
-    setStyleHasTranslucent(t: boolean): void {
-        this.m_styleHasTranslucent = t;
-    }
+    /** §572b gate retired with the AfterRender overlay channel (§643). */
+    setStyleHasTranslucent(_t: boolean): void {}
 
     get enabled(): boolean {
         return this.m_enabled && this.m_intensity > 0;
@@ -150,6 +155,12 @@ export class MBShadowRenderer {
                 uniform vec3 uMBGroundColor;
                 uniform vec3 uMBEye;
                 void main() {
+                    // §643 underlay channel: corners whose view ray never
+                    // hits the z=0 ground plane are clamped at the far
+                    // distance and sit ABOVE it — those interpolate to sky,
+                    // where the quad must not paint (the depth-gate of the
+                    // old overlay channel used to exclude sky for free).
+                    if (vMBWorldPos.z > 1.0) discard;
                     vec4 mbShadowUv = uMBShadowMatrix * vec4(vMBWorldPos - uMBEye, 1.0);
                     float mbLit = 1.0;
                     if (mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
@@ -165,7 +176,7 @@ export class MBShadowRenderer {
                     vec3 mbOut = uMBGroundColor * mix(uMBGroundShadowFactor, vec3(1.0), mbLit);
                     gl_FragColor = vec4(pow(mbOut, vec3(1.0 / 2.2)), 1.0);
                 }`,
-            depthTest: true,
+            depthTest: false,
             depthWrite: false,
         });
         const quad = new THREE.Mesh(geo, mat);
@@ -192,12 +203,24 @@ export class MBShadowRenderer {
         out.copy(camPos).addScaledVector(dir, Math.min(Math.abs(t), far));
     }
 
-    private syncGroundQuad(center: THREE.Vector3, radius: number, eye: THREE.Vector3): void {
-        // §572b: translucent content renders without depth writes — a
-        // post-main overlay quad would paint OVER it (mgl composites ground
-        // shadows underneath). Skip the quad for such styles (the depth pass
-        // still feeds material receivers).
-        if (this.m_styleHasTranslucent) return;
+    /** §643: underlay draw — the engine calls this from preSceneHook, before
+     * the scene render (frame already cleared, autoClear stays false, so the
+     * quad lies beneath all content). Uniforms were prepared by run() in
+     * WillRender; a fresh style's first frame simply draws nothing. */
+    private drawGroundQuad(renderer: THREE.WebGLRenderer): void {
+        if (!this.m_enabled || this.m_intensity <= 0) return;
+        if (!this.m_groundQuad || !this.m_groundUniforms) return;
+        if (this.m_orthoStyle) return;
+        const prevRT = renderer.getRenderTarget();
+        try {
+            renderer.setRenderTarget(null);
+            renderer.render(this.m_groundScene, this.m_groundCamera);
+        } finally {
+            renderer.setRenderTarget(prevRT);
+        }
+    }
+
+    private prepGroundQuad(center: THREE.Vector3, radius: number, eye: THREE.Vector3): void {
         this.ensureGroundQuad();
         const renderer = this.m_mapView?.renderer as THREE.WebGLRenderer | undefined;
         // The RTE render camera keeps an IDENTITY world matrix (rebase lives
@@ -241,17 +264,8 @@ export class MBShadowRenderer {
         // background semantics — MBStyleDataSource.applyBackgroundColor).
         const clear = (this.m_mapView as any).clearColor;
         if (clear !== undefined) this.m_groundUniforms.uMBGroundColor.value.setHex(clear);
-        // Draw over the finished frame (AfterRender pattern).
-        const prevAutoClear = renderer.autoClear;
-        const prevRT = renderer.getRenderTarget();
-        try {
-            renderer.autoClear = false;
-            renderer.setRenderTarget(null);
-            renderer.render(this.m_groundScene, this.m_groundCamera);
-        } finally {
-            renderer.autoClear = prevAutoClear;
-            renderer.setRenderTarget(prevRT);
-        }
+        // §643: the quad itself is drawn by the engine's preSceneHook —
+        // see drawGroundQuad.
     }
 
     /** Per-frame entry point (AfterRender; one-frame uniform lag like heatmap). */
@@ -360,22 +374,15 @@ export class MBShadowRenderer {
         let frameCenter = center.clone();
         let radius = Math.max(50, (this.m_mapView as any).targetDistance ?? 500);
         if (haveBox) {
-            // §561: the receiver quad spans the whole view ∩ ground — fold
-            // its far corners into the framing box so distant ground points
-            // stay inside the ortho (out-of-bounds uv reads as lit).
-            const corner = new THREE.Vector3();
-            try {
-                camera.updateMatrixWorld();
-                const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
-                for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-                    this.cornerOnGround(camera, camPos, cx, cy, radius * 8, corner);
-                    corner.sub(eye);
-                    casterBox.expandByPoint(corner);
-                }
-            } catch { /* framing stays caster-only */ }
+            // §643: tight caster framing with a 50% reach margin (long shadows
+            // at low sun + soft edges). The §561 view-corner folding (far =
+            // radius×8 → 4km corners) blew the ortho up to ~12km and crushed
+            // the casters into ~9% of the depth canvas (~12 m/px); points
+            // outside the box already read as lit via the uv bounds check, so
+            // folding added nothing but resolution loss.
             frameCenter = casterBox.getCenter(new THREE.Vector3());
             const sz = casterBox.getSize(new THREE.Vector3());
-            radius = Math.max(50, Math.max(sz.x, sz.y, 1) * 0.75);
+            radius = Math.max(50, Math.max(sz.x, sz.y, 1) * 0.75 * 1.5);
         }
         this.m_shadowCamera.left = -radius;
         this.m_shadowCamera.right = radius;
@@ -475,10 +482,11 @@ export class MBShadowRenderer {
                 0, 0, 0, 1,
             ));
 
-        this.syncGroundQuad(center, radius, eye);
+        this.prepGroundQuad(center, radius, eye);
     }
 
     dispose(): void {
+        (this.m_mapView?.mapRenderingManager as any).preSceneHook = null;
         this.m_shRenderer?.dispose();
         this.m_shRenderer = null;
         this.m_shTex?.dispose();

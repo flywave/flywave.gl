@@ -26,7 +26,7 @@ import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { MBTileDataEmitter } from './MBTileDataEmitter';
 import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
-import { mbCellTileKeyString, mbPendingChildrenPut, mbPendingSourceTilesPut, MBPendingChildTile, MBPendingSourceTile } from './MBStyleDecoder';
+import { mbCellTileKeyString, mbPendingChildrenPut, mbPendingSourceTilesClear, mbPendingSourceTilesPut, MBPendingChildTile, MBPendingSourceTile } from './MBStyleDecoder';
 import { SpriteAtlas } from './materials/MapIconMaterial';
 import { MBStyleRuntime } from './MBStyleRuntime';
 import { MBEnvironmentManager } from './MBEnvironmentManager';
@@ -992,6 +992,9 @@ class MBExtraVectorSourcesProvider extends DataProvider {
         private m_primary512: boolean,
     ) {
         super();
+        // §643: sticky-stash epoch reset — a (re)wired style must never decode
+        // a previous style's stashed extras (take() no longer consumes).
+        mbPendingSourceTilesClear();
     }
 
     ready(): boolean {
@@ -2560,6 +2563,12 @@ export class MBStyleDataSource extends TileDataSource {
                 // §518: loadModels instances (source-registry path) share the
                 // RTE problem — keep them at absolute − eye (see
                 // MBModelRenderer.run for the frame explanation).
+                // §643: the load path bakes R·S·flip into `model.matrix` with
+                // matrixAutoUpdate=false, so a bare position.set() never
+                // reached the rendered matrix — every model-source instance
+                // stayed at absolute world (~1e7) and rendered nothing (the
+                // entire blank model-source fixture family). Write the rebase
+                // straight into the frozen matrix.
                 if ((self as any).m_loadedModels?.length > 0) {
                     try {
                         const gc = (self.mapView as any).geoCenter;
@@ -2567,8 +2576,13 @@ export class MBStyleDataSource extends TileDataSource {
                         if (gc && pr) {
                             const eye = pr.projectPoint(gc, { x: 0, y: 0, z: 0 });
                             for (const entry of (self as any).m_loadedModels) {
-                                const base = entry.model.userData?._mbBasePos;
-                                if (base) entry.model.position.set(base.x - eye.x, base.y - eye.y, base.z - eye.z);
+                                const model = entry.model;
+                                const base = model.userData?._mbBasePos;
+                                if (!base) continue;
+                                model.position.set(base.x - eye.x, base.y - eye.y, base.z - eye.z);
+                                if (model.matrixAutoUpdate === false) {
+                                    model.matrix.setPosition(model.position);
+                                }
                             }
                         }
                     } catch {}
@@ -2588,21 +2602,10 @@ export class MBStyleDataSource extends TileDataSource {
                     const camSpec: any = (style as any).camera ?? style;
                     self.m_shadowRenderer.setOrthographicStyle(
                         camSpec['camera-projection'] === 'orthographic');
-                    // §572b: the ground overlay quad may only composite over
-                    // TRUE background. (a) translucent layer paints (numeric
-                    // opacity < 1) don't write depth; (b) plain fill/line
-                    // layers are painted with depthTest=false in style order
-                    // (§518) — they leave no depth either and the quad would
-                    // cover them (draw-layer-lines +27k measured).
-                    self.m_shadowRenderer.setStyleHasTranslucent(
-                        ((style.layers ?? []) as any[]).some((l: any) =>
-                            l?.type === 'fill' || l?.type === 'line'
-                            || ['fill-opacity', 'line-opacity', 'fill-extrusion-opacity',
-                                'raster-opacity', 'model-opacity', 'background-opacity',
-                                'circle-opacity'].some((k: string) => {
-                                    const v = l?.paint?.[k];
-                                    return typeof v === 'number' && v > 0 && v < 0.999;
-                                })));
+                    // §643: the §572b translucent scan retired — the ground
+                    // quad draws in the engine preSceneHook (underlay), where
+                    // it lies beneath translucent and depth-less layers by
+                    // construction (see MBShadowRenderer.drawGroundQuad).
                     self.m_shadowRenderer.setLightState(!!sl, sl?.intensity ?? 0);
                     self.m_shadowRenderer.run();
                     // §562: model materials sample the shadow map in their
@@ -2825,7 +2828,17 @@ export class MBStyleDataSource extends TileDataSource {
     private updateModelRegistry(style: StyleSpecification): void {
         if (!this.m_modelRenderer) return;
         const LOCAL = '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/';
-        const resolveUrl = (u: string) => u?.replace(/^local:\/\//, LOCAL) ?? '';
+        const resolveUrl = (u: string) => {
+            if (!u) return '';
+            const v = u.replace(/^local:\/\//, LOCAL);
+        // §643: mgl fixture URIs carry doubled slashes
+        // (local://models//Duck.gltf) — the karma static server 404s
+        // them and the model silently never loads (blank model-source
+        // fixtures). Collapse duplicate path slashes, protocol excepted.
+            const prot = v.match(/^([a-z][a-z0-9+.-]*:\/\/)/i);
+            const rest = prot ? v.slice(prot[1].length) : v;
+            return (prot ? prot[1] : '') + rest.replace(/\/{2,}/g, '/');
+        };
         const registry = new Map<string, string>();
         const addEntry = (id: string, def: any) => {
             const uri = typeof def === 'string' ? def : def?.uri;
@@ -2863,12 +2876,26 @@ export class MBStyleDataSource extends TileDataSource {
         if (!scene) return;
 
         const LOCAL = '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/';
-        const resolveUrl = (u: string) => u?.replace(/^local:\/\//, LOCAL) ?? '';
+        const resolveUrl = (u: string) => {
+            if (!u) return '';
+            const v = u.replace(/^local:\/\//, LOCAL);
+        // §643: mgl fixture URIs carry doubled slashes
+        // (local://models//Duck.gltf) — the karma static server 404s
+        // them and the model silently never loads (blank model-source
+        // fixtures). Collapse duplicate path slashes, protocol excepted.
+            const prot = v.match(/^([a-z][a-z0-9+.-]*:\/\/)/i);
+            const rest = prot ? v.slice(prot[1].length) : v;
+            return (prot ? prot[1] : '') + rest.replace(/\/{2,}/g, '/');
+        };
 
         for (const layer of modelLayers) {
             const layout = (layer as any).layout ?? {};
-            const modelScale = layout['model-scale'] ?? 1;
-            const modelRotation = layout['model-rotation'];
+            // §643: model-scale/model-rotation are PAINT properties in the
+            // mgl 3d-style spec (model layer fixtures put them in paint) —
+            // layout was only a legacy fallback.
+            const paint = (layer as any).paint ?? {};
+            const modelScale = paint['model-scale'] ?? layout['model-scale'] ?? 1;
+            const modelRotation = paint['model-rotation'] ?? layout['model-rotation'];
 
             // Collect model definitions: inline `models` map in the layer, a
             // `type: "model"` source's `models` registry, or from the
@@ -2878,6 +2905,7 @@ export class MBStyleDataSource extends TileDataSource {
                 position: number[];
                 orientation?: number[];
                 scale?: number | number[];
+                translation?: number[];
             }> = [];
 
             // Inline models (mapbox HD: layer.models = { id: { uri, position } })
@@ -2905,6 +2933,7 @@ export class MBStyleDataSource extends TileDataSource {
                                 position: m.position ?? [],
                                 orientation: m.orientation,
                                 scale: m.scale,
+                                translation: m.translation,
                             });
                         }
                     }
@@ -2972,6 +3001,26 @@ export class MBStyleDataSource extends TileDataSource {
                         const geoCoord = new GeoCoordinates(lat, lng);
                         const worldPos = projection.projectPoint(geoCoord);
                         model.position.set(worldPos.x, worldPos.y, (worldPos as any).z ?? z);
+                        // §643: paint `model-translation` — mgl calculateModelMatrix
+                        // adds translation[0..1] × pixelsPerMeter to the projected
+                        // point (its pixel frame is y-south-positive) and z raw in
+                        // meters. Our world frame is mercator-normalized equatorial
+                        // meters with the same south-positive y, so a ground meter
+                        // is 1/cos(lat) world units on x/y.
+                        const translation = def.translation
+                            ?? paint['model-translation']
+                            ?? layout['model-translation'];
+                        if (Array.isArray(translation)) {
+                            const latRad = (lat * Math.PI) / 180;
+                            const k = 1 / Math.max(1e-6, Math.cos(latRad));
+                            model.position.x += (translation[0] ?? 0) * k;
+                            // mgl's pixel frame is y-south-positive, BUT the
+                            // engine's render world frame flips that axis
+                            // (render empirics §643: +y moved the model NORTH
+                            // on screen while mgl moves it south) — negate.
+                            model.position.y -= (translation[1] ?? 0) * k;
+                            model.position.z += translation[2] ?? 0;
+                        }
                         // §518: keep the absolute placement for the per-frame
                         // RTE (−eye) rebase in the render hook.
                         (model.userData as any)._mbBasePos = {
@@ -2982,9 +3031,16 @@ export class MBStyleDataSource extends TileDataSource {
                     // Scale: scalar or [x,y,z] — layout `model-scale` or the
                     // source registry entry's own `scale`.
                     const effScale = def.scale ?? modelScale;
-                    // Rotation: [x,y,z] Euler angles in degrees — layout
-                    // `model-rotation` or the registry entry's `orientation`.
-                    const effRotation = def.orientation ?? modelRotation;
+                    // Rotation: [x,y,z] Euler degrees — mgl sums the model's
+                    // own orientation with the paint rotation (model.ts:
+                    // orientation[i] + rotation[i]) rather than falling back.
+                    const orient = def.orientation ?? [0, 0, 0];
+                    const paintRot = Array.isArray(modelRotation) ? modelRotation : [0, 0, 0];
+                    const effRotation = [
+                        (orient[0] ?? 0) + (paintRot[0] ?? 0),
+                        (orient[1] ?? 0) + (paintRot[1] ?? 0),
+                        (orient[2] ?? 0) + (paintRot[2] ?? 0),
+                    ];
                     // §518: render AFTER the HD road band (see MBModelRenderer
                     // — ro 0 gets overdrawn by the depthTest-less fill band).
                     model.traverse((o: any) => { o.renderOrder = 10; });
@@ -4252,6 +4308,15 @@ export class MBStyleDataSource extends TileDataSource {
         const bearing = -(style.bearing ?? 0);
 
         try {
+            // §643: mgl render tests place cameras at style zoom 21–27 (model
+            // closeups); the engine default maxZoomLevel is 20 and lookAtImpl
+            // clamps the zoom → camera distance (blank/over-far model-source
+            // fixtures). Lift the limit to the style's zoom for this map;
+            // tile requests stay clamped by each source's own maxzoom
+            // (overzoom path unchanged).
+            if (zoom > (this.mapView as any).maxZoomLevel) {
+                (this.mapView as any).maxZoomLevel = zoom;
+            }
             // Import GeoCoordinates dynamically to avoid circular dependency issues
             const { GeoCoordinates } = require('@flywave/flywave-geoutils');
             const geoCoord = new GeoCoordinates(center[1], center[0]);
