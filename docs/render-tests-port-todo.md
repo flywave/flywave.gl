@@ -7182,3 +7182,8 @@ diralt 修复后 z-offset 家族仍 ~39 万 px（vs quantization 2.6 万），�
 
 **下轮入口**：①查 MBBatchedModelRenderer 的 entry 结构是否携带 extrusion 高度信息；②对无 extrusion 的 z-offset fixture（如 z-offset-terrain-fix-griffith）验证 z=0 是否已正确（terrain 偏移走 elevation 路径）；③有 extrusion 的 fixture 需要 tile-level extrusion 高度查询。
 
+
+**§696（补充）smoothstep 效果验证 + 残差分析（2026-09-01）**：
+
+smoothstep A/B（ground-shadow-fog）：**167,004 → 141,864（−15%，−25,140 px）**——消除 ambient=0 binary 纯黑墙面效果确认：墙面从近黑恢复到白亮（与 expected 暗度差 Δ=34-45）。pixel 采样对比：ours 墙面/地面/树 = 255（纯白），expected = 244/239/166（fog wash 后的亮度）；ours 天空 = 198（偏暗），expected = 255。**剩余 141,864 px 主因：挤出/模型表面的 mgl fog 未正确应用**——ours 的 extrusion in-shader fog block 未将颜色 wash 向 fogColor（expected 有明显雾洗效果）。extrusion injection 中的 fog block（§670-§682）已实现但可能被后续 shader 覆盖或路径不通。下轮入口：用 fogt=1 读数确认挤出片元的 fogT 值是否为 0（fog 未生效）vs expected 的 fogT ≈0.5-0.8（中等洗涤）。
+
