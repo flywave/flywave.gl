@@ -250,6 +250,11 @@ export class MBShadowRenderer {
         this.cornerOnGround(cam, camPos, 1, -1, far, corners[1]);
         this.cornerOnGround(cam, camPos, 1, 1, far, corners[2]);
         this.cornerOnGround(cam, camPos, -1, 1, far, corners[3]);
+        // §692: RTE render camera sits at origin (identity world matrix),
+        // so cornerOnGround computes RTE-relative ground intersections
+        // (all ≈ 0,0,0). The receiver needs ABSOLUTE world positions for
+        // `mbWP - uMBEye` to yield the correct RTE offset. Add eye back.
+        for (const c of corners) c.add(eye);
         // The shadow camera lives in the eye-rebased scene frame — bring the
         // absolute-world corners into the SAME frame (casters' worldPos z
         // also carries −eye.z, so the ground plane here is z = −eye.z).
