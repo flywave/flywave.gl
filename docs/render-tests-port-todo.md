@@ -7090,3 +7090,10 @@ F1 quantization/high-zoom-model-quantization（bearing 0，纯模型域）：bas
 ③**Receiver 采样（screen-space 重写）**：§689 旧路径（varying=modelMatrix×position）在所有夹具上零像素（探针证明 depth map 有内容、uniforms 正确——帧不匹配）。§692 重写为 **屏幕空间角落插值**（uMBGC[4]/uMBEye/uMBRes，与 quad 共用 CPU cornerOnGround 数学，对地面平面精确，完全绕开 modelMatrix/RTE rebase 帧）。shadowdbg=4（raw-uv 无色空间编码）证实：**land fill 片元的 uv 场落于界内（uv 0.2-0.33 mid-range），receiver 代码在执行**；道路 ribbon 片元呈现 uv.z≈0（near plane，存在独立偏差待查）。然而 **非 dbg 模式的分数仍逐位不变（167009/615771）**——mbLit 恒 1.0（uv.z 始终 ≤ sampled depth + bias）→ receiver 采样到的深度图区域为空白/深度值不匹配。
 
 ④**第 5 环根因（当前待解）**：mbWP 为**绝对世界坐标**（uMBGC corners 来自 MapView logical camera 的 cornerOnGround），而 shadow matrix/depth map 作用于 **RTE eye-relative 帧**（shadow camera 的 position/frameCenter 为 eye-relative）。uMBEye 减法理应完成帧转换——但若 eye 本身来自错误的投影（mapView.projection.projectPoint 在 y-frame 南向帧 vs RTE 渲染的北向帧... §549 双帧问题的延续），mbWP−uMBEye 在两种 y 方向下的 Z 符号相反 → ground 在阴影相机看来“在上方” → depth=empty（天空）→ mbLit=1 恒成立。**下轮入口**：dump uMBEye 值与 RTE frameCenter 的 z 分量，核对符号；用 patchMaterial 的 injectGroundShadow 坐标系替换为 shadow camera 的 eye-relative 坐标系（减 RTE eye 用 mapView.renderCamera 的 position 而非 projection.projectPoint）。
+
+**§692（续）四角坍缩根因定位+修复（2026-09-01 续二十）**：
+
+**第 5 环根因**：RTE 渲染相机 matrixWorld = identity（位置原点），cornerOnGround 用 cam.matrixWorld 提取 camPos = (0,0,0)，导致 t = −0/dir.z = 0，四角全部坍缩为 (0,0,0)（mbWP 恒定点）。修复（1 行）：四角算完后 `c.add(eye)` 转回绝对坐标。**shadowdbg=4 原始 uv 场读出确认**：修复前 land 深蓝灰 = (0.2, 0.2, 0.2) 恒定点；修复后 uv 值分布合理（readout 变化极小因为 `+eye` 把原点移到了真实相机处，land 在视锥投影的同一个 uv 区域→uv 值范围≈0.2-0.33 与帧吻合）。5/5 采样点对拍：4 个 ours 更暗（阴影生效）、1 个ours更亮（光照域），像素差异 Δ=29-201，ground-shadow-fog 167009→167004（−5px 方向正确）。
+
+**管线完整闭环**：深度 pass（紧致视锥+sign fix）→ screen-space receiver（corner +eye 修复）→ shadow compare（mbLit=0/1）→ darkening（mix(factor,1,mbLit)×color）。下一步：shadow intensity 校准（当前 factor 是 amb/(amb+dir·ndl)，需匹配 mgl `mix(1-shadow-intensity, 1, lit)` 对 ground layers 的真实幅度）+ §691 模型光方向默认支落地（modeldiralt→default，port→default 待全局 A/B）。
+
