@@ -7297,3 +7297,10 @@ modellightport=1（§655 Cook-Torrance PBR 分支）ChromeHeadless 同平台 A/B
 **实现（MBModelRenderer.applyMglModelLighting）**：新增 `pbrEligible` 参数——仅 MBMeshFeatures 两处调用点传 true（部件级样式路径）；uMBPortMode = pbrEligible（mgl 规则），modellightport=0/1 保留为 A/B 强制覆盖。
 
 **验证（默认参数）**：landmark-conflation-buckingham **175,922**（hemi 167,941 ✓ 回到同水平；forced-PBR 211,526 → −17%）；landmark-z-offset-scale-munich-museum **280,629**（PBR 收益保留 ✓，hemi 371,586）。§704 的"conflation 阻塞"与"PBR 域分治"就此统一：**着色模型跟随 mesh_features 资格即 mgl 语义本身**，无需全局翻转也不需要按家族挑模式。z-offset 家族剩余亮度残差（均值 +16）归入 PBR part-color 标定。单测 300 绿、tsc 绿。
+
+
+**§707. PBR part-color 标定前置修正——像素非同源性实证（2026-09-01 续三十一）**：
+
+以 ±6px 模板匹配做同源点采样后发现：**§704 的"粉顶 G/B 色差"归因前提无效**。①expected 中强橙屋顶面片（如 exp(178,312)=(220,168,109)）在 ours 同位置是灰墙 (204,204,204)——同坐标表面身份不同（部分部件的 style-color 应用缺失或 partId 映射不一致），ours 的"pink 83,540px"散布全图（x 0-1023）而 exp 仅 2,258px 集中于 museum——ours 的 pink 计数被暖色地面/边缘混色污染，两图在该 fixture 上像素级不同源，逐像素 delta 统计（含 §704 的均值 +16.5）作为标定信号失效。②灰墙对照：exp(178,300)=(182,182,182) vs ours(206,206,206)——中性色、ours 均匀偏亮 +24，与 part-color 无关（光照/雾域）。③烘焙链路核对：mgl buildMeshFeatureArray byte-space lerp + 4444 展开 + LOD-AO 乘法与 MBMeshFeatures 逐项一致，part-color 烘焙非回归源。
+
+**结论**：part-color 数值标定的前置条件是先建立同源对应——下轮入口：①审计 landmark GLB 的 partId→PartNames 映射与 style-color 应用覆盖（为何部分屋顶面片未着色），用饱和色面片（r−b>60）做连通域质心配准而非灰度互相关；②配准后重新归因剩余偏移是光照还是色域。本轮无代码变更。单测 300 绿、tsc 绿。
