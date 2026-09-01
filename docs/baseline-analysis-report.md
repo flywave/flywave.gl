@@ -122,3 +122,35 @@
 2. §688/§689 复测 buildings-trees 家族（预期 −50%+）。
 3. MAPS3D-1159 / landmark-z-offset-munich 家族对拍（B4 批次出数后）。
 4. landmark-glb-tiles-lod（19 万 vs 非 lod 3023）单点排查。
+
+### ml-0901 基线终版（2026-09-01 补跑完成后；HEAD=§691）
+
+> 基线全集 = 212 夹具，其中 **20 例为 mgl 标记 web-skip**（front-cutoff 家族"Needs updated model fixtures"、model-opacity-cutout、multiple-models-terrain、terrain-2-wheels 等——本平台合法不跑），可跑全集 192，**已采集 192/192**（合计 ~3200 万 px）。跑测基建同步修复（733c7ec8：runner 硬超时+进程组击杀+断连快速失败）。
+
+#### 终版家族排行（px）
+
+| 家族 | 合计 | 主例 | 定性/下一入口 |
+|---|---|---|---|
+| meshopt-quantization（±lod） | 616 万 | high-zoom-model-quantization 101 万×2、z-offset-v2 48 万×2、-port 47/45 万、-station 34 万×2、highlights 30/31 万、castro 24/29 万、shadows-normal-offset 19 万×2 | 取景已对齐；残差=模型光照帧不一致（§691：法线/光双帧，ambient-only 实测）+V2 meshopt AO/位偏移（§551 遗留③） |
+| trees-puck-terrain-shadows | 192 万 | zoomin 97 万、partial 95 万 | 新入榜（原断连未测）；地形+树+阴影复合域 |
+| buildings-trees-shadows | 389 万 | casting 79 万、fog 系 62 万×3 | §688 后道路 103→194（mix 生效，期望 255，残留 ×0.77 压暗未定位）；§689 接收器零视觉变化（见下 A/B 结论） |
+| models-on-globe | ~160 万 | near-pole 81 万、nested 39 万 | globe 引擎域（报告 #2 已知冻结带） |
+| camera-projection | 97 万 | ortho 家族 | §571 ortho 特殊域 |
+| landmark-z-offset | ~380 万合计 | scale 49/38 万、museum-terrain 43/39 万、museum 39/36 万 | 3d-hidden/-lod 已回到 8962/9021（§661 时代回归消解） |
+| part-styling（indirect/update/doors） | ~290 万 | update-doors 48/36 万、doors-no-shadows 30/32 万 | setLights 重求值链（refreshMeshFeatures 在库，帧域亮度待 §691 裁决） |
+| landmark-conflation | ~85 万 | buckingham 22/16 万 | 挤压碰撞域，未动 |
+| mbx 其余（shadows/xray/wireframe/meshopt-colors） | ~120 万 | colors-lod 35 万、shadows-lod 19 万 | 分散 |
+| MAPS3D-1159 | 13733/同 | §659 前 7149 | 回归残留 ~6.6k，小项挂起 |
+
+#### §688/§689 首轮 A/B 诚实结论（2026-09-01）
+
+1. **§688 line-emissive-strength（部分生效）**：道路采样 (700,880) ours 103→194（mix 已落到渲染材质），expected 255——**残留 ×0.77 均匀压暗因子未定位**（候选：uMBEmissive 编译值≠1 的第二路径、双重 ground-rad、或渐变/雾交互）。land 92 恒不变 ✓。低 zoom-fade 恒 113661 ✓ 无回归。
+2. **§689 ground-shadow 接收器（零视觉变化）**：ground-shadow-fog 167009 **逐位不变**——patch 时点注入+刷新链已按 injectGroundLighting 同构接线，但阴影块在渲染材质上无像素效果（uv 越界/深度恒 lit/intensity 未达三选一）。与 §577-§588 的黑盒矛盾同构，但**本次注入路径已被 land 92 证明可达**——下轮用 shadowdbg=3 读出（compile 时已含 uMBShadowDbg）单点裁决；若读出仍 0px 则问题在 uv 域（vMbWorldPos vs shadow matrix 帧），dump uMBShadowMatrix+顶点世界坐标即可定位。
+3. 哨兵：fill-extrusion--default 136125、environment-test 17577、default-orientation 2865、multiple-meshes 4792——全部与修复前逐位一致，**无回归**。
+
+#### 下一步（更新）
+
+1. **§691 三门 A/B 裁决模型光照帧**（quantization 616 万 + part-styling 290 万 + trees 域联动，全局最大杠杆）：modellightport / modeldiralt / extaz180 × ground-shadow-fog(bearing 264) + quantization(bearing 0) 双夹具。
+2. §689 阴影读出裁决（shadowdbg=3，上述入口）。
+3. §688 残留 ×0.77 因子定位（diffuse 域 print 或排除法 A/B）。
+4. trees-puck（192 万）与 models-on-globe（globe 冻结带）分域立案。
