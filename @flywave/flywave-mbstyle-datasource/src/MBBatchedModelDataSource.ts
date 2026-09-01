@@ -674,6 +674,73 @@ class MBBatchedModelDecoder implements ITileDecoder {
                     (k: string, d: [number, number, number]) => this.evalPaintVec(k, d));
             }
         } catch { /* front-cutoff must never break the frame */ }
+        this.pixPickProbe();
+    }
+
+    /**
+     * §711: screen-space surface identification (mbbatchdbg=1 + karma arg
+     * `pix=x,y`) — raycast the pixel into every built tile group and dump
+     * the hit chain (node id / material baseColor / vertex part histogram)
+     * so an expected-crop pixel can be attributed to a mesh + color source.
+     */
+    private m_pixProbed = false;
+    private pixPickProbe(): void {
+        if (this.m_pixProbed || !batchedDiagEnabled()) return;
+        const mv: any = (this.m_envProvider as any)?.mapView;
+        const pixArg = (window as any).__karma__?.config?.args
+            ?.find?.((a: string) => a.startsWith('pix='))?.slice(4);
+        if (!mv || pixArg === undefined) return;
+        this.m_pixProbed = true;
+        const dump = (payload: Record<string, unknown>): void => {
+            const fb = (window as any).__karma__?.config?.args
+                ?.find?.((a: string) => a.startsWith('feedback-url='))
+                ?.slice('feedback-url='.length);
+            if (fb) {
+                fetch(`${fb}/mb-probe-dump`, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify(payload),
+                }).catch(() => {});
+            }
+        };
+        try {
+            const [pxs, pys] = pixArg.split(',').map(s => parseInt(s, 10));
+            const cam: any = mv.camera;
+            const ray = new THREE.Raycaster();
+            ray.setFromCamera(new THREE.Vector2(
+                (pxs / (mv.canvas?.clientWidth || 512)) * 2 - 1,
+                -((pys / (mv.canvas?.clientHeight || 512)) * 2 - 1)), cam);
+            for (const g of this.m_builtGroups) g.updateMatrixWorld(true);
+            const hits = ray.intersectObjects([...this.m_builtGroups], true);
+            const hitInfo = hits.slice(0, 5).map(hit => {
+                const m = hit.object as any;
+                const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+                const hist: Record<string, number> = {};
+                const feat = m.geometry?.getAttribute?.('_feature_rgba4444');
+                if (feat) {
+                    const u16 = feat.array as Uint16Array;
+                    const cnt = Math.min(feat.count, 20000);
+                    for (let i = 0; i < cnt; i++) {
+                        const u32 = (u16[i * 2] | (u16[i * 2 + 1] << 16)) >>> 0;
+                        const part = u32 & 0xf;
+                        hist['p' + part] = (hist['p' + part] ?? 0) + 1;
+                    }
+                }
+                return {
+                    dist: +hit.distance.toFixed(2),
+                    nodeId: m.userData?.__mbNodeId ?? null,
+                    part: m.userData?.__mbPart,
+                    baseColor: mat?.color ? mat.color.toArray().map(v => +v.toFixed(3)) : null,
+                    opacity: mat?.opacity,
+                    vertexColors: !!mat?.vertexColors,
+                    hist,
+                };
+            });
+            dump({ probe: 'pixpick', pix: [pxs, pys], hits: hitInfo,
+                groups: this.m_builtGroups.size });
+        } catch (e) {
+            dump({ probe: 'pixpick', pixErr: String((e as Error)?.stack ?? e) });
+        }
     }
 
     /**

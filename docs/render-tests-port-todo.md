@@ -7344,3 +7344,8 @@ mbbatchdbg=1 新增 partHist 探针（MBMeshFeatures splitByPart 内，/mb-probe
 | p6 | 8,892 | (212,211,208) | 灰 ✓ |
 
 **部件链路逐 part 与 style 表达式预期完全吻合**——4444 全链（烘焙→展开→mix→线性化）无非。exp 橙 (220,168,109) 亮度 64%/饱和度与 style 的 roof(浅 90%)/window(浅 87%) 均不符，且白光（ambient 白 1.0 + directional 白 0.86）在任何 PBR/DIFFUSE 公式下都无法从浅 albedo 产生 hue 旋转——该面片的 expected 色源仍需屏幕空间表面识别（depth/id buffer 探针）定位其所属 mesh 与材质。flood-light 属 building 层已排除。probe 工具链（相机/雾/部件直方图）已齐备。单测 300 绿、tsc 绿。
+
+
+**§711. pixpick 屏幕空间拾取探针——(178,312) 灰墙身份定案（2026-09-01 续三十六）**：
+
+pixpick 探针落地（MBBatchedModelDataSource.syncStyleState 末尾，mbbatchdbg=1 + karma arg `pix=x,y`，Raycaster 射线拾取 + /mb-probe-dump；首次误挂 MBBatchedModelRenderer——该 fixture 的活跃路径是 MBBatchedModelDataSource，partHist 有输出而 pixpick 无即为此因）。**定案：expected 橙像素 (col 178,row 312) 在 ours 无任何 batched-model 命中（hits:[]）——该处灰墙是 procedural fill-extrusion**，不是地标 mesh。因此 §704 以来的"粉顶 G/B 色差/均值 +16.5"像素统计实为**extrusion vs 地标模型的结构性错位**（同像素两图属不同表面），不存在可校准的逐通道色差。z-offset 家族的"均匀偏亮"残差重新归因：非同源像素的平均本身就是无意义统计，需配准后重测（§707b 入口保持）。landmark GLB 的着色链路（partHist 5 part 全吻合 §710）与本 pixel 的表面归属均已定案。工具链新增 pixpick（相机/dist/nodeId/baseColor/part 直方图）。单测 300 绿、tsc 绿。

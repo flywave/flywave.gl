@@ -50,6 +50,8 @@ export class MBBatchedModelRenderer {
     private m_eye = new THREE.Vector3();
     private m_carrier: any = null;
     private m_carrierGroup: THREE.Group | null = null;
+    /** §711: one-shot guard for the pixpick probe. */
+    private m_pixProbed = false;
 
     constructor(
         private m_mapView: any,
@@ -147,6 +149,63 @@ export class MBBatchedModelRenderer {
                 st.ourCtor = this.m_carrierGroup.constructor.name;
                 // §549 decisive: cross-instance instanceof (false ⇒ dual THREE).
                 st.engIsOurObj3D = eng instanceof THREE.Object3D ? 1 : 0;
+            }
+        }
+        // §711: screen-space surface identification — raycast a pixel (karma
+        // arg `pix=x,y`) into the batched group and dump the hit chain
+        // (mesh/node/material baseColor/feature-part histogram) so an
+        // expected-crop pixel can be attributed to a mesh + color source.
+        if ((globalThis as any).__mbBatchedDbgFlag === true && !this.m_pixProbed) {
+            const pixArg = (globalThis as any).__karmaArgs?.pix
+                ?? (window as any).__karma__?.config?.args?.find?.((a: string) => a.startsWith('pix='))?.slice(4);
+            if (pixArg) {
+                this.m_pixProbed = true;
+                try {
+                    const [pxs, pys] = pixArg.split(',').map(s => parseInt(s, 10));
+                    const cv = (this.m_mapView as any).canvas as HTMLCanvasElement;
+                    const W = cv?.clientWidth || cv?.width || 512;
+                    const H = cv?.clientHeight || cv?.height || 512;
+                    const cam = (this.m_mapView as any).camera as THREE.PerspectiveCamera;
+                    const ray = new THREE.Raycaster();
+                    ray.setFromCamera(new THREE.Vector2((pxs / W) * 2 - 1, -((pys / H) * 2 - 1)), cam);
+                    const hits = ray.intersectObjects(this.m_carrierGroup.children, true);
+                    const fb = (window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith('feedback-url='))
+                        ?.slice('feedback-url='.length);
+                    const hitInfo = hits.slice(0, 5).map(hit => {
+                        const m = hit.object as THREE.Mesh;
+                        const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as any;
+                        return {
+                            dist: +hit.distance.toFixed(2),
+                            uuid: m.uuid,
+                            nodeId: m.userData.__mbNodeId ?? null,
+                            baseColor: mat?.color ? mat.color.toArray().map(v => +v.toFixed(3)) : null,
+                            matUuid: mat?.uuid,
+                        };
+                    });
+                    if (fb) {
+                        fetch(`${fb}/mb-probe-dump`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({
+                                probe: 'pixpick', pix: [pxs, pys], W, H,
+                                hits: hitInfo, totalMeshes: keep.length,
+                                children: this.m_carrierGroup.children.length,
+                            }),
+                        }).catch(() => {});
+                    }
+                } catch (e) {
+                    const fb = (window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith('feedback-url='))
+                        ?.slice('feedback-url='.length);
+                    if (fb) {
+                        fetch(`${fb}/mb-probe-dump`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({ probe: 'pixpick', error: String((e as Error)?.stack ?? e) }),
+                        }).catch(() => {});
+                    }
+                }
             }
         }
     }
