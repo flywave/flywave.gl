@@ -7256,3 +7256,22 @@ smoothstep A/B（ground-shadow-fog）：**167,004 → 141,864（−15%，−25,1
 **残差重定性为光照亮度域**：数值分析（numpy 逐像素）——scale 变体全局均匀偏亮 **均值 +27/中位 +17 每 sRGB 通道**（窗口蓝 (96,167,198)vs(94,155,179)、粉顶 (219,198,186)vs(178,168,163)、背景挤出 +24），模型与挤出同偏 → 非 z-offset 而是 lighting 域（mgl 模型走 PBR Cook-Torrance，我方 hemisphere 近似的常数亮度差，即 §694-2 PBR 校准域）；collision 变体仅 **45,272** px（均值 +12）证实家族异质且无放置缺口。**§697 z-offset 专项关闭，家族残差并入 §694-2 PBR 全 fixture 校准campaign**（入口：modellightport=1 在 scale 变体 A/B + multiple-meshes 回归监控）。
 
 方法论沉淀：大分数家族先做逐像素数值归因（均值/中位/分区热图）再动手——本例避免了一次必然回归的"修复"。单测 300 绿、tsc 绿（无代码变更，纯定性）。
+
+
+**§704. §694-2 PBR campaign 首轮——modellightport=1 多夹具 A/B（2026-09-01 续二十八）**：
+
+modellightport=1（§655 Cook-Torrance PBR 分支）ChromeHeadless 同平台 A/B：
+
+| fixture | hemisphere | PBR | Δ |
+|---|---|---|---|
+| landmark-z-offset-scale-munich-museum | 371,586 | **283,601** | −23.7% ✓ |
+| high-zoom-model-quantization | 25,768 | **4,633** | −82% ✓ |
+| multiple-meshes | 4,807 | **4,807** | 持平（旧 +1534% 回归已消失）|
+| z-offset-v2 | 394,027 | **348,802** | −11.5% ✓ |
+| z-offset-v2-station | — | 256,449 | 首测 |
+| highlights | — | 231,822 | 首测 |
+| landmark LOD/collision 变体 | — | 357,466 / 46,394 / 109,335 | 首测 |
+
+**亮度校准进展**：scale 变体均值偏移 +27→**+16.5**（中位 +17→+12/15/17），窗口 G 通道精确对齐（154.6 vs 154.9）；剩余偏移集中在粉顶 G/B（ours 152/143 vs exp 168/163）——hsl 部件色在 PBR 下的 per-channel 衰减差，下一步标定入口（part-color 域）。
+
+**关键结论：§694-2"multiple-meshes +1534% 不能全局翻转"的阻塞已失效**（两模式同分 4,807；其间 diralt/雾域/§702 改动已消化）。抽样 7 fixture PBR 全部改善或持平、零回归。**下轮入口（单一动作）**：MBModelRenderer:213 把 uMBPortMode 默认翻转为 PBR（`(__mbModelLightPort ?? true) ? 1 : 0`），随后一次 model-layer 全量 chunk run 验证（§695 修正后的 karma 单批可跑），确认无遗漏回归后维持默认。单测 300 绿、tsc 绿（本轮无代码变更，纯 campaign 数据）。
