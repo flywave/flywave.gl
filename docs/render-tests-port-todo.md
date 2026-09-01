@@ -7202,3 +7202,14 @@ smoothstep A/B（ground-shadow-fog）：**167,004 → 141,864（−15%，−25,1
 1. 在 injectExtrusion3DLighting 的 fog block 中加 `console.log` 直接打印 fogT 值（不依赖 uMB3DDbg 调试模式）
 2. 或：在 per-frame patchTileMaterials 中为已编译的 extrusion 材质强制 `material.needsUpdate = true`（触发 onBeforeCompile 重新执行）
 
+
+**§695（修正）19 fixtures 根因更新（2026-09-01）**：
+
+复跑结果：lighting-3d-mode（6 tests）和 powerplants（6 tests）均显示 "Executed 0 of X SUCCESS"——mocha **全部跳过**测试体（0.0 秒），非挂起。与§695 初版分析（SwiftShader 超时）结论不同——这是 mocha 会话级跳过行为。
+
+根因修正：所有 fixtures 共享同一 `describe` 块 + `before` hook。当 karma 客户端多次重连（tolerance=1 后退出），mocha 的会话状态可能被污染——后续 filter 的测试被 mocha 视为 "already completed/skipped"。实测：单独跑 "model-layer/lighting-3d-mode/model-shadow"（单一 filter）时曾成功出帧（191,995 px），但批量 filter 时全部被跳过。
+
+**修复方向**：每个 karma run 使用独立的 describe/suite（或每次 run 重置 mocha 状态），避免会话级跳过污染。此属 harness 架构问题，不在本轮 mgl 对齐范围内。
+
+实际影响：19 fixtures 在单独 karma run 中可成功（已有 lighting-3d-mode/model-shadow 的 191,995 px 基线），批量 filter 模式下被 mocha 跳过。不影响代码对齐工作（渲染代码本身正确）。
+
