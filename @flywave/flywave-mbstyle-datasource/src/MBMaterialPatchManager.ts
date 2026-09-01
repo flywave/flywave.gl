@@ -144,6 +144,10 @@ export class MBMaterialPatchManager {
                         for (const m of mats) {
                             if (!m || m.__mbShadowInjected) continue;
                             if (m.__mbShadowSkipped) continue;
+                            // §719: extrusion materials already carry their own
+                            // receiver (injectExtrusion3DLighting, with fade) —
+                            // a second ground injection double-shadows walls.
+                            if (m.__mbExtrusion3DLit) { m.__mbShadowSkipped = true; continue; }
                             const t = String(m.type ?? '');
                             if (t !== 'MeshStandardMaterial' && t !== 'MeshBasicMaterial') {
                                 m.__mbShadowSkipped = true; continue;
