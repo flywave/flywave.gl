@@ -7380,3 +7380,10 @@ MBShadowRenderer.prepGroundQuad（cornerOnGround）的阴影相机取景 = **视
 **实施**：①挤出 mesh（材质带 __mbExtrusion3DLit）在场景扫描时 `layers.enable(1)`——此前深度 pass（layers.set(1)）不含 procedural 挤出，墙体从未进入 shadow map（§712/§715 归因的机制层确认：§715"相机只框地面足印"定性不准，casters 集合缺失才是机制）；②挤出接收采样改 mgl NORMAL_OFFSET——沿世界面法线抬升 1.5 单位再投影（消掠射自深度冲突的 acne）。
 
 **验证**：landmark-z-offset-scale 281,197→**256,320（−8.9%）**——§712 归因的 +24 偏亮开始收敛（墙获得邻楼遮挡）；ground-shadow-fog 131,915→157,696/167,583（+20-27%，两读数含抖动带 ±10k）——ambient=0 下墙体对邻楼遮挡过敏，**mgl 的 u_fade_range 机制缺失**（shadow_occlusion 按 view_depth 混合 fade，远处阴影衰减，model_fragment/_prelude_shadow：`mix(occlusion1, 0.0, smoothstep(u_fade_range.x, u_fade_range.y, view_depth))`）——远墙过阴影。**下轮入口**：实现 fade-range（按 view_depth 衰减挤出阴影接收，u_fade_range=shadow_renderer 的 fade 区间），预期同时保住 z-offset 收益与 gsf 基线。家族净账：z-offset 家族 18 夹具×~−25k 对 gsf 单夹具 +36k，保留修复。单测 300 绿、tsc 绿。
+
+
+**§717. u_fade_range 实施第一版——未生效，调试入口已立（2026-09-02 续）**：
+
+实施：①ShadowUniformState 增加 far（= m_shadowCamera.far，§717 注释对照 mgl fade_range=[lastCascade.far×0.75, far]）；②挤出注入声明 uMBShadowFar（初值 0）+ per-frame 刷新（`if (u.uMBShadowFar) u.uMBShadowFar.value = shadowState?.far ?? 0`）；③shader 因子处 `mbFade = smoothstep(far×0.75, far, viewDepth); mbShLit = mix(mbShLit, 1, mbFade)`。
+
+**实测：两夹具分数与实施前逐字节相同**（gsf 157,696 / scale 256,320）——fade 完全未生效。假说：uMBShadowFar 保持 0（刷新链未触达挤出材质，或 GLSL smoothstep edge0==edge1 退化），效果被吞。**下轮入口**：①确认 extrusion 材质的 __mbShadowUniforms 里存在 uMBShadowFar 且刷新顺序在材质编译后（onBeforeCompile 晚于首轮刷新则 uniform 对象被 shader 替换/丢失——检查 (material).__mbShadowUniforms 与 shader.uniforms 的对象同一性是否在编译后被 three 重建）；②dump far 值（decodedbg 通道）。单测 300 绿、tsc 绿。

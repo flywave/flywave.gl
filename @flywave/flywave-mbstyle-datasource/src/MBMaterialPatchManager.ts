@@ -203,6 +203,10 @@ export class MBMaterialPatchManager {
                         // ground receiver darkness comes from the
                         // shadow_utils amb/(amb+dir·NdotL) ratio alone.
                         u.uMBShadowIntensity.value = shadowState ? 1 : 0;
+                        // §717: fade-envelope far bound (shadow camera far).
+                        if (u.uMBShadowFar) {
+                            u.uMBShadowFar.value = (shadowState as any)?.far ?? 0;
+                        }
                         if (shadowState) {
                             const ls = (this.m_dataSource as any).m_environment
                                 ?.lighting3DState;
@@ -983,6 +987,8 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBShadowMap = { value: null };
             shader.uniforms.uMBShadowMatrix = { value: new THREE.Matrix4() };
             shader.uniforms.uMBShadowIntensity = { value: 0 };
+            // §717: mgl u_fade_range far bound — refreshed per frame.
+            shader.uniforms.uMBShadowFar = { value: 0 };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
             (material as any).__mbShadowUniforms = shader.uniforms;
             // §664: bind the engine's mgl-fog uniforms (fog_fragment override)
@@ -1050,6 +1056,7 @@ export class MBMaterialPatchManager {
                  uniform sampler2D uMBShadowMap;
                  uniform mat4 uMBShadowMatrix;
                  uniform float uMBShadowIntensity;
+                 uniform float uMBShadowFar;
                  vec3 mbBaseColor = vec3(1.0);
                  void main() {`
             );
@@ -1131,8 +1138,7 @@ export class MBMaterialPatchManager {
                          // occlusion is preserved.
                          vec3 mbWN = normalize(uMB3DViewToWorld * mbN3);
                          vec3 mbShPos = vMbWorldPos + mbWN * 1.5;
-                         vec4 mbShUv = uMBShadowMatrix * vec4(mbShPos, 1.0);
-                         if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
+                         vec4 mbShUv = uMBShadowMatrix * vec4(mbShPos, 1.0);                         if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
                              mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                              vec4 mbShPk = texture2D(uMBShadowMap, mbShUv.xy);
                              float mbShD = mbShPk.r + mbShPk.g / 255.0;
@@ -1145,6 +1151,14 @@ export class MBMaterialPatchManager {
                              // were reverted; correct scaling needs the
                              // window-depth-per-metre mapping probed first.
                              float mbShLit = smoothstep(-0.0002, 0.0002, mbShUv.z - mbShD);
+                             // §717: mgl u_fade_range — shadows fade back to
+                             // LIT across the far quarter of the shadow
+                             // camera's coverage (mgl: mix(occlusion1, 0.0,
+                             // smoothstep(0.75·far, far, view_depth))),
+                             // shadow_renderer.ts:363.
+                             float mbFade = smoothstep(uMBShadowFar * 0.75,
+                                 uMBShadowFar, length(vViewPosition));
+                             mbShLit = mix(mbShLit, 1.0, mbFade);
                              mbNdotL *= mix(1.0 - uMBShadowIntensity, 1.0, mbShLit);
                          }
                      }
