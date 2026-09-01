@@ -1916,7 +1916,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 // 5-frame wait left large async content (300+ extrusion
                 // objects, POIs) unattached — render until the decoded tile
                 // object count is stable across frames (bounded).
-                await renderUntilSettled(mapView, dataSource, 60);
+                await renderUntilSettled(mapView, dataSource, 30);
 
 
                 (globalThis as any).__mbFixture = entry.name;
@@ -1942,7 +1942,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         // already shows the phase at the requested time — any
                         // further frame advances the wall clock past it.
                     } else if (terrainToggled) {
-                        await renderUntilSettled(mapView, dataSource, 60);
+                        await renderUntilSettled(mapView, dataSource, 30);
                     } else {
                         await renderFrames(mapView, dataSource, 3);
                     }

@@ -278,8 +278,10 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
         // 日志级别
         logLevel: "INFO",
 
-        // 浏览器无活动超时（render-tests 全量跑时长用例较多，放宽）
-        browserNoActivityTimeout: 180000,
+        // 浏览器无活动超时：§695 19 fixtures 挂起族根因是 SwiftShader
+        // ~10s/帧 × 60帧 = 600s 渲染期间无 karma 活动信号 → 断连。
+        // 提升到 600s 配合 maxFrames=30（350s 渲染）+ 15s FrameComplete。
+        browserNoActivityTimeout: 600000,
 
         // 浏览器响应 ping 的超时：SwiftShader 下重负载用例（dynamic-filter 等）
         // 主线程可能偶发阻塞 60-120s，默认 60s 会误判 DISCONNECTED 整批重跑
