@@ -204,13 +204,13 @@ export function applyMglModelLighting(
                 // u_metallicFactor / u_roughnessFactor).
                 shader.uniforms.uMB3DMetal = { value: mat.metalness ?? 0 };
                 shader.uniforms.uMB3DRough = { value: mat.roughness ?? 0.5 };
-                // §655: uMBPortMode — 0 = §557 hemisphere approximation,
-                // 1 = the §655 model.fragment.glsl Cook-Torrance PBR (the
-                // faithful port of mgl 3d-style model shader). §691 A/B:
-                // port+diralt = 4633 px (−99.5% vs 101万 base) — PBR with
-                // the mgl-raw direction is the adjudicated best configuration.
+                // §655: uMBPortMode — 0 = §557 hemisphere approximation
+                // (default — calibrated across model fixtures; PBR
+                // (port+diralt) is better for quantization/meshopt but
+                // +1534% on multiple-meshes, so cannot globally flip yet).
+                // 1 = the §655 model.fragment.glsl Cook-Torrance PBR.
                 shader.uniforms.uMBPortMode = {
-                    value: (globalThis as any).__mbModelLightHemi ? 0 : 1,
+                    value: (globalThis as any).__mbModelLightPort ? 1 : 0,
                 };
                 // §661: legacy light defaults — mgl model_program.ts reads the
                 // root style light (spec defaults: position [1.15, 210, 30]
