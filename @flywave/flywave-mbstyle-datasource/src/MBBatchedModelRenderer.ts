@@ -224,11 +224,12 @@ export class MBBatchedModelRenderer {
                     stat.decoded = (stat.decoded ?? 0) + 1;
                     const model = new THREE.Group();
                     model.name = 'MBBatchedModelTile';
-                    for (const prims of tile.nodes) {
+                    tile.nodes.forEach((prims, nodeIdx) => {
+                        const nodeId = tile.nodeIds?.[nodeIdx];
                         for (const prim of prims) {
-                            model.add(this.buildPrimitiveMesh(prim, tile.materials));
+                            model.add(this.buildPrimitiveMesh(prim, tile.materials, nodeId));
                         }
-                    }
+                    });
                     model.scale.set(this.computeScale(z), this.computeScale(z), 1);
                     // §656: the mercator ground-stretch (x/y × 1/cos(lat),
                     // mgl modelPixelsPerMeter semantics) was tested here —
@@ -266,6 +267,9 @@ export class MBBatchedModelRenderer {
     /** Build one decoded primitive into a THREE mesh (glTF material map). */
     private buildPrimitiveMesh(
         prim: TilePrimitiveData, materials: TileMaterialData[],
+        // §709: node extras.id (mgl ModelNode.id) — drives per-node
+        // data-driven paint seeds (["id"] in ["random", ...]).
+        nodeId?: string | number,
     ): THREE.Mesh {
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(prim.positions, 3));
@@ -303,6 +307,7 @@ export class MBBatchedModelRenderer {
         const mesh = new THREE.Mesh(geo, mat);
         mesh.renderOrder = 10;
         mesh.frustumCulled = false;
+        if (nodeId !== undefined) mesh.userData.__mbNodeId = nodeId;
         return mesh;
     }
 

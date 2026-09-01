@@ -7320,3 +7320,12 @@ modellightport=1（§655 Cook-Torrance PBR 分支）ChromeHeadless 同平台 A/B
 ①**random 已精确对齐**：MBExpressionEngine.ts:893 的实现即 mgl definitions/index.ts:774 的忠实移植（hashString→mulberry32→min+r×(max−min)，逐行一致）——§707b 的"random 种子语义差异"假说证伪。②**更根本的否定**：该 fixture 的 window/roof 颜色是 mgl **tiler 离线烘焙**进 vector.pbf 的 4444 顶点色（buildMeshFeatureArray 只做展开+part 表 mix），渲染期 random 根本不参与——两引擎读同一份烘焙资产。③**measure-light brightness 排除**：mgl calculateLightsBrightness（style.ts:2694，sRGB ECF 亮度×intensity×polarIntensity 与 ambient 平均）与本方 mglMeasureLightBrightness 在本 fixture 白光下数值恒等（=(0.86×0.0847+1.0)/2=0.5364，白光的 ECF 差异退化为零）。
 
 **残差重新收缩**：排除后，(220,168,109) 橙面片 vs 灰墙的差异收敛到唯一剩余层——**同一 GLB 内特定面片的 partId→样式分配或面片归属**（可能 partId 越界回落 part0、4444 半字节错位、或 LOD/meshopt 变体差异）。下轮入口：以 mbbatchdbg 探针 dump 该 mesh 的 partId→颜色直方图（vector.pbf 原始 4444 字节 → 展开 → mix → 线性化全链），与 expected 裁剪区的色域做定量比对，定位第一个分歧字节。本轮无代码变更。单测 300 绿、tsc 绿。
+
+
+**§709. per-node id 接线 + 审计收敛记录（2026-09-01 续三十四）**：
+
+①**修正落地（正确性修复，非分数修复）**：applyMeshFeatures/refreshMeshFeatures 现按**节点**求值 part 表（MBBatchedModelRenderer buildPrimitiveMesh 穿入 node extras.id → mesh.userData.__mbNodeId → partsFor(mesh) 按 id 缓存求值表）——mgl computePartPbrTable 本就 per nodeInfo 刷新，id=0 塌缩各节点 random 抽取属实现缺陷，已修。**实测分数不变**（281,197 ≈ 280,629 抖动内），说明该 fixture 的分歧不在 random 种子层。
+
+②**GLB 解剖**（8718-5685-14.glb）：meshes 分两类——带 _FEATURE_RGBA4444+NORMAL+TEXCOORD 的部件 mesh（mat 0-5，无 baseColorTexture）与 POSITION-only+default 材质 mesh（mat 14-18，白因子、无法线，疑似 shadow/light 代理）；14 张 jpeg 全为 occlusion（无 baseColor 贴图）。featureData 仅源自 _FEATURE_RGBA4444 属性（mgl model_loader.ts:220 同），故 POSITION-only mesh 在两引擎都无 part 样式。
+
+③**残差重新定性**：exp 橙 (220,168,109) 的亮度 (≈64%) 与饱和度都不匹配 style 的 roof hsl(22,82%,90%)（极浅）或 window hsl(...,87%)（极浅）——该面片颜色既非 roof 也非 window 的 style 色，可能来自深藏在 GLB 材质/KHR 扩展或特定 part 的 evaluatedColor，需要 mesh 级直方图探针（dump 每个 primitive 的 partId→颜色分布并与 expected 裁剪区配准）才能定位。本阶段审计链条（资产→random→brightness→烘焙→GLB 结构）已闭合至唯一剩余层。单测 300 绿、tsc 绿。
