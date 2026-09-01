@@ -7222,3 +7222,12 @@ smoothstep A/B（ground-shadow-fog）：**167,004 → 141,864（−15%，−25,1
 ②**挤出 fog 语义缺口补齐（MBMaterialPatchManager injectExtrusion3DLighting）**：mgl fill_extrusion.fragment 用 `fog_apply_premultiplied(color, v_fog_pos, h)`，含两个此前缺失的修饰项：**(a) fog_horizon_blending**——camera-dir z 除以 horizonBlend，factor = fogAlpha·exp(−3t²)，朝地平线/天空的射线雾快速衰减（与引擎 fog_fragment override 同构，-fogCamHeight/depth 语义）；**(b) vertical limit + opacity limit**——elevated 片元在 u_fog_vertical_limit 高度区间（米，RTE world z × uMbMetersPerUnit）smoothstep 渐出雾，且 near-total fog 时 `1−smoothstep(0.9,1.0,depthOpacity)` 限制渐出本身防 cull 距离硬切。depth-only opacity 单独保留供 opacity limit 读取（mgl fog_opacity(pos) 无 horizon 项）。新 uniforms（fogHorizonBlend/fogCamHeight/fogVertLimit）沿用 by-reference 绑定链。§682 的 0.78 深度系数保留为标定旋钮。
 
 **验证**：ground-shadow-fog 188,975→**175,632（−13,343，−7.1%）**（ChromeHeadless-shell 平台，同平台 pre-change 基线=§699 首跑 188,975；注意 §696 的 141,864 基线疑为 Edge-150 平台，跨平台分数不可直接对比——结果目录按平台分桶，后续 A/B 必须同平台）。hard-cutoff 同步 188,571。fogt=1 调试跑 189,093 ≈ 无调试 188,975 说明墙面像素无论着色方式均处失配态（与 §696 墙面雾洗幅度差定性一致），挤出 fog 幅度校准仍待取景/参数微调。**坑位记录**：karma 经 package main 消费 **lib/** 构建产物——src 改动后必须 `tsc --build` 重建 lib 再跑 render-test，否则跑的是旧代码（§699 首轮 A/B 即因此无效）。单测 300 绿、tsc 绿。
+
+
+**§700. 相机放置实证对齐 + fog 深度域残差定性（2026-09-01 续二十四）**：
+
+①**相机探针落地（MBStyleDataSource applyCameraSettings，__mbDecodeDbg 门控，/mb-probe-dump 通道——karma runner 不转发浏览器 console，console.log 探针不可见，必须走 dump POST）**。ground-shadow-fog（zoom16.2/pitch70/bearing264）实测：**dist=798.5（mgl 理论 798.6）✓ camZ=273.1（理论 273.2）✓ fov=36.87 ✓ focal=768（CSS，dpr=1，canvas 512×512）✓ heading=−96≡bearing264 ✓**。§684 数值等价推导获运行时实证——**相机放置精确对齐 mgl，取景差不是残差来源**（§676 的"相机取景偏移"解读正式作废）。
+
+②**fog 深度域残差定性**：fogt=1 调试图采样（灰=log2(mbLen)/16）对照几何真值：屏幕底边（真值 ~9.8km，pitch70 下底边=远）读 2.3km、屏幕中心（真值 798m）读 3.7km、近端读 ~2.4km——**读数与真值非常数比例**（±4-5×双向偏差），排除简单尺度误差。mgl fog_range 典型值 [-0.5,3.0] 为归一化域（v_fog_pos = worldToFogMatrix 变换后的相机相对位置，域 = 相机深度处 worldSize 像素坐标），非米；我方挤出路径把"米"喂入同一条 fog_range 链（经 fogMglShift/DistCam 折算），域间映射存在未知非线性差。**下轮入口**：①严格对照 mgl transform.getWorldToCameraPosition（free_camera.ts:269：position×−worldSize 平移 + z×pixelsPerMeter）+ calculateFogTileMatrix（transform.ts:2255，createTileMatrix at cameraWorldSizeForFog）重建 fog 域的逐项映射；②用 fogprobe（engine 路径）与 fogt（挤出路径）同帧对比，确认地面与墙面的 t 域是否一致；③0.78 系数属域差的补偿标定，域对齐后应回归 1.0。
+
+坑位补充：pkill -f 匹配含自身命令行会自杀；runner 位置参数会变 filter= 导致 0 测试——探针开关一律走 MBSTYLE_* env。单测 300 绿、tsc 绿。
