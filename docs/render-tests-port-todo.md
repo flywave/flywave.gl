@@ -7074,3 +7074,19 @@ MBModelRenderer.run() 的缓存路径按**长度**判重：markTilesDirty 同 Ti
 **§691. 模型光照帧论证——NdotL 共轭不变性与双支法线不一致（2026-09-01 续十八）**：
 
 quantization 家族（§690 后最大头 ~660 万）"ambient-only 亮度"的源码级论证：①mgl `sphericalDirectionToCartesian` 精确式 = (cos(a)·sinp, **+sin(a)**·sinp, cosp)，a=az+90（src/util/util.ts）——我方 §683 式 = 其严格 y 镜像共轭（x 同、y 取负、z 同）；②镜像共轭 M=diag(1,−1,1) 下 dot(Ma,Mb)≡dot(a,b)——**若法线与光方向同帧，我方 NdotL 与 mgl 逐位等价**，转换式无嫌疑；③故实测"墙 177 vs 231（≈ambient-only，NdotL≈0）"必为**模型几何法线与光方向的帧不一致**（法线被翻转 0/2 次而光被翻转 1 次；§549 双帧问题在 batched-model 路径的延续；与 §562 "OPPOSITE directions net +377k" 的 A/B 史吻合）。④**分支不一致实锤**：injectMglModelLighting 中 §557 半球支用 `mbN0`（原始 vNormal），§655 PBR 支用 `mbN = vec3(−mbN0.xy, mbN0.z)`（mgl transformed_normal xy 翻转约定）——两支对同一光场给出不同 NdotL，modellightport=0/1 切换时光照翻转。**下轮入口**：单夹具 A/B 三门（modeldiralt / extaz180 / modellightport）× ground-shadow-fog（bearing 264）+ quantization（bearing 0）双夹具对拍，用 NdotL 敏感的墙面亮度直接裁决帧约定；裁决后统一两支法线与光方向至同一帧。
+
+**§691（补充）三门 A/B 裁决数据（2026-09-01 末）**：
+
+F1 quantization/high-zoom-model-quantization（bearing 0，纯模型域）：base 1,011,098、**modeldiralt=1  25,768（−97.5%）**、modellightport=1  1,017,201、**modellightport=1+modeldiralt=1  4,633（−99.5%）**。F2 ground-shadow-fog（bearing 264）：所有门均无变化（167,009）——该夹具模型占比极小。结论：**模型光方向= mgl 原始 sphericalDirectionToCartesian（不经 y 镜像）+ §655 PBR 支 为模型域最优配置**。下轮：将 modeldiralt=1 改为 modelLightDir 默认支（² 行改动），并规划 modellightport=1 默认化的 A/B（需全面回归验证，属专项）。
+
+**§692 阴影接收专项分析（2026-09-01）**：
+
+目标：mbstyle-render-model-layer 的 ground shadow receiving（fill/line 上的建筑投影）。现状（ml-0901 基线）：buildings-trees-shadows 家族 ~61.6 万 px，ground-shadow-fog 16.7 万 px——expected 有清晰投影，ours 无。
+
+①**深度 pass**：**已正确**。MBShadowRenderer.run() 实锤：casters=80-145（extrusion 注册正常）、depth canvas 有建筑内容（8×8 探针 0.48-0.58 灰度簇）、shadowEnable/intensity 正确。根因发现——**老的视锥深度范围过宽**（near=0.1, far=4×radius≈10-25km）：30m 建筑在深度贴图的足迹≈0.001-of-range，小于 receiver 的 compare bias 0.002，所有地面读“亮”。**修复：沿光轴紧致视锥**（投影 caster 八角到 viewDir 轴取 tMin/tMax + slack）。另一 bug：**viewDir 方位符号反**（用 lightDir 而非 −lightDir）→ far 为负 → 空视锥，已修复。
+
+②**Receiver 编译/注入**：**已验证**。MBShadowAnchor 探针实锤：MeshBasicMaterial/ShaderMaterial ribbon（含 ground-rad-mixed 变体）全部命中 opaque_fragment/outputDiffuse 锚点，block=in。uMBShadowIntensity=1 通过 per-frame 刷新到达绘制材质（[MBShadowRecv] 探针确认 res/corners/matrix/intensity/eye 五值正确）。
+
+③**Receiver 采样（screen-space 重写）**：§689 旧路径（varying=modelMatrix×position）在所有夹具上零像素（探针证明 depth map 有内容、uniforms 正确——帧不匹配）。§692 重写为 **屏幕空间角落插值**（uMBGC[4]/uMBEye/uMBRes，与 quad 共用 CPU cornerOnGround 数学，对地面平面精确，完全绕开 modelMatrix/RTE rebase 帧）。shadowdbg=4（raw-uv 无色空间编码）证实：**land fill 片元的 uv 场落于界内（uv 0.2-0.33 mid-range），receiver 代码在执行**；道路 ribbon 片元呈现 uv.z≈0（near plane，存在独立偏差待查）。然而 **非 dbg 模式的分数仍逐位不变（167009/615771）**——mbLit 恒 1.0（uv.z 始终 ≤ sampled depth + bias）→ receiver 采样到的深度图区域为空白/深度值不匹配。
+
+④**第 5 环根因（当前待解）**：mbWP 为**绝对世界坐标**（uMBGC corners 来自 MapView logical camera 的 cornerOnGround），而 shadow matrix/depth map 作用于 **RTE eye-relative 帧**（shadow camera 的 position/frameCenter 为 eye-relative）。uMBEye 减法理应完成帧转换——但若 eye 本身来自错误的投影（mapView.projection.projectPoint 在 y-frame 南向帧 vs RTE 渲染的北向帧... §549 双帧问题的延续），mbWP−uMBEye 在两种 y 方向下的 Z 符号相反 → ground 在阴影相机看来“在上方” → depth=empty（天空）→ mbLit=1 恒成立。**下轮入口**：dump uMBEye 值与 RTE frameCenter 的 z 分量，核对符号；用 patchMaterial 的 injectGroundShadow 坐标系替换为 shadow camera 的 eye-relative 坐标系（减 RTE eye 用 mapView.renderCamera 的 position 而非 projection.projectPoint）。
