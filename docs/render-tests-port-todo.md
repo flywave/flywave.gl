@@ -7402,3 +7402,8 @@ MBShadowRenderer.prepGroundQuad（cornerOnGround）的阴影相机取景 = **视
 **§720. 墙投射门控化——两夹具同时已知最优（2026-09-02 续）**：
 
 diff 定量显示 §716 的墙投射在 82° 掠射日照下产生**深度噪声阴影铺满全屏**（墙体深度编码在掠射角无 cascade/坡度 bias 保真度时即噪声明暗，与 mgl cascade 覆盖的保真度差距是系统工程）。**处置**：墙投射改为 forensic 门控（`shadowcast=1` karma arg / MBSTYLE_SHADOWCAST），默认关闭——**恢复 gsf 140,258**（接近 131,915 最优带，远好于 157,696/167,583），且 z-offset-scale **保留 256,320** 收益（unexpected 但可复现两次；其收益不依赖墙投射，可能来自 layer-1 关联的 §692 深度窗口语义变化——待查但结果为正）。两夹具同时处于已知最优态。**下轮入口**：①mgl cascade 保真度对齐（createLightMatrix 的 AABB/光轴框定 + 坡度 bias + normal offset 全套）后以 shadowcast=1 重启墙投射；②§694 清单剩余项。单测 300 绿、tsc 绿。
+
+
+**§721. cascade 框定对齐 A/B 负结果——回退至 §720 态（2026-09-02 续）**：
+
+实施 mgl createLightMatrix（shadow_renderer.ts:678）的旋转不变包围球框定（frustum slab [ccd/50, 4.5×ccd]，lxjk 2017 球心/半径公式）替换 casterBox 框定，并同步启用 mgl 坡度 bias 常量（域已一致假设）。**A/B 负结果**：shadowcast=1 下 gsf 155,133（vs 门控关闭 140,258 劣化 +10%）、scale 256,320 持平；默认（无墙投射）下 gsf **167,583（较 §720 的 140,258 劣化 +19%）**——包围球框定的深度窗口远大于 casterBox 紧框，地面阴影足迹进一步偏移。**已回退**（src 恢复 §720 casterBox 框定 + 固定 ±0.0002 窗口）。**结论**：阴影覆盖域对齐不是单纯框定公式问题——mgl cascade 的深度内容保真度（precision、tile 选择、bias 全套）与我们深度 pass 的差异是复合性的，需要专项 cascade 工程而非参数对齐；在 gsf/z-offset 两夹具的当前证据下，§720 态（墙投射关闭 + 局部 fade 基建保留）为已知最优。该专项到此封存，后续重启需以 mgl shadow_renderer 全套移植为前提。单测 300 绿、tsc 绿。
