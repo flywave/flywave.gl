@@ -7387,3 +7387,8 @@ MBShadowRenderer.prepGroundQuad（cornerOnGround）的阴影相机取景 = **视
 实施：①ShadowUniformState 增加 far（= m_shadowCamera.far，§717 注释对照 mgl fade_range=[lastCascade.far×0.75, far]）；②挤出注入声明 uMBShadowFar（初值 0）+ per-frame 刷新（`if (u.uMBShadowFar) u.uMBShadowFar.value = shadowState?.far ?? 0`）；③shader 因子处 `mbFade = smoothstep(far×0.75, far, viewDepth); mbShLit = mix(mbShLit, 1, mbFade)`。
 
 **实测：两夹具分数与实施前逐字节相同**（gsf 157,696 / scale 256,320）——fade 完全未生效。假说：uMBShadowFar 保持 0（刷新链未触达挤出材质，或 GLSL smoothstep edge0==edge1 退化），效果被吞。**下轮入口**：①确认 extrusion 材质的 __mbShadowUniforms 里存在 uMBShadowFar 且刷新顺序在材质编译后（onBeforeCompile 晚于首轮刷新则 uniform 对象被 shader 替换/丢失——检查 (material).__mbShadowUniforms 与 shader.uniforms 的对象同一性是否在编译后被 three 重建）；②dump far 值（decodedbg 通道）。单测 300 绿、tsc 绿。
+
+
+**§718. fade 管道判定实验——双接收注入假说成立（2026-09-02 续）**：
+
+决定性实验：fade 带缩至 [far×0.25, far×0.5]（≈[674,1348]m，深入墙面密集区）——ground-shadow-fog 分数仍逐字节 167,583 不变。**uMBShadowFar 管道死路实锤**（uniform 值/刷新/编译三处均已核对存在于 lib）。结合证据链重新归因：procedural 墙面的实际变暗来自**地面接收注入路径**——场景扫描（shadowState 块）对 MeshStandardMaterial 无差别注入 injectGroundShadow（含挤出材质），同一材质双接收（extrusion 接收 + ground 接收）叠加，我方 §716/§717 的 fade 修改只作用于 extrusion 接收分支，ground 接收分支（mbLit/±0.0002/无 fade）照旧生效——这同时解释 §714 深度差不灵敏（墙读的是 ground 接收的采样）与 §717 fade 无效。**已回退实验带宽至 mgl 忠实值 [0.75,1.0]×far。下轮入口（唯一）**：场景扫描跳过 __mbExtrusion3DLit 材质（免双接收），wall 阴影统一走 extrusion 接收分支（含 §717 fade），随后 gsf/scale 双夹具 A/B。单测 300 绿、tsc 绿。

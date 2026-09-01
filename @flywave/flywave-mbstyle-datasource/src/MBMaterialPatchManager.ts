@@ -1157,7 +1157,7 @@ export class MBMaterialPatchManager {
                              // smoothstep(0.75·far, far, view_depth))),
                              // shadow_renderer.ts:363.
                              float mbFade = smoothstep(uMBShadowFar * 0.75,
-                                 uMBShadowFar, length(vViewPosition));
+                                 uMBShadowFar * 1.0, length(vViewPosition));
                              mbShLit = mix(mbShLit, 1.0, mbFade);
                              mbNdotL *= mix(1.0 - uMBShadowIntensity, 1.0, mbShLit);
                          }
