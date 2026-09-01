@@ -7231,3 +7231,12 @@ smoothstep A/B（ground-shadow-fog）：**167,004 → 141,864（−15%，−25,1
 ②**fog 深度域残差定性**：fogt=1 调试图采样（灰=log2(mbLen)/16）对照几何真值：屏幕底边（真值 ~9.8km，pitch70 下底边=远）读 2.3km、屏幕中心（真值 798m）读 3.7km、近端读 ~2.4km——**读数与真值非常数比例**（±4-5×双向偏差），排除简单尺度误差。mgl fog_range 典型值 [-0.5,3.0] 为归一化域（v_fog_pos = worldToFogMatrix 变换后的相机相对位置，域 = 相机深度处 worldSize 像素坐标），非米；我方挤出路径把"米"喂入同一条 fog_range 链（经 fogMglShift/DistCam 折算），域间映射存在未知非线性差。**下轮入口**：①严格对照 mgl transform.getWorldToCameraPosition（free_camera.ts:269：position×−worldSize 平移 + z×pixelsPerMeter）+ calculateFogTileMatrix（transform.ts:2255，createTileMatrix at cameraWorldSizeForFog）重建 fog 域的逐项映射；②用 fogprobe（engine 路径）与 fogt（挤出路径）同帧对比，确认地面与墙面的 t 域是否一致；③0.78 系数属域差的补偿标定，域对齐后应回归 1.0。
 
 坑位补充：pkill -f 匹配含自身命令行会自杀；runner 位置参数会变 filter= 导致 0 测试——探针开关一律走 MBSTYLE_* env。单测 300 绿、tsc 绿。
+
+
+**§701. 挤出 fog 深度域重建——0.78 回归 1.0（2026-09-01 续二十五）**：
+
+**域理论+实证闭环**：①mgl `Fog.state`（style/fog.ts:87）把 shift=0.5/tan(fov/2)=1.5 **加**到 range 上（u_fog_range=[−0.5+1.5, 3.0+1.5]=[1.0,4.5]）；②用 expected.png 按 pitch-70 相机几何（探针实证 d=798.5m）逐行提取雾轮廓，三个独立观测点（d̂=1.54/1.80/2.66 处 opacity=0.72/0.82/0.99）全部拟合 falloff³ 曲线于 **有效深度 = fogMglShift×slant/ccd**——即 wsFog 像素域相对相机-中心距离天然含同一 shift 因子，引擎原始公式形态（shift 乘深度）正确，错的是 distCam 域（旧值 6838m+raster 0.15 折算 → 中心处净系数仅 0.026，雾几乎不生效）。
+
+**实现**：挤出路径改用新 uniform `uMbDistCam = focal×C/(256·2^flyZoom)`（calculateDistanceFromZoomLevel 语义，§700 探针证明 = mgl ccd 米数），`mbT = (shift·slant/uMbDistCam − (range.x+shift))/Δ`，0.78 补偿系数回归 1.0；§699 的 horizon blending/vertical limit 保留。中间态验证（纯 d̂ 无 shift 版）得 186,943 且渲染无雾——反证 shift 因子必须存在，遂定公式。
+
+**验证**：ground-shadow-fog 同平台 175,632→**131,915（−24.9%）**，历史最佳（§696 的 141,864 属 Edge 平台不可比）。渲染形态与 expected 一致（远城白雾洗、近场街道可见）。挤出 fog 深度域专项关闭。剩余残差：墙面明暗（lighting 域）、hard-cutoff 家族、ground-shadow intensity 校准（§694 清单）。单测 300 绿、tsc 绿。

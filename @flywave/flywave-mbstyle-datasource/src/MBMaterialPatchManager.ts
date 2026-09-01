@@ -232,9 +232,15 @@ export class MBMaterialPatchManager {
                 for (const m of fogMats) {
                     const fu = m?.__mbExtFogU;
                     if (!fu) continue;
-                    const lib2 = (THREE.UniformsLib as any).fog;
+                    const mvz = (this.m_dataSource as any).mapView;
                     fu.uMbMetersPerUnit.value = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
-                        (512 * Math.pow(2, (this.m_dataSource as any).mapView?.zoomLevel ?? 16));
+                        (512 * Math.pow(2, mvz?.zoomLevel ?? 16));
+                    // §701: mgl fog depth normalization — camera-to-center
+                    // metres (calculateDistanceFromZoomLevel semantics).
+                    fu.uMbDistCam.value = ((mvz as any)?.focalLength ?? 768) *
+                        EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                        (256 * Math.pow(2, mvz?.zoomLevel ?? 16));
+                    const lib2 = (THREE.UniformsLib as any).fog;
                     fu.fogMglShift.value = lib2.fogMglShift.value;
                     fu.fogMglDistCam.value = lib2.fogMglDistCam.value;
                     (fu.fogMglRange.value as THREE.Vector2).copy(lib2.fogMglRange.value);
@@ -979,6 +985,13 @@ export class MBMaterialPatchManager {
             const mpu0 = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                 (512 * Math.pow(2, mv0?.zoomLevel ?? 16));
             shader.uniforms.uMbMetersPerUnit = { value: mpu0 };
+            // §701: camera-to-center distance in metres for the mgl fog
+            // depth normalization (same formula as the camera placement's
+            // calculateDistanceFromZoomLevel — probe-verified vs mgl §700).
+            shader.uniforms.uMbDistCam = {
+                value: ((mv0 as any)?.focalLength ?? 768) * EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                    (256 * Math.pow(2, mv0?.zoomLevel ?? 16)),
+            };
             // NOTE: do NOT bind fogColor/fogNear/fogFar/fogDensity — three's
             // per-frame refreshFogUniforms writes scene.fog values straight
             // into these shared objects, clobbering the env's calibrated mgl
@@ -1020,6 +1033,7 @@ export class MBMaterialPatchManager {
                  uniform float fogMglShift; uniform float fogMglDistCam; uniform vec2 fogMglRange;
                  uniform float uMbMetersPerUnit; uniform vec3 fogColor; uniform float fogAlpha;
                  uniform float fogHorizonBlend; uniform float fogCamHeight; uniform vec2 fogVertLimit;
+                 uniform float uMbDistCam;
                  varying float vMbWallH;
                  varying vec3 vMbWorldPos;
                  uniform sampler2D uMBShadowMap;
@@ -1127,14 +1141,20 @@ export class MBMaterialPatchManager {
                      // mgl-fog uniforms above are bound by reference so the
                      // per-frame env feed reaches this program.
                      vec3 mbOut = mix(mbLit, mbBaseColor, uMB3DEmissive);
-                     // §670: mgl fog applied in-shader (chunk fog compiled
-                     // out): fogT from the meters-converted view depth, then
-                     // the mapbox falloff³ wash toward fogColor.
-                     // §682: fogT calibrated on ground-shadow-fog — raw t
-                     // measured 0.77-0.83 vs expected's moderate wash; the
-                     // 0.78 factor on the mgl depth lands mid-city t ≈ 0.6.
-                     float mbLen = length(vViewPosition) * uMbMetersPerUnit * 0.78;
-                     float mbT = (fogMglShift * mbLen / max(fogMglDistCam, 1.0)
+                     // §701: mgl fog depth domain calibrated on expected.png.
+                     // Effective mgl depth = fogMglShift × slant/ccd — three
+                     // expected-image opacity samples (0.72/0.82/0.99 at
+                     // d̂=1.54/1.80/2.66) all fit the falloff³ curve with
+                     // factor 1.5 = the shift (style/fog.ts state getter adds
+                     // 0.5/tan(fov/2) to the range, and the wsFog pixel domain
+                     // scales depth by the same factor relative to the
+                     // camera-to-center distance). uMbDistCam =
+                     // focal·C/(256·2^flyZoom) — §700's camera probe proved
+                     // it equals mgl's camera-to-centre distance. The previous
+                     // metres×0.78 form had the right shape but the wrong
+                     // distCam domain (raster-path 6838m value).
+                     float mbLen = length(vViewPosition);
+                     float mbT = (fogMglShift * mbLen / max(uMbDistCam, 1.0)
                          - (fogMglRange.x + fogMglShift))
                          / max(fogMglRange.y - fogMglRange.x, 0.001);
                      float mbFall = 1.0 - min(1.0, exp(-6.0 * mbT));
