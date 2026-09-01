@@ -150,6 +150,17 @@ export class MBMaterialPatchManager {
                             }
                             this.injectGroundShadow(m);
                         }
+                        // §715: procedural extrusion walls must CAST into the
+                        // shadow map — the depth pass renders layer 1 only,
+                        // and without wall occluders every extrusion wall
+                        // samples "lit" (the +24 uniform wall brightness).
+                        // Layer 0 keeps the main render untouched.
+                        for (const m of mats) {
+                            if (m?.__mbExtrusion3DLit && !o.layers.isEnabled(1)) {
+                                o.layers.enable(1);
+                                break;
+                            }
+                        }
                     });
                 }
             }
@@ -1112,7 +1123,15 @@ export class MBMaterialPatchManager {
                      // shadow, NdotL when lit). Sample the shadow map at the
                      // extrusion's RTE world position.
                      if (uMBShadowIntensity > 0.0) {
-                         vec4 mbShUv = uMBShadowMatrix * vec4(vMbWorldPos, 1.0);
+                         // §716: mgl NORMAL_OFFSET — sample the shadow map at
+                         // a point lifted OFF the surface along the world
+                         // face normal. A wall's own depth otherwise conflicts
+                         // at the 7.6° grazing sun (self-shadow acne: walls
+                         // misread as shadowed) while other buildings'
+                         // occlusion is preserved.
+                         vec3 mbWN = normalize(uMB3DViewToWorld * mbN3);
+                         vec3 mbShPos = vMbWorldPos + mbWN * 1.5;
+                         vec4 mbShUv = uMBShadowMatrix * vec4(mbShPos, 1.0);
                          if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
                              mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                              vec4 mbShPk = texture2D(uMBShadowMap, mbShUv.xy);

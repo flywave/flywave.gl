@@ -7373,3 +7373,10 @@ pixpick 扩展 grid 模式（64 采样点射线分类 batched-model/extrusion）
 MBShadowRenderer.prepGroundQuad（cornerOnGround）的阴影相机取景 = **视锥射线与 z=0 地平面交点**（far=radius×8），即深度编码只覆盖地面足印；墙体高出地面的部分投影到阴影 UV 后落在记录范围之外→§714 的"delta 全体 ≥+0.001 且与明暗分类无关"现象即源于此——墙面上部的遮挡关系从未进入 shadow map。mgl shadow_renderer 以场景 AABB（含建筑高度）框定 cascade，两者覆盖域不同。
 
 **修复方向（下轮实施）**：阴影相机取景从"地面足印"改为"含高度的 caster 包围盒"——①收集可见挤出/模型的 AABB（含 z）；②以 AABB＋光方向张成的视锥框定 ortho shadow camera；③保持 16-bit packed window depth 与 receivers 的采样约定不变。风险点：AABB 框定改变所有既有阴影 fixture 的窗口（ground-shadow-fog 131,915 基线需复测回归）。单测 300 绿、tsc 绿（本轮审计无代码变更；session 探针工具链四类齐备，累计 §699-§715）。
+
+
+**§716. 挤出墙投射修复（layer 1 + NORMAL_OFFSET）——z-offset 收敛、gsf 权衡（2026-09-02）**：
+
+**实施**：①挤出 mesh（材质带 __mbExtrusion3DLit）在场景扫描时 `layers.enable(1)`——此前深度 pass（layers.set(1)）不含 procedural 挤出，墙体从未进入 shadow map（§712/§715 归因的机制层确认：§715"相机只框地面足印"定性不准，casters 集合缺失才是机制）；②挤出接收采样改 mgl NORMAL_OFFSET——沿世界面法线抬升 1.5 单位再投影（消掠射自深度冲突的 acne）。
+
+**验证**：landmark-z-offset-scale 281,197→**256,320（−8.9%）**——§712 归因的 +24 偏亮开始收敛（墙获得邻楼遮挡）；ground-shadow-fog 131,915→157,696/167,583（+20-27%，两读数含抖动带 ±10k）——ambient=0 下墙体对邻楼遮挡过敏，**mgl 的 u_fade_range 机制缺失**（shadow_occlusion 按 view_depth 混合 fade，远处阴影衰减，model_fragment/_prelude_shadow：`mix(occlusion1, 0.0, smoothstep(u_fade_range.x, u_fade_range.y, view_depth))`）——远墙过阴影。**下轮入口**：实现 fade-range（按 view_depth 衰减挤出阴影接收，u_fade_range=shadow_renderer 的 fade 区间），预期同时保住 z-offset 收益与 gsf 基线。家族净账：z-offset 家族 18 夹具×~−25k 对 gsf 单夹具 +36k，保留修复。单测 300 绿、tsc 绿。
