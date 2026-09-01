@@ -176,8 +176,18 @@ export class MBMaterialPatchManager {
                     if (uList.length === 0) continue;
                     for (const u of uList) {
                         u.uMBShadowMap.value = shadowState?.map ?? null;
-                        if (shadowState) u.uMBShadowMatrix.value.copy(shadowState.matrix);
-                        else if (identity) u.uMBShadowMatrix.value.copy(identity);
+                        if (shadowState) {
+                            // §692: share the renderer's LIVE uniform objects —
+                            // prepGroundQuad mutates them in place each frame,
+                            // so the shaders always read the current framing
+                            // without per-material copies.
+                            u.uMBShadowMatrix.value = shadowState.matrix;
+                            u.uMBGC.value = shadowState.corners;
+                            u.uMBEye.value = shadowState.eye;
+                            u.uMBRes.value = shadowState.res;
+                        } else if (identity) {
+                            u.uMBShadowMatrix.value = identity;
+                        }
                         // mgl: shadow-intensity gates the shadow PASS; the
                         // ground receiver darkness comes from the
                         // shadow_utils amb/(amb+dir·NdotL) ratio alone.
@@ -195,6 +205,22 @@ export class MBMaterialPatchManager {
                                 }
                             } else {
                                 f.set(0, 0, 0);
+                            }
+                        }
+                        // §692 one-shot receiver-side probe: what the MATERIAL
+                        // actually holds after refresh (res/corners/matrix were
+                        // the unverified links — the renderer-side probe could
+                        // not see stale/wrong per-material state).
+                        if (!(MBMaterialPatchManager as any).__mbRecvLogged) {
+                            (MBMaterialPatchManager as any).__mbRecvLogged = true;
+                            try {
+                                const c0 = (u.uMBGC.value as THREE.Vector3[])?.[0];
+                                const mEl = (u.uMBShadowMatrix.value as THREE.Matrix4)?.elements ?? [];
+                                // eslint-disable-next-line no-console
+                                console.log(`[MBShadowRecv] res=(${(u.uMBRes.value as THREE.Vector2)?.x},${(u.uMBRes.value as THREE.Vector2)?.y}) c0=(${c0 ? c0.x.toFixed(0) + ',' + c0.y.toFixed(0) + ',' + c0.z.toFixed(0) : 'undef'}) mT=(${mEl[12]?.toFixed(2)},${mEl[13]?.toFixed(2)},${mEl[14]?.toFixed(2)}) m00=${mEl[0]?.toExponential(2)} int=${u.uMBShadowIntensity.value} eyeZ=${(u.uMBEye.value as THREE.Vector3)?.z?.toFixed(0)}`);
+                            } catch (e) {
+                                // eslint-disable-next-line no-console
+                                console.log('[MBShadowRecv] probe error ' + String(e));
                             }
                         }
                     }
@@ -2609,6 +2635,21 @@ export class MBMaterialPatchManager {
      * shadow factor. Uniform values are refreshed every frame from
      * MBShadowRenderer via `__mbShadowUniforms`.
      */
+    /**
+     * §692: shadow-map receiver for ground layers (fill/line/circle), mgl
+     * apply_lighting_ground + RENDER_SHADOWS semantics:
+     *   out *= mix(u_ground_shadow_factor, 1, shadowed_light_factor).
+     * The ground world position is reconstructed IN SCREEN SPACE from the
+     * per-frame NDC-corner ground intersections (uMBGC, computed CPU-side in
+     * MBShadowRenderer.prepGroundQuad — the same math as the ground quad
+     * underlay): for ground-plane fragments the bilinear corner interpolation
+     * is EXACT, with no per-material varying and no dependency on the tile
+     * matrix rebase frame (the §689 modelMatrix-varying variant showed zero
+     * pixels while the depth pass provably had content — [MBShadowGrid]).
+     * Uniform objects (corners/eye/res/matrix) are SHARED live references
+     * from the renderer; the per-frame refresh only pushes intensity + the
+     * ambient/directional factor.
+     */
     private injectGroundShadow(material: any): void {
         if (material.__mbShadowInjected) return;
         material.__mbShadowInjected = true;
@@ -2626,43 +2667,41 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBShadowMatrix = { value: new THREE.Matrix4() };
             shader.uniforms.uMBShadowIntensity = { value: 0 };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
+            // vec3[4] MUST never hold null at first compile/upload — three's
+            // array-uniform setter throws on null, the exception aborts the
+            // frame BEFORE the AfterRender refresh can install the real
+            // corners, and every subsequent frame re-throws (the §692 smoke
+            // hang on ground-shadow-fog: 180s timeout with zero executed
+            // assertions). Initialize with real vectors; the refresh swaps in
+            // the shared live array on the same frame.
+            shader.uniforms.uMBGC = {
+                value: [new THREE.Vector3(), new THREE.Vector3(),
+                    new THREE.Vector3(), new THREE.Vector3()],
+            };
+            shader.uniforms.uMBEye = { value: new THREE.Vector3() };
+            shader.uniforms.uMBRes = { value: new THREE.Vector2(1, 1) };
             material.__mbShadowUniforms = shader.uniforms;
-            // Declarations prepend at global scope — valid for both three-chunk
-            // materials and the chunk-less ribbon customs (an anchor-based
-            // declaration double-fires on shaders that have BOTH #include
-            // <common> and void main, redeclaring the varying).
-            shader.vertexShader =
-                'varying vec3 vMBWorldPos;\n' + shader.vertexShader;
-            // Vertex assignment: after project_vertex when chunks exist
-            // (`transformed` carries JS-side displacement); ribbons are
-            // pre-extruded in JS so plain `position` is already final there.
-            if (shader.vertexShader.includes('#include <project_vertex>')) {
-                shader.vertexShader = shader.vertexShader.replace(
-                    '#include <project_vertex>',
-                    '#include <project_vertex>\n' +
-                    'vMBWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;',
-                );
-            } else {
-                shader.vertexShader = shader.vertexShader.replace(
-                    'void main() {',
-                    'void main() {\n    vMBWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;',
-                );
-            }
             const mbShadowSample = `
-                        vec4 mbShadowUv = uMBShadowMatrix * vec4(vMBWorldPos, 1.0);
+                        vec2 mbSUV = gl_FragCoord.xy / max(uMBRes, vec2(1.0));
+                        vec3 mbWP = mix(mix(uMBGC[0], uMBGC[1], mbSUV.x),
+                                        mix(uMBGC[3], uMBGC[2], mbSUV.x), mbSUV.y);
+                        vec4 mbShadowUv = uMBShadowMatrix * vec4(mbWP - uMBEye, 1.0);
                         float mbShadowDepth = 1.0;
-                        if (mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
+                        if (mbWP.z <= 1.0 &&
+                            mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
                             mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
                             vec4 mbPk = texture2D(uMBShadowMap, mbShadowUv.xy);
                             // §527: 16-bit packed window depth (R=hi, G=lo)
                             mbShadowDepth = mbPk.r + mbPk.g / 255.0;
-                            float mbLit = mbShadowUv.z <= mbShadowDepth + 0.002 ? 1.0 : 0.0;
-                            // mgl apply_lighting_ground receivers: out *=
-                            // mix(u_ground_shadow_factor, 1, light) — the
-                            // shadow_utils ratio amb/(amb+dir·NdotL) applied
-                            // in the sRGB domain; our fragment is linear, so
-                            // square the ratio (srgb→linear of the multiplier)
-                            // to land the same sRGB product after encode.
+                            // §692: the tight §692 shadow frustum makes one
+                            // 16-bit depth quantum tiny — the old 0.002 bias
+                            // (≈6-60m of scene depth) ATE the entire building
+                            // shadow footprint (0.001-of-range signature).
+                            float mbLit = mbShadowUv.z <= mbShadowDepth + 0.0005 ? 1.0 : 0.0;
+                            // mgl: out(sRGB) *= mix(u_ground_shadow_factor, 1, light)
+                            // with the factor = linear-strengths ratio. Our
+                            // fragment is linear: multiplying it by ratio^2.2
+                            // encodes to exactly sRGB × ratio.
                             gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(2.2)), vec3(1.0), mbLit);
                         }`;
             let mbShadowInserted = false;
@@ -2671,14 +2710,20 @@ export class MBMaterialPatchManager {
                 mbShadowInserted = true;
                 return src.replace(anchor, anchor + block);
             };
+            // §692 compile-time anchor census: which injection path landed on
+            // this material (roads/fills use different shader flavors).
+            material.__mbShadowAnchor = 'none';
             shader.fragmentShader =
-                'varying vec3 vMBWorldPos;\n' +
                 'uniform sampler2D uMBShadowMap;\n' +
                 'uniform mat4 uMBShadowMatrix;\n' +
                 'uniform float uMBShadowIntensity;\n' +
                 'uniform vec3 uMBGroundShadowFactor;\n' +
+                'uniform vec3 uMBGC[4];\n' +
+                'uniform vec3 uMBEye;\n' +
+                'uniform vec2 uMBRes;\n' +
                 'uniform float uMBShadowDbg;\n' +
                 shader.fragmentShader;
+            const mbShadowDbg4 = !!(globalThis as any).__mbShadowDbg4;
             shader.fragmentShader = tryInsert(
                 shader.fragmentShader, '#include <opaque_fragment>',
                 `\nif (uMBShadowIntensity > 0.0) {${mbShadowSample}
@@ -2688,6 +2733,21 @@ export class MBMaterialPatchManager {
                             gl_FragColor.rgb = vec3(uMBShadowIntensity, mbShadowDepth, mbShadowUv.z);
                         }
                     }`);
+            if (mbShadowInserted) material.__mbShadowAnchor = 'opaque_fragment';
+            if (mbShadowDbg4) {
+                // §692: raw-uv field readout — bypass the output color-space
+                // transform entirely so the PNG shows the RAW shadow uv
+                // (R=uv.x, G=uv.y, B=uv.z) without tonemap/encode ambiguity.
+                shader.uniforms.uMBShadowDbg4 = { value: 1 };
+                shader.fragmentShader = 'uniform float uMBShadowDbg4;\n' + shader.fragmentShader;
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <colorspace_fragment>', '');
+                shader.fragmentShader = tryInsert(
+                    shader.fragmentShader, '#include <opaque_fragment>',
+                    `\nif (uMBShadowIntensity > 0.0 && uMBShadowDbg4 > 0.5) {
+                            gl_FragColor = vec4(mbShadowUv.xyz, 1.0);
+                        }`);
+            }
             if (!mbShadowInserted) {
                 // Chunk-less ribbon shaders: inject right after their final
                 // color assignment — raw and ground-radiance-mixed variants.
@@ -2700,7 +2760,22 @@ export class MBMaterialPatchManager {
                     shader.fragmentShader = tryInsert(
                         shader.fragmentShader, anchor,
                         `\nif (uMBShadowIntensity > 0.0) {${mbShadowSample}\n                    }`);
+                    if (mbShadowInserted) {
+                        material.__mbShadowAnchor = 'ribbon:' + anchor.slice(18, 60);
+                        break;
+                    }
                 }
+            }
+            // §692: one console line per material flavor — proves which
+            // compiled shaders carry the receiver (the ground-rad injection
+            // demonstrably renders, so its compiled flavor is the target).
+            if (!((globalThis as any).__mbAnchorSeen)) (globalThis as any).__mbAnchorSeen = {};
+            const __seen = (globalThis as any).__mbAnchorSeen;
+            const __ak = `${material.type}|${material.__mbShadowAnchor}`;
+            if (!__seen[__ak]) {
+                __seen[__ak] = 1;
+                // eslint-disable-next-line no-console
+                console.log(`[MBShadowAnchor] ${__ak} block=${shader.fragmentShader.includes('uMBShadowMatrix') ? 'in' : 'MISSING'}`);
             }
             shader.uniforms.uMBShadowDbg = { value: (globalThis as any).__mbShadowDbg ? 1 : 0 };
         };

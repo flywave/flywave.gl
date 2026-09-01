@@ -27,6 +27,12 @@ export interface ShadowUniformState {
     map: THREE.Texture;
     matrix: THREE.Matrix4;
     intensity: number;
+    /** Screen-corner ground-plane world positions (NDC (-1,-1),(1,-1),(1,1),(-1,1)) —
+     * receivers interpolate their ground world pos from gl_FragCoord (§692). */
+    corners: THREE.Vector3[];
+    eye: THREE.Vector3;
+    /** Drawing-buffer size in device px (gl_FragCoord space). */
+    res: THREE.Vector2;
 }
 
 export class MBShadowRenderer {
@@ -69,6 +75,8 @@ export class MBShadowRenderer {
     private m_groundUniforms: any = null;
     private m_groundScene = new THREE.Scene();
     private m_groundCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    /** Drawing-buffer size for the §692 screen-space receivers. */
+    private m_res = new THREE.Vector2(1, 1);
 
     constructor(
         private m_mapView: any,
@@ -113,10 +121,15 @@ export class MBShadowRenderer {
     /** Uniform state for receiving-material injection; null when inactive. */
     getShadowUniforms(): ShadowUniformState | null {
         if (!this.enabled || !this.m_shTex) return null;
+        if (!this.m_groundUniforms) return null;
+        const cv = this.m_mapView?.canvas as HTMLCanvasElement | undefined;
         return {
             map: this.m_shTex,
             matrix: this.m_matrix,
             intensity: this.m_intensity,
+            corners: this.m_groundUniforms.uMBGC.value as THREE.Vector3[],
+            eye: this.m_groundUniforms.uMBEye.value as THREE.Vector3,
+            res: this.m_res,
         };
     }
 
@@ -167,7 +180,7 @@ export class MBShadowRenderer {
                         mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
                         vec4 mbPk = texture2D(uMBShadowMap, mbShadowUv.xy);
                         float mbShadowDepth = mbPk.r + mbPk.g / 255.0;
-                        mbLit = mbShadowUv.z <= mbShadowDepth + 0.002 ? 1.0 : 0.0;
+                        mbLit = mbShadowUv.z <= mbShadowDepth + 0.0005 ? 1.0 : 0.0;
                     }
                     // The engine clear color reaches the canvas in sRGB; our
                     // raw ShaderMaterial output must be encoded to match
@@ -264,6 +277,10 @@ export class MBShadowRenderer {
         // background semantics — MBStyleDataSource.applyBackgroundColor).
         const clear = (this.m_mapView as any).clearColor;
         if (clear !== undefined) this.m_groundUniforms.uMBGroundColor.value.setHex(clear);
+        // §692: drawing-buffer size for the screen-space receivers
+        // (gl_FragCoord.xy is in device px).
+        const cv2 = this.m_mapView?.canvas as HTMLCanvasElement | undefined;
+        if (cv2) this.m_res.set(cv2.width, cv2.height);
         // §643: the quad itself is drawn by the engine's preSceneHook —
         // see drawGroundQuad.
     }
@@ -393,6 +410,37 @@ export class MBShadowRenderer {
         this.m_shadowCamera.position.copy(frameCenter).addScaledVector(lightDir, radius * 2);
         this.m_shadowCamera.up.set(0, 0, 1);
         this.m_shadowCamera.lookAt(frameCenter);
+        // §692: TIGHT DEPTH RANGE along the light axis. The old 0.1..4×radius
+        // frustum spans ~10-25km, so a 30m building's depth footprint on the
+        // ground is ~0.001 of the [0,1] window range — SMALLER than the
+        // receiver's 0.002 lit-compare bias, which made EVERY ground fragment
+        // read "lit" (the entire model-layer shadow family rendered without
+        // shadows while the depth map itself had content — [MBShadowGrid]
+        // 0.48-0.58 cluster vs scores bit-identical). Project the caster AABB
+        // onto the light axis and clamp [near, far] to it with a small slack.
+        if (haveBox) {
+            // The camera looks along −lightDir (it sits offset TOWARD the
+            // light and faces the frame center) — depth bounds must project
+            // onto THAT axis, not lightDir itself (sign flip ⇒ negative far ⇒
+            // inverted/empty frustum).
+            const viewDir = lightDir.clone().normalize().negate();
+            const corner = new THREE.Vector3();
+            let tMin = Infinity;
+            let tMax = -Infinity;
+            for (let i = 0; i < 8; i++) {
+                corner.set(
+                    i & 1 ? casterBox.max.x : casterBox.min.x,
+                    i & 2 ? casterBox.max.y : casterBox.min.y,
+                    i & 4 ? casterBox.max.z : casterBox.min.z,
+                );
+                const t = corner.sub(this.m_shadowCamera.position).dot(viewDir);
+                if (t < tMin) tMin = t;
+                if (t > tMax) tMax = t;
+            }
+            const slack = Math.max(100, (tMax - tMin) * 0.05);
+            this.m_shadowCamera.near = Math.max(0.1, tMin - slack);
+            this.m_shadowCamera.far = tMax + slack;
+        }
         this.m_shadowCamera.updateProjectionMatrix();
         this.m_shadowCamera.updateMatrixWorld();
 
@@ -437,7 +485,12 @@ export class MBShadowRenderer {
         }
         // §530 probe: 8×8 sample of the depth canvas (shadowdbg diagnostics).
         if ((globalThis as any).__mbDecodeDbg || (globalThis as any).__mbShadowEnable) {
-            try {
+            // §692: also log a LATE frame (60th) — frame-1 framing differs
+            // (few casters registered yet) and the early snapshot misled the
+            // shadow investigation once already.
+            const __rc = ((this as any).__mbRunCount = ((this as any).__mbRunCount ?? 0) + 1);
+            if (__rc === 1 || __rc === 60) {
+              try {
                 const c2: HTMLCanvasElement = (this as any).__mbDbg2d ??
                     ((this as any).__mbDbg2d = document.createElement('canvas'));
                 c2.width = 8;
@@ -470,6 +523,7 @@ export class MBShadowRenderer {
             } catch (e) {
                 (globalThis as any).__mbShadowGridErr = String(e);
             }
+            }
         }
 
         // world → shadow-uv matrix (proj*view + [0,1] remap).
@@ -481,6 +535,28 @@ export class MBShadowRenderer {
                 0, 0, 0.5, 0.5,
                 0, 0, 0, 1,
             ));
+
+        // §692 one-shot matrix probe: the receiver debug readout showed
+        // intensity=1 (refresh chain ✓) but the depth sample stuck at its
+        // 1.0 INIT with uv.z≈0 — the signature of the uv matrix reading as
+        // identity at draw time. Log the actual matrix + framing once.
+        if (!(this as any).__mbMatFrames) (this as any).__mbMatFrames = 0;
+        const __rc = ++(this as any).__mbMatFrames;
+        if (__rc === 1 || __rc === 60) {
+            (this as any).__mbMatLogged = true;
+            try {
+                const p = this.m_shadowCamera.position;
+                const pj = this.m_shadowCamera.projectionMatrix.elements;
+                const vi = this.m_shadowCamera.matrixWorldInverse.elements;
+                const bc = casterBox.getCenter(new THREE.Vector3());
+                const bs = casterBox.getSize(new THREE.Vector3());
+                // eslint-disable-next-line no-console
+                console.log(`[MBShadowMat] f=${__rc} casters=${shadowCasters.size} cam=(${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}) r=${radius.toFixed(0)} nrfr=${this.m_shadowCamera.near.toFixed(0)}/${this.m_shadowCamera.far.toFixed(0)} p00=${pj[0].toExponential(2)} boxC=(${bc.x.toFixed(0)},${bc.y.toFixed(0)},${bc.z.toFixed(0)}) boxS=(${bs.x.toFixed(0)},${bs.y.toFixed(0)},${bs.z.toFixed(0)}) fc=(${frameCenter.x.toFixed(0)},${frameCenter.y.toFixed(0)},${frameCenter.z.toFixed(0)})`);
+            } catch (e) {
+                // eslint-disable-next-line no-console
+                console.log('[MBShadowMat] probe error ' + String(e));
+            }
+        }
 
         this.prepGroundQuad(center, radius, eye);
     }

@@ -205,6 +205,9 @@ function discoverTests(): TestEntry[] {
     // Debug readout (receiver color = intensity/depth/uv.z) is a SEPARATE
     // gate — enabling shadows must not corrupt the pixel comparison.
     if (Number(dbg) >= 3) (globalThis as any).__mbShadowDbg = true;
+    // §692: raw-uv field readout (shadowdbg=4) — receivers paint their raw
+    // shadow uv (R=x,G=y,B=z) with the output color-space transform bypassed.
+    if (Number(dbg) >= 4) (globalThis as any).__mbShadowDbg4 = true;
     // §525 A/B: shadowdbg=2 opens the gate but SKIPS the depth pass —
     // discriminates depth-pass side effects from the patcher/lighting path.
     if (dbg === "2") (globalThis as any).__mbShadowSkipPass = true;
