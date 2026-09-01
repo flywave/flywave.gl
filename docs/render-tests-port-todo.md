@@ -7407,3 +7407,8 @@ diff 定量显示 §716 的墙投射在 82° 掠射日照下产生**深度噪声
 **§721. cascade 框定对齐 A/B 负结果——回退至 §720 态（2026-09-02 续）**：
 
 实施 mgl createLightMatrix（shadow_renderer.ts:678）的旋转不变包围球框定（frustum slab [ccd/50, 4.5×ccd]，lxjk 2017 球心/半径公式）替换 casterBox 框定，并同步启用 mgl 坡度 bias 常量（域已一致假设）。**A/B 负结果**：shadowcast=1 下 gsf 155,133（vs 门控关闭 140,258 劣化 +10%）、scale 256,320 持平；默认（无墙投射）下 gsf **167,583（较 §720 的 140,258 劣化 +19%）**——包围球框定的深度窗口远大于 casterBox 紧框，地面阴影足迹进一步偏移。**已回退**（src 恢复 §720 casterBox 框定 + 固定 ±0.0002 窗口）。**结论**：阴影覆盖域对齐不是单纯框定公式问题——mgl cascade 的深度内容保真度（precision、tile 选择、bias 全套）与我们深度 pass 的差异是复合性的，需要专项 cascade 工程而非参数对齐；在 gsf/z-offset 两夹具的当前证据下，§720 态（墙投射关闭 + 局部 fade 基建保留）为已知最优。该专项到此封存，后续重启需以 mgl shadow_renderer 全套移植为前提。单测 300 绿、tsc 绿。
+
+
+**§722. §695 会话级跳过修复——chunked runner 断连续跑（2026-09-02 续）**：
+
+**实施（runner 层，karma 6.4.4 无 restartOnDisconnectedBrowser 选项）**：run-mbstyle-render-tests-chunked.js 新增 `resumeMissing`——每个 karma 会话结束后枚举 category 的 212→N 个 fixture 结果文件，对缺失者以 `filter=<fixture>`（4 个/全新浏览器会话）续跑，最多 12 轮直至全部有结果。每次续跑 = 全新浏览器页面 = 全新 mocha 实例，§695 的"上一会话状态污染→Executed 0 of X 整批跳过"从机制上消除。**首跑复现**：首轮 212 会话在 5 测试后 DISCONNECTED（§695 同型），resume 第 1 轮自动续跑剩余 207。单测 300 绿、tsc 绿。
