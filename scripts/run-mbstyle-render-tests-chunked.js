@@ -72,7 +72,7 @@ function listFixtures(category) {
             const p = path.join(d, e.name);
             const r = rel ? rel + "/" + e.name : e.name;
             if (e.isDirectory()) walk(p, r);
-            else if (e.name === "style.json") names.push(r);
+            else if (e.name === "style.json") names.push(path.dirname(r));
         }
     })(path.join(fixturesRoot, category), "");
     return names;

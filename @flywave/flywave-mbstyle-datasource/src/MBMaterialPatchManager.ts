@@ -1063,9 +1063,10 @@ export class MBMaterialPatchManager {
                  uniform float uMbDistCam;
                  varying float vMbWallH;
                  varying vec3 vMbWorldPos;
-                 uniform sampler2D uMBShadowMap;
+                 ${shader.fragmentShader.includes('uniform sampler2D uMBShadowMap') ? '' :
+                 `uniform sampler2D uMBShadowMap;
                  uniform mat4 uMBShadowMatrix;
-                 uniform float uMBShadowIntensity;
+                 uniform float uMBShadowIntensity;`}
                  uniform float uMBShadowFar;
                  vec3 mbBaseColor = vec3(1.0);
                  void main() {`
