@@ -7070,3 +7070,7 @@ buildings-trees-shadows 家族（B1 批 61-82 万 px×5）定性双根因之一�
 **§690. add-layer 模型重复/残留放置修复——placements 数组身份重建（2026-09-01 续十七）**：
 
 MBModelRenderer.run() 的缓存路径按**长度**判重：markTilesDirty 同 Tile 原地重解码后 `decoded.modelInstances` 是新对象数组——长度增大时 processPending 按 index 的 `_done` 集跳过旧位（新对象混旧子节点）、长度缩小时旧克隆永久残留（mgl tile 语义 = 内容整体替换）。**修复**：缓存条目记录 `sourceArr`（数组身份），重解码换新数组即拆组重建（移除子节点+清 `_done`+全量重放）；同数组原地增长保留追加语义；无数组瞬窗 continue。注：B1 基线中 geojson-source-with-schema 与 -add-layer 已同分 48609=48609——重复放置已被 §659/§661 链修复，本修复为语义加固（防 runtime update/move 场景回归）。同批基线注：fill-extrusion--default 100130→136125 为 §686 移除 fogAlpha×0.5 常量、恢复深度雾的已知代价（§686 记档），非意外回归。单测 301 绿、tsc 绿。
+
+**§691. 模型光照帧论证——NdotL 共轭不变性与双支法线不一致（2026-09-01 续十八）**：
+
+quantization 家族（§690 后最大头 ~660 万）"ambient-only 亮度"的源码级论证：①mgl `sphericalDirectionToCartesian` 精确式 = (cos(a)·sinp, **+sin(a)**·sinp, cosp)，a=az+90（src/util/util.ts）——我方 §683 式 = 其严格 y 镜像共轭（x 同、y 取负、z 同）；②镜像共轭 M=diag(1,−1,1) 下 dot(Ma,Mb)≡dot(a,b)——**若法线与光方向同帧，我方 NdotL 与 mgl 逐位等价**，转换式无嫌疑；③故实测"墙 177 vs 231（≈ambient-only，NdotL≈0）"必为**模型几何法线与光方向的帧不一致**（法线被翻转 0/2 次而光被翻转 1 次；§549 双帧问题在 batched-model 路径的延续；与 §562 "OPPOSITE directions net +377k" 的 A/B 史吻合）。④**分支不一致实锤**：injectMglModelLighting 中 §557 半球支用 `mbN0`（原始 vNormal），§655 PBR 支用 `mbN = vec3(−mbN0.xy, mbN0.z)`（mgl transformed_normal xy 翻转约定）——两支对同一光场给出不同 NdotL，modellightport=0/1 切换时光照翻转。**下轮入口**：单夹具 A/B 三门（modeldiralt / extaz180 / modellightport）× ground-shadow-fog（bearing 264）+ quantization（bearing 0）双夹具对拍，用 NdotL 敏感的墙面亮度直接裁决帧约定；裁决后统一两支法线与光方向至同一帧。
