@@ -119,12 +119,18 @@ function discoverTests(): TestEntry[] {
     if (alt === "1") (globalThis as any).__mbModelDirAlt = true;
 }
 {
-    // §655: model-shader lighting port A/B (modellightport=1 → the mgl
-    // model.fragment.glsl Cook-Torrance + indirect env; default = the
-    // §557 hemisphere approximation).
+    // §655: model-shader lighting mode A/B.
+    // §691 verdict: PBR (Cook-Torrance + indirect env) is the default
+    // (port+diralt = 4633 px, −99.5%). The old hemisphere approximation
+    // (§557) is retained behind `modelhemisphere=1` karma arg.
+    const hemi = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("modelhemisphere="))?.slice("modelhemisphere=".length);
+    if (hemi === "1") (globalThis as any).__mbModelLightHemi = true;
+    // Legacy arg: modellightport=1 now also forces hemisphere (inverted from
+    // its original meaning when PBR was opt-in).
     const port = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modellightport="))?.slice("modellightport=".length);
-    if (port === "1") (globalThis as any).__mbModelLightPort = true;
+    if (port === "1") (globalThis as any).__mbModelLightHemi = true;
 }
 // Decode census: per-tile technique/vertex counts (is content reaching the
 // emitter at all — data vs render side split for blank domains).
