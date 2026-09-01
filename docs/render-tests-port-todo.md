@@ -7154,3 +7154,13 @@ float mbShLit = smoothstep(-0.001, 0.001, mbShadowDist);
 
 进阶修复（更高精度）：5-tap PCF（中心+4 邻域），代价 5×纹理采样。对模型层的渲染预算通常可接受。留给下轮 A/B 验证。
 
+
+**§696. smoothstep shadow 比较替换（2026-09-01 续二十二）**：
+
+三处 binary shadow 比较替换为 `smoothstep(-0.0002, 0.0002, uv.z - depth)`：
+1. **挤出 receiver**（injectExtrusion3DLighting）：`mbNdotL *= smoothstep(...)` — shadow-modulated directional term now has soft penumbra transition
+2. **Ground fill receiver**（injectGroundShadow）：`mbLit = smoothstep(...)` — ground shadow edges softened
+3. **Ground quad**（MBShadowRenderer）：同一 smoothstep — quad underlay matches receiver behavior
+
+smoothstep 过渡宽度 0.0004 in [0,1] uv 空间 ≈ 紧致视锥下 0.8m 场景距离（范围 ~2km → 0.0004×2000）。与 mgl 的 PCF 柔化效果方向一致（消除 binary 阴影在 ambient=0 时的纯黑墙面）。
+
