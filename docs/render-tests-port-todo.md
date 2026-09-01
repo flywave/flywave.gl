@@ -7213,3 +7213,12 @@ smoothstep A/B（ground-shadow-fog）：**167,004 → 141,864（−15%，−25,1
 
 实际影响：19 fixtures 在单独 karma run 中可成功（已有 lighting-3d-mode/model-shadow 的 191,995 px 基线），批量 filter 模式下被 mocha 跳过。不影响代码对齐工作（渲染代码本身正确）。
 
+
+
+**§699. §698 验证 + 挤出 fog 补齐 horizon blending / vertical limit（2026-09-01 续二十三）**：
+
+①**§698 fogt=1 探针验证通过**：ChromeHeadless-shell 单夹具复跑，挤出墙面出现随深度分布的灰度 log2 距离读数——挤出注入（lighting/fog/shadow uniforms）在 §698 needsUpdate 修复后确认触发，§686 的"onBeforeCompile 不触发"路径受阻已解除。
+
+②**挤出 fog 语义缺口补齐（MBMaterialPatchManager injectExtrusion3DLighting）**：mgl fill_extrusion.fragment 用 `fog_apply_premultiplied(color, v_fog_pos, h)`，含两个此前缺失的修饰项：**(a) fog_horizon_blending**——camera-dir z 除以 horizonBlend，factor = fogAlpha·exp(−3t²)，朝地平线/天空的射线雾快速衰减（与引擎 fog_fragment override 同构，-fogCamHeight/depth 语义）；**(b) vertical limit + opacity limit**——elevated 片元在 u_fog_vertical_limit 高度区间（米，RTE world z × uMbMetersPerUnit）smoothstep 渐出雾，且 near-total fog 时 `1−smoothstep(0.9,1.0,depthOpacity)` 限制渐出本身防 cull 距离硬切。depth-only opacity 单独保留供 opacity limit 读取（mgl fog_opacity(pos) 无 horizon 项）。新 uniforms（fogHorizonBlend/fogCamHeight/fogVertLimit）沿用 by-reference 绑定链。§682 的 0.78 深度系数保留为标定旋钮。
+
+**验证**：ground-shadow-fog 188,975→**175,632（−13,343，−7.1%）**（ChromeHeadless-shell 平台，同平台 pre-change 基线=§699 首跑 188,975；注意 §696 的 141,864 基线疑为 Edge-150 平台，跨平台分数不可直接对比——结果目录按平台分桶，后续 A/B 必须同平台）。hard-cutoff 同步 188,571。fogt=1 调试跑 189,093 ≈ 无调试 188,975 说明墙面像素无论着色方式均处失配态（与 §696 墙面雾洗幅度差定性一致），挤出 fog 幅度校准仍待取景/参数微调。**坑位记录**：karma 经 package main 消费 **lib/** 构建产物——src 改动后必须 `tsc --build` 重建 lib 再跑 render-test，否则跑的是旧代码（§699 首轮 A/B 即因此无效）。单测 300 绿、tsc 绿。

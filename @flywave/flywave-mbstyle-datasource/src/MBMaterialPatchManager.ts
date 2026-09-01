@@ -1019,6 +1019,7 @@ export class MBMaterialPatchManager {
                  uniform mat3 uMB3DViewToWorld; uniform float uMB3DEmissive; uniform float uMB3DDbg;
                  uniform float fogMglShift; uniform float fogMglDistCam; uniform vec2 fogMglRange;
                  uniform float uMbMetersPerUnit; uniform vec3 fogColor; uniform float fogAlpha;
+                 uniform float fogHorizonBlend; uniform float fogCamHeight; uniform vec2 fogVertLimit;
                  varying float vMbWallH;
                  varying vec3 vMbWorldPos;
                  uniform sampler2D uMBShadowMap;
@@ -1138,7 +1139,29 @@ export class MBMaterialPatchManager {
                          / max(fogMglRange.y - fogMglRange.x, 0.001);
                      float mbFall = 1.0 - min(1.0, exp(-6.0 * mbT));
                      mbFall *= mbFall * mbFall;
-                     float mbFogFactor = fogAlpha * min(1.0, 1.00747 * mbFall);
+                     // mgl fog_opacity (depth-only term) — kept separate: the
+                     // premultiplied variant's opacity limit reads the raw
+                     // depth opacity, before horizon blending.
+                     float mbFogDepth = fogAlpha * min(1.0, 1.00747 * mbFall);
+                     float mbFogFactor = mbFogDepth;
+                     // mgl fog_horizon_blending (fog_apply, non-globe):
+                     // camera-dir z below the horizon keeps full fog; rays
+                     // toward/above the horizon fade out. Same form as the
+                     // engine's fog_fragment override.
+                     float mbHzZ = -fogCamHeight / max(length(vViewPosition), 1.0);
+                     float mbHz = max(0.0, mbHzZ / max(fogHorizonBlend, 1e-4));
+                     mbFogFactor *= fogAlpha * exp(-3.0 * mbHz * mbHz);
+                     // mgl fog_apply_premultiplied(color, pos, heightMeters):
+                     // elevated fragments fade OUT of the fog between the
+                     // vertical-limit heights, and the fade itself is limited
+                     // near total fog to avoid a hard cut at the cull
+                     // distance. Height (m) = RTE world z × meters/unit.
+                     if (fogVertLimit.x > 0.0 || fogVertLimit.y > 0.0) {
+                         float mbH = vMbWorldPos.z * uMbMetersPerUnit;
+                         float mbVertP = smoothstep(fogVertLimit.x, fogVertLimit.y, mbH);
+                         float mbOpLimit = 1.0 - smoothstep(0.9, 1.0, mbFogDepth);
+                         mbFogFactor *= 1.0 - min(mbVertP, mbOpLimit);
+                     }
                      mbOut = mix(mbOut, fogColor, clamp(mbFogFactor, 0.0, 1.0));
                      gl_FragColor.rgb = mbOut;
                      if (uMB3DDbg > 1.5) {
