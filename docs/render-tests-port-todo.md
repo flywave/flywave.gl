@@ -7213,3 +7213,14 @@ smoothstep A/B（ground-shadow-fog）：**167,004 → 141,864（−15%，−25,1
 
 实际影响：19 fixtures 在单独 karma run 中可成功（已有 lighting-3d-mode/model-shadow 的 191,995 px 基线），批量 filter 模式下被 mocha 跳过。不影响代码对齐工作（渲染代码本身正确）。
 
+
+**§698 补充：19 fixtures 逐个跑结果（2026-09-01）**：
+
+逐个 filter 运行（每个独立 karma 进程）：19 fixtures 中 **10 例成功出帧**（53%），9 例仍失败。
+
+**最大成果**：`lighting-3d-mode/model-shadow` 从 191,995 → **3 px**（−99.998%，近完美）——§698 挤出 lighting 延迟注入修复是该 fixture 的关键：挤出材质在 applyLights() 之前被解码→use3DLights=false→injectExtrusion3DLighting 被跳过→材质缺少 lighting/fog/shadow uniforms→渲染错误。修复后材质在 use3DLights=true 后重新注入，渲染正确。
+
+**成功 fixtures**：model-shadow(3), model-with-ao-instance(18K), model-with-ao(31K), model-normals(111K), no-ambient(107K), powerplants-fog-mercator(218K), powerplants-globe-zoom(246K), trees-zoom-based-scale(212K), trees-lod-expression(60K)——共 10 例出帧。
+
+**仍失败 fixtures**（9 例 NO_RESULT）：globe projection 系（powerplants-globe-lod/to-mercator-*/set-projection）和 trees-light-aligned 系（fog/updated-data-driven 等）。globe projection 夹具需要 `setProjection("globe")` 操作→可能需要专用 globe 渲染路径支持；trees-light-aligned 系可能需要 trees fog integration 专项修复。
+
