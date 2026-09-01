@@ -7366,3 +7366,10 @@ pixpick 扩展 grid 模式（64 采样点射线分类 batched-model/extrusion）
 **§714. shadow-uv 探针定案——深度差非判别子（2026-09-02 续）**：
 
 ①**回退基准确认**：ground-shadow-fog 复跑 = **131,915** 分毫不差 ✓。②shdbg=1 探针落地（uMB3DDbg=3：R=0.5+250×(uv.z−storedDepth)、G=0.5+0.5×NdotL；runner 新增 MBSTYLE_SHDBG 透传）。③**定量拟合结果**：32,869 个墙面采样点中，expected-lit 与 expected-shadow 两类的深度差分布**几乎完全重叠**（lit p1=+0.00111；shadow p50=+0.00159、p95=+0.00175——所有墙像素 delta≥+0.001，两分类区间不可分）。**结论：缺失的阴影接收不是 bias 幅度问题（任何阈值都无法按深度差复现 mgl 的明暗分类），而是阴影图内容/投影一致性缺口**——mgl 判为阴影的墙面在我们采样的 shadow map 中无遮挡记录（可能：mgl 阴影相机的覆盖范围/tile 集合不同，或我们的 shadow map 只覆盖地面 quad 视锥而墙体高度出界）。固定 ±0.0002 窗口维持（probe 关闭默认零影响）。**下轮入口**：dump 我方 shadow map 本体与 mgl 阴影相机的视锥/tile 覆盖做对照（MBShadowRenderer 的窗口计算 vs mgl shadow_renderer 的 cascade 选取）。单测 300 绿、tsc 绿。
+
+
+**§715. 阴影图内容缺口根因定位——阴影相机只框地面足印（2026-09-02 续）**：
+
+MBShadowRenderer.prepGroundQuad（cornerOnGround）的阴影相机取景 = **视锥射线与 z=0 地平面交点**（far=radius×8），即深度编码只覆盖地面足印；墙体高出地面的部分投影到阴影 UV 后落在记录范围之外→§714 的"delta 全体 ≥+0.001 且与明暗分类无关"现象即源于此——墙面上部的遮挡关系从未进入 shadow map。mgl shadow_renderer 以场景 AABB（含建筑高度）框定 cascade，两者覆盖域不同。
+
+**修复方向（下轮实施）**：阴影相机取景从"地面足印"改为"含高度的 caster 包围盒"——①收集可见挤出/模型的 AABB（含 z）；②以 AABB＋光方向张成的视锥框定 ortho shadow camera；③保持 16-bit packed window depth 与 receivers 的采样约定不变。风险点：AABB 框定改变所有既有阴影 fixture 的窗口（ground-shadow-fog 131,915 基线需复测回归）。单测 300 绿、tsc 绿（本轮审计无代码变更；session 探针工具链四类齐备，累计 §699-§715）。
