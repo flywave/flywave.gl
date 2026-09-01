@@ -704,9 +704,36 @@ class MBBatchedModelDecoder implements ITileDecoder {
             }
         };
         try {
-            const [pxs, pys] = pixArg.split(',').map(s => parseInt(s, 10));
             const cam: any = mv.camera;
             const ray = new THREE.Raycaster();
+            // §712 grid mode (`pix=grid`): sample every 64px, classify each
+            // pixel as batched-model hit (with node id) vs miss (procedural
+            // extrusion / ground) — the surface-ownership map for the
+            // z-offset family.
+            if (pixArg === 'grid') {
+                const W = mv.canvas?.clientWidth || 512;
+                const H = mv.canvas?.clientHeight || 512;
+                for (const g of this.m_builtGroups) g.updateMatrixWorld(true);
+                const cells: Record<string, unknown>[] = [];
+                for (let py = 32; py < H; py += 64) {
+                    for (let px = 32; px < W; px += 64) {
+                        ray.setFromCamera(new THREE.Vector2(
+                            (px / W) * 2 - 1, -((py / H) * 2 - 1)), cam);
+                        const hits = ray.intersectObjects([...this.m_builtGroups], true);
+                        const hit: any = hits[0];
+                        cells.push({
+                            px, py,
+                            model: !!hit,
+                            nodeId: hit ? (hit.object.userData?.__mbNodeId ?? null) : null,
+                            dist: hit ? +hit.distance.toFixed(1) : null,
+                        });
+                    }
+                }
+                dump({ probe: 'pixpick', mode: 'grid', W, H, cells,
+                    groups: this.m_builtGroups.size });
+                return;
+            }
+            const [pxs, pys] = pixArg.split(',').map(s => parseInt(s, 10));
             ray.setFromCamera(new THREE.Vector2(
                 (pxs / (mv.canvas?.clientWidth || 512)) * 2 - 1,
                 -((pys / (mv.canvas?.clientHeight || 512)) * 2 - 1)), cam);

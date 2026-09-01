@@ -7349,3 +7349,10 @@ mbbatchdbg=1 新增 partHist 探针（MBMeshFeatures splitByPart 内，/mb-probe
 **§711. pixpick 屏幕空间拾取探针——(178,312) 灰墙身份定案（2026-09-01 续三十六）**：
 
 pixpick 探针落地（MBBatchedModelDataSource.syncStyleState 末尾，mbbatchdbg=1 + karma arg `pix=x,y`，Raycaster 射线拾取 + /mb-probe-dump；首次误挂 MBBatchedModelRenderer——该 fixture 的活跃路径是 MBBatchedModelDataSource，partHist 有输出而 pixpick 无即为此因）。**定案：expected 橙像素 (col 178,row 312) 在 ours 无任何 batched-model 命中（hits:[]）——该处灰墙是 procedural fill-extrusion**，不是地标 mesh。因此 §704 以来的"粉顶 G/B 色差/均值 +16.5"像素统计实为**extrusion vs 地标模型的结构性错位**（同像素两图属不同表面），不存在可校准的逐通道色差。z-offset 家族的"均匀偏亮"残差重新归因：非同源像素的平均本身就是无意义统计，需配准后重测（§707b 入口保持）。landmark GLB 的着色链路（partHist 5 part 全吻合 §710）与本 pixel 的表面归属均已定案。工具链新增 pixpick（相机/dist/nodeId/baseColor/part 直方图）。单测 300 绿、tsc 绿。
+
+
+**§712. z-offset 家族结构归属定案 + 偏亮残差精确归因（2026-09-01 续三十七）**：
+
+pixpick 扩展 grid 模式（64 采样点射线分类 batched-model/extrusion）：**全部 64 点 batched-model 均 0 命中**——batched-model 路径（含 404 的 mbx/8718-5686-14.glb，两引擎同缺）对本 fixture 贡献为零；museum 由 vector 模型路径（MBMeshFeatures，partHist 已证 style 忠实）绘制。"地标注记归属/404 覆盖"假设排除——结构性错位不存在于模型路径，两图画的是同一批模型。
+
+**偏亮残差精确归因（闭式验证）**：exp 灰墙 181/255=0.712 = **mgl 环境项精确值**（vert 0.96 × ambDir 0.742，dirFactorMin=1−0.3×0.86）；ours 206/255=0.81 = 环境项 + **直射项 0.86×NdotL(≈0.13)**。即：expected 的墙在 cast-shadows 下被 shadowed_light_factor 置零直射（阴影中），**ours 的挤出阴影接收在这些 procedural 建筑上未生效**（采样恒返回 lit），+24 均匀偏亮 = 直射项漏加。下轮入口：①验证本 fixture 挤出材质的 uMBShadowMatrix/Intensity 刷新链（syncModelShadowUniforms 是否覆盖 procedural 挤出材质）；②shadow map 覆盖范围（cascade 距离 vs 相机 800m）；③§702 smoothstep 的 bias 方向。单测 300 绿、tsc 绿。
