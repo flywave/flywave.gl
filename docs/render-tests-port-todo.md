@@ -7247,3 +7247,12 @@ smoothstep A/B（ground-shadow-fog）：**167,004 → 141,864（−15%，−25,1
 ①**hard-cutoff 同步收益**：§701 fog 域重建对 ground-shadow-fog-hard-cutoff 同样生效：188,571→**173,317（−8.1%）**（同平台 ChromeHeadless）。
 
 ②**shadow-intensity 语义补全（mgl 3d-style/shaders/_prelude_shadow.fragment.glsl 对照）**：mgl 挤出 `shadowed_light_factor_normal = mix(0, (1−intensity·occ)·NdotL, step(0,NdotL))`、地面 `light = shadowed_light_factor = 1−intensity·occ`（occ 为硬件 PCF 采样，intensity<1 时阴影减淡）。我方两条接收路径此前忽略 intensity（恒按 1 处理）——已在地面接收（`mbLight = mix(1−uMBShadowIntensity, 1, mbLit)`）与挤出接收（`mbNdotL *= mix(1−i, 1, mbShLit)`）接线，intensity=1 时严格恒等。**恒等性实证**：改动后 hard-cutoff 分值与改动前全同（173,317）、ground-shadow-fog 复跑分毫不差（131,915）；中间一次 173,232 经复跑证伪为偶发 settle 帧抖动（非代码回归——同代码复跑回到 131,915，判定容差应考虑单帧抖动，必要时取两次中位）。地面 factor=amb/(amb+dir·ndl)、挤出 ambient/vert/ambDir 因子（0.92/0.3）经逐项对照 mgl _prelude_lighting.glsl 已一致，§694"shadow-intensity 公式校准"项定性为雾 wash 干扰（§701 已消），专项关闭。剩余：墙面 lighting 残差、z-offset 家族（§697）、PBR 回归（§694-2）。单测 300 绿、tsc 绿。
+
+
+**§703. §697 z-offset 家族重定性——放置假说证伪（2026-09-01 续二十七）**：
+
+**§697 的"MBBatchedModelRenderer z=0 放置缺 extrusion 高度偏移"假说经 A/B 实证证伪**：landmark-z-offset-scale-munich-museum（zoom16.9/pitch55，fill-extrusion+model 地标层）单夹具跑 371,586 px，ours 与 expected **结构逐像素级吻合**——地标 mesh 正确落在地面、与 extrusion 无 z-fighting、取景一致。mgl draw_model.ts:755 对照亦确认：无地形时 elevation=0（DEM 仅在 elevation-reference='ground' 时参与），mgl 同样把模型放 z=0；model-scale z 分量（本夹具 0→3.5 插值）由 mesh 几何承载，无需额外放置偏移。**给 MBBatchedModelRenderer 加 extrusion 高度偏移会引入回归——不做**。
+
+**残差重定性为光照亮度域**：数值分析（numpy 逐像素）——scale 变体全局均匀偏亮 **均值 +27/中位 +17 每 sRGB 通道**（窗口蓝 (96,167,198)vs(94,155,179)、粉顶 (219,198,186)vs(178,168,163)、背景挤出 +24），模型与挤出同偏 → 非 z-offset 而是 lighting 域（mgl 模型走 PBR Cook-Torrance，我方 hemisphere 近似的常数亮度差，即 §694-2 PBR 校准域）；collision 变体仅 **45,272** px（均值 +12）证实家族异质且无放置缺口。**§697 z-offset 专项关闭，家族残差并入 §694-2 PBR 全 fixture 校准campaign**（入口：modellightport=1 在 scale 变体 A/B + multiple-meshes 回归监控）。
+
+方法论沉淀：大分数家族先做逐像素数值归因（均值/中位/分区热图）再动手——本例避免了一次必然回归的"修复"。单测 300 绿、tsc 绿（无代码变更，纯定性）。
