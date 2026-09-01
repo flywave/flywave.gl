@@ -7240,3 +7240,10 @@ smoothstep A/B（ground-shadow-fog）：**167,004 → 141,864（−15%，−25,1
 **实现**：挤出路径改用新 uniform `uMbDistCam = focal×C/(256·2^flyZoom)`（calculateDistanceFromZoomLevel 语义，§700 探针证明 = mgl ccd 米数），`mbT = (shift·slant/uMbDistCam − (range.x+shift))/Δ`，0.78 补偿系数回归 1.0；§699 的 horizon blending/vertical limit 保留。中间态验证（纯 d̂ 无 shift 版）得 186,943 且渲染无雾——反证 shift 因子必须存在，遂定公式。
 
 **验证**：ground-shadow-fog 同平台 175,632→**131,915（−24.9%）**，历史最佳（§696 的 141,864 属 Edge 平台不可比）。渲染形态与 expected 一致（远城白雾洗、近场街道可见）。挤出 fog 深度域专项关闭。剩余残差：墙面明暗（lighting 域）、hard-cutoff 家族、ground-shadow intensity 校准（§694 清单）。单测 300 绿、tsc 绿。
+
+
+**§702. hard-cutoff 同步收益确认 + shadow-intensity 语义补全（2026-09-01 续二十六）**：
+
+①**hard-cutoff 同步收益**：§701 fog 域重建对 ground-shadow-fog-hard-cutoff 同样生效：188,571→**173,317（−8.1%）**（同平台 ChromeHeadless）。
+
+②**shadow-intensity 语义补全（mgl 3d-style/shaders/_prelude_shadow.fragment.glsl 对照）**：mgl 挤出 `shadowed_light_factor_normal = mix(0, (1−intensity·occ)·NdotL, step(0,NdotL))`、地面 `light = shadowed_light_factor = 1−intensity·occ`（occ 为硬件 PCF 采样，intensity<1 时阴影减淡）。我方两条接收路径此前忽略 intensity（恒按 1 处理）——已在地面接收（`mbLight = mix(1−uMBShadowIntensity, 1, mbLit)`）与挤出接收（`mbNdotL *= mix(1−i, 1, mbShLit)`）接线，intensity=1 时严格恒等。**恒等性实证**：改动后 hard-cutoff 分值与改动前全同（173,317）、ground-shadow-fog 复跑分毫不差（131,915）；中间一次 173,232 经复跑证伪为偶发 settle 帧抖动（非代码回归——同代码复跑回到 131,915，判定容差应考虑单帧抖动，必要时取两次中位）。地面 factor=amb/(amb+dir·ndl)、挤出 ambient/vert/ambDir 因子（0.92/0.3）经逐项对照 mgl _prelude_lighting.glsl 已一致，§694"shadow-intensity 公式校准"项定性为雾 wash 干扰（§701 已消），专项关闭。剩余：墙面 lighting 残差、z-offset 家族（§697）、PBR 回归（§694-2）。单测 300 绿、tsc 绿。

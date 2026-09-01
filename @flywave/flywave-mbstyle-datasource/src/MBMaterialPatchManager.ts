@@ -1120,7 +1120,11 @@ export class MBMaterialPatchManager {
                              // §696: smoothstep 替代 binary — 在阴影边缘
                              // 产生 0→1 过渡（≈0.8m penumbra），消除
                              // ambient=0 时 binary 0/1 导致的纯黑墙面。
-                             mbNdotL *= smoothstep(-0.0002, 0.0002, mbShUv.z - mbShD);
+                             // §702: mgl shadowed_light_factor_normal =
+                             // (1 − intensity·occ)·NdotL — intensity<1
+                             // 减弱阴影幅度（intensity=1 行为不变）。
+                             float mbShLit = smoothstep(-0.0002, 0.0002, mbShUv.z - mbShD);
+                             mbNdotL *= mix(1.0 - uMBShadowIntensity, 1.0, mbShLit);
                          }
                      }
                      float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
@@ -2773,11 +2777,16 @@ export class MBMaterialPatchManager {
                             // (≈6-60m of scene depth) ATE the entire building
                             // shadow footprint (0.001-of-range signature).
                             float mbLit = smoothstep(-0.0002, 0.0002, mbShadowUv.z - mbShadowDepth);
+                            // §702: mgl shadowed_light_factor = 1 − intensity·occ
+                            // (_prelude_shadow.fragment.glsl) — intensity<1
+                            // lightens the shadow; ours previously ignored
+                            // uMBShadowIntensity (identical at intensity=1).
+                            float mbLight = mix(1.0 - uMBShadowIntensity, 1.0, mbLit);
                             // mgl: out(sRGB) *= mix(u_ground_shadow_factor, 1, light)
                             // with the factor = linear-strengths ratio. Our
                             // fragment is linear: multiplying it by ratio^2.2
                             // encodes to exactly sRGB × ratio.
-                            gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(2.2)), vec3(1.0), mbLit);
+                            gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(2.2)), vec3(1.0), mbLight);
                         }`;
             let mbShadowInserted = false;
             const tryInsert = (src: string, anchor: string, block: string): string => {
