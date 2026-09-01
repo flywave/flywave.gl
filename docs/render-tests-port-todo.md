@@ -7126,3 +7126,17 @@ mgl `fill_extrusion.fragment.glsl`：extrusion 的 direct term 用 `shadowed_lig
 
 **结论**：extrusion shadow reception **功能正确**（castings 家族 −47% 是真实改善）。ground-shadow-fog 回归属 mgl shadow-intensity PCF 缩放校准问题——ambient=0 + binary 0/1 → 墙面过暗；mgl 的 `shadowed_light_factor_normal` 在 shadow 边缘返回连续值（PCF），且 shadow-intensity 本身缩放整体暗化幅度。下轮：PCF 采样或多级 bias 替换 binary；或加 shadow-intensity 到 extrusion 接收路径。
 
+
+**§695. 19 fixtures 挂起族根因定位（2026-09-01）**：
+
+根因定位：**非代码 bug，是 karma browserNoActivityTimeout 超时与 SwiftShader 慢渲染的矛盾**。
+
+19 fixtures（lighting-3d-mode×6, powerplants-globe×6, trees-light-aligned×7）在 v3 straggler run 中显示"0 executed, DISCONNECTED after 3min"。通过 90s 带日志的单 fixture 重跑定位：①karma 成功连接浏览器、webpack 编译通过、测试注册成功（`[MBStyleCompat] filtered to 1`）；②测试体进入执行后，renderUntilSettled(60) 要求 60 帧稳定，但 SwiftShader 软渲染 ~10s/帧 → 60 帧 ≈ 600s；③karma 的 browserNoActivityTimeout=180s 在此期间触发（180s 无新测试结果回调）→ 浏览器断连 → karma 重试（tolerance=1 后快速失败）→ 测试体被中断；④shadow grid 探针证实渲染循环确实在运行（depth pass 正常），但 karma 的 activity 协议不感知帧渲染——只在测试体回调时发送心跳。
+
+修复路径（非 mgl 对齐，属 harness 调优）：
+1. **降低 renderUntilSettled maxFrames**：model-layer fixture 的初始 maxFrames 从 60 降到 20（SwiftShader 下 ~200s，仍超 180s timeout... 需配合 timeout 提升）
+2. **提升 browserNoActivityTimeout 到 600s**（或为 model-layer 专项配置）
+3. **缩短 SwiftShader 渲染时间**：减少 per-frame work（shadow pass 已用独立 context，可缓存 depth map 跳过静止帧）
+
+推荐优先 #2（最小改动，一行 karma.options.js）配合 #1（maxFrames=30），然后监控是否仍有 DISCONNECTED。
+
