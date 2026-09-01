@@ -279,7 +279,7 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
         logLevel: "INFO",
 
         // 浏览器无活动超时（render-tests 全量跑时长用例较多，放宽）
-        browserNoActivityTimeout: 300000,
+        browserNoActivityTimeout: 180000,
 
         // 浏览器响应 ping 的超时：SwiftShader 下重负载用例（dynamic-filter 等）
         // 主线程可能偶发阻塞 60-120s，默认 60s 会误判 DISCONNECTED 整批重跑
@@ -288,8 +288,11 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
         // 浏览器断开超时（SwiftShader 下重负载 3D 用例可能卡顿，放宽）
         browserDisconnectTimeout: 60000,
 
-        // 断开后自动重连次数（渲染器崩溃后 karma 重启浏览器续跑）
-        browserDisconnectTolerance: 3
+        // 断开后自动重连次数：1（不重试）。长会话下 SwiftShader 软渲染会
+        // 持续劣化（~19min 后 ping 超时，ml-0901 基线 B4/B5 实证），重试
+        // 拉起的仍是同一个劣化浏览器，每次重连白烧 5-10 分钟且大概率再断
+        // ——快速失败回到 runner，由它起新浏览器进程续跑剩余用例。
+        browserDisconnectTolerance: 1
     };
 };
 

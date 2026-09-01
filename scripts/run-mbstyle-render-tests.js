@@ -27,6 +27,11 @@ const fs = require("fs");
 const filters = process.argv.slice(2);
 const outputDir = process.env.MBSTYLE_REPORT || path.join("rendering-test-results", "mbstyle");
 const port = process.env.MBSTYLE_PORT || "8081";
+// Hard cap on one karma invocation. A degraded SwiftShader browser can die
+// (DISCONNECTED) while karma lingers forever with zero output — without this
+// the runner blocks indefinitely (ml-0901 baseline: two batches hung >7min).
+// The batch caller starts a fresh karma (fresh browser) for the next chunk.
+const karmaTimeoutMs = parseInt(process.env.MBSTYLE_KARMA_TIMEOUT_MS || "1500000", 10);
 
 const root = path.resolve(__dirname, "..");
 const resultsRoot = path.isAbsolute(outputDir) ? outputDir : path.join(root, outputDir);
@@ -96,6 +101,11 @@ function main() {
             ...(process.env.MBSTYLE_HIDE ? [`mbhide=${process.env.MBSTYLE_HIDE}`] : []),
             ...(process.env.MBSTYLE_SHADOW ? [`shadowdbg=${process.env.MBSTYLE_SHADOW}`] : []),
             ...(process.env.MBSTYLE_BATCHEDDBG ? ["mbbatchdbg=1"] : [])];
+        // detached:true makes the child a process-group leader (POSIX) so the
+        // timeout kill takes down the whole karma+browser tree, not just the
+        // npx shim (surviving grandchildren hold the karma port and poison
+        // the next batch).
+        const isPosix = process.platform !== "win32";
         const result = spawnSync(
             "npx",
             karmaArgs,
@@ -107,8 +117,18 @@ function main() {
                     KARMA_ARGS: karmaClientArgs.join(" "),
                 },
                 stdio: "inherit",
+                timeout: karmaTimeoutMs,
+                killSignal: "SIGTERM",
+                detached: isPosix,
             },
         );
+        if (isPosix && (result.error?.killed || result.signal)) {
+            try { process.kill(-result.pid, "SIGKILL"); } catch {}
+            console.error(
+                `### karma timed out after ${karmaTimeoutMs}ms — ` +
+                `browser session degraded; rerun the remaining tests in a new batch.`,
+            );
+        }
 
         // 3. Summarize saved results.
         summarize();
