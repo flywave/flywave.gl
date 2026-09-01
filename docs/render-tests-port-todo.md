@@ -7397,3 +7397,8 @@ MBShadowRenderer.prepGroundQuad（cornerOnGround）的阴影相机取景 = **视
 **§719. 双接收假说证伪 + gsf 回归重新归因（2026-09-02 续）**：
 
 ①场景扫描跳过 __mbExtrusion3DLit 材质（消双接收）——分数逐字节不变（256,320/167,583），**双接收假说证伪**：extrusion 材质本就未被 ground 注入（场景扫描的 MeshStandardMaterial 白名单先于标记生效，或注入顺序使然）。②NORMAL_OFFSET 1.5→6.0 单位（×4）——gsf 分数仍逐字节 167,583——extrusion 接收采样对 gsf 当前失配像素**无影响**。已回退 1.5。③**gsf +26k 回归重新归因**：非墙面采样问题，而是 §716 layer-1 墙投射改变了**地面阴影足迹**（墙体作为 caster 入图后，地面接收的阴影形状/范围变化→地面像素失配），其几何与 mgl cascade 足迹尚不一致。**结论**：layer-1 修复保留（z-offset-scale −8.9% 真实收益），gsf 基线恢复需地面阴影足迹对齐工作（MBShadowRenderer 深度 pass 的视锥/tile 语义 vs mgl cascade 覆盖），属下一阶段。本轮单测 300 绿、tsc 绿。
+
+
+**§720. 墙投射门控化——两夹具同时已知最优（2026-09-02 续）**：
+
+diff 定量显示 §716 的墙投射在 82° 掠射日照下产生**深度噪声阴影铺满全屏**（墙体深度编码在掠射角无 cascade/坡度 bias 保真度时即噪声明暗，与 mgl cascade 覆盖的保真度差距是系统工程）。**处置**：墙投射改为 forensic 门控（`shadowcast=1` karma arg / MBSTYLE_SHADOWCAST），默认关闭——**恢复 gsf 140,258**（接近 131,915 最优带，远好于 157,696/167,583），且 z-offset-scale **保留 256,320** 收益（unexpected 但可复现两次；其收益不依赖墙投射，可能来自 layer-1 关联的 §692 深度窗口语义变化——待查但结果为正）。两夹具同时处于已知最优态。**下轮入口**：①mgl cascade 保真度对齐（createLightMatrix 的 AABB/光轴框定 + 坡度 bias + normal offset 全套）后以 shadowcast=1 重启墙投射；②§694 清单剩余项。单测 300 绿、tsc 绿。
