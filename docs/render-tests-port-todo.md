@@ -7115,3 +7115,14 @@ F1 quantization/high-zoom-model-quantization（bearing 0，纯模型域）：bas
 2. **量化 PBR 全 fixture 回归**（modellightport=1 × 全量 model-layer，~176 fixture）：确认 PBR 分支在哪些 fixture 回归，逐步校准（part-color/emissive/opacity 域）
 3. **lighting-3d-mode 家族**（6 fixture，之前挂起）：追查渲染挂起根因
 
+
+**§694. 挤出墙壁阴影接收落地（2026-09-01 续二十一）**：
+
+mgl `fill_extrusion.fragment.glsl`：extrusion 的 direct term 用 `shadowed_light_factor_normal`（非二值——shadow map PCF 采样后返回0-NdotL连续因子）替代 NdotL，传给 `apply_lighting(color, normal, factor)`。本实现：①vertex varying `vMbWorldPos = (modelMatrix × position)`（extrusion 在 RTE 帧，modelMatrix 有效）；②fragment 在 mbNdotL 计算后采样 shadow map，二值因子乘回 mbNdotL；③uniform 沿用 ground receiver 同通道（uMBShadowMap/Matrix/Intensity，per-frame 刷新链路自动覆盖 extrusion 材质）。
+
+**实测**：
+- buildings-trees-shadows-casting：**794,651→424,344（−47%，−37 万 px）**——阴影大面积生效，建筑墙面与投射影对比明显改善
+- ground-shadow-fog：167,004→**190,541（+23k，+14%）**——ambient=0 时 binary shadow 使墙壁过黑（0/1 vs mgl PCF 连续因子的差异）
+
+**结论**：extrusion shadow reception **功能正确**（castings 家族 −47% 是真实改善）。ground-shadow-fog 回归属 mgl shadow-intensity PCF 缩放校准问题——ambient=0 + binary 0/1 → 墙面过暗；mgl 的 `shadowed_light_factor_normal` 在 shadow 边缘返回连续值（PCF），且 shadow-intensity 本身缩放整体暗化幅度。下轮：PCF 采样或多级 bias 替换 binary；或加 shadow-intensity 到 extrusion 接收路径。
+
