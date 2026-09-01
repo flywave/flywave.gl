@@ -87,3 +87,38 @@
 3. ⭐⭐ ground-shadow-fog 线层丢失：nvert=561 ShaderMaterial v0w=(0,500,0) 即第 2 条的同一错锚；修完后复查 road/water。
 4. ⭐⭐ MAPS3D-1159 回归（7149→14108）：§659 后 y 镜像过矫正或该例 orientation 语义特殊，单独对拍。
 5. ⭐ 三例 harness/杂项：add-layer 与 baseline 的 61441 vs 54912 差值（addLayer 触发的二次重解码可能重复放置模型，需查 MBModelRenderer 去重）。
+
+---
+
+## 五、2026-09-01 增量：ml-0901 全量基线（当前 HEAD=§686）+ §687-§690 修复批
+
+> 数据源：`rendering-test-results/mbstyle/`（ml-0901 分批跑测，ChromeHeadless 131 本机；B1/B2 已完成，B3-B5 跑测中）
+> 另：用户已解决 landmark-emission-strength(-lod)（-lod 88702→57295，−35%；主例 44153 与 §557 时代 41885 基本持平）。
+
+### B1/B2 关键数值（当前代码）
+
+| 家族 | 数值 | 定性 |
+|---|---|---|
+| **meshopt-quantization 家族（新最大头）** | high-zoom-model-quantization **101 万**（-lod 99 万）、z-offset-v2 48 万×2、-port 48/46 万、-station 34 万×2、highlights 30/31 万、castro 24/29 万、shadows-normal-offset 19 万×2 | **取景已对齐**（时钟塔例 ours/expected 位置逐像素吻合——§687 相机专项证伪的旁证）；残差 = 部件亮度域（整体暗约一档，实测墙 177 vs 231，≈ambient-only 缺 directional 项）+ 时钟表盘部件着色 + V2 meshopt AO/位偏移（§551 遗留③已有夹具） |
+| buildings-trees-shadows 家族 | 61-82 万×5（合计 337 万） | 双根因：①道路 `line-emissive-strength:1` 未生效（§688 修复）；②地面投影缺失（§689 修复）；另有 trees z13/z14 瓦片 mgl 亦缺（双方 404，非资产缺口） |
+| landmark-conflation | buckingham 22 万/16 万、index-overflow 9 万×2、其余 4-6 万 | 挤压碰撞域，未动 |
+| landmark-duplicate-model-layer | 13.7 万×2 | 双层反向 filter（§550 定性），未动 |
+| landmark-glb-tiles | 非 lod 3023 ✓ / **-lod 19 万** | lod 变体专项 |
+| ground-shadow-fog 系 | 167009/165712（§686 后） | 相机取景已排除（§687），残差=墙面明暗+雾标定+阴影接收（§689 应收益） |
+| fill-extrusion--default | 136125（§685 哨兵 100130 → §686 深度雾恢复代价，已知） | 待取景/雾域后续重评 |
+| geojson-source-with-schema(-add-layer) | **48609 = 48609** | 重复放置已消解（§690 为加固） |
+| 近绿带 | default 2916 / default-orientation 2865 / density-reduction 4762 / filter-runtime-styling 3725 | 光照标定边缘 |
+
+### §687-§690 修复（本批，代码入库）
+
+1. **§687 相机专项证伪**：mgl mercator `pixelSpaceConversion≡1`（基类实现）→ 现有 zoom+1 链 distance ≡ mgl ccd_m 逐项相等（focal 768 实测 = h_css/(2tan fov)）；mgl `_computeCameraPosition` ≡ flyway lookAtImpl orbit。**取景残差不在相机域**；§674/§675 偏移实测于 §681 前内容空窗期，属虚假位移峰。相机专项关闭。
+2. **§688 line-emissive-strength 键映射**：ribbon 提升吞键 → 道路被 groundRadiance 压暗（实测 103 = lightyellow×0.40，expected 255 原色）。
+3. **§689 ground-shadow 接收器 patch 时点投递**：§577-§588 悬案破壁——injectGroundLighting 同路径已证明可达渲染材质；公式改 mgl `mix(amb/(amb+dir·NdotL), 1, light)`（shadow_utils 正式语义，线性输出乘 ratio^2.2 落 sRGB 域）。
+4. **§690 模型 placements 数组身份重建**：mgl tile 内容整体替换语义，防 runtime update 双份/残留。
+
+### 下一步（按 ROI）
+
+1. **meshopt-quantization 家族光照/部件标定**（新最大头 ~660 万 px）：模型 directional 项缺失（疑似 ambient-only，[MBLight] 探针在库）+ V2 meshopt 位偏移/AO 顶点色（§551 遗留③）。
+2. §688/§689 复测 buildings-trees 家族（预期 −50%+）。
+3. MAPS3D-1159 / landmark-z-offset-munich 家族对拍（B4 批次出数后）。
+4. landmark-glb-tiles-lod（19 万 vs 非 lod 3023）单点排查。
