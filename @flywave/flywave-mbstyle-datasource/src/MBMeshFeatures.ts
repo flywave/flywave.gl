@@ -600,7 +600,7 @@ export function applyMeshFeatures(
         root.traverse(o => {
             const mesh = o as THREE.Mesh;
             if (mesh.isMesh && !mesh.geometry.getAttribute(FEATURE_ATTR) && !mesh.userData.__mbPart) {
-                applyMglModelLighting(dataSource, mesh, parts[0].emissive, undefined, undefined, 0);
+                applyMglModelLighting(dataSource, mesh, parts[0].emissive, undefined, undefined, 0, true);
                 root.userData.__mbFeatFeatureless.push(mesh);
             }
         });
@@ -774,7 +774,7 @@ function splitByPart(
         sub.userData.__mbMatBaseOpacity = (mat.opacity ?? 1);
         if (mat.transparent) (mat.userData ??= {}).__mbForceTransparent = true;
         const hr = mbHeightRampUniforms(style.heightEmission, bboxZMin, bboxZMax);
-        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr, 0);
+        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr, 0, true);
         sub.userData.__mbHrParams = hr;
         subMeshes.push(sub);
     }

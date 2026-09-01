@@ -7288,3 +7288,12 @@ modellightport=1（§655 Cook-Torrance PBR 分支）ChromeHeadless 同平台 A/B
 ③**landmark 子域双模式对比发现回归**：landmark-conflation-buckingham 167,941（hemi）→ **211,526（PBR，+26%）**——conflation（薄柱/交叉衬垫）域在 PBR 下劣化，与其余 7 夹具（z-offset/quantization/meshopt 全改善）方向相反。PBR 的 per-channel 衰减在薄几何/Alpha 域的行为差需单独标定（候选入口：conflation 家族的 intersect-padding/thin-pillars 变体 + shadow_occclusion 混合）。
 
 **决策**：保持 hemisphere 默认，PBR 域分治——z-offset/quantization/meshopt 家族继续用 modellightport=1 出报告值，conflation 家族维持 hemisphere；等 PBR part-color/conflation 校准收敛后再评估全局翻转。**harness 坑位**：result server 退出后驻留端口 → 同脚本后续 karma EADDRINUSE 静默死（>/dev/null 吞错）——每次调用须独立 MBSTYLE_PORT。单测 300 绿、tsc 绿。
+
+
+**§706. PBR 着色模型按 mgl 规则分治——conflation 回归修复（2026-09-01 续三十）**：
+
+**根因定位（mgl draw_model.ts:1459 + :204）**：mgl 的 Cook-Torrance PBR **只用于 MAPBOX_mesh_features tile**（`if (!hasMapboxFeatures) defines.push('DIFFUSE_SHADED')`）及 `!material.defined` 的情况；其余全部 mesh 走 **DIFFUSE_SHADED**（_prelude_lighting 的 apply_lighting——即我方"hemisphere 近似"公式）。§705 的 conflation +26% 回归正是把无 mesh_features 的经典 GLB 强制进了 PBR；而 z-offset-scale 的 −23.7% 收益是因为它带 part 样式（roof/wall/window）确属 mesh_features 域。两者皆 mgl 语义，不矛盾。
+
+**实现（MBModelRenderer.applyMglModelLighting）**：新增 `pbrEligible` 参数——仅 MBMeshFeatures 两处调用点传 true（部件级样式路径）；uMBPortMode = pbrEligible（mgl 规则），modellightport=0/1 保留为 A/B 强制覆盖。
+
+**验证（默认参数）**：landmark-conflation-buckingham **175,922**（hemi 167,941 ✓ 回到同水平；forced-PBR 211,526 → −17%）；landmark-z-offset-scale-munich-museum **280,629**（PBR 收益保留 ✓，hemi 371,586）。§704 的"conflation 阻塞"与"PBR 域分治"就此统一：**着色模型跟随 mesh_features 资格即 mgl 语义本身**，无需全局翻转也不需要按家族挑模式。z-offset 家族剩余亮度残差（均值 +16）归入 PBR part-color 标定。单测 300 绿、tsc 绿。
