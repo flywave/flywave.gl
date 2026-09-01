@@ -3749,7 +3749,6 @@ export class MBMaterialPatchManager {
         if (use3DLights) {
             this.injectExtrusion3DLighting(material, emissiveStrength);
         }
-        material.needsUpdate = true;
     }
 
     private patchBuildingMaterial(material: THREE.Material, technique: any): void {
