@@ -7164,3 +7164,21 @@ float mbShLit = smoothstep(-0.001, 0.001, mbShadowDist);
 
 smoothstep 过渡宽度 0.0004 in [0,1] uv 空间 ≈ 紧致视锥下 0.8m 场景距离（范围 ~2km → 0.0004×2000）。与 mgl 的 PCF 柔化效果方向一致（消除 binary 阴影在 ambient=0 时的纯黑墙面）。
 
+
+**§697. z-offset 家族初步分析（2026-09-01）**：
+
+landmark-z-offset 家族（~380 万 px，18 fixtures）测试模型放置在 extruded 建筑上方时的 z-fighting 防护。mgl `calculateModelMatrix`（3d-style/data/model.ts:205）有完整逻辑：①`projectedPoint = transform.project(position)` → 2D 投影；②`modelMetersPerPixel` 缩放；③`applyElevation ? elevation.getAtPointOrZero(...)` → terrain 高度查询；④viewportScale（globe/mmercator 模式补偿）；⑤translation.z 应用偏移。
+
+我方 `MBBatchedModelRenderer`（line 125）：`e.model.position.set(gx - ccx, gy - ccy, 0)` — **z=0**，无任何高度偏移或 z-fighting 防护。这与 mgl 的 elevation 查询形成差距，尤其在 extruded 建筑顶部放置模型时。
+
+diralt 修复后 z-offset 家族仍 ~39 万 px（vs quantization 2.6 万），说明 z-offset 问题独立于光照方向。
+
+**修复路径（需要引擎 elevation API）**：
+1. 确认 flywave 引擎是否提供 tile 级高程查询（DEM/terrain）——z-offset fixtures 无地形，但有 extrusion
+2. 对于有 extrusion 的 fixture：z-offset = extrusion 高度在模型位置的值（需 tile decode 时获取）
+3. 对于无 extrusion 的 fixture：z-offset = 0（当前行为正确）
+
+最简修复：对 batched-model 的 z 坐标加一个小偏移（epsilon=0.1m）防止与 extrusion z-fighting。但这需要知道 extrusion 的高度——否则 offset 不匹配实际建筑高度。
+
+**下轮入口**：①查 MBBatchedModelRenderer 的 entry 结构是否携带 extrusion 高度信息；②对无 extrusion 的 z-offset fixture（如 z-offset-terrain-fix-griffith）验证 z=0 是否已正确（terrain 偏移走 elevation 路径）；③有 extrusion 的 fixture 需要 tile-level extrusion 高度查询。
+
