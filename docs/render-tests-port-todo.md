@@ -7361,3 +7361,8 @@ pixpick 扩展 grid 模式（64 采样点射线分类 batched-model/extrusion）
 **§713. 挤出阴影坡度 bias A/B——常量域不可迁移，回退（2026-09-02）**：
 
 按 §712 入口尝试 mgl calculate_shadow_bias 形状的坡度缩放 bias（`0.5·(0.00036 + clamp(0.0012·tan(acos(NdotL)),0,0.012))`，shadow_renderer.ts:549 常量）替换固定 ±0.0002 窗口。**A/B 双夹具双双回归**：ground-shadow-fog 131,915→172,541（+31%）、z-offset-scale 281,197→331,486（+18%）——过度阴影。**根因：mgl bias 常量定义在其 NDC 深度域，与我方 16-bit packed window-depth 域尺度不可迁移**（§692 已知 0.002 ≈ 6-60m 场景深度；斜率项在两域的等效值差数倍），已回退。回归复核：回退后待验证（下轮首跑）。**正确修复路径**：先用 shadow-uv 探针 dump 掠射墙的 (uv.z, storedDepth, NdotL) 三元组分布，测出我方域的斜率深度误差系数（units/metre-at-grazing），再换算 mgl 的 bias 意图（grazing → shadowed）为本域常量。本轮记录 A/B 负结果与回退。单测 300 绿、tsc 绿。
+
+
+**§714. shadow-uv 探针定案——深度差非判别子（2026-09-02 续）**：
+
+①**回退基准确认**：ground-shadow-fog 复跑 = **131,915** 分毫不差 ✓。②shdbg=1 探针落地（uMB3DDbg=3：R=0.5+250×(uv.z−storedDepth)、G=0.5+0.5×NdotL；runner 新增 MBSTYLE_SHDBG 透传）。③**定量拟合结果**：32,869 个墙面采样点中，expected-lit 与 expected-shadow 两类的深度差分布**几乎完全重叠**（lit p1=+0.00111；shadow p50=+0.00159、p95=+0.00175——所有墙像素 delta≥+0.001，两分类区间不可分）。**结论：缺失的阴影接收不是 bias 幅度问题（任何阈值都无法按深度差复现 mgl 的明暗分类），而是阴影图内容/投影一致性缺口**——mgl 判为阴影的墙面在我们采样的 shadow map 中无遮挡记录（可能：mgl 阴影相机的覆盖范围/tile 集合不同，或我们的 shadow map 只覆盖地面 quad 视锥而墙体高度出界）。固定 ±0.0002 窗口维持（probe 关闭默认零影响）。**下轮入口**：dump 我方 shadow map 本体与 mgl 阴影相机的视锥/tile 覆盖做对照（MBShadowRenderer 的窗口计算 vs mgl shadow_renderer 的 cascade 选取）。单测 300 绿、tsc 绿。

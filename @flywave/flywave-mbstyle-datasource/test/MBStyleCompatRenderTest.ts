@@ -123,6 +123,10 @@ function discoverTests(): TestEntry[] {
     // §691 verdict: PBR (Cook-Torrance) is better for quantization (−99.5%)
     // §705: PBR is the default; `modellightport=0` forces the §557
     // hemisphere approximation for A/B diagnosis.
+    // §714: `shdbg=1` → extrusion shadow-uv probe (uMB3DDbg=3).
+    const sd = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shdbg="))?.slice("shdbg=".length);
+    if (sd === "1") (globalThis as any).__mbShadowUvDbg = true;
     const port = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modellightport="))?.slice("modellightport=".length);
     if (port === "1") (globalThis as any).__mbModelLightPort = true;

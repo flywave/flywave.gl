@@ -963,7 +963,7 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMB3DDir = { value: ls ? ls.dir : [0, 0, 1] };
             shader.uniforms.uMB3DViewToWorld = { value: viewToWorld };
             shader.uniforms.uMB3DEmissive = { value: ls ? emissiveStrength : 0 };
-            shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbLightDbg ? 1 : ((globalThis as any).__mbFogTDbg ? 2 : 0) };
+            shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbLightDbg ? 1 : ((globalThis as any).__mbFogTDbg ? 2 : ((globalThis as any).__mbShadowUvDbg ? 3 : 0)) };
             // §694: extrusion shadow reception — mgl fill_extrusion uses
             // shadowed_light_factor_normal to modulate the directional term.
             // The extrusion meshes ARE in RTE frame (modelMatrix×position =
@@ -1190,7 +1190,15 @@ export class MBMaterialPatchManager {
                      }
                      mbOut = mix(mbOut, fogColor, clamp(mbFogFactor, 0.0, 1.0));
                      gl_FragColor.rgb = mbOut;
-                     if (uMB3DDbg > 1.5) {
+                     if (uMB3DDbg > 2.5) {
+                         // §714 shadow-uv probe: R = signed depth delta
+                         // (uv.z − storedDepth, scaled ×250 — ±0.002 spans
+                         // the channel), G = NdotL. Used with the expected
+                         // crop to fit the domain slope-error coefficient.
+                         gl_FragColor.rgb = vec3(
+                             clamp(0.5 + 250.0 * (mbShUv.z - mbShD), 0.0, 1.0),
+                             0.5 + 0.5 * clamp(mbNdotL, 0.0, 1.0), 0.5);
+                     } else if (uMB3DDbg > 1.5) {
                          // §678: distance readout — grey = log2(metres)/16
                          // (metres = view length × uMbMetersPerUnit).
                          gl_FragColor.rgb = vec3(clamp(log2(max(mbLen, 1.0)) / 16.0, 0.0, 1.0));
