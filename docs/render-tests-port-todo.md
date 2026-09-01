@@ -7187,3 +7187,18 @@ diralt 修复后 z-offset 家族仍 ~39 万 px（vs quantization 2.6 万），�
 
 smoothstep A/B（ground-shadow-fog）：**167,004 → 141,864（−15%，−25,140 px）**——消除 ambient=0 binary 纯黑墙面效果确认：墙面从近黑恢复到白亮（与 expected 暗度差 Δ=34-45）。pixel 采样对比：ours 墙面/地面/树 = 255（纯白），expected = 244/239/166（fog wash 后的亮度）；ours 天空 = 198（偏暗），expected = 255。**剩余 141,864 px 主因：挤出/模型表面的 mgl fog 未正确应用**——ours 的 extrusion in-shader fog block 未将颜色 wash 向 fogColor（expected 有明显雾洗效果）。extrusion injection 中的 fog block（§670-§682）已实现但可能被后续 shader 覆盖或路径不通。下轮入口：用 fogt=1 读数确认挤出片元的 fogT 值是否为 0（fog 未生效）vs expected 的 fogT ≈0.5-0.8（中等洗涤）。
 
+
+**§686 影响再评估（2026-09-01）**：
+
+§685 常量 fogAlpha×0.5 版本：ground-shadow-fog 132,504 / hard-cutoff 133,142。
+§686 深度雾版本（移除常量）：167,010 / 165,712。
+§696 smoothstep：ground-shadow-fog → 141,864。
+
+深度版评分更高（167k vs 133k）= 差异更大，原因是：常量版统一洗涤 50%（所有深度相同），深度版按 `fogMglDistCam/fogMglShift` 参数产生**非均匀雾**——远近墙面雾洗程度不同。当前 fogMglDistCam/fogMglShift 是在**无挤出雾**状态下校准的（§682 用 fogt 读数标定），§686 移除常量后这些参数的效应范围变了，导致 extrusion 墙面的 fog depth 与 expected 不匹配。
+
+**fogt=1 诊断路径受阻**：fogT debug block (uMB3DDbg > 1.5) 只存在于 extrusion injection 的 onBeforeCompile 中，但该路径在当前代码中不响应 fogt=1 参数（probe 未命中）。原因是：fogt=1 通过 __mbFogTDbg 设为 true → uMB3DDbg=2 → debug block 应激活，但 probe 日志显示 extrusion injection 未被执行（__mbFogTDbg 未被读到）。可能原因：extrusion 材质在 patchMaterial 之前已被引擎编译（缓存命中），onBeforeCompile 不再触发。需要在 patchMaterial 路径加 `material.needsUpdate = true` 强制重编译，或在 run() 的 shadow 刷新链中补读 fogT 值。
+
+**下轮修复路径**：
+1. 在 injectExtrusion3DLighting 的 fog block 中加 `console.log` 直接打印 fogT 值（不依赖 uMB3DDbg 调试模式）
+2. 或：在 per-frame patchTileMaterials 中为已编译的 extrusion 材质强制 `material.needsUpdate = true`（触发 onBeforeCompile 重新执行）
+
