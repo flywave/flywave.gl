@@ -7329,3 +7329,18 @@ modellightport=1（§655 Cook-Torrance PBR 分支）ChromeHeadless 同平台 A/B
 ②**GLB 解剖**（8718-5685-14.glb）：meshes 分两类——带 _FEATURE_RGBA4444+NORMAL+TEXCOORD 的部件 mesh（mat 0-5，无 baseColorTexture）与 POSITION-only+default 材质 mesh（mat 14-18，白因子、无法线，疑似 shadow/light 代理）；14 张 jpeg 全为 occlusion（无 baseColor 贴图）。featureData 仅源自 _FEATURE_RGBA4444 属性（mgl model_loader.ts:220 同），故 POSITION-only mesh 在两引擎都无 part 样式。
 
 ③**残差重新定性**：exp 橙 (220,168,109) 的亮度 (≈64%) 与饱和度都不匹配 style 的 roof hsl(22,82%,90%)（极浅）或 window hsl(...,87%)（极浅）——该面片颜色既非 roof 也非 window 的 style 色，可能来自深藏在 GLB 材质/KHR 扩展或特定 part 的 evaluatedColor，需要 mesh 级直方图探针（dump 每个 primitive 的 partId→颜色分布并与 expected 裁剪区配准）才能定位。本阶段审计链条（资产→random→brightness→烘焙→GLB 结构）已闭合至唯一剩余层。单测 300 绿、tsc 绿。
+
+
+**§710. partId→颜色直方图探针落地——部件链路证实 style 忠实（2026-09-01 续三十五）**：
+
+mbbatchdbg=1 新增 partHist 探针（MBMeshFeatures splitByPart 内，/mb-probe-dump 通道）：dump 每个 feature mesh 的 partId→混合线性色分布（4444→展开→mix→线性化全链）。实测聚合（20 probe）：
+
+| part | verts | 混合后 sRGB 均值 | style 预期 |
+|---|---|---|---|
+| p1 wall | 250,001 | (255,255,255) | 白 ✓ |
+| p2 roof | 846 | (246,236,225) | hsl(22,82,90)=(252,231,208) ✓ |
+| p3 | 20,814 | (250,223,208) | 浅橙 ✓ |
+| p4 window | 15,766 | (127,197,255) | hsl(200-215,100,70-80) 蓝 ✓ |
+| p6 | 8,892 | (212,211,208) | 灰 ✓ |
+
+**部件链路逐 part 与 style 表达式预期完全吻合**——4444 全链（烘焙→展开→mix→线性化）无非。exp 橙 (220,168,109) 亮度 64%/饱和度与 style 的 roof(浅 90%)/window(浅 87%) 均不符，且白光（ambient 白 1.0 + directional 白 0.86）在任何 PBR/DIFFUSE 公式下都无法从浅 albedo 产生 hue 旋转——该面片的 expected 色源仍需屏幕空间表面识别（depth/id buffer 探针）定位其所属 mesh 与材质。flood-light 属 building 层已排除。probe 工具链（相机/雾/部件直方图）已齐备。单测 300 绿、tsc 绿。

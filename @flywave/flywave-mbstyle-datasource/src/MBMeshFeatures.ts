@@ -738,6 +738,44 @@ function splitByPart(
         colors[i * 3 + 1] = srgbToLinear(g / 255);
         colors[i * 3 + 2] = srgbToLinear(b / 255);
     }
+    // §710: partId→color histogram probe (mbbatchdbg=1) — the mixed linear
+    // color distribution per part, POSTed to /mb-probe-dump for quantitative
+    // comparison against the expected crop (mgl buildMeshFeatureArray parity
+    // check).
+    if ((globalThis as any).__mbBatchedDbgFlag === true) {
+        try {
+            const mixCnt: Record<string, number> = {};
+            const mixMean: Record<string, number[]> = {};
+            for (let i = 0; i < vertCount; i++) {
+                const key = 'p' + partOf[i];
+                mixCnt[key] = (mixCnt[key] ?? 0) + 1;
+                mixMean[key] = mixMean[key] ?? [0, 0, 0];
+                mixMean[key][0] += colors[i * 3];
+                mixMean[key][1] += colors[i * 3 + 1];
+                mixMean[key][2] += colors[i * 3 + 2];
+            }
+            const fb = (window as any).__karma__?.config?.args
+                ?.find?.((a: string) => a.startsWith('feedback-url='))
+                ?.slice('feedback-url='.length);
+            if (fb) {
+                fetch(`${fb}/mb-probe-dump`, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                        probe: 'partHist',
+                        mesh: mesh.uuid,
+                        verts: vertCount,
+                        parts: Object.keys(mixCnt).map(k => ({
+                            part: k, verts: mixCnt[k],
+                            linearMean: mixMean[k].map(v => +(v / mixCnt[k]).toFixed(4)),
+                            srgbMean: mixMean[k].map(v =>
+                                Math.round(255 * Math.pow(v / mixCnt[k], 1 / 2.2))),
+                        })),
+                    }),
+                }).catch(() => {});
+            }
+        } catch { /* probe must never break styling */ }
+    }
 
     // Group triangle indices by part (tiler authors uniform parts per face).
     // The height ramp maps the mesh-local z through the WHOLE mesh's z range
