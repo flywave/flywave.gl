@@ -121,11 +121,12 @@ function discoverTests(): TestEntry[] {
 {
     // §655: model-shader lighting mode A/B.
     // §691 verdict: PBR (Cook-Torrance) is better for quantization (−99.5%)
-    // but +1534% on multiple-meshes → hemisphere stays default.
-    // `modellightport=1` forces PBR; no special arg needed for default.
+    // §705: PBR is the default; `modellightport=0` forces the §557
+    // hemisphere approximation for A/B diagnosis.
     const port = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modellightport="))?.slice("modellightport=".length);
     if (port === "1") (globalThis as any).__mbModelLightPort = true;
+    if (port === "0") (globalThis as any).__mbModelLightPort = false;
 }
 // Decode census: per-tile technique/vertex counts (is content reaching the
 // emitter at all — data vs render side split for blank domains).

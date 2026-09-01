@@ -204,10 +204,12 @@ export function applyMglModelLighting(
                 // u_metallicFactor / u_roughnessFactor).
                 shader.uniforms.uMB3DMetal = { value: mat.metalness ?? 0 };
                 shader.uniforms.uMB3DRough = { value: mat.roughness ?? 0.5 };
-                // §655: uMBPortMode — 0 = §557 hemisphere approximation
-                // (default — calibrated across model fixtures; PBR
-                // (port+diralt) is better for quantization/meshopt but
-                // +1534% on multiple-meshes, so cannot globally flip yet).
+                // §705: uMBPortMode — 0 = §557 hemisphere approximation
+                // (DEFAULT — §705 full verification found PBR regresses the
+                // landmark-conflation family (+26% conflation-buckingham
+                // 167,941→211,526) while improving z-offset/quantization;
+                // PBR stays available per-run via modellightport=1 until the
+                // conflation/PBR divergence is calibrated).
                 // 1 = the §655 model.fragment.glsl Cook-Torrance PBR.
                 shader.uniforms.uMBPortMode = {
                     value: (globalThis as any).__mbModelLightPort ? 1 : 0,

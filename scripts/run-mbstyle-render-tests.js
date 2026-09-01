@@ -101,7 +101,7 @@ function main() {
             ...(process.env.MBSTYLE_HIDE ? [`mbhide=${process.env.MBSTYLE_HIDE}`] : []),
             ...(process.env.MBSTYLE_SHADOW ? [`shadowdbg=${process.env.MBSTYLE_SHADOW}`] : []),
             ...(process.env.MBSTYLE_BATCHEDDBG ? ["mbbatchdbg=1"] : []),
-            ...(process.env.MBSTYLE_MODELLIGHTPORT ? ["modellightport=1"] : []),
+            ...(process.env.MBSTYLE_MODELLIGHTPORT ? [`modellightport=${process.env.MBSTYLE_MODELLIGHTPORT}`] : []),
             ...(process.env.MBSTYLE_MODELDIRALT ? ["modeldiralt=1"] : [])];
         // detached:true makes the child a process-group leader (POSIX) so the
         // timeout kill takes down the whole karma+browser tree, not just the

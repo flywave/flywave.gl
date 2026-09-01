@@ -7275,3 +7275,16 @@ modellightport=1（§655 Cook-Torrance PBR 分支）ChromeHeadless 同平台 A/B
 **亮度校准进展**：scale 变体均值偏移 +27→**+16.5**（中位 +17→+12/15/17），窗口 G 通道精确对齐（154.6 vs 154.9）；剩余偏移集中在粉顶 G/B（ours 152/143 vs exp 168/163）——hsl 部件色在 PBR 下的 per-channel 衰减差，下一步标定入口（part-color 域）。
 
 **关键结论：§694-2"multiple-meshes +1534% 不能全局翻转"的阻塞已失效**（两模式同分 4,807；其间 diralt/雾域/§702 改动已消化）。抽样 7 fixture PBR 全部改善或持平、零回归。**下轮入口（单一动作）**：MBModelRenderer:213 把 uMBPortMode 默认翻转为 PBR（`(__mbModelLightPort ?? true) ? 1 : 0`），随后一次 model-layer 全量 chunk run 验证（§695 修正后的 karma 单批可跑），确认无遗漏回归后维持默认。单测 300 绿、tsc 绿（本轮无代码变更，纯 campaign 数据）。
+
+
+**§705. PBR 默认翻转验证——发现 conflation 回归，维持 hemisphere 默认（2026-09-01 续二十九）**：
+
+按 §704 计划执行 uMBPortMode 默认翻转 + 全量验证。**验证过程抓到真实回归，翻转已撤销**（ hemisphere 默认维持，modellightport=1 仍可 opt-in PBR；新增 modellightport=0 强制 hemisphere 的诊断通道，runner 支持任意 modellightport 值）：
+
+①**非模型域零影响实证**：翻转态下 19 个非 model-layer 夹具（extent/elevated-line/mapbox-gl-js#*/1024-* 家族）双模式逐像素同分（0.0% delta）——uMBPortMode 仅消费于模型材质，翻转无外溢风险。
+
+②**model-layer 全量单会话不可行再次证实**：212 fixture 单 karma 会话在 buildings-trees（SwiftShader ~10s/帧×settled 帧数）处 browserNoActivityTimeout 600s DISCONNECTED（Executed 5 of 212），与 §695 同型；改用分层批（5-6 filter/会话）。
+
+③**landmark 子域双模式对比发现回归**：landmark-conflation-buckingham 167,941（hemi）→ **211,526（PBR，+26%）**——conflation（薄柱/交叉衬垫）域在 PBR 下劣化，与其余 7 夹具（z-offset/quantization/meshopt 全改善）方向相反。PBR 的 per-channel 衰减在薄几何/Alpha 域的行为差需单独标定（候选入口：conflation 家族的 intersect-padding/thin-pillars 变体 + shadow_occclusion 混合）。
+
+**决策**：保持 hemisphere 默认，PBR 域分治——z-offset/quantization/meshopt 家族继续用 modellightport=1 出报告值，conflation 家族维持 hemisphere；等 PBR part-color/conflation 校准收敛后再评估全局翻转。**harness 坑位**：result server 退出后驻留端口 → 同脚本后续 karma EADDRINUSE 静默死（>/dev/null 吞错）——每次调用须独立 MBSTYLE_PORT。单测 300 绿、tsc 绿。
