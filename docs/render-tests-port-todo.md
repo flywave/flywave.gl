@@ -7097,3 +7097,21 @@ F1 quantization/high-zoom-model-quantization（bearing 0，纯模型域）：bas
 
 **管线完整闭环**：深度 pass（紧致视锥+sign fix）→ screen-space receiver（corner +eye 修复）→ shadow compare（mbLit=0/1）→ darkening（mix(factor,1,mbLit)×color）。下一步：shadow intensity 校准（当前 factor 是 amb/(amb+dir·ndl)，需匹配 mgl `mix(1-shadow-intensity, 1, lit)` 对 ground layers 的真实幅度）+ §691 模型光方向默认支落地（modeldiralt→default，port→default 待全局 A/B）。
 
+
+**§693. modelLightDir/PBR 默认化完整 A/B 与量化残差定性（2026-09-01）**：
+
+①**diralt 默认化已落地**（`ea76c2a4`）：modelLightDir 默认返回 mgl 原始 sphericalDirectionToCartesian（不经 y 镜像）；ls.dir（y 镜像，§683）仅用于 extrusion 不同法线帧。量化 101 万→25,768（−97.5%）。
+
+②**PBR 默认化 A/B 全量**（`ad4645d6`→`b922b32b` 回退）：
+- quantization：101 万→4,633（−99.5%）✓ — PBR Cook-Torrance + mgl-raw dir 为精确路径
+- model-pbr-light：4,718 ✓ — PBR 专测 fixture
+- **multiple-meshes：4,792→78,284（+1534%）✗** — PBR 在该 fixture 严重回归
+- 结论：**PBR 分支在 part-color/emissive/opacity 域仍有未校准差异**，不适合全局默认化；保持 hemisphere 为默认 + modellightport=1 opt-in。量化残差 (25,768 px) 属半球近似的固有精度限制，PBR 可修但代价是 other fixtures 回归。
+
+③**量化残差定性**（25,768 px / 1,048,576 = 2.5%）：pixel 采样 Δ=18（全表面均匀偏暗约 6-7 sRGB 单位），为半球近似 k-factor 的**亮度常数偏差**——ambient×vert×ambDir + dir×NdotL 与 PBR 的 Cook-Torrance + env 的精确差异。根因 = hemisphere 省略了 `mbVert`（0.92-1.0 垂直遮蔽）和 `mbAmbDir`（ambient-directional 交互）对整体亮度的轻微压低。修复路径：调校 vert/ambDir 参数使其匹配 PBR 的平均亮度；或在 fixture 级逐项标定。难度：低（单参数拟合），ROI：低（2.5%像素）。
+
+**下一轮优先事项**：
+1. **ground-shadow intensity 校准**（ground-shadow-fog 167,004 px）：阴影暗化在像素上已生效（4/5 采样点 darken ✓），残差 = 整体亮度/雾 wash 干扰，非 shadow-intensity 公式错误（已确认 per-material path 公式与 mgl 一致）
+2. **量化 PBR 全 fixture 回归**（modellightport=1 × 全量 model-layer，~176 fixture）：确认 PBR 分支在哪些 fixture 回归，逐步校准（part-color/emissive/opacity 域）
+3. **lighting-3d-mode 家族**（6 fixture，之前挂起）：追查渲染挂起根因
+
