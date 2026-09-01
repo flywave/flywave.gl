@@ -7313,3 +7313,10 @@ modellightport=1（§655 Cook-Torrance PBR 分支）ChromeHeadless 同平台 A/B
 ②**橙/红偏移定性**：expected 橙色域（r>190,r−b>60,r−g>30）=1,063px（220,168,109 型）；ours 同域 2,686px 但均值为 (212,124,122)——红移（G 被压 ~44）。该色域来自 style 中 `window` part 的 `["hsl",["random",0,90,["id"]],["random",20,100,["id"]],87]`——**feature-id 播种的 random 表达式**，两引擎评估出不同色相（ours 偏红）。非 PBR/part-color-bake 问题（烘焙链路 §707 已证一致）。
 
 **定案**：landmark-z-offset-scale 的主要残余 = mgl `random` 表达式的种子语义对齐（MBExpressionEngine 的 seeded-random 按 feature.id 复现 mgl 评估值），列入 expression 域工作。part-color/PBR 材质域标定完成——烘焙与光照公式均与 mgl 一致，无需再校准。单测 300 绿、tsc 绿（无代码变更）。
+
+
+**§708. random 表达式审计——§707b 假说证伪与残差重新收缩（2026-09-01 续三十三）**：
+
+①**random 已精确对齐**：MBExpressionEngine.ts:893 的实现即 mgl definitions/index.ts:774 的忠实移植（hashString→mulberry32→min+r×(max−min)，逐行一致）——§707b 的"random 种子语义差异"假说证伪。②**更根本的否定**：该 fixture 的 window/roof 颜色是 mgl **tiler 离线烘焙**进 vector.pbf 的 4444 顶点色（buildMeshFeatureArray 只做展开+part 表 mix），渲染期 random 根本不参与——两引擎读同一份烘焙资产。③**measure-light brightness 排除**：mgl calculateLightsBrightness（style.ts:2694，sRGB ECF 亮度×intensity×polarIntensity 与 ambient 平均）与本方 mglMeasureLightBrightness 在本 fixture 白光下数值恒等（=(0.86×0.0847+1.0)/2=0.5364，白光的 ECF 差异退化为零）。
+
+**残差重新收缩**：排除后，(220,168,109) 橙面片 vs 灰墙的差异收敛到唯一剩余层——**同一 GLB 内特定面片的 partId→样式分配或面片归属**（可能 partId 越界回落 part0、4444 半字节错位、或 LOD/meshopt 变体差异）。下轮入口：以 mbbatchdbg 探针 dump 该 mesh 的 partId→颜色直方图（vector.pbf 原始 4444 字节 → 展开 → mix → 线性化全链），与 expected 裁剪区的色域做定量比对，定位第一个分歧字节。本轮无代码变更。单测 300 绿、tsc 绿。
