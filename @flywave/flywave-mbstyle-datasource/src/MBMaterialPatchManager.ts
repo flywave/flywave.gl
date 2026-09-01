@@ -1117,12 +1117,14 @@ export class MBMaterialPatchManager {
                              mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                              vec4 mbShPk = texture2D(uMBShadowMap, mbShUv.xy);
                              float mbShD = mbShPk.r + mbShPk.g / 255.0;
-                             // §696: smoothstep 替代 binary — 在阴影边缘
-                             // 产生 0→1 过渡（≈0.8m penumbra），消除
-                             // ambient=0 时 binary 0/1 导致的纯黑墙面。
-                             // §702: mgl shadowed_light_factor_normal =
-                             // (1 − intensity·occ)·NdotL — intensity<1
-                             // 减弱阴影幅度（intensity=1 行为不变）。
+                             // §696/§702: smoothstep edge + (1−intensity·occ)
+                             // factor. §713 A/B: mgl's slope-scaled bias
+                             // constants ([0.00036,0.0012,0.012] NDC) do NOT
+                             // transfer to this window-depth domain — they
+                             // over-shadowed (ground-shadow-fog 131,915→
+                             // 172,541, z-offset-scale 281,197→331,486) and
+                             // were reverted; correct scaling needs the
+                             // window-depth-per-metre mapping probed first.
                              float mbShLit = smoothstep(-0.0002, 0.0002, mbShUv.z - mbShD);
                              mbNdotL *= mix(1.0 - uMBShadowIntensity, 1.0, mbShLit);
                          }

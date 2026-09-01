@@ -7356,3 +7356,8 @@ pixpick 探针落地（MBBatchedModelDataSource.syncStyleState 末尾，mbbatchd
 pixpick 扩展 grid 模式（64 采样点射线分类 batched-model/extrusion）：**全部 64 点 batched-model 均 0 命中**——batched-model 路径（含 404 的 mbx/8718-5686-14.glb，两引擎同缺）对本 fixture 贡献为零；museum 由 vector 模型路径（MBMeshFeatures，partHist 已证 style 忠实）绘制。"地标注记归属/404 覆盖"假设排除——结构性错位不存在于模型路径，两图画的是同一批模型。
 
 **偏亮残差精确归因（闭式验证）**：exp 灰墙 181/255=0.712 = **mgl 环境项精确值**（vert 0.96 × ambDir 0.742，dirFactorMin=1−0.3×0.86）；ours 206/255=0.81 = 环境项 + **直射项 0.86×NdotL(≈0.13)**。即：expected 的墙在 cast-shadows 下被 shadowed_light_factor 置零直射（阴影中），**ours 的挤出阴影接收在这些 procedural 建筑上未生效**（采样恒返回 lit），+24 均匀偏亮 = 直射项漏加。下轮入口：①验证本 fixture 挤出材质的 uMBShadowMatrix/Intensity 刷新链（syncModelShadowUniforms 是否覆盖 procedural 挤出材质）；②shadow map 覆盖范围（cascade 距离 vs 相机 800m）；③§702 smoothstep 的 bias 方向。单测 300 绿、tsc 绿。
+
+
+**§713. 挤出阴影坡度 bias A/B——常量域不可迁移，回退（2026-09-02）**：
+
+按 §712 入口尝试 mgl calculate_shadow_bias 形状的坡度缩放 bias（`0.5·(0.00036 + clamp(0.0012·tan(acos(NdotL)),0,0.012))`，shadow_renderer.ts:549 常量）替换固定 ±0.0002 窗口。**A/B 双夹具双双回归**：ground-shadow-fog 131,915→172,541（+31%）、z-offset-scale 281,197→331,486（+18%）——过度阴影。**根因：mgl bias 常量定义在其 NDC 深度域，与我方 16-bit packed window-depth 域尺度不可迁移**（§692 已知 0.002 ≈ 6-60m 场景深度；斜率项在两域的等效值差数倍），已回退。回归复核：回退后待验证（下轮首跑）。**正确修复路径**：先用 shadow-uv 探针 dump 掠射墙的 (uv.z, storedDepth, NdotL) 三元组分布，测出我方域的斜率深度误差系数（units/metre-at-grazing），再换算 mgl 的 bias 意图（grazing → shadowed）为本域常量。本轮记录 A/B 负结果与回退。单测 300 绿、tsc 绿。
