@@ -94,27 +94,29 @@ export function mbHeightRampUniforms(
     return { b0: 0, b1: 1, power: 1, start: 255 / 256, range: 0 };
 }
 
-/** §649: the model-shader light direction. A/B on the part-styling family:
- * mgl az+90 convention (§560 shadow-path) improves indirect-update-doors-lod
- * −160k / update-doors −38k but REGRESSES indirect-doors-no-shadows +232k /
- * update +91k / door-light-lod +85k — the two fixture groups respond in
- * OPPOSITE directions (net +377k), so the §455 extrusion convention (90−az,
- * ls.dir) stays the default. The `modeldiralt=1` karma arg re-enables the
- * az+90 frame for follow-up per-fixture calibration. */
+/** §649: the model-shader light direction. §691 A/B verdict (quantization
+ * 101万→4633 −99.5% with PBR branch): models use mgl-EXACT un-mirrored
+ * sphericalDirectionToCartesian (az+90 convention); the model geometry's
+ * normals are NOT y-mirrored relative to mgl (GLB y-flip + tile placement
+ * convention make them mgl-raw). The y-mirrored `ls.dir` (§683) is for
+ * EXTRUSION walls (different normal frame), not models. The `modeldiralt=1`
+ * karma arg retains the old y-mirrored form for per-fixture calibration. */
 export function modelLightDir(dataSource: any): [number, number, number] {
     const ls = dataSource?.m_environment?.lighting3DState;
     if (!ls) return [0, 0, 1];
+    // mgl-raw (un-mirrored) is the default for models — §691 A/B measured
+    // −97.5% on quantization/high-zoom vs the y-mirrored ls.dir.
+    const dirProp = dataSource?.m_environment?.m_3DDirectional?.direction;
+    const az = ((dirProp?.[0] ?? 210) + 90) * Math.PI / 180;
+    const pl = (dirProp?.[1] ?? 30) * Math.PI / 180;
     if ((globalThis as any).__mbModelDirAlt) {
-        const dirProp = dataSource?.m_environment?.m_3DDirectional?.direction;
-        const az = ((dirProp?.[0] ?? 210) + 90) * Math.PI / 180;
-        const pl = (dirProp?.[1] ?? 30) * Math.PI / 180;
-        return [
-            Math.cos(az) * Math.sin(pl),
-            Math.sin(az) * Math.sin(pl),
-            Math.cos(pl),
-        ];
+        return ls.dir;  // old y-mirrored §683 convention (reverted via arg)
     }
-    return ls.dir;
+    return [
+        Math.cos(az) * Math.sin(pl),
+        Math.sin(az) * Math.sin(pl),
+        Math.cos(pl),
+    ];
 }
 
 /**
