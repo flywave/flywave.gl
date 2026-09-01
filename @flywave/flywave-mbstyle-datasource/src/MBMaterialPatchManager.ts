@@ -958,6 +958,16 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMB3DViewToWorld = { value: viewToWorld };
             shader.uniforms.uMB3DEmissive = { value: ls ? emissiveStrength : 0 };
             shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbLightDbg ? 1 : ((globalThis as any).__mbFogTDbg ? 2 : 0) };
+            // §694: extrusion shadow reception — mgl fill_extrusion uses
+            // shadowed_light_factor_normal to modulate the directional term.
+            // The extrusion meshes ARE in RTE frame (modelMatrix×position =
+            // eye-relative world), same as the shadow camera, so the vertex
+            // varying approach is correct (no screen-space workaround needed).
+            shader.uniforms.uMBShadowMap = { value: null };
+            shader.uniforms.uMBShadowMatrix = { value: new THREE.Matrix4() };
+            shader.uniforms.uMBShadowIntensity = { value: 0 };
+            shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
+            (material as any).__mbShadowUniforms = shader.uniforms;
             // §664: bind the engine's mgl-fog uniforms (fog_fragment override)
             // BY REFERENCE to the live UniformsLib.fog template the env feeds
             // every frame. Built-in materials clone ShaderLib uniforms at
@@ -1010,6 +1020,10 @@ export class MBMaterialPatchManager {
                  uniform float fogMglShift; uniform float fogMglDistCam; uniform vec2 fogMglRange;
                  uniform float uMbMetersPerUnit; uniform vec3 fogColor; uniform float fogAlpha;
                  varying float vMbWallH;
+                 varying vec3 vMbWorldPos;
+                 uniform sampler2D uMBShadowMap;
+                 uniform mat4 uMBShadowMatrix;
+                 uniform float uMBShadowIntensity;
                  vec3 mbBaseColor = vec3(1.0);
                  void main() {`
             );
@@ -1026,18 +1040,20 @@ export class MBMaterialPatchManager {
                     '#include <common>',
                     `#include <common>
                      attribute vec4 extrusionAxis;
-                     varying float vMbWallH;`
+                     varying float vMbWallH;
+                     varying vec3 vMbWorldPos;`
                 );
             } else if (!shader.vertexShader.includes('varying float vMbWallH')) {
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <common>',
-                    '#include <common>\nvarying float vMbWallH;'
+                    '#include <common>\nvarying float vMbWallH;\nvarying vec3 vMbWorldPos;'
                 );
             }
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 `#include <begin_vertex>
-                 vMbWallH = clamp(extrusionAxis.z / max(extrusionAxis.z + extrusionAxis.w, 0.001), 0.0, 1.0);`
+                 vMbWallH = clamp(extrusionAxis.z / max(extrusionAxis.z + extrusionAxis.w, 0.001), 0.0, 1.0);
+                 vMbWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
             );
             // Capture the UNLIT material color before three's lighting pass —
             // the scene DirectionalLight (added by applyLights) shades the
@@ -1076,6 +1092,19 @@ export class MBMaterialPatchManager {
                      vec3 mbDirView = normalize((viewMatrix * vec4(uMB3DDir, 0.0)).xyz);
                      vec3 mbUpView = normalize((viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
                      float mbNdotL = dot(mbN3, mbDirView);
+                     // §694: extrusion shadow reception — mgl multiplies the
+                     // directional term by shadowed_light_factor_normal (0 in
+                     // shadow, NdotL when lit). Sample the shadow map at the
+                     // extrusion's RTE world position.
+                     if (uMBShadowIntensity > 0.0) {
+                         vec4 mbShUv = uMBShadowMatrix * vec4(vMbWorldPos, 1.0);
+                         if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
+                             mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
+                             vec4 mbShPk = texture2D(uMBShadowMap, mbShUv.xy);
+                             float mbShD = mbShPk.r + mbShPk.g / 255.0;
+                             mbNdotL *= mbShUv.z <= mbShD + 0.0005 ? 1.0 : 0.0;
+                         }
+                     }
                      float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
                      float mbDirFactorMin = 1.0 - 0.3 * min(mbDirLum, 1.0);
                      float mbAmbDir = mix(mbDirFactorMin, 1.0, min(mbNdotL + 1.0, 1.0));
