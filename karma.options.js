@@ -295,6 +295,10 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
         // 拉起的仍是同一个劣化浏览器，每次重连白烧 5-10 分钟且大概率再断
         // ——快速失败回到 runner，由它起新浏览器进程续跑剩余用例。
         browserDisconnectTolerance: 1
+        // §722: karma 6.4.4 无 restartOnDisconnectedBrowser 选项（断连后剩余
+        // 用例被 mocha 会话状态污染为整批跳过）——修复在 runner 层：
+        // run-mbstyle-render-tests-chunked.js 的 resumeMissing 按缺失 fixture
+        // 以 4 个/全新浏览器会话续跑（§695 会话级跳过的最终修复）。
     };
 };
 

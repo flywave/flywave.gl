@@ -33,6 +33,8 @@ export interface ShadowUniformState {
     eye: THREE.Vector3;
     /** Drawing-buffer size in device px (gl_FragCoord space). */
     res: THREE.Vector2;
+    /** §717: shadow-camera far (world units) — the fade-out envelope. */
+    far: number;
 }
 
 export class MBShadowRenderer {
@@ -130,6 +132,10 @@ export class MBShadowRenderer {
             corners: this.m_groundUniforms.uMBGC.value as THREE.Vector3[],
             eye: this.m_groundUniforms.uMBEye.value as THREE.Vector3,
             res: this.m_res,
+            // §717: mgl u_fade_range = [lastCascade.far×0.75, lastCascade.far]
+            // (shadow_renderer.ts:363) — receiver shadows fade to lit across
+            // the far quarter of the coverage; single-cascade far stands in.
+            far: this.m_shadowCamera.far,
         };
     }
 

@@ -4589,6 +4589,44 @@ export class MBStyleDataSource extends TileDataSource {
             const { GeoCoordinates } = require('@flywave/flywave-geoutils');
             const geoCoord = new GeoCoordinates(center[1], center[0]);
             this.mapView.setCameraGeolocationAndZoom(geoCoord, zoom, bearing, pitchAB);
+            // §700: empirical camera probe — dumped via /mb-probe-dump (the
+            // karma runner swallows browser consoles). Values must match mgl's
+            // placement: slant d = focal·C/(256·2^flyZoom) ≡ ccd_px·C/(512·2^styleZoom),
+            // height = d·cos(pitch), ground offset = d·sin(pitch).
+            if ((globalThis as any).__mbDecodeDbg) {
+                try {
+                    const cam = (this.mapView as any).camera as THREE.PerspectiveCamera;
+                    const tgt = this.mapView.projection.projectPoint(
+                        geoCoord as any,
+                        new THREE.Vector3()
+                    );
+                    const fb = (window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith('feedback-url='))
+                        ?.slice('feedback-url='.length);
+                    const dump = {
+                        probe: 'mbcam',
+                        name: (style.metadata as any)?.test?.name,
+                        dist: cam.position.distanceTo(tgt),
+                        camPos: cam.position.toArray(),
+                        tgt: tgt.toArray(),
+                        fov: cam.fov,
+                        focal: (this.mapView as any).focalLength,
+                        zoom: (this.mapView as any).zoomLevel,
+                        pitch: (this.mapView as any).tilt,
+                        heading: (this.mapView as any).heading,
+                        pixelRatio: (this.mapView as any).pixelRatio,
+                        canvasW: (this.mapView as any).canvas?.width,
+                        canvasH: (this.mapView as any).canvas?.height,
+                    };
+                    if (fb) {
+                        fetch(`${fb}/mb-probe-dump`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify(dump),
+                        }).catch(() => {});
+                    }
+                } catch {}
+            }
             // §274: sphere camera framing — mgl exact. mgl places the globe
             // center at plane z = −ws/2π and the camera at z = ccd·conv
             // (globe_util calculateGlobePosMatrix + transform

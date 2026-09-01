@@ -101,7 +101,12 @@ function parseCssColor(v: string): [number, number, number, number] | null {
     }
 }
 
-function evalPart(paint: any, zoom: number, part: string, brightness = 0): PartStyle {
+function evalPart(paint: any, zoom: number, part: string, brightness = 0,
+    // §709: mgl evaluates per NODE with nodeInfo.feature.id (the GLB node
+    // extras.id) — the ["id"] seed of data-driven paint (["random", ...,
+    // ["id"]]) is per landmark feature, not a constant. id=0 collapsed every
+    // node's random draw to one hue (§707b's orange-vs-red window shift).
+    id: number | string | undefined = 0): PartStyle {
     const props = part ? { part } : {};
     const evalRaw = (raw: any): any => {
         if (raw === undefined || raw === null) return undefined;
@@ -110,7 +115,7 @@ function evalPart(paint: any, zoom: number, part: string, brightness = 0): PartS
             return MBExpressionEngine.evaluate(raw, {
                 zoom,
                 brightness,
-                feature: { type: 'Point', properties: props, id: 0 },
+                feature: { type: 'Point', properties: props, id } as any,
             } as any);
         } catch {
             return undefined;
@@ -578,7 +583,21 @@ export function applyMeshFeatures(
 ): void {
     try {
         const brightness = mglMeasureLightBrightness(dataSource);
-        const parts = PART_NAMES.map(name => evalPart(paint, zoom, name, brightness));
+        // §709: per-NODE part tables — mgl's computePartPbrTable is refilled
+        // per nodeInfo (feature id drives ["id"]-seeded paint like
+        // ["random", ...]); a tile-level table collapsed every node's draw.
+        const tables = new Map<string, PartStyle[]>();
+        const partsFor = (mesh: THREE.Mesh): PartStyle[] => {
+            const key = String(mesh.userData.__mbNodeId ?? 0);
+            let t = tables.get(key);
+            if (!t) {
+                const rawId = mesh.userData.__mbNodeId;
+                const id = typeof rawId === 'string' || typeof rawId === 'number' ? rawId : 0;
+                t = PART_NAMES.map(name => evalPart(paint, zoom, name, brightness, id));
+                tables.set(key, t);
+            }
+            return t;
+        };
         const meshes: THREE.Mesh[] = [];
         root.traverse(o => {
             const mesh = o as THREE.Mesh;
@@ -589,8 +608,9 @@ export function applyMeshFeatures(
         // paint) can re-derive the styling without a re-decode.
         root.userData.__mbFeatSources = [];
         root.userData.__mbFeatFeatureless = [];
+        root.userData.__mbFeatTables = tables;
         for (const mesh of meshes) {
-            splitByPart(mesh, parts, root, dataSource);
+            splitByPart(mesh, partsFor(mesh), root, dataSource);
             if (mesh.userData.__mbFeatSplit) {
                 root.userData.__mbFeatSources.push(mesh);
             }
@@ -600,7 +620,7 @@ export function applyMeshFeatures(
         root.traverse(o => {
             const mesh = o as THREE.Mesh;
             if (mesh.isMesh && !mesh.geometry.getAttribute(FEATURE_ATTR) && !mesh.userData.__mbPart) {
-                applyMglModelLighting(dataSource, mesh, parts[0].emissive, undefined, undefined, 0);
+                applyMglModelLighting(dataSource, mesh, partsFor(mesh)[0].emissive, undefined, undefined, 0, true);
                 root.userData.__mbFeatFeatureless.push(mesh);
             }
         });
@@ -631,16 +651,29 @@ export function refreshMeshFeatures(
         if (Math.abs(prev.zoom - zoom) < 1e-9
             && Math.abs(prev.brightness - brightness) < 1e-9) return;
         root.userData.__mbFeatState = { zoom, brightness };
-        const parts = PART_NAMES.map(name => evalPart(paint, zoom, name, brightness));
+        // §709: per-node tables (same cache build as applyMeshFeatures).
+        const tables = new Map<string, PartStyle[]>();
+        const partsFor = (mesh: THREE.Mesh): PartStyle[] => {
+            const key = String(mesh.userData.__mbNodeId ?? 0);
+            let t = tables.get(key);
+            if (!t) {
+                const rawId = mesh.userData.__mbNodeId;
+                const id = typeof rawId === 'string' || typeof rawId === 'number' ? rawId : 0;
+                t = PART_NAMES.map(name => evalPart(paint, zoom, name, brightness, id));
+                tables.set(key, t);
+            }
+            return t;
+        };
         const sources = root.userData.__mbFeatSources as THREE.Mesh[];
         for (const mesh of sources) {
-            refreshSplit(mesh, parts);
+            refreshSplit(mesh, partsFor(mesh));
         }
         for (const mesh of root.userData.__mbFeatFeatureless as THREE.Mesh[]) {
+            const parts0 = partsFor(mesh);
             const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
             for (const mat of mats as any[]) {
                 const u = mat?.userData?.__mbLightU;
-                if (u?.emis) u.emis.value = parts[0].emissive;
+                if (u?.emis) u.emis.value = parts0[0].emissive;
             }
         }
     } catch { /* styling must never break the frame */ }
@@ -704,6 +737,44 @@ function splitByPart(
         colors[i * 3] = srgbToLinear(r / 255);
         colors[i * 3 + 1] = srgbToLinear(g / 255);
         colors[i * 3 + 2] = srgbToLinear(b / 255);
+    }
+    // §710: partId→color histogram probe (mbbatchdbg=1) — the mixed linear
+    // color distribution per part, POSTed to /mb-probe-dump for quantitative
+    // comparison against the expected crop (mgl buildMeshFeatureArray parity
+    // check).
+    if ((globalThis as any).__mbBatchedDbgFlag === true) {
+        try {
+            const mixCnt: Record<string, number> = {};
+            const mixMean: Record<string, number[]> = {};
+            for (let i = 0; i < vertCount; i++) {
+                const key = 'p' + partOf[i];
+                mixCnt[key] = (mixCnt[key] ?? 0) + 1;
+                mixMean[key] = mixMean[key] ?? [0, 0, 0];
+                mixMean[key][0] += colors[i * 3];
+                mixMean[key][1] += colors[i * 3 + 1];
+                mixMean[key][2] += colors[i * 3 + 2];
+            }
+            const fb = (window as any).__karma__?.config?.args
+                ?.find?.((a: string) => a.startsWith('feedback-url='))
+                ?.slice('feedback-url='.length);
+            if (fb) {
+                fetch(`${fb}/mb-probe-dump`, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                        probe: 'partHist',
+                        mesh: mesh.uuid,
+                        verts: vertCount,
+                        parts: Object.keys(mixCnt).map(k => ({
+                            part: k, verts: mixCnt[k],
+                            linearMean: mixMean[k].map(v => +(v / mixCnt[k]).toFixed(4)),
+                            srgbMean: mixMean[k].map(v =>
+                                Math.round(255 * Math.pow(v / mixCnt[k], 1 / 2.2))),
+                        })),
+                    }),
+                }).catch(() => {});
+            }
+        } catch { /* probe must never break styling */ }
     }
 
     // Group triangle indices by part (tiler authors uniform parts per face).
@@ -774,7 +845,7 @@ function splitByPart(
         sub.userData.__mbMatBaseOpacity = (mat.opacity ?? 1);
         if (mat.transparent) (mat.userData ??= {}).__mbForceTransparent = true;
         const hr = mbHeightRampUniforms(style.heightEmission, bboxZMin, bboxZMax);
-        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr, 0);
+        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr, 0, true);
         sub.userData.__mbHrParams = hr;
         subMeshes.push(sub);
     }

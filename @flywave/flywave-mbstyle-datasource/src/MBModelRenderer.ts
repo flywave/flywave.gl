@@ -167,6 +167,12 @@ export function applyMglModelLighting(
     // mesh-features tiles (draw_model.ts: hasMapboxFeatures ? 0 : rmea.z),
     // defaults to emissiveStrength for classic model layers.
     unlitMix?: number,
+    // §706: mgl picks the shading model PER TILE (draw_model.ts:1459):
+    // Cook-Torrance PBR only for MAPBOX_mesh_features tiles; everything
+    // else (classic GLBs — conflation/landmark dupes/z-offset tiles) is
+    // DIFFUSE_SHADED (the hemisphere-style apply_lighting formula).
+    // globalThis.__mbModelLightPort (modellightport=0/1) overrides for A/B.
+    pbrEligible?: boolean,
 ): void {
     const ls = dataSource?.m_environment?.lighting3DState;
     model.traverse((o) => {
@@ -204,13 +210,16 @@ export function applyMglModelLighting(
                 // u_metallicFactor / u_roughnessFactor).
                 shader.uniforms.uMB3DMetal = { value: mat.metalness ?? 0 };
                 shader.uniforms.uMB3DRough = { value: mat.roughness ?? 0.5 };
-                // §655: uMBPortMode — 0 = §557 hemisphere approximation
-                // (default — calibrated across model fixtures; PBR
-                // (port+diralt) is better for quantization/meshopt but
-                // +1534% on multiple-meshes, so cannot globally flip yet).
-                // 1 = the §655 model.fragment.glsl Cook-Torrance PBR.
+                // §706: mgl shading-model rule — PBR only for mesh-features
+                // parts (pbrEligible, set by the MBMeshFeatures call sites);
+                // classic GLBs stay DIFFUSE_SHADED (§705: forcing PBR on
+                // conflation GLBs regressed +26%). modellightport=0/1
+                // overrides the rule for A/B diagnosis.
+                const portForced = (globalThis as any).__mbModelLightPort;
                 shader.uniforms.uMBPortMode = {
-                    value: (globalThis as any).__mbModelLightPort ? 1 : 0,
+                    value: portForced !== undefined
+                        ? (portForced ? 1 : 0)
+                        : (pbrEligible ? 1 : 0),
                 };
                 // §661: legacy light defaults — mgl model_program.ts reads the
                 // root style light (spec defaults: position [1.15, 210, 30]

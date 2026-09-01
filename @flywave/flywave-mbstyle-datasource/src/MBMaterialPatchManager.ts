@@ -144,11 +144,32 @@ export class MBMaterialPatchManager {
                         for (const m of mats) {
                             if (!m || m.__mbShadowInjected) continue;
                             if (m.__mbShadowSkipped) continue;
+                            // §719: extrusion materials already carry their own
+                            // receiver (injectExtrusion3DLighting, with fade) —
+                            // a second ground injection double-shadows walls.
+                            if (m.__mbExtrusion3DLit) { m.__mbShadowSkipped = true; continue; }
                             const t = String(m.type ?? '');
                             if (t !== 'MeshStandardMaterial' && t !== 'MeshBasicMaterial') {
                                 m.__mbShadowSkipped = true; continue;
                             }
                             this.injectGroundShadow(m);
+                        }
+                        // §715: procedural extrusion walls must CAST into the
+                        // shadow map — the depth pass renders layer 1 only,
+                        // and without wall occluders every extrusion wall
+                        // samples "lit" (the +24 uniform wall brightness).
+                        // Layer 0 keeps the main render untouched.
+                        // §720 GATED: at grazing sun the wall depth encoding
+                        // is noise-dominated without mgl's cascade/slope-bias
+                        // fidelity (full-screen ground mismatch, +26k on
+                        // ground-shadow-fog) — forensic-only until the
+                        // cascade alignment lands (shadowcast=1).
+                        for (const m of mats) {
+                            if (m?.__mbExtrusion3DLit && (globalThis as any).__mbShadowCast === true
+                                && !o.layers.isEnabled(1)) {
+                                o.layers.enable(1);
+                                break;
+                            }
                         }
                     });
                 }
@@ -192,6 +213,10 @@ export class MBMaterialPatchManager {
                         // ground receiver darkness comes from the
                         // shadow_utils amb/(amb+dir·NdotL) ratio alone.
                         u.uMBShadowIntensity.value = shadowState ? 1 : 0;
+                        // §717: fade-envelope far bound (shadow camera far).
+                        if (u.uMBShadowFar) {
+                            u.uMBShadowFar.value = (shadowState as any)?.far ?? 0;
+                        }
                         if (shadowState) {
                             const ls = (this.m_dataSource as any).m_environment
                                 ?.lighting3DState;
@@ -232,9 +257,15 @@ export class MBMaterialPatchManager {
                 for (const m of fogMats) {
                     const fu = m?.__mbExtFogU;
                     if (!fu) continue;
-                    const lib2 = (THREE.UniformsLib as any).fog;
+                    const mvz = (this.m_dataSource as any).mapView;
                     fu.uMbMetersPerUnit.value = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
-                        (512 * Math.pow(2, (this.m_dataSource as any).mapView?.zoomLevel ?? 16));
+                        (512 * Math.pow(2, mvz?.zoomLevel ?? 16));
+                    // §701: mgl fog depth normalization — camera-to-center
+                    // metres (calculateDistanceFromZoomLevel semantics).
+                    fu.uMbDistCam.value = ((mvz as any)?.focalLength ?? 768) *
+                        EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                        (256 * Math.pow(2, mvz?.zoomLevel ?? 16));
+                    const lib2 = (THREE.UniformsLib as any).fog;
                     fu.fogMglShift.value = lib2.fogMglShift.value;
                     fu.fogMglDistCam.value = lib2.fogMglDistCam.value;
                     (fu.fogMglRange.value as THREE.Vector2).copy(lib2.fogMglRange.value);
@@ -957,7 +988,7 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMB3DDir = { value: ls ? ls.dir : [0, 0, 1] };
             shader.uniforms.uMB3DViewToWorld = { value: viewToWorld };
             shader.uniforms.uMB3DEmissive = { value: ls ? emissiveStrength : 0 };
-            shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbLightDbg ? 1 : ((globalThis as any).__mbFogTDbg ? 2 : 0) };
+            shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbLightDbg ? 1 : ((globalThis as any).__mbFogTDbg ? 2 : ((globalThis as any).__mbShadowUvDbg ? 3 : 0)) };
             // §694: extrusion shadow reception — mgl fill_extrusion uses
             // shadowed_light_factor_normal to modulate the directional term.
             // The extrusion meshes ARE in RTE frame (modelMatrix×position =
@@ -966,6 +997,8 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBShadowMap = { value: null };
             shader.uniforms.uMBShadowMatrix = { value: new THREE.Matrix4() };
             shader.uniforms.uMBShadowIntensity = { value: 0 };
+            // §717: mgl u_fade_range far bound — refreshed per frame.
+            shader.uniforms.uMBShadowFar = { value: 0 };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
             (material as any).__mbShadowUniforms = shader.uniforms;
             // §664: bind the engine's mgl-fog uniforms (fog_fragment override)
@@ -979,6 +1012,13 @@ export class MBMaterialPatchManager {
             const mpu0 = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                 (512 * Math.pow(2, mv0?.zoomLevel ?? 16));
             shader.uniforms.uMbMetersPerUnit = { value: mpu0 };
+            // §701: camera-to-center distance in metres for the mgl fog
+            // depth normalization (same formula as the camera placement's
+            // calculateDistanceFromZoomLevel — probe-verified vs mgl §700).
+            shader.uniforms.uMbDistCam = {
+                value: ((mv0 as any)?.focalLength ?? 768) * EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                    (256 * Math.pow(2, mv0?.zoomLevel ?? 16)),
+            };
             // NOTE: do NOT bind fogColor/fogNear/fogFar/fogDensity — three's
             // per-frame refreshFogUniforms writes scene.fog values straight
             // into these shared objects, clobbering the env's calibrated mgl
@@ -1019,11 +1059,15 @@ export class MBMaterialPatchManager {
                  uniform mat3 uMB3DViewToWorld; uniform float uMB3DEmissive; uniform float uMB3DDbg;
                  uniform float fogMglShift; uniform float fogMglDistCam; uniform vec2 fogMglRange;
                  uniform float uMbMetersPerUnit; uniform vec3 fogColor; uniform float fogAlpha;
+                 uniform float fogHorizonBlend; uniform float fogCamHeight; uniform vec2 fogVertLimit;
+                 uniform float uMbDistCam;
                  varying float vMbWallH;
                  varying vec3 vMbWorldPos;
-                 uniform sampler2D uMBShadowMap;
+                 ${shader.fragmentShader.includes('uniform sampler2D uMBShadowMap') ? '' :
+                 `uniform sampler2D uMBShadowMap;
                  uniform mat4 uMBShadowMatrix;
-                 uniform float uMBShadowIntensity;
+                 uniform float uMBShadowIntensity;`}
+                 uniform float uMBShadowFar;
                  vec3 mbBaseColor = vec3(1.0);
                  void main() {`
             );
@@ -1097,15 +1141,36 @@ export class MBMaterialPatchManager {
                      // shadow, NdotL when lit). Sample the shadow map at the
                      // extrusion's RTE world position.
                      if (uMBShadowIntensity > 0.0) {
-                         vec4 mbShUv = uMBShadowMatrix * vec4(vMbWorldPos, 1.0);
-                         if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
+                         // §716: mgl NORMAL_OFFSET — sample the shadow map at
+                         // a point lifted OFF the surface along the world
+                         // face normal. A wall's own depth otherwise conflicts
+                         // at the 7.6° grazing sun (self-shadow acne: walls
+                         // misread as shadowed) while other buildings'
+                         // occlusion is preserved.
+                         vec3 mbWN = normalize(uMB3DViewToWorld * mbN3);
+                         vec3 mbShPos = vMbWorldPos + mbWN * 1.5;
+                         vec4 mbShUv = uMBShadowMatrix * vec4(mbShPos, 1.0);                         if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
                              mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                              vec4 mbShPk = texture2D(uMBShadowMap, mbShUv.xy);
                              float mbShD = mbShPk.r + mbShPk.g / 255.0;
-                             // §696: smoothstep 替代 binary — 在阴影边缘
-                             // 产生 0→1 过渡（≈0.8m penumbra），消除
-                             // ambient=0 时 binary 0/1 导致的纯黑墙面。
-                             mbNdotL *= smoothstep(-0.0002, 0.0002, mbShUv.z - mbShD);
+                             // §696/§702: smoothstep edge + (1−intensity·occ)
+                             // factor. §713 A/B: mgl's slope-scaled bias
+                             // constants ([0.00036,0.0012,0.012] NDC) do NOT
+                             // transfer to this window-depth domain — they
+                             // over-shadowed (ground-shadow-fog 131,915→
+                             // 172,541, z-offset-scale 281,197→331,486) and
+                             // were reverted; correct scaling needs the
+                             // window-depth-per-metre mapping probed first.
+                             float mbShLit = smoothstep(-0.0002, 0.0002, mbShUv.z - mbShD);
+                             // §717: mgl u_fade_range — shadows fade back to
+                             // LIT across the far quarter of the shadow
+                             // camera's coverage (mgl: mix(occlusion1, 0.0,
+                             // smoothstep(0.75·far, far, view_depth))),
+                             // shadow_renderer.ts:363.
+                             float mbFade = smoothstep(uMBShadowFar * 0.75,
+                                 uMBShadowFar * 1.0, length(vViewPosition));
+                             mbShLit = mix(mbShLit, 1.0, mbFade);
+                             mbNdotL *= mix(1.0 - uMBShadowIntensity, 1.0, mbShLit);
                          }
                      }
                      float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
@@ -1126,22 +1191,58 @@ export class MBMaterialPatchManager {
                      // mgl-fog uniforms above are bound by reference so the
                      // per-frame env feed reaches this program.
                      vec3 mbOut = mix(mbLit, mbBaseColor, uMB3DEmissive);
-                     // §670: mgl fog applied in-shader (chunk fog compiled
-                     // out): fogT from the meters-converted view depth, then
-                     // the mapbox falloff³ wash toward fogColor.
-                     // §682: fogT calibrated on ground-shadow-fog — raw t
-                     // measured 0.77-0.83 vs expected's moderate wash; the
-                     // 0.78 factor on the mgl depth lands mid-city t ≈ 0.6.
-                     float mbLen = length(vViewPosition) * uMbMetersPerUnit * 0.78;
-                     float mbT = (fogMglShift * mbLen / max(fogMglDistCam, 1.0)
+                     // §701: mgl fog depth domain calibrated on expected.png.
+                     // Effective mgl depth = fogMglShift × slant/ccd — three
+                     // expected-image opacity samples (0.72/0.82/0.99 at
+                     // d̂=1.54/1.80/2.66) all fit the falloff³ curve with
+                     // factor 1.5 = the shift (style/fog.ts state getter adds
+                     // 0.5/tan(fov/2) to the range, and the wsFog pixel domain
+                     // scales depth by the same factor relative to the
+                     // camera-to-center distance). uMbDistCam =
+                     // focal·C/(256·2^flyZoom) — §700's camera probe proved
+                     // it equals mgl's camera-to-centre distance. The previous
+                     // metres×0.78 form had the right shape but the wrong
+                     // distCam domain (raster-path 6838m value).
+                     float mbLen = length(vViewPosition);
+                     float mbT = (fogMglShift * mbLen / max(uMbDistCam, 1.0)
                          - (fogMglRange.x + fogMglShift))
                          / max(fogMglRange.y - fogMglRange.x, 0.001);
                      float mbFall = 1.0 - min(1.0, exp(-6.0 * mbT));
                      mbFall *= mbFall * mbFall;
-                     float mbFogFactor = fogAlpha * min(1.0, 1.00747 * mbFall);
+                     // mgl fog_opacity (depth-only term) — kept separate: the
+                     // premultiplied variant's opacity limit reads the raw
+                     // depth opacity, before horizon blending.
+                     float mbFogDepth = fogAlpha * min(1.0, 1.00747 * mbFall);
+                     float mbFogFactor = mbFogDepth;
+                     // mgl fog_horizon_blending (fog_apply, non-globe):
+                     // camera-dir z below the horizon keeps full fog; rays
+                     // toward/above the horizon fade out. Same form as the
+                     // engine's fog_fragment override.
+                     float mbHzZ = -fogCamHeight / max(length(vViewPosition), 1.0);
+                     float mbHz = max(0.0, mbHzZ / max(fogHorizonBlend, 1e-4));
+                     mbFogFactor *= fogAlpha * exp(-3.0 * mbHz * mbHz);
+                     // mgl fog_apply_premultiplied(color, pos, heightMeters):
+                     // elevated fragments fade OUT of the fog between the
+                     // vertical-limit heights, and the fade itself is limited
+                     // near total fog to avoid a hard cut at the cull
+                     // distance. Height (m) = RTE world z × meters/unit.
+                     if (fogVertLimit.x > 0.0 || fogVertLimit.y > 0.0) {
+                         float mbH = vMbWorldPos.z * uMbMetersPerUnit;
+                         float mbVertP = smoothstep(fogVertLimit.x, fogVertLimit.y, mbH);
+                         float mbOpLimit = 1.0 - smoothstep(0.9, 1.0, mbFogDepth);
+                         mbFogFactor *= 1.0 - min(mbVertP, mbOpLimit);
+                     }
                      mbOut = mix(mbOut, fogColor, clamp(mbFogFactor, 0.0, 1.0));
                      gl_FragColor.rgb = mbOut;
-                     if (uMB3DDbg > 1.5) {
+                     if (uMB3DDbg > 2.5) {
+                         // §714 shadow-uv probe: R = signed depth delta
+                         // (uv.z − storedDepth, scaled ×250 — ±0.002 spans
+                         // the channel), G = NdotL. Used with the expected
+                         // crop to fit the domain slope-error coefficient.
+                         gl_FragColor.rgb = vec3(
+                             clamp(0.5 + 250.0 * (mbShUv.z - mbShD), 0.0, 1.0),
+                             0.5 + 0.5 * clamp(mbNdotL, 0.0, 1.0), 0.5);
+                     } else if (uMB3DDbg > 1.5) {
                          // §678: distance readout — grey = log2(metres)/16
                          // (metres = view length × uMbMetersPerUnit).
                          gl_FragColor.rgb = vec3(clamp(log2(max(mbLen, 1.0)) / 16.0, 0.0, 1.0));
@@ -2730,11 +2831,16 @@ export class MBMaterialPatchManager {
                             // (≈6-60m of scene depth) ATE the entire building
                             // shadow footprint (0.001-of-range signature).
                             float mbLit = smoothstep(-0.0002, 0.0002, mbShadowUv.z - mbShadowDepth);
+                            // §702: mgl shadowed_light_factor = 1 − intensity·occ
+                            // (_prelude_shadow.fragment.glsl) — intensity<1
+                            // lightens the shadow; ours previously ignored
+                            // uMBShadowIntensity (identical at intensity=1).
+                            float mbLight = mix(1.0 - uMBShadowIntensity, 1.0, mbLit);
                             // mgl: out(sRGB) *= mix(u_ground_shadow_factor, 1, light)
                             // with the factor = linear-strengths ratio. Our
                             // fragment is linear: multiplying it by ratio^2.2
                             // encodes to exactly sRGB × ratio.
-                            gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(2.2)), vec3(1.0), mbLit);
+                            gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(2.2)), vec3(1.0), mbLight);
                         }`;
             let mbShadowInserted = false;
             const tryInsert = (src: string, anchor: string, block: string): string => {

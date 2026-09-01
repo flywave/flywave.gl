@@ -7214,13 +7214,201 @@ smoothstep A/B（ground-shadow-fog）：**167,004 → 141,864（−15%，−25,1
 实际影响：19 fixtures 在单独 karma run 中可成功（已有 lighting-3d-mode/model-shadow 的 191,995 px 基线），批量 filter 模式下被 mocha 跳过。不影响代码对齐工作（渲染代码本身正确）。
 
 
-**§698 补充：19 fixtures 逐个跑结果（2026-09-01）**：
 
-逐个 filter 运行（每个独立 karma 进程）：19 fixtures 中 **10 例成功出帧**（53%），9 例仍失败。
+**§699. §698 验证 + 挤出 fog 补齐 horizon blending / vertical limit（2026-09-01 续二十三）**：
 
-**最大成果**：`lighting-3d-mode/model-shadow` 从 191,995 → **3 px**（−99.998%，近完美）——§698 挤出 lighting 延迟注入修复是该 fixture 的关键：挤出材质在 applyLights() 之前被解码→use3DLights=false→injectExtrusion3DLighting 被跳过→材质缺少 lighting/fog/shadow uniforms→渲染错误。修复后材质在 use3DLights=true 后重新注入，渲染正确。
+①**§698 fogt=1 探针验证通过**：ChromeHeadless-shell 单夹具复跑，挤出墙面出现随深度分布的灰度 log2 距离读数——挤出注入（lighting/fog/shadow uniforms）在 §698 needsUpdate 修复后确认触发，§686 的"onBeforeCompile 不触发"路径受阻已解除。
 
-**成功 fixtures**：model-shadow(3), model-with-ao-instance(18K), model-with-ao(31K), model-normals(111K), no-ambient(107K), powerplants-fog-mercator(218K), powerplants-globe-zoom(246K), trees-zoom-based-scale(212K), trees-lod-expression(60K)——共 10 例出帧。
+②**挤出 fog 语义缺口补齐（MBMaterialPatchManager injectExtrusion3DLighting）**：mgl fill_extrusion.fragment 用 `fog_apply_premultiplied(color, v_fog_pos, h)`，含两个此前缺失的修饰项：**(a) fog_horizon_blending**——camera-dir z 除以 horizonBlend，factor = fogAlpha·exp(−3t²)，朝地平线/天空的射线雾快速衰减（与引擎 fog_fragment override 同构，-fogCamHeight/depth 语义）；**(b) vertical limit + opacity limit**——elevated 片元在 u_fog_vertical_limit 高度区间（米，RTE world z × uMbMetersPerUnit）smoothstep 渐出雾，且 near-total fog 时 `1−smoothstep(0.9,1.0,depthOpacity)` 限制渐出本身防 cull 距离硬切。depth-only opacity 单独保留供 opacity limit 读取（mgl fog_opacity(pos) 无 horizon 项）。新 uniforms（fogHorizonBlend/fogCamHeight/fogVertLimit）沿用 by-reference 绑定链。§682 的 0.78 深度系数保留为标定旋钮。
 
-**仍失败 fixtures**（9 例 NO_RESULT）：globe projection 系（powerplants-globe-lod/to-mercator-*/set-projection）和 trees-light-aligned 系（fog/updated-data-driven 等）。globe projection 夹具需要 `setProjection("globe")` 操作→可能需要专用 globe 渲染路径支持；trees-light-aligned 系可能需要 trees fog integration 专项修复。
+**验证**：ground-shadow-fog 188,975→**175,632（−13,343，−7.1%）**（ChromeHeadless-shell 平台，同平台 pre-change 基线=§699 首跑 188,975；注意 §696 的 141,864 基线疑为 Edge-150 平台，跨平台分数不可直接对比——结果目录按平台分桶，后续 A/B 必须同平台）。hard-cutoff 同步 188,571。fogt=1 调试跑 189,093 ≈ 无调试 188,975 说明墙面像素无论着色方式均处失配态（与 §696 墙面雾洗幅度差定性一致），挤出 fog 幅度校准仍待取景/参数微调。**坑位记录**：karma 经 package main 消费 **lib/** 构建产物——src 改动后必须 `tsc --build` 重建 lib 再跑 render-test，否则跑的是旧代码（§699 首轮 A/B 即因此无效）。单测 300 绿、tsc 绿。
 
+
+**§700. 相机放置实证对齐 + fog 深度域残差定性（2026-09-01 续二十四）**：
+
+①**相机探针落地（MBStyleDataSource applyCameraSettings，__mbDecodeDbg 门控，/mb-probe-dump 通道——karma runner 不转发浏览器 console，console.log 探针不可见，必须走 dump POST）**。ground-shadow-fog（zoom16.2/pitch70/bearing264）实测：**dist=798.5（mgl 理论 798.6）✓ camZ=273.1（理论 273.2）✓ fov=36.87 ✓ focal=768（CSS，dpr=1，canvas 512×512）✓ heading=−96≡bearing264 ✓**。§684 数值等价推导获运行时实证——**相机放置精确对齐 mgl，取景差不是残差来源**（§676 的"相机取景偏移"解读正式作废）。
+
+②**fog 深度域残差定性**：fogt=1 调试图采样（灰=log2(mbLen)/16）对照几何真值：屏幕底边（真值 ~9.8km，pitch70 下底边=远）读 2.3km、屏幕中心（真值 798m）读 3.7km、近端读 ~2.4km——**读数与真值非常数比例**（±4-5×双向偏差），排除简单尺度误差。mgl fog_range 典型值 [-0.5,3.0] 为归一化域（v_fog_pos = worldToFogMatrix 变换后的相机相对位置，域 = 相机深度处 worldSize 像素坐标），非米；我方挤出路径把"米"喂入同一条 fog_range 链（经 fogMglShift/DistCam 折算），域间映射存在未知非线性差。**下轮入口**：①严格对照 mgl transform.getWorldToCameraPosition（free_camera.ts:269：position×−worldSize 平移 + z×pixelsPerMeter）+ calculateFogTileMatrix（transform.ts:2255，createTileMatrix at cameraWorldSizeForFog）重建 fog 域的逐项映射；②用 fogprobe（engine 路径）与 fogt（挤出路径）同帧对比，确认地面与墙面的 t 域是否一致；③0.78 系数属域差的补偿标定，域对齐后应回归 1.0。
+
+坑位补充：pkill -f 匹配含自身命令行会自杀；runner 位置参数会变 filter= 导致 0 测试——探针开关一律走 MBSTYLE_* env。单测 300 绿、tsc 绿。
+
+
+**§701. 挤出 fog 深度域重建——0.78 回归 1.0（2026-09-01 续二十五）**：
+
+**域理论+实证闭环**：①mgl `Fog.state`（style/fog.ts:87）把 shift=0.5/tan(fov/2)=1.5 **加**到 range 上（u_fog_range=[−0.5+1.5, 3.0+1.5]=[1.0,4.5]）；②用 expected.png 按 pitch-70 相机几何（探针实证 d=798.5m）逐行提取雾轮廓，三个独立观测点（d̂=1.54/1.80/2.66 处 opacity=0.72/0.82/0.99）全部拟合 falloff³ 曲线于 **有效深度 = fogMglShift×slant/ccd**——即 wsFog 像素域相对相机-中心距离天然含同一 shift 因子，引擎原始公式形态（shift 乘深度）正确，错的是 distCam 域（旧值 6838m+raster 0.15 折算 → 中心处净系数仅 0.026，雾几乎不生效）。
+
+**实现**：挤出路径改用新 uniform `uMbDistCam = focal×C/(256·2^flyZoom)`（calculateDistanceFromZoomLevel 语义，§700 探针证明 = mgl ccd 米数），`mbT = (shift·slant/uMbDistCam − (range.x+shift))/Δ`，0.78 补偿系数回归 1.0；§699 的 horizon blending/vertical limit 保留。中间态验证（纯 d̂ 无 shift 版）得 186,943 且渲染无雾——反证 shift 因子必须存在，遂定公式。
+
+**验证**：ground-shadow-fog 同平台 175,632→**131,915（−24.9%）**，历史最佳（§696 的 141,864 属 Edge 平台不可比）。渲染形态与 expected 一致（远城白雾洗、近场街道可见）。挤出 fog 深度域专项关闭。剩余残差：墙面明暗（lighting 域）、hard-cutoff 家族、ground-shadow intensity 校准（§694 清单）。单测 300 绿、tsc 绿。
+
+
+**§702. hard-cutoff 同步收益确认 + shadow-intensity 语义补全（2026-09-01 续二十六）**：
+
+①**hard-cutoff 同步收益**：§701 fog 域重建对 ground-shadow-fog-hard-cutoff 同样生效：188,571→**173,317（−8.1%）**（同平台 ChromeHeadless）。
+
+②**shadow-intensity 语义补全（mgl 3d-style/shaders/_prelude_shadow.fragment.glsl 对照）**：mgl 挤出 `shadowed_light_factor_normal = mix(0, (1−intensity·occ)·NdotL, step(0,NdotL))`、地面 `light = shadowed_light_factor = 1−intensity·occ`（occ 为硬件 PCF 采样，intensity<1 时阴影减淡）。我方两条接收路径此前忽略 intensity（恒按 1 处理）——已在地面接收（`mbLight = mix(1−uMBShadowIntensity, 1, mbLit)`）与挤出接收（`mbNdotL *= mix(1−i, 1, mbShLit)`）接线，intensity=1 时严格恒等。**恒等性实证**：改动后 hard-cutoff 分值与改动前全同（173,317）、ground-shadow-fog 复跑分毫不差（131,915）；中间一次 173,232 经复跑证伪为偶发 settle 帧抖动（非代码回归——同代码复跑回到 131,915，判定容差应考虑单帧抖动，必要时取两次中位）。地面 factor=amb/(amb+dir·ndl)、挤出 ambient/vert/ambDir 因子（0.92/0.3）经逐项对照 mgl _prelude_lighting.glsl 已一致，§694"shadow-intensity 公式校准"项定性为雾 wash 干扰（§701 已消），专项关闭。剩余：墙面 lighting 残差、z-offset 家族（§697）、PBR 回归（§694-2）。单测 300 绿、tsc 绿。
+
+
+**§703. §697 z-offset 家族重定性——放置假说证伪（2026-09-01 续二十七）**：
+
+**§697 的"MBBatchedModelRenderer z=0 放置缺 extrusion 高度偏移"假说经 A/B 实证证伪**：landmark-z-offset-scale-munich-museum（zoom16.9/pitch55，fill-extrusion+model 地标层）单夹具跑 371,586 px，ours 与 expected **结构逐像素级吻合**——地标 mesh 正确落在地面、与 extrusion 无 z-fighting、取景一致。mgl draw_model.ts:755 对照亦确认：无地形时 elevation=0（DEM 仅在 elevation-reference='ground' 时参与），mgl 同样把模型放 z=0；model-scale z 分量（本夹具 0→3.5 插值）由 mesh 几何承载，无需额外放置偏移。**给 MBBatchedModelRenderer 加 extrusion 高度偏移会引入回归——不做**。
+
+**残差重定性为光照亮度域**：数值分析（numpy 逐像素）——scale 变体全局均匀偏亮 **均值 +27/中位 +17 每 sRGB 通道**（窗口蓝 (96,167,198)vs(94,155,179)、粉顶 (219,198,186)vs(178,168,163)、背景挤出 +24），模型与挤出同偏 → 非 z-offset 而是 lighting 域（mgl 模型走 PBR Cook-Torrance，我方 hemisphere 近似的常数亮度差，即 §694-2 PBR 校准域）；collision 变体仅 **45,272** px（均值 +12）证实家族异质且无放置缺口。**§697 z-offset 专项关闭，家族残差并入 §694-2 PBR 全 fixture 校准campaign**（入口：modellightport=1 在 scale 变体 A/B + multiple-meshes 回归监控）。
+
+方法论沉淀：大分数家族先做逐像素数值归因（均值/中位/分区热图）再动手——本例避免了一次必然回归的"修复"。单测 300 绿、tsc 绿（无代码变更，纯定性）。
+
+
+**§704. §694-2 PBR campaign 首轮——modellightport=1 多夹具 A/B（2026-09-01 续二十八）**：
+
+modellightport=1（§655 Cook-Torrance PBR 分支）ChromeHeadless 同平台 A/B：
+
+| fixture | hemisphere | PBR | Δ |
+|---|---|---|---|
+| landmark-z-offset-scale-munich-museum | 371,586 | **283,601** | −23.7% ✓ |
+| high-zoom-model-quantization | 25,768 | **4,633** | −82% ✓ |
+| multiple-meshes | 4,807 | **4,807** | 持平（旧 +1534% 回归已消失）|
+| z-offset-v2 | 394,027 | **348,802** | −11.5% ✓ |
+| z-offset-v2-station | — | 256,449 | 首测 |
+| highlights | — | 231,822 | 首测 |
+| landmark LOD/collision 变体 | — | 357,466 / 46,394 / 109,335 | 首测 |
+
+**亮度校准进展**：scale 变体均值偏移 +27→**+16.5**（中位 +17→+12/15/17），窗口 G 通道精确对齐（154.6 vs 154.9）；剩余偏移集中在粉顶 G/B（ours 152/143 vs exp 168/163）——hsl 部件色在 PBR 下的 per-channel 衰减差，下一步标定入口（part-color 域）。
+
+**关键结论：§694-2"multiple-meshes +1534% 不能全局翻转"的阻塞已失效**（两模式同分 4,807；其间 diralt/雾域/§702 改动已消化）。抽样 7 fixture PBR 全部改善或持平、零回归。**下轮入口（单一动作）**：MBModelRenderer:213 把 uMBPortMode 默认翻转为 PBR（`(__mbModelLightPort ?? true) ? 1 : 0`），随后一次 model-layer 全量 chunk run 验证（§695 修正后的 karma 单批可跑），确认无遗漏回归后维持默认。单测 300 绿、tsc 绿（本轮无代码变更，纯 campaign 数据）。
+
+
+**§705. PBR 默认翻转验证——发现 conflation 回归，维持 hemisphere 默认（2026-09-01 续二十九）**：
+
+按 §704 计划执行 uMBPortMode 默认翻转 + 全量验证。**验证过程抓到真实回归，翻转已撤销**（ hemisphere 默认维持，modellightport=1 仍可 opt-in PBR；新增 modellightport=0 强制 hemisphere 的诊断通道，runner 支持任意 modellightport 值）：
+
+①**非模型域零影响实证**：翻转态下 19 个非 model-layer 夹具（extent/elevated-line/mapbox-gl-js#*/1024-* 家族）双模式逐像素同分（0.0% delta）——uMBPortMode 仅消费于模型材质，翻转无外溢风险。
+
+②**model-layer 全量单会话不可行再次证实**：212 fixture 单 karma 会话在 buildings-trees（SwiftShader ~10s/帧×settled 帧数）处 browserNoActivityTimeout 600s DISCONNECTED（Executed 5 of 212），与 §695 同型；改用分层批（5-6 filter/会话）。
+
+③**landmark 子域双模式对比发现回归**：landmark-conflation-buckingham 167,941（hemi）→ **211,526（PBR，+26%）**——conflation（薄柱/交叉衬垫）域在 PBR 下劣化，与其余 7 夹具（z-offset/quantization/meshopt 全改善）方向相反。PBR 的 per-channel 衰减在薄几何/Alpha 域的行为差需单独标定（候选入口：conflation 家族的 intersect-padding/thin-pillars 变体 + shadow_occclusion 混合）。
+
+**决策**：保持 hemisphere 默认，PBR 域分治——z-offset/quantization/meshopt 家族继续用 modellightport=1 出报告值，conflation 家族维持 hemisphere；等 PBR part-color/conflation 校准收敛后再评估全局翻转。**harness 坑位**：result server 退出后驻留端口 → 同脚本后续 karma EADDRINUSE 静默死（>/dev/null 吞错）——每次调用须独立 MBSTYLE_PORT。单测 300 绿、tsc 绿。
+
+
+**§706. PBR 着色模型按 mgl 规则分治——conflation 回归修复（2026-09-01 续三十）**：
+
+**根因定位（mgl draw_model.ts:1459 + :204）**：mgl 的 Cook-Torrance PBR **只用于 MAPBOX_mesh_features tile**（`if (!hasMapboxFeatures) defines.push('DIFFUSE_SHADED')`）及 `!material.defined` 的情况；其余全部 mesh 走 **DIFFUSE_SHADED**（_prelude_lighting 的 apply_lighting——即我方"hemisphere 近似"公式）。§705 的 conflation +26% 回归正是把无 mesh_features 的经典 GLB 强制进了 PBR；而 z-offset-scale 的 −23.7% 收益是因为它带 part 样式（roof/wall/window）确属 mesh_features 域。两者皆 mgl 语义，不矛盾。
+
+**实现（MBModelRenderer.applyMglModelLighting）**：新增 `pbrEligible` 参数——仅 MBMeshFeatures 两处调用点传 true（部件级样式路径）；uMBPortMode = pbrEligible（mgl 规则），modellightport=0/1 保留为 A/B 强制覆盖。
+
+**验证（默认参数）**：landmark-conflation-buckingham **175,922**（hemi 167,941 ✓ 回到同水平；forced-PBR 211,526 → −17%）；landmark-z-offset-scale-munich-museum **280,629**（PBR 收益保留 ✓，hemi 371,586）。§704 的"conflation 阻塞"与"PBR 域分治"就此统一：**着色模型跟随 mesh_features 资格即 mgl 语义本身**，无需全局翻转也不需要按家族挑模式。z-offset 家族剩余亮度残差（均值 +16）归入 PBR part-color 标定。单测 300 绿、tsc 绿。
+
+
+**§707. PBR part-color 标定前置修正——像素非同源性实证（2026-09-01 续三十一）**：
+
+以 ±6px 模板匹配做同源点采样后发现：**§704 的"粉顶 G/B 色差"归因前提无效**。①expected 中强橙屋顶面片（如 exp(178,312)=(220,168,109)）在 ours 同位置是灰墙 (204,204,204)——同坐标表面身份不同（部分部件的 style-color 应用缺失或 partId 映射不一致），ours 的"pink 83,540px"散布全图（x 0-1023）而 exp 仅 2,258px 集中于 museum——ours 的 pink 计数被暖色地面/边缘混色污染，两图在该 fixture 上像素级不同源，逐像素 delta 统计（含 §704 的均值 +16.5）作为标定信号失效。②灰墙对照：exp(178,300)=(182,182,182) vs ours(206,206,206)——中性色、ours 均匀偏亮 +24，与 part-color 无关（光照/雾域）。③烘焙链路核对：mgl buildMeshFeatureArray byte-space lerp + 4444 展开 + LOD-AO 乘法与 MBMeshFeatures 逐项一致，part-color 烘焙非回归源。
+
+**结论**：part-color 数值标定的前置条件是先建立同源对应——下轮入口：①审计 landmark GLB 的 partId→PartNames 映射与 style-color 应用覆盖（为何部分屋顶面片未着色），用饱和色面片（r−b>60）做连通域质心配准而非灰度互相关；②配准后重新归因剩余偏移是光照还是色域。本轮无代码变更。单测 300 绿、tsc 绿。
+
+
+**§707b. part-color 审计定案——random 表达式色差（2026-09-01 续三十二）**：
+
+①**资产完整性排除**：404 的 `mbx/8718-5686-14.glb` 在 mgl 上游资产树同样缺失（find 证实）——两引擎同 404，expected 即不含该 tile 模型，非分歧源；本地 expected.png 与 mgl 上游 expected.png **逐字节相同**（max diff 0）。
+
+②**橙/红偏移定性**：expected 橙色域（r>190,r−b>60,r−g>30）=1,063px（220,168,109 型）；ours 同域 2,686px 但均值为 (212,124,122)——红移（G 被压 ~44）。该色域来自 style 中 `window` part 的 `["hsl",["random",0,90,["id"]],["random",20,100,["id"]],87]`——**feature-id 播种的 random 表达式**，两引擎评估出不同色相（ours 偏红）。非 PBR/part-color-bake 问题（烘焙链路 §707 已证一致）。
+
+**定案**：landmark-z-offset-scale 的主要残余 = mgl `random` 表达式的种子语义对齐（MBExpressionEngine 的 seeded-random 按 feature.id 复现 mgl 评估值），列入 expression 域工作。part-color/PBR 材质域标定完成——烘焙与光照公式均与 mgl 一致，无需再校准。单测 300 绿、tsc 绿（无代码变更）。
+
+
+**§708. random 表达式审计——§707b 假说证伪与残差重新收缩（2026-09-01 续三十三）**：
+
+①**random 已精确对齐**：MBExpressionEngine.ts:893 的实现即 mgl definitions/index.ts:774 的忠实移植（hashString→mulberry32→min+r×(max−min)，逐行一致）——§707b 的"random 种子语义差异"假说证伪。②**更根本的否定**：该 fixture 的 window/roof 颜色是 mgl **tiler 离线烘焙**进 vector.pbf 的 4444 顶点色（buildMeshFeatureArray 只做展开+part 表 mix），渲染期 random 根本不参与——两引擎读同一份烘焙资产。③**measure-light brightness 排除**：mgl calculateLightsBrightness（style.ts:2694，sRGB ECF 亮度×intensity×polarIntensity 与 ambient 平均）与本方 mglMeasureLightBrightness 在本 fixture 白光下数值恒等（=(0.86×0.0847+1.0)/2=0.5364，白光的 ECF 差异退化为零）。
+
+**残差重新收缩**：排除后，(220,168,109) 橙面片 vs 灰墙的差异收敛到唯一剩余层——**同一 GLB 内特定面片的 partId→样式分配或面片归属**（可能 partId 越界回落 part0、4444 半字节错位、或 LOD/meshopt 变体差异）。下轮入口：以 mbbatchdbg 探针 dump 该 mesh 的 partId→颜色直方图（vector.pbf 原始 4444 字节 → 展开 → mix → 线性化全链），与 expected 裁剪区的色域做定量比对，定位第一个分歧字节。本轮无代码变更。单测 300 绿、tsc 绿。
+
+
+**§709. per-node id 接线 + 审计收敛记录（2026-09-01 续三十四）**：
+
+①**修正落地（正确性修复，非分数修复）**：applyMeshFeatures/refreshMeshFeatures 现按**节点**求值 part 表（MBBatchedModelRenderer buildPrimitiveMesh 穿入 node extras.id → mesh.userData.__mbNodeId → partsFor(mesh) 按 id 缓存求值表）——mgl computePartPbrTable 本就 per nodeInfo 刷新，id=0 塌缩各节点 random 抽取属实现缺陷，已修。**实测分数不变**（281,197 ≈ 280,629 抖动内），说明该 fixture 的分歧不在 random 种子层。
+
+②**GLB 解剖**（8718-5685-14.glb）：meshes 分两类——带 _FEATURE_RGBA4444+NORMAL+TEXCOORD 的部件 mesh（mat 0-5，无 baseColorTexture）与 POSITION-only+default 材质 mesh（mat 14-18，白因子、无法线，疑似 shadow/light 代理）；14 张 jpeg 全为 occlusion（无 baseColor 贴图）。featureData 仅源自 _FEATURE_RGBA4444 属性（mgl model_loader.ts:220 同），故 POSITION-only mesh 在两引擎都无 part 样式。
+
+③**残差重新定性**：exp 橙 (220,168,109) 的亮度 (≈64%) 与饱和度都不匹配 style 的 roof hsl(22,82%,90%)（极浅）或 window hsl(...,87%)（极浅）——该面片颜色既非 roof 也非 window 的 style 色，可能来自深藏在 GLB 材质/KHR 扩展或特定 part 的 evaluatedColor，需要 mesh 级直方图探针（dump 每个 primitive 的 partId→颜色分布并与 expected 裁剪区配准）才能定位。本阶段审计链条（资产→random→brightness→烘焙→GLB 结构）已闭合至唯一剩余层。单测 300 绿、tsc 绿。
+
+
+**§710. partId→颜色直方图探针落地——部件链路证实 style 忠实（2026-09-01 续三十五）**：
+
+mbbatchdbg=1 新增 partHist 探针（MBMeshFeatures splitByPart 内，/mb-probe-dump 通道）：dump 每个 feature mesh 的 partId→混合线性色分布（4444→展开→mix→线性化全链）。实测聚合（20 probe）：
+
+| part | verts | 混合后 sRGB 均值 | style 预期 |
+|---|---|---|---|
+| p1 wall | 250,001 | (255,255,255) | 白 ✓ |
+| p2 roof | 846 | (246,236,225) | hsl(22,82,90)=(252,231,208) ✓ |
+| p3 | 20,814 | (250,223,208) | 浅橙 ✓ |
+| p4 window | 15,766 | (127,197,255) | hsl(200-215,100,70-80) 蓝 ✓ |
+| p6 | 8,892 | (212,211,208) | 灰 ✓ |
+
+**部件链路逐 part 与 style 表达式预期完全吻合**——4444 全链（烘焙→展开→mix→线性化）无非。exp 橙 (220,168,109) 亮度 64%/饱和度与 style 的 roof(浅 90%)/window(浅 87%) 均不符，且白光（ambient 白 1.0 + directional 白 0.86）在任何 PBR/DIFFUSE 公式下都无法从浅 albedo 产生 hue 旋转——该面片的 expected 色源仍需屏幕空间表面识别（depth/id buffer 探针）定位其所属 mesh 与材质。flood-light 属 building 层已排除。probe 工具链（相机/雾/部件直方图）已齐备。单测 300 绿、tsc 绿。
+
+
+**§711. pixpick 屏幕空间拾取探针——(178,312) 灰墙身份定案（2026-09-01 续三十六）**：
+
+pixpick 探针落地（MBBatchedModelDataSource.syncStyleState 末尾，mbbatchdbg=1 + karma arg `pix=x,y`，Raycaster 射线拾取 + /mb-probe-dump；首次误挂 MBBatchedModelRenderer——该 fixture 的活跃路径是 MBBatchedModelDataSource，partHist 有输出而 pixpick 无即为此因）。**定案：expected 橙像素 (col 178,row 312) 在 ours 无任何 batched-model 命中（hits:[]）——该处灰墙是 procedural fill-extrusion**，不是地标 mesh。因此 §704 以来的"粉顶 G/B 色差/均值 +16.5"像素统计实为**extrusion vs 地标模型的结构性错位**（同像素两图属不同表面），不存在可校准的逐通道色差。z-offset 家族的"均匀偏亮"残差重新归因：非同源像素的平均本身就是无意义统计，需配准后重测（§707b 入口保持）。landmark GLB 的着色链路（partHist 5 part 全吻合 §710）与本 pixel 的表面归属均已定案。工具链新增 pixpick（相机/dist/nodeId/baseColor/part 直方图）。单测 300 绿、tsc 绿。
+
+
+**§712. z-offset 家族结构归属定案 + 偏亮残差精确归因（2026-09-01 续三十七）**：
+
+pixpick 扩展 grid 模式（64 采样点射线分类 batched-model/extrusion）：**全部 64 点 batched-model 均 0 命中**——batched-model 路径（含 404 的 mbx/8718-5686-14.glb，两引擎同缺）对本 fixture 贡献为零；museum 由 vector 模型路径（MBMeshFeatures，partHist 已证 style 忠实）绘制。"地标注记归属/404 覆盖"假设排除——结构性错位不存在于模型路径，两图画的是同一批模型。
+
+**偏亮残差精确归因（闭式验证）**：exp 灰墙 181/255=0.712 = **mgl 环境项精确值**（vert 0.96 × ambDir 0.742，dirFactorMin=1−0.3×0.86）；ours 206/255=0.81 = 环境项 + **直射项 0.86×NdotL(≈0.13)**。即：expected 的墙在 cast-shadows 下被 shadowed_light_factor 置零直射（阴影中），**ours 的挤出阴影接收在这些 procedural 建筑上未生效**（采样恒返回 lit），+24 均匀偏亮 = 直射项漏加。下轮入口：①验证本 fixture 挤出材质的 uMBShadowMatrix/Intensity 刷新链（syncModelShadowUniforms 是否覆盖 procedural 挤出材质）；②shadow map 覆盖范围（cascade 距离 vs 相机 800m）；③§702 smoothstep 的 bias 方向。单测 300 绿、tsc 绿。
+
+
+**§713. 挤出阴影坡度 bias A/B——常量域不可迁移，回退（2026-09-02）**：
+
+按 §712 入口尝试 mgl calculate_shadow_bias 形状的坡度缩放 bias（`0.5·(0.00036 + clamp(0.0012·tan(acos(NdotL)),0,0.012))`，shadow_renderer.ts:549 常量）替换固定 ±0.0002 窗口。**A/B 双夹具双双回归**：ground-shadow-fog 131,915→172,541（+31%）、z-offset-scale 281,197→331,486（+18%）——过度阴影。**根因：mgl bias 常量定义在其 NDC 深度域，与我方 16-bit packed window-depth 域尺度不可迁移**（§692 已知 0.002 ≈ 6-60m 场景深度；斜率项在两域的等效值差数倍），已回退。回归复核：回退后待验证（下轮首跑）。**正确修复路径**：先用 shadow-uv 探针 dump 掠射墙的 (uv.z, storedDepth, NdotL) 三元组分布，测出我方域的斜率深度误差系数（units/metre-at-grazing），再换算 mgl 的 bias 意图（grazing → shadowed）为本域常量。本轮记录 A/B 负结果与回退。单测 300 绿、tsc 绿。
+
+
+**§714. shadow-uv 探针定案——深度差非判别子（2026-09-02 续）**：
+
+①**回退基准确认**：ground-shadow-fog 复跑 = **131,915** 分毫不差 ✓。②shdbg=1 探针落地（uMB3DDbg=3：R=0.5+250×(uv.z−storedDepth)、G=0.5+0.5×NdotL；runner 新增 MBSTYLE_SHDBG 透传）。③**定量拟合结果**：32,869 个墙面采样点中，expected-lit 与 expected-shadow 两类的深度差分布**几乎完全重叠**（lit p1=+0.00111；shadow p50=+0.00159、p95=+0.00175——所有墙像素 delta≥+0.001，两分类区间不可分）。**结论：缺失的阴影接收不是 bias 幅度问题（任何阈值都无法按深度差复现 mgl 的明暗分类），而是阴影图内容/投影一致性缺口**——mgl 判为阴影的墙面在我们采样的 shadow map 中无遮挡记录（可能：mgl 阴影相机的覆盖范围/tile 集合不同，或我们的 shadow map 只覆盖地面 quad 视锥而墙体高度出界）。固定 ±0.0002 窗口维持（probe 关闭默认零影响）。**下轮入口**：dump 我方 shadow map 本体与 mgl 阴影相机的视锥/tile 覆盖做对照（MBShadowRenderer 的窗口计算 vs mgl shadow_renderer 的 cascade 选取）。单测 300 绿、tsc 绿。
+
+
+**§715. 阴影图内容缺口根因定位——阴影相机只框地面足印（2026-09-02 续）**：
+
+MBShadowRenderer.prepGroundQuad（cornerOnGround）的阴影相机取景 = **视锥射线与 z=0 地平面交点**（far=radius×8），即深度编码只覆盖地面足印；墙体高出地面的部分投影到阴影 UV 后落在记录范围之外→§714 的"delta 全体 ≥+0.001 且与明暗分类无关"现象即源于此——墙面上部的遮挡关系从未进入 shadow map。mgl shadow_renderer 以场景 AABB（含建筑高度）框定 cascade，两者覆盖域不同。
+
+**修复方向（下轮实施）**：阴影相机取景从"地面足印"改为"含高度的 caster 包围盒"——①收集可见挤出/模型的 AABB（含 z）；②以 AABB＋光方向张成的视锥框定 ortho shadow camera；③保持 16-bit packed window depth 与 receivers 的采样约定不变。风险点：AABB 框定改变所有既有阴影 fixture 的窗口（ground-shadow-fog 131,915 基线需复测回归）。单测 300 绿、tsc 绿（本轮审计无代码变更；session 探针工具链四类齐备，累计 §699-§715）。
+
+
+**§716. 挤出墙投射修复（layer 1 + NORMAL_OFFSET）——z-offset 收敛、gsf 权衡（2026-09-02）**：
+
+**实施**：①挤出 mesh（材质带 __mbExtrusion3DLit）在场景扫描时 `layers.enable(1)`——此前深度 pass（layers.set(1)）不含 procedural 挤出，墙体从未进入 shadow map（§712/§715 归因的机制层确认：§715"相机只框地面足印"定性不准，casters 集合缺失才是机制）；②挤出接收采样改 mgl NORMAL_OFFSET——沿世界面法线抬升 1.5 单位再投影（消掠射自深度冲突的 acne）。
+
+**验证**：landmark-z-offset-scale 281,197→**256,320（−8.9%）**——§712 归因的 +24 偏亮开始收敛（墙获得邻楼遮挡）；ground-shadow-fog 131,915→157,696/167,583（+20-27%，两读数含抖动带 ±10k）——ambient=0 下墙体对邻楼遮挡过敏，**mgl 的 u_fade_range 机制缺失**（shadow_occlusion 按 view_depth 混合 fade，远处阴影衰减，model_fragment/_prelude_shadow：`mix(occlusion1, 0.0, smoothstep(u_fade_range.x, u_fade_range.y, view_depth))`）——远墙过阴影。**下轮入口**：实现 fade-range（按 view_depth 衰减挤出阴影接收，u_fade_range=shadow_renderer 的 fade 区间），预期同时保住 z-offset 收益与 gsf 基线。家族净账：z-offset 家族 18 夹具×~−25k 对 gsf 单夹具 +36k，保留修复。单测 300 绿、tsc 绿。
+
+
+**§717. u_fade_range 实施第一版——未生效，调试入口已立（2026-09-02 续）**：
+
+实施：①ShadowUniformState 增加 far（= m_shadowCamera.far，§717 注释对照 mgl fade_range=[lastCascade.far×0.75, far]）；②挤出注入声明 uMBShadowFar（初值 0）+ per-frame 刷新（`if (u.uMBShadowFar) u.uMBShadowFar.value = shadowState?.far ?? 0`）；③shader 因子处 `mbFade = smoothstep(far×0.75, far, viewDepth); mbShLit = mix(mbShLit, 1, mbFade)`。
+
+**实测：两夹具分数与实施前逐字节相同**（gsf 157,696 / scale 256,320）——fade 完全未生效。假说：uMBShadowFar 保持 0（刷新链未触达挤出材质，或 GLSL smoothstep edge0==edge1 退化），效果被吞。**下轮入口**：①确认 extrusion 材质的 __mbShadowUniforms 里存在 uMBShadowFar 且刷新顺序在材质编译后（onBeforeCompile 晚于首轮刷新则 uniform 对象被 shader 替换/丢失——检查 (material).__mbShadowUniforms 与 shader.uniforms 的对象同一性是否在编译后被 three 重建）；②dump far 值（decodedbg 通道）。单测 300 绿、tsc 绿。
+
+
+**§718. fade 管道判定实验——双接收注入假说成立（2026-09-02 续）**：
+
+决定性实验：fade 带缩至 [far×0.25, far×0.5]（≈[674,1348]m，深入墙面密集区）——ground-shadow-fog 分数仍逐字节 167,583 不变。**uMBShadowFar 管道死路实锤**（uniform 值/刷新/编译三处均已核对存在于 lib）。结合证据链重新归因：procedural 墙面的实际变暗来自**地面接收注入路径**——场景扫描（shadowState 块）对 MeshStandardMaterial 无差别注入 injectGroundShadow（含挤出材质），同一材质双接收（extrusion 接收 + ground 接收）叠加，我方 §716/§717 的 fade 修改只作用于 extrusion 接收分支，ground 接收分支（mbLit/±0.0002/无 fade）照旧生效——这同时解释 §714 深度差不灵敏（墙读的是 ground 接收的采样）与 §717 fade 无效。**已回退实验带宽至 mgl 忠实值 [0.75,1.0]×far。下轮入口（唯一）**：场景扫描跳过 __mbExtrusion3DLit 材质（免双接收），wall 阴影统一走 extrusion 接收分支（含 §717 fade），随后 gsf/scale 双夹具 A/B。单测 300 绿、tsc 绿。
+
+
+**§719. 双接收假说证伪 + gsf 回归重新归因（2026-09-02 续）**：
+
+①场景扫描跳过 __mbExtrusion3DLit 材质（消双接收）——分数逐字节不变（256,320/167,583），**双接收假说证伪**：extrusion 材质本就未被 ground 注入（场景扫描的 MeshStandardMaterial 白名单先于标记生效，或注入顺序使然）。②NORMAL_OFFSET 1.5→6.0 单位（×4）——gsf 分数仍逐字节 167,583——extrusion 接收采样对 gsf 当前失配像素**无影响**。已回退 1.5。③**gsf +26k 回归重新归因**：非墙面采样问题，而是 §716 layer-1 墙投射改变了**地面阴影足迹**（墙体作为 caster 入图后，地面接收的阴影形状/范围变化→地面像素失配），其几何与 mgl cascade 足迹尚不一致。**结论**：layer-1 修复保留（z-offset-scale −8.9% 真实收益），gsf 基线恢复需地面阴影足迹对齐工作（MBShadowRenderer 深度 pass 的视锥/tile 语义 vs mgl cascade 覆盖），属下一阶段。本轮单测 300 绿、tsc 绿。
+
+
+**§720. 墙投射门控化——两夹具同时已知最优（2026-09-02 续）**：
+
+diff 定量显示 §716 的墙投射在 82° 掠射日照下产生**深度噪声阴影铺满全屏**（墙体深度编码在掠射角无 cascade/坡度 bias 保真度时即噪声明暗，与 mgl cascade 覆盖的保真度差距是系统工程）。**处置**：墙投射改为 forensic 门控（`shadowcast=1` karma arg / MBSTYLE_SHADOWCAST），默认关闭——**恢复 gsf 140,258**（接近 131,915 最优带，远好于 157,696/167,583），且 z-offset-scale **保留 256,320** 收益（unexpected 但可复现两次；其收益不依赖墙投射，可能来自 layer-1 关联的 §692 深度窗口语义变化——待查但结果为正）。两夹具同时处于已知最优态。**下轮入口**：①mgl cascade 保真度对齐（createLightMatrix 的 AABB/光轴框定 + 坡度 bias + normal offset 全套）后以 shadowcast=1 重启墙投射；②§694 清单剩余项。单测 300 绿、tsc 绿。
+
+
+**§721. cascade 框定对齐 A/B 负结果——回退至 §720 态（2026-09-02 续）**：
+
+实施 mgl createLightMatrix（shadow_renderer.ts:678）的旋转不变包围球框定（frustum slab [ccd/50, 4.5×ccd]，lxjk 2017 球心/半径公式）替换 casterBox 框定，并同步启用 mgl 坡度 bias 常量（域已一致假设）。**A/B 负结果**：shadowcast=1 下 gsf 155,133（vs 门控关闭 140,258 劣化 +10%）、scale 256,320 持平；默认（无墙投射）下 gsf **167,583（较 §720 的 140,258 劣化 +19%）**——包围球框定的深度窗口远大于 casterBox 紧框，地面阴影足迹进一步偏移。**已回退**（src 恢复 §720 casterBox 框定 + 固定 ±0.0002 窗口）。**结论**：阴影覆盖域对齐不是单纯框定公式问题——mgl cascade 的深度内容保真度（precision、tile 选择、bias 全套）与我们深度 pass 的差异是复合性的，需要专项 cascade 工程而非参数对齐；在 gsf/z-offset 两夹具的当前证据下，§720 态（墙投射关闭 + 局部 fade 基建保留）为已知最优。该专项到此封存，后续重启需以 mgl shadow_renderer 全套移植为前提。单测 300 绿、tsc 绿。
+
+
+**§722. §695 会话级跳过修复——chunked runner 断连续跑（2026-09-02 续）**：
+
+**实施（runner 层，karma 6.4.4 无 restartOnDisconnectedBrowser 选项）**：run-mbstyle-render-tests-chunked.js 新增 `resumeMissing`——每个 karma 会话结束后枚举 category 的 212→N 个 fixture 结果文件，对缺失者以 `filter=<fixture>`（4 个/全新浏览器会话）续跑，最多 12 轮直至全部有结果。每次续跑 = 全新浏览器页面 = 全新 mocha 实例，§695 的"上一会话状态污染→Executed 0 of X 整批跳过"从机制上消除。**首跑复现**：首轮 212 会话在 5 测试后 DISCONNECTED（§695 同型），resume 第 1 轮自动续跑剩余 207。单测 300 绿、tsc 绿。

@@ -64,6 +64,67 @@ function listCategories() {
     return withCount;
 }
 
+// §722: enumerate fixture test names (category-relative dirs with style.json).
+function listFixtures(category) {
+    const names = [];
+    (function walk(d, rel) {
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+            const p = path.join(d, e.name);
+            const r = rel ? rel + "/" + e.name : e.name;
+            if (e.isDirectory()) walk(p, r);
+            else if (e.name === "style.json") names.push(path.dirname(r));
+        }
+    })(path.join(fixturesRoot, category), "");
+    return names;
+}
+
+// §722: resume loop — after a karma session dies (DISCONNECTED at the
+// browserNoActivityTimeout under SwiftShader slow render), relaunch karma
+// with `filter=<fixture>` args for the NOT-YET-SAVED fixtures, 4 per fresh
+// browser session. Each relaunch is a fresh page = fresh mocha instance
+// (the §695 "Executed 0 of X" session-level skip).
+function resumeMissing(batchNames, port, chunkTimeout) {
+    for (let attempt = 1; attempt <= 12; attempt++) {
+        const missing = [];
+        for (const cat of batchNames) {
+            for (const fx of listFixtures(cat)) {
+                const res = path.join(
+                    resultsRoot, "web-ChromeHeadless-149.0.7827.22-Linux",
+                    "mbstyle-render-" + cat.replace(/\//g, "-"),
+                    fx.replace(/\//g, "-") + ".ibct-result.json");
+                if (!fs.existsSync(res)) missing.push(fx);
+            }
+        }
+        if (missing.length === 0) {
+            console.log(`### resume: all fixtures have results.`);
+            return;
+        }
+        console.log(`### resume attempt ${attempt}: ${missing.length} fixtures missing.`);
+        for (let i = 0; i < missing.length; i += 4) {
+            const slice = missing.slice(i, i + 4);
+            const karmaClientArgs = [
+                ...slice.map((f) => `filter=${f}`),
+                `feedback-url=http://localhost:${port}`,
+            ];
+            const result = spawnSync(
+                "npx",
+                ["karma", "start", "--browsers", "ChromeHeadlessNoSandbox", "--single-run"],
+                {
+                    cwd: root,
+                    env: {
+                        ...process.env,
+                        CHROME_BIN: process.env.CHROME_BIN,
+                        KARMA_ARGS: karmaClientArgs.join(" "),
+                    },
+                    stdio: "inherit",
+                    timeout: chunkTimeout,
+                },
+            );
+            if (result.error) console.error(`### resume karma aborted: ${result.error.message}`);
+        }
+    }
+}
+
 function main() {
     fs.mkdirSync(resultsRoot, { recursive: true });
     const server = spawn(process.execPath, [serverJs, outputDir], {
@@ -127,6 +188,8 @@ function main() {
             } else if (result.status !== 0) {
                 console.error(`### batch karma exited with status ${result.status}`);
             }
+            // §722: resume whatever the session skipped/dropped.
+            resumeMissing(batch.names, port, chunkTimeout);
         }
 
         summarize();
