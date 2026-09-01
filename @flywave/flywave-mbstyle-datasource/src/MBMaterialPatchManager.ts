@@ -1102,7 +1102,10 @@ export class MBMaterialPatchManager {
                              mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                              vec4 mbShPk = texture2D(uMBShadowMap, mbShUv.xy);
                              float mbShD = mbShPk.r + mbShPk.g / 255.0;
-                             mbNdotL *= mbShUv.z <= mbShD + 0.0005 ? 1.0 : 0.0;
+                             // §696: smoothstep 替代 binary — 在阴影边缘
+                             // 产生 0→1 过渡（≈0.8m penumbra），消除
+                             // ambient=0 时 binary 0/1 导致的纯黑墙面。
+                             mbNdotL *= smoothstep(-0.0002, 0.0002, mbShUv.z - mbShD);
                          }
                      }
                      float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
@@ -2726,7 +2729,7 @@ export class MBMaterialPatchManager {
                             // 16-bit depth quantum tiny — the old 0.002 bias
                             // (≈6-60m of scene depth) ATE the entire building
                             // shadow footprint (0.001-of-range signature).
-                            float mbLit = mbShadowUv.z <= mbShadowDepth + 0.0005 ? 1.0 : 0.0;
+                            float mbLit = smoothstep(-0.0002, 0.0002, mbShadowUv.z - mbShadowDepth);
                             // mgl: out(sRGB) *= mix(u_ground_shadow_factor, 1, light)
                             // with the factor = linear-strengths ratio. Our
                             // fragment is linear: multiplying it by ratio^2.2

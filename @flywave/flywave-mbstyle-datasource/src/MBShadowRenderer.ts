@@ -180,7 +180,7 @@ export class MBShadowRenderer {
                         mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
                         vec4 mbPk = texture2D(uMBShadowMap, mbShadowUv.xy);
                         float mbShadowDepth = mbPk.r + mbPk.g / 255.0;
-                        mbLit = mbShadowUv.z <= mbShadowDepth + 0.0005 ? 1.0 : 0.0;
+                        mbLit = smoothstep(-0.0002, 0.0002, mbShadowUv.z - mbShadowDepth);
                     }
                     // The engine clear color reaches the canvas in sRGB; our
                     // raw ShaderMaterial output must be encoded to match
