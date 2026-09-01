@@ -7140,3 +7140,17 @@ mgl `fill_extrusion.fragment.glsl`：extrusion 的 direct term 用 `shadowed_lig
 
 推荐优先 #2（最小改动，一行 karma.options.js）配合 #1（maxFrames=30），然后监控是否仍有 DISCONNECTED。
 
+
+**§694（续）binary shadow → smooth transition 修复思路（待下轮实现+测试）**：
+
+ground-shadow-fog +14% 回归根因：extrusion receiver 的 shadow factor 是 binary 0/1（mbShUv.z ≤ depth + 0.0005 ? 1.0 : 0.0）。ambient=0 时 shadowed 墙面 = 全黑；mgl 的 shadowed_light_factor_normal 用 PCF（5-tap 或更高阶）返回连续因子 → shadow 边缘柔和过渡 + 非全黑。
+
+修复草案：用 smoothstep 替代 binary：
+```glsl
+float mbShadowDist = mbShUv.z - mbShD;
+float mbShLit = smoothstep(-0.001, 0.001, mbShadowDist);
+```
+这给出 0-1 的连续因子：uv.z >> depth → 1.0（完全 lit），uv.z ≈ depth → 0.5（penumbra），uv.z << depth → 0.0（全 shadow）。消除了 ambient=0 时的纯黑墙面。
+
+进阶修复（更高精度）：5-tap PCF（中心+4 邻域），代价 5×纹理采样。对模型层的渲染预算通常可接受。留给下轮 A/B 验证。
+
