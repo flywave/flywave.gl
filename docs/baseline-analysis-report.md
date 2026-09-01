@@ -154,3 +154,7 @@
 2. §689 阴影读出裁决（shadowdbg=3，上述入口）。
 3. §688 残留 ×0.77 因子定位（diffuse 域 print 或排除法 A/B）。
 4. trees-puck（192 万）与 models-on-globe（globe 冻结带）分域立案。
+
+#### 补测终态更正（2026-09-01 末）
+
+19 例（lighting-3d-mode×6、powerplants-globe 系×6、trees-light-aligned/lod-expression×7）为**渲染挂起族**：页面加载后 0 用例执行、180s 无活动断连、重试同路复现（mlv3-L/P/T 三批实证）——非基建问题，是渲染死循环/永Await类 bug（shadow/globe/trees-lights 复合域），§550 时代"186/212 DISCONNECTED 截断"的元凶即此。基线终态：**可跑 192 例中 173 采集（90%），28,074,624 px**；19 例挂起族立案（复现入口：单夹具 karma + 180s 超时栈 dump）。
