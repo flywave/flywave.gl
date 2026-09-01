@@ -7054,3 +7054,19 @@ pitchab 扫描数据（flyway tilt = 70+delta）：0→174429、−10→178143�
 **§686. 光方向 y 镜像修复 + 深度雾恢复（2026-09-01 续十五）**：
 
 ①§683 方位角翻转的补全：dir 矢量补上渲染帧 **y 镜像**（our world y = −mgl y，§643）——此前 x 分量已翻而 y 未翻，lit-wall 集合仍绕 x 轴镜像、相机可见侧墙面全部背光（黑墙）。修复后 ground-shadow-fog **174429→167010（−7.4k）**，可见侧出现灰色受光面。②按用户指示移除 fogAlpha×0.5 常量补丁，恢复深度相关 mgl 雾（fogT×falloff³×fogAlpha，米制转换链路）——常量版 132504 虽数值更低但属均匀洗涤（深度行为错误的标定补丁），深度版才是 mgl 语义；两者差距受相机取景偏移（§675）混淆，待取景修复后重评。单测 300 绿、tsc 绿。
+
+**§687. 相机取景标定专项重定性——zoom+1 链路与 mgl ccd 数值等价（2026-09-01 续十六）**：
+
+§684 定名的"mgl transform.js 语义级移植"经源码级对拍**证伪为 no-op**：①mgl mercator 的 `pixelSpaceConversion` 恒 1（projection.ts 基类实现，globe 才覆写）→ mgl ccd = h_css/(2·tan(fov/2))；②flyway `calculateDistanceFromZoomLevel` 的 focalLength 实测 768 = 512 CSS 高度同式（CameraUtils.getFocalLength ← camera.userData）；③故现链 distance = 768×C/(256×2^(z+1)) = 768×C/(512×2^z) ≡ mgl ccd_m，逐项相等；④mgl 相机放置 `position = center − forward×ccd_merc`（_computeCameraPosition）≡ flyway lookAtImpl 的绕目标 orbit（斜距=distance）；⑤fov harness 已设 mgl 精确 36.87°。**结论：pitch-0 与 pitch 域的相机距离/枢轴约定已数值等价，取景残差必在内容放置/光照域而非相机**——旁证：high-zoom-model-quantization（B2 批）ours/expected 取景逐像素级吻合（时钟塔位置一致），无 (dx,dy) 偏移。§674/§675 的互相关偏移实测于 §681 之前（近场 z16 404 空窗期，内容缺失导致虚假位移峰）；§684 pitch A/B 的"未收敛"实为光照/材质域差异污染互相关。相机专项关闭，A/B 基建（yawab/pitchab）保留。
+
+**§688. line-emissive-strength 键映射修复——ribbon 提升吞键（2026-09-01 续十七）**：
+
+buildings-trees-shadows 家族（B1 批 61-82 万 px×5）定性双根因之一：**道路层 `line-emissive-strength: 1` 未生效**——本仓库全部 line 层经 §512 提升为 `name:'fill'` 的 ribbon technique（`_isLineRibbon`），而 `injectGroundLighting` 的 emissive 键按 technique 名查 `fill-emissive-strength` → 永远 0 → 道路被 groundRadiance（≈0.40 sRGB）压暗成暗橄榄（实测 ours(103,103,95) = lightyellow×0.40；expected(255,255,224) = 原色，mgl `apply_lighting_with_emission_ground` 的 mix(color,lit,e)=e=1 全未光照支）。land fill 层两边同值 (92,92,92) 证明 groundRadiance 链路本身已 mgl 对齐。**修复**：emissive 键对 `_isLineRibbon` 且 paint 带 line 键者取 `line-emissive-strength`（fill-outline ribbon 无 line 键回退 fill 键）。附带发现 `patchLineMaterial` 内的加法式 emissive 注入（`rgb += diffuse×strength`）与 mgl mix 语义不符——该路径当前不触发（无 solid-line 技术），记档待清理。预期 buildings-trees 家族大幅收敛（该家族含 4 例 top-10）。
+
+**§689. ground-shadow 接收器 patch 时点投递——§577-§588 挂起线破壁（2026-09-01 续十七）**：
+
+§577-§588 十二轮"逐帧重试注入不可达渲染材质"悬案的破壁点：**injectGroundLighting（patchMaterial 时点、编译前包裹 onBeforeCompile）的注入被证明可达并渲染**（land 层 92 灰 = groundRadiance 计算值精确命中）。而 injectGroundShadow 此前只走逐帧重试/场景扫描路径。**修复**：①injectGroundShadow 挂入 patchMaterial（fill/solid-line/circles，排除 raster/hillshade/heatmap）；②公式从 `mix(1−intensity,1,lit)` 改 mgl 正式语义 `mix(u_ground_shadow_factor, 1, light)`——shadow_utils.ts `calculateGroundShadowFactor` = amb/(amb+dir·max(NdotL,0))（线性域比值、不乘 shadow-intensity，intensity 只门 pass）；线性输出上乘 ratio^2.2 以落 mgl 的 sRGB 域乘积（encode(x·k) 恒等变形）；③锚点多路径：三 chunk 材质走 `#include <opaque_fragment>`，SolidLineMaterial 类无 chunk 走 outputDiffuse 输出语句（含 ground-rad mix 后的变体）；声明统一前置着色器串首（双锚点会重复声明 varying）；④刷新循环 intensity 改 0/1 门 + 每帧算 factor（lighting3DState 线性色）。预期：buildings-trees 家族的地面投影（expected 中树/建筑长影，ours 全缺——采样点 (60,560) expected(4,4,4) vs ours(91,102,83)）开始收敛。
+
+**§690. add-layer 模型重复/残留放置修复——placements 数组身份重建（2026-09-01 续十七）**：
+
+MBModelRenderer.run() 的缓存路径按**长度**判重：markTilesDirty 同 Tile 原地重解码后 `decoded.modelInstances` 是新对象数组——长度增大时 processPending 按 index 的 `_done` 集跳过旧位（新对象混旧子节点）、长度缩小时旧克隆永久残留（mgl tile 语义 = 内容整体替换）。**修复**：缓存条目记录 `sourceArr`（数组身份），重解码换新数组即拆组重建（移除子节点+清 `_done`+全量重放）；同数组原地增长保留追加语义；无数组瞬窗 continue。注：B1 基线中 geojson-source-with-schema 与 -add-layer 已同分 48609=48609——重复放置已被 §659/§661 链修复，本修复为语义加固（防 runtime update/move 场景回归）。同批基线注：fill-extrusion--default 100130→136125 为 §686 移除 fogAlpha×0.5 常量、恢复深度雾的已知代价（§686 记档），非意外回归。单测 301 绿、tsc 绿。

@@ -178,7 +178,25 @@ export class MBMaterialPatchManager {
                         u.uMBShadowMap.value = shadowState?.map ?? null;
                         if (shadowState) u.uMBShadowMatrix.value.copy(shadowState.matrix);
                         else if (identity) u.uMBShadowMatrix.value.copy(identity);
-                        u.uMBShadowIntensity.value = shadowState?.intensity ?? 0;
+                        // mgl: shadow-intensity gates the shadow PASS; the
+                        // ground receiver darkness comes from the
+                        // shadow_utils amb/(amb+dir·NdotL) ratio alone.
+                        u.uMBShadowIntensity.value = shadowState ? 1 : 0;
+                        if (shadowState) {
+                            const ls = (this.m_dataSource as any).m_environment
+                                ?.lighting3DState;
+                            const f = u.uMBGroundShadowFactor.value as THREE.Vector3;
+                            if (ls) {
+                                const ndl = Math.max(ls.dir[2], 0);
+                                for (let i = 0; i < 3; i++) {
+                                    const a = ls.ambientColorLinear[i];
+                                    const d = ls.directionalColorLinear[i] * ndl;
+                                    f.setComponent(i, a > 0 ? a / (a + d) : 0);
+                                }
+                            } else {
+                                f.set(0, 0, 0);
+                            }
+                        }
                     }
                 }
                 // §672: refresh the extrusion self-drawn mgl fog uniforms
@@ -748,7 +766,13 @@ export class MBMaterialPatchManager {
         (material as any).__mbGroundLitHandler = true;
 
         const paint = technique._paint ?? {};
-        const emissiveKey = techName === 'solid-line' ? 'line-emissive-strength'
+        // Lines render as `fill`-named ribbons (_isLineRibbon) — mgl's line
+        // shader keeps line lighting semantics for them, so the emissive key
+        // must follow the ORIGINAL layer type, not the technique name. Fill
+        // outlines are ribbons too but come from fill layers (no line key).
+        const emissiveKey = techName === 'solid-line'
+            || ((technique as any)?._isLineRibbon && paint['line-emissive-strength'] !== undefined)
+            ? 'line-emissive-strength'
             : techName === 'circles' ? 'circle-emissive-strength'
             : 'fill-emissive-strength';
         const emissive = Number(paint[emissiveKey] ?? 0);
@@ -1320,6 +1344,17 @@ export class MBMaterialPatchManager {
         // Applied first so per-layer patches below can still wrap the shader.
         if (techName === 'fill' || techName === 'solid-line' || techName === 'circles') {
             this.injectGroundLighting(material, technique, techName);
+            // mgl RENDER_SHADOWS: ground layers (fill/line/circle) also RECEIVE
+            // the shadow map (out *= mix(groundShadowFactor, 1, light)). The
+            // per-frame retry path (§579-§588) never reached the engine's
+            // rendered material instances, but patch-time onBeforeCompile
+            // wrapping demonstrably does (the ground-radiance darkening
+            // renders) — inject here, at tile-build time, before first
+            // compile. Raster/hillshade/heatmap drape differently (bail).
+            if (!(technique as any)._isRaster && !(technique as any)._isHillshade
+                && !(technique as any)._isHeatmap) {
+                this.injectGroundShadow(material as any);
+            }
         }
         switch (techName) {
             case 'fill':
@@ -2590,28 +2625,30 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBShadowMap = { value: null };
             shader.uniforms.uMBShadowMatrix = { value: new THREE.Matrix4() };
             shader.uniforms.uMBShadowIntensity = { value: 0 };
+            shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
             material.__mbShadowUniforms = shader.uniforms;
-            shader.vertexShader = shader.vertexShader
-                .replace('#include <common>', '#include <common>\nvarying vec3 vMBWorldPos;')
-                .replace(
+            // Declarations prepend at global scope — valid for both three-chunk
+            // materials and the chunk-less ribbon customs (an anchor-based
+            // declaration double-fires on shaders that have BOTH #include
+            // <common> and void main, redeclaring the varying).
+            shader.vertexShader =
+                'varying vec3 vMBWorldPos;\n' + shader.vertexShader;
+            // Vertex assignment: after project_vertex when chunks exist
+            // (`transformed` carries JS-side displacement); ribbons are
+            // pre-extruded in JS so plain `position` is already final there.
+            if (shader.vertexShader.includes('#include <project_vertex>')) {
+                shader.vertexShader = shader.vertexShader.replace(
                     '#include <project_vertex>',
                     '#include <project_vertex>\n' +
                     'vMBWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;',
                 );
-            shader.fragmentShader = shader.fragmentShader
-                .replace(
-                    '#include <common>',
-                    '#include <common>\n' +
-                    'varying vec3 vMBWorldPos;\n' +
-                    'uniform sampler2D uMBShadowMap;\n' +
-                    'uniform mat4 uMBShadowMatrix;\n' +
-                    'uniform float uMBShadowIntensity;\n' +
-                    'uniform float uMBShadowDbg;',
-                )
-                .replace(
-                    '#include <opaque_fragment>',
-                    `#include <opaque_fragment>
-                    if (uMBShadowIntensity > 0.0) {
+            } else {
+                shader.vertexShader = shader.vertexShader.replace(
+                    'void main() {',
+                    'void main() {\n    vMBWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;',
+                );
+            }
+            const mbShadowSample = `
                         vec4 mbShadowUv = uMBShadowMatrix * vec4(vMBWorldPos, 1.0);
                         float mbShadowDepth = 1.0;
                         if (mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
@@ -2620,15 +2657,51 @@ export class MBMaterialPatchManager {
                             // §527: 16-bit packed window depth (R=hi, G=lo)
                             mbShadowDepth = mbPk.r + mbPk.g / 255.0;
                             float mbLit = mbShadowUv.z <= mbShadowDepth + 0.002 ? 1.0 : 0.0;
-                            gl_FragColor.rgb *= mix(1.0 - uMBShadowIntensity, 1.0, mbLit);
-                        }
+                            // mgl apply_lighting_ground receivers: out *=
+                            // mix(u_ground_shadow_factor, 1, light) — the
+                            // shadow_utils ratio amb/(amb+dir·NdotL) applied
+                            // in the sRGB domain; our fragment is linear, so
+                            // square the ratio (srgb→linear of the multiplier)
+                            // to land the same sRGB product after encode.
+                            gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(2.2)), vec3(1.0), mbLit);
+                        }`;
+            let mbShadowInserted = false;
+            const tryInsert = (src: string, anchor: string, block: string): string => {
+                if (mbShadowInserted || !src.includes(anchor)) return src;
+                mbShadowInserted = true;
+                return src.replace(anchor, anchor + block);
+            };
+            shader.fragmentShader =
+                'varying vec3 vMBWorldPos;\n' +
+                'uniform sampler2D uMBShadowMap;\n' +
+                'uniform mat4 uMBShadowMatrix;\n' +
+                'uniform float uMBShadowIntensity;\n' +
+                'uniform vec3 uMBGroundShadowFactor;\n' +
+                'uniform float uMBShadowDbg;\n' +
+                shader.fragmentShader;
+            shader.fragmentShader = tryInsert(
+                shader.fragmentShader, '#include <opaque_fragment>',
+                `\nif (uMBShadowIntensity > 0.0) {${mbShadowSample}
                         // §525 debug readout (baked 1.0/0.0 at compile time when
                         // shadowdbg=1): R=intensity, G=depth sample, B=uv.z.
                         if (uMBShadowDbg > 0.5) {
                             gl_FragColor.rgb = vec3(uMBShadowIntensity, mbShadowDepth, mbShadowUv.z);
                         }
-                    }`,
-                );
+                    }`);
+            if (!mbShadowInserted) {
+                // Chunk-less ribbon shaders: inject right after their final
+                // color assignment — raw and ground-radiance-mixed variants.
+                for (const anchor of [
+                    'gl_FragColor = vec4( outputDiffuse, alpha );',
+                    'gl_FragColor = vec4( outputDiffuse * vColor, alpha );',
+                    'gl_FragColor = vec4(mix(outputDiffuse * uMBGroundRad, outputDiffuse, uMBEmissive), alpha);',
+                    'gl_FragColor = vec4(mix(outputDiffuse * vColor * uMBGroundRad, outputDiffuse * vColor, uMBEmissive), alpha);',
+                ]) {
+                    shader.fragmentShader = tryInsert(
+                        shader.fragmentShader, anchor,
+                        `\nif (uMBShadowIntensity > 0.0) {${mbShadowSample}\n                    }`);
+                }
+            }
             shader.uniforms.uMBShadowDbg = { value: (globalThis as any).__mbShadowDbg ? 1 : 0 };
         };
     }

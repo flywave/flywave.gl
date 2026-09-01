@@ -582,7 +582,7 @@ export class MBModelRenderer {
      * set (same lifecycle contract as MBHeatmapRenderer.m_tileKernels).
      */
     private m_tileGroups = new Map<Tile, THREE.Group>();
-    private m_tilePlacements = new Map<Tile, { placements: ModelPlacement[] }>();
+    private m_tilePlacements = new Map<Tile, { placements: ModelPlacement[]; sourceArr?: readonly unknown[] }>();
 
     constructor(
         private m_mapView: any,
@@ -685,11 +685,34 @@ export class MBModelRenderer {
             const cachedPl = this.m_tilePlacements.get(tile);
             if (cachedPl) {
                 const dNow: any = (tile as any)?.decodedTile;
-                const nNow = dNow?.modelInstances?.length
-                    ?? (tile as any).modelInstances?.length ?? 0;
-                if (cachedPl.placements.length >= nNow) continue;
-                cachedPl.placements = [...(dNow?.modelInstances
-                    ?? (tile as any).modelInstances)];
+                const nowArr = dNow?.modelInstances
+                    ?? (tile as any).modelInstances;
+                // mgl tile re-decode replaces the tile's content wholesale.
+                // markTilesDirty re-decodes the SAME Tile object, so a fresh
+                // placements array (new object identity) is the only reliable
+                // signal that the emitter re-ran (addLayer/moveLayer/…):
+                // stale instances must be dropped, else removed models linger
+                // and changed models double up behind the fresh clones.
+                if (nowArr && nowArr !== (cachedPl as any).sourceArr) {
+                    const group = this.m_tileGroups.get(tile);
+                    if (group) {
+                        for (const c of [...group.children]) {
+                            group.remove(c);
+                            this.disposeGroup(c as THREE.Group);
+                        }
+                        group.userData._done = new Set();
+                    }
+                    cachedPl.placements = [...nowArr];
+                    (cachedPl as any).sourceArr = nowArr;
+                } else if (!nowArr || cachedPl.placements.length >= nowArr.length) {
+                    // Transient decode window (no array), or the SAME array
+                    // grew in place — processPending places only unflagged
+                    // indexes, so keep the incremental-append semantics.
+                    continue;
+                } else {
+                    cachedPl.placements = [...nowArr];
+                    (cachedPl as any).sourceArr = nowArr;
+                }
             } else if (this.m_tilePlacements.has(tile)) {
                 continue;
             }
@@ -702,6 +725,7 @@ export class MBModelRenderer {
                 this.m_sawPlacements = true;
                 this.m_tilePlacements.set(tile, {
                     placements: [...placements],
+                    sourceArr: placements,
                 });
                 // Create the group lazily; clones are appended as prototype
                 // GLTFs finish loading (run() retries every frame).
