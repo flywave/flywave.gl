@@ -1140,6 +1140,7 @@ export class MBMaterialPatchManager {
                      // directional term by shadowed_light_factor_normal (0 in
                      // shadow, NdotL when lit). Sample the shadow map at the
                      // extrusion's RTE world position.
+                     bool mbShProbeFired = false;
                      if (uMBShadowIntensity > 0.0) {
                          // §716: mgl NORMAL_OFFSET — sample the shadow map at
                          // a point lifted OFF the surface along the world
@@ -1171,6 +1172,18 @@ export class MBMaterialPatchManager {
                                  uMBShadowFar * 1.0, length(vViewPosition));
                              mbShLit = mix(mbShLit, 1.0, mbFade);
                              mbNdotL *= mix(1.0 - uMBShadowIntensity, 1.0, mbShLit);
+                             // §714 shadow-uv probe: R = signed depth delta
+                             // (uv.z − storedDepth, scaled ×250), G = NdotL.
+                             // §742: MUST live inside this scope — mbShUv/
+                             // mbShD are local here; the old probe branch sat
+                             // below the block and made every strict GLSL
+                             // compiler reject the shader (extrusions vanish).
+                             if (uMB3DDbg > 2.5) {
+                                 gl_FragColor.rgb = vec3(
+                                     clamp(0.5 + 250.0 * (mbShUv.z - mbShD), 0.0, 1.0),
+                                     0.5 + 0.5 * clamp(mbNdotL, 0.0, 1.0), 0.5);
+                                 mbShProbeFired = true;
+                             }
                          }
                      }
                      float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
@@ -1234,22 +1247,20 @@ export class MBMaterialPatchManager {
                      }
                      mbOut = mix(mbOut, fogColor, clamp(mbFogFactor, 0.0, 1.0));
                      gl_FragColor.rgb = mbOut;
-                     if (uMB3DDbg > 2.5) {
-                         // §714 shadow-uv probe: R = signed depth delta
-                         // (uv.z − storedDepth, scaled ×250 — ±0.002 spans
-                         // the channel), G = NdotL. Used with the expected
-                         // crop to fit the domain slope-error coefficient.
-                         gl_FragColor.rgb = vec3(
-                             clamp(0.5 + 250.0 * (mbShUv.z - mbShD), 0.0, 1.0),
-                             0.5 + 0.5 * clamp(mbNdotL, 0.0, 1.0), 0.5);
-                     } else if (uMB3DDbg > 1.5) {
-                         // §678: distance readout — grey = log2(metres)/16
-                         // (metres = view length × uMbMetersPerUnit).
-                         gl_FragColor.rgb = vec3(clamp(log2(max(mbLen, 1.0)) / 16.0, 0.0, 1.0));
-                     } else if (uMB3DDbg > 0.5) {
-                         // Debug readback: R = NdotL (signed 0.5+0.5*n),
-                         // G/B = dir.x/dir.y (0.5+0.5*v) — wall azimuth probe.
-                         gl_FragColor.rgb = vec3(0.5 + 0.5 * mbNdotL, 0.5 + 0.5 * mbDirView.x, 0.5 + 0.5 * mbDirView.z);
+                     // §742: the shadow-uv probe branch moved INSIDE the
+                     // shadow-sampling block above (its mbShUv/mbShD live
+                     // there); this outer chain keeps only the scope-safe
+                     // probes and yields to the probe when it fired.
+                     if (!mbShProbeFired) {
+                        if (uMB3DDbg > 1.5) {
+                            // §678: distance readout — grey = log2(metres)/16
+                            // (metres = view length × uMbMetersPerUnit).
+                            gl_FragColor.rgb = vec3(clamp(log2(max(mbLen, 1.0)) / 16.0, 0.0, 1.0));
+                        } else if (uMB3DDbg > 0.5) {
+                            // Debug readback: R = NdotL (signed 0.5+0.5*n),
+                            // G/B = dir.x/dir.y (0.5+0.5*v) — wall azimuth probe.
+                            gl_FragColor.rgb = vec3(0.5 + 0.5 * mbNdotL, 0.5 + 0.5 * mbDirView.x, 0.5 + 0.5 * mbDirView.z);
+                        }
                      }
                  }`
             );

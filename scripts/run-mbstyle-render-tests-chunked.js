@@ -2,30 +2,36 @@
 /*
  * Chunked render-test evaluation for MBStyleDataSource.
  *
- * Same flow as run-mbstyle-render-tests.js, but runs the full suite one
- * top-level category at a time so a browser crash / karma failure in one
- * category does not abort the whole baseline. Results accumulate in the
- * same output directory (per-test *.ibct-result.json), and a final
- * aggregated summary is printed.
+ * Memory-safe session model (§742): EVERY karma session covers at most
+ * MBSTYLE_BATCH (default 4) fixtures in a fresh browser, and the whole
+ * karma+Chrome process GROUP is killed when the session ends (normally, on
+ * timeout, or on crash). No session grows big enough to exhaust memory, and
+ * no browser survives a session boundary. A final resumeMissing sweep re-runs
+ * any fixture that is still missing a result file.
  *
  * Usage:
  *   node scripts/run-mbstyle-render-tests-chunked.js [category...]
  *     (no args = all categories, sorted by test count ascending)
  *
  * Env:
- *   CHROME_BIN       - path to the chrome/edge headless binary (required)
- *   MBSTYLE_REPORT   - output dir for results (default ./rendering-test-results/mbstyle)
- *   MBSTYLE_PORT     - port for the result server (default 8081)
- *   CHUNK_TIMEOUT_MS - per-category karma timeout (default 1200000 = 20min)
+ *   CHROME_BIN             - path to the chrome/edge headless binary (required)
+ *   MBSTYLE_REPORT         - output dir for results (default ./rendering-test-results/mbstyle)
+ *   MBSTYLE_PORT           - port for the result server (default 8081)
+ *   MBSTYLE_BATCH          - fixtures per karma session (default 4)
+ *   MBSTYLE_SESSION_TIMEOUT_MS - per-session hard timeout (default 900000 = 15min;
+ *                            expiry kills the browser tree and moves on)
+ *   MBSTYLE_EXTRA_ARGS     - space-separated extra karma client args
+ *                            (modellightport=, modellightgamma=, mbbatchdbg=1, pix=…)
  */
-const { spawn, spawnSync } = require("child_process");
+const { spawn, spawnSync, execSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
 const onlyCategories = process.argv.slice(2);
 const outputDir = process.env.MBSTYLE_REPORT || path.join("rendering-test-results", "mbstyle");
 const port = process.env.MBSTYLE_PORT || "8081";
-const chunkTimeout = parseInt(process.env.CHUNK_TIMEOUT_MS || "1200000", 10);
+const batch = Math.max(1, parseInt(process.env.MBSTYLE_BATCH || "4", 10));
+const sessionTimeoutMs = parseInt(process.env.MBSTYLE_SESSION_TIMEOUT_MS || "900000", 10);
 // MBSTYLE_EXTRA_ARGS: space-separated extra karma client args (modellightport=,
 // modellightgamma=, mbbatchdbg=1, pix=…) forwarded to every session so A/B
 // gates work through the chunked runner too.
@@ -63,12 +69,10 @@ function listCategories() {
         })(path.join(fixturesRoot, name));
         return { name, count };
     });
-    // Small categories first: quick feedback, and early crashes lose less.
     withCount.sort((a, b) => a.count - b.count);
     return withCount;
 }
 
-// §722: enumerate fixture test names (category-relative dirs with style.json).
 function listFixtures(category) {
     const names = [];
     (function walk(d, rel) {
@@ -82,14 +86,9 @@ function listFixtures(category) {
     return names;
 }
 
-// §722: resume loop — after a karma session dies (DISCONNECTED at the
-// browserNoActivityTimeout under SwiftShader slow render), relaunch karma
-// with `filter=<fixture>` args for the NOT-YET-SAVED fixtures, 4 per fresh
-// browser session. Each relaunch is a fresh page = fresh mocha instance
-// (the §695 "Executed 0 of X" session-level skip).
 // The result server files fixtures under a browser-derived platform dir
 // (e.g. web-ChromeHeadless-131.0.6778.108-MacOS) — discover it instead of
-// hardcoding one platform.
+// hardcoding one platform (§724).
 function fixtureHasResult(cat, fx) {
     let platformDirs = [];
     try {
@@ -100,53 +99,81 @@ function fixtureHasResult(cat, fx) {
     } catch {
         return false;
     }
-    const rel = path.join(
-        "mbstyle-render-" + cat.replace(/\//g, "-"),
-        fx.replace(/\//g, "-") + ".ibct-result.json",
-    );
-    return platformDirs.some((d) => fs.existsSync(path.join(resultsRoot, d, rel)));
+    const flat = fx.replace(/\//g, "-") + ".ibct-result.json";
+    const nested = fx + ".ibct-result.json";
+    const rel = path.join("mbstyle-render-" + cat.replace(/\//g, "-"));
+    return platformDirs.some((d) => {
+        const base = path.join(resultsRoot, d, rel);
+        return (
+            fs.existsSync(path.join(base, flat))
+            || fs.existsSync(path.join(base, nested))
+        );
+    });
 }
 
-function resumeMissing(batchNames, port, chunkTimeout) {
-    for (let attempt = 1; attempt <= 12; attempt++) {
-        const missing = [];
-        for (const cat of batchNames) {
-            for (const fx of listFixtures(cat)) {
-                if (!fixtureHasResult(cat, fx)) missing.push(fx);
-            }
-        }
-        if (missing.length === 0) {
-            console.log(`### resume: all fixtures have results.`);
-            return;
-        }
-        console.log(`### resume attempt ${attempt}: ${missing.length} fixtures missing.`);
-        for (let i = 0; i < missing.length; i += 4) {
-            const slice = missing.slice(i, i + 4);
-            const karmaClientArgs = [
-                ...extraArgs,
-                ...slice.map((f) => `filter=${f}`),
-                `feedback-url=http://localhost:${port}`,
-            ];
-            const result = spawnSync(
-                "npx",
-                ["karma", "start", "--browsers", "ChromeHeadlessNoSandbox", "--single-run"],
-                {
-                    cwd: root,
-                    env: {
-                        ...process.env,
-                        CHROME_BIN: process.env.CHROME_BIN,
-                        KARMA_ARGS: karmaClientArgs.join(" "),
-                    },
-                    stdio: "inherit",
-                    timeout: chunkTimeout,
+/**
+ * Run ONE karma session (at most `batch` fixtures) as a detached POSIX
+ * process group and make sure the whole karma+Chrome tree is dead when it
+ * returns — normally, on timeout, or on crash (§742 memory discipline).
+ */
+function runKarmaSession(filters, port, timeoutMs, label) {
+    return new Promise((resolve) => {
+        const isPosix = process.platform !== "win32";
+        const karmaClientArgs = [
+            ...extraArgs,
+            ...filters.map((f) => `filter=${f}`),
+            `feedback-url=http://localhost:${port}`,
+        ];
+        const child = spawn(
+            "npx",
+            ["karma", "start", "--browsers", "ChromeHeadlessNoSandbox", "--single-run"],
+            {
+                cwd: root,
+                env: {
+                    ...process.env,
+                    CHROME_BIN: process.env.CHROME_BIN,
+                    KARMA_ARGS: karmaClientArgs.join(" "),
                 },
-            );
-            if (result.error) console.error(`### resume karma aborted: ${result.error.message}`);
-        }
-    }
+                stdio: "inherit",
+                detached: isPosix,
+            },
+        );
+        let settled = false;
+        const killTree = (sig) => {
+            try {
+                if (isPosix) process.kill(-child.pid, sig);
+                else child.kill(sig);
+            } catch { /* group already gone */ }
+        };
+        const sweep = () => {
+            // Belt-and-braces: any headless Chrome that outlived the group
+            // (karma restart races) dies here. Matches only --headless
+            // instances; a normal desktop browser session is never hit.
+            try {
+                execSync('pkill -9 -f "Google Chrome.*--headless" 2>/dev/null || true', {
+                    shell: "/bin/bash",
+                });
+            } catch { /* nothing matched */ }
+        };
+        const finish = (code) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            killTree("SIGKILL");
+            sweep();
+            resolve(code);
+        };
+        const timer = setTimeout(() => {
+            console.log(`### [${label}] session timeout after ${timeoutMs}ms — killing browser tree`);
+            killTree("SIGKILL");
+            setTimeout(() => finish(-9), 1500);
+        }, timeoutMs);
+        child.on("exit", (code) => finish(code));
+        child.on("error", () => finish(-1));
+    });
 }
 
-function main() {
+async function main() {
     fs.mkdirSync(resultsRoot, { recursive: true });
     const server = spawn(process.execPath, [serverJs, outputDir], {
         cwd: root,
@@ -157,70 +184,61 @@ function main() {
         console.error("Failed to start result server:", err);
         process.exit(1);
     });
+    await new Promise((r) => setTimeout(r, 1500));
 
     const categories = listCategories().filter(
         (c) => onlyCategories.length === 0 || onlyCategories.includes(c.name),
     );
-    console.log(
-        `Chunked run: ${categories.length} categories, ` +
-            `${categories.reduce((s, c) => s + c.count, 0)} tests total.`,
-    );
+    const total = categories.reduce((s, c) => s + c.count, 0);
+    console.log(`Chunked run: ${categories.length} categories, ${total} tests total.`);
+    console.log(`Session model: ≤${batch} fixtures/session, hard timeout ${sessionTimeoutMs}ms, browser tree killed at every session boundary.`);
 
-    setTimeout(() => {
-        // Batch small categories together (multiple filter= args are OR'ed)
-        // to amortize karma/webpack startup; big categories get a solo run.
-        const batches = [];
-        let current = null;
-        for (const { name, count } of categories) {
-            if (!current || current.count + count > 80) {
-                current = { names: [], count: 0 };
-                batches.push(current);
-            }
-            // Trailing slash anchors the substring filter to the directory,
-            // but names like "elevated-line-color/..." still contain
-            // "line-color/" — duplicate runs are harmless (results overwrite).
-            current.names.push(`${name}/`);
-            current.count += count;
+    // Flatten to (category, fixture) pairs and skip ones that already have a
+    // result (re-runs after an interrupted pass pick up where they stopped).
+    const pending = [];
+    for (const cat of categories) {
+        for (const fx of listFixtures(cat.name)) {
+            if (!fixtureHasResult(cat.name, fx)) pending.push({ cat: cat.name, fx });
         }
-        console.log(`Batched into ${batches.length} karma runs.`);
+    }
+    console.log(`${pending.length} fixtures to run (${total - pending.length} already have results).`);
 
-        for (const batch of batches) {
-            console.log(`\n### [${batch.names.join(", ")}] ~${batch.count} tests ...`);
-            const karmaClientArgs = [
-                ...extraArgs,
-                ...batch.names.map((f) => `filter=${f}`),
-                `feedback-url=http://localhost:${port}`,
-            ];
-            const result = spawnSync(
-                "npx",
-                ["karma", "start", "--browsers", "ChromeHeadlessNoSandbox", "--single-run"],
-                {
-                    cwd: root,
-                    env: {
-                        ...process.env,
-                        CHROME_BIN: process.env.CHROME_BIN,
-                        KARMA_ARGS: karmaClientArgs.join(" "),
-                    },
-                    stdio: "inherit",
-                    timeout: chunkTimeout,
-                },
-            );
-            if (result.error) {
-                console.error(`### batch karma aborted: ${result.error.message}`);
-            } else if (result.status !== 0) {
-                console.error(`### batch karma exited with status ${result.status}`);
+    let done = 0;
+    for (let i = 0; i < pending.length; i += batch) {
+        const chunk = pending.slice(i, i + batch);
+        const label = `${i + 1}..${i + chunk.length}/${pending.length}`;
+        console.log(`\n### session [${label}]: ${chunk.map((c) => c.fx).join(", ")}`);
+        await runKarmaSession(
+            chunk.map((c) => c.fx),
+            port,
+            sessionTimeoutMs,
+            label,
+        );
+        done += chunk.length;
+        console.log(`### session [${label}] done (${done}/${pending.length}).`);
+    }
+
+    // Final resume sweep for anything still missing (12 rounds × 4).
+    for (let attempt = 1; attempt <= 12; attempt++) {
+        const missing = [];
+        for (const cat of categories) {
+            for (const fx of listFixtures(cat.name)) {
+                if (!fixtureHasResult(cat.name, fx)) missing.push({ cat: cat.name, fx });
             }
-            // §722: resume whatever the session skipped/dropped.
-            resumeMissing(batch.names, port, chunkTimeout);
         }
+        if (missing.length === 0) break;
+        console.log(`\n### resume attempt ${attempt}: ${missing.length} fixtures missing.`);
+        const chunk = missing.slice(0, batch).map((m) => m.fx);
+        if (chunk.length === 0) break;
+        await runKarmaSession(chunk, port, sessionTimeoutMs, `resume-${attempt}`);
+    }
 
-        summarize();
-        console.log("\n=== Chunked render-test evaluation complete ===");
-        console.log(`Results saved to: ${outputDir}`);
-        console.log(`Open the HTML report:  http://localhost:${port}/ibct-report`);
-        console.log("(press Ctrl-C to stop the result server)");
-        server.on("exit", () => process.exit(0));
-    }, 1500);
+    summarize();
+    console.log("\n=== Chunked render-test evaluation complete ===");
+    console.log(`Results saved to: ${outputDir}`);
+    console.log(`Open the HTML report:  http://localhost:${port}/ibct-report`);
+    server.kill();
+    setTimeout(() => process.exit(0), 500);
 }
 
 function summarize() {
@@ -233,18 +251,21 @@ function summarize() {
     let failed = 0;
     const failures = [];
     for (const f of files) {
-        const res = JSON.parse(fs.readFileSync(f, "utf8"));
-        const name = res.imageProps?.name ?? f;
-        if (res.passed) {
-            passed++;
-        } else {
-            failed++;
-            const mismatched = res.mismatchedPixels ?? "?";
-            failures.push(`  FAIL ${name} (${mismatched} mismatched pixels)`);
-        }
+        try {
+            const res = JSON.parse(fs.readFileSync(f, "utf8"));
+            const name = res.imageProps?.name ?? f;
+            if (res.passed) {
+                passed++;
+            } else {
+                failed++;
+                const mismatched = res.mismatchedPixels ?? "?";
+                failures.push(`  FAIL ${name} (${mismatched} mismatched pixels)`);
+            }
+        } catch { /* skip malformed */ }
     }
     console.log(`\n=== Summary: ${passed} passed, ${failed} failed ===`);
-    for (const line of failures) console.log(line);
+    for (const line of failures.slice(0, 20)) console.log(line);
+    if (failures.length > 20) console.log(`  … and ${failures.length - 20} more`);
 }
 
 function walk(dir) {
@@ -258,4 +279,7 @@ function walk(dir) {
     return out;
 }
 
-main();
+main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+});
