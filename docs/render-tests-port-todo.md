@@ -7665,3 +7665,7 @@ RST 探针（reset 时同步读 sceneRoot mesh 数）：全帧 sceneMeshes=**164
 **§771b. trees-use-theme 残余再定性：全帧 2D 主题亮度域（暗红背景 vs 纯红），非树冠/非 runtime tint 链（2026-09-03）**：
 
 diff 图目视+像素统计：202,959 错配铺满全帧——**ours 背景/地面呈暗红 (170,0,0)/(51,0,0) 族，expected 为纯红 (255,0,0) 族**；皇冠（橄榄 vs 暗红）只是小分量；道路部分吻合（diff 中白色）。定性：**2D 层（background/fill/地面）的全局主题化亮度差**——同一 LUT 下我方 2D 路径输出偏暗（疑 CPU bake 的 sRGB/线性域或 LUT 索引对 2D 路径的同款转置问题——§772 修的是 GPU 模型尾采样，2D CPU bake 路径需同款对拍）。runtime tint 链（§770/§771）降级为小分量。下一入口：MBColorTheme CPU 索引与 LUT PNG 布局的逐 texel 对拍（对照 mgl color_theme 的 LUT 构建），重点 2D background 的主题化输出亮度。309 单测绿、tsc 绿。
+
+**§771c. LUT 布局对拍确认 + trees-use-theme 背景暗红新洞察（2026-09-03）**：
+
+① **§772 修复获得 mgl 侧印证**：mgl LUT = Texture3D（draw_model:172，[N,N,N]）——图像 x = b·N + r、y = g，与修复后的 mbLutTap 完全一致；CPU applyColorTheme 索引同样正确。LUT 布局域全部洗清。② **背景暗红新洞察**：expected 背景纯红 (255,0,0) = mgl 背景不受雾影响；ours 暗红 (170,0,0) = 走了 §572 雾化背景管线（applyBackgroundColor 的 fogged background quad 仲裁）——trees-use-theme 无地形的背景在 mgl 不吃雾。下一入口：§572 背景雾仲裁条件复核（globeFogActive/fog 树种判定是否误纳非雾背景）。309 单测绿、tsc 绿。
