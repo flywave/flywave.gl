@@ -218,8 +218,11 @@ async function main() {
         console.log(`### session [${label}] done (${done}/${pending.length}).`);
     }
 
-    // Final resume sweep for anything still missing (12 rounds × 4).
-    for (let attempt = 1; attempt <= 12; attempt++) {
+    // Final resume sweep — §742: default OFF. Persistently crashing
+    // fixtures (page-level "Executed 0 of N") would burn 12 × session
+    // timeout on futile retries; opt back in with MBSTYLE_RESUME_ROUNDS.
+    const resumeRounds = parseInt(process.env.MBSTYLE_RESUME_ROUNDS || "0", 10);
+    for (let attempt = 1; attempt <= resumeRounds; attempt++) {
         const missing = [];
         for (const cat of categories) {
             for (const fx of listFixtures(cat.name)) {

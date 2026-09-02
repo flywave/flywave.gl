@@ -326,3 +326,16 @@
 - 200/212 已派发（53 会话内存安全模式：≤4 夹具/会话、进程组击杀、零泄漏）；trees-puck 双例（192万）渲染中；trees-use-theme 待跑。
 - ml-0901 存档目录被清理 → 基线快照固化为 `rendering-test-results/ml0901-baseline-snapshot.json`（43 精确 + 38 家族级）。
 - 批测完成后：三门 A/B（modeldiralt 优先）→ 回归例定点复核 → 终版对比报告。
+
+### 8.6 页面级崩溃 4 例记录（§742 批测唯一未产出组，2026-09-02）
+
+以下 4 夹具在同一 karma 会话中 **"Executed 0 of 4" + ping 超时断连**（页面级失败，非单测失败）；用户裁定**不重试**（每轮 15min×12 轮纯浪费），本轮基线将其记为 **NO-RESULT**：
+
+| 夹具 | 头号嫌疑 |
+|---|---|
+| trees-use-theme | **§727 GPU LUT 首次真渲染**——DataTexture/mbApplyLut 路径或有渲染期挂起/异常；且 style 引 models 注册表（modelsPending 永 Await 同 §695 族模式） |
+| trees-zoom-based-scale | 同会话连坐（实例树，单独跑历史上可渲染） |
+| vector-layer-external-models(-import) | 外部 gltf 加载路径（model-external 分支） |
+
+**定位入口（下会话）**：单夹具 karma + 180s 超时栈 dump（§695 同款手法），按 trees-use-theme → external-models 顺序隔离；重点查 §727 的 mbLutGpuTexture/onBeforeCompile 是否在 modelsPending 判定路径抛错或永不 settle。
+runner 同步修改：resume 轮数默认 **12→0**（MBSTYLE_RESUME_ROUNDS 可恢复），崩溃夹具不再空转重试。
