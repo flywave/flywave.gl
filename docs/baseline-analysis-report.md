@@ -427,3 +427,9 @@ globe 相机距离系、fog 逐内容深度语义、depth-occlusion 双 pass、c
 1. **addImage 运行时注册通道已修复入库（§744）**：`addImage(name, image, pixelRatio)` 惰性建 atlas（无 sprite 样式此前整体丢弃运行时图像）+ `m_runtimeImages` 注册表跨 atlas 换重放 + harness op 透传 pixelRatio。修复后 globe 夹具 pattern 解析恢复（tex=Y@pr3 vs 修复前 NONE）。
 2. **96.7万 px 未兑现的改判（R14，引擎冻结带）**：五连 A/B（细分密度/DoubleSide/关剔除/纯红材质）+ FILLPROBE 实证——globe fill 瓦片被放置在**相机对跖位**（mesh world x = −camera.x，5.71R 之外），整体被地球遮挡，几何零光栅化；静态 style 对照同病 → 非 runtime op 专属。这是引擎 globe 瓦片放置帧镜像问题（与 §二#2 相机距离系同域不同点）。诊断夹具 `globe/globe-fill-pattern/3x-on-2x-static` 留作 R14 修复验收点；karma arg 探针 sphdeg/sphds/nocull/fillflat 入库。
 3. 状态表更新：**#P1-A → 通道修复完成（代码正确性）**；globe-fill-pattern 家族残差归入 §9.5 冻结带（新增 R14 条目）。
+
+### §十一 P0-A/P0-B 执行结果（2026-09-02，§745）
+
+1. **P0-A 裁决：三嫌疑全部排除，默认光向约定维持**。diralt=1 混合结果（glb-tiles 独胜 57k→1.2k，z-offset 门不保）；unlit-clamp 恢复（modelclamp 门）与门灯 alpha-blend 回退（doorblend 门）均零效果。emission/doors 回归归因改判为 R1 直射项激活后的家族光照量级标定深水（非方位镜像差）。
+2. **P0-B 定性：R13 编译修复确认生效（零 Shader Error）但建筑仍零光栅化**——19 个挤出网格"在场景+可见+挂载"却不进像素，与 §585/§612/R14 同签名，**引擎渲染清单级立案**（与 R14 合并）。MAPS3D ×2 无回归。
+3. 9.3 计划状态：P0-A 完成（负裁决也是裁决）；P0-B 复测完成，残差改判引擎冻结带；剩余开放项=P2（conflation 归因、§688 ×0.77、崩溃 4 例定位）+ 引擎渲染清单专项。

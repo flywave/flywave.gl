@@ -564,7 +564,11 @@ function buildNodeLightsMesh(
             transparent: true,
             // mgl draw_model:716 — light meshes draw in the dedicated
             // light-beam pass with ColorMode.additive.
-            blending: THREE.AdditiveBlending,
+            // §744 A/B gate (`doorblend=1`): alpha-blend fallback for the
+            // indirect-doors family regression (P0-A candidate ③).
+            blending: (globalThis as any).__mbDoorAlphaBlend
+                ? THREE.NormalBlending
+                : THREE.AdditiveBlending,
             depthWrite: false,
             side: THREE.DoubleSide,
         });

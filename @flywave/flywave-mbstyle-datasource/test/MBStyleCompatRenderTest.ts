@@ -119,6 +119,18 @@ function discoverTests(): TestEntry[] {
     if (alt === "1") (globalThis as any).__mbModelDirAlt = true;
 }
 {
+    // §744: unlit-clamp restore A/B (emission-strength regression candidate ②).
+    const uc = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("modelclamp="))?.slice("modelclamp=".length);
+    if (uc === "1") (globalThis as any).__mbModelUnlitClamp = true;
+}
+{
+    // §744: door-beam alpha-blend fallback A/B (indirect-doors candidate ③).
+    const db = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("doorblend="))?.slice("doorblend=".length);
+    if (db === "1") (globalThis as any).__mbDoorAlphaBlend = true;
+}
+{
     // §655: model-shader lighting mode A/B.
     // §691 verdict: PBR (Cook-Torrance) is better for quantization (−99.5%)
     // §705: PBR is the default; `modellightport=0` forces the §557

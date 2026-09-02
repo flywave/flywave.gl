@@ -238,7 +238,16 @@ export function applyMglModelLighting(
                 shader.uniforms.uMB3DDirColor = { value: ls2 ? ls2.directionalColorLinear : [1, 1, 1] };
                 shader.uniforms.uMB3DDir = { value: modelLightDir(dataSource) };
                 shader.uniforms.uMB3DEmissive = { value: emissiveStrength ?? 0 };
-                shader.uniforms.uMB3DUnlit = { value: unlitMix ?? emissiveStrength ?? 0 };
+                // §744: unlit-clamp A/B gate (`modelclamp=1`) — §724.4 removed
+                // mgl-unlawful clamp(0,1) on the unlit mix; the emission
+                // -strength family regression candidates this restore as a
+                // single-variable A/B.
+                const unlitRaw = unlitMix ?? emissiveStrength ?? 0;
+                shader.uniforms.uMB3DUnlit = {
+                    value: (globalThis as any).__mbModelUnlitClamp
+                        ? Math.min(1, Math.max(0, unlitRaw))
+                        : unlitRaw,
+                };
                 // §655: per-material PBR factors (model.fragment.glsl
                 // u_metallicFactor / u_roughnessFactor).
                 shader.uniforms.uMB3DMetal = { value: mat.metalness ?? 0 };
