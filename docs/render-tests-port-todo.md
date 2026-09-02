@@ -7510,3 +7510,8 @@ mgl APPLY_LUT_ON_GPU（draw_model:172-178：有 color-theme 即对**所有**模�
 **§735. model-state 子家族调研——location-indicator 为 JS 未实现语义（2026-09-02，分析记录）**：
 
 model-state/*（feature-state/opacity/node-lod-zoom/multiple-features/part-opacity）用 `model-type:'location-indicator'`。spec 语义="显示于其它 3D 内容之上、被地形遮挡"；但 mgl JS 渲染代码**零消费**（仅 style_layer_properties 声明，行为在原生 SDK）——JS 出的 expected 即普通渲染，我方同样忽略即等价，无需实现。node-lod-zoom 的 LOD 距离切换由 tiler 预拆分瓦片承载（-lod 命名），静态等价 ✓。part-opacity（per-part alpha/opacity）✓ 已实现。feature-state ✓ §725.4。至此 model-layer 静态对齐域再次确认穷尽，余项均为运行时取证（§728 清单①-④+§733 的 gamma A/B 裁定）。
+
+
+**§736. LUT 门控单测落地——连抓两个 §727 真 bug（2026-09-02，测试+修复）**：
+
+新增 MBMeshFeaturesLutTest（纯 CPU，5 例）：①LUT 打包不变量（applyColorTheme 格点读取=index(r+g·N²+b·N)→texel(r+g·N,b)，GLSL 8-tap 端口的 CPU 对齐基准）；②rgba alpha 保持；③applyMeshFeatures 三态门控（无 LUT=原色/默认=themed/use-theme:'none'=原色）。**测试即刻抓到两个真 bug**：①themed 结果串 'rgb(...)' 被 parseCssColor（仅关键字/hsl）解析→null→主题静默失效（应走 parseRgbaBytes）；②修复①时 colorEval 被覆写为**数组**，而最终 colorSrgb 解析 parseRgbaBytes 只收字符串→失败→**全部 themed 部件色回退白色**（比①更重——batched landmark+theme 组合会整体白化，因 trees-use-theme 是实例化路径而未暴露）。两处已修（themed 以字符串形态回写 colorEval）。305 passing（+5）、tsc 绿。

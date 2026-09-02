@@ -133,9 +133,14 @@ function evalPart(paint: any, zoom: number, part: string, brightness = 0,
         const bytes = parseRgbaBytes(colorEval)
             ?? (typeof colorEval === 'string' ? parseCssColor(colorEval) : null);
         if (bytes) {
-            const themed = parseCssColor(applyColorTheme(lut,
-                `rgba(${bytes[0]}, ${bytes[1]}, ${bytes[2]}, ${bytes[3]})`));
-            if (themed) colorEval = themed;
+            // applyColorTheme returns "rgb(...)"/"rgba(...)" — parseRgbaBytes
+            // understands those; parseCssColor (keywords/hsl only) does not.
+            const themedStr = applyColorTheme(lut,
+                `rgba(${bytes[0]}, ${bytes[1]}, ${bytes[2]}, ${bytes[3]})`);
+            // parseRgbaBytes only accepts strings — keep colorEval as the
+            // themed STRING or the final parse falls back to white.
+            const themed = parseRgbaBytes(themedStr) ?? parseCssColor(themedStr);
+            if (themed) colorEval = themedStr;
         }
     }
     const colorSrgb = parseRgbaBytes(colorEval)
