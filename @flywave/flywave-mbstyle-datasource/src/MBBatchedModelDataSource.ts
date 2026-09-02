@@ -123,6 +123,8 @@ interface BatchedPending {
  */
 class MBBatchedModelDecoder implements ITileDecoder {
     private m_paint: any = {};
+    /** §751: bumped whenever the layer paint object is (re)assigned. */
+    private m_paintRev = 0;
     private m_envProvider: any;
     private m_zoomProvider: () => number = () => 0;
     private m_filter: any;
@@ -152,7 +154,14 @@ class MBBatchedModelDecoder implements ITileDecoder {
 
     configure(_options?: any, customOptions?: OptionsMap): void {
         const custom = customOptions as any;
-        if (custom?.paint !== undefined) this.m_paint = custom.paint;
+        if (custom?.paint !== undefined) {
+            // §751: the runtime mutates the layer paint object IN PLACE
+            // (identity never changes), so every provided paint bumps the
+            // revision — refreshMeshFeatures keys its color-domain re-style
+            // on this, not on object identity.
+            if (custom.paint !== this.m_paint) this.m_paint = custom.paint;
+            this.m_paintRev++;
+        }
         if (custom?.envProvider !== undefined) this.m_envProvider = custom.envProvider;
         if (custom?.zoomProvider !== undefined) this.m_zoomProvider = custom.zoomProvider;
         if (custom?.filter !== undefined) {
@@ -832,7 +841,7 @@ class MBBatchedModelDecoder implements ITileDecoder {
             // or zoom moved since the last application.
             try {
                 refreshMeshFeatures(outer.children[0] as THREE.Object3D,
-                    this.m_paint, zoom, this.m_envProvider);
+                    this.m_paint, zoom, this.m_envProvider, this.m_paintRev);
             } catch { /* must never break the frame */ }
         }
         try {

@@ -1993,6 +1993,11 @@ export class MBStyleDataSource extends TileDataSource {
             try {
                 this.updateModelRegistry(this.m_runtime!.style);
             } catch {}
+            // §751: runtime paint ops (model-color-mix-intensity, model-color,
+            // …) must re-tint the live model-source instances — mgl re-runs
+            // per-part styling on every repaint. setFeatureState already did
+            // this; paint ops now do too.
+            try { this.applyModelSourcePartStylingAll(); } catch {}
             if (this.mapView) {
                 this.mapView.markTilesDirty(this);
             }

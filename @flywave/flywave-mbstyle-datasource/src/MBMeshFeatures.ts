@@ -662,7 +662,7 @@ export function applyMeshFeatures(
                 root.userData.__mbFeatFeatureless.push(mesh);
             }
         });
-        root.userData.__mbFeatState = { zoom, brightness };
+        root.userData.__mbFeatState = { zoom, brightness, paintRev: 0 };
     } catch { /* styling must never break tile loading */ }
 }
 
@@ -680,15 +680,22 @@ export function refreshMeshFeatures(
     paint: any,
     zoom: number,
     dataSource: any,
+    // §751: revision of the layer paint object — a runtime setPaintProperty
+    // mutates the SAME paint object (reference stays equal), so the caller
+    // bumps a revision to force the color-domain re-style below. Without
+    // this the zoom/brightness guard silently skipped paint-only changes
+    // (trees-use-theme: model-color-mix-intensity op never re-tinted).
+    paintRev: number = 0,
 ): void {
     try {
         const prev = root.userData.__mbFeatState as
-            { zoom: number; brightness: number } | undefined;
+            { zoom: number; brightness: number; paintRev?: number } | undefined;
         if (!prev) return; // never styled (or a non-features tile)
         const brightness = mglMeasureLightBrightness(dataSource);
         if (Math.abs(prev.zoom - zoom) < 1e-9
-            && Math.abs(prev.brightness - brightness) < 1e-9) return;
-        root.userData.__mbFeatState = { zoom, brightness };
+            && Math.abs(prev.brightness - brightness) < 1e-9
+            && (prev.paintRev ?? 0) === paintRev) return;
+        root.userData.__mbFeatState = { zoom, brightness, paintRev };
         // §709: per-node tables (same cache build as applyMeshFeatures).
         const tables = new Map<string, PartStyle[]>();
         const partsFor = (mesh: THREE.Mesh): PartStyle[] => {
