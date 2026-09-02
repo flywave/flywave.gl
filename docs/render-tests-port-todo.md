@@ -7673,3 +7673,7 @@ diff 图目视+像素统计：202,959 错配铺满全帧——**ours 背景/地�
 **§771d. trees-use-theme 背景域量化定案：雾覆盖不足（alpha<1），非 LUT（2026-09-03）**：
 
 ① **LUT 洗清**：离线解码主题 PNG（N=32 RGBA）——纯红 texel (31,0,0)=(255,0,0) 恒等、白 (31,31,31)=(255,0,0)（主题把白→红）——LUT 内容与我方 CPU/GPU 采样均无冲突。② **背景量化**：style background-color=#aaaaaa、fog range=[-1.5,3.0]（全域覆盖，mgl 背景应被雾完全覆盖呈雾主题色纯红 255,0,0——雾色 default 白经主题→红）；ours 背景实测 (170,0,0) = 灰底×红的部分混合（alpha<1）。**定案：背景雾 quad 的覆盖/alpha 不足**（mgl full fog 覆盖 vs 我方部分混合），MBBackgroundFogRenderer 的 alpha/r0/r1/shift/distCam 参数域标定为收敛入口（与 §701 雾标定同族）。③ 溢出说明：本节量测均在无头日志/离线 PNG 解码完成，无需交互式 devtools。309 单测绿、tsc 绿。
+
+**§771e. trees-use-theme 并排目视定案：残余=全场景光照/材质渲染域（金属镜面+雾洗），非单链 tint 断点（2026-09-03）**：
+
+两图并排对比（§771 live-paint/paintRev/entryId 全部生效后）：① 布局/树位/数量逐树吻合（放置域干净）；② ours 树冠暗栗色 vs expected 橄榄亮黄——expected 的亮黄高光为**金属材质（tree-metallic）镜面反射**特征，ours 无此镜面响应（金属高光/PBR 环境差，§694-§721 同域）；③ 地面/街道 ours 更锐利暗红、expected 更柔和红洗（雾/主题亮度差，§771b 已记档）。**裁定**：202,959 残余为全场景光照+材质渲染域（金属镜面、雾洗、阴影），由 §694-§721 阴影/光照专项统一收敛，无数据源层单链修复点。runtime tint 链的全部可静态修复项（§750 断链/§770 entryId/§771 live-paint）均已入库。309 单测绿、tsc 绿。
