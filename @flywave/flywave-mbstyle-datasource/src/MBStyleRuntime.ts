@@ -50,6 +50,7 @@ export class MBStyleRuntime {
         if (!layer) return;
         if (!layer.paint) (layer as any).paint = {};
 
+        console.log('[SPP] layer=' + layerId + ' prop=' + prop + ' value=' + JSON.stringify(value) + ' found=' + (layer ? 'Y' : 'N'));
         let oldValue = (layer as any).paint[prop];
         if (oldValue === undefined) {
             // Transitioning away from an UNSET property starts at the
@@ -61,6 +62,7 @@ export class MBStyleRuntime {
         const duration = transition?.duration ?? 300;
         const delay = transition?.delay ?? 0;
 
+        console.log('[SPP2] dur=' + duration + ' interp=' + this.canInterpolate(oldValue, value) + ' old=' + JSON.stringify(oldValue));
         if (duration > 0 && this.canInterpolate(oldValue, value)) {
             // mgl semantics: the property reads back its TARGET immediately
             // (getPaintProperty returns the new value even mid-transition);
@@ -133,6 +135,7 @@ export class MBStyleRuntime {
     }
 
     private ensureTickLoop(): void {
+        console.log('[ETL] called, existing=' + (this.m_tickCallback ? 'Y' : 'N') + ' transitions=' + this.m_transitions.length);
         if (this.m_tickCallback) return;
         this.m_tickCallback = () => this.tickTransitions();
         this.m_onChange();
@@ -181,6 +184,7 @@ export class MBStyleRuntime {
             // §750: fire onChange once at the FINAL tick so the settled
             // target value reaches a re-decode (bounded: not per tick).
             if (remaining.length === 0) {
+                console.log('[TICKEND] firing onChange, transitions drained');
                 this.m_onChange();
             }
         }

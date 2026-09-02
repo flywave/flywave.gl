@@ -7689,3 +7689,7 @@ CFG 探针（decoder.configure 入口）读数：configure n=4-6 收到的 tree-
 **§771f-b. trees-use-theme 亮度域量化：3D-lights 挤出照明偏暗（ours 51-76 vs exp 229）（2026-09-03）**：
 
 背景/建筑分区量测：expected 背景区 = 亮红 (229,0,1)/(197,0,0) 渐变（远亮近稍暗），建筑区亮红+黑影；ours 同区 = 暗红 (51,0,0)/(76,0,0)/(170,0,0) 混杂。**定性：extrusion 3D-lights 照明亮度差**——mgl 公式 `directional = mix(1−intensity, max(1−colorvalue+intensity, 1), NdotL)` 保证背光面地板亮度 ≥1−intensity（红 colorvalue 0.21、intensity 0.5 → ≥0.5 → 亮红），我方同公式实测却落在 0.2-0.3 域 → uMBLightIntensity/uMBLightColor 的喂送值或 NdotL 项存在域差（疑 intensity 双重折减或 lightColor 非白）。下一入口：MBLight/extflat 探针读 uMBLightIntensity/uMBLightColor 实际 uniform 值，对照 mgl u_lightintensity/lightColor。309 单测绿、tsc 绿。
+
+**§771g. mgl 精确雾公式落地：casting 729,580→583,378（−20%）、hard-cutoff −19%，雾族零回归（2026-09-03）**：
+
+对照 mgl `_prelude_fog.fragment`（fog_range 无 shift 项：T=(depth−r0)/(r1−r0)，r0/r1=style fog range 原值，depth=视长/ccd）修正 injectExtrusion3DLighting 内联雾——旧式 `(d̂ − (r0+shift))/(r1−r0)` 在同距离下雾量低估 ~0.23。**验证**：casting 729,580→**583,378（−20%）**；hard-cutoff 168,847→136,191（−19%）；ground-shadow-fog 135,914（持平）。trees-use-theme 202,959 不变（其错配主体为树冠/背景域，雾变化量低于计数灵敏度）。309 单测绿、tsc 绿。

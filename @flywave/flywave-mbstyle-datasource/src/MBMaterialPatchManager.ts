@@ -1217,8 +1217,13 @@ export class MBMaterialPatchManager {
                      // metres×0.78 form had the right shape but the wrong
                      // distCam domain (raster-path 6838m value).
                      float mbLen = length(vViewPosition);
-                     float mbT = (fogMglShift * mbLen / max(uMbDistCam, 1.0)
-                         - (fogMglRange.x + fogMglShift))
+                     // §771g: mgl _prelude_fog.fragment fog_range has NO shift
+                     // in the numerator: T = (depth - r0)/(r1 - r0). The old
+                     // (r0 + shift) subtraction under-fogged every frame by
+                     // ~0.23 of the normalized range (ground/buildings stayed
+                     // dark instead of washing to the fog color).
+                     float mbT = (mbLen / max(uMbDistCam, 1.0)
+                         - fogMglRange.x)
                          / max(fogMglRange.y - fogMglRange.x, 0.001);
                      float mbFall = 1.0 - min(1.0, exp(-6.0 * mbT));
                      mbFall *= mbFall * mbFall;

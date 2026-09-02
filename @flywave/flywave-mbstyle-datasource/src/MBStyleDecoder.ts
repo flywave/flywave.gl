@@ -805,6 +805,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         super.configure(options, customOptions);
         if (customOptions?.mbStyle) {
             const style = customOptions.mbStyle as StyleSpecification;
+            { const g: any = (globalThis as any); g.__cfgN = (g.__cfgN ?? 0) + 1;
+              const tl = (style.layers ?? []).find((l: any) => l.id === 'tree-layer');
+              if (g.__cfgN <= 8) console.log('[CFG] n=' + g.__cfgN + ' treeLayerMix=' + JSON.stringify(tl?.paint?.['model-color-mix-intensity'])); }
             this.m_layerEvaluator = new MBLayerEvaluator(style);
             this.applyThemeToEvaluator();
             // §236: emit the per-tile background fill only for geojson

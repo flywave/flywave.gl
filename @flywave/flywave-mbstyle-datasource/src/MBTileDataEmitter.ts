@@ -4274,16 +4274,10 @@ export class MBTileDataEmitter {
                     const colorMix = mixRaw === undefined || mixRaw === null
                         ? undefined
                         : evalScalar('model-color-mix-intensity', NaN);
-                    { const g: any = (globalThis as any); g.__cmN = (g.__cmN ?? 0) + 1;
-                      if (g.__cmN <= 6) {
-                        const ds: any = (this as any).m_dataSource ?? (this as any).dataSource;
-                        const rtLayer = ds?.runtime?.style?.layers?.find?.((l: any) => l.id === (layer as any)?.id);
-                        const smLayer = ds?.styleManager?.getStyle?.()?.layers?.find?.((l: any) => l.id === (layer as any)?.id);
-                        console.log('[CMIX] n=' + g.__cmN + ' layer=' + (layer as any)?.id +
-                            ' emitterPaint=' + JSON.stringify((layer as any)?.paint?.['model-color-mix-intensity']) +
-                            ' rtPaint=' + JSON.stringify(rtLayer?.paint?.['model-color-mix-intensity']) +
-                            ' smPaint=' + JSON.stringify(smLayer?.paint?.['model-color-mix-intensity']) +
-                            ' sameObj=' + (rtLayer === (layer as any) ? 'Y' : 'N'));
+                    { const g: any = (globalThis as any);
+                      if ((layer as any)?.id === 'tree-layer') {
+                        g.__cmSeq = (g.__cmSeq ?? 0) + 1;
+                        console.log('[CMIXSEQ] n=' + g.__cmSeq + ' mix=' + JSON.stringify((layer as any)?.paint?.['model-color-mix-intensity']) + ' t=' + Date.now() % 100000);
                       } }
                     // §521: model-color tints the albedo (mix in LINEAR — mgl
                     // getBaseColor: mix(albedo, sRGBToLinear(v_color_mix), a)).

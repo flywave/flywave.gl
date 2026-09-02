@@ -978,6 +978,8 @@ export class MBModelRenderer {
 
     private async getPrototype(url: string): Promise<THREE.Object3D | null> {
         url = localizeModelUrl(url);
+        { const g: any = (globalThis as any); g.__protoN = (g.__protoN ?? 0) + 1;
+          if (g.__protoN <= 8) console.log('[PROTO] n=' + g.__protoN + ' url=' + url); }
         const cached = this.m_prototypes.get(url);
         if (cached === 'failed') return null;
         if (cached && cached !== 'loading') return cached;
@@ -994,6 +996,7 @@ export class MBModelRenderer {
             // requested (and skipped); they appear on the next run() pass.
             return proto;
         } catch (err) {
+            console.log('[PROTO-FAIL] url=' + url + ' err=' + String(err).slice(0, 200));
             this.m_prototypes.set(url, 'failed');
             return null;
         }
@@ -1130,8 +1133,17 @@ export class MBModelRenderer {
         // road band occupies ro 2..9.8 — clones at ro 0 rasterize FIRST and
         // are overdrawn to zero visible pixels (mgl draw_model renders the
         // model pass after the road/fill passes).
-        model.traverse((o) => { o.renderOrder = 10; });
-        model.renderOrder = 10;
+        // §773: renderOrder follows the STYLE LAYER ORDER — duplicate model
+        // layers over the same source (trees-use-theme: tree-layer +
+        // tree-layer-diffuse at identical positions) must draw in style order
+        // so the later layer wins the coplanar depth tie, like mgl's
+        // layer-ordered draw.
+        const layersList: any[] = (this.m_dataSource as any).m_runtime?.style?.layers
+            ?? (this.m_dataSource as any).styleManager?.getStyle?.()?.layers ?? [];
+        const layerIdx = Math.max(0, layersList.findIndex((l: any) => l.id === technique._layerId));
+        const ro = 10 + layerIdx * 0.001;
+        model.traverse((o) => { o.renderOrder = ro; });
+        model.renderOrder = ro;
         model.userData._mbLayerId = technique._layerId;
         group.add(model);
 
@@ -1191,6 +1203,9 @@ export class MBModelRenderer {
      * every frame; clones appear once their prototype resolves.
      */
     private processPending(): number {
+        { const g: any = (globalThis as any); g.__ppN = (g.__ppN ?? 0) + 1;
+          if (g.__ppN <= 3) { let tot = 0; for (const t of this.m_tilePlacements.values()) tot += t.placements.length;
+            console.log('[PP] call=' + g.__ppN + ' tiles=' + this.m_tilePlacements.size + ' placements=' + tot + ' registry=' + this.m_registry.size); } }
         const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;
         if (!scene) return;
         let placedCount = 0;

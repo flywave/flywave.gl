@@ -3511,7 +3511,11 @@ export class MBStyleDataSource extends TileDataSource {
     /** §651: re-run per-part styling for every live model-source instance
      * (feature-state / paint ops). */
     applyModelSourcePartStylingAll(): void {
-        const style = this.m_styleManager.getStyle();
+        // §772b: prefer the RUNTIME style — setPaintProperty mutates the
+        // runtime's copy, so reading the manager's original parse made every
+        // re-tint evaluate the STALE paint (trees-use-theme red crowns stuck
+        // at mix=1).
+        const style = this.m_runtime?.style ?? this.m_styleManager.getStyle();
         if (!style) return;
         const layersById = new Map<string, any>();
         for (const l of style.layers ?? []) layersById.set(l.id, l);
