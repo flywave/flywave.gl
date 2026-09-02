@@ -3127,7 +3127,11 @@ export class MBStyleDataSource extends TileDataSource {
                                 _cal: Number((globalThis as any).__modelScaleCal ?? 1),
                                 orientation: evalFeat(paint['model-rotation'] ?? layout['model-rotation'])
                                     ?? f.properties?.rotation,
-                                id: f.properties?.id,
+                                // §770: synthesized entryId for id-less features —
+                                // applyModelSourcePartStylingAll skips entries
+                                // without _mbModelSource, so runtime paint ops
+                                // never reached them.
+                                id: f.properties?.id ?? `f${modelDefs.length}`,
                                 sourceId,
                             });
                         }

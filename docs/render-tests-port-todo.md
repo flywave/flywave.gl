@@ -7649,3 +7649,7 @@ RST 探针（reset 时同步读 sceneRoot mesh 数）：全帧 sceneMeshes=**164
 **§769c. 阴影保真度专项定案：§522 门翻默认开 + 相机取景域确认为剩余缺陷（封存维持）（2026-09-03）**：
 
 ① **根因链闭合**：§765"阴影接收未激活"的下游根因=§522 时代的 opt-in 门（`__mbShadowEnable`，当年 uniform-darkening 的取证 opt-out）把 shadow pass 默认关死——shadow map 从未渲染（SHST 探针：sl=Y(int=1) 但 map=no-su）。② **门已翻默认开**（opt-out=`shadowdisable=1` karma arg/MBSTYLE_SHADOWDISABLE），翻门后像素不变（729,580）→ 结合 §522 记档"depth sample uniformly wrong across framings"，剩余缺陷=**shadow camera 取景/深度采样域**（§529 白清色修复后仍全 lit），属 §721 已封存的 cascade 保真度（需 mgl shadow_renderer 全套移植）。③ 封存维持，本专项不再消耗数据源层预算；取证工具链（RIDRAW-CUM/RIRESET/RST/SHST/extflat/extnolut/modelscale）全部入库。309 单测绿、tsc 绿。
+
+**§770. trees-use-theme 追加定案：entryId 合成入库；runtime tint 链仍需交互式追踪（2026-09-03）**：
+
+① **修复入库**：loadModels geojson 分支为无 id 要素合成 entryId（`f<index>`）——此前 `id: f.properties?.id` 为 undefined 的要素不落 `_mbModelSource`，applyModelSourcePartStylingAll 全跳过。② **实测**：trees-use-theme 仍 202,959 逐位不变——语义修复未改变像素，说明该夹具树冠的红染色**并不来自** entryId 门控的 applyModelSourcePartStyling 路径（m_loadedModels registry），而是 decode-time 的 placement tint（emitter 烘焙）或 LUT 组合的其它支路；runtime op（mix→0）→ 重解码 → tint 刷新的断点位置仍需交互式追踪（headless 日志考古已三轮无新增量）。③ 定性：trees-use-theme 202,959 = 主题化已生效（§753 绿冠清零）、残差为 runtime op tint 链 + 光照域。309 单测绿、tsc 绿。
