@@ -7717,3 +7717,7 @@ INST 探针（instantiate 处）实证：tree-layer（ro 10.003）与 tree-layer
 **§774b. trees-use-theme 双层位置错开量化定案（2026-09-03）**：
 
 当前帧量化：ours 树冠呈两族——亮绿族（tree-layer-diffuse，无 LUT 门…实为 diffuse 层）与暗栗族（tree-layer，红染）——**两族树位置相互错开**（绿blob与栗blob交替分布）；expected 中两层树**同位重叠**（上层 diffuse 橄榄完全覆盖）。即我方两层树的 placement 坐标存在层间偏移（同 geojson 要素、同锚点，两层的放置结果不一致），expected 的橄榄色=上层 diffuse 的 LUT 绿正确覆盖。收敛入口：核对两层的 placement 坐标求值（model-scale/rotation 逐层求值差异、或 tree-layer 的锚点偏移）。309 单测绿、tsc 绿。
+
+**§774c. trees-use-theme 双树错开实因定案：diffuse 层 model-translation [0,0,100] 的 z 抬升未在我方生效（2026-09-03）**：
+
+两层 paint 对比：tree-layer（model-scale [70,50,50]，mix 1.0→op 0，color red）与 tree-layer-diffuse（同 scale/rotation，**model-translation [0,0,100]**，无 color/use-theme）。expected 的橄榄树冠 = **diffuse 层树抬升 +100m 后的悬空树**（pitch 60 下屏面上移），栗色树 = tree-layer 的树——expected 图中两族树确实分层可见（与我们此前"同位重叠"的判读修正：expected 双族都在，只是 diffuse 抬升后不遮挡）。ours 的绿族（diffuse）与栗族（tree-layer）位置关系与 expected 的分层几何接近——主体残差实为：①diffuse 层树的 z 抬升量/方向在两引擎间是否一致（需 placement z=+100m 的投影对照）；②树冠着色（LUT/光照）域。入口：量测我方 diffuse 树的世界 z 与 expected 抬升量的对照（camHeight/d̂ 探针已有）。309 单测绿、tsc 绿。
