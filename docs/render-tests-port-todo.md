@@ -7705,3 +7705,7 @@ CFG 探针（decoder.configure 入口）读数：configure n=4-6 收到的 tree-
 **§772d. 双模型层次序对拍定案：两层均放置、renderOrder 正确区分，可见树冠归属待逐像素 A/B（2026-09-03）**：
 
 INST 探针（instantiate 处）实证：tree-layer（ro 10.003）与 tree-layer-diffuse（ro 10.004）的树均被实例化放置——**两层放置无缺失**；PROTO 实证两资产（tree-metallic/tree-no-material）均加载成功。mbhide=diffuse 隔离对照：隐藏 diffuse 后画面与双层渲染基本一致 → 可见树冠为 tree-layer（metallic，mix→0 原始暗色）而非 diffuse 的 LUT 橄榄 → **diffuse 树虽放置但被 tree-layer 深度遮挡/未出像素**（同位重复树的深度竞争：renderOrder 差 0.001 已设置，LEQUAL 下后画者应胜——实际未胜，疑深度写入次序或 ro 相等性精度问题）。剩余收敛入口：①两层的 coplanar 深度竞争逐像素 A/B（depthWrite/polygonOffset/depthFunc）；②hidden-vs-visible 像素差量测定位 diffuse 树的具体像素域。309 单测绿、tsc 绿。
+
+**§773. LUT 采样对拍修正 + mgl applyLUT 精确式入库（2026-09-03）**：
+
+对拍 mgl `_prelude.fragment:103 applyLUT`：`uvw = col.rbg × (size−1) + 0.5`（swizzle rbg → Texture3D [N,N,N]：image texel x = r + g·N，y = b）。据此再次修正 mbLutTap：x = r + g·N（此前 §772 的 x = r + b·N 仍是转置——CPU applyColorTheme 的 index 公式 r + g·N² + b·N 对应 x = r + b·N/y = g，**CPU 与 mgl GPU 的读法本身互为转置**，此为历史遗留的 CPU 奇偶差，2D 主题夹具按 CPU 式标定故未暴露）。trees-use-theme 实测仍 202,959——该夹具树冠未走到 uMBLut 采样路径（capture 帧树层 lutOff/门控状态待查），残余维持全场景光照域定性。309 单测绿、tsc 绿。

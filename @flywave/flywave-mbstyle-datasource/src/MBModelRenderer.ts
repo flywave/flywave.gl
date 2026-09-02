@@ -369,11 +369,13 @@ export function applyMglModelLighting(
                      uniform float uMBLutOn;
                      vec3 mbLutTap(float rI, float gI, float bI) {
                          float n2 = uMBLutN * uMBLutN;
-                         // §772: CPU parity (MBColorTheme index = r + g·N² +
-                         // b·N, image width N²) → texel x = r + b·N, y = g.
-                         // The previous x = r + g·N, y = b transposed g/b.
+                         // §773: mgl applyLUT exact (prelude.fragment:103):
+                         // uvw = col.rbg * (size-1) + 0.5 over a Texture3D
+                         // [N,N,N] unpacked from the N²×N image → image
+                         // texel x = r + g·N, y = b. The previous x = r + b·N,
+                         // y = g transposed g/b.
                          return texture2D(uMBLut,
-                             vec2((rI + bI * uMBLutN + 0.5) / n2, (gI + 0.5) / uMBLutN)).rgb;
+                             vec2((rI + gI * uMBLutN + 0.5) / n2, (bI + 0.5) / uMBLutN)).rgb;
                      }
                      vec3 mbApplyLut(vec3 c) {
                          // 8-tap trilinear over the N×N² image (CPU parity:
