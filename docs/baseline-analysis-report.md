@@ -353,3 +353,69 @@ globe 重跑（污染结果清除后）前 40 例已出，**累计 ~430 万 px**
 - **R13（§742，已修复）**：§714 shadow-uv 探针分支引用了 `if(uMBShadowIntensity>0)` 块内的 mbShUv/mbShD（作用域外引用=GLSL 恒定编译错误）→ 该注入序下**挤出材质全灭**——buildings-trees-shadows 族（389万）建筑整体缺失的真根因（日志 Shader Error 1281 实锤）。探针移入阴影块+mbShProbeFired 守卫。注意：**§742 提交前渲染的 session 1-2 八例（buildings-trees-shadows 族+MAPS3D）为修复前结果，终版对比前需定点重跑**。
 - 运行状态：globe 40/122 → 之后 3d-intersections 续跑（30/75 已有）；内存纪律持续生效（会话边界 Chrome 归零）。
 - 4 例页面级崩溃（§743）已记录：trees-use-theme/trees-zoom-based-scale/vector-layer-external-models±import——定位入口=单夹具+超时栈 dump，头号嫌疑 §727 GPU LUT / modelsPending 永 Await。
+
+---
+
+## 九、2026-09-02 终版：全面评估与下一步对齐计划（§724-§742 会话收官）
+
+> 数据源：全量验证 570 结果 / 110 PASS / 42,395,087 px（当前 HEAD=§742，4 夹具/会话内存安全模式）。
+> 覆盖域：model-layer 169 例、globe 84 例、3d-intersections 57 例、fog 62 例、lighting-3d-mode 7 例 + 90 余小分类。
+> 基准：model-layer 对 ml-0901 快照（41 例精确）；globe/3di 为首个干净基线（无历史逐例对照）。
+
+### 9.1 一页总览
+
+| 域 | 例数 | px 合计 | PASS | 状态判读 |
+|---|---|---|---|---|
+| model-layer | 169 | 2,599万 | 0 | 对 ml-0901 精确 41 例 **+4.0%**（8 胜 9 负）——R1 直射项恢复对 z-offset/conflation/hard-cutoff 大幅正收益；对 emission/doors/glb-tiles 等"ambient-only 时代标定"家族为负 |
+| globe | 84 | 955万 | 0 | **首个干净逐例基线建立**；极端离群 globe-fill-pattern/3x-on-2x-add-image 96.7万（addImage 运行时 pattern 缺失） |
+| 3d-intersections | 57 | 407万 | 1 | 与 §550-553 后记录值一致（elevated-line-labels-multi-level 24,161 逐位吻合）——**无回归**；余 18 例续跑 |
+| fog | 62 | 87.5万 | **14 PASS** | §701 雾域重建收益兑现 |
+| lighting-3d-mode | 7 | 62.9万 | 2 | §741 hillshade 接线后首测 |
+| 其余 90+ 小分类 | ~180 | ~230万 | ~93 PASS | circle/fill/heatmap/line-基础属性大面积 0 px PASS |
+
+### 9.2 §724-§742 修复效果裁决（model-layer 精确 41 例：4,947,485 → 5,147,351，+4.0%）
+
+**胜（8 例，节选）**：ground-shadow-fog-hard-cutoff 189,396→134,262（−29%）、conflation-buckingham 220,369→188,966（−14%）、duplicate-filtered-lod 40,660→35,379（−13%）、geojson-source-with-schema ×2 48,609→43,671（−10%）。
+**负（9 例）**：glb-tiles 3,023→57,152（+1791%）、emission-strength-lod 57,295→181,184（+216%）、emission-strength 44,153→85,514（+94%）、buckingham-lod 160,421→211,682（+32%）、thin-pillars +23%、mbx-lod-distant +26%、filter-runtime-styling +17%、fog-terrain +16%、glb-tiles-lod +20%。
+**家族级近似（±判读）**：z-offset 全家 −26~−35% ✓、highlights/castro +89~109% ✗、indirect-doors +42~71% ✗、trees-puck 待出。
+
+**机制归因**：正负同源——R1（§733）把 PBR-3D 直射项从"恒零"修复为"按方位生效"，所有 features 瓦片模型的亮度/明暗面因此改变：对"欠亮"的家族（z-offset/颜色过暗系）是修正，对"已在 ambient-only 下标定/调参"的家族（emission 标定、doors 门灯、castro/highlights 取景）是破坏。次要变量：§724.4 unlit-clamp 移除（emission 域）、§724.3 门灯 additive（doors 域）、R4 AO transform（-lod 域：glb-tiles-lod/colors-lod 改善但 glb-tiles-lod +20% 混合）。
+
+### 9.3 下一步对齐计划（按 ROI 排序，含具体入口）
+
+**P0-A 方位/标定 A/B 裁决（预期一举收敛 4-6 例回归，~150万 px）**
+回归四组（emission ±lod、doors ×4、castro ±lod、highlights ±lod、glb-tiles）全部符合"直射项激活后方位/量级与旧标定冲突"模式。已备好的裁决门：
+① `modeldiralt=1`（MBSTYLE_EXTRA_ARGS 透传，切 §683 镜像光向）——对回归四例单夹具 A/B；
+② **unlit-clamp 恢复**单变量对照（§724.4，emission 域第一嫌疑）；
+③ 若①②均负 → 光源方位镜像差实锤，按 §643/§653 共轭规则修正 mbDirView 的 y 分量。
+约束：z-offset/colors-lod/hard-cutoff 的已改善例在新参数下不得回退（回归门）。
+
+**P0-B 挤出消失复测（§742 已修，session 1-2 八例陈旧）**
+删除 buildings-trees-shadows 族 + MAPS3D ×8 的 §742 前结果 → 定点重跑 → 建筑应恢复渲染（对照 §723 后 94/95 采样吻合记录）。预期 casting/fog 系 4 例大幅收敛（建筑体量=失分主体）。
+
+**P1-A globe-fill-pattern/addImage（96.7万 单点，globe 域最高 ROI）**
+环境/数据源暴露 `map.addImage` 运行时注册表；fill-pattern 通道合并消费 sprite-atlas + runtime registry（3x/2x pixel-ratio 语义对齐 mgl ImageSprite）。入口：MBEnvironmentManager image/canvas/video 源分支（:2786-2837 已有同构通道）+ fill-pattern 纹理选择处。
+
+**P1-B globe 域基线归因（955万，84 例基线已建）**
+逐例对 §二#2 的机制清单：globe 相机距离系（zoom→dc 4.5R vs 5.7R）、globe raster colorization、TerrainDraping bail——均为引擎冻结带；数据源层无即修项。globe-antialiasing 族 14-22万×4 为域内最大子族（AA 语义，冻结）。
+
+**P1-C 3d-intersections 收尾（余 18 例自动续跑）+ 407万 归因**
+已有 57 例与历史记录一致（无回归）；完成后按 elevated 照明/symbol 方向/drape 依赖链归因（报告 §二#3）。
+
+**P2-A 崩溃 4 例定位（§743）**：单夹具 karma + 180s 超时栈 dump；顺序 trees-use-theme（§727 LUT 嫌疑）→ vector-layer-external-models（external gltf 分支）。
+**P2-B conflation 族混合**（buckingham-lod +32% vs buckingham −14% 同域分化）：需 pixpick 置换归因（取证②）。
+**P2-C §688 ×0.77**：diffuse 域 print 排除法。
+
+**P3 冻结带（维持挂起）**：globe 相机距离、fog 逐内容深度、depth-occlusion 双 pass、custom-layer-js、fill-extrusion 半透明（真机）、SDF atlas FontCatalog。
+
+### 9.4 验证基建现状（就绪）
+
+- chunked runner：≤4 夹具/会话、进程组击杀、15min 会话超时、resume 默认关（MBSTYLE_RESUME_ROUNDS）、MBSTYLE_EXTRA_ARGS 透传、断点续跑（跳过已有结果）。
+- filter 类别锚定（§743）：`filter=<category>/<fixture>`——跨分类污染（globe 被意外执行）已根治。
+- `compare-mbstyle-results.js`：双树对比/family 聚合/FLIP/MISSING。
+- ml-0901 快照：`ml0901-baseline-snapshot.json`（43 精确 + 38 家族级）。
+- 309 单测 + tsc 绿；探针在库（pixpick/partHist/shdbg/fogt/decodedbg/mbbatchdbg）。
+
+### 9.5 已知未对齐但裁定暂缓的域（维持记录）
+
+globe 相机距离系、fog 逐内容深度语义、depth-occlusion 双 pass、custom-layer-js 通道、fill-extrusion 半透明混合（SwiftShader GL 级疑点，需真机）、SDF atlas FontCatalog 光栅化、models-on-globe 模型矩阵球面补偿（探针入口已备）、TERRAIN_FRAGMENT_OCCLUSION 模型覆盖、DITHERED_DISCARD LOD 渐变（资产预拆无触发）、OCCLUSION_TEXTURE_TRANSFORM 已修（§728）。
