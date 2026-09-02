@@ -225,3 +225,39 @@
 4. landmark-glb-tiles-lod 单夹具复测（R4 直接验证点）。
 5. 19 挂起族余量（9 例 globe/trees-fog 引擎域）与 fill-extrusion 半透明（真机）维持挂起。
 6. 工程防线现状：309 单测（LUT 门控 5 + 压平 4 为新增，均已实战抓 bug）、tsc 绿、chunked runner 三项修复。
+
+---
+
+## 七、2026-09-02 增量续：§三 ROI 清单状态勘误（代码比对，全部已执行/裁定）
+
+> 代码比对发现：§三 的 ROI 修复建议已由后续会话执行完毕（主批次 `9f7fa341` 2026-08-30"baseline-report ROI 批次"+ 后续 §724-§740），但本报告 §二/§三 状态未同步。逐项勘误如下（含代码位置与实测结果，取自各提交记录）：
+
+| §三 条目 | 状态 | 实现位置 / 实测 |
+|---|---|---|
+| 1. background-pitch-alignment viewport 纯色 quad（#8，5 例 70.7万） | ✅ 已执行 | `applyBackgroundViewportQuad`（MBEnvironmentManager:2487；调用门控 MBStyleDataSource:2153-2167：pattern 缺失+pitch-alignment=viewport 时走全屏 quad，层序在内容之上时 overlay）；**708,933→234,907 px，viewport-alignment-mercator-low-zoom 转 PASS**（9f7fa341①） |
+| 2. appearance icon-offset y 方向（#23） | ✅ 已执行 | MBStyleSymbolPlacement:981-986 y 翻转对齐 mgl（9f7fa341②） |
+| 3. extent/1024-symbol setExtents 前置（#12） | ✅ 已执行+改判 | `probeMvtExtent`（MBStyleDecoder:302）protobuf 探针前置（legacy group wiretype+幂2 sanity）；**实测 extent/1024 系瓦片实为 4096 内容——双影根因在数据不在解码**（9f7fa341③） |
+| 4. raster-color 重跑确认（#14） | ✅ 已执行+确认 | 含 raster-value 的表达式存 raw 不求值→ramp 生效：**expression 121,110→0 转 PASS**、nearest 120,987→323（9f7fa341④）——报告"已修未兑现"的疑问兑现 |
+| 5. fit-screen-coordinates / free-camera harness 相机（#11/#18，79万） | ✅ 已执行 | fitScreenCoordinates 改 mgl 语义（unproject 四角 bbox+lookAt bounds-fit，**51,916→613**）；lookAtPoint/setCameraPosition 改 FreeCamera 公式（9f7fa341⑥） |
+| 6. hillshade illumination-direction/emissive 接线（#16） | ⚠️ 已试，**负结果回退** | 实测 +60k 回归，已回退留注（9f7fa341）——非接线缺口而是色调标定域，重启需先破照明模型 |
+| 7a. crossSourceCollisions 分组 | ✅ 已实现 | MBStyleSymbolPlacement:261-300——metadata.test.crossSourceCollisions===false 时按 source 分碰撞组（layerSource 映射+组内 box 碰撞+verdict 派生），引擎 overlap 旗标按 csc=false 放宽 |
+| 7b. video vendored mp4 + VideoSource | ✅ 已执行 | `drone.mp4` 已 vendored（7.9MB）+ VideoSource 分支（MBEnvironmentManager:2817-2837，`<video>`+VideoTexture、canplay 门+10s 超时惰性、0.04s 停靠帧）；**video/default 150,271→148,456**（结构性缺口关闭；残差=CDN mp4 重编码与 expected 生成期不可逐位对齐）；video/projected 79,659（albers 自定义投影 drape 冻结域）不变（20dcae17） |
+| 8. model-layer 新家族 | ✅ 本会话主攻 | §724-§740（见 §六）：12 项根因 R1-R12 修复入库 |
+| 9. landmark-z-offset-munich-3d-hidden 回归排查 | ✅ 已消解 | layout.visibility:none 接线跳过（9f7fa341⑤）：50,607→8,962 / lod 28,859→9,021 |
+
+### §二 表格状态同步勘误（受上表影响的行）
+
+- **#8 background-pitch-alignment**：`走不到 quad 通道` → **已修**（quad 通道落地，1 例转 PASS，残余 23.5万 为 pattern-viewport-globe 系）。
+- **#11 fit-screen-coordinates**：`harness 缺陷` → **已修**（613 px 近绿）。
+- **#12 extent/1024-symbol**：`setExtents 惰性` → **已前置**；残余双影根因改判为 fixture 数据（瓦片实为 4096 内容）。
+- **#14 raster-color**：`已在 HEAD 修复` → **确认兑现**（expression 0 px）。
+- **#15 video**：`无 VideoSource 分支 + mp4 未 vendored` → **两者均已关闭**（残差为资产版本域 + 自定义投影冻结域）。
+- **#17 dynamic-filter/symbols**：`crossSourceCollisions 分组未实现` → **已实现**（per-source 碰撞组）；余下 text 沿线 TextPathGeometry 分支仍开放。
+- **#16 hillshade**：`照明硬编码 315°` → 接线已试并回退（+60k），域改判为照明模型标定。
+
+### 当前真正的开放项（2026-09-02 末，按域）
+
+1. **model-layer**（§六矩阵）：§733 帧修复+§738/§739 双门控+R4 AO transform 的渲染复核（chunked 全量+compare 归因）。
+2. **运行时取证清单**（§6.5）：globe 模型矩阵探针、conflation 置换归因、indirect-update 帧差、门灯光束色链、modellightgamma/翻转方位 A/B、§688 ×0.77。
+3. **引擎冻结带**：globe 相机距离系、fog 逐内容深度、depth-occlusion 双 pass、custom-layer-js、models-on-globe 矩阵补偿、fill-extrusion 半透明（真机）。
+4. **符号域残余**：text 沿线 TextPathGeometry 分支、SDF atlas FontCatalog 光栅化（冻结）、hillshade 照明模型重破。
