@@ -7677,3 +7677,7 @@ diff 图目视+像素统计：202,959 错配铺满全帧——**ours 背景/地�
 **§771e. trees-use-theme 并排目视定案：残余=全场景光照/材质渲染域（金属镜面+雾洗），非单链 tint 断点（2026-09-03）**：
 
 两图并排对比（§771 live-paint/paintRev/entryId 全部生效后）：① 布局/树位/数量逐树吻合（放置域干净）；② ours 树冠暗栗色 vs expected 橄榄亮黄——expected 的亮黄高光为**金属材质（tree-metallic）镜面反射**特征，ours 无此镜面响应（金属高光/PBR 环境差，§694-§721 同域）；③ 地面/街道 ours 更锐利暗红、expected 更柔和红洗（雾/主题亮度差，§771b 已记档）。**裁定**：202,959 残余为全场景光照+材质渲染域（金属镜面、雾洗、阴影），由 §694-§721 阴影/光照专项统一收敛，无数据源层单链修复点。runtime tint 链的全部可静态修复项（§750 断链/§770 entryId/§771 live-paint）均已入库。309 单测绿、tsc 绿。
+
+**§771f. trees-use-theme 双模型层取证：expected 主显 tree-layer-diffuse（LUT 绿→橄榄），ours 被 tree-layer（金属红染）覆盖（2026-09-03）**：
+
+mgl getBaseColor 对照（model.fragment:164-205）：albedo = baseColorFactor × vertexColor × texture → mix(color_mix) → LUT（mgl:165-205 实证 LUT 在 getBaseColor 尾部、作用于含顶点色的完整 albedo）。**层结构取证**：style 有两个 model 层——tree-layer（model-id tree/tree-metallic，use-theme none，mix 1.0→op 0）与 tree-layer-diffuse（tree-diffuse，无 use-theme none → 全 LUT）。expected 树冠=橄榄金=LUT(绿顶点色) → **主显 diffuse 层**；ours 暗栗=metallic 树的红染/无 LUT 版本在上层。**下一入口**：两 model 层的 renderOrder/绘制次序对拍（谁覆盖谁），及 mix→0 后 tree-layer 的可见性语义（mgl mix=0 → 该层树为原始贴图色仍可见，与 diffuse 层叠加的混合次序）。309 单测绿、tsc 绿。
