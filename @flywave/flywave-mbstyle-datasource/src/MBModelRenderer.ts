@@ -1184,12 +1184,13 @@ export class MBModelRenderer {
                 : undefined;
             applyMglModelLighting(this.m_dataSource, model, pl.emissive ?? 0, tint,
                 undefined, undefined, undefined,
-                // §753: mgl draw_model ignoreLut only nulls the LAYER lut
-                // (model-color theming); the style-wide theme still LUTs the
-                // albedo — pixel proof: trees-use-theme expected has ZERO
-                // green (raw COLOR_0) pixels while ours kept them when this
-                // inherited 'none'.
-                false,
+                // §774: use-theme 'none' disables the layer LUT entirely
+                // (mgl draw_model ignoreLut → null). §753's global-LUT
+                // experiment was reverted: inverse-LUT proof — the theme
+                // contains NO texel near expected's olive crowns, i.e. mgl
+                // renders these trees UNLUT'd raw vertex green under its
+                // lighting.
+                (technique as any)._paint?.['model-color-use-theme'] === 'none',
                 (technique as any)._paint?.['model-receive-shadows'] !== false);
             if (Number.isFinite(pl.roughness)) {
                 model.traverse((o) => {

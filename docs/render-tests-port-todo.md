@@ -7709,3 +7709,7 @@ INST 探针（instantiate 处）实证：tree-layer（ro 10.003）与 tree-layer
 **§773. LUT 采样对拍修正 + mgl applyLUT 精确式入库（2026-09-03）**：
 
 对拍 mgl `_prelude.fragment:103 applyLUT`：`uvw = col.rbg × (size−1) + 0.5`（swizzle rbg → Texture3D [N,N,N]：image texel x = r + g·N，y = b）。据此再次修正 mbLutTap：x = r + g·N（此前 §772 的 x = r + b·N 仍是转置——CPU applyColorTheme 的 index 公式 r + g·N² + b·N 对应 x = r + b·N/y = g，**CPU 与 mgl GPU 的读法本身互为转置**，此为历史遗留的 CPU 奇偶差，2D 主题夹具按 CPU 式标定故未暴露）。trees-use-theme 实测仍 202,959——该夹具树冠未走到 uMBLut 采样路径（capture 帧树层 lutOff/门控状态待查），残余维持全场景光照域定性。309 单测绿、tsc 绿。
+
+**§774. trees-use-theme LUT 门裁定回退 + 光照亮度域最终确认（2026-09-03）**：
+
+反查 LUT 全表：**不存在任何 texel 逼近 expected 橄榄 (159,110,47)**（最近距离 14,318）→ mgl 的 expected 树冠橄榄**不经 LUT**——§734 原判（use-theme none → 整层不主题化）正确，§753 的全局 LUT 实验方向错误，已回退为 paint 驱动 lutOff（use-theme none → LUT 关）。残差 203,504 ≈ 202,959：**主导差异 = 模型照明亮度**（expected 树冠受光面 117-255 亮域 vs ours 0-51 黑域；环境光 rgba(0,0,0,0.4) 下 mgl indirect=0 但 directional 项在受光面给出 255 域）——我方向量/强度喂送在树层存在域差，属 §694-§721 光照量级专项核心（非 LUT、非 tint 链）。309 单测绿、tsc 绿。
