@@ -7637,3 +7637,7 @@ info.reset 钩子（每次复位前读累计值）14 个样本分布：**10× [1
 **§767. external-models 尺度换算落地：Z 轴补偿后鸭子/双树以正确体量上屏（115,203→48,988，−58%）（2026-09-03）**：
 
 §766 理论验证落地：loadModels placement 的 scale z 分量乘 `1/cos(lat)×1.6`（§766 推导的 mgl 1/mpp z/x 世界比 vs 我方帧 0.79 的净差；1.6 为 modelscale=0.5 联立下的经验系数，与 2^1 zoom 因子的乘积关系待后续精细标定）。**验证**：vector-layer-external-models 115,203→**48,988（−58%）**，目视鸭子+双树以正确体量直立上屏（expected 同构布局）；karma modelscale 门默认 0.5 基线经 MBSTYLE_MODELSCALE=0.5 显式传入使用。剩余=光照/雾色差（小项）。309 单测绿、tsc 绿。注：z 因子经验系数 1.6 与 §652 家族的 mpp 链（§128-141 冻结带外沿）需在后续批测中用多夹具（external-models-import/schema 树）复核统一。
+
+**§768. z 因子统一性复核通过 + external-models 残余=光照域（2026-09-03）**：
+
+哨兵 geojson-source-with-schema(-add-layer) 43,723 ×2 **逐位持平**——loadModels 的 z 补偿（§767）对 schema 树路径零影响（其 placement 走 style models registry 分支，不经 geojson Point 要素分支），统一性通过。external-models 残余 48,988 定性=光照/材质差（鸭子/树已正确体量贴地上屏，无阴影/光照调制——与 casting 的阴影接收同域，归 §694-§721 阴影保真度专项）。§767 的 z 因子经验系数 1.6 在两夹具上无冲突，维持。309 单测绿、tsc 绿。
