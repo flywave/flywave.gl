@@ -7445,3 +7445,12 @@ ground 注入先于 extrusion 注入时 uniform 三连声明重复 → GLSL 编�
 **§725.4 实例化模型 feature-state 接线**：trees-shadow-scaled / trees-puck-terrain-change-exaggeration 的 setFeatureState→hover 语义此前失效——MBTileDataEmitter 模型分支 evalVec3/evalScalar/model-color 求值上下文缺 featureState。修复：emitter 新增 `setFeatureStateLookup`（decoder 注入 m_featureStates 查找，number/string 双形式归一），三处求值上下文传入 featureState。setFeatureState 已有 markTilesDirty 重解码链路，状态变更后重求值生效。
 
 **未移植记录（评估后主动跳过）**：①模型 GPU LUT（APPLY_LUT_ON_GPU）——mgl 为 sampler3D + GLSL3，需 3D 纹理上传与 shader 版本升级（SwiftShader 风险），且 model-layer 仅 trees-use-theme 1 夹具；CPU 侧 applyColorTheme（MBLayerEvaluator:628-636）已覆盖颜色类 paint，缺口仅在纹理颜色 themed——独立立项。②DITHERED_DISCARD LOD 渐变——fixture 瓦片为 tiler 预拆分（mbx vs mbx-lod 目录），GLB 内无 LOD scene，静态夹具无过渡态。③OCCLUSION_TEXTURE_TRANSFORM / UNPREMULT_TEXTURE_IN_SHADER——现有资产未见触发形态。④TERRAIN_FRAGMENT_OCCLUSION 模型覆盖——引擎级，未列入。单测 300 绿（743ms）、tsc 绿。
+
+
+**§726. 代码对齐第三波——无 UV 贴图剥离 + 实例模型贴地/坡度（2026-09-02，代码落地，渲染验证攒批延后）**：
+
+**§726.1 无 TEXCOORD 网格全贴图剥离（model-no-texcooords-textures 根因扩展）**：BoomBoxNoUV 解剖——mesh 仅 POSITION+NORMAL，材质却带全部 5 张贴图。mgl 所有纹理采样以 HAS_ATTRIBUTE_a_uv_2f 门控（frag:179/212/294/507/519）→ 无 UV 走纯因子路径。§647 此前只摘 baseColor map——且 §725.2 的 metallicRoughness 纹理捕获会读到 texel(0,0) 垃圾 roughness/metalness，本修复成为其前置。实现：fixupModelMaterials 对无 UV mesh 在**克隆**上剥离全部 6 类 map（GLTFLoader 材质跨 primitive 共享，mgl 门控是 per-primitive；克隆不拷贝 `__mbMglLit`——onBeforeCompile 闭包不可克隆，由 instantiate 后续的 applyMglModelLighting 重新挂载）。
+
+**§726.2 实例模型贴地 + 坡度倾斜（model-elevation-reference 默认语义）**：style-spec 默认 `model-elevation-reference: ground`（v8.json paint_model）→ mgl drawModels:530-532 对**实例化模型**默认 applyElevation + followTerrainSlope（data/model.ts:271-285：matrix[14] += DEM 高程；positionModelOnTerrain 以 AABB 底面 4 角采样取 3 点拟合地形平面四元数）。我方此前实例放置完全无贴地（trees-puck-terrain 家族模型悬空/入地）。实现：①emitter 暂存 `_modelElevationReference`（paint_model 常量属性）；②MBModelRenderer.instantiate 在地形采样激活时 z += DEM 高程 + 坡度梯度法线四元数（setFromUnitVectors(up, normal)，梯度采样半径 r=instance 足迹 span≈max(scale)——mgl 的 AABB 底面 3 点拟合对小模型收敛于同一切平面，近似记录在案）；③旋转插入序与 mgl 一致（T·S(ppm)·Rterrain·Rmodel·S·F，premultiply 于 ground-stretch k 之前）；④elevation-reference: sea 时全跳过；地形关闭时 sampleTerrainElevation 返回 null → 无抬升（state.elevation null 同语义）。
+
+**需运行时取证再动的域（静态盲改风险高，暂记）**：①conflation 族（intersect-padding/thin-pillars/buckingham）——mgl replacement_source + per-frame conflation manager 是大子系统，我方 §634 为 decode 时挤出抑制；哪些内容在何处被置换需 fixture diff 像素归因后定向移植；②indirect-update 家族剩余残差——refreshMeshFeatures 链路已具备，需 setLights 前后帧差取证；③门灯光色链（lit-color mix vs 我方原色直出）——需光束像素差。单测 300 绿（1s）、tsc 绿。

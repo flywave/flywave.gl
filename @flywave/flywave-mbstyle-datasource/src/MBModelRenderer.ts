@@ -569,9 +569,41 @@ export function fixupModelMaterials(root: THREE.Object3D): void {
         // rendered gray-on-gray instead of its white baseColorFactor; mgl
         // falls back to the factor when TEXCOORD_0 is absent).
         const hasUV = !!(mesh.geometry?.attributes?.uv);
-        for (const mat of mats as any[]) {
+        for (let mi = 0; mi < (mats as any[]).length; mi++) {
+            const mat: any = (mats as any[])[mi];
             if (!mat) continue;
-            if (!hasUV && mat.map) { mat.map = null; mat.needsUpdate = true; }
+            // mgl gates EVERY texture sample on HAS_ATTRIBUTE_a_uv_2f
+            // (model.fragment.glsl:179 baseColor, :212 normal, :294
+            // metallicRoughness, :507 occlusion, :519 emissive) — without
+            // TEXCOORD_0 the factor-only path renders. three would clamp
+            // every map to texel (0,0), so strip them all. GLTFLoader shares
+            // materials across primitives: strip on a CLONE so meshes with
+            // UVs keep their textures (mgl gates per primitive).
+            const anyMap = mat.map || mat.roughnessMap || mat.metalnessMap
+                || mat.aoMap || mat.normalMap || mat.emissiveMap;
+            if (!hasUV && anyMap) {
+                const stripped: any = mat.clone();
+                stripped.map = null;
+                stripped.roughnessMap = null;
+                stripped.metalnessMap = null;
+                stripped.aoMap = null;
+                if (stripped.normalScale) stripped.normalScale.set(1, 1);
+                stripped.normalMap = null;
+                stripped.emissiveMap = null;
+                stripped.needsUpdate = true;
+                // NOTE: __mbMglLit deliberately NOT copied — the clone loses
+                // the onBeforeCompile closure, so applyMglModelLighting must
+                // re-patch it (it runs after fixup in instantiate()).
+                stripped.__mbMetalFixed = mat.__mbMetalFixed;
+                if (Array.isArray(mesh.material)) {
+                    const arr = (mesh.material as any[]).slice();
+                    arr[mi] = stripped;
+                    mesh.material = arr;
+                } else {
+                    mesh.material = stripped;
+                }
+                continue;
+            }
             if (mat.__mbMetalFixed) continue;
             mat.__mbMetalFixed = true;
             // §647: metallic ≈ 1 materials (the glTF DEFAULT when
@@ -891,6 +923,40 @@ export class MBModelRenderer {
                 0, 0, -1, 0,
                 0, 1, 0, 0,
                 0, 0, 0, 1));
+        // mgl calculateModelMatrix:271-285: model-elevation-reference defaults
+        // to 'ground' (style-spec) — with terrain the instance sits ON the
+        // DEM (matrix[14] += elevate) and followTerrainSlope rotates the
+        // model onto the terrain plane (Rterrain between the map scale and
+        // the model rotation). Terrain off → no lift (state.elevation null).
+        const elevRef = (placement as any).elevationReference
+            ?? (technique as any)._modelElevationReference ?? 'ground';
+        if (elevRef !== 'sea') {
+            const env: any = this.m_dataSource;
+            const sample = env?.sampleTerrainElevation?.bind(env);
+            if (sample) {
+                const base = sample(placement.x, placement.y);
+                if (base !== null && base !== undefined && isFinite(base)) {
+                    // Slope: sample the terrain gradient at ±r around the
+                    // anchor (r ≈ the instance footprint span) and rotate the
+                    // model's up onto the terrain normal.
+                    const rs = [Number(scale[0]) || 1, Number(scale[1]) || 1, Number(scale[2]) || 1];
+                    const r = Math.max(1, rs[0], rs[1], rs[2]);
+                    const ex = sample(placement.x + r, placement.y);
+                    const ey = sample(placement.x, placement.y + r);
+                    if (ex !== null && ex !== undefined && ey !== null && ey !== undefined
+                        && isFinite(ex) && isFinite(ey)) {
+                        const nx = (base - ex) / r;
+                        const ny = (base - ey) / r;
+                        const nl = Math.hypot(nx, ny, 1);
+                        const qTerrain = new THREE.Quaternion().setFromUnitVectors(
+                            new THREE.Vector3(0, 0, 1),
+                            new THREE.Vector3(nx / nl, ny / nl, 1 / nl));
+                        m.premultiply(new THREE.Matrix4().makeRotationFromQuaternion(qTerrain));
+                    }
+                    model.position.z += base;
+                }
+            }
+        }
         // §652(恢复): mercator ground-stretch — the world frame's x/y are
         // EQUATORIAL meters (tile2world), so one GROUND meter at latitude φ
         // spans 1/cos(φ) world units. mgl calculateModelMatrix:211 uses

@@ -1454,6 +1454,11 @@ export class MBTileDataEmitter {
                 props._modelTranslation = p['model-translation'] ?? l['model-translation'];
                 props._modelColor = p['model-color'];
                 props._modelColorMixIntensity = p['model-color-mix-intensity'];
+                // mgl model-elevation-reference (default 'ground'): with
+                // terrain the instance sits on the DEM and follows the slope.
+                props._modelElevationReference =
+                    p['model-elevation-reference']
+                    ?? l['model-elevation-reference'] ?? 'ground';
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'building':
