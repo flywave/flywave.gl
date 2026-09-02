@@ -209,6 +209,22 @@ export function applyModelFrontCutoff(
     const params = evalVec('model-front-cutoff', [0, 0, 1]);
     const finalOpacity = Math.min(Math.max(params[2], 0), 1);
     const enabled = finalOpacity < 1;
+    // Node opacity sink: standard materials take mat.opacity; the additive
+    // door-light ShaderMaterial scales uMBLightsA instead.
+    const setNodeOpacity = (mesh: THREE.Mesh, factor: number): void => {
+        const mat: any = mesh.material;
+        if (!mat) return;
+        if (mat.__mbIsLights) {
+            const u = mat.uniforms?.uMBLightsA;
+            if (u) u.value = (mesh.userData.__mbBeamBaseA ?? 1) * factor;
+            return;
+        }
+        if (mesh.userData.__mbBaseOpacity !== undefined) {
+            const opacity = mesh.userData.__mbBaseOpacity * factor;
+            mat.opacity = opacity;
+            mat.transparent = opacity < 1 || mat.userData.__mbForceTransparent === true;
+        }
+    };
     const meshes: THREE.Mesh[] = [];
     for (const group of groups) {
         group.traverse((o: any) => {
@@ -217,10 +233,7 @@ export function applyModelFrontCutoff(
     }
     if (!enabled) {
         for (const mesh of meshes) {
-            const mat: any = mesh.material;
-            if (mat && mesh.userData.__mbBaseOpacity !== undefined) {
-                mat.opacity = mesh.userData.__mbBaseOpacity * (mesh.userData.__mbFarCutoff ?? 1);
-            }
+            setNodeOpacity(mesh, mesh.userData.__mbFarCutoff ?? 1);
             mesh.userData.__mbCamColOp = undefined;
         }
         return;
@@ -229,10 +242,7 @@ export function applyModelFrontCutoff(
     const pitch = Number(mv?.pitch ?? 0);
     if (!camera || pitch < 20) {
         for (const mesh of meshes) {
-            const mat: any = mesh.material;
-            if (mat && mesh.userData.__mbBaseOpacity !== undefined) {
-                mat.opacity = mesh.userData.__mbBaseOpacity * (mesh.userData.__mbFarCutoff ?? 1);
-            }
+            setNodeOpacity(mesh, mesh.userData.__mbFarCutoff ?? 1);
         }
         return;
     }
@@ -297,13 +307,7 @@ export function applyModelFrontCutoff(
         } catch { nodeOpacity = 1; }
 
         const factor = camCol * nodeOpacity * (mesh.userData.__mbFarCutoff ?? 1);
-        const mat: any = mesh.material;
-        if (mat && mesh.userData.__mbBaseOpacity !== undefined) {
-            const base = mesh.userData.__mbBaseOpacity;
-            const opacity = base * factor;
-            mat.opacity = opacity;
-            mat.transparent = opacity < 1 || mat.userData.__mbForceTransparent === true;
-        }
+        setNodeOpacity(mesh, factor);
     }
 }
 
@@ -898,6 +902,12 @@ function splitByPart(
             parts[DOOR_PART].alpha * parts[DOOR_PART].opacity);
         if (lightsMesh) {
             lightsMesh.userData.__mbNodeId = mesh.userData?.__mbNodeId;
+            // mgl draws the light mesh with the node's u_opacity chain — the
+            // front-cutoff/camera-collision walker needs the node box and the
+            // beam's alpha base to scale (uMBLightsA).
+            lightsMesh.userData.__mbNodeBox = mesh.userData?.__mbNodeBox;
+            lightsMesh.userData.__mbBeamBaseA =
+                parts[DOOR_PART].alpha * parts[DOOR_PART].opacity;
             parent.add(lightsMesh);
             if (!(globalThis as any).__mbBeamLogged) {
                 (globalThis as any).__mbBeamLogged = true;
