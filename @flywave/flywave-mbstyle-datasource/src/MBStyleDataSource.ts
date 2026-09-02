@@ -1192,6 +1192,11 @@ export class MBStyleDataSource extends TileDataSource {
     private m_styleParams: MBStyleDataSourceParameters;
     private m_delegatingProvider: DelegatingDataProvider;
     private m_spriteAtlas: SpriteAtlas | null = null;
+    /**
+     * Runtime addImage registry (mgl ImageSprite semantics): survives atlas
+     * swaps and seeds the lazily created sprite-less atlas.
+     */
+    private m_runtimeImages = new Map<string, { image: HTMLImageElement | HTMLCanvasElement | ImageBitmap; pixelRatio: number }>();
     /** Active color-theme LUT (null = identity); applied to paints, fog, and baked into sprite/pattern textures. */
     private m_colorThemeLut: import('./MBColorTheme').ColorThemeLut | null = null;
     /** Per-import-scope color-theme LUTs (mgl getLut(scope)). */
@@ -3663,15 +3668,27 @@ export class MBStyleDataSource extends TileDataSource {
         (this.mapView as any)?.setFovCalculation?.({ type: 'fixed', fov });
     }
 
-    /** Runtime addImage: inject an icon into the sprite atlas. */
-    addImage(name: string, image: HTMLImageElement | HTMLCanvasElement | ImageBitmap): boolean {
+    /**
+     * Runtime addImage: inject an icon/pattern into the sprite atlas.
+     * mgl keeps runtime images in an ImageSprite independent of the style
+     * sprite — styles without a sprite block must still accept addImage
+     * (globe-fill-pattern/3x-on-2x-add-image), so the atlas is created
+     * lazily here and runtime images are re-applied if a style sprite
+     * later replaces the atlas.
+     */
+    addImage(name: string, image: HTMLImageElement | HTMLCanvasElement | ImageBitmap, pixelRatio: number = 1): boolean {
         MBExpressionEngine.addAvailableImage(name);
-        const w = (image as any).width ?? 0;
-        const h = (image as any).height ?? 0;
+        const w = (image as any).naturalWidth ?? (image as any).width ?? 0;
+        const h = (image as any).naturalHeight ?? (image as any).height ?? 0;
         if (w > 0 && h > 0) {
             // Keep the pattern-size registry in sync for runtime-added images.
             const cur = (MBTileDataEmitter as any).s_spriteInfos as Map<string, any> | null;
-            cur?.set(name, { width: w, height: h });
+            cur?.set(name, { width: w, height: h, pixelRatio });
+        }
+        this.m_runtimeImages.set(name, { image, pixelRatio });
+        if (!this.m_spriteAtlas) {
+            if (typeof document === 'undefined') return false;
+            this.m_spriteAtlas = this.createEmptySpriteAtlas();
         }
         // PoiRenderer looks icons up in mapView.userImageCache (theme+user
         // caches) by technique imageTextureName — runtime addImage must
@@ -3683,12 +3700,22 @@ export class MBStyleDataSource extends TileDataSource {
                 userImageCache.addImage(name, image as any);
             }
         } catch {}
-        return this.m_spriteAtlas?.addIcon(name, image as any) ?? false;
+        return this.m_spriteAtlas.addIcon(name, image as any, false, pixelRatio) ?? false;
+    }
+
+    /** Minimal blank-atlas so runtime addImage works on sprite-less styles. */
+    private createEmptySpriteAtlas(): SpriteAtlas {
+        const cv = document.createElement('canvas');
+        cv.width = 1;
+        cv.height = 1;
+        return new SpriteAtlas(cv, new Map());
     }
 
     /** Runtime removeImage: remove an icon from the sprite atlas. */
     removeImage(name: string): boolean {
         MBExpressionEngine.removeAvailableImage(name);
+        this.m_runtimeImages.delete(name);
+        (MBTileDataEmitter as any).s_spriteInfos?.delete?.(name);
         return this.m_spriteAtlas?.removeIcon(name) ?? false;
     }
 
@@ -3979,6 +4006,11 @@ export class MBStyleDataSource extends TileDataSource {
             }
             MBTileDataEmitter.setSpriteInfos(spriteInfos);
             this.m_spriteAtlas = new SpriteAtlas(spriteData.image, icons);
+            // Re-apply runtime addImage entries — the new atlas must not
+            // silently drop images registered before/without a style sprite.
+            for (const [name, entry] of this.m_runtimeImages) {
+                this.m_spriteAtlas.addIcon(name, entry.image, false, entry.pixelRatio);
+            }
 
             // Register individual icons in MapView's userImageCache so that
             // PoiRenderer can find them by name. PoiRenderer uses imageCaches

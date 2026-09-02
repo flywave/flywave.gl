@@ -897,6 +897,10 @@ async function processOperations(
                     // it against the vendored mapbox-gl-js checkout, strip the
                     // export syntax, eval once (onAdd + one render pass) and
                     // feed the drawn canvas to addImage.
+                    // args[2] carries mgl's {pixelRatio, sdf} — pixelRatio must
+                    // reach the atlas so pattern/icon displaySize = px/ratio
+                    // (3x-on-2x-add-image family).
+                    const opPixelRatio = Number((args[2] as any)?.pixelRatio) || 1;
                     if (typeof args[1] === 'string' && args[1].endsWith('.js')) {
                         try {
                             const rel = args[1].replace('./', '');
@@ -911,7 +915,7 @@ async function processOperations(
                                 if (image && typeof image.render === 'function') image.render();
                                 const canvas = image?.context?.canvas as HTMLCanvasElement | undefined;
                                 if (canvas) {
-                                    dataSource.addImage(args[0], canvas);
+                                    dataSource.addImage(args[0], canvas, opPixelRatio);
                                     // The symbol placement decoded before the
                                     // image existed (icon 'dot' unresolved →
                                     // feature dropped). Force a re-decode so
@@ -931,7 +935,7 @@ async function processOperations(
                             const rel2 = (args[1] as string).replace('./', '');
                             const img = new Image();
                             img.onload = () => {
-                                dataSource.addImage(args[0], img);
+                                dataSource.addImage(args[0], img, opPixelRatio);
                                 (dataSource as any).mapView?.markTilesDirty?.(dataSource);
                                 mapView.update();
                             };
@@ -950,7 +954,7 @@ async function processOperations(
                             imageData.data.set(new Uint8ClampedArray(imgData.data));
                             ctx.putImageData(imageData, 0, 0);
                         }
-                        dataSource.addImage(args[0], canvas);
+                        dataSource.addImage(args[0], canvas, opPixelRatio);
                     } catch {}
                 }
                 break;
@@ -961,6 +965,7 @@ async function processOperations(
             }
             case "updateImage": {
                 // Re-add the image (same as addImage but replaces existing).
+                const opPixelRatio = Number((args[2] as any)?.pixelRatio) || 1;
                 if (args[1] && typeof document !== 'undefined') {
                     dataSource.removeImage(args[0]);
                     if (typeof args[1] === 'string' && args[1].endsWith('.png')) {
@@ -970,7 +975,7 @@ async function processOperations(
                             const rel2 = (args[1] as string).replace('./', '');
                             const img = new Image();
                             img.onload = () => {
-                                dataSource.addImage(args[0], img);
+                                dataSource.addImage(args[0], img, opPixelRatio);
                                 (dataSource as any).mapView?.markTilesDirty?.(dataSource);
                                 mapView.update();
                             };
@@ -989,7 +994,7 @@ async function processOperations(
                             imageData.data.set(new Uint8ClampedArray(imgData.data));
                             ctx.putImageData(imageData, 0, 0);
                         }
-                        dataSource.addImage(args[0], canvas);
+                        dataSource.addImage(args[0], canvas, opPixelRatio);
                     } catch {}
                 }
                 break;

@@ -1526,6 +1526,10 @@ export class MBMaterialPatchManager {
                 this.injectGroundShadow(material as any);
             }
         }
+        if ((globalThis as any).__mbNoCull) {
+            let o: THREE.Object3D | null = obj;
+            while (o) { o.frustumCulled = false; o = o.parent; }
+        }
         switch (techName) {
             case 'fill':
                 if (technique._isLineRibbon) {
@@ -4810,6 +4814,13 @@ export class MBMaterialPatchManager {
      */
     private patchFillPatternMaterial(material: THREE.Material, technique: any, mglComposite = false): void {
         const tex = this.extractPatternTexture(technique._patternName);
+        if ((globalThis as any).__mbFillFlat) {
+            (material as any).map = null;
+            (material as any).color = new THREE.Color('#ff0000');
+            (material as any).onBeforeCompile = () => {};
+            (material as any).needsUpdate = true;
+            return;
+        }
         if (!tex) {
             // mgl: a pattern missing from the atlas renders the layer
             // invisible — never the black fill-color base. The marker is
@@ -4820,6 +4831,10 @@ export class MBMaterialPatchManager {
             return;
         }
         material.visible = true;
+        // SPHAB probe: globe fills culled? try double-side.
+        if ((globalThis as any).__mbSphDoubleSide) {
+            (material as any).side = THREE.DoubleSide;
+        }
         // Terrain draping: make patterned fill conform to the terrain surface.
         if (!!this.centerDem) this.injectTerrainDrape(material);
         if ((material as any).__mbPatternPatched) return;

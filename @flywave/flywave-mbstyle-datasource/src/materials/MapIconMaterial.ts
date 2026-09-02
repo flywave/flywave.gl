@@ -75,7 +75,7 @@ export class SpriteAtlas {
      * Dynamically add an icon to the atlas at runtime (addImage operation).
      * The icon is drawn to the canvas at the current cursor position.
      */
-    addIcon(name: string, image: HTMLImageElement | HTMLCanvasElement | ImageBitmap, sdf: boolean = false): boolean {
+    addIcon(name: string, image: HTMLImageElement | HTMLCanvasElement | ImageBitmap, sdf: boolean = false, pixelRatio: number = 1): boolean {
         if (!this.m_ctx || !this.m_canvas) return false;
         if (this.icons.has(name)) return false;
 
@@ -94,7 +94,7 @@ export class SpriteAtlas {
         this.m_ctx.drawImage(image as any, this.m_cursorX, this.m_cursorY);
         this.icons.set(name, {
             x: this.m_cursorX, y: this.m_cursorY,
-            width: w, height: h, pixelRatio: 1, sdf,
+            width: w, height: h, pixelRatio, sdf,
         });
         this.m_cursorX += w + padding;
         this.m_rowHeight = Math.max(this.m_rowHeight, h);

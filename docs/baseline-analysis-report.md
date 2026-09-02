@@ -419,3 +419,11 @@ globe 重跑（污染结果清除后）前 40 例已出，**累计 ~430 万 px**
 ### 9.5 已知未对齐但裁定暂缓的域（维持记录）
 
 globe 相机距离系、fog 逐内容深度语义、depth-occlusion 双 pass、custom-layer-js 通道、fill-extrusion 半透明混合（SwiftShader GL 级疑点，需真机）、SDF atlas FontCatalog 光栅化、models-on-globe 模型矩阵球面补偿（探针入口已备）、TERRAIN_FRAGMENT_OCCLUSION 模型覆盖、DITHERED_DISCARD LOD 渐变（资产预拆无触发）、OCCLUSION_TEXTURE_TRANSFORM 已修（§728）。
+
+---
+
+## 十、2026-09-02 续：P1-A 执行结果（addImage 通道修复 + globe 残差改判 R14）
+
+1. **addImage 运行时注册通道已修复入库（§744）**：`addImage(name, image, pixelRatio)` 惰性建 atlas（无 sprite 样式此前整体丢弃运行时图像）+ `m_runtimeImages` 注册表跨 atlas 换重放 + harness op 透传 pixelRatio。修复后 globe 夹具 pattern 解析恢复（tex=Y@pr3 vs 修复前 NONE）。
+2. **96.7万 px 未兑现的改判（R14，引擎冻结带）**：五连 A/B（细分密度/DoubleSide/关剔除/纯红材质）+ FILLPROBE 实证——globe fill 瓦片被放置在**相机对跖位**（mesh world x = −camera.x，5.71R 之外），整体被地球遮挡，几何零光栅化；静态 style 对照同病 → 非 runtime op 专属。这是引擎 globe 瓦片放置帧镜像问题（与 §二#2 相机距离系同域不同点）。诊断夹具 `globe/globe-fill-pattern/3x-on-2x-static` 留作 R14 修复验收点；karma arg 探针 sphdeg/sphds/nocull/fillflat 入库。
+3. 状态表更新：**#P1-A → 通道修复完成（代码正确性）**；globe-fill-pattern 家族残差归入 §9.5 冻结带（新增 R14 条目）。
