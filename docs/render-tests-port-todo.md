@@ -7661,3 +7661,7 @@ RST 探针（reset 时同步读 sceneRoot mesh 数）：全帧 sceneMeshes=**164
 **§772. LUT 逐通道对拍定案：GPU 采样 g/b 转置修复入库（真实正确性修复）；冠色红染仍由 placement tint 链主导（2026-09-03）**：
 
 ① **转置缺陷实锤并修复**：CPU applyColorTheme 索引 = `r + g·N² + b·N`（图像宽 N²：x = r+b·N，y = g），GPU mbLutTap 却用 `x = r+g·N, y = b` —— **g/b 轴转置**。已改为 x = r+b·N、y = g（与 CPU 逐 texel 对齐）。② 实测 trees-use-theme 202,959 逐位不变——转置修复被上游遮蔽：**placement tint（model-color 红 × mix=1）仍在**，皇冠=红染+LUT，遮蔽了 LUT 采样差异；tint 链的 runtime op 断点（§770）需交互式追踪先行。③ 转置修复对全部 GPU LUT 模型（trees-zoom-based-scale、color-theme 模型族）都是正确性收益，保留。309 单测绿、tsc 绿。
+
+**§771b. trees-use-theme 残余再定性：全帧 2D 主题亮度域（暗红背景 vs 纯红），非树冠/非 runtime tint 链（2026-09-03）**：
+
+diff 图目视+像素统计：202,959 错配铺满全帧——**ours 背景/地面呈暗红 (170,0,0)/(51,0,0) 族，expected 为纯红 (255,0,0) 族**；皇冠（橄榄 vs 暗红）只是小分量；道路部分吻合（diff 中白色）。定性：**2D 层（background/fill/地面）的全局主题化亮度差**——同一 LUT 下我方 2D 路径输出偏暗（疑 CPU bake 的 sRGB/线性域或 LUT 索引对 2D 路径的同款转置问题——§772 修的是 GPU 模型尾采样，2D CPU bake 路径需同款对拍）。runtime tint 链（§770/§771）降级为小分量。下一入口：MBColorTheme CPU 索引与 LUT PNG 布局的逐 texel 对拍（对照 mgl color_theme 的 LUT 构建），重点 2D background 的主题化输出亮度。309 单测绿、tsc 绿。
