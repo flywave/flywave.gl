@@ -428,6 +428,16 @@ export class MBTileDataEmitter {
     setTerrainSampler(sampler: (x: number, y: number) => number): void {
         this.m_terrainSampler = sampler;
     }
+
+    /**
+     * Per-feature state lookup (setFeatureState) for the instanced MODEL
+     * branch's paint evaluation — mgl data-driven model-* paints accept
+     * ["feature-state", ...] (trees-shadow-scaled hover family).
+     */
+    setFeatureStateLookup(lookup: (featureId: string | number | undefined) => Record<string, any> | undefined): void {
+        this.m_featureStateLookup = lookup;
+    }
+    private m_featureStateLookup: ((featureId: string | number | undefined) => Record<string, any> | undefined) | null = null;
     private m_terrainSampler: ((x: number, y: number) => number) | null = null;
 
     /**
@@ -4154,6 +4164,7 @@ export class MBTileDataEmitter {
                                 v = MBExpressionEngine.evaluate(raw, {
                                     zoom: this.m_zoom,
                                     feature: { type: 'Point', properties, id: featureId } as any,
+                                    featureState: this.m_featureStateLookup?.(featureId),
                                 } as any);
                             } catch { return undefined; }
                         }
@@ -4174,6 +4185,7 @@ export class MBTileDataEmitter {
                                 v = MBExpressionEngine.evaluate(raw, {
                                     zoom: this.m_zoom,
                                     feature: { type: 'Point', properties, id: featureId } as any,
+                                    featureState: this.m_featureStateLookup?.(featureId),
                                 } as any);
                             } catch { return dflt; }
                         }
@@ -4217,6 +4229,7 @@ export class MBTileDataEmitter {
                                 cv = MBExpressionEngine.evaluate(colorRaw, {
                                     zoom: this.m_zoom,
                                     feature: { type: 'Point', properties, id: featureId } as any,
+                                    featureState: this.m_featureStateLookup?.(featureId),
                                 } as any);
                             }
                             const c = new THREE.Color(cv as any);

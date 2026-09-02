@@ -297,6 +297,8 @@ export function applyMglModelLighting(
                      uniform float uMBModelGamma;
                      varying float vMbLocalZ;
                      varying vec3 vMbWorldPos;
+                     float mbRoughTex = 1.0;
+                     float mbMetalTex = 0.0;
                      vec3 mbAlbedo = vec3(1.0);
                      vec3 mbEmissive = vec3(0.0);
                      // mgl model.fragment.glsl EnvBRDFApprox (Unreal 4).
@@ -357,6 +359,21 @@ export function applyMglModelLighting(
                     `#include <emissivemap_fragment>
                      mbEmissive = totalEmissiveRadiance;`
                 );
+                // §725 mgl frag:294-298: the metallicRoughness TEXTURE
+                // multiplies the factor uniforms — three's
+                // roughness/metalness fragments already compute factor×texel
+                // into roughnessFactor/metalnessFactor; capture them for the
+                // tail (factor-only uniforms would ignore the textures).
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <roughnessmap_fragment>',
+                    `#include <roughnessmap_fragment>
+                     mbRoughTex = roughnessFactor;`
+                );
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <metalnessmap_fragment>',
+                    `#include <metalnessmap_fragment>
+                     mbMetalTex = metalnessFactor;`
+                );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <opaque_fragment>',
                     `#include <opaque_fragment>
@@ -364,20 +381,22 @@ export function applyMglModelLighting(
                          // §655: faithful port of 3d-style/shaders/model.fragment.glsl
                          // (Cook-Torrance PBR + env 0.65 indirect + emissive +
                          // unlit mix). Replaces the hemisphere approximation.
-                         #ifdef FLAT_SHADED
-                             vec3 mbN0 = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
-                         #else
-                             vec3 mbN0 = normalize(vNormal);
-                         #endif
+                         // three's normal_fragment_begin/maps produce the
+                         // final view-space normal — flat-shading derivative
+                         // or normal-map perturbation (mgl frag:212-271
+                         // getNormal equivalent); normalize(vNormal) would
+                         // ignore the normal map.
+                         vec3 mbN0 = normalize(normal);
                          // mgl transformed_normal: xy flipped (fill-extrusion
                          // normal convention).
                          vec3 mbN = vec3(-mbN0.xy, mbN0.z);
                          vec3 mbV = normalize(vViewPosition);
                          float mbNdotV = clamp(abs(dot(mbN0, mbV)), 0.001, 1.0);
-                         float mbR = clamp(uMB3DRough, 0.04, 1.0);
+                         // §725: texture-multiplied factors (captured above).
+                         float mbR = clamp(mbRoughTex, 0.04, 1.0);
                          float mbAR = mbR * mbR;
-                         vec3 mbDiffC = mbAlbedo * (vec3(1.0) - vec3(0.04)) * (1.0 - uMB3DMetal);
-                         vec3 mbSpecC = mix(vec3(0.04), mbAlbedo, uMB3DMetal);
+                         vec3 mbDiffC = mbAlbedo * (vec3(1.0) - vec3(0.04)) * (1.0 - mbMetalTex);
+                         vec3 mbSpecC = mix(vec3(0.04), mbAlbedo, mbMetalTex);
                          vec3 mbL = normalize(uMB3DDir);
                          vec3 mbH = normalize(mbV + mbL);
                          float mbNdotL = clamp(dot(mbN0, mbL), 0.0, 1.0);

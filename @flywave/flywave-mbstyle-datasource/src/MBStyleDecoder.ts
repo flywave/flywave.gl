@@ -1087,6 +1087,14 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         if (this.m_terrainSampler) {
             emitter.setTerrainSampler(this.m_terrainSampler);
         }
+        // Instanced model paints evaluate ["feature-state", ...] per feature
+        // (ids stored as number OR string across the pipeline — try both).
+        emitter.setFeatureStateLookup((id) => {
+            if (id === undefined) return undefined;
+            const states = this.m_featureStates;
+            return states.get(id)
+                ?? states.get(typeof id === 'number' ? String(id) : Number(id));
+        });
         emitter.setStyleHasTerrain(this.m_styleHasTerrain);
         // mgl crossSourceCollisions=false (test metadata): the engine's own
         // POI placement must not cull across sources — placement verdicts

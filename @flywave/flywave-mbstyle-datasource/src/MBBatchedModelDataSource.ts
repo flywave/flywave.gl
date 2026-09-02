@@ -406,6 +406,8 @@ class MBBatchedModelDecoder implements ITileDecoder {
             inner.userData.__mbPosBase = [inner.position.x, inner.position.y, inner.position.z];
             inner.userData.__mbTransformMeta = { w, secLat, level: tileKey.level };
             inner.userData.tileKey = tileKey;
+            // mgl elevationUpdate gates DEM flattening on HasMapboxMeshFeatures.
+            inner.userData.__mbHasFeatures = hasMeshFeatures;
             // model-ambient-occlusion-intensity: three's aomap_fragment uses
             // exactly mgl's (tex−1)·I + 1 — only the intensity needs wiring.
             // Sub-mesh clones inherit aoMapIntensity, so this also covers the
@@ -644,6 +646,11 @@ class MBBatchedModelDecoder implements ITileDecoder {
      * every frame: sampling is deterministic, so a static scene is stable.
      */
     private applyNodeElevation(outer: any): void {
+        // mgl elevationUpdate order: updateDEM (flatten) FIRST, then the
+        // per-node min sampling — nodes read the already-flattened DEM.
+        try {
+            this.applyDemFlattening(outer);
+        } catch { /* flattening must never break the frame */ }
         const env = (this.m_envProvider as any)?.m_environment;
         const cam = env?.m_mapView?.camera;
         const active = !!(env?.sampleTerrainElevation && cam && (env as any).__mbTerrainActive);
@@ -668,6 +675,179 @@ class MBBatchedModelDecoder implements ITileDecoder {
                 if (isFinite(minElev)) liftLocal = minElev / secLat;
             }
             mesh.userData.__mbElevLift = liftLocal;
+        });
+    }
+
+    /**
+     * mgl bucket.updateDEM (tiled_3d_model_bucket.ts:416-575): flatten the
+     * DEM under each footprint — region A (pixels the footprint covers) is
+     * set to the average height over those pixels; region B (demAtt padding,
+     * clamped [2,5]) propagates the delta outward with distance attenuation
+     * and wave prevention. Only for MAPBOX_mesh_features tiles; footprints
+     * crossing the DEM tile border are skipped (mgl distanceToBorder < 0).
+     * Applied once per (footprint, DEM texture): the guard lives on the
+     * texture so a terrain rebuild (fresh texture) re-flattens.
+     */
+    private applyDemFlattening(outer: any): void {
+        const env = (this.m_envProvider as any)?.m_environment;
+        const tc = env?.m_terrainController;
+        const cam = env?.m_mapView?.camera;
+        if (!tc || !cam || !(env as any).__mbTerrainActive) return;
+        const inner = outer.children[0] as any;
+        if (inner?.userData?.__mbHasFeatures !== true) return;
+        const tiles: Array<{ texture: any; originX: number; originY: number; size: number }> =
+            tc.allDemTiles ?? [];
+        if (tiles.length === 0) return;
+        const camX = cam.position.x;
+        const camY = cam.position.y;
+        const v = new THREE.Vector3();
+        // Scratch buffers sized per DEM texture resolution (shared across
+        // footprints — mgl uses module-level lookup/passLookup arrays with
+        // the same region-reset discipline).
+        let pass: Uint8Array | null = null;
+        let lookup: Float64Array | null = null;
+        let demRes = 0;
+
+        outer.traverse((mesh: any) => {
+            if (!mesh.isMesh) return;
+            const ring = mesh.userData.__mbFootprintLocal as Float32Array | undefined;
+            if (!ring || ring.length < 6) return;
+            const wx: number[] = [];
+            const wy: number[] = [];
+            for (let i = 0; i < ring.length; i += 2) {
+                v.set(ring[i], ring[i + 1], 0).applyMatrix4(mesh.matrixWorld);
+                wx.push(v.x + camX);
+                wy.push(v.y + camY);
+            }
+            let minWX = Infinity, maxWX = -Infinity, minWY = Infinity, maxWY = -Infinity;
+            for (let i = 0; i < wx.length; i++) {
+                if (wx[i] < minWX) minWX = wx[i];
+                if (wx[i] > maxWX) maxWX = wx[i];
+                if (wy[i] < minWY) minWY = wy[i];
+                if (wy[i] > maxWY) maxWY = wy[i];
+            }
+            for (const tile of tiles) {
+                if (maxWX < tile.originX || minWX > tile.originX + tile.size
+                    || maxWY < tile.originY || minWY > tile.originY + tile.size) continue;
+                const tex = tile.texture;
+                const data = tex?.image?.data as Float32Array | undefined;
+                if (!data) continue;
+                const n = Math.floor(Math.sqrt(data.length));
+                if (n <= 2) continue;
+                const done: Set<string> = (tex.userData ??= {}).__mbFlatKeys ??= new Set();
+                const key = String(mesh.userData.__mbNodeId ?? mesh.uuid);
+                if (done.has(key)) continue;
+                done.add(key);
+                if (!pass || demRes !== n) {
+                    demRes = n;
+                    pass = new Uint8Array(n * n);
+                    lookup = new Float64Array(n * n);
+                }
+                const get = (x: number, y: number) => data[y * n + x];
+                const set = (x: number, y: number, val: number) => {
+                    const idx = y * n + x;
+                    const delta = val - data[idx];
+                    data[idx] = val;
+                    return delta;
+                };
+                const pxOf = (w: number, origin: number) =>
+                    Math.floor((w - origin) / tile.size * n);
+                const minDemX = pxOf(minWX, tile.originX);
+                const maxDemX = pxOf(maxWX, tile.originX);
+                const minDemY = pxOf(minWY, tile.originY);
+                const maxDemY = pxOf(maxWY, tile.originY);
+                const distanceToBorder = Math.min(n - maxDemY, minDemX, minDemY, n - maxDemX);
+                if (distanceToBorder < 0) continue; // mgl: skip tile-border crossings
+                const demAtt = Math.min(5, Math.max(2, distanceToBorder));
+                const minx0 = Math.max(0, minDemX - demAtt);
+                const miny0 = Math.max(0, minDemY - demAtt);
+                const maxx0 = Math.min(maxDemX + demAtt, n - 1);
+                const maxy0 = Math.min(maxDemY + demAtt, n - 1);
+                for (let y = miny0; y <= maxy0; ++y) {
+                    for (let x = minx0; x <= maxx0; ++x) pass![y * n + x] = 255;
+                }
+                // Region A: DEM pixels whose center is inside the footprint.
+                let heightAcc = 0;
+                let count = 0;
+                const polyTest = (pxW: number, pyW: number) => {
+                    let inside = false;
+                    for (let i = 0, j = wx.length - 1; i < wx.length; j = i++) {
+                        const xi = wx[i], yi = wy[i], xj = wx[j], yj = wy[j];
+                        if (((yi > pyW) !== (yj > pyW))
+                            && (pxW < (xj - xi) * (pyW - yi) / (yj - yi) + xi)) inside = !inside;
+                    }
+                    return inside;
+                };
+                for (let y = Math.max(0, minDemY); y <= Math.min(n - 1, maxDemY); ++y) {
+                    for (let x = Math.max(0, minDemX); x <= Math.min(n - 1, maxDemX); ++x) {
+                        const idx = y * n + x;
+                        if (pass![idx] !== 255) continue;
+                        if (!polyTest(tile.originX + (x + 0.5) / n * tile.size,
+                            tile.originY + (y + 0.5) / n * tile.size)) continue;
+                        pass![idx] = 0;
+                        heightAcc += get(x, y);
+                        count++;
+                    }
+                }
+                if (!count) continue;
+                const avgHeight = heightAcc / count;
+                let minx = Math.max(1, minDemX - demAtt);
+                let miny = Math.max(1, minDemY - demAtt);
+                let maxx = Math.min(maxDemX + demAtt, n - 2);
+                let maxy = Math.min(maxDemY + demAtt, n - 2);
+                for (let y = miny; y <= maxy; ++y) {
+                    for (let x = minx; x <= maxx; ++x) {
+                        if (pass![y * n + x] === 0) {
+                            lookup![y * n + x] = set(x, y, avgHeight);
+                        }
+                    }
+                }
+                // Region B: attenuated outward propagation (wave-prevented).
+                for (let p = 1; p < demAtt; ++p) {
+                    minx = Math.max(1, minDemX - p);
+                    miny = Math.max(1, minDemY - p);
+                    maxx = Math.min(maxDemX + p, n - 2);
+                    maxy = Math.min(maxDemY + p, n - 2);
+                    for (let y = miny; y <= maxy; ++y) {
+                        for (let x = minx; x <= maxx; ++x) {
+                            const idxThis = y * n + x;
+                            if (pass![idxThis] !== 255) continue;
+                            let maxDiff = 0;
+                            let maxDiffAbs = 0;
+                            let xoffset = -1;
+                            let yoffset = -1;
+                            for (let j = -1; j <= 1; ++j) {
+                                for (let i = -1; i <= 1; ++i) {
+                                    const idx = (y + j) * n + (x + i);
+                                    if (pass![idx] >= p) continue;
+                                    const diff = lookup![idx];
+                                    const diffAbs = Math.abs(diff);
+                                    if (diffAbs > maxDiffAbs) {
+                                        maxDiff = diff;
+                                        maxDiffAbs = diffAbs;
+                                        xoffset = i;
+                                        yoffset = j;
+                                    }
+                                }
+                            }
+                            if (maxDiffAbs > 0.1) {
+                                const diagonalAttenuation = Math.abs(xoffset * yoffset) * 0.5;
+                                const attenuation = 1 - (p + diagonalAttenuation) / demAtt;
+                                const prev = get(x, y);
+                                let next = prev + maxDiff * attenuation;
+                                const parent = get(x + xoffset, y + yoffset);
+                                const child = get(x - xoffset, y - yoffset);
+                                if ((next - parent) * (next - child) > 0) {
+                                    next = (parent + child) / 2;
+                                }
+                                lookup![idxThis] = set(x, y, next);
+                                pass![idxThis] = p;
+                            }
+                        }
+                    }
+                }
+                tex.needsUpdate = true; // mgl needsDEMTextureUpload
+            }
         });
     }
 
