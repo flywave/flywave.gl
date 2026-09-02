@@ -26,6 +26,10 @@ const onlyCategories = process.argv.slice(2);
 const outputDir = process.env.MBSTYLE_REPORT || path.join("rendering-test-results", "mbstyle");
 const port = process.env.MBSTYLE_PORT || "8081";
 const chunkTimeout = parseInt(process.env.CHUNK_TIMEOUT_MS || "1200000", 10);
+// MBSTYLE_EXTRA_ARGS: space-separated extra karma client args (modellightport=,
+// modellightgamma=, mbbatchdbg=1, pix=…) forwarded to every session so A/B
+// gates work through the chunked runner too.
+const extraArgs = (process.env.MBSTYLE_EXTRA_ARGS || "").split(/\s+/).filter(Boolean);
 
 const root = path.resolve(__dirname, "..");
 const resultsRoot = path.isAbsolute(outputDir) ? outputDir : path.join(root, outputDir);
@@ -119,6 +123,7 @@ function resumeMissing(batchNames, port, chunkTimeout) {
         for (let i = 0; i < missing.length; i += 4) {
             const slice = missing.slice(i, i + 4);
             const karmaClientArgs = [
+                ...extraArgs,
                 ...slice.map((f) => `filter=${f}`),
                 `feedback-url=http://localhost:${port}`,
             ];
@@ -182,6 +187,7 @@ function main() {
         for (const batch of batches) {
             console.log(`\n### [${batch.names.join(", ")}] ~${batch.count} tests ...`);
             const karmaClientArgs = [
+                ...extraArgs,
                 ...batch.names.map((f) => `filter=${f}`),
                 `feedback-url=http://localhost:${port}`,
             ];
