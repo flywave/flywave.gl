@@ -239,7 +239,7 @@
 | 3. extent/1024-symbol setExtents 前置（#12） | ✅ 已执行+改判 | `probeMvtExtent`（MBStyleDecoder:302）protobuf 探针前置（legacy group wiretype+幂2 sanity）；**实测 extent/1024 系瓦片实为 4096 内容——双影根因在数据不在解码**（9f7fa341③） |
 | 4. raster-color 重跑确认（#14） | ✅ 已执行+确认 | 含 raster-value 的表达式存 raw 不求值→ramp 生效：**expression 121,110→0 转 PASS**、nearest 120,987→323（9f7fa341④）——报告"已修未兑现"的疑问兑现 |
 | 5. fit-screen-coordinates / free-camera harness 相机（#11/#18，79万） | ✅ 已执行 | fitScreenCoordinates 改 mgl 语义（unproject 四角 bbox+lookAt bounds-fit，**51,916→613**）；lookAtPoint/setCameraPosition 改 FreeCamera 公式（9f7fa341⑥） |
-| 6. hillshade illumination-direction/emissive 接线（#16） | ⚠️ 已试，**负结果回退** | 实测 +60k 回归，已回退留注（9f7fa341）——非接线缺口而是色调标定域，重启需先破照明模型 |
+| 6. hillshade illumination-direction/emissive 接线（#16） | ✅ **已正式接线（§741，2026-09-02）** | 三分支方位（viewport=dir+bearing / map+3Dlights=灯光自身方位 / else=dir，spec 默认 335）+ LIGHTING_3D_MODE 尾巴 mix(color×groundRadiance, color, emissive)；§625 的 315 常量 vs 335 差异裁定为噪声级（36,408 vs 37,433 ≈ 2.7%）；非 lights 样式惰性。命中 lighting-3d-mode/hillshade 5+3 夹具（22.6万） |
 | 7a. crossSourceCollisions 分组 | ✅ 已实现 | MBStyleSymbolPlacement:261-300——metadata.test.crossSourceCollisions===false 时按 source 分碰撞组（layerSource 映射+组内 box 碰撞+verdict 派生），引擎 overlap 旗标按 csc=false 放宽 |
 | 7b. video vendored mp4 + VideoSource | ✅ 已执行 | `drone.mp4` 已 vendored（7.9MB）+ VideoSource 分支（MBEnvironmentManager:2817-2837，`<video>`+VideoTexture、canplay 门+10s 超时惰性、0.04s 停靠帧）；**video/default 150,271→148,456**（结构性缺口关闭；残差=CDN mp4 重编码与 expected 生成期不可逐位对齐）；video/projected 79,659（albers 自定义投影 drape 冻结域）不变（20dcae17） |
 | 8. model-layer 新家族 | ✅ 本会话主攻 | §724-§740（见 §六）：12 项根因 R1-R12 修复入库 |
