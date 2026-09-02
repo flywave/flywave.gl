@@ -7477,6 +7477,19 @@ mgl APPLY_LUT_ON_GPU（draw_model:172-178：有 color-theme 即对**所有**模�
 mgl 光束 mesh 与节点共用 u_opacity 链（draw_model:1327-1333 对含 isLight 的全部 node mesh 乘 cameraCollisionOpacity 与 frontCutoffOpacity）——我方 beam ShaderMaterial 不消费 mat.opacity，相机穿楼时楼体淡出而光束残留。实现：①splitByPart 给 lightsMesh 补 `__mbNodeBox`（节点盒）与 `__mbBeamBaseA`（door alpha×opacity 基值）；②applyModelFrontCutoff 三处 mat.opacity 直写收敛为 setNodeOpacity 助手——`__mbIsLights` 材质改写 `uMBLightsA = base×factor`（additive 透明链保持），标准材质维持原 opacity+transparent 逻辑。far-cutoff 因子（__mbFarCutoff 全 mesh 存储含 beam）经 factor 入参继续复合；beams base=identity 天然满足 mgl"灯光不吃节点 globalMatrix"语义（draw_model:1435-1438），无需特判。单测 300 绿、tsc 绿。
 
 
+**§732. 最小化验证（意外全量）——duplicate 结构修复实证 + 资源事故记录（2026-09-02）**：
+
+**资源事故**：直接裸调 karma 的最小化脚本未按预期收窄（10 个结果覆盖 buildings-trees/MAPS3D/duplicate/model-no-texcooords 全字母序=全量 212 在跑），叠加此前多次被终止会话的重启型孤儿浏览器并发 → load 峰值 270，机器重启。**规程固化**：渲染批测只走 chunked runner（含 resume+extraArgs），禁裸调 karma；启动前必须核实无 karma/Headless Chrome 残留（ps 核查而非盲 pkill）；单会话夹具数≤4。
+
+**验证收获（10 个结果，全部 §724+ 新码渲染）**：
+- **landmark-duplicate-filtered：结构性修复实证** ✓——current 图与 expected 同构（5 个正向 filter 模型红 + 其余绿，ml-0901 为全红/翻转竞态），137,574→126,098（−8.4%）、-lod 46,865→40,660（−13.2%）。**剩余失分=亮度域**（红/绿模型整体偏暗约 3-4×，疑似 tint 进 PBR lit 链的亮度标定）→ 入取证清单⑤。
+- landmark-duplicate-model-layer/lod：134,975/135,148（与 ml-0901 的 13.9万 同带，无回归）。
+- model-no-texcooords-textures：274,435 ≈ ml-0901 274,436 逐位同带——符合预期（§647 已处理可见路径；§725.2 MR 捕获+§726.1 剥离对该夹具净效应中性），残差属 BoomBox 材质标定域。
+- buildings-trees-shadows-fog：559,637（ml-0901 616,873 → −9.3%，含 §701 雾域链路收益；与首跑 559,437 抖动带内一致）；MAPS3D-1159：14,124/8,370（抖动带内）。
+
+**取证清单更新**：加⑤duplicate 族 tint 亮度域（新）。基线验证维持攒批。
+
+
 **§727. 代码对齐第四波——模型 color-theme GPU LUT（2026-09-02，代码落地，渲染验证攒批延后）**：
 
 mgl APPLY_LUT_ON_GPU（draw_model:172-178：有 color-theme 即对**所有**模型 draw 推 define；model.fragment.glsl:204-206 albedo、524-529 emissive、538 color_mix 三处 applyLUT）此前完全缺失——themed 样式的模型纹理/部件颜色不经 LUT（trees-use-theme 为 model-layer 唯一主题夹具，ml-0901 无结果=从未测过）。mgl 用 sampler3D + GLSL3；**移植方案为 2D 仿真**：①LUT 图（N²×N，CPU index=r+g·N²+b·N → texel(r+g·N, b)）原样上传 DataTexture（NearestFilter——8 tap 手动三线性，硬件线性会在 g 切片边界渗色）；②GLSL mbApplyLut = 8 次 nearest tap 三线性，与 MBColorTheme.applyColorTheme CPU 查找逐位同构，无 GLSL3/sampler3D 依赖；③uniform uMBLut/uMBLutN/uMBLutOn（onBeforeCompile 时构建，缓存于 lut 对象）——**无主题样式 uMBLutOn=0 全分支惰性，对其余 211 夹具零影响**；④应用点按 mgl：albedo 在 tail 入口（覆盖三着色分支的 getBaseColor 语义）+ emissive 按 mgl 524-529 的 sRGB wrap（linearTosRGB→LUT→sRGBToLinear，factor length 归一防 LUT 无纯黑提亮）；⑤CPU 侧补齐：evalPart 的 model-color 求值接 applyColorTheme（model-color-use-theme:'none' 门控，mgl DataDrivenProperty 语义）——mesh_features 顶点 color_mix 烘焙链（splitByPart 4444 混合）随之 themed，门灯 doorColor 同链受益。单测 300 绿（724ms）、tsc 绿。
