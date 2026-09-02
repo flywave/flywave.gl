@@ -157,6 +157,33 @@ export function syncModelShadowUniforms(shadowState: {
     }
 }
 
+/**
+ * §727: GPU color-theme LUT for the model tail (mgl APPLY_LUT_ON_GPU,
+ * draw_model.ts:172-178 — pushed for every model draw when the style has a
+ * `color-theme`). mgl samples a sampler3D; here the SAME N×N² image the CPU
+ * path (MBColorTheme.applyColorTheme, index = r + g·N² + b·N) uses is kept
+ * as a 2D DataTexture and the trilinear is done with 8 nearest taps —
+ * bit-equivalent to the CPU lookup, no GLSL3/sampler3D requirement.
+ * Inert (uMBLutOn=0) for styles without a theme.
+ */
+function mbLutGpuTexture(lut: any): THREE.DataTexture | null {
+    if (!lut?.data || !lut?.n) return null;
+    if (lut.__mbGpuTex) return lut.__mbGpuTex;
+    const N: number = lut.n;
+    const bytes = new Uint8Array(lut.data.buffer ?? lut.data,
+        lut.data.byteOffset ?? 0, lut.data.byteLength ?? lut.data.length);
+    const tex = new THREE.DataTexture(bytes, N * N, N, THREE.RGBAFormat);
+    // Nearest: the 8-tap trilinear below interpolates manually — hardware
+    // linear would bleed across the g-slice boundary (x = r + g·N).
+    tex.minFilter = THREE.NearestFilter;
+    tex.magFilter = THREE.NearestFilter;
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.needsUpdate = true;
+    lut.__mbGpuTex = tex;
+    return tex;
+}
+
 export function applyMglModelLighting(
     dataSource: any,
     model: THREE.Object3D,
@@ -226,6 +253,11 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBModelGamma = {
                     value: (globalThis as any).__mbModelLightGamma ? 1 : 0,
                 };
+                // §727: color-theme GPU LUT (mgl APPLY_LUT_ON_GPU).
+                const mbLut = (dataSource as any)?.m_colorThemeLut ?? null;
+                shader.uniforms.uMBLut = { value: mbLutGpuTexture(mbLut) };
+                shader.uniforms.uMBLutN = { value: mbLut?.n ?? 0 };
+                shader.uniforms.uMBLutOn = { value: mbLut ? 1 : 0 };
                 // §661: legacy light defaults — mgl model_program.ts reads the
                 // root style light (spec defaults: position [1.15, 210, 30]
                 // spherical, intensity 0.5, white, anchor viewport), converts
@@ -295,6 +327,31 @@ export function applyMglModelLighting(
                      uniform float uMBHas3DLights;
                      uniform float uMBPortMode;
                      uniform float uMBModelGamma;
+                     uniform sampler2D uMBLut;
+                     uniform float uMBLutN;
+                     uniform float uMBLutOn;
+                     vec3 mbLutTap(float rI, float gI, float bI) {
+                         float n2 = uMBLutN * uMBLutN;
+                         return texture2D(uMBLut,
+                             vec2((rI + gI * uMBLutN + 0.5) / n2, (bI + 0.5) / uMBLutN)).rgb;
+                     }
+                     vec3 mbApplyLut(vec3 c) {
+                         // 8-tap trilinear over the N×N² image (CPU parity:
+                         // MBColorTheme index = r + g·N² + b·N → texel
+                         // (r + g·N, b)). mgl APPLY_LUT_ON_GPU.
+                         float N = uMBLutN;
+                         vec3 t = clamp(c, 0.0, 1.0) * (N - 1.0);
+                         float r0 = floor(t.x), g0 = floor(t.y), b0 = floor(t.z);
+                         float r1 = min(r0 + 1.0, N - 1.0);
+                         float g1 = min(g0 + 1.0, N - 1.0);
+                         float b1 = min(b0 + 1.0, N - 1.0);
+                         float rw = t.x - r0, gw = t.y - g0, bw = t.z - b0;
+                         vec3 c00 = mix(mbLutTap(r0, g0, b0), mbLutTap(r1, g0, b0), rw);
+                         vec3 c01 = mix(mbLutTap(r0, g0, b1), mbLutTap(r1, g0, b1), rw);
+                         vec3 c10 = mix(mbLutTap(r0, g1, b0), mbLutTap(r1, g1, b0), rw);
+                         vec3 c11 = mix(mbLutTap(r0, g1, b1), mbLutTap(r1, g1, b1), rw);
+                         return mix(mix(c00, c01, bw), mix(c10, c11, bw), gw);
+                     }
                      varying float vMbLocalZ;
                      varying vec3 vMbWorldPos;
                      float mbRoughTex = 1.0;
@@ -395,6 +452,19 @@ export function applyMglModelLighting(
                          // §725: texture-multiplied factors (captured above).
                          float mbR = clamp(mbRoughTex, 0.04, 1.0);
                          float mbAR = mbR * mbR;
+                         // §727 mgl APPLY_LUT_ON_GPU sites: getBaseColor:204
+                         // LUTs the (texture×factor, post color_mix-mix)
+                         // albedo; emissive:524-529 LUTs it sRGB-wrapped,
+                         // renormalized by the factor length so a LUT without
+                         // pure black doesn't brighten zero-emission models.
+                         if (uMBLutOn > 0.5) {
+                             mbAlbedo = mbApplyLut(mbAlbedo);
+                             if (mbEmissive.r + mbEmissive.g + mbEmissive.b > 0.0) {
+                                 float mbEfLen = max(length(mbEmissive), 0.001);
+                                 vec3 eSrgb = pow(mbEmissive / mbEfLen, vec3(1.0 / 2.2));
+                                 mbEmissive = pow(mbApplyLut(eSrgb), vec3(2.2)) * mbEfLen;
+                             }
+                         }
                          vec3 mbDiffC = mbAlbedo * (vec3(1.0) - vec3(0.04)) * (1.0 - mbMetalTex);
                          vec3 mbSpecC = mix(vec3(0.04), mbAlbedo, mbMetalTex);
                          vec3 mbL = normalize(uMB3DDir);

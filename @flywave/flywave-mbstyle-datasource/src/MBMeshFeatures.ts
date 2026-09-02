@@ -22,6 +22,7 @@ import * as THREE from 'three';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { applyMglModelLighting, MBHeightBasedEmission, mbHeightRampUniforms } from './MBModelRenderer';
 import { parseGlb } from './MBDracoDecoder';
+import { applyColorTheme } from './MBColorTheme';
 
 // mgl Tiled3dModelBucket PartNames — index = the partId in the feature attr.
 export const PART_NAMES = ['', 'wall', 'door', 'roof', 'window', 'lamp', 'logo'];
@@ -106,7 +107,10 @@ function evalPart(paint: any, zoom: number, part: string, brightness = 0,
     // extras.id) — the ["id"] seed of data-driven paint (["random", ...,
     // ["id"]]) is per landmark feature, not a constant. id=0 collapsed every
     // node's random draw to one hue (§707b's orange-vs-red window shift).
-    id: number | string | undefined = 0): PartStyle {
+    id: number | string | undefined = 0,
+    // §727: color-theme LUT (mgl themes the paint evaluation; the vertex
+    // color_mix bake rides it unless model-color-use-theme is 'none').
+    lut: any = null): PartStyle {
     const props = part ? { part } : {};
     const evalRaw = (raw: any): any => {
         if (raw === undefined || raw === null) return undefined;
@@ -122,8 +126,18 @@ function evalPart(paint: any, zoom: number, part: string, brightness = 0,
         }
     };
     const colorRaw = paint?.['model-color'];
-    const colorEval = typeof colorRaw === 'object' && colorRaw !== null
+    let colorEval = typeof colorRaw === 'object' && colorRaw !== null
         ? evalRaw(colorRaw) : colorRaw;
+    if (lut && colorEval !== undefined && colorEval !== null
+        && paint?.['model-color-use-theme'] !== 'none') {
+        const bytes = parseRgbaBytes(colorEval)
+            ?? (typeof colorEval === 'string' ? parseCssColor(colorEval) : null);
+        if (bytes) {
+            const themed = parseCssColor(applyColorTheme(lut,
+                `rgba(${bytes[0]}, ${bytes[1]}, ${bytes[2]}, ${bytes[3]})`));
+            if (themed) colorEval = themed;
+        }
+    }
     const colorSrgb = parseRgbaBytes(colorEval)
         ?? (typeof colorEval === 'string' ? parseCssColor(colorEval) : null)
         ?? [255, 255, 255, 1];
@@ -601,7 +615,7 @@ export function applyMeshFeatures(
             if (!t) {
                 const rawId = mesh.userData.__mbNodeId;
                 const id = typeof rawId === 'string' || typeof rawId === 'number' ? rawId : 0;
-                t = PART_NAMES.map(name => evalPart(paint, zoom, name, brightness, id));
+                t = PART_NAMES.map(name => evalPart(paint, zoom, name, brightness, id, (dataSource as any)?.m_colorThemeLut ?? null));
                 tables.set(key, t);
             }
             return t;
@@ -667,7 +681,7 @@ export function refreshMeshFeatures(
             if (!t) {
                 const rawId = mesh.userData.__mbNodeId;
                 const id = typeof rawId === 'string' || typeof rawId === 'number' ? rawId : 0;
-                t = PART_NAMES.map(name => evalPart(paint, zoom, name, brightness, id));
+                t = PART_NAMES.map(name => evalPart(paint, zoom, name, brightness, id, (dataSource as any)?.m_colorThemeLut ?? null));
                 tables.set(key, t);
             }
             return t;
