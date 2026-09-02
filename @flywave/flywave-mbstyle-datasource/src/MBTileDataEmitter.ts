@@ -4262,10 +4262,15 @@ export class MBTileDataEmitter {
                     const mScale = evalVec3('model-scale');
                     const translation = evalVec3('model-translation');
                     const opacity = evalScalar('model-opacity', 1);
-                    const colorRaw = (layer as any).paintDefs?.['model-color']?.value
-                        ?? layer.paint?.['model-color'];
-                    const mixRaw = (layer as any).paintDefs?.['model-color-mix-intensity']?.value
-                        ?? layer.paint?.['model-color-mix-intensity'];
+                    // §771: LIVE paint first — paintDefs is the pre-runtime-op
+                    // style snapshot, so after a setPaintProperty op its stale
+                    // value shadowed layer.paint and model-color-mix-intensity
+                    // ops never reached the placement tint (trees-use-theme
+                    // red crowns never cleared).
+                    const colorRaw = layer.paint?.['model-color']
+                        ?? (layer as any).paintDefs?.['model-color']?.value;
+                    const mixRaw = layer.paint?.['model-color-mix-intensity']
+                        ?? (layer as any).paintDefs?.['model-color-mix-intensity']?.value;
                     const colorMix = mixRaw === undefined || mixRaw === null
                         ? undefined
                         : evalScalar('model-color-mix-intensity', NaN);

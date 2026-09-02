@@ -7653,3 +7653,7 @@ RST 探针（reset 时同步读 sceneRoot mesh 数）：全帧 sceneMeshes=**164
 **§770. trees-use-theme 追加定案：entryId 合成入库；runtime tint 链仍需交互式追踪（2026-09-03）**：
 
 ① **修复入库**：loadModels geojson 分支为无 id 要素合成 entryId（`f<index>`）——此前 `id: f.properties?.id` 为 undefined 的要素不落 `_mbModelSource`，applyModelSourcePartStylingAll 全跳过。② **实测**：trees-use-theme 仍 202,959 逐位不变——语义修复未改变像素，说明该夹具树冠的红染色**并不来自** entryId 门控的 applyModelSourcePartStyling 路径（m_loadedModels registry），而是 decode-time 的 placement tint（emitter 烘焙）或 LUT 组合的其它支路；runtime op（mix→0）→ 重解码 → tint 刷新的断点位置仍需交互式追踪（headless 日志考古已三轮无新增量）。③ 定性：trees-use-theme 202,959 = 主题化已生效（§753 绿冠清零）、残差为 runtime op tint 链 + 光照域。309 单测绿、tsc 绿。
+
+**§771. live-paint 修复入库 + trees-use-theme 残余定性为全帧色彩精确域（2026-09-03）**：
+
+① **修复入库**：emitter placement tint 的 paint 读取顺序翻转（§771）——`paintDefs?.value`（runtime op 前的样式快照）此前优先于被 op 更新的 `layer.paint`，model-color/-mix-intensity 的 runtime op 被 stale 快照遮蔽；现在活值优先、paintDefs 兜底。② 实测 trees-use-theme 202,959 仍逐位恒定——结合全帧 77% 像素错配（连背景红 (255,0,0) 双方一致的情况下总量仍巨大），**残余定性为全帧级 LUT/色彩精确域**（LUT 采样精度/色彩空间链的微小全域偏差），非单点断链——归入 LUT 精确标定专项（需 LUT 采样逐通道对拍）。③ 语义修复（live-paint 优先 + §770 entryId 合成）保留。309 单测绿、tsc 绿。
