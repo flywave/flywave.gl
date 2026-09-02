@@ -221,6 +221,11 @@ export function applyMglModelLighting(
                         ? (portForced ? 1 : 0)
                         : (pbrEligible ? 1 : 0),
                 };
+                // §724: hemisphere-branch gamma A/B gate (modellightgamma=1
+                // → mgl linearProduct exponent in the DIFFUSE_SHADED branch).
+                shader.uniforms.uMBModelGamma = {
+                    value: (globalThis as any).__mbModelLightGamma ? 1 : 0,
+                };
                 // §661: legacy light defaults — mgl model_program.ts reads the
                 // root style light (spec defaults: position [1.15, 210, 30]
                 // spherical, intensity 0.5, white, anchor viewport), converts
@@ -289,6 +294,7 @@ export function applyMglModelLighting(
                      uniform vec3 uMB3DLegacyPos; uniform vec3 uMB3DLegacyColor; uniform float uMB3DLegacyInt;
                      uniform float uMBHas3DLights;
                      uniform float uMBPortMode;
+                     uniform float uMBModelGamma;
                      varying float vMbLocalZ;
                      varying vec3 vMbWorldPos;
                      vec3 mbAlbedo = vec3(1.0);
@@ -415,7 +421,13 @@ export function applyMglModelLighting(
                              float mbAmbDir = mix(1.0 - 0.3 * min(mbDirLum, 1.0), 1.0, min(dot(mbN0, mbDirView) + 1.0, 1.0));
                              float mbVert = mix(0.92, 1.0, dot(mbN0, mbUpView) * 0.5 + 0.5);
                              vec3 mbK = uMB3DAmb * (mbVert * mbAmbDir) + uMB3DDirColor * mbNdotL;
-                             vec3 mbLit = mbAlbedo * mbK;
+                             // mgl apply_lighting ends in linearProduct: the
+                             // sRGB albedo multiplies pow(K, 1/2.2) (_prelude_lighting.glsl:37).
+                             // The flat multiply is the §557-era calibration;
+                             // modellightgamma=1 A/Bs the exact mgl exponent.
+                             vec3 mbLit = uMBModelGamma > 0.5
+                                 ? mbAlbedo * pow(mbK, vec3(1.0 / 2.2))
+                                 : mbAlbedo * mbK;
                              float mbAo = 1.0;
                              #ifdef USE_AOMAP
                                  mbAo = (texture2D(aoMap, vAoMapUv).r - 1.0) * aoMapIntensity + 1.0;
@@ -424,7 +436,7 @@ export function applyMglModelLighting(
                              float mbRes = uMB3DEmissive * (uMBHbs.w + uMBHbsRange * pow(clamp(vMbLocalZ * uMBHbs.x + uMBHbs.y, 0.0, 1.0), uMBHbs.z));
                              vec3 mbColor = mix(mbLit, mbAlbedo, min(mbRes, 1.0));
                              vec3 mbUnlit = mbAlbedo * mbAo;
-                             gl_FragColor.rgb = mix(mbColor, mbUnlit, clamp(uMB3DUnlit, 0.0, 1.0)) + mbEmissive;
+                             gl_FragColor.rgb = mix(mbColor, mbUnlit, uMB3DUnlit) + mbEmissive;
                          } else if (uMBHas3DLights > 0.5) {
                              // §655 port: LIGHTING_3D_MODE — diffuseLambertian
                              // without PI; env_light = u_lighting_ambient_color
@@ -458,7 +470,7 @@ export function applyMglModelLighting(
                              mbCol += mbEmissive;
                              vec3 mbTinted = mix(mbAlbedo, uMB3DTint, uMB3DTintA);
                              vec3 mbUnlit = mbTinted * mbAo + mbEmissive;
-                             gl_FragColor.rgb = mix(mbCol, mbUnlit, clamp(uMB3DUnlit, 0.0, 1.0));
+                             gl_FragColor.rgb = mix(mbCol, mbUnlit, uMB3DUnlit);
                         } else {
                             // §661: legacy light path — u_lightpos drives the
                             // DIRECT term (view-transformed, mgl anchor
@@ -492,7 +504,7 @@ export function applyMglModelLighting(
                              mbCol += mbEmissive;
                              vec3 mbTinted = mix(mbAlbedo, uMB3DTint, uMB3DTintA);
                              vec3 mbUnlit = mbTinted * mbAo + mbEmissive;
-                             gl_FragColor.rgb = mix(mbCol, mbUnlit, clamp(uMB3DUnlit, 0.0, 1.0));
+                             gl_FragColor.rgb = mix(mbCol, mbUnlit, uMB3DUnlit);
                          }
                      }`
                 );

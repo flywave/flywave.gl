@@ -7412,3 +7412,23 @@ diff 定量显示 §716 的墙投射在 82° 掠射日照下产生**深度噪声
 **§722. §695 会话级跳过修复——chunked runner 断连续跑（2026-09-02 续）**：
 
 **实施（runner 层，karma 6.4.4 无 restartOnDisconnectedBrowser 选项）**：run-mbstyle-render-tests-chunked.js 新增 `resumeMissing`——每个 karma 会话结束后枚举 category 的 212→N 个 fixture 结果文件，对缺失者以 `filter=<fixture>`（4 个/全新浏览器会话）续跑，最多 12 轮直至全部有结果。每次续跑 = 全新浏览器页面 = 全新 mocha 实例，§695 的"上一会话状态污染→Executed 0 of X 整批跳过"从机制上消除。**首跑复现**：首轮 212 会话在 5 测试后 DISCONNECTED（§695 同型），resume 第 1 轮自动续跑剩余 207。单测 300 绿、tsc 绿。
+
+
+**§723. 挤出 shader 编译失败修复——shadow 声明条件化（2026-09-02 续）**：
+
+ground 注入先于 extrusion 注入时 uniform 三连声明重复 → GLSL 编译失败 → 挤出 mesh 整体消失（MBMaterialPatchManager shadow 声明条件化修复）。修复后建筑恢复渲染（采样 ours 94 vs exp 95 吻合）。含 §722 resume 修复与 §718 fade 代码。单测 300 绿、tsc 绿。
+
+
+**§724. 代码对齐大批次——splitByPart 过滤复活修复 + anchor 默认值 + 门灯 additive/alpha 门控 + gamma A/B 门控 + 模型地形高程移植（2026-09-02，代码落地，渲染验证攒批延后）**：
+
+**§724.1 splitByPart 过滤复活修复（duplicate 族根因）**：Explore 审计定案 H1——splitByPart 创建的子 mesh 不继承 `visible` 与 `__mbNodeId`：①decode 时被 layer filter 隐藏的节点（landmark-duplicate-filtered 的正向/反向 filter 对）被拆分后以 visible=true 的子 mesh 复活，双层各画全集，胜负由 material.id 碰撞决定 → 全红/全绿翻转（§553 记录的竞态由此而来）；②runtime setFilter（applyNodeFilter）只触到已脱离场景的源 mesh，对绘制 mesh 无效。**修复**：`splitByPart` 对 `mesh.visible === false` 直接早退（mgl setFilter 隐藏整节点，footprint mesh 同样被早退覆盖——顺带修复足迹节点复活）；子 mesh 传播 `__mbNodeId`/`__mbNodeHeight`/`visible`。预期 duplicate 族（ml-0901 13.9万×4）收敛为"正向层 5 红 + 反向层其余绿"。
+
+**§724.2 anchor 默认 (0,0)**：mgl draw_model:1308-1313 anchor 缺省 (0,0) 且变换应用于**每个**节点；我方 applyNodeTransforms 此前跳过无 `__mbAnchor` 的 mesh（model-translation 对其失效）。修复为 `anchor ?? [0,0]` 全节点应用。
+
+**§724.3 门灯 additive + part alpha 门控**：mgl 门灯在独立 light-beam pass 以 `ColorMode.additive`（[ONE,ONE]+shader 预乘，draw_model:716/47）绘制，alpha 链 `opacity *= rmea.w · saturate(1−d²)`（frag:549，rmea.w=door part alpha）。我方简化版为普通 alpha blend 且无 part alpha。修复：ShaderMaterial 换 `THREE.AdditiveBlending`（SRC_ALPHA,ONE 与预乘等效）+ 新 uniform `uMBLightsA = door alpha × opacity`（splitByPart 调用点传入）。falloff 公式（1.3·max(0,|x|−z)，mix(0.5,0,clamp(E−1))）经比对已与 mgl 一致。
+
+**§724.4 hemisphere gamma A/B 门控（不盲改已标定路径）**：审计发现 mgl `apply_lighting` 终结于 linearProduct（`srgbIn · pow(k, 1/2.2)`，_prelude_lighting.glsl:37-51），我方 DIFFUSE_SHADED hemisphere 分支为平面乘法 `mbAlbedo · mbK`——高 zoom 量化族"ours 整体偏暗"的方向性吻合。但该分支是 §557 经验标定路径，直接改指数有回归风险。落地为**门控 A/B**：`modellightgamma=1`（karma arg / MBSTYLE_MODELLIGHTGAMMA）→ `uMBModelGamma` uniform 切换 pow(1/2.2) 指数；默认维持平面乘法。下轮批测时对该门控做双模式 A/B 后定去留。顺带：`u_emissive_strength` unlit mix 的 `clamp(0,1)` 移除（mgl mix 不钳位，rmea.z 域 [0..2]、§561 夹具实测 1.95——mix 外推是 mgl 合法语义）。
+
+**§724.5 模型地形高程移植（bucket.elevationUpdate 专项）**：mgl 机制（tiled_3d_model_bucket.ts:386-414 + draw_model.ts:1226-1314）：①elevationUpdate 每 draw 调用，按节点 footprint（`mapbox:footprint:id` ↔ 节点 extras.id 匹配）顶点取 **min DEM 高程**为 node.elevation；②draw 时 `tileTranslation.z = node.elevation × exaggeration + translation[2]`——footprint 节点坐落地形，无 footprint 节点保持 0；③（未移植）updateDEM 将足迹下 DEM 压平（avg 高程回写 + 衰减传播），建筑业防穿模用。**我方实现**：①decode 时捕获 footprint 环（subsample ≤32 点，mesh-local）按 id 挂到同节点全部绘制 mesh（`__mbFootprintLocal`，两条 decode 路径统一，Draco 侧补 `__mbFootprintId`）；②syncStyleState 每帧 `applyNodeElevation`（先于 applyNodeTransforms，mgl prepareBatched 同序）：环点经当前 matrixWorld（RTE 帧）+ `mapView.camera.position`（世界相机位置，MBEnvironmentManager RTE listener 同源）还原绝对世界 xy，`MBEnvironmentManager.sampleTerrainElevation`（新增门控访问器：`__mbTerrainActive` && TerrainController.sampleElevation——即 §290 标定的 bilinear DEMSampler 等价物）取 min，除以 inner.scale.z（secLat）转为 mesh-local z lift 存 `__mbElevLift`；③applyNodeTransforms 将 lift 并入平移 z 槽位（非 identity 分支 t.z += lift；identity 分支 T(0,0,lift)×base 并强制 matrixAutoUpdate=false——autoUpdate 重compose会丢弃 elements[14] 修改）。terrain 关闭时 lift 归零（mgl painter.terrain 门控语义）。**未移植（后续项）**：updateDEM 足迹压平（建筑防穿模，需 DEM 像素回写 machinery）；`model-elevation-reference` 求值门控（mgl batched 路径无此门控，跟随）。
+
+**harness**：resumeMissing 的结果目录此前硬编码 Linux 平台（web-ChromeHeadless-149...-Linux），macOS 上 resume 全误判缺失——改为扫描 resultsRoot 下 web-* 目录动态发现。本轮无渲染验证（攒批），单测/tsc 见下轮记录。

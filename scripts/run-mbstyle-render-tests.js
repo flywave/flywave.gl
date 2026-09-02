@@ -102,6 +102,7 @@ function main() {
             ...(process.env.MBSTYLE_SHADOW ? [`shadowdbg=${process.env.MBSTYLE_SHADOW}`] : []),
             ...(process.env.MBSTYLE_BATCHEDDBG ? ["mbbatchdbg=1"] : []),
             ...(process.env.MBSTYLE_MODELLIGHTPORT ? [`modellightport=${process.env.MBSTYLE_MODELLIGHTPORT}`] : []),
+            ...(process.env.MBSTYLE_MODELLIGHTGAMMA ? [`modellightgamma=${process.env.MBSTYLE_MODELLIGHTGAMMA}`] : []),
             ...(process.env.MBSTYLE_PROBEPIX ? [`pix=${process.env.MBSTYLE_PROBEPIX}`] : []),
             ...(process.env.MBSTYLE_SHDBG ? [`shdbg=${process.env.MBSTYLE_SHDBG}`] : []),
             ...(process.env.MBSTYLE_SHADOWCAST ? [`shadowcast=${process.env.MBSTYLE_SHADOWCAST}`] : []),

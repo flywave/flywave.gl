@@ -494,6 +494,7 @@ function buildNodeLightsMesh(
     doorColorBytes: [number, number, number],
     doorEmissive: number,
     zScale: number,
+    doorAlpha = 1,
 ): THREE.Mesh | null {
     try {
         const geo = buildLightsGeometry(decodeLights(lightsBase64), zScale);
@@ -513,6 +514,9 @@ function buildNodeLightsMesh(
                         doorColorBytes[0] / 255, doorColorBytes[1] / 255, doorColorBytes[2] / 255),
                 },
                 uMBLightsE: { value: doorEmissive },
+                // mgl frag:549: opacity *= v_roughness_metallic_emissive_alpha.w
+                // (the DOOR part alpha riding the lights feature array).
+                uMBLightsA: { value: doorAlpha },
             },
             vertexShader: `
                 attribute vec4 mbC4f;
@@ -524,16 +528,20 @@ function buildNodeLightsMesh(
             fragmentShader: `
                 uniform vec3 uMBLightsColor;
                 uniform float uMBLightsE;
+                uniform float uMBLightsA;
                 varying vec4 vMbC4f;
                 void main() {
                     // mgl model.fragment.glsl light-geometry falloff.
                     float mbD = length(vec2(1.3 * max(0.0, abs(vMbC4f.x) - vMbC4f.z), vMbC4f.y));
                     mbD += mix(0.5, 0.0, clamp(uMBLightsE - 1.0, 0.0, 1.0));
-                    float mbA = clamp(1.0 - mbD * mbD, 0.0, 1.0);
+                    float mbA = clamp(1.0 - mbD * mbD, 0.0, 1.0) * uMBLightsA;
                     if (mbA <= 0.0) discard;
                     gl_FragColor = vec4(uMBLightsColor, mbA);
                 }`,
             transparent: true,
+            // mgl draw_model:716 — light meshes draw in the dedicated
+            // light-beam pass with ColorMode.additive.
+            blending: THREE.AdditiveBlending,
             depthWrite: false,
             side: THREE.DoubleSide,
         });
@@ -685,6 +693,12 @@ function splitByPart(
     root: THREE.Object3D,
     dataSource: any,
 ): void {
+    // mgl setFilter hides whole NODES at draw (bucket.getNodesInfo) — a
+    // filter-hidden node must not be split: the sub-meshes would detach the
+    // hidden source and re-attach visible replacements, resurrecting the
+    // node (landmark-duplicate-*: the negated layer's filter was defeated
+    // this way and the positive layer painted every node).
+    if (mesh.visible === false) return;
     const geometry = mesh.geometry;
     const feature = geometry.getAttribute(FEATURE_ATTR) as THREE.BufferAttribute;
     const index = geometry.getIndex();
@@ -836,6 +850,12 @@ function splitByPart(
         sub.renderOrder = mesh.renderOrder;
         sub.frustumCulled = mesh.frustumCulled;
         sub.userData.__mbPart = partId;
+        // Layer-filter bookkeeping (mgl setFilter evaluates per node at
+        // draw): sub-meshes carry the node identity and visibility so the
+        // runtime applyNodeFilter walk reaches the DRAWN meshes.
+        sub.userData.__mbNodeId = mesh.userData?.__mbNodeId;
+        sub.userData.__mbNodeHeight = mesh.userData?.__mbNodeHeight;
+        sub.visible = mesh.visible;
         // Front-cutoff / opacity bookkeeping propagates to the split meshes
         // (the per-frame applyModelFrontCutoff walks these).
         sub.userData.__mbNodeBox = mesh.userData?.__mbNodeBox;
@@ -860,7 +880,8 @@ function splitByPart(
         const doorColor = partFirstColor.get(DOOR_PART)!;
         lightsMesh = buildNodeLightsMesh(
             lightsBase64, doorColor, parts[DOOR_PART].emissive,
-            mesh.userData?.__mbZScale ?? 5);
+            mesh.userData?.__mbZScale ?? 5,
+            parts[DOOR_PART].alpha * parts[DOOR_PART].opacity);
         if (lightsMesh) {
             lightsMesh.userData.__mbNodeId = mesh.userData?.__mbNodeId;
             parent.add(lightsMesh);

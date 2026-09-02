@@ -272,6 +272,8 @@ class MBBatchedModelDecoder implements ITileDecoder {
                             || p.userData?.['mapbox:footprint:version'] !== undefined) {
                             o.userData.__mbFootprint = true;
                             o.visible = false;
+                            const fpid = p.userData?.['mapbox:footprint:id'];
+                            if (fpid !== undefined) o.userData.__mbFootprintId = String(fpid);
                             break;
                         }
                     }
@@ -373,6 +375,10 @@ class MBBatchedModelDecoder implements ITileDecoder {
                         // mgl (convertFootprints) — never render them.
                         if (tileData.nodeFootprints?.[meshIdx] !== undefined) {
                             mesh.userData.__mbFootprint = true;
+                            // mgl convertFootprints: the footprint matches its
+                            // feature node by id — the elevation source.
+                            mesh.userData.__mbFootprintId =
+                                tileData.nodeFootprints[meshIdx];
                             mesh.visible = false;
                             inner.add(mesh);
                             continue;
@@ -472,6 +478,37 @@ class MBBatchedModelDecoder implements ITileDecoder {
                 const box = new THREE.Box3().setFromObject(inner);
                 if (isFinite(box.max.z)) maxZ = box.max.z;
             } catch { /* keep the data-source-level bound */ }
+
+            // mgl convertFootprints: footprint-only nodes are parsed into the
+            // MATCHING feature node (by id) as its terrain footprint, then
+            // removed. Capture each footprint ring (subsampled, mesh-local —
+            // matrixWorld at frame time carries the tile + node transforms)
+            // and attach it to every drawn mesh of the matching node.
+            try {
+                const fpRings = new Map<string, Float32Array>();
+                inner.traverse((o: any) => {
+                    if (!o.isMesh || o.userData?.__mbFootprint !== true) return;
+                    const id = o.userData?.__mbFootprintId;
+                    if (id === undefined) return;
+                    const pos = o.geometry?.getAttribute?.('position');
+                    if (!pos || pos.count < 3) return;
+                    const step = Math.max(1, Math.floor(pos.count / 32));
+                    const pts: number[] = [];
+                    for (let i = 0; i < pos.count; i += step) {
+                        pts.push(pos.getX(i), pos.getY(i));
+                    }
+                    fpRings.set(String(id), new Float32Array(pts));
+                });
+                if (fpRings.size > 0) {
+                    inner.traverse((o: any) => {
+                        if (!o.isMesh || o.userData?.__mbFootprint === true) return;
+                        const nodeId = o.userData?.__mbNodeId;
+                        if (nodeId === undefined) return;
+                        const ring = fpRings.get(String(nodeId));
+                        if (ring) o.userData.__mbFootprintLocal = ring;
+                    });
+                }
+            } catch { /* footprint capture is best-effort */ }
 
             // §634 conflation replacement: register every footprint node's
             // world bbox so fill-extrusion features under the model can be
@@ -596,6 +633,44 @@ class MBBatchedModelDecoder implements ITileDecoder {
      * translation arrives in ground/z METERS and converts to grid units
      * (x/y: tileGroundMeters span 8192 units, z: GLB z IS meters).
      */
+    /**
+     * mgl bucket.elevationUpdate + drawBatchedModels placement: a node with
+     * a footprint sits at the MINIMUM terrain elevation over its footprint
+     * ring (node.elevation = min dem.getElevationAt(vert)), lifted in the
+     * translation-z slot before model-scale. The ring is mesh-local; the
+     * current matrixWorld (RTE frame) + the world camera position resolve it
+     * to the absolute world xy the terrain sampler expects. Terrain off →
+     * zero lift (mgl gates on painter.terrain && exaggeration > 0). Runs
+     * every frame: sampling is deterministic, so a static scene is stable.
+     */
+    private applyNodeElevation(outer: any): void {
+        const env = (this.m_envProvider as any)?.m_environment;
+        const cam = env?.m_mapView?.camera;
+        const active = !!(env?.sampleTerrainElevation && cam && (env as any).__mbTerrainActive);
+        const camX = active ? cam.position.x : 0;
+        const camY = active ? cam.position.y : 0;
+        const v = new THREE.Vector3();
+        outer.traverse((mesh: any) => {
+            if (!mesh.isMesh) return;
+            const ring = mesh.userData.__mbFootprintLocal as Float32Array | undefined;
+            if (!ring || ring.length < 6) return;
+            let liftLocal = 0;
+            if (active) {
+                const inner = outer.children[0] as any;
+                const secLat = Math.abs(inner?.scale?.z) || 1;
+                let minElev = Infinity;
+                for (let i = 0; i < ring.length; i += 2) {
+                    v.set(ring[i], ring[i + 1], 0).applyMatrix4(mesh.matrixWorld);
+                    const e = env.sampleTerrainElevation(v.x + camX, v.y + camY);
+                    if (e !== null && isFinite(e) && e < minElev) minElev = e;
+                }
+                // world-units lift → mesh-local z (inner scales z by secLat).
+                if (isFinite(minElev)) liftLocal = minElev / secLat;
+            }
+            mesh.userData.__mbElevLift = liftLocal;
+        });
+    }
+
     private applyNodeTransforms(outer: any): void {
         const inner = outer.children[0] as any;
         const meta = inner?.userData?.__mbTransformMeta;
@@ -612,8 +687,11 @@ class MBBatchedModelDecoder implements ITileDecoder {
             metersPerGrid = groundMeters / TILE_GRID;
         }
         inner.traverse((mesh: any) => {
-            if (!mesh.isMesh || mesh.userData.__mbAnchor === undefined) return;
-            const anchor = mesh.userData.__mbAnchor;
+            if (!mesh.isMesh) return;
+            // mgl draw_model:1308: anchorX = node.anchor ? node.anchor[0] : 0
+            // — anchor defaults to (0,0) and the transform applies to EVERY
+            // node (anchorless nodes still take model-translation).
+            const anchor: [number, number] = mesh.userData.__mbAnchor ?? [0, 0];
             // Base local matrix (Draco sub-meshes: pos/quat/scale; meshopt:
             // the loader-baked matrix) — cached on first sync.
             let base = mesh.userData.__mbBaseMatrix;
@@ -628,15 +706,26 @@ class MBBatchedModelDecoder implements ITileDecoder {
                 mesh.userData.__mbWasAutoUpdate = mesh.matrixAutoUpdate;
             }
             if (identityPaint) {
-                mesh.matrixAutoUpdate = mesh.userData.__mbWasAutoUpdate;
-                mesh.matrix.copy(base);
+                const lift0 = mesh.userData.__mbElevLift ?? 0;
+                if (!lift0) {
+                    mesh.matrixAutoUpdate = mesh.userData.__mbWasAutoUpdate;
+                    mesh.matrix.copy(base);
+                } else {
+                    // With a lift the matrix must stick: autoUpdate would
+                    // recompose from position/quaternion/scale and drop it.
+                    mesh.matrixAutoUpdate = false;
+                    mesh.matrix.copy(base);
+                    // Parent-frame z: adds after the base translation.
+                    mesh.matrix.elements[14] += lift0;
+                }
                 mesh.matrixWorldNeedsUpdate = true;
                 return;
             }
+            const lift = mesh.userData.__mbElevLift ?? 0;
             const t = new THREE.Vector3(
                 anchor[0] * (mScale[0] - 1) + (mTrans[0] ? mTrans[0] / metersPerGrid : 0),
                 anchor[1] * (mScale[1] - 1) + (mTrans[1] ? mTrans[1] / metersPerGrid : 0),
-                mTrans[2] ?? 0);
+                (mTrans[2] ?? 0) + lift);
             const m = new THREE.Matrix4().makeTranslation(t.x, t.y, t.z)
                 .multiply(new THREE.Matrix4().makeScale(mScale[0], mScale[1], mScale[2]))
                 .multiply(base);
@@ -654,6 +743,9 @@ class MBBatchedModelDecoder implements ITileDecoder {
     syncStyleState(): void {
         const zoom = this.m_zoomProvider();
         for (const outer of this.m_builtGroups) {
+            // mgl prepareBatched order: elevationUpdate BEFORE
+            // evaluateTransform — the lift feeds the node translation.
+            this.applyNodeElevation(outer);
             this.applyNodeTransforms(outer);
             syncMglModelLighting(outer, this.m_envProvider);
             // Indirect part-styling update (runtime setLights/setZoom over

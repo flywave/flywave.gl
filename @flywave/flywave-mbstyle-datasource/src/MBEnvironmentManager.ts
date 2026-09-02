@@ -496,6 +496,18 @@ export class MBEnvironmentManager {
 
     /** Multi-tile terrain controller (null if no terrain or single-tile fallback). */
     get terrainController(): TerrainController | null { return this.m_terrainController; }
+
+    /**
+     * Terrain elevation (world z units, exaggeration + secLat applied) at an
+     * ABSOLUTE world x/y — the mgl DEMSampler.getElevationAt equivalent for
+     * model node placement (bucket.elevationUpdate). Null when terrain is
+     * not active: callers must not lift content then (mgl gates on
+     * painter.terrain && exaggeration > 0).
+     */
+    sampleTerrainElevation(worldX: number, worldY: number): number | null {
+        if (!(this as any).__mbTerrainActive || !this.m_terrainController) return null;
+        return this.m_terrainController.sampleElevation(worldX, worldY);
+    }
     private m_backgroundQuad: THREE.Mesh | null = null;
     /** §357: live background-pattern uniforms (shared Vector2s auto-update). */
     private m_bgPatternInfo: {

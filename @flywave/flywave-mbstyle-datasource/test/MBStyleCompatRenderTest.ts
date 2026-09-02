@@ -137,6 +137,12 @@ function discoverTests(): TestEntry[] {
         a.startsWith("modellightport="))?.slice("modellightport=".length);
     if (port === "1") (globalThis as any).__mbModelLightPort = true;
     if (port === "0") (globalThis as any).__mbModelLightPort = false;
+    // §724: `modellightgamma=1` → the DIFFUSE_SHADED hemisphere branch uses
+    // the exact mgl linearProduct exponent (pow(K, 1/2.2)) instead of the
+    // §557 flat multiply.
+    const mg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("modellightgamma="))?.slice("modellightgamma=".length);
+    if (mg === "1") (globalThis as any).__mbModelLightGamma = true;
 }
 // Decode census: per-tile technique/vertex counts (is content reaching the
 // emitter at all — data vs render side split for blank domains).

@@ -83,16 +83,32 @@ function listFixtures(category) {
 // with `filter=<fixture>` args for the NOT-YET-SAVED fixtures, 4 per fresh
 // browser session. Each relaunch is a fresh page = fresh mocha instance
 // (the §695 "Executed 0 of X" session-level skip).
+// The result server files fixtures under a browser-derived platform dir
+// (e.g. web-ChromeHeadless-131.0.6778.108-MacOS) — discover it instead of
+// hardcoding one platform.
+function fixtureHasResult(cat, fx) {
+    let platformDirs = [];
+    try {
+        platformDirs = fs
+            .readdirSync(resultsRoot, { withFileTypes: true })
+            .filter((e) => e.isDirectory() && e.name.startsWith("web-"))
+            .map((e) => e.name);
+    } catch {
+        return false;
+    }
+    const rel = path.join(
+        "mbstyle-render-" + cat.replace(/\//g, "-"),
+        fx.replace(/\//g, "-") + ".ibct-result.json",
+    );
+    return platformDirs.some((d) => fs.existsSync(path.join(resultsRoot, d, rel)));
+}
+
 function resumeMissing(batchNames, port, chunkTimeout) {
     for (let attempt = 1; attempt <= 12; attempt++) {
         const missing = [];
         for (const cat of batchNames) {
             for (const fx of listFixtures(cat)) {
-                const res = path.join(
-                    resultsRoot, "web-ChromeHeadless-149.0.7827.22-Linux",
-                    "mbstyle-render-" + cat.replace(/\//g, "-"),
-                    fx.replace(/\//g, "-") + ".ibct-result.json");
-                if (!fs.existsSync(res)) missing.push(fx);
+                if (!fixtureHasResult(cat, fx)) missing.push(fx);
             }
         }
         if (missing.length === 0) {
