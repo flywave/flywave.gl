@@ -7482,7 +7482,7 @@ mgl 光束 mesh 与节点共用 u_opacity 链（draw_model:1327-1333 对含 isLi
 **资源事故**：直接裸调 karma 的最小化脚本未按预期收窄（10 个结果覆盖 buildings-trees/MAPS3D/duplicate/model-no-texcooords 全字母序=全量 212 在跑），叠加此前多次被终止会话的重启型孤儿浏览器并发 → load 峰值 270，机器重启。**规程固化**：渲染批测只走 chunked runner（含 resume+extraArgs），禁裸调 karma；启动前必须核实无 karma/Headless Chrome 残留（ps 核查而非盲 pkill）；单会话夹具数≤4。
 
 **验证收获（10 个结果，全部 §724+ 新码渲染）**：
-- **landmark-duplicate-filtered：结构性修复实证** ✓——current 图与 expected 同构（5 个正向 filter 模型红 + 其余绿，ml-0901 为全红/翻转竞态），137,574→126,098（−8.4%）、-lod 46,865→40,660（−13.2%）。**剩余失分=亮度域**（红/绿模型整体偏暗约 3-4×，疑似 tint 进 PBR lit 链的亮度标定）→ 入取证清单⑤。
+- **landmark-duplicate-filtered：结构性修复实证** ✓——current 图与 expected 同构（5 个正向 filter 模型红 + 其余绿，ml-0901 为全红/翻转竞态）。**基线勘误**：ml-0901 存档真值 47,951（-lod 40,660→？同带），文档此前引用的 137,574 系 §553 时代数字——当前 126,098/+lod 40,660 相对 ml-0901 为回归，成因=亮度塌陷（§733 已修：直射项为零→纯环境项）而**非结构**；§733 渲染后应显著优于 47,951。→ 取证清单⑤已由 §733 静态修复，待渲染复核。
 - landmark-duplicate-model-layer/lod：134,975/135,148（与 ml-0901 的 13.9万 同带，无回归）。
 - model-no-texcooords-textures：274,435 ≈ ml-0901 274,436 逐位同带——符合预期（§647 已处理可见路径；§725.2 MR 捕获+§726.1 剥离对该夹具净效应中性），残差属 BoomBox 材质标定域。
 - buildings-trees-shadows-fog：559,637（ml-0901 616,873 → −9.3%，含 §701 雾域链路收益；与首跑 559,437 抖动带内一致）；MAPS3D-1159：14,124/8,370（抖动带内）。

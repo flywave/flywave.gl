@@ -22,7 +22,7 @@ import * as THREE from 'three';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { applyMglModelLighting, MBHeightBasedEmission, mbHeightRampUniforms } from './MBModelRenderer';
 import { parseGlb } from './MBDracoDecoder';
-import { applyColorTheme } from './MBColorTheme';
+import { applyColorTheme, parseCssColor as parseCssColorFull } from './MBColorTheme';
 
 // mgl Tiled3dModelBucket PartNames — index = the partId in the feature attr.
 export const PART_NAMES = ['', 'wall', 'door', 'roof', 'window', 'lamp', 'logo'];
@@ -133,13 +133,13 @@ function evalPart(paint: any, zoom: number, part: string, brightness = 0,
         const bytes = parseRgbaBytes(colorEval)
             ?? (typeof colorEval === 'string' ? parseCssColor(colorEval) : null);
         if (bytes) {
-            // applyColorTheme returns "rgb(...)"/"rgba(...)" — parseRgbaBytes
-            // understands those; parseCssColor (keywords/hsl only) does not.
+            // applyColorTheme returns "rgb(...)"/"rgba(...)" — parse with the
+            // full-format parser (MBColorTheme), not the keywords/hsl local
+            // one; and keep colorEval as the themed STRING (the final
+            // parseRgbaBytes only accepts strings, an array falls back white).
             const themedStr = applyColorTheme(lut,
                 `rgba(${bytes[0]}, ${bytes[1]}, ${bytes[2]}, ${bytes[3]})`);
-            // parseRgbaBytes only accepts strings — keep colorEval as the
-            // themed STRING or the final parse falls back to white.
-            const themed = parseRgbaBytes(themedStr) ?? parseCssColor(themedStr);
+            const themed = parseCssColorFull(themedStr);
             if (themed) colorEval = themedStr;
         }
     }
