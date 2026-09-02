@@ -339,3 +339,17 @@
 
 **定位入口（下会话）**：单夹具 karma + 180s 超时栈 dump（§695 同款手法），按 trees-use-theme → external-models 顺序隔离；重点查 §727 的 mbLutGpuTexture/onBeforeCompile 是否在 modelsPending 判定路径抛错或永不 settle。
 runner 同步修改：resume 轮数默认 **12→0**（MBSTYLE_RESUME_ROUNDS 可恢复），崩溃夹具不再空转重试。
+
+### 8.6 globe 干净重跑中期（40/122，§742 代码）+ 单点极端离群
+
+globe 重跑（污染结果清除后）前 40 例已出，**累计 ~430 万 px**（全类别预计 ~900-1200 万，与 §二#2 的 947 万规模吻合——globe 域确为最大冻结带之一）。
+
+**极端离群单点**：`globe-fill-pattern/3x-on-2x-add-image` = **966,602 px（92% 全帧失配）**——expected 中央有橙色 dot-pattern 方块，ours 仅渲染 globe+大气，**fill 层整体缺失**。根因：该夹具经 **map.addImage 运行时注册 pattern 图像**（3x pixel-ratio on 2x map），我方 fill-pattern 通道只消费 sprite-atlas → 运行时注册图像不入册 → fill 层静默丢弃。**修复方向（数据源层）**：环境/数据源暴露 addImage 注册表，applyBackgroundPattern/fill-pattern 通道合并消费（sprite + runtime registry）。此单点 ≈ 96.6万 px，为 globe 域最高 ROI。
+
+其余 globe 值域（首测基线，无历史对照）：antialiasing 族 14-22万×4、fill-extrusion 族 2.4-21.6万×14、heatmap 3.3/5.6万、circle 族 0.3-23.5万×9、camera 3.5-3.9万×2、geojson/clustered 17万。**globe 域从此有了首个干净逐例基线**（污染数据已清除）。
+
+### 8.7 新增根因（R13）与运行状态
+
+- **R13（§742，已修复）**：§714 shadow-uv 探针分支引用了 `if(uMBShadowIntensity>0)` 块内的 mbShUv/mbShD（作用域外引用=GLSL 恒定编译错误）→ 该注入序下**挤出材质全灭**——buildings-trees-shadows 族（389万）建筑整体缺失的真根因（日志 Shader Error 1281 实锤）。探针移入阴影块+mbShProbeFired 守卫。注意：**§742 提交前渲染的 session 1-2 八例（buildings-trees-shadows 族+MAPS3D）为修复前结果，终版对比前需定点重跑**。
+- 运行状态：globe 40/122 → 之后 3d-intersections 续跑（30/75 已有）；内存纪律持续生效（会话边界 Chrome 归零）。
+- 4 例页面级崩溃（§743）已记录：trees-use-theme/trees-zoom-based-scale/vector-layer-external-models±import——定位入口=单夹具+超时栈 dump，头号嫌疑 §727 GPU LUT / modelsPending 永 Await。
