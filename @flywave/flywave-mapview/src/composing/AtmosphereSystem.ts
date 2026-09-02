@@ -206,6 +206,9 @@ export class AtmosphereSystem {
             vrm.setSize(canvas.clientWidth || 1, canvas.clientHeight || 1);
             vrm.exposure.value = this.m_toneMappingExposure;
             renderer.toneMapping = THREE.NoToneMapping;
+            // Async effect loads (e.g. LUT textures) request a frame through
+            // this hook once their needsUpdate flag is set.
+            vrm.onNeedsRender = () => this.mapView.update();
             this.mapView.mapRenderingManager.viewRenderManager = vrm;
             this.mapView.mapRenderingManager.syncPostEffectsToVRM();
             // VRM now exists — push any cloud config that updateOptions()

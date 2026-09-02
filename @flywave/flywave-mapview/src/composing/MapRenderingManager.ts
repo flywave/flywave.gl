@@ -4,6 +4,7 @@ import {
     ITranslucentLayerConfig,
     type IBloomEffect,
     type IBrightnessContrastEffect,
+    type IColorGradingLUTEffect,
     type IHueSaturationEffect,
     type IOutlineEffect,
     type ISepiaEffect,
@@ -55,6 +56,7 @@ export interface IMapRenderingManager extends IPassManager {
     sepia: ISepiaEffect;
     hueSaturation: IHueSaturationEffect;
     brightnessContrast: IBrightnessContrastEffect;
+    colorGradingLUT: IColorGradingLUTEffect;
     taaEnabled: boolean;
     antialiasing: AntialiasingMode;
     dynamicMsaaSamplingLevel: MSAASampling;
@@ -163,6 +165,17 @@ export class MapRenderingManager implements IMapRenderingManager {
         contrast: 0.0
     };
 
+    /**
+     * 3D LUT color grading. `url` must be an absolute/resolved URL by the
+     * time it reaches the VRM (MapView.setPostEffects resolves relative
+     * paths through the uriResolver). Empty URL = neutral (no-op) LUT.
+     */
+    colorGradingLUT: IColorGradingLUTEffect = {
+        enabled: false,
+        url: "",
+        opacity: 1
+    };
+
     taaEnabled: boolean = false;
     /**
      * Active anti-aliasing strategy. Drives `vrm.config.antialiasing`.
@@ -245,6 +258,10 @@ export class MapRenderingManager implements IMapRenderingManager {
 
         vrm.config.sepia.enabled = this.sepia.enabled;
         vrm.config.sepia.amount = this.sepia.amount;
+
+        vrm.config.colorGradingLUT.enabled = this.colorGradingLUT.enabled;
+        vrm.config.colorGradingLUT.url = this.colorGradingLUT.url;
+        vrm.config.colorGradingLUT.opacity = this.colorGradingLUT.opacity ?? 1;
 
         vrm.config.taa.enabled = this.taaEnabled;
         // Resolve the active AA mode: the explicit `antialiasing` field wins,

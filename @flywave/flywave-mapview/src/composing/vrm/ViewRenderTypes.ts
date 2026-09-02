@@ -32,6 +32,13 @@ export interface ISepiaConfig {
     amount: number;
 }
 
+export interface IColorGradingLUTConfig {
+    enabled: boolean;
+    /** Resolved LUT file URL (already through the uriResolver). */
+    url: string;
+    opacity: number;
+}
+
 export interface IOutlineConfig {
     enabled: boolean;
     thickness: number;
@@ -85,6 +92,7 @@ export interface IViewRenderConfig {
     brightnessContrast: IBrightnessContrastConfig;
     hueSaturation: IHueSaturationConfig;
     sepia: ISepiaConfig;
+    colorGradingLUT: IColorGradingLUTConfig;
     outline: IOutlineConfig;
     taa: ITemporalAntialiasConfig;
     clouds?: ICloudsConfig;
@@ -104,6 +112,12 @@ export interface IViewRenderManager {
     translucentLayerEffect?: TranslucentLayerEffect;
     exposure: { value: number };
     gpuPicking: boolean;
+    /**
+     * Invoked when an async post-effect load finished and flagged
+     * `needsUpdate` outside the frame loop; the host schedules a frame
+     * (MapView.update) so the change shows on a static map.
+     */
+    onNeedsRender?: () => void;
     /** Camera-relative camera the pass renders with (produces the pickDepth MRT). */
     readonly renderCamera?: THREE.Camera;
     render(scene: THREE.Scene, camera: THREE.Camera): void;

@@ -17,8 +17,8 @@ shadowLength；云必须在其前）→ **lensFlare** → **bloom**（输入是�
 colorNode × bloomIntensity MRT，不是 lensFlare 后的色彩；加法叠加）→
 **toneMapping**（在 AA 前）→ **TAA/SMAA**（`antialiasing` 字段二选一）→
 **outline**（独立 mask 预 pass 的深度形态学，见下节）→ vignette →
-brightnessContrast → hueSaturation → sepia → translucent 合成 pass →
-dithering。
+brightnessContrast → hueSaturation → sepia → **colorGradingLUT**（成片
+调色在解析调色之后）→ translucent 合成 pass → dithering。
 
 ## Theme 配置面
 
@@ -29,9 +29,10 @@ theme: {
         outline:    { enabled(废弃,选中驱动), thickness, color,
                       xray(默认true), hiddenColor },
         vignette:   { enabled, offset, darkness },
-        sepia:      { enabled, amount },
+        sepia:       { enabled, amount },
         hueSaturation: { enabled, hue, saturation },
         brightnessContrast: { enabled, brightness, contrast },
+        colorGradingLUT: { enabled, url, opacity },   // 3D LUT 调色，见下节
         antialiasing: "none" | "taa" | "smaa"   // 互斥；旧 taa 布尔已废弃
     },
     toneMappingExposure: 3,               // VRM 默认
@@ -79,6 +80,73 @@ mapView.mapRenderingManager.removeBloomObject(mesh);
 new CesiumIonDataSource({ ..., postEffects: { bloom: { enabled: true } } });
 // 或 ds.setTheme({ postEffects: { translucentDepth: { enabled: true } } })  // 地下半透明
 ```
+
+## Color Grading LUT（3D LUT 成片调色）
+
+`effects/colorGradingLUT.ts`：LUT 文件是 sRGB 显示域，而节点链在该处仍是
+线性工作域（管线的 sRGB 输出变换在 dithering 之后）——查表前后用
+`sRGBTransferOETF`/`sRGBTransferEOTF` 做域转换（postprocessing
+LUT3DEffect 同语义），**漏掉这一步会明显偏色**（紫色变粉之类）。**持久 `texture3D` 节点槽位**（初始 8³
+中性 LUT）跨 graph 重建复用，`ColorGradingLutController.setLut()` 只换
+`.value` + domain uniforms（scale=(N-1)/N, offset=0.5/N）不动管线；
+`enabled` 切换才重建 graph。异步加载完成经 `onNeedsRender` 钩子
+（AtmosphereSystem 接到 `mapView.update()`）补帧，静态地图也能看到换装。
+URL 相对路径在 `MapView.setPostEffects` 里经 `m_uriResolver` 解析
+（http/data/blob 直通）。
+
+### 内置 LUT 资源（`@flywave/flywave-map-theme/resources/lut/`）
+
+经 `createAssetsConfig` 拷到 `dist/resources/lut/**`，业务代码只写
+`"resources/lut/<文件名>"`。版权记录在同目录 `ATTRIBUTION.md`（分发须保留）：
+
+| 文件 | 风格 | 格式/布局 |
+|---|---|---|
+| `presetpro-cinematic.3dl` | 电影感（PresetPro） | 3dl，32³ |
+| `django-25.cube` | Django 暖调电影（RocketStock） | cube，32³ |
+| `blackmagic-4.6k-film-extended-video.cube` | Blackmagic 影视 | cube，33³ |
+| `fuji-160c.png` | Fuji 160C 胶片模拟 | PNG 网格，144³ |
+| `fuji-800z.png` | Fuji 800Z 胶片模拟 | PNG 网格，144³ |
+| `fuji-fp100c.png` | Fuji FP-100C 即拍即现 | PNG 网格，144³ |
+| `kodak-e100-gx.png` | Kodak E-100 GX 反转片 | PNG 网格，144³ |
+| `agfa-vista-200.png` | Agfa Vista 200 负片 | PNG 网格，144³ |
+| `agfa-precisa-100.png` | Agfa Precisa 100 反转片 | PNG 网格，144³ |
+| `agfa-ultra-color-100.png` | Agfa Ultra Color 100 | PNG 网格，144³ |
+
+PNG 系全部来自 RawTherapee 胶片模拟（takram three-geospatial 上游），
+**Hald 式网格布局**（正方形，size³ = width×height，如 1728² = 144³）。
+
+### 运行时用法
+
+```typescript
+// 主题 / patchTheme（正道）
+mapView.patchTheme({ postEffects: { colorGradingLUT:
+    { enabled: true, url: "resources/lut/fuji-160c.png", opacity: 1 } } });
+// url 也接受绝对 http(s)/data/blob；新增预设 = 文件丢进 resources/lut/ +
+// ATTRIBUTION.md 记一笔（换装不重建管线，enabled 切换才重建）
+```
+
+坑：**禁用 three 的 `LUTImageLoader` 处理网格 PNG**——它只认条带布局、
+取 `min(w,h)` 当立方体边长，1728² 网格图会被当成 1728³ 立方体
+（≈2.3TB 描述符 → `GPUOutOfMemoryError: Failed to allocate texture` +
+`WriteTexture: Data offset is too large` 级联）。仓库自带 `loadLutImageTable()`
+用 `cbrt(w×h)` + 恒等拷贝（竖条带/Hald 网格的行主序**就是** r 最快扁平
+表），横条带（w=size²）做 b 最快→r 最快重排，网格/条带通吃。
+
+坑 2（2026-09-02 彩噪事故，详见设计文档 §9.2）：**重排时严禁把颜色
+字节值当网格坐标**——`dst = ((b*size+g)*size+r)*4` 里的 b/g/r 若取自
+`pixels[]`（0~255），越界写 `Uint8Array` 会被 **JS 静默丢弃**，表烂成
+噪点且无任何报错。凡手写重排，先用离线脚本（Python 同语义）比对校验和。
+
+坑 3：**`.cube`/`.3dl` 解析内置在 `effects/colorGradingLUT.ts`，勿引
+three/addons 的 `LUTCubeLoader`/`LUT3dlLoader`**——它们内部裸
+`import from "three"`，违反「three 一律从 `three/webgpu` 导入」铁律，
+且 examples import map 里两者是独立模块实例（纹理会跨类域）。
+
+调试：color-grading-lut 示例支持 `?lut=off` / `?lut=neutral` 查询参数。
+深挖纹理类问题时可临时加回三板斧（2026-09 彩噪事故用过，已随修复移除）：
+运行时表 FNV-1a 校验和比对离线期望值（堵"验证没读运行时字节"漏洞）、
+固定 UVW 采样（区分纹理坏 vs 输入色坏）、`device.uncapturederror` 监听
+（WebGPU 验证错误静默丢写入，不监听看不到）。
 
 ## 改 VRM 的注意事项
 
@@ -165,6 +233,7 @@ pass 会把天空再画一遍（深度写到远平面、无视觉影响，但有
 | 示例 | 演示 |
 |---|---|
 | `examples/src/post-processing-effects/` | bloom 全家桶 + 选择性 bloom 对象 + inspector 的 PostProcessingGUI 调参面板 |
+| `examples/src/color-grading-lut/` | LUT 调色：10 预设热切换 + opacity；`?lut=off`/`?lut=neutral` 调试参数 |
 | `examples/src/cloud-mapview/` | AA 运行时切换、太阳时刻滑杆、toneMapping 时序处理（"VRM 可能还没建"） |
 | `examples/src/cloud-render/` | 脱离 MapView 的独立云渲染预览（验证云节点本身） |
 | `examples/src/3dtiles-terrain-overlay/` | 数据源级 translucentDepth（地下半透明） |

@@ -80,9 +80,14 @@ DataProvider **直接 fetch**（已核实 terrain 包无 resolveUri 调用）—
 | 资源 | 来源 | 部署位置 |
 |---|---|---|
 | 主题 JSON、示例数据（dem_terrain 等） | `@flywave/flywave-examples/resources` | dist 根（`resources/...`） |
-| 字体/图标/天空盒/大气贴图 | `@flywave/flywave-map-theme/resources` | `dist/resources/` |
+| 字体/图标/天空盒/大气贴图/云纹理/LUT 调色预设 | `@flywave/flywave-map-theme/resources` | `dist/resources/` |
 | draco 解码器 | three 的 draco 库 | `dist/resources/libs` |
 | harp 字体资源 | fontcatalog | `dist/resources/fonts` |
+
+LUT 预设明细（`resources/lut/`，10 个：2 个 .cube、1 个 .3dl、7 个
+Hald 网格 PNG）与版权记录见
+`references/postprocessing-vrm.md` 的「Color Grading LUT」一节和
+`resources/lut/ATTRIBUTION.md`。
 
 聚合包的发布构建同样用 `createAssetsConfig` 把资源打进 `dist/`——这是
 unpkg CDN 兜底能工作的前提。**新增主题资源后记得过这条拷贝链**。

@@ -87,7 +87,7 @@ flywave.gl 是基于 **three/webgpu**（`WebGPURenderer` + TSL 节点材质，�
 | 新增示例 demo | `assets/example-template/`（glob 自动发现，无需注册） |
 | 3D Tiles 样式 / batch 属性配色 / 动态高亮 | `references/3dtile-styling.md`（不走 styleSet 解码管线，是独立机制） |
 | 文字/POI 不显示 / 字体 / FontCatalog / 标注排障 | `references/text-rendering.md` |
-| 后处理 / bloom / 抗锯齿 / 描边 outline / 大气云太阳 / 改 ViewRenderManager | `references/postprocessing-vrm.md` |
+| 后处理 / bloom / 抗锯齿 / 描边 outline / 调色 LUT（内置预设清单）/ 大气云太阳 / 改 ViewRenderManager | `references/postprocessing-vrm.md` |
 | 性能 / 卡顿 / 帧统计 / 缓存与 LOD 调参 | `references/performance-tuning.md` |
 | 地形开挖 / 刷高程 / 投影贴图 / 地层 / HeightmapPainter | `references/terrain-features.md` |
 | **聚合包 `@flywave/flywave.gl`**（对外使用核心）：re-export 面 / decoder bundle / 双格式构建 / 发布 / 外部应用接入 | `references/aggregate-package.md` |

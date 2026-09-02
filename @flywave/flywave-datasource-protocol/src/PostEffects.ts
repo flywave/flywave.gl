@@ -14,6 +14,7 @@ export interface PostEffects {
     sepia?: ISepiaEffect;
     hueSaturation?: IHueSaturationEffect;
     brightnessContrast?: IBrightnessContrastEffect;
+    colorGradingLUT?: IColorGradingLUTEffect;
     /**
      * Anti-aliasing strategy selector (mutually exclusive). Replaces the
      * legacy `taa?: boolean` field; `taa: true` is still accepted as a
@@ -76,6 +77,24 @@ export interface IBrightnessContrastEffect {
     enabled: boolean;
     brightness: number;
     contrast: number;
+}
+
+/**
+ * 3D LUT color grading applied to the final tone-mapped image (after all
+ * analytic grading effects like brightnessContrast/sepia). The LUT file is
+ * loaded asynchronously; until it resolves a neutral LUT keeps the image
+ * unchanged.
+ */
+export interface IColorGradingLUTEffect {
+    enabled: boolean;
+    /**
+     * LUT file URL. Relative paths resolve through the MapView `uriResolver`
+     * (built-in presets live under `resources/lut/`). Supported formats:
+     * `.cube`, `.3dl`, and 2D strip images `.png` / `.jpg` / `.jpeg`.
+     */
+    url: string;
+    /** Blend factor between the original and the graded color, 0-1. */
+    opacity?: number;
 }
 
 export interface ITranslucentLayerConfig {

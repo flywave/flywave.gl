@@ -56,6 +56,7 @@ import { smaaWrapped } from "@flywave/flywave-atmosphere";
 import type { IViewRenderConfig, IViewRenderManager, ILensFlareConfig } from "./ViewRenderTypes";
 import { vignette } from "./effects/vignette";
 import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading";
+import { ColorGradingLutController, colorGradingLut } from "./effects/colorGradingLUT";
 import { bloom } from "./effects/bloom";
 import { outline } from "./effects/outline";
 import {
@@ -97,6 +98,7 @@ export class ViewRenderManager implements IViewRenderManager {
         brightnessContrast: { enabled: false, brightness: 0, contrast: 0 },
         hueSaturation: { enabled: false, hue: 0, saturation: 0 },
         sepia: { enabled: false, amount: 0 },
+        colorGradingLUT: { enabled: false, url: "", opacity: 1 },
         outline: { enabled: false, thickness: 2, color: "#ffffff", xray: true },
         taa: { enabled: false },
         clouds: { enabled: false },
@@ -120,6 +122,9 @@ export class ViewRenderManager implements IViewRenderManager {
     private outlineMaskPassNode?: ReturnType<typeof pass>;
     private m_outlineMaskMaterial?: MeshBasicNodeMaterial;
     private lensFlareNode?: LensFlareNode;
+    /** Persistent LUT texture slot; reused across graph rebuilds. */
+    private m_lutController?: ColorGradingLutController;
+    private m_appliedLutUrl?: string;
     private aerialNode?: AerialPerspectiveNode;
     private m_cloudNode?: CloudRenderNode;
     private pendingCloudConfig?: Record<string, unknown>;
@@ -130,6 +135,12 @@ export class ViewRenderManager implements IViewRenderManager {
      * existed.
      */
     onCloudNodeReady?: () => void;
+    /**
+     * Called when an async post-effect load (e.g. LUT texture) finished and
+     * set {@link needsUpdate}. AtmosphereSystem wires this to
+     * `mapView.update()` so the frame is actually scheduled on a static map.
+     */
+    onNeedsRender?: () => void;
     private taaNode?: TemporalAntialiasNode;
     private _smaaNode?: ReturnType<typeof smaa>;
     private scene?: THREE.Scene;
@@ -463,6 +474,36 @@ export class ViewRenderManager implements IViewRenderManager {
             finalNode = sepia(finalNode, this.config.sepia.amount);
         }
 
+        // 3D LUT film grading — applied AFTER all analytic grading so the LUT
+        // grades the finished image; translucent/dithering still run after.
+        if (this.config.colorGradingLUT.enabled) {
+            // Diff the URL here (syncConfigToViewRenderManager doesn't know
+            // about async loads): a changed URL kicks off the texture swap in
+            // the background; the (neutral or previous) texture stays until
+            // it resolves, then one rebuild picks up domain uniforms.
+            const lutUrl = this.config.colorGradingLUT.url;
+            if (lutUrl !== this.m_appliedLutUrl) {
+                this.m_appliedLutUrl = lutUrl;
+                const controller = this.ensureLutController();
+                controller.setLut(lutUrl).then(changed => {
+                    // Force a frame so the swapped texture becomes visible
+                    // even on a static map (uniform swap alone needs no
+                    // rebuild, but needsUpdate is the only redraw trigger).
+                    if (changed) {
+                        this.needsUpdate = true;
+                        this.onNeedsRender?.();
+                    }
+                });
+            }
+            if (this.config.colorGradingLUT.opacity > 0) {
+                finalNode = colorGradingLut(
+                    finalNode,
+                    this.ensureLutController(),
+                    this.config.colorGradingLUT.opacity
+                );
+            }
+        }
+
         if (this.translucentLayerEffect != null && this.translucentLayerEffect.hasObjects) {
             const buildingLayers = new THREE.Layers();
             buildingLayers.set(TRANSLUCENT_LAYER_BIT);
@@ -592,6 +633,13 @@ export class ViewRenderManager implements IViewRenderManager {
         this.needsUpdate = true;
     }
 
+    private ensureLutController(): ColorGradingLutController {
+        if (this.m_lutController == null) {
+            this.m_lutController = new ColorGradingLutController();
+        }
+        return this.m_lutController;
+    }
+
     dispose(): void {
         this.pipeline?.dispose();
         this.pipeline = undefined;
@@ -604,6 +652,9 @@ export class ViewRenderManager implements IViewRenderManager {
         this.aerialNode = undefined;
         this.m_cloudNode = undefined;
         this.taaNode = undefined;
+        this.m_lutController?.dispose();
+        this.m_lutController = undefined;
+        this.m_appliedLutUrl = undefined;
         this.centerSlot = createDepthSlot();
         this.querySlot = createDepthSlot();
         this.gpuPickRegistry.clear();

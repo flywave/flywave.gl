@@ -18,7 +18,56 @@ import {
 } from "@flywave/flywave-inspector";
 
 import { PropertiesTable } from "./PropertiesTable.js";
-import { Matrix4 } from "three";
+import { Matrix4 } from "three/webgpu";
+import { GUI } from "dat.gui";
+
+/**
+ * Built-in LUT presets served from `resources/lut/**`.
+ */
+const LUT_PRESETS: Record<string, string> = {
+    None: "",
+    "PresetPro Cinematic (.3dl)": "resources/lut/presetpro-cinematic.3dl",
+    "Django 25 (.cube)": "resources/lut/django-25.cube",
+    "Blackmagic 4.6K Film (.cube)": "resources/lut/blackmagic-4.6k-film-extended-video.cube",
+    "Fuji 160C": "resources/lut/fuji-160c.png",
+    "Fuji 800Z": "resources/lut/fuji-800z.png",
+    "Fuji FP-100C": "resources/lut/fuji-fp100c.png",
+    "Kodak E-100 GX": "resources/lut/kodak-e100-gx.png",
+    "Agfa Vista 200": "resources/lut/agfa-vista-200.png",
+    "Agfa Precisa 100": "resources/lut/agfa-precisa-100.png",
+    "Agfa Ultra Color 100": "resources/lut/agfa-ultra-color-100.png"
+};
+
+/**
+ * Wire a dat.GUI folder for live LUT color grading switching.
+ * @param mapView Map view instance
+ * @param gui Root dat.GUI instance
+ */
+const setupLutGui = (mapView: MapView, gui: GUI): void => {
+    const state = {
+        enabled: true,
+        preset: "Django 25 (.cube)",
+        opacity: 0.85
+    };
+    const folder = gui.addFolder("Color Grading LUT");
+    folder.add(state, "enabled").onChange(apply);
+    folder.add(state, "preset", Object.keys(LUT_PRESETS)).onChange(apply);
+    folder.add(state, "opacity", 0, 1, 0.01).onChange(apply);
+    folder.open();
+
+    function apply(): void {
+        mapView.patchTheme({
+            postEffects: {
+                colorGradingLUT: {
+                    enabled: state.enabled,
+                    url: LUT_PRESETS[state.preset],
+                    opacity: state.opacity
+                }
+            }
+        });
+        mapView.update();
+    }
+};
 
 /**
  * Get map canvas element
@@ -42,6 +91,8 @@ const getMapCanvas = (): HTMLCanvasElement => {
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     // Set initial map position and viewpoint (New York City, near Statue of Liberty)
     const initialLocation = new GeoCoordinates(40.611294303495846, 109.746860690045);
+    // Debug switch: ?lut=off loads the page without the LUT effect.
+    const lutOff = new URLSearchParams(location.search).get("lut") === "off";
 
     return new MapView({
         projection: ellipsoidProjection, // Use ellipsoidal projection
@@ -50,21 +101,28 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         tilt: 70, // Initial tilt angle
         heading: 35.1, // Initial heading angle
         canvas: canvas, // Specify render canvas
-        enableGpuPicking:true,
+        enableGpuPicking: true,
         theme: {
             atmosphere: {
                 enabled: true,
                 sunCastShadow: true,
-                clouds: { 
-                    quality: "high"
-                },
+                // clouds: {
+                //     quality: "high"
+                // },
                 sunTime: new Date(new Date().setMonth(9)).setHours(12, 30)
             },
             postEffects: {
                 antialiasing: "taa",
-                bloom:{
-                    enabled:true
-                }
+                bloom: {
+                    enabled: true
+                },
+                colorGradingLUT: lutOff
+                    ? undefined
+                    : {
+                          enabled: true,
+                          url: "resources/lut/django-25.cube",
+                          opacity: 0.85
+                      }
             },
             toneMappingExposure: 10,
             toneMappingMode: "neutral"
@@ -99,11 +157,7 @@ const createDrawingUI = (drawControls: GeoJSONDrawControls): void => {
     title.style.cssText = "margin:0 0 10px 0;font-size:14px;";
     controlPanel.appendChild(title);
 
-    const createButton = (
-        text: string,
-        color: string,
-        onClick: () => void
-    ): void => {
+    const createButton = (text: string, color: string, onClick: () => void): void => {
         const button = document.createElement("button");
         button.textContent = text;
         button.style.cssText = `display:block;width:100%;margin:4px 0;padding:6px;background:${color};color:white;border:none;border-radius:3px;cursor:pointer;font-size:12px;`;
@@ -161,11 +215,11 @@ const create3DTilesDataSource = (mapView: MapView): CesiumIonDataSource => {
         new TileRenderDataSource({
             url: "http://192.168.1.9/%E5%8C%85%E8%A5%BF3dtile/tileset.json",
             receiveShadow: true,
-            errorTarget: 100, 
+            errorTarget: 100,
             // wireframe:true,
-            enableCameraCollision:true,
+            enableCameraCollision: true,
             castShadow: true,
-            shadowCastErrorThreshold:5000,
+            shadowCastErrorThreshold: 5000,
             transform: new Matrix4().fromArray([
                 -0.337273, 0.00054, -0.941407, 0, -0.612574, 0.759208, 0.219899, 0, 0.714842,
                 0.650848, -0.25573, 0, 4565629.4, 4129077, -8011465.5, 1
@@ -343,8 +397,6 @@ const setupMouseClickHandler = (
     });
 };
 
-
-
 // ==================== Main execution flow ====================
 
 try {
@@ -378,9 +430,10 @@ try {
 
     // 8. Initialize inspector debug panels
     const monitor = new MapViewMonitor(mapView);
-    new AtmosphereModule(mapView, (monitor as any).gui);
-    new ToneMappingModule(mapView, (monitor as any).gui);
-    new PostProcessingModule(mapView);
+    // new AtmosphereModule(mapView, (monitor as any).gui);
+    // new ToneMappingModule(mapView, (monitor as any).gui);
+    // new PostProcessingModule(mapView);
+    setupLutGui(mapView, (monitor as any).gui);
 
     console.log("3D Tiles animation example initialized successfully");
 

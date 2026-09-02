@@ -2719,7 +2719,11 @@ export class MapView extends EventDispatcher {
             this.m_animatedExtrusionHandler.isAnimating ||
             this.m_textElementsRenderer.isUpdatePending ||
             this.m_textElementsRenderer.loading ||
-            this.m_sceneEnvironment?.isSunTimeAnimating === true
+            this.m_sceneEnvironment?.isSunTimeAnimating === true ||
+            // Post-processing pipeline rebuilds requested outside the frame
+            // loop (e.g. an async LUT/cloud texture finishing its load) must
+            // keep the loop alive until vrm.render() consumed the flag.
+            this.mapRenderingManager.viewRenderManager?.needsUpdate === true
         );
     }
 
@@ -3253,6 +3257,9 @@ export class MapView extends EventDispatcher {
         this.mapRenderingManager.sepia.enabled = false;
         this.mapRenderingManager.hueSaturation.enabled = false;
         this.mapRenderingManager.taaEnabled = false;
+        this.mapRenderingManager.colorGradingLUT.enabled = false;
+        this.mapRenderingManager.colorGradingLUT.url = "";
+        this.mapRenderingManager.colorGradingLUT.opacity = 1;
 
         if (this.m_postEffects !== undefined) {
             if (this.m_postEffects.bloom !== undefined) {
@@ -3278,6 +3285,16 @@ export class MapView extends EventDispatcher {
                     this.mapRenderingManager.brightnessContrast,
                     this.m_postEffects.brightnessContrast
                 );
+            }
+            if (this.m_postEffects.colorGradingLUT !== undefined) {
+                const lut = this.mapRenderingManager.colorGradingLUT;
+                Object.assign(lut, this.m_postEffects.colorGradingLUT);
+                // Relative LUT paths (e.g. "resources/lut/fuji-160c.png")
+                // resolve through the same uriResolver chain as theme
+                // resources; absolute http(s)/data/blob URLs pass through.
+                if (lut.url !== "" && !/^(https?:|data:|blob:)/i.test(lut.url)) {
+                    lut.url = this.m_uriResolver?.resolveUri(lut.url) ?? lut.url;
+                }
             }
             if (this.m_postEffects.antialiasing !== undefined) {
                 this.mapRenderingManager.antialiasing = this.m_postEffects.antialiasing;
