@@ -1139,7 +1139,20 @@ class MBBatchedModelDecoder implements ITileDecoder {
         // ((tex.r − 1) · aoMapIntensity + 1); the mgl lighting patch below
         // re-applies it to the LIT color only.
         if (m && m.occlusionTextureIndex >= 0 && occlusionMaps[m.occlusionTextureIndex]) {
-            mat.aoMap = occlusionMaps[m.occlusionTextureIndex];
+            const aoTex = occlusionMaps[m.occlusionTextureIndex];
+            const xf = m.occlusionTransform;
+            if (xf) {
+                // mgl OCCLUSION_TEXTURE_TRANSFORM: uv·scale+offset — three's
+                // aoMapTransform (repeat/offset) composes the same; the clone
+                // keeps per-material transforms off the shared tile texture.
+                const t2 = aoTex.clone();
+                t2.repeat.set(xf[0], xf[1]);
+                t2.offset.set(xf[2], xf[3]);
+                t2.needsUpdate = true;
+                mat.aoMap = t2;
+            } else {
+                mat.aoMap = aoTex;
+            }
             mat.aoMapIntensity = aoIntensity;
         }
         const mesh = new THREE.Mesh(geo, mat);

@@ -158,6 +158,9 @@ export interface TileMaterialData {
     hasOcclusion: boolean;
     /** Index into TileMaterialized.textures when occlusionTexture present. */
     occlusionTextureIndex: number;
+    /** KHR_texture_transform of the occlusion texture: [sx, sy, ox, oy]
+     * (mgl OCCLUSION_TEXTURE_TRANSFORM, model.fragment.glsl:35-38). */
+    occlusionTransform?: [number, number, number, number];
 }
 
 /** Decoded image payload of a GLB texture (occlusion maps on mbx tiles). */
@@ -292,6 +295,17 @@ export async function decodeGlbTile(buffer: ArrayBuffer): Promise<TileMaterializ
         const e = m.emissiveFactor ?? [0, 0, 0];
         const occTex = m.occlusionTexture?.index !== undefined
             ? json.textures?.[m.occlusionTexture.index] : undefined;
+        // mgl OCCLUSION_TEXTURE_TRANSFORM (draw_model:1491): the AO map's
+        // KHR_texture_transform (uv·scale+offset) — mbx-lod AO maps carry a
+        // ×16 atlas scale that is meaningless without it.
+        let occlusionTransform: [number, number, number, number] | undefined;
+        const occXf = m.occlusionTexture?.extensions?.['KHR_texture_transform'];
+        if (occXf) {
+            occlusionTransform = [
+                occXf.scale?.[0] ?? 1, occXf.scale?.[1] ?? 1,
+                occXf.offset?.[0] ?? 0, occXf.offset?.[1] ?? 0,
+            ];
+        }
         return {
             baseColorFactor: pbr.baseColorFactor ?? [1, 1, 1, 1],
             roughnessFactor: pbr.roughnessFactor ?? 1,
@@ -300,6 +314,7 @@ export async function decodeGlbTile(buffer: ArrayBuffer): Promise<TileMaterializ
             doubleSided: !!m.doubleSided,
             hasOcclusion: !!m.occlusionTexture,
             occlusionTextureIndex: occTex?.source ?? -1,
+            occlusionTransform,
         };
     });
 

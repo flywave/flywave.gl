@@ -7453,7 +7453,18 @@ ground 注入先于 extrusion 注入时 uniform 三连声明重复 → GLSL 编�
 
 **§726.2 实例模型贴地 + 坡度倾斜（model-elevation-reference 默认语义）**：style-spec 默认 `model-elevation-reference: ground`（v8.json paint_model）→ mgl drawModels:530-532 对**实例化模型**默认 applyElevation + followTerrainSlope（data/model.ts:271-285：matrix[14] += DEM 高程；positionModelOnTerrain 以 AABB 底面 4 角采样取 3 点拟合地形平面四元数）。我方此前实例放置完全无贴地（trees-puck-terrain 家族模型悬空/入地）。实现：①emitter 暂存 `_modelElevationReference`（paint_model 常量属性）；②MBModelRenderer.instantiate 在地形采样激活时 z += DEM 高程 + 坡度梯度法线四元数（setFromUnitVectors(up, normal)，梯度采样半径 r=instance 足迹 span≈max(scale)——mgl 的 AABB 底面 3 点拟合对小模型收敛于同一切平面，近似记录在案）；③旋转插入序与 mgl 一致（T·S(ppm)·Rterrain·Rmodel·S·F，premultiply 于 ground-stretch k 之前）；④elevation-reference: sea 时全跳过；地形关闭时 sampleTerrainElevation 返回 null → 无抬升（state.elevation null 同语义）。
 
-**需运行时取证再动的域（静态盲改风险高，暂记）**：①conflation 族（intersect-padding/thin-pillars/buckingham）——mgl replacement_source + per-frame conflation manager 是大子系统，我方 §634 为 decode 时挤出抑制；哪些内容在何处被置换需 fixture diff 像素归因后定向移植；②indirect-update 家族剩余残差——refreshMeshFeatures 链路已具备，需 setLights 前后帧差取证；③门灯光色链（lit-color mix vs 我方原色直出）——需光束像素差。单测 300 绿（1s）、tsc 绿。
+**§727. 代码对齐第四波——模型 color-theme GPU LUT（2026-09-02，代码落地，渲染验证攒批延后）**：
+
+mgl APPLY_LUT_ON_GPU（draw_model:172-178：有 color-theme 即对**所有**模型 draw 推 define；model.fragment.glsl:204-206 albedo、524-529 emissive、538 color_mix 三处 applyLUT）此前完全缺失——themed 样式的模型纹理/部件颜色不经 LUT（trees-use-theme 为 model-layer 唯一主题夹具，ml-0901 无结果=从未测过）。mgl 用 sampler3D + GLSL3；**移植方案为 2D 仿真**：①LUT 图（N²×N，CPU index=r+g·N²+b·N → texel(r+g·N, b)）原样上传 DataTexture（NearestFilter——8 tap 手动三线性，硬件线性会在 g 切片边界渗色）；②GLSL mbApplyLut = 8 次 nearest tap 三线性，与 MBColorTheme.applyColorTheme CPU 查找逐位同构，无 GLSL3/sampler3D 依赖；③uniform uMBLut/uMBLutN/uMBLutOn（onBeforeCompile 时构建，缓存于 lut 对象）——**无主题样式 uMBLutOn=0 全分支惰性，对其余 211 夹具零影响**；④应用点按 mgl：albedo 在 tail 入口（覆盖三着色分支的 getBaseColor 语义）+ emissive 按 mgl 524-529 的 sRGB wrap（linearTosRGB→LUT→sRGBToLinear，factor length 归一防 LUT 无纯黑提亮）；⑤CPU 侧补齐：evalPart 的 model-color 求值接 applyColorTheme（model-color-use-theme:'none' 门控，mgl DataDrivenProperty 语义）——mesh_features 顶点 color_mix 烘焙链（splitByPart 4444 混合）随之 themed，门灯 doorColor 同链受益。单测 300 绿（724ms）、tsc 绿。
+
+
+**§728. 代码对齐第五波——occlusion UV transform + 剩余静态项收口（2026-09-02，代码落地，渲染验证攒批延后）**：
+
+**§728.1 occlusion KHR_texture_transform（OCCLUSION_TEXTURE_TRANSFORM）**：资产实测推翻"无触发形态"预判——mbx-lod 瓦片（2619-6333-14 等）全部带 KHR_texture_transform，挂在 **occlusion 纹理**上（scale≈16.0037, offset≈1.2e-4，AO 图集 4×4 → 1/16 语义）。mgl draw_model:1491 为其推 OCCLUSION_TEXTURE_TRANSFORM define（frag:35-38 uv·scale+offset）。我方 Draco 材质转换未解析该扩展 → AO 采样落在图集左下 1/16 区域 → mbx-lod 家族 AO 系统性错误。实现：TileMaterialData 增 occlusionTransform [sx,sy,ox,oy]（MBDracoDecoder 材质映射解析）；buildPrimitiveMesh 对 aoMap **克隆**后设 repeat/offset（three 0.178 aoMapTransform = uv·repeat+offset 与 mgl 同序；克隆防共享瓦片纹理跨材质串扰）。meshopt 路径由 GLTFLoader 自动解析无需处理。
+
+**§728.2 models-on-globe 结构前提确认**：夹具 ops 为 setProjection:'globe'——harness 与引擎（sphereProjection 原生 globe 渲染，MBStyleDataSource:4501-4534）均已支持；失败域在**模型矩阵的球面补偿**（mgl calculateModelMatrix:227-246 globeProjectionScale/pixelScaleConversion + convertModelMatrixForGlobe——朝向贴球面法线 + 视角相关尺度补偿）。我方 instantiate 无 globe 分支。**静态移植风险点**：球面世界系的单位/朝向约定（projectPoint 输出帧）未标定，盲改可能劣化——需 sphere 投影下的一次运行时探针（dump 实例矩阵与地表法线）定标后移植。已列运行时取证清单。
+
+**运行时取证清单（下次批测首日）**：①globe 模型矩阵探针（本次新增）；②conflation 置换归因（§726 清单）；③indirect-update setLights 帧差；④门灯光束色链。单测 300 绿（690ms）、tsc 绿。
 
 
 **§727. 代码对齐第四波——模型 color-theme GPU LUT（2026-09-02，代码落地，渲染验证攒批延后）**：
