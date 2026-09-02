@@ -7645,3 +7645,7 @@ info.reset 钩子（每次复位前读累计值）14 个样本分布：**10× [1
 **§769. 双态切换驱动定案：退化帧=未挂载 tile objects 的引擎最小渲染；捕获守卫已兜住（2026-09-03）**：
 
 RST 探针（reset 时同步读 sceneRoot mesh 数）：全帧 sceneMeshes=**164**（calls 143/85/2404 不等），退化帧 sceneMeshes=**2**（仅背景类）。**机理定案**：flywave 引擎的 tile objects 只在渲染 pass 内存在（每帧后清空、渲染前从瓦片缓存挂回）；退化帧=未执行瓦片挂载的 update 驱动最小渲染（引擎 renderLoop 的空转帧），非"对象被谁清掉"——挂载与清空的生命周期本就如此，只是**空转帧占比 ~80%** 且捕获曾命中。§762 的捕获守卫（calls≥20）已从捕获侧兜住；残余 729,580 = §764 后建筑呈雾色平灰的光照/阴影标定（§694-§721 专项）。渲染清单专项到此收束：机制链完整（双态→场景 mesh 数实证→捕获守卫落地），收敛归 §694-§721。309 单测绿、tsc 绿。
+
+**§769c. 阴影保真度专项定案：§522 门翻默认开 + 相机取景域确认为剩余缺陷（封存维持）（2026-09-03）**：
+
+① **根因链闭合**：§765"阴影接收未激活"的下游根因=§522 时代的 opt-in 门（`__mbShadowEnable`，当年 uniform-darkening 的取证 opt-out）把 shadow pass 默认关死——shadow map 从未渲染（SHST 探针：sl=Y(int=1) 但 map=no-su）。② **门已翻默认开**（opt-out=`shadowdisable=1` karma arg/MBSTYLE_SHADOWDISABLE），翻门后像素不变（729,580）→ 结合 §522 记档"depth sample uniformly wrong across framings"，剩余缺陷=**shadow camera 取景/深度采样域**（§529 白清色修复后仍全 lit），属 §721 已封存的 cascade 保真度（需 mgl shadow_renderer 全套移植）。③ 封存维持，本专项不再消耗数据源层预算；取证工具链（RIDRAW-CUM/RIRESET/RST/SHST/extflat/extnolut/modelscale）全部入库。309 单测绿、tsc 绿。

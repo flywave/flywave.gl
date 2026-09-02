@@ -306,7 +306,14 @@ export class MBShadowRenderer {
         // and needs a shadow-map dump probe (frame/extent/bias decomposition)
         // before visual calibration. Opt back in per-run via the forensic
         // karma arg gate `shadowdbg=1` (window.__mbShadowEnable).
-        if (!(globalThis as any).__mbShadowEnable) return;
+        // §769c: gate flipped to default-ON. The §522 uniform-darkening root
+        // cause (black clear color) was fixed to white-clear in a later
+        // session but this opt-in gate was left behind, so shadow-intensity
+        // never produced a shadow map (uMBShadowMap null → the extrusion
+        // shadow modulation no-oped → buildings flat gray,
+        // buildings-trees-shadows-casting 729,580). Opt OUT via
+        // `shadowdisable=1` keeps a forensic escape hatch.
+        if ((globalThis as any).__mbShadowDisable) return;
         if (this.m_orthoStyle) return;
         if (!this.m_enabled || this.m_intensity <= 0) return;
         const renderer = this.m_mapView?.renderer as THREE.WebGLRenderer | undefined;
