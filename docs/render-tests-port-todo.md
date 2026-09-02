@@ -7685,3 +7685,7 @@ mgl getBaseColor 对照（model.fragment:164-205）：albedo = baseColorFactor �
 **§772b. trees-use-theme runtime tint 断点定位：第二 decoder/数据源实例未随 onChange 重配置（2026-09-03）**：
 
 CFG 探针（decoder.configure 入口）读数：configure n=4-6 收到的 tree-layer paint mix=**0** ✓——onChange→configure 链已通（§750 修复生效）。但 CMIXSEQ 显示解码侧 mix=**1** 无限持续（5 秒内 15+ 次全部 1）→ **解码使用的是另一个未随 configure 更新的 decoder/数据源实例**（geojson model-source 的第二实例：m_loadedModels registry 路径之外的副本，或 batched/anonymous datasource 的独立 decoder）。该副本的 layer paint 恒为初始 1.0 → placement 红染永不消退。**修复方向**：onChange 的 configure 需遍历重配置所有 datasource 的 decoder（含 geojson model-source 的实例），或统一共享单一 decoder 实例。309 单测绿、tsc 绿。
+
+**§771f-b. trees-use-theme 亮度域量化：3D-lights 挤出照明偏暗（ours 51-76 vs exp 229）（2026-09-03）**：
+
+背景/建筑分区量测：expected 背景区 = 亮红 (229,0,1)/(197,0,0) 渐变（远亮近稍暗），建筑区亮红+黑影；ours 同区 = 暗红 (51,0,0)/(76,0,0)/(170,0,0) 混杂。**定性：extrusion 3D-lights 照明亮度差**——mgl 公式 `directional = mix(1−intensity, max(1−colorvalue+intensity, 1), NdotL)` 保证背光面地板亮度 ≥1−intensity（红 colorvalue 0.21、intensity 0.5 → ≥0.5 → 亮红），我方同公式实测却落在 0.2-0.3 域 → uMBLightIntensity/uMBLightColor 的喂送值或 NdotL 项存在域差（疑 intensity 双重折减或 lightColor 非白）。下一入口：MBLight/extflat 探针读 uMBLightIntensity/uMBLightColor 实际 uniform 值，对照 mgl u_lightintensity/lightColor。309 单测绿、tsc 绿。
