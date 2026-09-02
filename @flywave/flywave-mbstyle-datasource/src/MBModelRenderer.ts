@@ -650,7 +650,7 @@ export function applyMglModelLighting(
     });
 }
 
-async function getSharedGLTFLoader(): Promise<GLTFLoaderType> {
+export async function getSharedGLTFLoader(): Promise<GLTFLoaderType> {
     const mod: any = await import('three/examples/jsm/loaders/GLTFLoader.js');
     const loader = new mod.GLTFLoader();
     try {

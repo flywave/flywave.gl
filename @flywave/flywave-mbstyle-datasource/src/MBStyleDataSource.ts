@@ -3053,7 +3053,60 @@ export class MBStyleDataSource extends TileDataSource {
             if (modelDefs.length === 0) {
                 const sourceId = (layer as any).source;
                 const source = sourceId ? (style.sources as any)[sourceId] : null;
-                if (source) {
+                // §755: geojson model-source — mgl vector-layer-external-models
+                // semantics: one placement per Point feature, uri/scale/rotation
+                // ride the feature properties (data-driven model-id). The geojson
+                // file itself is NOT a model URL — the previous generic branch
+                // fed it to GLTFLoader and silently dropped every placement.
+                if (source?.type === 'geojson') {
+                    let fc: any = null;
+                    try {
+                        if (source.data && typeof source.data === 'object'
+                            && (source.data as any).type === 'FeatureCollection') {
+                            fc = source.data;
+                        } else if (typeof source.data === 'string') {
+                            const res = await fetch(resolveUrl(source.data));
+                            if (res.ok) fc = await res.json();
+                        }
+                    } catch { /* missing data → no placements */ }
+                    if (fc?.type === 'FeatureCollection') {
+                        const { localizeModelUrl } = await import('./MBModelRenderer');
+                        for (const f of fc.features ?? []) {
+                            const uri = f.properties?.['model-uri'];
+                            if (typeof uri !== 'string' || !uri) continue;
+                            const url = uri.startsWith('local://')
+                                ? resolveUrl(uri)
+                                : localizeModelUrl(uri);
+                            // data-driven paint (["get","scale"], ["match",
+                            // ["get","id"], …]) evaluates PER FEATURE here —
+                            // stuffing the raw expression into scale/rotation
+                            // later NaNs the placement matrix (models invisible).
+                            const evalFeat = (raw: any): any => {
+                                if (raw === undefined || raw === null) return undefined;
+                                if (typeof raw !== 'object') return raw;
+                                try {
+                                    return MBExpressionEngine.evaluate(raw, {
+                                        zoom: this.mapView?.zoomLevel ?? 0,
+                                        feature: { type: 'Point',
+                                            properties: f.properties ?? {},
+                                            id: f.properties?.id } as any,
+                                    } as any);
+                                } catch { return undefined; }
+                            };
+                            modelDefs.push({
+                                url,
+                                position: f.geometry?.coordinates ?? [],
+                                scale: evalFeat(paint['model-scale'] ?? layout['model-scale'])
+                                    ?? f.properties?.scale,
+                                orientation: evalFeat(paint['model-rotation'] ?? layout['model-rotation'])
+                                    ?? f.properties?.rotation,
+                                id: f.properties?.id,
+                                sourceId,
+                            });
+                        }
+                    }
+                }
+                if (modelDefs.length === 0 && source) {
                     const url = typeof source.data === 'string'
                         ? resolveUrl(source.data)
                         : resolveUrl(source.url);
@@ -3070,8 +3123,10 @@ export class MBStyleDataSource extends TileDataSource {
             if (modelDefs.length === 0) continue;
 
             try {
-                const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-                const loader = new GLTFLoader();
+                // §755: the shared loader carries the DRACOLoader — fixture
+                // GLBs (tree.glb/maple.glb) are DRACO-compressed and a bare
+                // GLTFLoader rejects them ("No DRACOLoader instance provided").
+                const loader = await import('./MBModelRenderer').then(m => m.getSharedGLTFLoader());
                 const { GeoCoordinates } = await import('@flywave/flywave-geoutils');
                 const projection = (this.mapView as any).projection;
 
@@ -3159,7 +3214,10 @@ export class MBStyleDataSource extends TileDataSource {
                     // own orientation with the paint rotation (model.ts:
                     // orientation[i] + rotation[i]) rather than falling back.
                     const orient = def.orientation ?? [0, 0, 0];
-                    const paintRot = Array.isArray(modelRotation) ? modelRotation : [0, 0, 0];
+                    // §755: only a plain numeric array may sum — a data-driven
+                    // EXPRESSION array (["match", …]) would NaN every component.
+                    const paintRot = Array.isArray(modelRotation) && modelRotation.every((v: any) => typeof v === 'number')
+                        ? modelRotation : [0, 0, 0];
                     const effRotation = [
                         (orient[0] ?? 0) + (paintRot[0] ?? 0),
                         (orient[1] ?? 0) + (paintRot[1] ?? 0),
