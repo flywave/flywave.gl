@@ -2969,6 +2969,12 @@ export class MBStyleDataSource extends TileDataSource {
     }
 
     private async loadModels(style: StyleSpecification): Promise<void> {
+        { const g: any = (globalThis as any);
+          const arg: string | undefined = typeof window !== 'undefined'
+              ? (window as any).__karma__?.config?.args?.find?.((a: string) => a.startsWith('modelscale='))?.slice('modelscale='.length)
+              : undefined;
+          if (arg !== undefined) g.__modelScaleCal = Number(arg) || 1; }
+
         const modelLayers = (style.layers ?? []).filter(
             (l: any) => l.type === 'model' && (l.layout?.visibility ?? 'visible') === 'visible',
         );
@@ -3011,6 +3017,8 @@ export class MBStyleDataSource extends TileDataSource {
                 /** §651: registry key — the model feature id. */
                 id?: string;
                 sourceId?: string;
+                /** §756: scale calibration factor (karma modelscale gate). */
+                _cal?: number;
             }> = [];
 
             // Inline models (mapbox HD: layer.models = { id: { uri, position } })
@@ -3098,6 +3106,7 @@ export class MBStyleDataSource extends TileDataSource {
                                 position: f.geometry?.coordinates ?? [],
                                 scale: evalFeat(paint['model-scale'] ?? layout['model-scale'])
                                     ?? f.properties?.scale,
+                                _cal: Number((globalThis as any).__modelScaleCal ?? 1),
                                 orientation: evalFeat(paint['model-rotation'] ?? layout['model-rotation'])
                                     ?? f.properties?.rotation,
                                 id: f.properties?.id,
@@ -3209,7 +3218,11 @@ export class MBStyleDataSource extends TileDataSource {
 
                     // Scale: scalar or [x,y,z] — layout `model-scale` or the
                     // source registry entry's own `scale`.
-                    const effScale = def.scale ?? modelScale;
+                    const effScale = (def.scale ?? modelScale);
+                    const cal = (def as any)._cal ?? 1;
+                    const effScaleC = Array.isArray(effScale)
+                        ? effScale.map((v: any) => Number(v) * cal)
+                        : (typeof effScale === 'number' ? effScale * cal : effScale);
                     // Rotation: [x,y,z] Euler degrees — mgl sums the model's
                     // own orientation with the paint rotation (model.ts:
                     // orientation[i] + rotation[i]) rather than falling back.
@@ -3232,9 +3245,9 @@ export class MBStyleDataSource extends TileDataSource {
                     // Z-up); a bare three Euler leaves the model on its side.
                     {
                         const rot = Array.isArray(effRotation) ? effRotation : [0, 0, 0];
-                        const sc = Array.isArray(effScale)
-                            ? [effScale[0] ?? 1, effScale[1] ?? 1, effScale[2] ?? 1]
-                            : (effScale !== undefined ? [effScale, effScale, effScale] : [1, 1, 1]);
+                        const sc = Array.isArray(effScaleC)
+                            ? [effScaleC[0] ?? 1, effScaleC[1] ?? 1, effScaleC[2] ?? 1]
+                            : (effScaleC !== undefined ? [effScaleC, effScaleC, effScaleC] : [1, 1, 1]);
                         const D2R = Math.PI / 180;
                         const m = new THREE.Matrix4()
                             // §653: render-frame y mirror flips the euler

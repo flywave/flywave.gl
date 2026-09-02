@@ -7585,3 +7585,7 @@ GLPRINT 探针（injectGroundLighting 编译期 uniform 打印，buildings-trees
 **§755. model-external 接线落地：鸭子+双树上屏（40,430→115,203，残差=尺度标定）（2026-09-03）**：
 
 §754 修复方向实施完毕，三件套：① loadModels 新增 **geojson model-source 分支**——解析 FeatureCollection，每 Point 要素一个 placement，url=model-uri（localizeModelUrl/resolveUrl），scale/rotation 逐要素用 MBExpressionEngine 求值（["get","scale"]/["match",["get","id"],…]），id/sourceId 落 _mbModelSource（per-part styling 兼容）；此前该分支把 .geojson 文件本身喂给 GLTFLoader 必败、静默丢光 placement。② **paintRot 数值数组守卫**——数据驱动表达式数组被 Array.isArray 误当 Euler 相加 → placement 矩阵 NaN → 模型整体不可见（MBModelMesh 探针 world=(NaN,NaN,NaN) 实证）。③ karma files 补 `mapbox-gl-js/test/integration/models/*.*`（此前仅 image/ 被服务）。④ **验证**：加载链全通（DRACO 共享 loader/URL/数据），鸭子+双树上屏（图像实证），40,430→115,203——数值上升=从"整体缺失"到"上屏但偏大 ~4×"，残差=**mgl modelPixelsPerMeter（meters→mercator-pixels 世界）换算链未接入 loadModels placement**（§652 同族标定），挂账。309 单测绿、tsc 绿。
+
+**§756. external-models 尺度标定取证：模型位置偏移 ~73px 屏幕y 污染比例扫描（2026-09-03）**：
+
+`modelscale=` 标定门入库（karma arg，默认 1 无行为变化）。扫描：1.0→115,203 / 0.6→68,518 / 0.5→58,443 / 0.25→43,850（≈不可见基线 40,430）——数值单调趋近"不可见"而非有最优值，**位置误差污染比例标定**：黄块质心 ours y≈241 vs expected y≈168（~73px 屏幕偏下，pitch 60），x 基本对齐。即 placement 的地面锚点/高度语义尚有偏差（疑 mgl 模型原点/高程锚定 vs 我方 z=0 投影），尺寸与位置须联立标定。结论：接线与 URL/DRACO/表达式求值链已全通（模型上屏），位置锚定+尺度换算合并为下一个专项（入口：对 duck 原点做 mgl calculateModelMatrix 端到端对照，z 高程项+translation[2] 语义）。309 单测绿、tsc 绿。
