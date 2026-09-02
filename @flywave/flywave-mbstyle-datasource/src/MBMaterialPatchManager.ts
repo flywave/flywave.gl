@@ -1063,7 +1063,7 @@ export class MBMaterialPatchManager {
                  uniform float uMbDistCam;
                  varying float vMbWallH;
                  varying vec3 vMbWorldPos;
-                 ${shader.fragmentShader.includes('uniform sampler2D uMBShadowMap') ? '' :
+                 ${shader.fragmentShader.includes('uMBShadowMap') ? '' :
                  `uniform sampler2D uMBShadowMap;
                  uniform mat4 uMBShadowMatrix;
                  uniform float uMBShadowIntensity;`}
@@ -2875,16 +2875,26 @@ export class MBMaterialPatchManager {
             // §692 compile-time anchor census: which injection path landed on
             // this material (roads/fills use different shader flavors).
             material.__mbShadowAnchor = 'none';
-            shader.fragmentShader =
-                'uniform sampler2D uMBShadowMap;\n' +
-                'uniform mat4 uMBShadowMatrix;\n' +
-                'uniform float uMBShadowIntensity;\n' +
-                'uniform vec3 uMBGroundShadowFactor;\n' +
-                'uniform vec3 uMBGC[4];\n' +
-                'uniform vec3 uMBEye;\n' +
-                'uniform vec2 uMBRes;\n' +
-                'uniform float uMBShadowDbg;\n' +
-                shader.fragmentShader;
+            // §764: per-name dedupe — the extrusion lighting injection may
+            // already have declared uMBShadowMap/Matrix/Intensity (in EITHER
+            // chain order; both wrappers edit the same shader string), and a
+            // duplicate GLSL declaration is a hard compile error that makes
+            // the extrusions vanish (buildings-trees family).
+            const mbShadowOwn: string[] = [];
+            for (const decl of [
+                'uniform sampler2D uMBShadowMap;\n',
+                'uniform mat4 uMBShadowMatrix;\n',
+                'uniform float uMBShadowIntensity;\n',
+                'uniform vec3 uMBGroundShadowFactor;\n',
+                'uniform vec3 uMBGC[4];\n',
+                'uniform vec3 uMBEye;\n',
+                'uniform vec2 uMBRes;\n',
+                'uniform float uMBShadowDbg;\n',
+            ]) {
+                const name = decl.replace(/^uniform [a-zA-Z0-9]+ /, '').replace(/[;\n]/g, '');
+                if (!shader.fragmentShader.includes(name)) mbShadowOwn.push(decl);
+            }
+            shader.fragmentShader = mbShadowOwn.join('') + shader.fragmentShader;
             const mbShadowDbg4 = !!(globalThis as any).__mbShadowDbg4;
             shader.fragmentShader = tryInsert(
                 shader.fragmentShader, '#include <opaque_fragment>',
@@ -3876,7 +3886,7 @@ export class MBMaterialPatchManager {
         // LIGHTING_3D_MODE last: wrapping HERE guarantees the lighting handler
         // is the OUTERMOST onBeforeCompile — nothing later in this method can
         // capture a chain snapshot without it.
-        if (use3DLights) {
+        if (use3DLights && !(globalThis as any).__mbExtNoLut3D) {
             this.injectExtrusion3DLighting(material, emissiveStrength);
         }
     }

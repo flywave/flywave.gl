@@ -7621,3 +7621,7 @@ info.reset 钩子（每次复位前读累计值）14 个样本分布：**10× [1
 **§763. casting 建筑二分定案：几何可达屏，注入着色器链输出不可见（extflat 796,560 vs 424,784）（2026-09-03）**：
 
 `extflat=1` 探针（patchExtrusionMaterial 入口强制纯红无注入）：错配 424,784→**796,560**——红色建筑体大量上屏（几何/深度/位置域无恙，R2/R3 门控洗清——cast-shadows 仅作用于 model 层，不涉 fill-extrusion 建筑）。**定案：正常注入链的着色器输出不可见**（alpha=0/discard 类），嫌疑链=injectExtrusion3DLighting（§550）+ injectGroundShadow（§577-588 mix）+ §714 shadow-uv 探针序 + height-ramp 的组合输出。下一入口：注入链逐段二分（保留/禁用各 inject），定位产出 alpha=0 或 discard 的段。探针 extflat 已入库（karma arg）。309 单测绿、tsc 绿。
+
+**§764. casting 建筑消失根因修复：uMBShadow* 重定义（GLSL 编译失败）——注入声明按名去重（2026-09-03）**：
+
+§763 定案的"注入链输出不可见"破案：Shader Error 1281 VALIDATE_STATUS false——**`uMBShadowMap`/`uMBShadowMatrix`/`uMBShadowIntensity` 重复定义**（GLSL ERROR 0:1468-1470 redefinition）。机理：injectGroundShadow 的 onBeforeCompile **无条件前置** 8 个 uniform 声明，而 injectExtrusion3DLighting 的条件声明用精确子串 `includes('uniform sampler2D uMBShadowMap')` 判重——两 wrapper 的链序在 casting 夹具的组合下先声明者先跑，后者重复声明 → 编译失败 → 挤出整片消失（R13 的姊妹缺陷：R13 修的是探针作用域，这一处是声明判重太窄）。**修复**：①injectExtrusion3DLighting 判重改按 uniform 名（`includes('uMBShadowMap')`）；②injectGroundShadow 前置块改按名补缺（只添加缺失声明）。**验证**：Shader Error 0；建筑以雾色上屏（当前图目视：体积出现在 expected 对应位置，呈雾色与深灰背景难分）——**建筑渲染恢复**，424,784→729,580 的上升=建筑像素计入但呈雾色错配。**残余=雾/光照标定域**（§701 家族，建筑被雾色洗掉），非消失域。哨兵 ground-shadow-fog-hard-cutoff 168,847（§753 时代 134,262→现 168,847，+34k 需关注——雾色建筑与旧标定的偏差属同一雾标定域）。309 单测绿、tsc 绿。

@@ -114,7 +114,8 @@ function main() {
             ...(process.env.MBSTYLE_MODELCLAMP ? ["modelclamp=1"] : []),
             ...(process.env.MBSTYLE_DOORBLEND ? ["doorblend=1"] : []),
             ...(process.env.MBSTYLE_MODELSCALE ? [`modelscale=${process.env.MBSTYLE_MODELSCALE}`] : []),
-            ...(process.env.MBSTYLE_EXTFLAT ? ["extflat=1"] : [])];
+            ...(process.env.MBSTYLE_EXTFLAT ? ["extflat=1"] : []),
+            ...(process.env.MBSTYLE_EXTNOLUT ? ["extnolut=1"] : [])];
         // detached:true makes the child a process-group leader (POSIX) so the
         // timeout kill takes down the whole karma+browser tree, not just the
         // npx shim (surviving grandchildren hold the karma port and poison
