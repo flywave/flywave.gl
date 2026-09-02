@@ -433,3 +433,9 @@ globe 相机距离系、fog 逐内容深度语义、depth-occlusion 双 pass、c
 1. **P0-A 裁决：三嫌疑全部排除，默认光向约定维持**。diralt=1 混合结果（glb-tiles 独胜 57k→1.2k，z-offset 门不保）；unlit-clamp 恢复（modelclamp 门）与门灯 alpha-blend 回退（doorblend 门）均零效果。emission/doors 回归归因改判为 R1 直射项激活后的家族光照量级标定深水（非方位镜像差）。
 2. **P0-B 定性：R13 编译修复确认生效（零 Shader Error）但建筑仍零光栅化**——19 个挤出网格"在场景+可见+挂载"却不进像素，与 §585/§612/R14 同签名，**引擎渲染清单级立案**（与 R14 合并）。MAPS3D ×2 无回归。
 3. 9.3 计划状态：P0-A 完成（负裁决也是裁决）；P0-B 复测完成，残差改判引擎冻结带；剩余开放项=P2（conflation 归因、§688 ×0.77、崩溃 4 例定位）+ 引擎渲染清单专项。
+
+### §十二 P2-A 阶段结果（2026-09-02，§746）
+
+1. **崩溃机制定案**：trees-use-theme 页面死亡 = **无界重解码循环 OOM**（RSS 70s 0→5GB → renderer crash），非永 Await/死锁。60s 内同一批 z15 瓦片解码 11.6 万次。
+2. **驱动收窄**：引擎 tile 管线八探针全零（markTilesDirty/缓存 miss/驱逐/重启/解码入口均无参与）→ 循环在解码器内部调用图；头号嫌疑 = §643 粘性 stash 的异步递归再合并。防御修复入库：registerElevationTile 仅新 key 触发 pending（消除另一潜在循环源）。
+3. 崩溃 4 例（trees-use-theme / trees-zoom-based-scale / vector-layer-external-models±import）同族待治；专用会话入口已记档（§746）。

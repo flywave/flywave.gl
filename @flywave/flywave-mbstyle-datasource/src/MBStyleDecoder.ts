@@ -994,10 +994,18 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private registerElevationTile(tileKey: TileKey, features: import('./3d-style/elevation/MBElevationFeature').MBElevationFeature[]): void {
         if (!features || features.length === 0) return;
         const key = mbCellTileKeyString(tileKey);
+        // §746: only a genuinely NEW curve provider re-triggers the deferred
+        // re-decode. m_elevationDeferredKeys never shrinks (deferred refs are
+        // re-taken on every decode), so re-registering the SAME tile's
+        // curves on every re-decode round used to set pending forever →
+        // markTilesDirty every frame → unbounded re-decode loop (116k+
+        // decodes in 60s) → renderer OOM crash (trees-use-theme family,
+        // §743 crash 4).
+        const isNew = !this.m_elevationRegistry.has(key);
         this.m_elevationRegistry.delete(key);
         // New curves arrived — tiles that deferred on missing curves can
         // resolve them after a re-decode (mgl reparse-on-provider-arrival).
-        if (this.m_elevationDeferredKeys.size > 0) {
+        if (isNew && this.m_elevationDeferredKeys.size > 0) {
             this.m_elevationRedecodePending = true;
         }
         this.m_elevationRegistry.set(key, features.map(f => ({
