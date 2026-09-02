@@ -7697,3 +7697,7 @@ CFG 探针（decoder.configure 入口）读数：configure n=4-6 收到的 tree-
 **§772c. 第二 decoder 实例遍历重配置落地；trees-use-theme 残余改判为层覆盖结构域（2026-09-03）**：
 
 ① **reconfigureAll 落地**：MBStyleDecoder 静态实例注册表（decodeTile 首调时注册）+ `MBStyleDecoder.reconfigureAll(style)`（逐实例 applyRuntimeStyle 重建 evaluator+派生旗标），onChange 回调接入——runtime paint op 现在到达所有活 decoder 副本。② 实测 trees-use-theme 仍 202,959——结合 §771f 双层取证：expected 的橄榄树冠来自 tree-layer-diffuse（LUT 绿→橄榄），ours 每位置仅一树（暗栗）——**tree-layer-diffuse 的树在我方缺失或被 tree-layer 覆盖**（层覆盖结构域）。③ 残余收敛入口：两 model 层的 renderOrder/绘制次序 + tree-layer-diffuse 的放置核验（PROTO 已证 tree-no-material 加载成功）。309 单测绿、tsc 绿。
+
+**§771h-b. trees-use-theme 皇冠亮度域量化定案（2026-09-03）**：
+
+同位皇冠区量测：expected = 亮红 (255,1,1)/中红 (117,5,5)（tree-layer 红染 + mix 过渡后原始色叠加）；ours = **黑 (0,0,0)×601 + (51,0,0)** + 少量 (230,42,42)。定案：双层的层序/覆盖已非主因——**皇冠暗面 = LIGHTING_3D_MODE 方向项无地板**（NdotL→0 的背光面直接乘 0 变黑；mgl computeLightContribution 同公式但 ambient(0,0,0,0.4)+directional(0.5) 下 mgl 亮面 255/暗面 117）。归因确认：模型 PBR tail 的方向项缺少 mgl 的环境/indirect 补偿（indirectLightColor = envBRDF·env_light + diffuseColor·env_light，env_light=ambient_color×ambient_factor），即 §694-§721 光照量级标定的核心未完成项。收敛需实现 mgl 的 indirect 分量（含 ambient_factor(n) 随法线的变化），已列入光照专项。309 单测绿、tsc 绿。
