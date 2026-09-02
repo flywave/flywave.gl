@@ -158,3 +158,70 @@
 #### 补测终态更正（2026-09-01 末）
 
 19 例（lighting-3d-mode×6、powerplants-globe 系×6、trees-light-aligned/lod-expression×7）为**渲染挂起族**：页面加载后 0 用例执行、180s 无活动断连、重试同路复现（mlv3-L/P/T 三批实证）——非基建问题，是渲染死循环/永Await类 bug（shadow/globe/trees-lights 复合域），§550 时代"186/212 DISCONNECTED 截断"的元凶即此。基线终态：**可跑 192 例中 173 采集（90%），28,074,624 px**；19 例挂起族立案（复现入口：单夹具 karma + 180s 超时栈 dump）。
+
+---
+
+## 六、2026-09-02 增量：§724-§740 代码对齐会话（27 提交，代码比对补齐）
+
+> 数据源：本会话对 mgl 源码（mapbox-gl-js/3d-style）的逐域比对 + 双 Explore 审计（shader 管线/bucket 语义）+ 309 单测（+9）。
+> 本节把第五节的"下一步"清单与家族排行逐项更新到当前代码状态，并补齐报告缺失的根因。
+
+### 6.1 报告既有"下一步"项的当前状态（代码比对结论）
+
+| 报告条目 | 现状 | 证据 |
+|---|---|---|
+| §691 三门 A/B 裁决"模型光照帧"（全局最大杠杆 616万+290万+380万） | **§733 静态破案**：PBR-3D 分支 `dot(mbN 视空间, uMB3DDir 世界空间)` 帧错配 → 直射项恒零 → 即报告实测的"ambient-only"（墙 177 vs 231、duplicate 红 104=纯环境项精确值 albedo×0.2×ADF）。修复=mbLF/ADF/共享镜面项 mbL 全部改 `viewMatrix×dir` 视空间（§733/§733b）。modellightgamma 门控预期维持默认关（three colorspace_fragment 在 opaque_fragment 之后 :221/:223 → tail 线性值×K 编码后恰=mgl linearProduct） | MBModelRenderer.ts:533-548/470；model.fragment.glsl:438-443；three meshphysical.glsl.js:221/223 |
+| §689 阴影读出裁决（shadowdbg=3） | **已走完**（§712-§721）：shadow-uv 探针定案深度差非判别子 → casters 集合缺失（§716 layer-1）→ 墙投射门控（§720 shadowcast=0 默认）→ cascade 保真度专项**封存**（需 mgl shadow_renderer 全套移植） | §712-§721 |
+| §688 残留 ×0.77 均匀压暗 | **仍开放**（无收口记录）——候选维持：uMBEmissive 第二路径/双重 ground-rad/渐变雾交互。渲染复核时用 diffuse 域 print 排除 | 本节缺项确认 |
+| trees-puck（192万）分域 | **§725/§726 覆盖大半**：实例模型贴地+坡度（model-elevation-reference 默认 ground，§726.2）+ 高程放置门控 | §726.2 |
+| models-on-globe（160万）分域 | **确认引擎域+立案**：harness/引擎球面投影已通（setProjection ✓），缺口=模型矩阵球面补偿（mgl calculateModelMatrix:227-246 globeProjectionScale）需运行时探针定标 | §728.2 |
+| 19 例挂起族 | §698 延迟注入修复后 10/19 出帧；余 9 例（globe+trees-fog 引擎域）+ §722 resume 兜底 | §698/§722 |
+| landmark-z-offset-munich-3d-hidden 回归 | **已消解**（报告 §五 已记：回到 8962/9021）✓ | 报告 §五 |
+
+### 6.2 报告缺失的根因（代码比对新发现，均已修复入库）
+
+| # | 根因 | 命中家族（ml-0901 px） | 修复 |
+|---|---|---|---|
+| R1 | **PBR-3D 光向帧错配**（§733）：直射项零——即"ambient-only"之谜；hemisphere/legacy 分支转换正确，唯 PBR-3D 漏 | meshopt-quantization 616万、part-styling 290万、z-offset ~380万、duplicate 27万 | MBModelRenderer.ts mbLF/ADF/mbL 改视空间 |
+| R2 | **cast-shadows 门控失效**（§738）：emitter model 分支缺 `_paint` stash → 恒投影 | buildings-trees-shadows-casting 42.4万（双树层 cast:false）、trees-zoom-based-scale | emitter stash props._paint=p；batched 同款门控（§738b） |
+| R3 | **receive-shadows 门控缺失**（§739）：全局刷新无 per-layer 过滤 → false 层照常接收 | buildings-trees-shadows-casting 的 tree-layer-not-receiving（层名即语义）、trees-zoom-based-scale、color-theme/trees-monochrome | applyMglModelLighting receiveShadows 参数，false 不注册 __mbShU |
+| R4 | **mbx-lod occlusion KHR_texture_transform 未解析**（§728，×16 AO 图集）：资产实测全部 mbx-lod 带 transform | **landmark-glb-tiles-lod 19万（vs 非 lod 3023）主嫌**、colors-lod 35万、全部 -lod 变体 AO 域 | MBDracoDecoder occlusionTransform + aoMap 克隆 repeat/offset（three 0.178 aoMapTransform） |
+| R5 | **splitByPart 过滤复活**（§724.1）：子 mesh 不继承 visible/__mbNodeId → filter 隐藏节点被复活+runtime setFilter 失效 | landmark-duplicate-filtered 结构域（图像实证：红绿分离与 expected 同构） | 隐藏早退+字段传播 |
+| R6 | **无 TEXCOORD 全贴图剥离**（§726.1）：mgl 五处采样 uv 门控 vs 我方仅摘 baseColor | model-no-texcooords-textures（27.4万；净效应中性但 §725.2 MR 捕获的前置） | 克隆剥离 6 类 map |
+| R7 | **实例模型贴地/坡度缺失**（§726.2）：elevation-reference 默认 ground | trees-puck-terrain 族、z-offset-*-terrain | z+=DEM 高程+梯度法线四元数 |
+| R8 | **DEM 压平行翻转**（§729，自查）+ **压平缺失**（§725.1）：updateDEM 完整移植 | terrain+features 瓦片域 | 纯函数 MBTerrainFlatten + 4 单测锁死 |
+| R9 | **模型 feature-state 未接线**（§725.4）：evalVec3/evalScalar 无 featureState | trees-shadow-scaled、trees-puck-terrain-change-exaggeration | emitter setFeatureStateLookup |
+| R10 | **LUT 双 bug**（§736）：themed rgb() 串被 keywords/hsl 解析器误读→主题失效；colorEval 覆写数组→白化兜底 | themed features 瓦片（batched landmark+theme 组合） | parseCssColorFull + 字符串回写（+5 单测） |
+| R11 | **GPU LUT 缺失**（§727）+ **use-theme:none 整层排除**（§734）：mgl APPLY_LUT_ON_GPU 三应用点 | trees-use-theme（首测）、themed 层 | 2D 8-tap 仿真 + lutOff 穿线 6 调用点 |
+| R12 | **unlit clamp 非法**（§724.4）+ **MR 纹理/法线贴图不参与 tail**（§725.2/3） | 带 MR/normal 贴图的 GLB | three roughnessFactor/metalnessFactor 捕获 + three perturbed normal |
+
+### 6.3 报告"近绿带/杂项"的复核结论（免修项裁定）
+
+- **location-indicator**（model-state 子家族）：mgl JS 渲染零消费（spec 声明，行为在原生 SDK）——JS expected 即普通渲染，我方忽略即等价（§735）。
+- **0.65 地形阴影抑制**（draw_model:541-556）：仅 zoom-dep opacity 触发；资产扫描无夹具命中（trees-puck 的 0.5 为常量，mgl 照常投影）——不实现（§734）。
+- **数据驱动 model-scale/rotation/translation 227 处**：batched 瓦片仅 zoom 插值（逐帧求值 ✓），feature 驱动全在实例化/矢量路径（per-feature + §725.4 ✓）——无缺口（§734 附录）。
+- **fill-extrusion 半透明**（§12.74 六轮）：headless 已到观测极限（GL/合成器级 blend 疑点），维持**待真机验证**。
+- **输出链 colorspace 勘误**：three 0.178 colorspace_fragment 在 opaque_fragment 之后 → tail 线性值被正确编码；早期审计"缺 linearTosRGB"论断作废，hemisphere 线性乘法经编码恰=mgl linearProduct。
+
+### 6.4 修复→家族预期影响矩阵（下次批测验证点）
+
+| 家族（ml-0901 px） | 相关修复 | 预期 |
+|---|---|---|
+| meshopt-quantization 616万 | R1 直射项+R4 AO transform+§706 PBR 分治 | 大幅收敛（直射项从零恢复为主收益） |
+| buildings-trees-shadows 389万 | R2+R3 双门控+§688/§689+§701 雾域 | casting 42.4万 主例大幅收敛 |
+| landmark-z-offset ~380万 | R1+§716/§720 墙影门控+R7 terrain 变体 | 收敛 |
+| part-styling 290万 | R1+§724.1 refresh 链+R9 | 收敛（indirect-update 待帧差取证） |
+| trees-puck-terrain 192万 | R7 贴地坡度+§725 压平+R1 | 收敛 |
+| duplicate 27万 | R5 结构（已实证）+R1 亮度 | 大幅收敛（47,951 基线应被超越） |
+| landmark-glb-tiles-lod 19万 / colors-lod 35万 | R4 AO transform | **单点验证 R4 的关键对** |
+| models-on-globe 160万 / conflation 85万 | 未修（取证①②） | 持平预期 |
+| trees-use-theme | R11 LUT | 首次真值测量 |
+
+### 6.5 仍开放清单（渲染批测日执行序）
+
+1. chunked runner 全量（§722 resume + §731 extraArgs + 平台目录修复后首跑）→ `scripts/compare-mbstyle-results.js` 对 ml-0901 归因。
+2. 运行时取证：①globe 模型矩阵探针；②conflation 置换像素归因；③indirect-update setLights 帧差；④门灯光束色链；⑤duplicate 亮度（§733 修复复核）；⑥modellightgamma A/B（预期默认关，若 A/B 反证再翻转）。
+3. §688 ×0.77 因子排除法定位。
+4. landmark-glb-tiles-lod 单夹具复测（R4 直接验证点）。
+5. 19 挂起族余量（9 例 globe/trees-fog 引擎域）与 fill-extrusion 半透明（真机）维持挂起。
+6. 工程防线现状：309 单测（LUT 门控 5 + 压平 4 为新增，均已实战抓 bug）、tsc 绿、chunked runner 三项修复。
