@@ -1974,9 +1974,15 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     // transition is mid-flight; settle path otherwise.
                     const rtAny = (dataSource as any).runtime;
                     if (rtAny?.hasActiveTransitions) {
-                        // Zero extra frames: the wait loop's last AfterRender
-                        // already shows the phase at the requested time — any
-                        // further frame advances the wall clock past it.
+                        // §771b: mgl waits out paint transitions before its
+                        // capture (the style ops' implicit wait). Capture
+                        // immediately and the first ~300ms interpolated phase
+                        // freezes into the result (trees-use-theme red crowns
+                        // never cleared). Render until transitions drain.
+                        const trDeadline = Date.now() + 10000;
+                        while (rtAny.hasActiveTransitions && Date.now() < trDeadline) {
+                            await renderFrames(mapView, dataSource, 1);
+                        }
                     } else if (terrainToggled) {
                         await renderUntilSettled(mapView, dataSource, 30);
                     } else {
