@@ -36,6 +36,10 @@ export interface IOutlineConfig {
     enabled: boolean;
     thickness: number;
     color: string;
+    /** X-ray mode (outline hidden parts too). Defaults to true. */
+    xray: boolean;
+    /** Ring color for occluded silhouette sections; undefined = same as color. */
+    hiddenColor?: string;
 }
 
 export interface ITemporalAntialiasConfig {

@@ -200,7 +200,7 @@ function transformPrimitive(
                     scratchVector.set(uv[0], uv[1], 1);
                     scratchVector.applyMatrix3(matrix);
                     // Save result in Float32Array
-                    result.set([scratchVector[0], scratchVector[1]], i * components);
+                    result.set([scratchVector.x, scratchVector.y], i * components);
                 }
                 // If texCoord the same, replace gltf structural data
                 if (originalTexCoord === texCoord) {

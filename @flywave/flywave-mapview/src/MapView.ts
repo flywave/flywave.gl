@@ -39,7 +39,7 @@ import {
     PerformanceTimer
 } from "@flywave/flywave-utils";
 import * as THREE from "three/webgpu";
-import { type Renderer, WebGPURenderer } from "three/webgpu";
+import { type Renderer, type WebGPURendererParameters, WebGPURenderer } from "three/webgpu";
 import { type RendererCapabilities } from "@flywave/flywave-materials";
 
 import { type AtmosphereThemeConfig } from "@flywave/flywave-datasource-protocol";
@@ -179,6 +179,42 @@ const DEFAULT_MIN_CAMERA_HEIGHT = 20;
  * Style set used by {@link PolarTileDataSource} by default.
  */
 const DEFAULT_POLAR_STYLE_SET_NAME = "polar";
+
+/**
+ * WebGPU spec default for `maxColorAttachmentBytesPerSample`.
+ */
+const DEFAULT_MAX_COLOR_ATTACHMENT_BYTES = 32;
+
+// The VRM scene pass can bind up to 5 RGBA16Float MRT channels at once
+// (output + TAA velocity + bloom intensity + outline mask / viewZ + pickDepth),
+// i.e. 40 B per sample — above the WebGPU default of 32. Probed once per page
+// and passed as requiredLimits when the adapter supports more.
+let maxColorAttachmentBytesPerSample = DEFAULT_MAX_COLOR_ATTACHMENT_BYTES;
+
+/**
+ * Queries the adapter's `maxColorAttachmentBytesPerSample` so the device can be
+ * requested with it (three reads `parameters.requiredLimits` inside `init()`).
+ * Best effort: on failure the spec default is kept. See
+ * https://www.w3.org/TR/webgpu/#limits-maxColorAttachmentBytesPerSample
+ */
+async function resolveColorAttachmentLimit(forceWebGL: boolean): Promise<void> {
+    if (forceWebGL || typeof navigator === "undefined" || !("gpu" in navigator)) {
+        return;
+    }
+    try {
+        // No DOM WebGPU typings guaranteed across build targets.
+        const gpu = (navigator as unknown as { gpu?: { requestAdapter?: () => Promise<unknown> } })
+            .gpu;
+        const adapter = await gpu?.requestAdapter?.();
+        const limit = (adapter as { limits?: { maxColorAttachmentBytesPerSample?: number } } | null)
+            ?.limits?.maxColorAttachmentBytesPerSample;
+        if (typeof limit === "number") {
+            maxColorAttachmentBytesPerSample = limit;
+        }
+    } catch {
+        // Keep the default — pipeline creation errors are reported by three.
+    }
+}
 
 /**
  * The type of `RenderEvent`.
@@ -951,7 +987,6 @@ export class MapView extends EventDispatcher {
     /** Lazily created surface capture pass (see {@link MapView.surfaceCapture}). */
     private m_surfaceCapturePass?: SurfaceCapturePass;
 
-
     // `true` if dispose() has been called on `MapView`.
     private m_disposed = false;
 
@@ -1067,18 +1102,34 @@ export class MapView extends EventDispatcher {
                 ? undefined
                 : (this.m_options.powerPreference as "low-power" | "high-performance");
 
-        this.m_renderer = new WebGPURenderer({
+        const rendererParams: WebGPURendererParameters = {
             canvas: this.canvas,
             forceWebGL: this.m_options.forceWebGL === true,
             antialias: this.nativeWebglAntialiasEnabled,
             alpha: this.m_options.alpha,
             reversedDepthBuffer: true,
-            ...(powerPreference !== undefined ? { powerPreference } : {})
-        });
+            ...(powerPreference !== undefined ? { powerPreference } : {}),
+            requiredLimits: {}
+        };
 
-        this.m_rendererReady = this.m_renderer.init().then(() => {
-            this.m_rendererInitialized = true;
-        });
+        this.m_renderer = new WebGPURenderer(rendererParams);
+
+        // WebGPURenderer reads parameters.requiredLimits inside init(), so the
+        // adapter probe below can fill it in before that runs. NOTE: the
+        // backend constructor aliases this.requiredLimits object itself, so it
+        // must be mutated in place, never reassigned.
+        this.m_rendererReady = resolveColorAttachmentLimit(this.m_options.forceWebGL === true)
+            .then(() => {
+                if (maxColorAttachmentBytesPerSample > DEFAULT_MAX_COLOR_ATTACHMENT_BYTES) {
+                    Object.assign(rendererParams.requiredLimits!, {
+                        maxColorAttachmentBytesPerSample: maxColorAttachmentBytesPerSample
+                    });
+                }
+                return this.m_renderer.init();
+            })
+            .then(() => {
+                this.m_rendererInitialized = true;
+            });
 
         this.m_renderer.autoClear = false;
         this.m_renderer.debug.checkShaderErrors = !isProduction;

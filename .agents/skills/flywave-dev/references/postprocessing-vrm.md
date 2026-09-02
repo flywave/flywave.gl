@@ -16,8 +16,9 @@ scene pass → **clouds** → **aerialPerspective**（含 CSM god rays 的
 shadowLength；云必须在其前）→ **lensFlare** → **bloom**（输入是原始
 colorNode × bloomIntensity MRT，不是 lensFlare 后的色彩；加法叠加）→
 **toneMapping**（在 AA 前）→ **TAA/SMAA**（`antialiasing` 字段二选一）→
-**outline**（depth 邻域差分）→ vignette → brightnessContrast →
-hueSaturation → sepia → translucent 合成 pass → dithering。
+**outline**（独立 mask 预 pass 的深度形态学，见下节）→ vignette →
+brightnessContrast → hueSaturation → sepia → translucent 合成 pass →
+dithering。
 
 ## Theme 配置面
 
@@ -25,7 +26,8 @@ hueSaturation → sepia → translucent 合成 pass → dithering。
 theme: {
     postEffects: {                        // 类型：PostEffects.ts
         bloom:      { enabled, strength, radius, luminancePassThreshold },
-        outline:    { enabled, thickness, color },
+        outline:    { enabled(废弃,选中驱动), thickness, color,
+                      xray(默认true), hiddenColor },
         vignette:   { enabled, offset, darkness },
         sepia:      { enabled, amount },
         hueSaturation: { enabled, hue, saturation },
@@ -98,11 +100,55 @@ new CesiumIonDataSource({ ..., postEffects: { bloom: { enabled: true } } });
    `copyTextureToTexture` 抛错，精度受影响）；LUT 纹理格式按
    `OES_texture_float_linear` 探测分支。bloom/outline/调色/SMAA/agx 均可跑。
 
+## 选择性描边（outline，X-ray 完整轮廓）
+
+架构（2025-08 重做，替换旧的 `outlineMask` MRT 通道方案）：
+
+1. **打标**：`mapRenderingManager.addOutlineObject(obj)` 给子树开
+   `OUTLINE_LAYER_BIT`（bit 11，`TranslucentLayerEffect.ts`；bit 10 =
+   translucent，bit 12 = splat 深度/surface capture）。**不动材质**。
+2. **mask 预 pass**：`ViewRenderManager.buildNodeGraph` 在有选中对象时建
+   第二个 `pass(scene, camera)`，`setLayers(bit 11)` +
+   `overrideMaterial`（共享干净 MeshBasicNodeMaterial）。只有选中物体
+   参与该 pass → 其深度 footprint 就是**完整投影剪影（含被遮挡部分）**，
+   这就是 X-ray 的实现方式。
+3. **形态学**：`vrm/effects/outline.ts` 对深度纹理做
+   `dilate && !erode` 取环。"在剪影内" = `depth > 0`（**反转深度**，
+   清空值 0）；`xray: false` 时逐 tap 再与主场景深度比较做遮挡剔除；
+   `hiddenColor` 把环的被遮挡段涂成另一色。
+4. 配置面：`IOutlineEffect`（PostEffects.ts），全局
+   `mapView.postEffects.outline` / `patchTheme` / 运行时
+   `mapRenderingManager.updateOutline(部分字段)`（会触发管线重建）。
+
+## 坑：pass/深度采样三条硬规则（全部实测踩过）
+
+1. **本引擎用反转深度缓冲**（`MapView.ts` 的 `reversedDepthBuffer: true`）：
+   depth 清空值是 **0**（`Renderer.getClearDepth()` 返回 `1-clearDepth`），
+   近处物体深度趋近 1。任何"depth < 1 = 有几何"的判断都是反的，必须写
+   `depth > 0 = 有几何`；静默失效无报错，画面只是"效果消失"。
+2. **后处理链里 `textureLoad()`（TSL `.load(ivec2)`）读到全 0**，连主
+   pass 的 color/depth 都读不出来（WebGPU，r185）。读 RT 纹理一律用
+   UV 采样 `textureNode.sample(uv)`，texel 中心 =
+   `(floor(screenUV*size-0.5)+offset+0.5)/size`（参考
+   `flywave-atmosphere/src/tsl/sampling.ts`、TAA）。TAA 内部能用 load
+   是它自己的节点上下文，别照抄。
+3. **无 MRT 的 pass 里渲染带自定义 `mrtNode` 的材质会崩**（WGSL
+   "structures must have at least one member"，pipeline 创建失败）：
+   `NodeMaterial` 在 `renderer MRT = null` 时用材质自己的 `mrtNode`
+   替换整个片元输出。解法：给 pass 设 `overrideMaterial`（干净
+   MeshBasicNodeMaterial），参考 buildingColor pass / outline mask pass。
+
+另：`pass()` 复用同一 scene 渲染，**Background 不受 layers 控制**，子
+pass 会把天空再画一遍（深度写到远平面、无视觉影响，但有一次天空着色
+开销）——只有选中对象时才建 outline pass 就是为此。调试可用
+`outline.ts` 的 `OUTLINE_DEBUG`（R/G/B = dilated/eroded/ring）。
+
 ## 坑清单（全部源码实证）
 
-- **outline 的 enabled 不归 theme 管**：`updateOutline` 只改 thickness/color
-  （`MapView.ts` 的 `setPostEffects`）；换一份 postEffects 时 outline 与
-  brightnessContrast **不在"先全关"清单里，旧值会残留**。
+- **换一份 postEffects 时 outline 与 brightnessContrast 不在"先全关"
+  清单里，旧值会残留**（`MapView.ts` 的 `setPostEffects`；outline 的
+  enabled 本就由选中驱动，thickness/color/xray/hiddenColor 经
+  `updateOutline` 全量合并）。
 - **AA 默认值不一致**：VRM 默认 `"taa"`，MapRenderingManager 默认 `"none"`，
   首次 sync 以 MapRenderingManager 为准——**不配 theme 就没有 AA**。
 - `config.taa.enabled` 字段已被 `antialiasing` 实质取代，构建只看后者。

@@ -31,6 +31,14 @@ export const TRANSLUCENT_LAYER_BIT = 10;
 export const SPLAT_DEPTH_LAYER_BIT = 12;
 
 /**
+ * Object3D.layers bit for outlined objects (bit 11). The ViewRenderManager
+ * renders only bit-11 objects into a dedicated outline mask pass whose depth
+ * buffer gives the FULL silhouette (occluded parts included) consumed by
+ * `vrm/effects/outline`.
+ */
+export const OUTLINE_LAYER_BIT = 11;
+
+/**
  * Data manager for translucent layer effect.
  *
  * Objects registered via `addObject` get bit 10 enabled on their layers mask.

@@ -9,6 +9,7 @@ import {
     WindowEventHandler,
     TileRenderDataSource
 } from "@flywave/flywave.gl";
+import { GeoJSONDrawControls, DrawMode } from "@flywave/flywave-draw-controls";
 import {
     MapViewMonitor,
     AtmosphereModule,
@@ -60,7 +61,10 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                 sunTime: new Date(new Date().setMonth(9)).setHours(12, 30)
             },
             postEffects: {
-                antialiasing: "taa"
+                antialiasing: "taa",
+                bloom:{
+                    enabled:true
+                }
             },
             toneMappingExposure: 10,
             toneMappingMode: "neutral"
@@ -71,12 +75,61 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
 /**
  * Initialize map control component
  * @param mapView Map view instance
+ * @returns MapControls instance
  */
-const initializeMapControls = (mapView: MapView): void => {
+const initializeMapControls = (mapView: MapView): MapControls => {
     const controls = new MapControls(mapView);
     const ui = new MapControlsUI(controls);
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
     canvas.parentElement!.appendChild(ui.domElement);
+    return controls;
+};
+
+/**
+ * Create drawing UI panel for polygon drawing
+ * @param drawControls GeoJSONDrawControls instance
+ */
+const createDrawingUI = (drawControls: GeoJSONDrawControls): void => {
+    const controlPanel = document.createElement("div");
+    controlPanel.style.cssText =
+        "position:absolute;top:10px;left:10px;background:white;padding:15px;border-radius:5px;box-shadow:0 2px 5px rgba(0,0,0,0.3);z-index:1000;font-family:Arial,sans-serif;";
+
+    const title = document.createElement("h3");
+    title.textContent = "绘制工具";
+    title.style.cssText = "margin:0 0 10px 0;font-size:14px;";
+    controlPanel.appendChild(title);
+
+    const createButton = (
+        text: string,
+        color: string,
+        onClick: () => void
+    ): void => {
+        const button = document.createElement("button");
+        button.textContent = text;
+        button.style.cssText = `display:block;width:100%;margin:4px 0;padding:6px;background:${color};color:white;border:none;border-radius:3px;cursor:pointer;font-size:12px;`;
+        button.onclick = onClick;
+        controlPanel.appendChild(button);
+    };
+
+    createButton("绘制面", "#2C7BE5", () => {
+        drawControls.setMode(DrawMode.POLYGON);
+    });
+
+    createButton("编辑模式", "#6c757d", () => {
+        drawControls.setMode(DrawMode.EDIT);
+    });
+
+    createButton("清除所有", "#dc3545", () => {
+        drawControls.clearAll();
+    });
+
+    createButton("导出 GeoJSON", "#28a745", () => {
+        const geoJSON = drawControls.exportToGeoJSON();
+        console.log("Exported GeoJSON:", JSON.stringify(geoJSON, null, 2));
+        alert("GeoJSON 已导出到控制台");
+    });
+
+    document.body.appendChild(controlPanel);
 };
 
 /**
@@ -305,7 +358,11 @@ try {
     mapView.beginAnimation();
 
     // 3. Initialize map controls
-    initializeMapControls(mapView);
+    const mapControls = initializeMapControls(mapView);
+
+    // 3.1 Initialize GeoJSON draw controls
+    const drawControls = new GeoJSONDrawControls(mapView, mapControls);
+    createDrawingUI(drawControls);
 
     // 4. Create 3D Tiles data source
     const cesiumIonDataSource = create3DTilesDataSource(mapView);

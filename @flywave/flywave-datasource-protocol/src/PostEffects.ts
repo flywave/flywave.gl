@@ -31,9 +31,21 @@ export interface IOutlineEffect {
      * (one outlined object is enough to turn it on). This field is ignored.
      */
     enabled: boolean;
-    /** Stroke width in pixels (selection mask dilation radius). */
+    /** Stroke width in pixels (mask dilation radius). */
     thickness: number;
+    /** Ring color for the visible part of the silhouette. */
     color: string;
+    /**
+     * X-ray mode: also outline the parts of the object hidden behind other
+     * geometry. Defaults to `true`.
+     */
+    xray?: boolean;
+    /**
+     * Ring color for the occluded (hidden) part of the silhouette in X-ray
+     * mode. Defaults to `color`. Set e.g. to a dimmer tone for the classic
+     * "bright visible / dim hidden" look.
+     */
+    hiddenColor?: string;
 }
 
 export interface IBloomEffect {

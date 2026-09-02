@@ -45,6 +45,9 @@ flywave.gl 是基于 **three/webgpu**（`WebGPURenderer` + TSL 节点材质，�
    `intersectMapObjects`；3DTile 侧契约见
    `@flywave/flywave-3dtile-datasource/src/TilesRenderer.ts` 的 `raycast`
    （"只信射线方向，不信原点坐标系"）。
+   另外：**本引擎用反转深度缓冲**（`MapView` 的 `reversedDepthBuffer:
+   true`）——深度清空值是 0，近处物体深度趋近 1；GPU 侧任何
+   "有几何/无几何" 的深度判断必须按 `depth > 0` 写，写反会静默失效。
 2. **永不把持久对象挂到场景根**：场景根每帧清空重建。用户/持久对象必须走
    `MapAnchor`。证据：`@flywave/flywave-mapview/src/MapView.ts` 的 `render()`
    开头 `m_sceneRoot.children.length = 0`。
@@ -84,7 +87,7 @@ flywave.gl 是基于 **three/webgpu**（`WebGPURenderer` + TSL 节点材质，�
 | 新增示例 demo | `assets/example-template/`（glob 自动发现，无需注册） |
 | 3D Tiles 样式 / batch 属性配色 / 动态高亮 | `references/3dtile-styling.md`（不走 styleSet 解码管线，是独立机制） |
 | 文字/POI 不显示 / 字体 / FontCatalog / 标注排障 | `references/text-rendering.md` |
-| 后处理 / bloom / 抗锯齿 / 大气云太阳 / 改 ViewRenderManager | `references/postprocessing-vrm.md` |
+| 后处理 / bloom / 抗锯齿 / 描边 outline / 大气云太阳 / 改 ViewRenderManager | `references/postprocessing-vrm.md` |
 | 性能 / 卡顿 / 帧统计 / 缓存与 LOD 调参 | `references/performance-tuning.md` |
 | 地形开挖 / 刷高程 / 投影贴图 / 地层 / HeightmapPainter | `references/terrain-features.md` |
 | **聚合包 `@flywave/flywave.gl`**（对外使用核心）：re-export 面 / decoder bundle / 双格式构建 / 发布 / 外部应用接入 | `references/aggregate-package.md` |

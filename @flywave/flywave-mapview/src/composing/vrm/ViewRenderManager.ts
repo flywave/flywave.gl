@@ -61,7 +61,8 @@ import { outline } from "./effects/outline";
 import {
     TranslucentLayerEffect,
     TRANSLUCENT_LAYER_BIT,
-    SPLAT_DEPTH_LAYER_BIT
+    SPLAT_DEPTH_LAYER_BIT,
+    OUTLINE_LAYER_BIT
 } from "./TranslucentLayerEffect";
 
 interface DepthSlot {
@@ -96,7 +97,7 @@ export class ViewRenderManager implements IViewRenderManager {
         brightnessContrast: { enabled: false, brightness: 0, contrast: 0 },
         hueSaturation: { enabled: false, hue: 0, saturation: 0 },
         sepia: { enabled: false, amount: 0 },
-        outline: { enabled: false, thickness: 2, color: "#ffffff" },
+        outline: { enabled: false, thickness: 2, color: "#ffffff", xray: true },
         taa: { enabled: false },
         clouds: { enabled: false },
         antialiasing: "taa",
@@ -115,6 +116,9 @@ export class ViewRenderManager implements IViewRenderManager {
     private pipeline?: RenderPipeline;
     private passNode?: ReturnType<typeof pass>;
     private buildingColorPassNode?: ReturnType<typeof pass>;
+    /** Outline-only mask pass (OUTLINE_LAYER_BIT objects, fresh depth buffer). */
+    private outlineMaskPassNode?: ReturnType<typeof pass>;
+    private m_outlineMaskMaterial?: MeshBasicNodeMaterial;
     private lensFlareNode?: LensFlareNode;
     private aerialNode?: AerialPerspectiveNode;
     private m_cloudNode?: CloudRenderNode;
@@ -137,10 +141,12 @@ export class ViewRenderManager implements IViewRenderManager {
     bloomObjects: Set<THREE.Object3D> = new Set();
     bloomIgnoreObjects: Set<THREE.Object3D> = new Set();
     /**
-     * Objects registered for the selective depth-edge outline (populated via
-     * `MapRenderingManager.addOutlineObject`). The outline pass only exists
-     * while this set is non-empty; its silhouette comes from the
-     * `outlineMask` MRT channel those objects write.
+     * Objects registered for the selective outline (populated via
+     * `MapRenderingManager.addOutlineObject`, tagged with `OUTLINE_LAYER_BIT`).
+     * The outline mask pass only exists while this set is non-empty; it
+     * renders ONLY these objects into a fresh depth buffer, whose "depth < 1"
+     * footprint is the FULL silhouette (occluded parts included) that
+     * `vrm/effects/outline` dilates.
      */
     outlineObjects: Set<THREE.Object3D> = new Set();
     translucentLayerEffect?: TranslucentLayerEffect;
@@ -222,7 +228,6 @@ export class ViewRenderManager implements IViewRenderManager {
         const mrtEntries: Record<string, unknown> = { output };
         if (taaEnabled) mrtEntries.velocity = highpVelocity;
         if (bloomEnabled) mrtEntries.bloomIntensity = float(0);
-        if (outlineEnabled) mrtEntries.outlineMask = float(0);
         if (aerialEnabled && hasCSM) {
             mrtEntries.viewZUnit = positionView.z.mul(WORLD_TO_UNIT);
         }
@@ -296,6 +301,34 @@ export class ViewRenderManager implements IViewRenderManager {
 
         if (this.gpuPicking) {
             this.passNode.getTextureNode("pickDepth");
+        }
+
+        // Outline mask prepass: renders ONLY the outlined objects (bit 11)
+        // with their own fresh depth buffer. Because no scene occluder takes
+        // part in this pass, the depth footprint is the complete projected
+        // silhouette — hidden portions included — which is what enables the
+        // X-ray outline (`vrm/effects/outline` reads this depth; the engine
+        // uses a REVERSED depth buffer, so "inside" = depth > 0, the sky /
+        // background writes 0 and Background ignores layers anyway).
+        // Plain override material further down: per-material mrtNode (bloom/
+        // translucent entries) would otherwise replace the whole fragment
+        // output in this MRT-less pass and crash pipeline creation
+        // ("structures must have at least one member"). Same pattern as the
+        // buildingColor pass below.
+        if (outlineEnabled) {
+            const outlineLayers = new THREE.Layers();
+            outlineLayers.set(OUTLINE_LAYER_BIT);
+            if (!this.m_outlineMaskMaterial) {
+                const maskMat = new MeshBasicNodeMaterial();
+                maskMat.transparent = true;
+                maskMat.blending = THREE.NoBlending;
+                this.m_outlineMaskMaterial = maskMat;
+            }
+            this.outlineMaskPassNode = pass(scene, camera, { samples: 0 });
+            this.outlineMaskPassNode.setLayers(outlineLayers);
+            this.outlineMaskPassNode.overrideMaterial = this.m_outlineMaskMaterial;
+        } else {
+            this.outlineMaskPassNode = undefined;
         }
 
         let outputNode = colorNode;
@@ -395,9 +428,14 @@ export class ViewRenderManager implements IViewRenderManager {
         if (outlineEnabled) {
             finalNode = outline(
                 finalNode,
-                this.passNode.getTextureNode("outlineMask"),
+                this.outlineMaskPassNode.getTextureNode("depth"),
                 this.config.outline.thickness,
-                this.config.outline.color
+                this.config.outline.color,
+                {
+                    sceneDepthTexture: depthNode,
+                    hiddenColor: this.config.outline.hiddenColor,
+                    xray: this.config.outline.xray !== false
+                }
             );
         }
         if (this.config.vignette.enabled) {
@@ -559,6 +597,9 @@ export class ViewRenderManager implements IViewRenderManager {
         this.pipeline = undefined;
         this.passNode = undefined;
         this.buildingColorPassNode = undefined;
+        this.outlineMaskPassNode = undefined;
+        this.m_outlineMaskMaterial?.dispose();
+        this.m_outlineMaskMaterial = undefined;
         this.lensFlareNode = undefined;
         this.aerialNode = undefined;
         this.m_cloudNode = undefined;
