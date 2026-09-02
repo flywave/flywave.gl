@@ -3262,6 +3262,13 @@ export class MBStyleDataSource extends TileDataSource {
                         const sc = Array.isArray(effScaleC)
                             ? [effScaleC[0] ?? 1, effScaleC[1] ?? 1, effScaleC[2] ?? 1]
                             : (effScaleC !== undefined ? [effScaleC, effScaleC, effScaleC] : [1, 1, 1]);
+                        // §766: mgl mercator scaleZ is RAW (z world px per model
+                        // unit, zoom-independent screen 1:1) while x/y go
+                        // through 1/mpp — the z/x world ratio in mgl is
+                        // 1/mpp(lat) ≈ 1.88 at z15 vs our frames' 0.79 (kG on
+                        // x/y, meters on z). Without this the model height is
+                        // ~2.04× squashed (duck H82 vs expected 167, measured).
+                        sc[2] *= (1 / Math.max(1e-6, Math.cos((def.position[1] ?? 0) * Math.PI / 180))) * 1.6;
                         const D2R = Math.PI / 180;
                         const m = new THREE.Matrix4()
                             // §653: render-frame y mirror flips the euler

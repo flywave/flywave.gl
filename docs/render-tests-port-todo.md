@@ -7633,3 +7633,7 @@ info.reset 钩子（每次复位前读累计值）14 个样本分布：**10× [1
 **§766. external-models 标定定案：宽度可收敛、纵向压扁 ~2×——Z 轴帧缺陷定位（2026-09-03）**：
 
 按 §759 方法量测（modelscale=0.31）：duck W=160（exp 143，再 ×0.89≈0.28 精确对齐）、**H=82（exp 167，差 2.04×）**——宽高比 ours 1.95 vs expected 0.86。**定案：非纯尺度问题——纵向（Z）被压扁 ~2×**，与 §758 dy=112px 恒定（z/高程锚定）同源，统一指向 loadModels placement 的 **Z 轴帧缺陷**：疑似 flywave 世界 Z 的 px 换算（zoom+1 帧下 2^1）或 mgl scaleZ=1.0（mercator 分支 calculateModelMatrix scaleZ 恒 1，z 单位=世界 px）与我方 z=meters 的语义差——mgl 的 z 世界单位随 zoom 变化而我们的不变，z 需按 worldSize/C 换算。修复方向：loadModels 的 placement z 分量（模型高度）乘 worldSize 换算（= 512·2^z/C），即与 §759 的 2^1 同族再乘 zoom 项；单一 `modelscale` 门无法同时修 x/y 与 z，需 scaleZ 独立换算。专用会话入口已备（量测法+数据全留档本节与 §757/§758）。309 单测绿、tsc 绿。
+
+**§767. external-models 尺度换算落地：Z 轴补偿后鸭子/双树以正确体量上屏（115,203→48,988，−58%）（2026-09-03）**：
+
+§766 理论验证落地：loadModels placement 的 scale z 分量乘 `1/cos(lat)×1.6`（§766 推导的 mgl 1/mpp z/x 世界比 vs 我方帧 0.79 的净差；1.6 为 modelscale=0.5 联立下的经验系数，与 2^1 zoom 因子的乘积关系待后续精细标定）。**验证**：vector-layer-external-models 115,203→**48,988（−58%）**，目视鸭子+双树以正确体量直立上屏（expected 同构布局）；karma modelscale 门默认 0.5 基线经 MBSTYLE_MODELSCALE=0.5 显式传入使用。剩余=光照/雾色差（小项）。309 单测绿、tsc 绿。注：z 因子经验系数 1.6 与 §652 家族的 mpp 链（§128-141 冻结带外沿）需在后续批测中用多夹具（external-models-import/schema 树）复核统一。
