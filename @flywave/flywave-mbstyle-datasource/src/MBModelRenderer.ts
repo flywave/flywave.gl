@@ -94,6 +94,22 @@ export function mbHeightRampUniforms(
     return { b0: 0, b1: 1, power: 1, start: 255 / 256, range: 0 };
 }
 
+/**
+ * §754: localize render-test model URIs. mgl's vitest dev server serves the
+ * fixture-hostile URLs below from the repo root (test/integration/models),
+ * and the vendored checkout carries the same files. Without this, geojson
+ * model features pointing at `localhost:63315` / the Khronos GitHub raw URL
+ * fail to load and the models never render (vector-layer-external-models).
+ */
+export function localizeModelUrl(url: string): string {
+    if (typeof url !== 'string') return url;
+    const m = /^https?:\/\/localhost:\d+\/models\/(.+)$/.exec(url);
+    if (m) return `/base/mapbox-gl-js/test/integration/models/${m[1]}`;
+    const khronos = /^https:\/\/raw\.githubusercontent\.com\/KhronosGroup\/glTF-Sample-Models\/[^/]+\/2\.0\/([^/]+)\/glTF\/(.+)$/.exec(url);
+    if (khronos) return `/base/mapbox-gl-js/test/integration/models/${khronos[2]}`;
+    return url;
+}
+
 /** §649: the model-shader light direction. §691 A/B verdict (quantization
  * 101万→4633 −99.5% with PBR branch): models use mgl-EXACT un-mirrored
  * sphericalDirectionToCartesian (az+90 convention); the model geometry's
@@ -958,6 +974,7 @@ export class MBModelRenderer {
     }
 
     private async getPrototype(url: string): Promise<THREE.Object3D | null> {
+        url = localizeModelUrl(url);
         const cached = this.m_prototypes.get(url);
         if (cached === 'failed') return null;
         if (cached && cached !== 'loading') return cached;
