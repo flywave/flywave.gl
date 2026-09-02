@@ -79,6 +79,12 @@ export class MBStyleRuntime {
         } else {
             (layer as any).paint[prop] = value;
             this.rebuildEvaluator();
+            // §750: non-interpolable paint changes must reach the tiles —
+            // the datasource onChange reconfigures the decoder + marks tiles
+            // dirty so decode-time evaluation (model part paints, LUT gates)
+            // sees the new value. Without this, model runtime-styling ops
+            // (model-color-mix-intensity etc.) silently never render.
+            this.m_onChange();
         }
     }
 
@@ -172,6 +178,11 @@ export class MBStyleRuntime {
         this.m_transitions = remaining;
         if (changed) {
             this.rebuildEvaluator();
+            // §750: fire onChange once at the FINAL tick so the settled
+            // target value reaches a re-decode (bounded: not per tick).
+            if (remaining.length === 0) {
+                this.m_onChange();
+            }
         }
     }
 

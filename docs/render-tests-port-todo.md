@@ -7561,3 +7561,7 @@ GLPRINT 探针（injectGroundLighting 编译期 uniform 打印，buildings-trees
 **§749. §747 残差归因 + ×0.77 结案（2026-09-02）**：
 
 ① **trees-use-theme 203,504 归因 = 模型 color-theme/LUT 应用域**：图像对比——布局/树位/尺寸与 expected 逐树吻合（放置/瓦片内容域干净），背景 2D（fill/extrusion）已正确主题化变红；**树冠仍为未主题化的原绿色**（expected 为红/橄榄主题色调）→ 残差全部在模型侧 LUT（§727 GPU LUT 的模型尾注入未生效或索引错），挂账 §727 专项。② **vector-layer-external-models 40,430 归因 = 外部 glTF 模型整体缺失**：expected 近景鸭子+两棵树，ours 仅 basemap——model-external 加载分支未拉起（§743 崩溃时代掩蔽的加载缺陷），挂账模型加载专项。③ **×0.77 结案**：当前代码 fog 夹具 road 像素 ours=(255,255,224) 与 expected **逐位一致**——§688 时代的残差已被 R1/R13/§733 链顺带消除，GLPRINT 已证 emi=1 mix 恒等还原，**P2-C 结案**。309 单测绿、tsc 绿。
+
+**§750. 模型 LUT 专项第一阶段：runtime setPaintProperty 断链修复 + trees-use-theme 归因细化（2026-09-02）**：
+
+① **审计结论**：§727 GPU LUT 注入链本身完整（uMBLut/uMBLutN/uMBLutOn 进 onBeforeCompile、mbApplyLut 8-tap 三线性索引 (r+g·N, b) 与 CPU r+g·N²+b·N 对齐、lutOff 门控在 :661/:899 正确传参）；TINT 探针证 lutN=32 已达材质、lutOff=true 正确。② **真 bug：runtime setPaintProperty 从不触发 m_onChange**（两分支都只 rebuildEvaluator）→ 模型 runtime-styling op（model-color-mix-intensity 等）永远到不了重解码/重求值。修复：非可插值分支立即 m_onChange()；transition 终帧（remaining 空）触发一次（有界，免逐 tick 重解码风暴）。③ **验证与残留**：trees-use-theme 203,504 像素仍持平——op→onChange→重解码链已通，但**splitByPart/refreshSplit 只刷新 emissive，不刷新 model-color mix 的颜色域**（refreshMeshFeatures 的 refreshSplit 不更新 part 颜色烘焙）——精确下一入口。意外收益：**indirect-update-doors 61万→52.8万（−14%）**（onChange 让 indirect 更新真正到达）。④ 回归门：geojson-source-with-schema 43,723 持平、doors-lod 610,444 持平；309 单测绿、tsc 绿。TINT/ONCHG 探针已移除。
