@@ -200,6 +200,9 @@ export function applyMglModelLighting(
     // DIFFUSE_SHADED (the hemisphere-style apply_lighting formula).
     // globalThis.__mbModelLightPort (modellightport=0/1) overrides for A/B.
     pbrEligible?: boolean,
+    // §734: mgl drawMesh:241/255 — model-color-use-theme:'none' passes NULL
+    // as the layer LUT, so the whole layer (textures included) is unthemed.
+    lutOff?: boolean,
 ): void {
     const ls = dataSource?.m_environment?.lighting3DState;
     model.traverse((o) => {
@@ -253,11 +256,12 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBModelGamma = {
                     value: (globalThis as any).__mbModelLightGamma ? 1 : 0,
                 };
-                // §727: color-theme GPU LUT (mgl APPLY_LUT_ON_GPU).
+                // §727: color-theme GPU LUT (mgl APPLY_LUT_ON_GPU). §734:
+                // use-theme:'none' excludes the whole layer (drawMesh:255).
                 const mbLut = (dataSource as any)?.m_colorThemeLut ?? null;
-                shader.uniforms.uMBLut = { value: mbLutGpuTexture(mbLut) };
-                shader.uniforms.uMBLutN = { value: mbLut?.n ?? 0 };
-                shader.uniforms.uMBLutOn = { value: mbLut ? 1 : 0 };
+                shader.uniforms.uMBLut = { value: lutOff ? null : mbLutGpuTexture(mbLut) };
+                shader.uniforms.uMBLutN = { value: lutOff ? 0 : (mbLut?.n ?? 0) };
+                shader.uniforms.uMBLutOn = { value: mbLut && !lutOff ? 1 : 0 };
                 // §661: legacy light defaults — mgl model_program.ts reads the
                 // root style light (spec defaults: position [1.15, 210, 30]
                 // spherical, intensity 0.5, white, anchor viewport), converts
@@ -1124,7 +1128,9 @@ export class MBModelRenderer {
             const tint = pl.color && pl.colorMix > 0
                 ? { color: pl.color, mix: pl.colorMix }
                 : undefined;
-            applyMglModelLighting(this.m_dataSource, model, pl.emissive ?? 0, tint);
+            applyMglModelLighting(this.m_dataSource, model, pl.emissive ?? 0, tint,
+                undefined, undefined, undefined,
+                (technique as any)._paint?.['model-color-use-theme'] === 'none');
             if (Number.isFinite(pl.roughness)) {
                 model.traverse((o) => {
                     const mesh = o as THREE.Mesh;

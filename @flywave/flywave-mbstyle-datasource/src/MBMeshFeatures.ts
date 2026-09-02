@@ -609,6 +609,9 @@ export function applyMeshFeatures(
 ): void {
     try {
         const brightness = mglMeasureLightBrightness(dataSource);
+        // §734: mgl drawMesh:241/255 — use-theme 'none' passes NULL as the
+        // layer LUT: the WHOLE layer (textures included) is unthemed.
+        const lutOff = paint?.['model-color-use-theme'] === 'none';
         // §709: per-NODE part tables — mgl's computePartPbrTable is refilled
         // per nodeInfo (feature id drives ["id"]-seeded paint like
         // ["random", ...]); a tile-level table collapsed every node's draw.
@@ -619,7 +622,7 @@ export function applyMeshFeatures(
             if (!t) {
                 const rawId = mesh.userData.__mbNodeId;
                 const id = typeof rawId === 'string' || typeof rawId === 'number' ? rawId : 0;
-                t = PART_NAMES.map(name => evalPart(paint, zoom, name, brightness, id, (dataSource as any)?.m_colorThemeLut ?? null));
+                t = PART_NAMES.map(name => evalPart(paint, zoom, name, brightness, id, lutOff ? null : ((dataSource as any)?.m_colorThemeLut ?? null)));
                 tables.set(key, t);
             }
             return t;
@@ -636,7 +639,7 @@ export function applyMeshFeatures(
         root.userData.__mbFeatFeatureless = [];
         root.userData.__mbFeatTables = tables;
         for (const mesh of meshes) {
-            splitByPart(mesh, partsFor(mesh), root, dataSource);
+            splitByPart(mesh, partsFor(mesh), root, dataSource, lutOff);
             if (mesh.userData.__mbFeatSplit) {
                 root.userData.__mbFeatSources.push(mesh);
             }
@@ -646,7 +649,7 @@ export function applyMeshFeatures(
         root.traverse(o => {
             const mesh = o as THREE.Mesh;
             if (mesh.isMesh && !mesh.geometry.getAttribute(FEATURE_ATTR) && !mesh.userData.__mbPart) {
-                applyMglModelLighting(dataSource, mesh, partsFor(mesh)[0].emissive, undefined, undefined, 0, true);
+                applyMglModelLighting(dataSource, mesh, partsFor(mesh)[0].emissive, undefined, undefined, 0, true, lutOff);
                 root.userData.__mbFeatFeatureless.push(mesh);
             }
         });
@@ -710,6 +713,7 @@ function splitByPart(
     parts: PartStyle[],
     root: THREE.Object3D,
     dataSource: any,
+    lutOff = false,
 ): void {
     // mgl setFilter hides whole NODES at draw (bucket.getNodesInfo) — a
     // filter-hidden node must not be split: the sub-meshes would detach the
@@ -883,7 +887,7 @@ function splitByPart(
         sub.userData.__mbMatBaseOpacity = (mat.opacity ?? 1);
         if (mat.transparent) (mat.userData ??= {}).__mbForceTransparent = true;
         const hr = mbHeightRampUniforms(style.heightEmission, bboxZMin, bboxZMax);
-        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr, 0, true);
+        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr, 0, true, lutOff);
         sub.userData.__mbHrParams = hr;
         subMeshes.push(sub);
     }

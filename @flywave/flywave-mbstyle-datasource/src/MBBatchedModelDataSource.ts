@@ -1212,7 +1212,9 @@ class MBBatchedModelDecoder implements ITileDecoder {
                 if (mix > 0) tint = { color: [c.r, c.g, c.b], mix };
             }
             const emissive = num(paint?.['model-emissive-strength'], 0);
-            applyMglModelLighting(this.m_envProvider, model, emissive, tint);
+            applyMglModelLighting(this.m_envProvider, model, emissive, tint,
+                undefined, undefined, undefined,
+                paint?.["model-color-use-theme"] === "none");
             const op = Number(paint?.['model-opacity'] ?? 1);
             if (op < 1) {
                 model.traverse((o: any) => {

@@ -3102,7 +3102,9 @@ export class MBStyleDataSource extends TileDataSource {
                     try {
                         const { applyMglModelLighting } = await import('./MBModelRenderer');
                         applyMglModelLighting(this, model,
-                            Number(layer?.paint?.['model-emissive-strength'] ?? 0));
+                            Number(layer?.paint?.['model-emissive-strength'] ?? 0),
+                            undefined, undefined, undefined, undefined,
+                            layer?.paint?.['model-color-use-theme'] === 'none');
                     } catch {}
                     const lng = def.position[0] ?? 0;
                     const lat = def.position[1] ?? 0;
