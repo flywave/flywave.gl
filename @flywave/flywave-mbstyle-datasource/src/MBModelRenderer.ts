@@ -1147,7 +1147,12 @@ export class MBModelRenderer {
                 : undefined;
             applyMglModelLighting(this.m_dataSource, model, pl.emissive ?? 0, tint,
                 undefined, undefined, undefined,
-                (technique as any)._paint?.['model-color-use-theme'] === 'none',
+                // §753: mgl draw_model ignoreLut only nulls the LAYER lut
+                // (model-color theming); the style-wide theme still LUTs the
+                // albedo — pixel proof: trees-use-theme expected has ZERO
+                // green (raw COLOR_0) pixels while ours kept them when this
+                // inherited 'none'.
+                false,
                 (technique as any)._paint?.['model-receive-shadows'] !== false);
             if (Number.isFinite(pl.roughness)) {
                 model.traverse((o) => {
