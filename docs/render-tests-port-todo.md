@@ -7589,3 +7589,7 @@ GLPRINT 探针（injectGroundLighting 编译期 uniform 打印，buildings-trees
 **§756. external-models 尺度标定取证：模型位置偏移 ~73px 屏幕y 污染比例扫描（2026-09-03）**：
 
 `modelscale=` 标定门入库（karma arg，默认 1 无行为变化）。扫描：1.0→115,203 / 0.6→68,518 / 0.5→58,443 / 0.25→43,850（≈不可见基线 40,430）——数值单调趋近"不可见"而非有最优值，**位置误差污染比例标定**：黄块质心 ours y≈241 vs expected y≈168（~73px 屏幕偏下，pitch 60），x 基本对齐。即 placement 的地面锚点/高度语义尚有偏差（疑 mgl 模型原点/高程锚定 vs 我方 z=0 投影），尺寸与位置须联立标定。结论：接线与 URL/DRACO/表达式求值链已全通（模型上屏），位置锚定+尺度换算合并为下一个专项（入口：对 duck 原点做 mgl calculateModelMatrix 端到端对照，z 高程项+translation[2] 语义）。309 单测绿、tsc 绿。
+
+**§757. external-models 尺度扫描定案：无局部最优=位置偏移主导，锚点+尺度须联立（2026-09-03）**：
+
+`modelscale` 全扫描（每点一次定向跑）：0.25→43,850 / 0.3→46,175 / 0.35→48,862 / 0.4→51,403 / 0.45→54,469 / 0.5→58,443 / 0.6→68,518 / 1.0→115,203——**严格单调，无局部最优**。判读：若模型位置正确而仅尺寸错，错配应在真实尺寸处取最小（尺寸偏离双向都变差）；单调下降至"不可见基线 40,430"说明**模型渲染位置整体偏离 expected 的对应位置**，任何尺寸的模型都在错误位置添加错配像素。理论复核（mgl calculateModelMatrix:205-232）：scaleXY=1/mpp、世界=mercator px、我们用 kG=1/cos 的 equator-meter 帧在数学上等价（units·scale/cos 两帧一致）——但 flywave 相机 zoom 约定 (+1) 与 mgl 的 px-per-meter 差 2^1，且 pitch-60 下投影混合 z/y 分量，净差实测 ~1.68-4× 不定。**结论**：单纯比例门不可收敛；须先修锚点投影（世界帧/zoom 约定的 2^1 因子与 pitch-60 z 分量），再做尺度。专用会话入口：①以街上已有对齐的 2D 内容为参照反推我们模型世界坐标的正确投影；②mgl getMetersPerPixelAtLatitude(mercator_coordinate.ts:52) 对照我方 px/m 链。数据全表留档本节。309 单测绿、tsc 绿。
