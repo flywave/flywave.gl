@@ -7494,6 +7494,8 @@ mgl 光束 mesh 与节点共用 u_opacity 链（draw_model:1327-1333 对含 isLi
 
 §732 的取证⑤静态破案。**像素定量**：expected 红 (217,24,24)=albedo×0.69 线性（amb 0.2+dir 0.8×NL 合理）；我方红 (104,7,7)=线性 0.139=**恰好纯环境项**（albedo×0.2×ADF≈0.7）——直射项整体为零。**根因**：§655 PBR-3D 分支 `dot(mbN, uMB3DDir)` 用视空间法线（three normal）点**世界空间**光向（modelLightDir 球转直角坐标）——帧不匹配使多数相机姿态下可见面 dot≤0，直射项静默消失；hemisphere（§557）与 legacy（§661）分支都正确做了 `viewMatrix×dir` 视空间转换，唯独 PBR-3D 漏了（§704 量化夹具 −82% 的改善掩盖了它——小模型面元法线杂散，错帧的直射项误差被平均）。**修复**：PBR-3D 的 mbLF 与 ADF 的 NdotLDir 均改用 `mbDirView = normalize(viewMatrix×uMB3DDir)`，与 mgl computeLightContribution(lightPosition 视空间) 对齐；transformed normal 的 y 翻转与 mgl transformed_normal 一致保持。**连带修正认知**：①three 0.178 meshphysical 的 colorspace_fragment 在 opaque_fragment **之后**（:221/:223）——tail 线性值输出后被正确编码，audit"输出链缺 linearTosRGB"的论断不成立，且 hemisphere 线性 albedo×K 经编码恰=linearProduct，**modellightgamma 门控预期应维持默认关**（待 A/B 证伪）；②§661 legacy 分支经逐项核对（intensityFactor 的 luminance乘子、env 0.65、π 除法）与 mgl 完全一致，此前怀疑排除。影响面：全部 features 瓦片+3D lights 夹具（duplicate/z-offset/highlights/quantization 家族的直射项从零恢复）。单测 300 绿（400ms）、tsc 绿。
 
+**§733b. 同类帧错配清零（2026-09-02 续）**：共享 F/V/D 镜面项 `mbL = normalize(uMB3DDir)` 同为世界空间直入视空间点积（mbSpecTerm 仅 PBR-3D 分支消费；legacy 自算 mbLLeg，hemisphere 不用）——同改 viewMatrix 转换。挤出两个注入块（MBMaterialPatchManager:942/:1080 区域）复核均已正确转换，此类 bug 清零。单测 300 绿、tsc 绿。
+
 
 **§727. 代码对齐第四波——模型 color-theme GPU LUT（2026-09-02，代码落地，渲染验证攒批延后）**：
 
