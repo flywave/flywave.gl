@@ -7713,3 +7713,7 @@ INST 探针（instantiate 处）实证：tree-layer（ro 10.003）与 tree-layer
 **§774. trees-use-theme LUT 门裁定回退 + 光照亮度域最终确认（2026-09-03）**：
 
 反查 LUT 全表：**不存在任何 texel 逼近 expected 橄榄 (159,110,47)**（最近距离 14,318）→ mgl 的 expected 树冠橄榄**不经 LUT**——§734 原判（use-theme none → 整层不主题化）正确，§753 的全局 LUT 实验方向错误，已回退为 paint 驱动 lutOff（use-theme none → LUT 关）。残差 203,504 ≈ 202,959：**主导差异 = 模型照明亮度**（expected 树冠受光面 117-255 亮域 vs ours 0-51 黑域；环境光 rgba(0,0,0,0.4) 下 mgl indirect=0 但 directional 项在受光面给出 255 域）——我方向量/强度喂送在树层存在域差，属 §694-§721 光照量级专项核心（非 LUT、非 tint 链）。309 单测绿、tsc 绿。
+
+**§774b. trees-use-theme 双层位置错开量化定案（2026-09-03）**：
+
+当前帧量化：ours 树冠呈两族——亮绿族（tree-layer-diffuse，无 LUT 门…实为 diffuse 层）与暗栗族（tree-layer，红染）——**两族树位置相互错开**（绿blob与栗blob交替分布）；expected 中两层树**同位重叠**（上层 diffuse 橄榄完全覆盖）。即我方两层树的 placement 坐标存在层间偏移（同 geojson 要素、同锚点，两层的放置结果不一致），expected 的橄榄色=上层 diffuse 的 LUT 绿正确覆盖。收敛入口：核对两层的 placement 坐标求值（model-scale/rotation 逐层求值差异、或 tree-layer 的锚点偏移）。309 单测绿、tsc 绿。
