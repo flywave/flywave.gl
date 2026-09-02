@@ -754,8 +754,14 @@ class MBBatchedModelDecoder implements ITileDecoder {
                     Math.floor((w - origin) / tile.size * n);
                 const minDemX = pxOf(minWX, tile.originX);
                 const maxDemX = pxOf(maxWX, tile.originX);
-                const minDemY = pxOf(minWY, tile.originY);
-                const maxDemY = pxOf(maxWY, tile.originY);
+                // DEM rows run north→south in data order — sampleElevation
+                // reads row n−1−v (v = south-positive world fraction). The
+                // write path must use the SAME flip or the terrain is
+                // flattened at the mirrored location.
+                const minDemY = (n - 1) - pxOf(maxWY, tile.originY); // north edge
+                const maxDemY = (n - 1) - pxOf(minWY, tile.originY); // south edge
+                const worldYofRow = (y: number) =>
+                    tile.originY + ((n - 1 - y) + 0.5) / n * tile.size;
                 const distanceToBorder = Math.min(n - maxDemY, minDemX, minDemY, n - maxDemX);
                 if (distanceToBorder < 0) continue; // mgl: skip tile-border crossings
                 const demAtt = Math.min(5, Math.max(2, distanceToBorder));
@@ -783,7 +789,7 @@ class MBBatchedModelDecoder implements ITileDecoder {
                         const idx = y * n + x;
                         if (pass![idx] !== 255) continue;
                         if (!polyTest(tile.originX + (x + 0.5) / n * tile.size,
-                            tile.originY + (y + 0.5) / n * tile.size)) continue;
+                            worldYofRow(y))) continue;
                         pass![idx] = 0;
                         heightAcc += get(x, y);
                         count++;

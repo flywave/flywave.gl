@@ -7467,6 +7467,11 @@ mgl APPLY_LUT_ON_GPU（draw_model:172-178：有 color-theme 即对**所有**模�
 **运行时取证清单（下次批测首日）**：①globe 模型矩阵探针（本次新增）；②conflation 置换归因（§726 清单）；③indirect-update setLights 帧差；④门灯光束色链。单测 300 绿（690ms）、tsc 绿。
 
 
+**§729. §725.1 自查修正——压平写入的 DEM 行翻转缺失（2026-09-02，代码落地）**：
+
+新码自查抓到一处真 bug：applyDemFlattening 的 world→DEM 行映射未做南北翻转。sampleElevation 读取时 `r = n−1−v`（v=南向世界分数，DEM 数据行序北→南），而压平写入原用 `row = floor(v)` → **压平落在南北镜像位置**（region A 采样与回写同时镜像，均值逻辑自洽但位置错）。修正：minDemY/maxDemY 按 `(n−1)−pxOf(maxWY/minWY)` 重排（北边缘→小行号），region A 像素中心世界 y 用 `worldYofRow(y) = originY + ((n−1−y)+0.5)/n·size` 反算。附带确认：①outer.children[0]===inner 两 decode 路径均成立；②LUT DataTexture 字节数 4N³=N²·N·4 恰合；③pass/lookup 跨 footprint 复用的区域重置纪律与 mgl 共享数组一致（B 区每 footprint 重涂 255，循环限 B 区内，越界旧值不可达）；④evalPart LUT 输出 rgb() 串由 parseRgbaBytes 承接（已支持）。MAPS3D-1159 解剖：无 model 层（batched-model 源+extrusion+82° 掠射影组合）→ 属 §721 已封存 cascade 域，非新缺口。单测 300 绿（655ms）、tsc 绿。
+
+
 **§727. 代码对齐第四波——模型 color-theme GPU LUT（2026-09-02，代码落地，渲染验证攒批延后）**：
 
 mgl APPLY_LUT_ON_GPU（draw_model:172-178：有 color-theme 即对**所有**模型 draw 推 define；model.fragment.glsl:204-206 albedo、524-529 emissive、538 color_mix 三处 applyLUT）此前完全缺失——themed 样式的模型纹理/部件颜色不经 LUT（trees-use-theme 为 model-layer 唯一主题夹具，ml-0901 无结果=从未测过）。mgl 用 sampler3D + GLSL3；**移植方案为 2D 仿真**：①LUT 图（N²×N，CPU index=r+g·N²+b·N → texel(r+g·N, b)）原样上传 DataTexture（NearestFilter——8 tap 手动三线性，硬件线性会在 g 切片边界渗色）；②GLSL mbApplyLut = 8 次 nearest tap 三线性，与 MBColorTheme.applyColorTheme CPU 查找逐位同构，无 GLSL3/sampler3D 依赖；③uniform uMBLut/uMBLutN/uMBLutOn（onBeforeCompile 时构建，缓存于 lut 对象）——**无主题样式 uMBLutOn=0 全分支惰性，对其余 211 夹具零影响**；④应用点按 mgl：albedo 在 tail 入口（覆盖三着色分支的 getBaseColor 语义）+ emissive 按 mgl 524-529 的 sRGB wrap（linearTosRGB→LUT→sRGBToLinear，factor length 归一防 LUT 无纯黑提亮）；⑤CPU 侧补齐：evalPart 的 model-color 求值接 applyColorTheme（model-color-use-theme:'none' 门控，mgl DataDrivenProperty 语义）——mesh_features 顶点 color_mix 烘焙链（splitByPart 4444 混合）随之 themed，门灯 doorColor 同链受益。单测 300 绿（724ms）、tsc 绿。
