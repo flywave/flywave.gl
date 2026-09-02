@@ -419,3 +419,33 @@ globe 重跑（污染结果清除后）前 40 例已出，**累计 ~430 万 px**
 ### 9.5 已知未对齐但裁定暂缓的域（维持记录）
 
 globe 相机距离系、fog 逐内容深度语义、depth-occlusion 双 pass、custom-layer-js 通道、fill-extrusion 半透明混合（SwiftShader GL 级疑点，需真机）、SDF atlas FontCatalog 光栅化、models-on-globe 模型矩阵球面补偿（探针入口已备）、TERRAIN_FRAGMENT_OCCLUSION 模型覆盖、DITHERED_DISCARD LOD 渐变（资产预拆无触发）、OCCLUSION_TEXTURE_TRANSFORM 已修（§728）。
+
+### 9.6 补齐遍终态（2026-09-02 晚）与 41 例持久挂起族登记
+
+补齐遍（47 例目标）实际新增仅 6 例——其余 41 例为**持久挂起/崩溃族**（每会话复现同型失败，重试无效，用户裁定不重试）。**全量终态：628 结果 / 4,947 万 px / 113 PASS，覆盖 409 例中的 368 例（90%）**。
+
+**41 例持久挂起族登记**（下会话诊断工作清单，入口=单夹具 karma + 180s 超时栈 dump，按族归组）：
+
+| 族 | 例数 | 夹具 | 首嫌疑 |
+|---|---|---|---|
+| front-cutoff 家族 | 8 | landmark-front-cutoff-{camera-inside,disabled-camera-inside,high-zoom,meshopt}±lod | 相机入楼裁剪路径死循环/永 Await（camera-collision 1/6 每帧衰减 + 截止 opacity 求值） |
+| powerplants 家族 | 6 | powerplants-fog-globe-transition/fog-mercator/globe-lod/globe-to-mercator-lod/globe-to-mercator-set-projection/globe-zoom-function | globe+雾+zoom-function 复合（§695 已立案引擎冻结带） |
+| trees-light-aligned 家族 | 4 | fog/update-data-driven(±fade)/update-non-data-driven | 实例树+灯光对齐+数据驱动旋转 |
+| model-elevation-reference/hd-road-markup | 3 | with-elevation-id(±trees)/with-terrain-fallback-to-ground | hd-road 高程参考路径 |
+| multiple-models-terrain(±fog) | 2 | — | 地形+多模型 |
+| z-offset-v2-port ±lod | 2 | — | -port 变体（§704 era 家族） |
+| part-styling-munich-museum ±lod | 2 | — | — |
+| fill-extrusion--default-terrain(±opacity) | 2 | — | terrain 挤出 |
+| **页面级崩溃 4 例（§743）** | 4 | trees-use-theme/trees-zoom-based-scale/vector-layer-external-models±import | §727 GPU LUT / external gltf |
+| trees-puck-terrain-shadows ± | 2 | zoomin/partial | SwiftShader 慢渲染+15min 会话超时截断（单夹具重跑可解） |
+| 其它 | 3 | buildings-trees-shadows-{fog-terrain-cutoff,low-zoom-fade}、globe-transition/horizon-during-transition、3d-intersections/terrain-enabled | 慢渲染/会话截断 |
+
+（例数合计 41；zoomin/partial 与 4 崩溃例计入上表前后两行。）
+
+**域总账（终）**：model-layer 2,875万/169 例（169=有结果者；41 例中 39 属 model-layer）、globe 955万/121、3di 510万/72、fog 87.5万/62（14 PASS）、lighting-3d-mode 62.9万/7（2 PASS）、其余小分类 ~230万/~93 PASS。
+
+**对齐计划（§9.3）维持有效**，执行序更新：
+1. P0-B 挤出复测：§742 已修，buildings-trees 族建筑应恢复（本轮该族渲染于修复前，未验证）。
+2. P0-A 方位/clamp A/B：回归四组（§8.3）裁决。
+3. 41 例挂起族：按上表归组逐族定位（每族首例栈 dump 即可归因）。
+4. globe-addImage pattern 修复（96.7万）后 globe 域复测。
