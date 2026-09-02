@@ -530,8 +530,14 @@ export function applyMglModelLighting(
                              // §655 port: LIGHTING_3D_MODE — diffuseLambertian
                              // without PI; env_light = u_lighting_ambient_color
                              // × calculate_ambient_directional_factor(normal).
+                             // §733: uMB3DDir is WORLD-space (modelLightDir);
+                             // mbN is VIEW-space — the raw dot zeroes the whole
+                             // direct term for most cameras (duplicate family
+                             // rendered at pure-ambient brightness). Convert to
+                             // view space like the §557/§661 branches do.
+                             vec3 mbDirView = normalize((viewMatrix * vec4(uMB3DDir, 0.0)).xyz);
                              vec3 mbDiffTerm = (1.0 - mbF) * mbDiffC;
-                             float mbLF = clamp(dot(mbN, uMB3DDir), 0.0, 1.0);
+                             float mbLF = clamp(dot(mbN, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
                                  vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos, 1.0);
                                  if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
@@ -542,7 +548,7 @@ export function applyMglModelLighting(
                                  }
                              }
                              vec3 mbDirect = (mbSpecTerm + mbDiffTerm) * mbLF * uMB3DDirColor;
-                             float mbNdotLDir = dot(mbN, uMB3DDir);
+                             float mbNdotLDir = dot(mbN, mbDirView);
                              float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
                              float mbDirMin = 1.0 - 0.3 * min(mbDirLum, 1.0);
                              float mbADF = mix(mbDirMin, 1.0, min(mbNdotLDir + 1.0, 1.0))
