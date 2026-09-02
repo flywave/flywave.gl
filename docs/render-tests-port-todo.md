@@ -7515,3 +7515,8 @@ model-state/*（feature-state/opacity/node-lod-zoom/multiple-features/part-opaci
 **§736. LUT 门控单测落地——连抓两个 §727 真 bug（2026-09-02，测试+修复）**：
 
 新增 MBMeshFeaturesLutTest（纯 CPU，5 例）：①LUT 打包不变量（applyColorTheme 格点读取=index(r+g·N²+b·N)→texel(r+g·N,b)，GLSL 8-tap 端口的 CPU 对齐基准）；②rgba alpha 保持；③applyMeshFeatures 三态门控（无 LUT=原色/默认=themed/use-theme:'none'=原色）。**测试即刻抓到两个真 bug**：①themed 结果串 'rgb(...)' 被 parseCssColor（仅关键字/hsl）解析→null→主题静默失效（应走 parseRgbaBytes）；②修复①时 colorEval 被覆写为**数组**，而最终 colorSrgb 解析 parseRgbaBytes 只收字符串→失败→**全部 themed 部件色回退白色**（比①更重——batched landmark+theme 组合会整体白化，因 trees-use-theme 是实例化路径而未暴露）。两处已修（themed 以字符串形态回写 colorEval）。305 passing（+5）、tsc 绿。
+
+
+**§738. 实例化模型 cast-shadows 门控修复——_paint 缺失（2026-09-02，代码落地）**：
+
+静态扫描发现：emitter 的 model 分支从未 stash `_paint` → MBModelRenderer:1099 的 `technique._paint?.['model-cast-shadows'] !== false` 恒 undefined → 恒 true → **cast-shadows:false 的层照常投影**。命中夹具：`trees-zoom-based-scale`（tree-layer false）+ `buildings-trees-shadows-casting`（tree-layer 与 tree-layer-not-receiving 双 false，ml-0901 42.4万——错误的树影很可能占大头）。§734 的实例化 lutOff 门控同样因此失效（读同一字段）。修复：emitter model 分支 stash `props._paint = p`（求值后的 paint dict，与 symbol/extrusion 技术同名约定一致），MBModelRenderer 既有读取自动生效。另核实 0.65 地形阴影抑制（draw_model:541-556）仅 zoom-dep opacity 触发、无夹具命中，维持不实现。单测 305 绿、tsc 绿。

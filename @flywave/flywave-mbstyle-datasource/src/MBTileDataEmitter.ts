@@ -1459,6 +1459,10 @@ export class MBTileDataEmitter {
                 props._modelElevationReference =
                     p['model-elevation-reference']
                     ?? l['model-elevation-reference'] ?? 'ground';
+                // Full evaluated paint — MBModelRenderer reads model-cast-
+                // shadows (default true; false layers must NOT enter the
+                // shadow depth pass) and model-color-use-theme from here.
+                props._paint = p;
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'building':
