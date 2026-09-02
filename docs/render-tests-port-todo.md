@@ -7593,3 +7593,7 @@ GLPRINT 探针（injectGroundLighting 编译期 uniform 打印，buildings-trees
 **§757. external-models 尺度扫描定案：无局部最优=位置偏移主导，锚点+尺度须联立（2026-09-03）**：
 
 `modelscale` 全扫描（每点一次定向跑）：0.25→43,850 / 0.3→46,175 / 0.35→48,862 / 0.4→51,403 / 0.45→54,469 / 0.5→58,443 / 0.6→68,518 / 1.0→115,203——**严格单调，无局部最优**。判读：若模型位置正确而仅尺寸错，错配应在真实尺寸处取最小（尺寸偏离双向都变差）；单调下降至"不可见基线 40,430"说明**模型渲染位置整体偏离 expected 的对应位置**，任何尺寸的模型都在错误位置添加错配像素。理论复核（mgl calculateModelMatrix:205-232）：scaleXY=1/mpp、世界=mercator px、我们用 kG=1/cos 的 equator-meter 帧在数学上等价（units·scale/cos 两帧一致）——但 flywave 相机 zoom 约定 (+1) 与 mgl 的 px-per-meter 差 2^1，且 pitch-60 下投影混合 z/y 分量，净差实测 ~1.68-4× 不定。**结论**：单纯比例门不可收敛；须先修锚点投影（世界帧/zoom 约定的 2^1 因子与 pitch-60 z 分量），再做尺度。专用会话入口：①以街上已有对齐的 2D 内容为参照反推我们模型世界坐标的正确投影；②mgl getMetersPerPixelAtLatitude(mercator_coordinate.ts:52) 对照我方 px/m 链。数据全表留档本节。309 单测绿、tsc 绿。
+
+**§758. external-models 锚点量化定案：dx 随尺寸缩放、dy=112px 恒定（锚点 z/高度语义差）（2026-09-03）**：
+
+以鸭子眼睛（唯一暗斑）为锚点特征，程序化量测三图：expected 眼 (148.8,132.8)；ours scale1.0 (255.1,242.3)（偏移 +106,+109）；ours scale0.5 (181.2,244.6)（偏移 +32,+112）。**判读**：dx 随模型尺寸缩放（尺寸分量，随 scale 收敛）；**dy=112px 恒定、与尺寸无关 = 锚点位置分量**——pitch 60 下等效 ~100-240m 的 z 高程/南向偏移（恰为 schema 树 translation[0,0,100] 同量级，疑 mgl 模型原点的高程语义或我方 z=0 投影与 mgl projectedPoint 的 z 轴差）。结论：位置偏移沿屏幕 y（=z 高程或南北地面分量），与尺寸无关——**修复点在 loadModels placement 的 z/高程锚定**，而非 scale 换算；scale 扫描的单调性由该 dy 完全解释（尺寸×错误位置=单调）。下一入口：①量测 mgl 侧同相机下 z=0 地面点与 duck origin 的像素关系（以街道为地面真值）；②检查 loadModels 的 model.position.z 与引擎 RTE/高程管线的交互（对比 MBModelRenderer.instantiate 的 _mbBasePos+每帧 −eye rebase 路径）。309 单测绿、tsc 绿。
