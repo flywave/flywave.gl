@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import * as THREE from "three/webgpu";
+import type { GeoCoordinates } from "@flywave/flywave-geoutils";
 
 export interface IBloomConfig {
     enabled: boolean;
@@ -37,6 +38,37 @@ export interface IColorGradingLUTConfig {
     /** Resolved LUT file URL (already through the uriResolver). */
     url: string;
     opacity: number;
+}
+
+/**
+ * One volumetric fog light (lamp glow through haze). Plain data — registered
+ * at runtime via `mapView.addFogLight`; add/remove/reposition never rebuilds
+ * the node graph, only uniform slots change.
+ */
+export interface IFogLightDef {
+    /** Geographic position of the light (converted to world once on add). */
+    position: GeoCoordinates;
+    /** Light color, 0xRRGGBB. */
+    color: number;
+    /** Luminous intensity multiplier; ~1 = a bright street lamp. */
+    intensity: number;
+    /** Halo radius in meters; falloff is 1 / (1 + h² / radius²). */
+    radius: number;
+    /**
+     * Visibility factor 0-1 reserved for the future occlusion pre-pass;
+     * consumed premultiplied at uniform upload time. Defaults to 1.
+     */
+    visibility?: number;
+    /** World-frame position cached by `MapView.addFogLight` (do not set). */
+    worldPosition?: THREE.Vector3;
+}
+
+export interface IFogLightConfig {
+    enabled: boolean;
+    /** Global intensity multiplier on top of each light's own intensity. */
+    intensity: number;
+    /** Halo reach along the view ray (1/m); ~0.002 saturates in a few 100 m. */
+    density: number;
 }
 
 export interface IOutlineConfig {
@@ -93,6 +125,7 @@ export interface IViewRenderConfig {
     hueSaturation: IHueSaturationConfig;
     sepia: ISepiaConfig;
     colorGradingLUT: IColorGradingLUTConfig;
+    fogLight: IFogLightConfig;
     outline: IOutlineConfig;
     taa: ITemporalAntialiasConfig;
     clouds?: ICloudsConfig;
@@ -107,6 +140,17 @@ export interface IViewRenderManager {
     readonly config: IViewRenderConfig;
     bloomObjects: Set<THREE.Object3D>;
     bloomIgnoreObjects: Set<THREE.Object3D>;
+    /** Fog lights registered for the volumetric halo pass (plain data defs). */
+    fogLights: Set<IFogLightDef>;
+    /**
+     * Per-frame light uniform refresh (world → camera-relative view space).
+     * Called from `MapView.render` right before the frame is submitted; cheap
+     * (≤ capacity vector transforms).
+     */
+    updateFogLights(
+        cameraWorldPosition: THREE.Vector3,
+        cameraWorldMatrixInverse: THREE.Matrix4
+    ): void;
     /** Objects registered for the selective outline pass (see MapRenderingManager). */
     outlineObjects: Set<THREE.Object3D>;
     translucentLayerEffect?: TranslucentLayerEffect;

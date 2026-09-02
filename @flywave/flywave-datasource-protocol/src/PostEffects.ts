@@ -15,6 +15,7 @@ export interface PostEffects {
     hueSaturation?: IHueSaturationEffect;
     brightnessContrast?: IBrightnessContrastEffect;
     colorGradingLUT?: IColorGradingLUTEffect;
+    fogLight?: IFogLightEffect;
     /**
      * Anti-aliasing strategy selector (mutually exclusive). Replaces the
      * legacy `taa?: boolean` field; `taa: true` is still accepted as a
@@ -95,6 +96,24 @@ export interface IColorGradingLUTEffect {
     url: string;
     /** Blend factor between the original and the graded color, 0-1. */
     opacity?: number;
+}
+
+/**
+ * Volumetric light halos (lamp glow through haze) around point lights
+ * registered at runtime via `mapView.addFogLight` / `removeFogLight`.
+ * Deliberately NOT an environmental fog: scene haze stays owned by the
+ * existing atmosphere / FogExp2 stack. The switch rebuilds the pipeline
+ * once; adding/removing/moving lights only updates uniform slots.
+ */
+export interface IFogLightEffect {
+    enabled: boolean;
+    /** Global intensity multiplier on top of each light's own intensity. */
+    intensity?: number;
+    /**
+     * Halo reach along the view ray (1/m). Higher = shorter, denser glow;
+     * 0.002 ≈ glow saturating within a few hundred meters.
+     */
+    density?: number;
 }
 
 export interface ITranslucentLayerConfig {

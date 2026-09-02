@@ -5,6 +5,7 @@ import {
     type IBloomEffect,
     type IBrightnessContrastEffect,
     type IColorGradingLUTEffect,
+    type IFogLightEffect,
     type IHueSaturationEffect,
     type IOutlineEffect,
     type ISepiaEffect,
@@ -16,7 +17,11 @@ import type { Renderer } from "three/webgpu";
 import { uniform, vec3 } from "three/tsl";
 
 import { type IPassManager } from "./IPassManager";
-import { type IViewRenderManager, type AntialiasingMode } from "./vrm";
+import {
+    type IViewRenderManager,
+    type AntialiasingMode,
+    type IFogLightDef
+} from "./vrm";
 import { TranslucentLayerEffect, OUTLINE_LAYER_BIT } from "./vrm/TranslucentLayerEffect";
 
 export enum MSAASampling {
@@ -57,6 +62,7 @@ export interface IMapRenderingManager extends IPassManager {
     hueSaturation: IHueSaturationEffect;
     brightnessContrast: IBrightnessContrastEffect;
     colorGradingLUT: IColorGradingLUTEffect;
+    fogLight: IFogLightEffect;
     taaEnabled: boolean;
     antialiasing: AntialiasingMode;
     dynamicMsaaSamplingLevel: MSAASampling;
@@ -82,6 +88,19 @@ export interface IMapRenderingManager extends IPassManager {
     removeBloomObject(object: THREE.Object3D): void;
     addIgnoreBloomObject(object: THREE.Object3D): void;
     removeIgnoreBloomObject(object: THREE.Object3D): void;
+
+    /**
+     * Register a fog light (volumetric lamp halo). Plain data def; the
+     * `worldPosition` cache is filled by the caller (MapView) once. Adding,
+     * removing or moving lights never rebuilds the node graph.
+     */
+    addFogLight(def: IFogLightDef): void;
+    removeFogLight(def: IFogLightDef): void;
+    /** Per-frame uniform refresh (world → camera-relative view space). */
+    updateFogLights(
+        cameraWorldPosition: THREE.Vector3,
+        cameraWorldMatrixInverse: THREE.Matrix4
+    ): void;
 
     addOutlineObject(object: THREE.Object3D): void;
     removeOutlineObject(object: THREE.Object3D): void;
@@ -176,6 +195,17 @@ export class MapRenderingManager implements IMapRenderingManager {
         opacity: 1
     };
 
+    /**
+     * Volumetric light halos. Lights live in the VRM's `fogLights` registry
+     * (addFogLight/removeFogLight below); this slot only carries the global
+     * config. Toggling `enabled` rebuilds the graph once.
+     */
+    fogLight: IFogLightEffect = {
+        enabled: false,
+        intensity: 1,
+        density: 0.002
+    };
+
     taaEnabled: boolean = false;
     /**
      * Active anti-aliasing strategy. Drives `vrm.config.antialiasing`.
@@ -192,6 +222,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_customEffects: Map<string, ICustomEffect> = new Map();
     private m_pendingBloomObjects: THREE.Object3D[] = [];
     private m_pendingOutlineObjects: THREE.Object3D[] = [];
+    private m_pendingFogLights: IFogLightDef[] = [];
     private m_gpuPicking: boolean = false;
 
     private _viewRenderManager?: IViewRenderManager;
@@ -263,6 +294,15 @@ export class MapRenderingManager implements IMapRenderingManager {
         vrm.config.colorGradingLUT.url = this.colorGradingLUT.url;
         vrm.config.colorGradingLUT.opacity = this.colorGradingLUT.opacity ?? 1;
 
+        // `enabled` toggling needs a graph rebuild (the fog node is built or
+        // dropped); intensity/density are uniforms the node reads per frame.
+        if (vrm.config.fogLight.enabled !== this.fogLight.enabled) {
+            vrm.config.fogLight.enabled = this.fogLight.enabled;
+            vrm.needsUpdate = true;
+        }
+        vrm.config.fogLight.intensity = this.fogLight.intensity ?? 1;
+        vrm.config.fogLight.density = this.fogLight.density ?? 0.002;
+
         vrm.config.taa.enabled = this.taaEnabled;
         // Resolve the active AA mode: the explicit `antialiasing` field wins,
         // but the deprecated `taaEnabled` boolean still maps to "taa".
@@ -286,6 +326,10 @@ export class MapRenderingManager implements IMapRenderingManager {
                 this.applyOutlineLayer(obj, true);
             }
             this.m_pendingOutlineObjects = [];
+            for (const def of this.m_pendingFogLights) {
+                vrm.fogLights.add(def);
+            }
+            this.m_pendingFogLights = [];
         }
     }
 
@@ -341,6 +385,25 @@ export class MapRenderingManager implements IMapRenderingManager {
         if (!vrm.bloomObjects.has(object)) return;
         vrm.bloomObjects.delete(object);
         this.applyBloomMrtNode(object, 0);
+    }
+
+    addFogLight(def: IFogLightDef): void {
+        this.m_pendingFogLights.push(def);
+        const vrm = this.viewRenderManager;
+        if (vrm == null) return;
+        vrm.fogLights.add(def);
+    }
+
+    removeFogLight(def: IFogLightDef): void {
+        this.m_pendingFogLights = this.m_pendingFogLights.filter(d => d !== def);
+        this.viewRenderManager?.fogLights.delete(def);
+    }
+
+    updateFogLights(
+        cameraWorldPosition: THREE.Vector3,
+        cameraWorldMatrixInverse: THREE.Matrix4
+    ): void {
+        this.viewRenderManager?.updateFogLights(cameraWorldPosition, cameraWorldMatrixInverse);
     }
     private applyBloomMrtNode(object: THREE.Object3D, intensity: number): void {
         object.traverse(child => {

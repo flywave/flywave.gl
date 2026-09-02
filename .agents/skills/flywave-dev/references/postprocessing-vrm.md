@@ -148,6 +148,42 @@ three/addons 的 `LUTCubeLoader`/`LUT3dlLoader`**——它们内部裸
 固定 UVW 采样（区分纹理坏 vs 输入色坏）、`device.uncapturederror` 监听
 （WebGPU 验证错误静默丢写入，不监听看不到）。
 
+## Fog Light（体积灯光光晕，2026-09-02 移植）
+
+`effects/fogLight.ts`：navara fogLight 的 TSL 移植——逐像素对每盏灯做
+视线解析散射积分（最近点 h² 的 halo 衰减 + `1-exp(-t·density)` 段内散射），
+加性合成在 **bloom 之前、tonemapping 之前的线性域**。只做"灯在雾里的
+光晕"，**不做环境雾**（环境雾仍归 FogExp2/aerial 体系）；遮挡不判（已知
+瑕疵：楼后的灯光晕照样亮），光源 uniform 留了 `visibility` 槽位给未来
+遮挡 pre-pass（CPU 侧预乘进 rgb，shader 不用改）。
+
+**注册表用法**（人机接口照 bloom 的 add/remove）：
+
+```typescript
+// position 用 GeoCoordinates；worldPosition 缓存由 addFogLight 内部
+// projectPoint 填（之后每帧减相机位置再转视空间）
+mapView.addFogLight({ position: new GeoCoordinates(lat, lng, h),
+                      color: 0xffb45c, intensity: 1.5, radius: 60 });
+mapView.removeFogLight(def); // 同一对象身份
+```
+
+- **灯的增删改不重建管线**：固定 32 槽 uniform 数组（`FOG_LIGHT_CAPACITY`），
+  `MapView.render` 每帧调 `vrm.updateFogLights(cameraPos, rteCamInv)` 重写
+  槽位（世界系偏移 → 乘 RTE 相机逆矩阵 → **视空间**，与 shader 里
+  `positionView` 同帧）；只有 `postEffects.fogLight.enabled` 开关才重建。
+- 参数域（夜景城市 1.6–2.3km 视距实测）：radius 40–80m、intensity 1–2、
+  density 0.002 起步。halo 是重尾衰减 `1/(1+h²/r²)`，radius 220m 能罩住
+  半屏；intensity 是"每盏 × 全局"双乘，4 盏 × intensity 4 直接全屏过曝。
+- 坑：**`uniformArray(..., "vec3")` 的数据在 `.array`（原始 Vector3 数组），
+  `.value` 是 BufferNode 的 null**——写槽位要 `arr[slot].set(...)` 原地改，
+  UniformArrayNode 每帧自动重传（`updateType = RENDER`）。
+- 坑：**`theme.atmosphere.sunTime` 只在大气系统真正初始化后生效**
+  （`updateOptions` 把 currentDate/targetDate 落好才有意义）；headless
+  环境大气 context 常缺资源不初始化，太阳方向 uniforms 不会被写入，
+  白天/黑夜切换的目检必须在真实浏览器做。
+- 示例：`fog-light/`（夜景 + 4 盏冷暖灯 + sun hour/exposure/density GUI，
+  `?night=off`、`?foglight=off` 查询参数）。
+
 ## 改 VRM 的注意事项
 
 1. **类型不保护**：`ViewRenderManager.ts`、`AtmosphereSystem.ts`、

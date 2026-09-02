@@ -53,6 +53,7 @@ import {
     type IMapRenderingManager,
     MapRenderingManager
 } from "./composing";
+import type { IFogLightDef } from "./composing/vrm/ViewRenderTypes";
 import { ConcurrentDecoderFacade } from "./ConcurrentDecoderFacade";
 import { ConcurrentTilerFacade } from "./ConcurrentTilerFacade";
 import { CopyrightInfo } from "./copyrights/CopyrightInfo";
@@ -1586,6 +1587,28 @@ export class MapView extends EventDispatcher {
     set postEffects(postEffects: PostEffects | undefined) {
         this.m_postEffects = postEffects;
         this.setPostEffects();
+    }
+
+    /**
+     * Register a volumetric fog light (lamp glow through haze). The geo
+     * position is converted to a world-frame cache once on add; afterwards
+     * add/remove/reposition only touch uniform slots — the node graph is
+     * rebuilt only by the `postEffects.fogLight.enabled` switch. Lights
+     * beyond the fixed capacity (32) are ignored.
+     */
+    addFogLight(def: IFogLightDef): void {
+        def.worldPosition = this.projection.projectPoint(
+            def.position,
+            def.worldPosition ?? new THREE.Vector3()
+        );
+        this.mapRenderingManager.addFogLight(def);
+        this.update();
+    }
+
+    /** Remove a previously registered fog light (same object identity). */
+    removeFogLight(def: IFogLightDef): void {
+        this.mapRenderingManager.removeFogLight(def);
+        this.update();
     }
 
     /**
@@ -3260,6 +3283,9 @@ export class MapView extends EventDispatcher {
         this.mapRenderingManager.colorGradingLUT.enabled = false;
         this.mapRenderingManager.colorGradingLUT.url = "";
         this.mapRenderingManager.colorGradingLUT.opacity = 1;
+        this.mapRenderingManager.fogLight.enabled = false;
+        this.mapRenderingManager.fogLight.intensity = 1;
+        this.mapRenderingManager.fogLight.density = 0.002;
 
         if (this.m_postEffects !== undefined) {
             if (this.m_postEffects.bloom !== undefined) {
@@ -3295,6 +3321,14 @@ export class MapView extends EventDispatcher {
                 if (lut.url !== "" && !/^(https?:|data:|blob:)/i.test(lut.url)) {
                     lut.url = this.m_uriResolver?.resolveUri(lut.url) ?? lut.url;
                 }
+            }
+            if (this.m_postEffects.fogLight !== undefined) {
+                // Lights are NOT part of the theme config — they register at
+                // runtime via addFogLight/removeFogLight (bloom-object style).
+                Object.assign(
+                    this.mapRenderingManager.fogLight,
+                    this.m_postEffects.fogLight
+                );
             }
             if (this.m_postEffects.antialiasing !== undefined) {
                 this.mapRenderingManager.antialiasing = this.m_postEffects.antialiasing;
@@ -4011,6 +4045,13 @@ export class MapView extends EventDispatcher {
         }
 
         this.dispatchEvent(this.WILL_RENDER_EVENT);
+        // Fog-light uniforms are camera-relative VIEW-space: subtract the geo
+        // camera's world position (MapAnchors offset convention) and rotate by
+        // the inverse of the render camera's world matrix (RTE rotation).
+        this.mapRenderingManager.updateFogLights(
+            (this.m_pointOfView ?? this.camera).position,
+            camera.matrixWorldInverse
+        );
         this.mapRenderingManager.render(
             this.m_renderer,
             this.m_scene,

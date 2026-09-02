@@ -1,5 +1,10 @@
 // @ts-nocheck
 import * as THREE from "three/webgpu";
+
+/** Scratch for updateFogLights — avoids per-light Color allocation each frame. */
+const _fogLightColor = new THREE.Color();
+const _fogLightOffset = new THREE.Vector3();
+
 import {
     RenderPipeline,
     type Renderer,
@@ -53,10 +58,21 @@ import {
 
 import { smaaWrapped } from "@flywave/flywave-atmosphere";
 
-import type { IViewRenderConfig, IViewRenderManager, ILensFlareConfig } from "./ViewRenderTypes";
+import type {
+    IViewRenderConfig,
+    IViewRenderManager,
+    ILensFlareConfig,
+    IFogLightDef
+} from "./ViewRenderTypes";
 import { vignette } from "./effects/vignette";
 import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading";
 import { ColorGradingLutController, colorGradingLut } from "./effects/colorGradingLUT";
+import {
+    createFogLightUniforms,
+    fogLight as fogLightEffect,
+    FOG_LIGHT_CAPACITY,
+    type IFogLightUniforms
+} from "./effects/fogLight";
 import { bloom } from "./effects/bloom";
 import { outline } from "./effects/outline";
 import {
@@ -99,6 +115,7 @@ export class ViewRenderManager implements IViewRenderManager {
         hueSaturation: { enabled: false, hue: 0, saturation: 0 },
         sepia: { enabled: false, amount: 0 },
         colorGradingLUT: { enabled: false, url: "", opacity: 1 },
+        fogLight: { enabled: false, intensity: 1, density: 0.002 },
         outline: { enabled: false, thickness: 2, color: "#ffffff", xray: true },
         taa: { enabled: false },
         clouds: { enabled: false },
@@ -125,6 +142,54 @@ export class ViewRenderManager implements IViewRenderManager {
     /** Persistent LUT texture slot; reused across graph rebuilds. */
     private m_lutController?: ColorGradingLutController;
     private m_appliedLutUrl?: string;
+
+    private ensureFogLightUniforms(): IFogLightUniforms {
+        if (this.m_fogLightUniforms === undefined) {
+            this.m_fogLightUniforms = createFogLightUniforms();
+        }
+        return this.m_fogLightUniforms;
+    }
+
+    /**
+     * Rewrite the fog-light uniform slots from the {@link fogLights} set.
+     * Scene frame is the geo world frame translated by the camera's world
+     * position (same convention as `MapAnchors.update`), but the fog shader
+     * integrates in VIEW space — so the offset is additionally rotated by
+     * the inverse of the render camera's world matrix (position-less RTE
+     * rotation).
+     */
+    updateFogLights(cameraWorldPosition: THREE.Vector3, cameraWorldMatrixInverse: THREE.Matrix4): void {
+        const u = this.m_fogLightUniforms;
+        if (u === undefined) return; // graph not built (effect never enabled)
+        // UniformArrayNode keeps the ORIGINAL object array in `.array` (its
+        // `.value` is the BufferNode's null!) and re-uploads it per render —
+        // mutate the Vector3/Vector4 slots in place.
+        const posArr = u.positions.array as THREE.Vector3[];
+        const dataArr = u.data.array as THREE.Vector4[];
+        let slot = 0;
+        for (const def of this.fogLights) {
+            if (slot >= FOG_LIGHT_CAPACITY) break;
+            const world = def.worldPosition;
+            if (world === undefined) continue;
+            _fogLightOffset.set(
+                world.x - cameraWorldPosition.x,
+                world.y - cameraWorldPosition.y,
+                world.z - cameraWorldPosition.z
+            );
+            _fogLightOffset.applyMatrix4(cameraWorldMatrixInverse);
+            posArr[slot].set(_fogLightOffset.x, _fogLightOffset.y, _fogLightOffset.z);
+            const visibility = def.visibility ?? 1;
+            _fogLightColor.setHex(def.color);
+            dataArr[slot].set(
+                _fogLightColor.r * def.intensity * visibility,
+                _fogLightColor.g * def.intensity * visibility,
+                _fogLightColor.b * def.intensity * visibility,
+                Math.max(def.radius, 1)
+            );
+            slot++;
+        }
+        u.count.value = slot;
+    }
     private aerialNode?: AerialPerspectiveNode;
     private m_cloudNode?: CloudRenderNode;
     private pendingCloudConfig?: Record<string, unknown>;
@@ -151,6 +216,10 @@ export class ViewRenderManager implements IViewRenderManager {
 
     bloomObjects: Set<THREE.Object3D> = new Set();
     bloomIgnoreObjects: Set<THREE.Object3D> = new Set();
+    /** Fog lights feeding the halo pass; plain data defs (see MapRenderingManager). */
+    fogLights: Set<IFogLightDef> = new Set();
+    /** Persistent fog-light uniform slots; reused across graph rebuilds. */
+    private m_fogLightUniforms?: IFogLightUniforms;
     /**
      * Objects registered for the selective outline (populated via
      * `MapRenderingManager.addOutlineObject`, tagged with `OUTLINE_LAYER_BIT`).
@@ -406,6 +475,16 @@ export class ViewRenderManager implements IViewRenderManager {
         } else if (this.lensFlareNode != null) {
             this.lensFlareNode.dispose();
             this.lensFlareNode = undefined;
+        }
+
+        // Fog light halos — additive volumetric inscattering around the
+        // registered point lights, pre-tonemapping so agx grades it with the
+        // frame. The uniform slots persist across rebuilds; only `enabled`
+        // toggling rebuilds the graph, light add/remove/reposition just
+        // rewrites the arrays via updateFogLights.
+        if (this.config.fogLight.enabled) {
+            const u = this.ensureFogLightUniforms();
+            outputNode = outputNode.add(fogLightEffect(depthNode, camera, u));
         }
 
         if (bloomEnabled) {

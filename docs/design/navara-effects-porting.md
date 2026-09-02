@@ -464,3 +464,51 @@ Failed to allocate texture` → `WriteTexture: Data offset is too large` →
   - `device.uncapturederror` 监听——WebGPU 验证错误（如 writeTexture
     布局非法）不抛异常只静默丢写入，不监听看不到。
 - **验证**：用户浏览器实测全部 PNG 预设噪点消失、胶片调色正常。
+
+---
+
+## 10. 实现记录：Fog Light Phase 1（2026-09-02）
+
+按 §6 的 P2 项落地第一阶段（纯雾光晕版），设计决策经产品确认收敛为：
+**FogLightDef 专用注册表**（不做引擎级光源系统）、**雾只保留现有单一
+体系**（FogLight 只做灯晕，不新增环境雾密度项）、**遮挡按默认方案搁置**
+（接受 navara 同款"楼后灯透光晕"瑕疵，uniform 留 `visibility` 槽位供
+未来遮挡 pre-pass 预乘，shader 端无需改动）。
+
+### 落地面
+
+| 文件 | 内容 |
+|---|---|
+| `datasource-protocol/src/PostEffects.ts` | `IFogLightEffect`（enabled/intensity/density）+ `fogLight?` 字段；灯**有意不进主题**，只走运行时注册表 |
+| `mapview/composing/vrm/ViewRenderTypes.ts` | `IFogLightDef`（GeoCoordinates/color/intensity/radius/visibility）+ `IFogLightConfig` + `fogLights` Set + `updateFogLights()` 接口 |
+| `mapview/composing/vrm/effects/fogLight.ts` | TSL 移植：`depthToViewZ`/`screenToPositionView` 复用 aerial 的深度重建；`Loop` 32 槽固定展开，槽位超 count 按 0 处理（免动态分支）；返回 `vec4(acc, 0)` 加性合成 |
+| `ViewRenderManager.ts` | buildNodeGraph 在 **bloom 块之前**插入（线性域、tonemapping 前）；持久 uniform 槽位跨重建复用；`updateFogLights` 每帧世界系偏移 × RTE 相机逆矩阵 → 视空间 |
+| `MapRenderingManager.ts` | `addFogLight`/`removeFogLight`（照 bloom 的 Set + pending 队列模式）+ `fogLight` 配置槽 + sync 时 enabled-diff 才 `needsUpdate` |
+| `MapView.ts` | 公共 `addFogLight`/`removeFogLight`（内部 projectPoint 缓存 worldPosition + `update()`）；`setPostEffects` 清除/应用；render 里每帧推 uniform |
+| `examples/src/fog-light/` | 夜景示例：4 盏冷暖灯 + blocks + DEM/卫星底图，GUI（sun hour/exposure/fog intensity/density/bloom），`?night=off`、`?foglight=off` 参数 |
+
+### 与 navara 的设计偏差
+
+1. **无 tiled culling**：槽位上限 32（navara 每 tile 64 + residual haze），
+   城市场景少量灯够用；超容量静默忽略（`updateFogLights` break）。
+2. **全分辨率单 pass 起步**：navara 默认 1/4 分辨率 + 深度感知双边上采样；
+   本版为减少活动部件先全分辨率，性能不足时降采样是 drop-in 优化。
+3. **无遮挡、无表面光照**：见上；表面光照仍卡 G-Buffer 前置（§4/§5）。
+4. **位置约定**：navara 传 ECEF 向量；本版收 GeoCoordinates（引擎内
+   `projectPoint` 转世界系），灯可挂地理坐标而无需应用侧换算。
+
+### 调试记录（headless Chrome 截屏逐级二分）
+
+- `pos.set is not a function` → `Cannot set properties of null`：
+  **`uniformArray(..., "vec3")` 的 `.value` 是 BufferNode 的 null，数据在
+  `.array`（原始 Vector3 数组）**，须 `arr[slot].set(...)` 原地写。
+- 恒定红屏二分 → 管线插入/uniform 更新/合成路径验证；
+  三通道诊断（R=槽位有数、G=halo 非零、B=rayEnd>1）→ 全通过。
+- 灯"消失"根因：世界系偏移直接进 shader，而视线积分在**视空间**——
+  补 `rteCamera.matrixWorldInverse` 旋转后光晕出现。
+- 全屏过曝根因：halo 重尾 + intensity 双乘，radius 220/intensity 4 × 4 盏
+  在 2.3km 视距直接铺满；收敛到 radius 60 / intensity 1.5。
+- **未解（headless 环境固有，非引擎 bug）**：`?night=off`（sunTime 正午）
+  在无头环境渲染不出白天——大气系统未完全初始化时太阳方向 uniforms
+  不写入（sunTime 依赖大气系统启用）；`?foglight=off` 关闭路径已验证。
+  白天观感待真实浏览器目检。
