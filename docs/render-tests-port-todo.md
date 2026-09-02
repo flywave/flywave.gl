@@ -7557,3 +7557,7 @@ P1-A（报告 §九）执行实录。① **代码修复入库**：mgl ImageSprit
 **§748. P2-C §688 ×0.77 排除法读数：ground-lighting 通道洗清，候选收窄到 additive/半透明二次暗化（2026-09-02）**：
 
 GLPRINT 探针（injectGroundLighting 编译期 uniform 打印，buildings-trees-shadows-fog）读数：road ribbon（tech=fill, _isLineRibbon=true）`emissiveKey=line-emissive-strength, emi=1`，style lights `groundRadiance=0.405`（linRad=0.137）——**uMBEmissive=1 时 mix(x·rad, x, 1) 恒等还原 x，×0.77 残差不可能来自本通道**。§688 的候选清单收敛：①:3169 ribbon additive 路径 `gl_FragColor.rgb += diffuse × uMBEmissiveStrength`（若 diffuse 在该点已是暗化值，加法叠加的是暗化量，不是还原）；②半透明 pass 的第二次 groundRad 应用；③渐变/雾域连带。剩余定位需逐像素材质归属（pixpick 式），挂起待专用入口。探针已移除；309 单测绿、tsc 绿。
+
+**§749. §747 残差归因 + ×0.77 结案（2026-09-02）**：
+
+① **trees-use-theme 203,504 归因 = 模型 color-theme/LUT 应用域**：图像对比——布局/树位/尺寸与 expected 逐树吻合（放置/瓦片内容域干净），背景 2D（fill/extrusion）已正确主题化变红；**树冠仍为未主题化的原绿色**（expected 为红/橄榄主题色调）→ 残差全部在模型侧 LUT（§727 GPU LUT 的模型尾注入未生效或索引错），挂账 §727 专项。② **vector-layer-external-models 40,430 归因 = 外部 glTF 模型整体缺失**：expected 近景鸭子+两棵树，ours 仅 basemap——model-external 加载分支未拉起（§743 崩溃时代掩蔽的加载缺陷），挂账模型加载专项。③ **×0.77 结案**：当前代码 fog 夹具 road 像素 ours=(255,255,224) 与 expected **逐位一致**——§688 时代的残差已被 R1/R13/§733 链顺带消除，GLPRINT 已证 emi=1 mix 恒等还原，**P2-C 结案**。309 单测绿、tsc 绿。

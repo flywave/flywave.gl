@@ -443,3 +443,10 @@ globe 相机距离系、fog 逐内容深度语义、depth-occlusion 双 pass、c
 ### §十三 崩溃 4 例根治（2026-09-02，§747）
 
 mergeDepth 限深修复落地：§643 粘性 stash 的无界异步递归链截断（depth<2 才消费 stash）。trees-use-theme 203,504（首次出值）/ trees-zoom-based-scale 212,282 / vector-layer-external-models(-import) 40,430×2——**崩溃 4 例全部从"页面崩溃零结果"转为正常渲染出值**；哨兵逐位持平零回归。P2-A 结案。
+
+### §十四 §747 残差归因 + ×0.77 结案（2026-09-02，§749）
+
+1. trees-use-theme 203,504 → 模型 LUT/theme 域（放置/内容干净，背景已主题化，树冠未着色）——归入 §727 专项。
+2. vector-layer-external-models 40,430 → 外部 glTF 模型整体未加载——模型加载专项新立案。
+3. **×0.77 结案**：road 像素 ours==expected 逐位一致，残差已消解。
+4. 剩余开放：引擎渲染清单专项（挤出/globe fill 零光栅化）、模型 LUT、model-external 加载、emission/doors 光照标定、P2-B conflation 归因。
