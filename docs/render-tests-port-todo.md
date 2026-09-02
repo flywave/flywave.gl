@@ -7553,3 +7553,7 @@ P1-A（报告 §九）执行实录。① **代码修复入库**：mgl ImageSprit
 **§747. 崩溃 4 例根治：§643 粘性 stash 无界异步递归链实锤 + mergeDepth 限深修复（2026-09-02）**：
 
 §746 头号嫌疑验证并修复。① **深度计数读数**：decodeThemedTile 入口计数显示 depth **持续悬浮 32-40**（非爆栈式同步递归——每层经 await 续延）且每层 dataKind=string（geojson extras 载荷）——**粘性 stash（§643 take 不消费）使每个 child key 又命中最新的另一 cell stash，链式再合并永不枯竭**：一次引擎解码请求即可启动无限异步链（与引擎八探针全零完全吻合），每层新建几何 → OOM。② **修复（mergeDepth 限深）**：decodeThemedTile/decodeTileWithSources/decodeTileWithChildren 贯穿 mergeDepth 参数——depth<2 才消费 pendingChildren/pendingSources stash，更深一律 plain decode；cell 再合并（§643 语义）保留，child 链条截断。③ **验证**：trees-use-theme **从页面崩溃（DISCONNECT、零结果）→ 正常渲染出值 203,504 px**（该夹具历史首次真值测量）；trees-zoom-based-scale 212,282、vector-layer-external-models(-import) 40,430×2——**崩溃 4 例全部根治**（FAIL 数值为渲染对齐域，非崩溃域）。④ **回归门**：哨兵 geojson-source-with-schema 43,723（§742 43,671 持平）、quantization-shadows 2,330/1,709（§742 值逐位吻合）——merge 主路径零回归；309 单测绿、tsc 绿。engine 八探针已确认全部回滚（§746 已还原文档）。崩溃 4 例结案，转入普通渲染对齐域。
+
+**§748. P2-C §688 ×0.77 排除法读数：ground-lighting 通道洗清，候选收窄到 additive/半透明二次暗化（2026-09-02）**：
+
+GLPRINT 探针（injectGroundLighting 编译期 uniform 打印，buildings-trees-shadows-fog）读数：road ribbon（tech=fill, _isLineRibbon=true）`emissiveKey=line-emissive-strength, emi=1`，style lights `groundRadiance=0.405`（linRad=0.137）——**uMBEmissive=1 时 mix(x·rad, x, 1) 恒等还原 x，×0.77 残差不可能来自本通道**。§688 的候选清单收敛：①:3169 ribbon additive 路径 `gl_FragColor.rgb += diffuse × uMBEmissiveStrength`（若 diffuse 在该点已是暗化值，加法叠加的是暗化量，不是还原）；②半透明 pass 的第二次 groundRad 应用；③渐变/雾域连带。剩余定位需逐像素材质归属（pixpick 式），挂起待专用入口。探针已移除；309 单测绿、tsc 绿。
