@@ -2311,6 +2311,11 @@ export class MBStyleDataSource extends TileDataSource {
                     info.reset = () => {
                       const ri = info.render;
                       g.__mbLastFrameCalls = ri.calls ?? 0;
+                      if ((g.__mbRiLog = (g.__mbRiLog ?? 0) + 1) <= 14) {
+                        const root = (self.mapView as any)?.m_sceneRoot;
+                        let meshes = 0; root?.traverse?.((o: any) => { if (o.isMesh) meshes++; });
+                        console.log('[RST] calls=' + ri.calls + ' tris=' + ri.triangles + ' sceneMeshes=' + meshes);
+                      }
                       return origReset();
                     };
                   } }
