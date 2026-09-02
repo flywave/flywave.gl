@@ -7629,3 +7629,7 @@ info.reset 钩子（每次复位前读累计值）14 个样本分布：**10× [1
 **§765. casting 雾/光照排查定案：雾 uniform 健康；平灰=阴影接收未激活（NdotL≈常数）（2026-09-03）**：
 
 §764 残余排查两步：① **雾域洗清**——MBFogU 探针读数 alpha=1/shift=1/range [0.5,10]/distCam 编译期正确（focal·C/(256·2^flyZoom)），雾因子无过饱和；"建筑被雾色洗掉"的先前判读修正为**平光着色**。② **lightdbg 读数**（uMB3DDbg=1 片元读出 R=NdotL,G/B=dir 分量）：墙面 NdotL≈0.1 且各朝向近乎相同——太阳仰角 70°（近垂直）下墙面 NdotL 理论 ∈[0,0.34] 且随朝向变化，实测常数 → **阴影接收（shadow-intensity 1.0 的 uMBShadowIntensity 喂送 + shadowed_light_factor 调制）未生效**，墙面失去 expected 的黑/亮对比，呈平灰。③ **归因**：expected 的强对比来自 shadow-intensity 1.0 的阴影调制（§694 链）+ cast-shadow 地面投影（§689 链）；我方 shadowState 喂送链存在（:195-215）但调制未落到像素——属 §694-§721 阴影保真度专项（部分封存：cascade 保真度需 mgl shadow_renderer 全套移植）。④ 维持挂账，证据链完整（雾洗清+光读数+喂送链位置）。309 单测绿、tsc 绿。
+
+**§766. external-models 标定定案：宽度可收敛、纵向压扁 ~2×——Z 轴帧缺陷定位（2026-09-03）**：
+
+按 §759 方法量测（modelscale=0.31）：duck W=160（exp 143，再 ×0.89≈0.28 精确对齐）、**H=82（exp 167，差 2.04×）**——宽高比 ours 1.95 vs expected 0.86。**定案：非纯尺度问题——纵向（Z）被压扁 ~2×**，与 §758 dy=112px 恒定（z/高程锚定）同源，统一指向 loadModels placement 的 **Z 轴帧缺陷**：疑似 flywave 世界 Z 的 px 换算（zoom+1 帧下 2^1）或 mgl scaleZ=1.0（mercator 分支 calculateModelMatrix scaleZ 恒 1，z 单位=世界 px）与我方 z=meters 的语义差——mgl 的 z 世界单位随 zoom 变化而我们的不变，z 需按 worldSize/C 换算。修复方向：loadModels 的 placement z 分量（模型高度）乘 worldSize 换算（= 512·2^z/C），即与 §759 的 2^1 同族再乘 zoom 项；单一 `modelscale` 门无法同时修 x/y 与 z，需 scaleZ 独立换算。专用会话入口已备（量测法+数据全留档本节与 §757/§758）。309 单测绿、tsc 绿。
