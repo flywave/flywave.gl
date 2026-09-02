@@ -2300,6 +2300,14 @@ export class MBStyleDataSource extends TileDataSource {
                 }
             });
             this.mapView.addEventListener(MapViewEventNames.AfterRender, async () => {
+                // §761: renderer.info read right after the frame — draw calls
+                // / triangles tell whether the extrusion meshes reach the GL
+                // queue (zero-rasterization forensics, buildings-trees family).
+                { const g: any = (globalThis as any); const r: any = (self.mapView as any).renderer;
+                  if (r?.info) r.info.autoReset = false;
+                  g.__riN = (g.__riN ?? 0) + 1;
+                  if (g.__riN <= 3) { const ri = r?.info?.render;
+                    console.log('[RIDRAW-CUM] f=' + g.__riN + ' calls=' + ri?.calls + ' tris=' + ri?.triangles); } }
                 // §550 DIAG (karma arg `mbbatchdbg=1`, see MBBatchedModelDataSource):
                 // batched-model regular-DS chain state, frame-capped.
                 {

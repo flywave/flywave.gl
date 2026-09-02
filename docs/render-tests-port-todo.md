@@ -7605,3 +7605,7 @@ modelscale=0.5 目视判读：鸭子（黄、眼+橙喙）与枫树（绿）按 
 **§760. 引擎渲染清单取证第一轮：renderer.info 探针挂载 + 待解挂载点（2026-09-03）**：
 
 §745 入口首轮执行：RIDRAW 探针（renderer.info.render.calls/triangles/frame）挂入 harness decodedbg dump 闭包——该闭包在 casting 夹具下未触达（MBSceneDump/MBSceneObj 均零输出，疑似该夹具会话内 getDecodedTiles 路径或闭包条件未满足；对照 globe 夹具曾正常输出）。取证状态：buildings-trees-shadows-casting 已有事实链=19 个挤出网格 willCensus tall/visible/parented 全 true + 零 Shader Error + 像素零光栅化；下一步需把 renderer.info 读取挂到**每帧**（AfterRender 内直接读，autoReset 前的窗口）或改用 Spector.drawCall 对拍，并叠加 mbhide 隔离（hide 树层后若挤出入帧数变化即可判定渲染清单归属）。未闭环，维持挂账。309 单测绿、tsc 绿。
+
+**§761. 引擎渲染清单定案级事实：主 renderer 每帧仅 1 call/960 tris——可见内容由离屏/合成管线提供（2026-09-03）**：
+
+RIDRAW 探针改挂 AfterRender 直读并设 `info.autoReset=false` 取累计值：buildings-trees-shadows-casting 主 renderer **每帧恒 1 call / 960 triangles**（f=1..3 恒定）。判读：可见帧中的街道网格+树（远超 960 tri）不可能由该 renderer 直绘——**flywave 引擎的内容渲染发生在离屏/Worker 合成管线，主 renderer 只做最终合成（960 tri ≈ 合成 quad + 少量叠加）**。这一事实重定义了零光栅化问题的定位域：19 个挤出网格是否进 GL，须在**合成管线内部**取证（Spector 对各 context 的 draw 列表，或 TileObjectsRenderer 的渲染清单枚举），主 canvas renderer.info 不再是有效观测点（§760 的探针静默与此吻合）。309 单测绿、tsc 绿。探针保留（autoReset=false 模式）。
