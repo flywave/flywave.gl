@@ -35,6 +35,7 @@ import { DecodedTile, ITileDecoder, OptionsMap, TileInfo } from '@flywave/flywav
 import type { Projection } from '@flywave/flywave-geoutils';
 import { applyMglModelLighting, syncMglModelLighting } from './MBModelRenderer';
 import { refreshMeshFeatures } from './MBMeshFeatures';
+import { flattenDemFootprint, makeDemFlattenScratch, DemFlattenScratch } from './MBTerrainFlatten';
 import { decodeGlbTile, parseGlb, TileMaterialData, TileMaterialized, TilePrimitiveData } from './MBDracoDecoder';
 import { getModelFootprintBoxCount, registerModelFootprintRing } from './MBModelFootprints';
 import { applyMeshFeatures, applyModelFrontCutoff, applyModelFarCutoff, mglMeasureLightBrightness } from './MBMeshFeatures';
@@ -704,11 +705,7 @@ class MBBatchedModelDecoder implements ITileDecoder {
         const camX = cam.position.x;
         const camY = cam.position.y;
         const v = new THREE.Vector3();
-        // Scratch buffers sized per DEM texture resolution (shared across
-        // footprints — mgl uses module-level lookup/passLookup arrays with
-        // the same region-reset discipline).
-        let pass: Uint8Array | null = null;
-        let lookup: Float64Array | null = null;
+        let scratch: DemFlattenScratch | null = null;
         let demRes = 0;
 
         outer.traverse((mesh: any) => {
@@ -741,121 +738,14 @@ class MBBatchedModelDecoder implements ITileDecoder {
                 const key = String(mesh.userData.__mbNodeId ?? mesh.uuid);
                 if (done.has(key)) continue;
                 done.add(key);
-                if (!pass || demRes !== n) {
+                if (!scratch || demRes !== n) {
                     demRes = n;
-                    pass = new Uint8Array(n * n);
-                    lookup = new Float64Array(n * n);
+                    scratch = makeDemFlattenScratch(n);
                 }
-                const get = (x: number, y: number) => data[y * n + x];
-                const set = (x: number, y: number, val: number) => {
-                    const idx = y * n + x;
-                    const delta = val - data[idx];
-                    data[idx] = val;
-                    return delta;
-                };
-                const pxOf = (w: number, origin: number) =>
-                    Math.floor((w - origin) / tile.size * n);
-                const minDemX = pxOf(minWX, tile.originX);
-                const maxDemX = pxOf(maxWX, tile.originX);
-                // DEM rows run north→south in data order — sampleElevation
-                // reads row n−1−v (v = south-positive world fraction). The
-                // write path must use the SAME flip or the terrain is
-                // flattened at the mirrored location.
-                const minDemY = (n - 1) - pxOf(maxWY, tile.originY); // north edge
-                const maxDemY = (n - 1) - pxOf(minWY, tile.originY); // south edge
-                const worldYofRow = (y: number) =>
-                    tile.originY + ((n - 1 - y) + 0.5) / n * tile.size;
-                const distanceToBorder = Math.min(n - maxDemY, minDemX, minDemY, n - maxDemX);
-                if (distanceToBorder < 0) continue; // mgl: skip tile-border crossings
-                const demAtt = Math.min(5, Math.max(2, distanceToBorder));
-                const minx0 = Math.max(0, minDemX - demAtt);
-                const miny0 = Math.max(0, minDemY - demAtt);
-                const maxx0 = Math.min(maxDemX + demAtt, n - 1);
-                const maxy0 = Math.min(maxDemY + demAtt, n - 1);
-                for (let y = miny0; y <= maxy0; ++y) {
-                    for (let x = minx0; x <= maxx0; ++x) pass![y * n + x] = 255;
-                }
-                // Region A: DEM pixels whose center is inside the footprint.
-                let heightAcc = 0;
-                let count = 0;
-                const polyTest = (pxW: number, pyW: number) => {
-                    let inside = false;
-                    for (let i = 0, j = wx.length - 1; i < wx.length; j = i++) {
-                        const xi = wx[i], yi = wy[i], xj = wx[j], yj = wy[j];
-                        if (((yi > pyW) !== (yj > pyW))
-                            && (pxW < (xj - xi) * (pyW - yi) / (yj - yi) + xi)) inside = !inside;
-                    }
-                    return inside;
-                };
-                for (let y = Math.max(0, minDemY); y <= Math.min(n - 1, maxDemY); ++y) {
-                    for (let x = Math.max(0, minDemX); x <= Math.min(n - 1, maxDemX); ++x) {
-                        const idx = y * n + x;
-                        if (pass![idx] !== 255) continue;
-                        if (!polyTest(tile.originX + (x + 0.5) / n * tile.size,
-                            worldYofRow(y))) continue;
-                        pass![idx] = 0;
-                        heightAcc += get(x, y);
-                        count++;
-                    }
-                }
-                if (!count) continue;
-                const avgHeight = heightAcc / count;
-                let minx = Math.max(1, minDemX - demAtt);
-                let miny = Math.max(1, minDemY - demAtt);
-                let maxx = Math.min(maxDemX + demAtt, n - 2);
-                let maxy = Math.min(maxDemY + demAtt, n - 2);
-                for (let y = miny; y <= maxy; ++y) {
-                    for (let x = minx; x <= maxx; ++x) {
-                        if (pass![y * n + x] === 0) {
-                            lookup![y * n + x] = set(x, y, avgHeight);
-                        }
-                    }
-                }
-                // Region B: attenuated outward propagation (wave-prevented).
-                for (let p = 1; p < demAtt; ++p) {
-                    minx = Math.max(1, minDemX - p);
-                    miny = Math.max(1, minDemY - p);
-                    maxx = Math.min(maxDemX + p, n - 2);
-                    maxy = Math.min(maxDemY + p, n - 2);
-                    for (let y = miny; y <= maxy; ++y) {
-                        for (let x = minx; x <= maxx; ++x) {
-                            const idxThis = y * n + x;
-                            if (pass![idxThis] !== 255) continue;
-                            let maxDiff = 0;
-                            let maxDiffAbs = 0;
-                            let xoffset = -1;
-                            let yoffset = -1;
-                            for (let j = -1; j <= 1; ++j) {
-                                for (let i = -1; i <= 1; ++i) {
-                                    const idx = (y + j) * n + (x + i);
-                                    if (pass![idx] >= p) continue;
-                                    const diff = lookup![idx];
-                                    const diffAbs = Math.abs(diff);
-                                    if (diffAbs > maxDiffAbs) {
-                                        maxDiff = diff;
-                                        maxDiffAbs = diffAbs;
-                                        xoffset = i;
-                                        yoffset = j;
-                                    }
-                                }
-                            }
-                            if (maxDiffAbs > 0.1) {
-                                const diagonalAttenuation = Math.abs(xoffset * yoffset) * 0.5;
-                                const attenuation = 1 - (p + diagonalAttenuation) / demAtt;
-                                const prev = get(x, y);
-                                let next = prev + maxDiff * attenuation;
-                                const parent = get(x + xoffset, y + yoffset);
-                                const child = get(x - xoffset, y - yoffset);
-                                if ((next - parent) * (next - child) > 0) {
-                                    next = (parent + child) / 2;
-                                }
-                                lookup![idxThis] = set(x, y, next);
-                                pass![idxThis] = p;
-                            }
-                        }
-                    }
-                }
-                tex.needsUpdate = true; // mgl needsDEMTextureUpload
+                const wrote = flattenDemFootprint({
+                    data, n, originX: tile.originX, originY: tile.originY, size: tile.size,
+                }, wx, wy, scratch);
+                if (wrote) tex.needsUpdate = true; // mgl needsDEMTextureUpload
             }
         });
     }

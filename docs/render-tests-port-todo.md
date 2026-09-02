@@ -7525,3 +7525,8 @@ model-state/*（feature-state/opacity/node-lod-zoom/multiple-features/part-opaci
 **§739. model-receive-shadows per-layer 门控（2026-09-02，代码落地）**：
 
 `model-receive-shadows:false` 命中 4 处——**buildings-trees-shadows-casting 的 tree-layer-not-receiving**（层名即语义：期望该树层不被建筑阴影变暗）+ trees-zoom-based-scale + color-theme/trees-monochrome。我方阴影接收 uniform 刷新为全局（syncModelShadowUniforms 写所有注册 handle）→ false 层照常接收=真分歧。修复：applyMglModelLighting 增 `receiveShadows` 参数（默认 true）——false 层**不注册** `__mbShU` 刷新 handle，uMBShIntensity 恒 0 → tail 的 `uMBShIntensity>0` 采样门永不开启（等价 mgl draw_model:557-560 shadowRenderer.enabled=false）。穿线 instantiate（technique._paint，§738 stash 后生效）与 MBStyleDataSource models 注册表。单测 305 绿、tsc 绿。
+
+
+**§740. DEM 压平核心抽纯函数 + 4 例单测锁死（2026-09-02，重构+测试）**：
+
+applyDemFlattening 的 per-tile 数学（行翻转映射/demAtt/region A 均值/region B 衰减传播/防波）抽取为纯函数模块 MBTerrainFlatten.ts（flattenDemFootprint + makeDemFlattenScratch），applyDemFlattening 收敛为编排壳（环境守卫/环世界还原/tile 遍历/幂等守卫/needsUpdate）。新增 MBTerrainFlattenTest 4 例：①行翻转锁死（世界 y∈[6,10] 足迹必须落在数据行 6..9——§729 镜像 bug 的回归防线）；②region A 恒等于覆盖像素均值；③跨台阶足迹的 region A 常数均值严格介于两台阶之间（证明均值+衰减链活着）+远场不变；④跨界足迹跳过（distanceToBorder<0）。309 passing（+4）、tsc 绿。
