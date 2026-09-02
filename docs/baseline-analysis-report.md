@@ -261,3 +261,68 @@
 2. **运行时取证清单**（§6.5）：globe 模型矩阵探针、conflation 置换归因、indirect-update 帧差、门灯光束色链、modellightgamma/翻转方位 A/B、§688 ×0.77。
 3. **引擎冻结带**：globe 相机距离系、fog 逐内容深度、depth-occlusion 双 pass、custom-layer-js、models-on-globe 矩阵补偿、fill-extrusion 半透明（真机）。
 4. **符号域残余**：text 沿线 TextPathGeometry 分支、SDF atlas FontCatalog 光栅化（冻结）、hillshade 照明模型重破。
+
+---
+
+## 八、2026-09-02 深夜增量：§742 全量验证中期读数（200/212 已跑，ml-0901 对比）
+
+> 数据源：`rendering-test-results/mbstyle/web-ChromeHeadless-152.0.0.0-MacOS/`（§724-§742 代码全量，4 夹具/会话内存安全模式）。
+> 基准：ml-0901 快照（`ml0901-baseline-snapshot.json`，43 例精确 + 38 例家族级近似）。
+> 注：ml-0901 存档目录已被清理，快照为首次对比跑捕获值 + 报告 §五 家族值。
+
+### 8.1 总账（41 例精确基线小计）
+
+**4,947,485 → 5,149,237（+4.1%）** —— 净值近乎持平，但结构剧烈分化：
+**21 例显著改善（最大 −53%）** vs **17 例回归（最大 +216%）** vs 23 例持平/待跑。
+分化模式清晰指向两个新引入变量的方向性：R1 直射项恢复（对一部分家族正、对被"ambient-only 时代标定"的家族负）+ R10/§724.4 的 unlit-clamp 移除（emission 域）。
+
+### 8.2 改善清单（21 例）
+
+| 家族 | 例证（old → new） | 归属修复 |
+|---|---|---|
+| **z-offset 全家 7 例 −26~−35%** | museum 39万→23.9万、terrain 43万→29.2万、scale 49万→35.5万、v2 48万→32.5/34.1万 | R1 直射项恢复（§733）+ R7 terrain 贴地（§726.2） |
+| mbx-meshopt-colors-lod | 35.4万→16.6万（−53%） | R1 + R4 AO transform（§728） |
+| ground-shadow-fog-hard-cutoff | 18.9万→13.4万（−29%） | §701 雾域 + R1 |
+| ground-shadow-fog | 14.2万→13.4万（−5%） | 同上（历史最优带内再改善） |
+| buildings-trees-shadows-fog/-fade | 62万→56/56.3万（−9/10%） | §738/§739 树影门控 + R1 |
+| part-styling-update | 23.8万→17.6万（−26%） | R1 + §724 refresh 链 |
+| conflation-buckingham | 22万→18.9万（−14%） | R1 间接收益 |
+| shadows-normal-offset ×2 | 19万→17万（−10%） | R1 |
+| duplicate-filtered-lod | 4.07万→3.54万（−13%） | R5 结构修复 |
+| geojson-source-with-schema(-add-layer) | 4.86万→4.37万（−10%） | §690/§734 |
+| quantization-shadows(-lod) | →1,709/2,332（近 PASS） | R1+R4 |
+
+### 8.3 回归清单（17 例）——两组模式
+
+**模式 A（照明方位敏感组）**：R1 直射项恢复后，被"ambient-only 时代标定/调参"的家族现暴露方位差：
+| 夹具 | old → new | 备注 |
+|---|---|---|
+| **landmark-emission-strength(-lod)** | 44,153→85,514（+94%）/ 57,295→181,184（+216%） | **用户自有修复域回归**——§724.4 unlit-clamp 移除 + R1 直射项双嫌疑 |
+| landmark-part-styling-indirect-update-doors(-lod) | 48万→61万（+70%）/ 36万→61万（+70%） | 门灯域（§724.3 additive 改动的关联面） |
+| landmark-part-styling-indirect-doors-no-shadows(-lod) | 30万→51.4万（+71%）/ 32万→45.5万（+42%） | 同上 |
+| quantization castro-theater-quantization ±lod | 24/29万→50.2/57.3万（+98/109%） | R1 方位差（该两例取景对光方位敏感） |
+| quantization highlights ±lod | 30/31万→56.7/58.5万（+89%） | 同上 |
+
+**模式 B（孤立单点）**：
+| 夹具 | old → new | 备注 |
+|---|---|---|
+| **landmark-glb-tiles** | 3,023→57,152（+1791%） | 曾近 PASS！R1 直射项激活（该夹具无 theme、非 -lod=R4 惰性）——典型"ambient-only 标定被打破" |
+| landmark-glb-tiles-lod | 19万→22.8万（+20%） | R4 AO transform 方向待复核 |
+| landmark-duplicate-filtered（非 lod） | 4.8万→12.7万（+164%） | 已知亮度残差（§733 未覆盖该取景的方位） |
+| buildings-trees-shadows-fog-terrain | 62万→71.7万（+16%） | terrain+树复合（R7 关联） |
+| conflation thin-pillars/buckingham-lod | +23%/+32% | conflation 域混合 |
+| landmark-mbx-lod-distant / filter-runtime-styling | +26%/+17% | 小项 |
+
+### 8.4 机制判读与下一步（关键：三门 A/B 正当其时）
+
+1. **R1 方位约定的方向性已可证**：z-offset 族（取景偏北向）收益 vs emission/doors/castro（另取景）回归 —— 直射项恢复了但**落在的方位可能带镜像差**（我方 viewMatrix 转换 + y-mirror 渲染帧的组合 vs mgl 帧）。§691 设计的 `modeldiralt=1` A/B 正是裁决手段：对回归 4 例（emission-strength/doors/castro/highlights）跑 modeldiralt=1，若转改善则全局切 §683 镜像约定。
+2. **§724.4 unlit-clamp 移除的回退预案**：emission-strength ±lod 回归的另一嫌疑——spec 允许 >1 但用户的 44,153 标定基于 clamp 行为。A/B：恢复 clamp 单变量对照。
+3. **§724.3 门灯 additive 回退预案**：doors 三例回归的第三嫌疑——additive beams 若过亮，回退 alpha-blend 单变量对照。
+4. 正面成果固化：z-offset 全家、colors-lod、hard-cutoff、quantization-shadows、shadows-normal-offset 的改善为真（机制明确），后续调参不得回退。
+5. 未跑完：trees-puck 双例（192万）正在收尾；trees-use-theme（R11 LUT 首测）pending。
+
+### 8.5 执行状态
+
+- 200/212 已派发（53 会话内存安全模式：≤4 夹具/会话、进程组击杀、零泄漏）；trees-puck 双例（192万）渲染中；trees-use-theme 待跑。
+- ml-0901 存档目录被清理 → 基线快照固化为 `rendering-test-results/ml0901-baseline-snapshot.json`（43 精确 + 38 家族级）。
+- 批测完成后：三门 A/B（modeldiralt 优先）→ 回归例定点复核 → 终版对比报告。
