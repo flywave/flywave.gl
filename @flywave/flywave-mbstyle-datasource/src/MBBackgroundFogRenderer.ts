@@ -89,7 +89,13 @@ export class MBBackgroundFogRenderer {
         // semantics and the mgl tile ramp — above 76° it alone matches the
         // expected band better (§190/§193 measurements); 60..76 keeps the
         // calibrated quad (fog/color family).
-        if (pitchDeg < 60 || pitchDeg > 76) return;
+        if (pitchDeg > 76) return;
+        // §771h: low-pitch styles (0..60°) now ALSO composite the fog wash —
+        // mgl fogs the ground/background at any pitch (trees-use-theme: fog
+        // [-1.5,3.0] at pitch 0 → t≈0.55 → ~94% fog-red wash = expected).
+        // uScale uses the calibrated table only within 60..85; below 60 the
+        // mgl-exact s=1.0 applies (no rig compression at nadir).
+        const lowPitch = pitchDeg < 60;
 
         this.ensureMesh();
         if (!this.m_mesh || !this.m_material) return;
@@ -103,7 +109,9 @@ export class MBBackgroundFogRenderer {
         this.m_material.uniforms.uDistCam.value = Math.max(state.distCam, 1);
         // Per-pitch scale table (two-point calibrated §180/§181): linear in
         // pitch, clamped at the ends.
-        this.m_material.uniforms.uScale.value = MBBackgroundFogRenderer.scaleForPitch(pitchDeg);
+        this.m_material.uniforms.uScale.value = lowPitch
+            ? 1.0
+            : MBBackgroundFogRenderer.scaleForPitch(pitchDeg);
         // §198: with the engine plane removed, the quad's depth test alone
         // separates background (clear color) from content tiles — transparent
         // blending is correct again; opaque mode covered content (heatmap).
@@ -212,7 +220,7 @@ export class MBBackgroundFogRenderer {
                     // residual engine↔mgl fog-space scale (same family as the
                     // content fog's kFog=3.7; calibrated on fog/color §180).
                     float depth = uScale * uShift * rayLen / uDistCam;
-                    float t = (depth - (uR0 + uShift)) / max(uR1 - uR0, 0.001);
+                    float t = (depth - uR0) / max(uR1 - uR0, 0.001);
                     float falloff = 1.0 - min(1.0, exp(-6.0 * t));
                     falloff *= falloff * falloff;
                     float opacity = min(1.0, 1.00747 * falloff);

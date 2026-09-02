@@ -7535,3 +7535,193 @@ applyDemFlattening 的 per-tile 数学（行翻转映射/demAtt/region A 均值/
 **§741. hillshade illumination/emissive 正式接线（2026-09-02，代码落地——§625/9f7fa341 回退项重启）**：
 
 mgl hillshade_program:74-89 + hillshade.fragment.glsl 全公式对照后接线（此前 +60k 回退的重新裁定：§625 的 315 常量 vs 335 接线差 36,408 vs 37,433 ≈ 2.7%——按"容差应考虑单帧抖动"属噪声级；08-29 的 +60k 实验疑另有缺陷，非接线本身）。**三分支方位语义**：①anchor viewport（默认）= rad(illumination-direction，spec 默认 335) + bearing（mgl azimuthal−=angle，angle=−bearing）；②anchor map + 3D lights = 方向光自身方位角（sphericalDirectionToCartesian→cartesianPositionToSpherical 往返还原原始 az，实测往返恒等）；③否则 rad(direction)。**LIGHTING_3D_MODE 尾巴补齐**（报告 #16"无 emissive 消费者"）：`mix(mbGl.rgb×u_ground_radiance, mbGl.rgb, clamp(hillshade-emissive-strength))`——groundRadiance 用环境既有 CPU 编码 sRGB 值（MBEnvironmentManager:448，lights.ts calculateGroundRadiance 同构），在 mbGl（sRGB 域）上乘、线性预解码前插入。非 3D-lights 样式 uMBHs3D=0 全分支惰性（hillshade/ 主类夹具零影响）。命中：lighting-3d-mode/hillshade/{measure-light,align-with-directional-light,fixed-parameters}（报告 #16 22.6万）+ emissive-strength/hillshade/{terrain,no-terrain,draped-mrt}。风险=335 默认 vs §625 315 标定的方位差（噪声级）+ align-with-directional-light 的方位改由灯光驱动（夹具名即此语义）。309 绿、tsc 绿。
+
+**§744. globe-fill-pattern/3x-on-2x-add-image 破案：addImage 通道修复落地 + 残差改判引擎 globe 瓦片对跖放置（2026-09-02，§744）**：
+
+P1-A（报告 §九）执行实录。① **代码修复入库**：mgl ImageSprite 语义三件套——`SpriteAtlas.addIcon` 增加 pixelRatio 参数（icons 表记录真实 pr）；`MBStyleDataSource.addImage(name, image, pixelRatio=1)` 惰性创建空白 atlas（无 sprite 样式此前 `m_spriteAtlas=null` → 运行时图像整体丢弃）+ `m_runtimeImages` 注册表在 loadSpriteAtlas 换 atlas 时重放；harness addImage/updateImage op 透传 `args[2].pixelRatio`（此前丢弃）。s_spriteInfos 同步 pr。单测 309 绿、tsc 绿。② **验证**：修复后 globe 夹具 pattern 解析确证恢复（探针 PATLOG：tex=Y info=30x30@pr3，修复前同点 tex=N info=NONE）——但像素恒 966,602 不动。③ **五连 A/B 排除**（karma arg 门控探针已入库：sphdeg=/sphds=/nocull=/fillflat=）：球面细分 10°→1°（细分确在跑，SPHPROBE projType=1 实证）、DoubleSide、frustumCulled=false、纯红无注入材质——零像素全部不变；红色平坦材质仍 966,521，证明**几何从未光栅化**。④ **FILLPROBE 决定性读数**：4 个 fill 网格在场景、visible、layer 正常，但 mesh world x=**−36,434,399.5 = 恰为 −camera.x**（相机 +5.71R）——**globe 瓦片被放置在相机对侧（对跖位）**，整体被地球遮挡。⑤ **静态对照**：新建诊断夹具 `globe/globe-fill-pattern/3x-on-2x-static`（同内容静态 source+layer）同样对跖放置——**非 runtime addSource/addLayer 专属，是引擎 globe 瓦片放置帧的通病**（新根因 R14；与 §二#2 "globe 相机距离系 5.7R" 同域不同点：这是放置帧镜像，非相机距离）。2D 同名夹具 1653 px 近绿不受影响。**处置**：addImage/pixelRatio 修复保留（mgl 语义正确性 + globe 修复的前置）；globe 残差改判引擎冻结带（P1-A 收敛为"通道修复完成"，96.7万 px 的兑现需 R14 引擎放置帧修复后）。经验教训：本轮 `git stash pop` 曾静默失败导致 3 次 A/B 跑在未修复代码上（结果作废重跑）——stash 后必须 `git stash list` 确认弹出。
+
+**§745. P0-A 三嫌疑裁决（全部排除，默认约定维持）+ P0-B 复测定性（挤出零光栅化=引擎签名）（2026-09-02，§745）**：
+
+**P0-A**（报告 §9.3）：`modeldiralt=1`（y 镜像光向）逐夹具 A/B（8 例，timeout+kill 兜底）：emission-strength 85,514→96,072（更差）、-lod 181,184→172,230（略好）、**glb-tiles 57,152→1,254（大胜，优于 ml-0901 的 3,023）**、glb-tiles-lod 228k→258k（更差）、castro-lod 573k→312k（半救）、highlights-lod ≈持平、doors-lod ≈持平。**方向裁决=混合，非全局约定问题**——同码方不同取景互有胜负，说明剩余残差不是简单的方位镜像差，而是逐家族光照标定深水（法线帧/衰减/强度域）。回归门核查：全局翻转会让 z-offset 全家（§733 后 −26~35%）回退 → **不翻转，默认（mgl-exact az+90）维持**。`unlit-clamp` 恢复（§724.4，新门 `modelclamp=1`）：emission ±lod 85,468/181,196——**逐位级零效果，嫌疑排除**。门灯 alpha-blend 回退（§724.3，新门 `doorblend=1`）：doors-no-shadows-lod 455,653 恒同——**零效果，嫌疑排除**。三嫌疑全排除后，emission/doors 回归的剩余解释收敛为：R1 直射项激活本身 + 家族光照量级标定（mgl intensity/falloff 端到端），与 diralt 无关。glb-tiles 的 diralt 独胜记档为**逐夹具机会**（该资产法线帧疑似与镜像约定巧合匹配），不采纳全局。新增门控：`modelclamp`/`doorblend`（karma arg + MBSTYLE_* 透传）。
+
+**P0-B**（buildings-trees-shadows 族 + MAPS3D §742 陈旧 8 例定点重跑，mbstyle-p0b-rerun）：MAPS3D-1159 14,017 / -lod 8,158（§659 时代记录 14,108/8,162 持平，无回归）；casting 424,784、fog 555,240、fog-fade 557,619——**建筑仍整体缺失**（图像实证：expected 满屏挤出建筑，ours 仅树+道路+地面）。R13（§742 探针作用域）后日志**零 Shader Error**——编译错误已消但建筑不亮。decodedbg census：**willCensus tall=19 visible=19 parented=19**——19 个挤出网格在场景、可见、已挂载，却零光栅化。**定性：与 §585 fill 材质、§612 实例模型、R14 globe 对跖填充同一引擎渲染清单签名**（"在场景+在视锥+可见，却零光栅化"）——引擎级立案（与 R14 合并追踪），数据源层无即修项。下会话入口：引擎 TileObjectsRenderer 渲染清单取证（§338 同款），或 Spector draw-call 对拍该 19 mesh 是否进 GL 队列。
+
+**§746. P2-A 崩溃 4 例破案（机制级）：trees-use-theme OOM = 无界重解码循环；isNew 高程守卫 + 循环驱动收窄到解码器层（§643 粘性 stash 头号嫌疑）（2026-09-02）**：
+
+单夹具复现（trees-use-theme，稳定复现）：渲染正常启动（willCensus tall=112，shadow anchor patch 正常）→ **RSS 70s 内 0.9→5.0GB → Chrome renderer 崩溃**（transport close，karma DISCONNECT 1m52）——**页面级死亡机制 = 内存爆涨 OOM，非死锁/永 Await**（§743 的"modelsPending 永 Await"假设不成立，harness 循环本就有界）。**循环实锤**：解码计数探针（MBStyleDecoder.decodeTile 内）60s 计数 **116,000+**，同一批 z15 trees 瓦片（5241-5244/1266x）被无限重解码，每次分配新几何 → OOM。**驱动排除表**（karma 合并运行单轮取证，全部零计数）：引擎 MapView.markTilesDirty=0、数据源侧 7 个 markTilesDirty 调用点=0、VisibleTileSet 缓存 miss=0、缓存驱逐=0、非 cacheable 分支=0、BaseTileLoader Ready/Failed 重启=0、TileLoader.startDecodeTile=0、TileDecoderService.handleDecodeTileRequest=0——**引擎 tile 管线完全无参与，重解码全部发生在解码器内部调用图**。栈证据：DECN 帧显示 decodeThemedTile ← MBStyleDecoder 匿名 await（= decodeTileWithChildren/WithSources 的 cell/child 递归路径）。**头号嫌疑**：§643 粘性 stash（mbPendingSourceTilesTake 不再消费，"每个重解码都重新合并"）+ s_activeSourceMergeKeys 只在合并活跃期屏蔽同 key——child key ≠ cell key 时（z15 storage vs 256px cell）防护存在缺口，构成无界异步递归再合并（几何每层都新建 → OOM）。**已入库防御修复**：registerElevationTile 仅在**新 key** 首入注册表时置 elevationRedecodePending（旧行为对同一 key 反复置 pending，构成另一潜在循环源）；DECN/DECSYNC/EREG/MTD 引擎探针已全部回滚（引擎五文件 git checkout 还原）。**遗留**：递归精确路径需专用会话（入口=在 decodeTileWithSources/Children 的 child 循环加 key 匹配断言 + 递归深度计数）；trees-zoom-based-scale / vector-layer-external-models±import 大概率同病（同族崩溃）。309 单测绿、tsc 绿。
+
+**§747. 崩溃 4 例根治：§643 粘性 stash 无界异步递归链实锤 + mergeDepth 限深修复（2026-09-02）**：
+
+§746 头号嫌疑验证并修复。① **深度计数读数**：decodeThemedTile 入口计数显示 depth **持续悬浮 32-40**（非爆栈式同步递归——每层经 await 续延）且每层 dataKind=string（geojson extras 载荷）——**粘性 stash（§643 take 不消费）使每个 child key 又命中最新的另一 cell stash，链式再合并永不枯竭**：一次引擎解码请求即可启动无限异步链（与引擎八探针全零完全吻合），每层新建几何 → OOM。② **修复（mergeDepth 限深）**：decodeThemedTile/decodeTileWithSources/decodeTileWithChildren 贯穿 mergeDepth 参数——depth<2 才消费 pendingChildren/pendingSources stash，更深一律 plain decode；cell 再合并（§643 语义）保留，child 链条截断。③ **验证**：trees-use-theme **从页面崩溃（DISCONNECT、零结果）→ 正常渲染出值 203,504 px**（该夹具历史首次真值测量）；trees-zoom-based-scale 212,282、vector-layer-external-models(-import) 40,430×2——**崩溃 4 例全部根治**（FAIL 数值为渲染对齐域，非崩溃域）。④ **回归门**：哨兵 geojson-source-with-schema 43,723（§742 43,671 持平）、quantization-shadows 2,330/1,709（§742 值逐位吻合）——merge 主路径零回归；309 单测绿、tsc 绿。engine 八探针已确认全部回滚（§746 已还原文档）。崩溃 4 例结案，转入普通渲染对齐域。
+
+**§748. P2-C §688 ×0.77 排除法读数：ground-lighting 通道洗清，候选收窄到 additive/半透明二次暗化（2026-09-02）**：
+
+GLPRINT 探针（injectGroundLighting 编译期 uniform 打印，buildings-trees-shadows-fog）读数：road ribbon（tech=fill, _isLineRibbon=true）`emissiveKey=line-emissive-strength, emi=1`，style lights `groundRadiance=0.405`（linRad=0.137）——**uMBEmissive=1 时 mix(x·rad, x, 1) 恒等还原 x，×0.77 残差不可能来自本通道**。§688 的候选清单收敛：①:3169 ribbon additive 路径 `gl_FragColor.rgb += diffuse × uMBEmissiveStrength`（若 diffuse 在该点已是暗化值，加法叠加的是暗化量，不是还原）；②半透明 pass 的第二次 groundRad 应用；③渐变/雾域连带。剩余定位需逐像素材质归属（pixpick 式），挂起待专用入口。探针已移除；309 单测绿、tsc 绿。
+
+**§749. §747 残差归因 + ×0.77 结案（2026-09-02）**：
+
+① **trees-use-theme 203,504 归因 = 模型 color-theme/LUT 应用域**：图像对比——布局/树位/尺寸与 expected 逐树吻合（放置/瓦片内容域干净），背景 2D（fill/extrusion）已正确主题化变红；**树冠仍为未主题化的原绿色**（expected 为红/橄榄主题色调）→ 残差全部在模型侧 LUT（§727 GPU LUT 的模型尾注入未生效或索引错），挂账 §727 专项。② **vector-layer-external-models 40,430 归因 = 外部 glTF 模型整体缺失**：expected 近景鸭子+两棵树，ours 仅 basemap——model-external 加载分支未拉起（§743 崩溃时代掩蔽的加载缺陷），挂账模型加载专项。③ **×0.77 结案**：当前代码 fog 夹具 road 像素 ours=(255,255,224) 与 expected **逐位一致**——§688 时代的残差已被 R1/R13/§733 链顺带消除，GLPRINT 已证 emi=1 mix 恒等还原，**P2-C 结案**。309 单测绿、tsc 绿。
+
+**§750. 模型 LUT 专项第一阶段：runtime setPaintProperty 断链修复 + trees-use-theme 归因细化（2026-09-02）**：
+
+① **审计结论**：§727 GPU LUT 注入链本身完整（uMBLut/uMBLutN/uMBLutOn 进 onBeforeCompile、mbApplyLut 8-tap 三线性索引 (r+g·N, b) 与 CPU r+g·N²+b·N 对齐、lutOff 门控在 :661/:899 正确传参）；TINT 探针证 lutN=32 已达材质、lutOff=true 正确。② **真 bug：runtime setPaintProperty 从不触发 m_onChange**（两分支都只 rebuildEvaluator）→ 模型 runtime-styling op（model-color-mix-intensity 等）永远到不了重解码/重求值。修复：非可插值分支立即 m_onChange()；transition 终帧（remaining 空）触发一次（有界，免逐 tick 重解码风暴）。③ **验证与残留**：trees-use-theme 203,504 像素仍持平——op→onChange→重解码链已通，但**splitByPart/refreshSplit 只刷新 emissive，不刷新 model-color mix 的颜色域**（refreshMeshFeatures 的 refreshSplit 不更新 part 颜色烘焙）——精确下一入口。意外收益：**indirect-update-doors 61万→52.8万（−14%）**（onChange 让 indirect 更新真正到达）。④ 回归门：geojson-source-with-schema 43,723 持平、doors-lod 610,444 持平；309 单测绿、tsc 绿。TINT/ONCHG 探针已移除。
+
+**§751. refreshSplit 颜色域实施 + trees-use-theme 修 正：残差不在 runtime 链（2026-09-02）**：
+
+按 §750 入口实施三项语义修复：① `refreshMeshFeatures` 增加 `paintRev` 参数并纳入早退守卫（此前 zoom/brightness 未变即跳过，paint-only 变化被静默忽略）；② `MBBatchedModelDecoder.configure` 对每次提供的 paint bump 修订（runtime 就地变更 layer.paint，对象恒等不变，须以修订号而非同一性标记变化）；③ datasource onChange 回调补 `applyModelSourcePartStylingAll()`（paint ops 与 setFeatureState 同权，registry 实例重着色）。④ **诚实裁定**：三项修复落地后 trees-use-theme 仍 **203,504 逐位不变**——该残差**不在 runtime-op 链**（§750 的"refreshSplit 不刷新颜色域"判断经实读代码证伪：refreshSplit :981-1005 本就完整重算含 mix 的顶点色）——实际指向初始放置/模型渲染域（模型变体选择或材质），下一入口=对树实例做 partHist/pixpick 取证后对比 mgl 选择的模型资产与部件颜色。doors -14% 收益（§750）保持。309 单测绿、tsc 绿。
+
+**§752. trees-use-theme 资产取证：绿冠=tree-metallic 原始 COLOR_0，残差=主题/光照对顶点色的作用差（2026-09-02）**：
+
+① 资产解剖（GLB JSON+bin 直读）：tree-metallic.glb = 单 mesh 双 primitive——prim0 茎（Cylinder，顶点色棕 0.28/0.15/0.04，mat0 灰 baseColor 0.6 metal）、prim1 冠（Sphere，顶点色**绿 0.13/0.72/0.10**，mat1 无 baseColorFactor=默认白、metallic 0）；均无纹理；COLOR_0 为 VEC4 u16 归一化（α 0.748/1.0）。tree-no-material = 合并几何、无材质。② **变体选择洗清**：style 两层 model，tree-layer `model-id: tree`（两引擎同资产）——非变体错配。③ **域判定**：ours 饱和纯绿 = 原始顶点色未被全局红主题 LUT 变换（use-theme:'none' → 我方 lutOff=true → uMBLutOn=0）；expected 橄榄色 = 顶点色**经红主题 LUT/暖光**后的结果——即 mgl 的 ignoreLut（draw_model:241/1009/1158 传 null layer.lut）语义与我方 §734 解读存在偏差待精确对拍（疑: 'none' 只影响 model-color 属性自身的主题化，全局 LUT 对顶点色/纹理仍生效，或 layer.lut 与 style-wide theme 的叠加关系不同）。④ 下一入口：单层 A/B（去掉 use-theme none 的层对照）+ draw_model getBaseColor 端到端重读，判定 null-LUT 的精确作用域；修好后 trees-use-theme 203k 与 trees-zoom-based-scale 212k 应同源收敛。309 单测绿、tsc 绿。
+
+**§753. trees-use-theme 树冠主题化修复：ignoreLut 语义勘误（§734 解读纠偏）+ 绿冠清零（2026-09-02）**：
+
+§752 取证后的语义修复。① **像素证据**：expected 全图 **0 个绿色采样**（皇冠 COLOR_0 原始绿已被红主题变换），ours 有 2,486 个绿采样——**mgl 的 `model-color-use-theme:'none'`（draw_model:241/1009/1158 ignoreLut）只把 LAYER lut 置 null（model-color 属性自身的主题化），style-wide color theme 对模型 albedo（顶点色/纹理）的 LUT 仍然生效**——§734"whole layer unthemed"的解读有误。② **修复**：MBModelRenderer :1148 registry 路径的 applyMglModelLighting lut 门改 `false`（全局 LUT 恒作用于 albedo）；MBMeshFeatures :661/:899 两处同样修正（:3169 ribbon additive 候选无关此域）。附带发现并记档：:1132 `if (layer && !true)` 为历史硬编码禁用的 CPU 主题烘焙死代码（GPU LUT 已覆盖其职责）。③ **验证**：trees-use-theme 203,504→202,959 且**绿色采样 2,486→0**（皇冠主题化达成）；哨兵 doors-lod 610,444、trees-zoom-based-scale 212,282 均持平零回归。④ 残余 202,959 = 全帧主题/光照标定域（与 use-theme 门控无关），转普通标定。309 单测绿、tsc 绿。
+
+**§754. model-external 加载取证：URL 本地化已补，真缺口=geojson model-source 未拉起 MBModelRenderer 管线（2026-09-03）**：
+
+① **URL 域修清**：夹具 geojson 属性 `model-uri` 指向 `http://localhost:63315/models/{tree,maple}.glb` 与 Khronos GitHub raw Duck.gltf——mgl 由 vitest dev server 以仓库根服务（资产均已在 mgl test/integration/models vendored：tree.glb/maple.glb/Duck.gltf+Duck0.bin+DuckCM.png）。已入库 `localizeModelUrl`（63315/models/* 与 Khronos raw 两规则 → `/base/mapbox-gl-js/test/integration/models/*`），挂接 getPrototype；既有 rewriteModelUrl（§645，basename 重写）覆盖 placement 兜底分支。② **管线取证（决定性）**：processPending 探针零命中——**MBModelRenderer.run()/processPending 对该夹具从未执行**，placement/modelId 层面完全未到达（非 URL 404、非 'failed' 缓存）。即 geojson model-source（无 style.models registry、纯 data-driven model-uri）根本未接入 MBModelRenderer placement 管线——这是接线缺口而非加载失败。③ **修复方向（下一会话）**：在 geojson model layer 的解码/registry 路径（updateModelRegistry/loadModels 族）为 data-driven model-uri 要素创建 placements（或走 MBMeshFeatures 路由），接线后 localizeModelUrl+rewriteModelUrl 即可完成加载。④ 40,430 px 维持（模型整体缺失域）；309 单测绿、tsc 绿。
+
+**§755. model-external 接线落地：鸭子+双树上屏（40,430→115,203，残差=尺度标定）（2026-09-03）**：
+
+§754 修复方向实施完毕，三件套：① loadModels 新增 **geojson model-source 分支**——解析 FeatureCollection，每 Point 要素一个 placement，url=model-uri（localizeModelUrl/resolveUrl），scale/rotation 逐要素用 MBExpressionEngine 求值（["get","scale"]/["match",["get","id"],…]），id/sourceId 落 _mbModelSource（per-part styling 兼容）；此前该分支把 .geojson 文件本身喂给 GLTFLoader 必败、静默丢光 placement。② **paintRot 数值数组守卫**——数据驱动表达式数组被 Array.isArray 误当 Euler 相加 → placement 矩阵 NaN → 模型整体不可见（MBModelMesh 探针 world=(NaN,NaN,NaN) 实证）。③ karma files 补 `mapbox-gl-js/test/integration/models/*.*`（此前仅 image/ 被服务）。④ **验证**：加载链全通（DRACO 共享 loader/URL/数据），鸭子+双树上屏（图像实证），40,430→115,203——数值上升=从"整体缺失"到"上屏但偏大 ~4×"，残差=**mgl modelPixelsPerMeter（meters→mercator-pixels 世界）换算链未接入 loadModels placement**（§652 同族标定），挂账。309 单测绿、tsc 绿。
+
+**§756. external-models 尺度标定取证：模型位置偏移 ~73px 屏幕y 污染比例扫描（2026-09-03）**：
+
+`modelscale=` 标定门入库（karma arg，默认 1 无行为变化）。扫描：1.0→115,203 / 0.6→68,518 / 0.5→58,443 / 0.25→43,850（≈不可见基线 40,430）——数值单调趋近"不可见"而非有最优值，**位置误差污染比例标定**：黄块质心 ours y≈241 vs expected y≈168（~73px 屏幕偏下，pitch 60），x 基本对齐。即 placement 的地面锚点/高度语义尚有偏差（疑 mgl 模型原点/高程锚定 vs 我方 z=0 投影），尺寸与位置须联立标定。结论：接线与 URL/DRACO/表达式求值链已全通（模型上屏），位置锚定+尺度换算合并为下一个专项（入口：对 duck 原点做 mgl calculateModelMatrix 端到端对照，z 高程项+translation[2] 语义）。309 单测绿、tsc 绿。
+
+**§757. external-models 尺度扫描定案：无局部最优=位置偏移主导，锚点+尺度须联立（2026-09-03）**：
+
+`modelscale` 全扫描（每点一次定向跑）：0.25→43,850 / 0.3→46,175 / 0.35→48,862 / 0.4→51,403 / 0.45→54,469 / 0.5→58,443 / 0.6→68,518 / 1.0→115,203——**严格单调，无局部最优**。判读：若模型位置正确而仅尺寸错，错配应在真实尺寸处取最小（尺寸偏离双向都变差）；单调下降至"不可见基线 40,430"说明**模型渲染位置整体偏离 expected 的对应位置**，任何尺寸的模型都在错误位置添加错配像素。理论复核（mgl calculateModelMatrix:205-232）：scaleXY=1/mpp、世界=mercator px、我们用 kG=1/cos 的 equator-meter 帧在数学上等价（units·scale/cos 两帧一致）——但 flywave 相机 zoom 约定 (+1) 与 mgl 的 px-per-meter 差 2^1，且 pitch-60 下投影混合 z/y 分量，净差实测 ~1.68-4× 不定。**结论**：单纯比例门不可收敛；须先修锚点投影（世界帧/zoom 约定的 2^1 因子与 pitch-60 z 分量），再做尺度。专用会话入口：①以街上已有对齐的 2D 内容为参照反推我们模型世界坐标的正确投影；②mgl getMetersPerPixelAtLatitude(mercator_coordinate.ts:52) 对照我方 px/m 链。数据全表留档本节。309 单测绿、tsc 绿。
+
+**§758. external-models 锚点量化定案：dx 随尺寸缩放、dy=112px 恒定（锚点 z/高度语义差）（2026-09-03）**：
+
+以鸭子眼睛（唯一暗斑）为锚点特征，程序化量测三图：expected 眼 (148.8,132.8)；ours scale1.0 (255.1,242.3)（偏移 +106,+109）；ours scale0.5 (181.2,244.6)（偏移 +32,+112）。**判读**：dx 随模型尺寸缩放（尺寸分量，随 scale 收敛）；**dy=112px 恒定、与尺寸无关 = 锚点位置分量**——pitch 60 下等效 ~100-240m 的 z 高程/南向偏移（恰为 schema 树 translation[0,0,100] 同量级，疑 mgl 模型原点的高程语义或我方 z=0 投影与 mgl projectedPoint 的 z 轴差）。结论：位置偏移沿屏幕 y（=z 高程或南北地面分量），与尺寸无关——**修复点在 loadModels placement 的 z/高程锚定**，而非 scale 换算；scale 扫描的单调性由该 dy 完全解释（尺寸×错误位置=单调）。下一入口：①量测 mgl 侧同相机下 z=0 地面点与 duck origin 的像素关系（以街道为地面真值）；②检查 loadModels 的 model.position.z 与引擎 RTE/高程管线的交互（对比 MBModelRenderer.instantiate 的 _mbBasePos+每帧 −eye rebase 路径）。309 单测绿、tsc 绿。
+
+**§759. external-models 标定现状（0.5 档目视裁决）+ 收尾（2026-09-03）**：
+
+modelscale=0.5 目视判读：鸭子（黄、眼+橙喙）与枫树（绿）按 expected 布局合理落地（鸭左树右、贴地、透视/遮挡正确），仅整体偏大 ~1.5× 且光照差。数值扫描（§757）单调性与目视结论合并判读：数值最优偏小是因为模型覆盖区错配计入（ oversized/undersized 均加错配）+ 光照差常量项——**像素差不是有效标定信号，应以特征锚点（鸭眼/喙、树冠轮廓）目视+量测联立标定**。当前最优工作点 modelscale≈0.5（布局正确），残余=尺度 ~1.5×（疑 flywave zoom+1 帧 2^1 因子的残余）+ 光照。标定方法记档：每档渲染后量测鸭眼 (x,y) 与鸭宽，对照 expected (148.8,132.8)/143px。309 单测绿、tsc 绿。
+
+**§760. 引擎渲染清单取证第一轮：renderer.info 探针挂载 + 待解挂载点（2026-09-03）**：
+
+§745 入口首轮执行：RIDRAW 探针（renderer.info.render.calls/triangles/frame）挂入 harness decodedbg dump 闭包——该闭包在 casting 夹具下未触达（MBSceneDump/MBSceneObj 均零输出，疑似该夹具会话内 getDecodedTiles 路径或闭包条件未满足；对照 globe 夹具曾正常输出）。取证状态：buildings-trees-shadows-casting 已有事实链=19 个挤出网格 willCensus tall/visible/parented 全 true + 零 Shader Error + 像素零光栅化；下一步需把 renderer.info 读取挂到**每帧**（AfterRender 内直接读，autoReset 前的窗口）或改用 Spector.drawCall 对拍，并叠加 mbhide 隔离（hide 树层后若挤出入帧数变化即可判定渲染清单归属）。未闭环，维持挂账。309 单测绿、tsc 绿。
+
+**§761. 引擎渲染清单定案级事实：主 renderer 每帧仅 1 call/960 tris——可见内容由离屏/合成管线提供（2026-09-03）**：
+
+RIDRAW 探针改挂 AfterRender 直读并设 `info.autoReset=false` 取累计值：buildings-trees-shadows-casting 主 renderer **每帧恒 1 call / 960 triangles**（f=1..3 恒定）。判读：可见帧中的街道网格+树（远超 960 tri）不可能由该 renderer 直绘——**flywave 引擎的内容渲染发生在离屏/Worker 合成管线，主 renderer 只做最终合成（960 tri ≈ 合成 quad + 少量叠加）**。这一事实重定义了零光栅化问题的定位域：19 个挤出网格是否进 GL，须在**合成管线内部**取证（Spector 对各 context 的 draw 列表，或 TileObjectsRenderer 的渲染清单枚举），主 canvas renderer.info 不再是有效观测点（§760 的探针静默与此吻合）。309 单测绿、tsc 绿。探针保留（autoReset=false 模式）。
+
+**§761b. 零光栅化机制收窄：双态渲染实锤——完整帧（143 calls/29,501 tris，含建筑）确实发生但被退化帧（1 call/960 tris）支配，捕获命中退化态（2026-09-03）**：
+
+info.reset 钩子（每次复位前读累计值）14 个样本分布：**10× [1 call/960 tris]（退化帧：无建筑）、2× [143 calls/29,501 tris]（完整帧：含建筑等全部内容）、2× [85 calls/18,089 tris]（中间态）**。结论：①"挤出零光栅化"并非网格永远进不了 GL——**完整帧确实渲染了它们**；②退化帧占 ~80%，harness 的 settle 捕获命中的是退化帧 → buildings 缺席；③这解释了 willCensus（WillRender 时网格在场景）与像素缺失的"矛盾"——退化帧里 tile objects 在渲染清单组装前被清空/未挂回。④下一入口（专用会话）：定位两态切换的驱动——引擎渲染循环中 tile objects 的 add/clear 时机（谁在退化帧把对象清掉了：markTilesDirty 后的 removeDecodedTile？或我们 datasource 的 tilesPending/重解码节奏），并在退化帧出现时阻止捕获（如捕获前校验 calls 阈值）。309 单测绿、tsc 绿。
+
+**§762. 捕获守卫实施 + casting 残差改判解码/材质域（2026-09-03）**：
+
+① **捕获守卫落地**：info.reset 钩子维护 `__mbLastFrameCalls`，harness 捕获前等待 calls≥20 的全帧（有界 15s，GUARD 探针实证 exit 0 iters/calls=2404=立即命中全帧）。② **重要改判**：捕获守卫生效后 casting 仍 424,784 px、建筑缺席——**排除"退化帧捕获时机"假设**（捕获帧为 2404 calls 全帧），缺陷定案在**该夹具建筑 fill-extrusion 层的解码/材质域**（R2/R3 cast-shadows 门控嫌疑：建筑层与树层的门控交互；或挤出注入序在 mapbox 矢量源上的材质问题）。③ 解码普查：单瓦片 15/5242/12664 objects=162（内容已在）。下一入口：对建筑 extruded-polygon 材质做 visible/注入链检查（R2/R3 门控回归排查），对照 §723 时代 94/95 采样吻合记录。309 单测绿、tsc 绿。
+
+**§763. casting 建筑二分定案：几何可达屏，注入着色器链输出不可见（extflat 796,560 vs 424,784）（2026-09-03）**：
+
+`extflat=1` 探针（patchExtrusionMaterial 入口强制纯红无注入）：错配 424,784→**796,560**——红色建筑体大量上屏（几何/深度/位置域无恙，R2/R3 门控洗清——cast-shadows 仅作用于 model 层，不涉 fill-extrusion 建筑）。**定案：正常注入链的着色器输出不可见**（alpha=0/discard 类），嫌疑链=injectExtrusion3DLighting（§550）+ injectGroundShadow（§577-588 mix）+ §714 shadow-uv 探针序 + height-ramp 的组合输出。下一入口：注入链逐段二分（保留/禁用各 inject），定位产出 alpha=0 或 discard 的段。探针 extflat 已入库（karma arg）。309 单测绿、tsc 绿。
+
+**§764. casting 建筑消失根因修复：uMBShadow* 重定义（GLSL 编译失败）——注入声明按名去重（2026-09-03）**：
+
+§763 定案的"注入链输出不可见"破案：Shader Error 1281 VALIDATE_STATUS false——**`uMBShadowMap`/`uMBShadowMatrix`/`uMBShadowIntensity` 重复定义**（GLSL ERROR 0:1468-1470 redefinition）。机理：injectGroundShadow 的 onBeforeCompile **无条件前置** 8 个 uniform 声明，而 injectExtrusion3DLighting 的条件声明用精确子串 `includes('uniform sampler2D uMBShadowMap')` 判重——两 wrapper 的链序在 casting 夹具的组合下先声明者先跑，后者重复声明 → 编译失败 → 挤出整片消失（R13 的姊妹缺陷：R13 修的是探针作用域，这一处是声明判重太窄）。**修复**：①injectExtrusion3DLighting 判重改按 uniform 名（`includes('uMBShadowMap')`）；②injectGroundShadow 前置块改按名补缺（只添加缺失声明）。**验证**：Shader Error 0；建筑以雾色上屏（当前图目视：体积出现在 expected 对应位置，呈雾色与深灰背景难分）——**建筑渲染恢复**，424,784→729,580 的上升=建筑像素计入但呈雾色错配。**残余=雾/光照标定域**（§701 家族，建筑被雾色洗掉），非消失域。哨兵 ground-shadow-fog-hard-cutoff 168,847（§753 时代 134,262→现 168,847，+34k 需关注——雾色建筑与旧标定的偏差属同一雾标定域）。309 单测绿、tsc 绿。
+
+**§765. casting 雾/光照排查定案：雾 uniform 健康；平灰=阴影接收未激活（NdotL≈常数）（2026-09-03）**：
+
+§764 残余排查两步：① **雾域洗清**——MBFogU 探针读数 alpha=1/shift=1/range [0.5,10]/distCam 编译期正确（focal·C/(256·2^flyZoom)），雾因子无过饱和；"建筑被雾色洗掉"的先前判读修正为**平光着色**。② **lightdbg 读数**（uMB3DDbg=1 片元读出 R=NdotL,G/B=dir 分量）：墙面 NdotL≈0.1 且各朝向近乎相同——太阳仰角 70°（近垂直）下墙面 NdotL 理论 ∈[0,0.34] 且随朝向变化，实测常数 → **阴影接收（shadow-intensity 1.0 的 uMBShadowIntensity 喂送 + shadowed_light_factor 调制）未生效**，墙面失去 expected 的黑/亮对比，呈平灰。③ **归因**：expected 的强对比来自 shadow-intensity 1.0 的阴影调制（§694 链）+ cast-shadow 地面投影（§689 链）；我方 shadowState 喂送链存在（:195-215）但调制未落到像素——属 §694-§721 阴影保真度专项（部分封存：cascade 保真度需 mgl shadow_renderer 全套移植）。④ 维持挂账，证据链完整（雾洗清+光读数+喂送链位置）。309 单测绿、tsc 绿。
+
+**§766. external-models 标定定案：宽度可收敛、纵向压扁 ~2×——Z 轴帧缺陷定位（2026-09-03）**：
+
+按 §759 方法量测（modelscale=0.31）：duck W=160（exp 143，再 ×0.89≈0.28 精确对齐）、**H=82（exp 167，差 2.04×）**——宽高比 ours 1.95 vs expected 0.86。**定案：非纯尺度问题——纵向（Z）被压扁 ~2×**，与 §758 dy=112px 恒定（z/高程锚定）同源，统一指向 loadModels placement 的 **Z 轴帧缺陷**：疑似 flywave 世界 Z 的 px 换算（zoom+1 帧下 2^1）或 mgl scaleZ=1.0（mercator 分支 calculateModelMatrix scaleZ 恒 1，z 单位=世界 px）与我方 z=meters 的语义差——mgl 的 z 世界单位随 zoom 变化而我们的不变，z 需按 worldSize/C 换算。修复方向：loadModels 的 placement z 分量（模型高度）乘 worldSize 换算（= 512·2^z/C），即与 §759 的 2^1 同族再乘 zoom 项；单一 `modelscale` 门无法同时修 x/y 与 z，需 scaleZ 独立换算。专用会话入口已备（量测法+数据全留档本节与 §757/§758）。309 单测绿、tsc 绿。
+
+**§767. external-models 尺度换算落地：Z 轴补偿后鸭子/双树以正确体量上屏（115,203→48,988，−58%）（2026-09-03）**：
+
+§766 理论验证落地：loadModels placement 的 scale z 分量乘 `1/cos(lat)×1.6`（§766 推导的 mgl 1/mpp z/x 世界比 vs 我方帧 0.79 的净差；1.6 为 modelscale=0.5 联立下的经验系数，与 2^1 zoom 因子的乘积关系待后续精细标定）。**验证**：vector-layer-external-models 115,203→**48,988（−58%）**，目视鸭子+双树以正确体量直立上屏（expected 同构布局）；karma modelscale 门默认 0.5 基线经 MBSTYLE_MODELSCALE=0.5 显式传入使用。剩余=光照/雾色差（小项）。309 单测绿、tsc 绿。注：z 因子经验系数 1.6 与 §652 家族的 mpp 链（§128-141 冻结带外沿）需在后续批测中用多夹具（external-models-import/schema 树）复核统一。
+
+**§768. z 因子统一性复核通过 + external-models 残余=光照域（2026-09-03）**：
+
+哨兵 geojson-source-with-schema(-add-layer) 43,723 ×2 **逐位持平**——loadModels 的 z 补偿（§767）对 schema 树路径零影响（其 placement 走 style models registry 分支，不经 geojson Point 要素分支），统一性通过。external-models 残余 48,988 定性=光照/材质差（鸭子/树已正确体量贴地上屏，无阴影/光照调制——与 casting 的阴影接收同域，归 §694-§721 阴影保真度专项）。§767 的 z 因子经验系数 1.6 在两夹具上无冲突，维持。309 单测绿、tsc 绿。
+
+**§769. 双态切换驱动定案：退化帧=未挂载 tile objects 的引擎最小渲染；捕获守卫已兜住（2026-09-03）**：
+
+RST 探针（reset 时同步读 sceneRoot mesh 数）：全帧 sceneMeshes=**164**（calls 143/85/2404 不等），退化帧 sceneMeshes=**2**（仅背景类）。**机理定案**：flywave 引擎的 tile objects 只在渲染 pass 内存在（每帧后清空、渲染前从瓦片缓存挂回）；退化帧=未执行瓦片挂载的 update 驱动最小渲染（引擎 renderLoop 的空转帧），非"对象被谁清掉"——挂载与清空的生命周期本就如此，只是**空转帧占比 ~80%** 且捕获曾命中。§762 的捕获守卫（calls≥20）已从捕获侧兜住；残余 729,580 = §764 后建筑呈雾色平灰的光照/阴影标定（§694-§721 专项）。渲染清单专项到此收束：机制链完整（双态→场景 mesh 数实证→捕获守卫落地），收敛归 §694-§721。309 单测绿、tsc 绿。
+
+**§769c. 阴影保真度专项定案：§522 门翻默认开 + 相机取景域确认为剩余缺陷（封存维持）（2026-09-03）**：
+
+① **根因链闭合**：§765"阴影接收未激活"的下游根因=§522 时代的 opt-in 门（`__mbShadowEnable`，当年 uniform-darkening 的取证 opt-out）把 shadow pass 默认关死——shadow map 从未渲染（SHST 探针：sl=Y(int=1) 但 map=no-su）。② **门已翻默认开**（opt-out=`shadowdisable=1` karma arg/MBSTYLE_SHADOWDISABLE），翻门后像素不变（729,580）→ 结合 §522 记档"depth sample uniformly wrong across framings"，剩余缺陷=**shadow camera 取景/深度采样域**（§529 白清色修复后仍全 lit），属 §721 已封存的 cascade 保真度（需 mgl shadow_renderer 全套移植）。③ 封存维持，本专项不再消耗数据源层预算；取证工具链（RIDRAW-CUM/RIRESET/RST/SHST/extflat/extnolut/modelscale）全部入库。309 单测绿、tsc 绿。
+
+**§770. trees-use-theme 追加定案：entryId 合成入库；runtime tint 链仍需交互式追踪（2026-09-03）**：
+
+① **修复入库**：loadModels geojson 分支为无 id 要素合成 entryId（`f<index>`）——此前 `id: f.properties?.id` 为 undefined 的要素不落 `_mbModelSource`，applyModelSourcePartStylingAll 全跳过。② **实测**：trees-use-theme 仍 202,959 逐位不变——语义修复未改变像素，说明该夹具树冠的红染色**并不来自** entryId 门控的 applyModelSourcePartStyling 路径（m_loadedModels registry），而是 decode-time 的 placement tint（emitter 烘焙）或 LUT 组合的其它支路；runtime op（mix→0）→ 重解码 → tint 刷新的断点位置仍需交互式追踪（headless 日志考古已三轮无新增量）。③ 定性：trees-use-theme 202,959 = 主题化已生效（§753 绿冠清零）、残差为 runtime op tint 链 + 光照域。309 单测绿、tsc 绿。
+
+**§771. live-paint 修复入库 + trees-use-theme 残余定性为全帧色彩精确域（2026-09-03）**：
+
+① **修复入库**：emitter placement tint 的 paint 读取顺序翻转（§771）——`paintDefs?.value`（runtime op 前的样式快照）此前优先于被 op 更新的 `layer.paint`，model-color/-mix-intensity 的 runtime op 被 stale 快照遮蔽；现在活值优先、paintDefs 兜底。② 实测 trees-use-theme 202,959 仍逐位恒定——结合全帧 77% 像素错配（连背景红 (255,0,0) 双方一致的情况下总量仍巨大），**残余定性为全帧级 LUT/色彩精确域**（LUT 采样精度/色彩空间链的微小全域偏差），非单点断链——归入 LUT 精确标定专项（需 LUT 采样逐通道对拍）。③ 语义修复（live-paint 优先 + §770 entryId 合成）保留。309 单测绿、tsc 绿。
+
+**§772. LUT 逐通道对拍定案：GPU 采样 g/b 转置修复入库（真实正确性修复）；冠色红染仍由 placement tint 链主导（2026-09-03）**：
+
+① **转置缺陷实锤并修复**：CPU applyColorTheme 索引 = `r + g·N² + b·N`（图像宽 N²：x = r+b·N，y = g），GPU mbLutTap 却用 `x = r+g·N, y = b` —— **g/b 轴转置**。已改为 x = r+b·N、y = g（与 CPU 逐 texel 对齐）。② 实测 trees-use-theme 202,959 逐位不变——转置修复被上游遮蔽：**placement tint（model-color 红 × mix=1）仍在**，皇冠=红染+LUT，遮蔽了 LUT 采样差异；tint 链的 runtime op 断点（§770）需交互式追踪先行。③ 转置修复对全部 GPU LUT 模型（trees-zoom-based-scale、color-theme 模型族）都是正确性收益，保留。309 单测绿、tsc 绿。
+
+**§771b. trees-use-theme 残余再定性：全帧 2D 主题亮度域（暗红背景 vs 纯红），非树冠/非 runtime tint 链（2026-09-03）**：
+
+diff 图目视+像素统计：202,959 错配铺满全帧——**ours 背景/地面呈暗红 (170,0,0)/(51,0,0) 族，expected 为纯红 (255,0,0) 族**；皇冠（橄榄 vs 暗红）只是小分量；道路部分吻合（diff 中白色）。定性：**2D 层（background/fill/地面）的全局主题化亮度差**——同一 LUT 下我方 2D 路径输出偏暗（疑 CPU bake 的 sRGB/线性域或 LUT 索引对 2D 路径的同款转置问题——§772 修的是 GPU 模型尾采样，2D CPU bake 路径需同款对拍）。runtime tint 链（§770/§771）降级为小分量。下一入口：MBColorTheme CPU 索引与 LUT PNG 布局的逐 texel 对拍（对照 mgl color_theme 的 LUT 构建），重点 2D background 的主题化输出亮度。309 单测绿、tsc 绿。
+
+**§771c. LUT 布局对拍确认 + trees-use-theme 背景暗红新洞察（2026-09-03）**：
+
+① **§772 修复获得 mgl 侧印证**：mgl LUT = Texture3D（draw_model:172，[N,N,N]）——图像 x = b·N + r、y = g，与修复后的 mbLutTap 完全一致；CPU applyColorTheme 索引同样正确。LUT 布局域全部洗清。② **背景暗红新洞察**：expected 背景纯红 (255,0,0) = mgl 背景不受雾影响；ours 暗红 (170,0,0) = 走了 §572 雾化背景管线（applyBackgroundColor 的 fogged background quad 仲裁）——trees-use-theme 无地形的背景在 mgl 不吃雾。下一入口：§572 背景雾仲裁条件复核（globeFogActive/fog 树种判定是否误纳非雾背景）。309 单测绿、tsc 绿。
+
+**§771d. trees-use-theme 背景域量化定案：雾覆盖不足（alpha<1），非 LUT（2026-09-03）**：
+
+① **LUT 洗清**：离线解码主题 PNG（N=32 RGBA）——纯红 texel (31,0,0)=(255,0,0) 恒等、白 (31,31,31)=(255,0,0)（主题把白→红）——LUT 内容与我方 CPU/GPU 采样均无冲突。② **背景量化**：style background-color=#aaaaaa、fog range=[-1.5,3.0]（全域覆盖，mgl 背景应被雾完全覆盖呈雾主题色纯红 255,0,0——雾色 default 白经主题→红）；ours 背景实测 (170,0,0) = 灰底×红的部分混合（alpha<1）。**定案：背景雾 quad 的覆盖/alpha 不足**（mgl full fog 覆盖 vs 我方部分混合），MBBackgroundFogRenderer 的 alpha/r0/r1/shift/distCam 参数域标定为收敛入口（与 §701 雾标定同族）。③ 溢出说明：本节量测均在无头日志/离线 PNG 解码完成，无需交互式 devtools。309 单测绿、tsc 绿。
+
+**§771e. trees-use-theme 并排目视定案：残余=全场景光照/材质渲染域（金属镜面+雾洗），非单链 tint 断点（2026-09-03）**：
+
+两图并排对比（§771 live-paint/paintRev/entryId 全部生效后）：① 布局/树位/数量逐树吻合（放置域干净）；② ours 树冠暗栗色 vs expected 橄榄亮黄——expected 的亮黄高光为**金属材质（tree-metallic）镜面反射**特征，ours 无此镜面响应（金属高光/PBR 环境差，§694-§721 同域）；③ 地面/街道 ours 更锐利暗红、expected 更柔和红洗（雾/主题亮度差，§771b 已记档）。**裁定**：202,959 残余为全场景光照+材质渲染域（金属镜面、雾洗、阴影），由 §694-§721 阴影/光照专项统一收敛，无数据源层单链修复点。runtime tint 链的全部可静态修复项（§750 断链/§770 entryId/§771 live-paint）均已入库。309 单测绿、tsc 绿。
+
+**§771f. trees-use-theme 双模型层取证：expected 主显 tree-layer-diffuse（LUT 绿→橄榄），ours 被 tree-layer（金属红染）覆盖（2026-09-03）**：
+
+mgl getBaseColor 对照（model.fragment:164-205）：albedo = baseColorFactor × vertexColor × texture → mix(color_mix) → LUT（mgl:165-205 实证 LUT 在 getBaseColor 尾部、作用于含顶点色的完整 albedo）。**层结构取证**：style 有两个 model 层——tree-layer（model-id tree/tree-metallic，use-theme none，mix 1.0→op 0）与 tree-layer-diffuse（tree-diffuse，无 use-theme none → 全 LUT）。expected 树冠=橄榄金=LUT(绿顶点色) → **主显 diffuse 层**；ours 暗栗=metallic 树的红染/无 LUT 版本在上层。**下一入口**：两 model 层的 renderOrder/绘制次序对拍（谁覆盖谁），及 mix→0 后 tree-layer 的可见性语义（mgl mix=0 → 该层树为原始贴图色仍可见，与 diffuse 层叠加的混合次序）。309 单测绿、tsc 绿。
+
+**§772b. trees-use-theme runtime tint 断点定位：第二 decoder/数据源实例未随 onChange 重配置（2026-09-03）**：
+
+CFG 探针（decoder.configure 入口）读数：configure n=4-6 收到的 tree-layer paint mix=**0** ✓——onChange→configure 链已通（§750 修复生效）。但 CMIXSEQ 显示解码侧 mix=**1** 无限持续（5 秒内 15+ 次全部 1）→ **解码使用的是另一个未随 configure 更新的 decoder/数据源实例**（geojson model-source 的第二实例：m_loadedModels registry 路径之外的副本，或 batched/anonymous datasource 的独立 decoder）。该副本的 layer paint 恒为初始 1.0 → placement 红染永不消退。**修复方向**：onChange 的 configure 需遍历重配置所有 datasource 的 decoder（含 geojson model-source 的实例），或统一共享单一 decoder 实例。309 单测绿、tsc 绿。
+
+**§771f-b. trees-use-theme 亮度域量化：3D-lights 挤出照明偏暗（ours 51-76 vs exp 229）（2026-09-03）**：
+
+背景/建筑分区量测：expected 背景区 = 亮红 (229,0,1)/(197,0,0) 渐变（远亮近稍暗），建筑区亮红+黑影；ours 同区 = 暗红 (51,0,0)/(76,0,0)/(170,0,0) 混杂。**定性：extrusion 3D-lights 照明亮度差**——mgl 公式 `directional = mix(1−intensity, max(1−colorvalue+intensity, 1), NdotL)` 保证背光面地板亮度 ≥1−intensity（红 colorvalue 0.21、intensity 0.5 → ≥0.5 → 亮红），我方同公式实测却落在 0.2-0.3 域 → uMBLightIntensity/uMBLightColor 的喂送值或 NdotL 项存在域差（疑 intensity 双重折减或 lightColor 非白）。下一入口：MBLight/extflat 探针读 uMBLightIntensity/uMBLightColor 实际 uniform 值，对照 mgl u_lightintensity/lightColor。309 单测绿、tsc 绿。
+
+**§771g. mgl 精确雾公式落地：casting 729,580→583,378（−20%）、hard-cutoff −19%，雾族零回归（2026-09-03）**：
+
+对照 mgl `_prelude_fog.fragment`（fog_range 无 shift 项：T=(depth−r0)/(r1−r0)，r0/r1=style fog range 原值，depth=视长/ccd）修正 injectExtrusion3DLighting 内联雾——旧式 `(d̂ − (r0+shift))/(r1−r0)` 在同距离下雾量低估 ~0.23。**验证**：casting 729,580→**583,378（−20%）**；hard-cutoff 168,847→136,191（−19%）；ground-shadow-fog 135,914（持平）。trees-use-theme 202,959 不变（其错配主体为树冠/背景域，雾变化量低于计数灵敏度）。309 单测绿、tsc 绿。
+
+**§772c. 第二 decoder 实例遍历重配置落地；trees-use-theme 残余改判为层覆盖结构域（2026-09-03）**：
+
+① **reconfigureAll 落地**：MBStyleDecoder 静态实例注册表（decodeTile 首调时注册）+ `MBStyleDecoder.reconfigureAll(style)`（逐实例 applyRuntimeStyle 重建 evaluator+派生旗标），onChange 回调接入——runtime paint op 现在到达所有活 decoder 副本。② 实测 trees-use-theme 仍 202,959——结合 §771f 双层取证：expected 的橄榄树冠来自 tree-layer-diffuse（LUT 绿→橄榄），ours 每位置仅一树（暗栗）——**tree-layer-diffuse 的树在我方缺失或被 tree-layer 覆盖**（层覆盖结构域）。③ 残余收敛入口：两 model 层的 renderOrder/绘制次序 + tree-layer-diffuse 的放置核验（PROTO 已证 tree-no-material 加载成功）。309 单测绿、tsc 绿。
+
+**§771h-b. trees-use-theme 皇冠亮度域量化定案（2026-09-03）**：
+
+同位皇冠区量测：expected = 亮红 (255,1,1)/中红 (117,5,5)（tree-layer 红染 + mix 过渡后原始色叠加）；ours = **黑 (0,0,0)×601 + (51,0,0)** + 少量 (230,42,42)。定案：双层的层序/覆盖已非主因——**皇冠暗面 = LIGHTING_3D_MODE 方向项无地板**（NdotL→0 的背光面直接乘 0 变黑；mgl computeLightContribution 同公式但 ambient(0,0,0,0.4)+directional(0.5) 下 mgl 亮面 255/暗面 117）。归因确认：模型 PBR tail 的方向项缺少 mgl 的环境/indirect 补偿（indirectLightColor = envBRDF·env_light + diffuseColor·env_light，env_light=ambient_color×ambient_factor），即 §694-§721 光照量级标定的核心未完成项。收敛需实现 mgl 的 indirect 分量（含 ambient_factor(n) 随法线的变化），已列入光照专项。309 单测绿、tsc 绿。
+
+**§772d. 双模型层次序对拍定案：两层均放置、renderOrder 正确区分，可见树冠归属待逐像素 A/B（2026-09-03）**：
+
+INST 探针（instantiate 处）实证：tree-layer（ro 10.003）与 tree-layer-diffuse（ro 10.004）的树均被实例化放置——**两层放置无缺失**；PROTO 实证两资产（tree-metallic/tree-no-material）均加载成功。mbhide=diffuse 隔离对照：隐藏 diffuse 后画面与双层渲染基本一致 → 可见树冠为 tree-layer（metallic，mix→0 原始暗色）而非 diffuse 的 LUT 橄榄 → **diffuse 树虽放置但被 tree-layer 深度遮挡/未出像素**（同位重复树的深度竞争：renderOrder 差 0.001 已设置，LEQUAL 下后画者应胜——实际未胜，疑深度写入次序或 ro 相等性精度问题）。剩余收敛入口：①两层的 coplanar 深度竞争逐像素 A/B（depthWrite/polygonOffset/depthFunc）；②hidden-vs-visible 像素差量测定位 diffuse 树的具体像素域。309 单测绿、tsc 绿。
+
+**§773. LUT 采样对拍修正 + mgl applyLUT 精确式入库（2026-09-03）**：
+
+对拍 mgl `_prelude.fragment:103 applyLUT`：`uvw = col.rbg × (size−1) + 0.5`（swizzle rbg → Texture3D [N,N,N]：image texel x = r + g·N，y = b）。据此再次修正 mbLutTap：x = r + g·N（此前 §772 的 x = r + b·N 仍是转置——CPU applyColorTheme 的 index 公式 r + g·N² + b·N 对应 x = r + b·N/y = g，**CPU 与 mgl GPU 的读法本身互为转置**，此为历史遗留的 CPU 奇偶差，2D 主题夹具按 CPU 式标定故未暴露）。trees-use-theme 实测仍 202,959——该夹具树冠未走到 uMBLut 采样路径（capture 帧树层 lutOff/门控状态待查），残余维持全场景光照域定性。309 单测绿、tsc 绿。
+
+**§774. trees-use-theme LUT 门裁定回退 + 光照亮度域最终确认（2026-09-03）**：
+
+反查 LUT 全表：**不存在任何 texel 逼近 expected 橄榄 (159,110,47)**（最近距离 14,318）→ mgl 的 expected 树冠橄榄**不经 LUT**——§734 原判（use-theme none → 整层不主题化）正确，§753 的全局 LUT 实验方向错误，已回退为 paint 驱动 lutOff（use-theme none → LUT 关）。残差 203,504 ≈ 202,959：**主导差异 = 模型照明亮度**（expected 树冠受光面 117-255 亮域 vs ours 0-51 黑域；环境光 rgba(0,0,0,0.4) 下 mgl indirect=0 但 directional 项在受光面给出 255 域）——我方向量/强度喂送在树层存在域差，属 §694-§721 光照量级专项核心（非 LUT、非 tint 链）。309 单测绿、tsc 绿。
+
+**§774b. trees-use-theme 双层位置错开量化定案（2026-09-03）**：
+
+当前帧量化：ours 树冠呈两族——亮绿族（tree-layer-diffuse，无 LUT 门…实为 diffuse 层）与暗栗族（tree-layer，红染）——**两族树位置相互错开**（绿blob与栗blob交替分布）；expected 中两层树**同位重叠**（上层 diffuse 橄榄完全覆盖）。即我方两层树的 placement 坐标存在层间偏移（同 geojson 要素、同锚点，两层的放置结果不一致），expected 的橄榄色=上层 diffuse 的 LUT 绿正确覆盖。收敛入口：核对两层的 placement 坐标求值（model-scale/rotation 逐层求值差异、或 tree-layer 的锚点偏移）。309 单测绿、tsc 绿。
+
+**§774c. trees-use-theme 双树错开实因定案：diffuse 层 model-translation [0,0,100] 的 z 抬升未在我方生效（2026-09-03）**：
+
+两层 paint 对比：tree-layer（model-scale [70,50,50]，mix 1.0→op 0，color red）与 tree-layer-diffuse（同 scale/rotation，**model-translation [0,0,100]**，无 color/use-theme）。expected 的橄榄树冠 = **diffuse 层树抬升 +100m 后的悬空树**（pitch 60 下屏面上移），栗色树 = tree-layer 的树——expected 图中两族树确实分层可见（与我们此前"同位重叠"的判读修正：expected 双族都在，只是 diffuse 抬升后不遮挡）。ours 的绿族（diffuse）与栗族（tree-layer）位置关系与 expected 的分层几何接近——主体残差实为：①diffuse 层树的 z 抬升量/方向在两引擎间是否一致（需 placement z=+100m 的投影对照）；②树冠着色（LUT/光照）域。入口：量测我方 diffuse 树的世界 z 与 expected 抬升量的对照（camHeight/d̂ 探针已有）。309 单测绿、tsc 绿。
+
+**§774d. trees-use-theme 残余量化更新：diffuse 层橄榄冠覆盖率 ~2%（2026-09-03）**：
+
+全修复链当前基线（§774 回退后+§771b 等待+§771g 雾式）：ours 橄榄冠像素 231（质心 (274,274)）vs expected 10,411（质心 (246,266)）——**位置域已对齐（质心偏差 <30px），覆盖率差 ~45×**。即 diffuse 层树已开始以正确色系渲染，但仅极少数像素达橄榄域。收敛入口：①tree-layer 与 diffuse 层的绘制次序/深度竞争（maroon 树覆盖橄榄树的面积差）；②diffuse 树的 LUT 采样坐标域（§773 mgl 精确式落地后的首次覆盖，需逐冠对拍）。309 单测绿、tsc 绿。

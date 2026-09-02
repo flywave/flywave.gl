@@ -106,7 +106,17 @@ function main() {
             ...(process.env.MBSTYLE_PROBEPIX ? [`pix=${process.env.MBSTYLE_PROBEPIX}`] : []),
             ...(process.env.MBSTYLE_SHDBG ? [`shdbg=${process.env.MBSTYLE_SHDBG}`] : []),
             ...(process.env.MBSTYLE_SHADOWCAST ? [`shadowcast=${process.env.MBSTYLE_SHADOWCAST}`] : []),
-            ...(process.env.MBSTYLE_MODELDIRALT ? ["modeldiralt=1"] : [])];
+            ...(process.env.MBSTYLE_MODELDIRALT ? ["modeldiralt=1"] : []),
+            ...(process.env.MBSTYLE_SPHDEG ? [`sphdeg=${process.env.MBSTYLE_SPHDEG}`] : []),
+            ...(process.env.MBSTYLE_SPHDS ? ["sphds=1"] : []),
+            ...(process.env.MBSTYLE_FILLFLAT ? ["fillflat=1"] : []),
+            ...(process.env.MBSTYLE_NOCULL ? ["nocull=1"] : []),
+            ...(process.env.MBSTYLE_MODELCLAMP ? ["modelclamp=1"] : []),
+            ...(process.env.MBSTYLE_DOORBLEND ? ["doorblend=1"] : []),
+            ...(process.env.MBSTYLE_MODELSCALE ? [`modelscale=${process.env.MBSTYLE_MODELSCALE}`] : []),
+            ...(process.env.MBSTYLE_EXTFLAT ? ["extflat=1"] : []),
+            ...(process.env.MBSTYLE_EXTNOLUT ? ["extnolut=1"] : []),
+            ...(process.env.MBSTYLE_SHADOWDISABLE ? ["shadowdisable=1"] : [])];
         // detached:true makes the child a process-group leader (POSIX) so the
         // timeout kill takes down the whole karma+browser tree, not just the
         // npx shim (surviving grandchildren hold the karma port and poison

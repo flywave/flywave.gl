@@ -151,6 +151,13 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
                 pattern: "mapbox-gl-js/test/integration/image/*.*",
                 included: false,
                 served: true
+            },
+            {
+                // §754: mgl test models (data-driven model-uri localization
+                // targets — vector-layer-external-models family).
+                pattern: "mapbox-gl-js/test/integration/models/*.*",
+                included: false,
+                served: true
             }
             // {
             //     pattern: "@flywave/flywave-mapview/test/resources/*.*",

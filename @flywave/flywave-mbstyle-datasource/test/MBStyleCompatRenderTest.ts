@@ -119,6 +119,18 @@ function discoverTests(): TestEntry[] {
     if (alt === "1") (globalThis as any).__mbModelDirAlt = true;
 }
 {
+    // §744: unlit-clamp restore A/B (emission-strength regression candidate ②).
+    const uc = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("modelclamp="))?.slice("modelclamp=".length);
+    if (uc === "1") (globalThis as any).__mbModelUnlitClamp = true;
+}
+{
+    // §744: door-beam alpha-blend fallback A/B (indirect-doors candidate ③).
+    const db = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("doorblend="))?.slice("doorblend=".length);
+    if (db === "1") (globalThis as any).__mbDoorAlphaBlend = true;
+}
+{
     // §655: model-shader lighting mode A/B.
     // §691 verdict: PBR (Cook-Torrance) is better for quantization (−99.5%)
     // §705: PBR is the default; `modellightport=0` forces the §557
@@ -392,6 +404,8 @@ async function renderFrames(
                             }
                         });
                     };
+                    try { const ri = (mapView as any).renderer?.info?.render;
+                        if (ri) console.log('[RIDRAW] calls=' + ri.calls + ' tris=' + ri.triangles + ' frames=' + ri.frame); } catch {}
                     const tiles = (dataSource as any).getDecodedTiles?.() ?? [];
                     for (const t of tiles) {
                         const tk = t.tileKey ? `${t.tileKey.level}/${t.tileKey.column}/${t.tileKey.row}` : '?';
@@ -897,6 +911,10 @@ async function processOperations(
                     // it against the vendored mapbox-gl-js checkout, strip the
                     // export syntax, eval once (onAdd + one render pass) and
                     // feed the drawn canvas to addImage.
+                    // args[2] carries mgl's {pixelRatio, sdf} — pixelRatio must
+                    // reach the atlas so pattern/icon displaySize = px/ratio
+                    // (3x-on-2x-add-image family).
+                    const opPixelRatio = Number((args[2] as any)?.pixelRatio) || 1;
                     if (typeof args[1] === 'string' && args[1].endsWith('.js')) {
                         try {
                             const rel = args[1].replace('./', '');
@@ -911,7 +929,7 @@ async function processOperations(
                                 if (image && typeof image.render === 'function') image.render();
                                 const canvas = image?.context?.canvas as HTMLCanvasElement | undefined;
                                 if (canvas) {
-                                    dataSource.addImage(args[0], canvas);
+                                    dataSource.addImage(args[0], canvas, opPixelRatio);
                                     // The symbol placement decoded before the
                                     // image existed (icon 'dot' unresolved →
                                     // feature dropped). Force a re-decode so
@@ -931,7 +949,7 @@ async function processOperations(
                             const rel2 = (args[1] as string).replace('./', '');
                             const img = new Image();
                             img.onload = () => {
-                                dataSource.addImage(args[0], img);
+                                dataSource.addImage(args[0], img, opPixelRatio);
                                 (dataSource as any).mapView?.markTilesDirty?.(dataSource);
                                 mapView.update();
                             };
@@ -950,7 +968,7 @@ async function processOperations(
                             imageData.data.set(new Uint8ClampedArray(imgData.data));
                             ctx.putImageData(imageData, 0, 0);
                         }
-                        dataSource.addImage(args[0], canvas);
+                        dataSource.addImage(args[0], canvas, opPixelRatio);
                     } catch {}
                 }
                 break;
@@ -961,6 +979,7 @@ async function processOperations(
             }
             case "updateImage": {
                 // Re-add the image (same as addImage but replaces existing).
+                const opPixelRatio = Number((args[2] as any)?.pixelRatio) || 1;
                 if (args[1] && typeof document !== 'undefined') {
                     dataSource.removeImage(args[0]);
                     if (typeof args[1] === 'string' && args[1].endsWith('.png')) {
@@ -970,7 +989,7 @@ async function processOperations(
                             const rel2 = (args[1] as string).replace('./', '');
                             const img = new Image();
                             img.onload = () => {
-                                dataSource.addImage(args[0], img);
+                                dataSource.addImage(args[0], img, opPixelRatio);
                                 (dataSource as any).mapView?.markTilesDirty?.(dataSource);
                                 mapView.update();
                             };
@@ -989,7 +1008,7 @@ async function processOperations(
                             imageData.data.set(new Uint8ClampedArray(imgData.data));
                             ctx.putImageData(imageData, 0, 0);
                         }
-                        dataSource.addImage(args[0], canvas);
+                        dataSource.addImage(args[0], canvas, opPixelRatio);
                     } catch {}
                 }
                 break;
@@ -1955,9 +1974,15 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     // transition is mid-flight; settle path otherwise.
                     const rtAny = (dataSource as any).runtime;
                     if (rtAny?.hasActiveTransitions) {
-                        // Zero extra frames: the wait loop's last AfterRender
-                        // already shows the phase at the requested time — any
-                        // further frame advances the wall clock past it.
+                        // §771b: mgl waits out paint transitions before its
+                        // capture (the style ops' implicit wait). Capture
+                        // immediately and the first ~300ms interpolated phase
+                        // freezes into the result (trees-use-theme red crowns
+                        // never cleared). Render until transitions drain.
+                        const trDeadline = Date.now() + 10000;
+                        while (rtAny.hasActiveTransitions && Date.now() < trDeadline) {
+                            await renderFrames(mapView, dataSource, 1);
+                        }
                     } else if (terrainToggled) {
                         await renderUntilSettled(mapView, dataSource, 30);
                     } else {
@@ -2040,6 +2065,21 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 );
 
 
+                // §762: degenerate-frame guard — the engine alternates between
+                // full frames (≥threshold draw calls, buildings included) and
+                // degenerate ones (1 call/960 tris, buildings missing, ~80% of
+                // frames in the buildings-trees family). Wait (bounded) for a
+                // frame with real content before capturing.
+                try {
+                    const g762: any = globalThis as any;
+                    const calDeadline = Date.now() + 15000;
+                    let gIter = 0;
+                    while (Date.now() < calDeadline && (g762.__mbLastFrameCalls ?? 999) < 20) {
+                        await renderFrames(mapView!, dataSource, 1);
+                        if (++gIter <= 8) console.log('[GUARD] iter=' + gIter + ' calls=' + g762.__mbLastFrameCalls);
+                    }
+                    console.log('[GUARD] exit after ' + gIter + ' iters, calls=' + g762.__mbLastFrameCalls);
+                } catch { /* guard is best-effort */ }
                 await ibct.assertCanvasMatchesReference(canvas, entry.name, {
                     threshold: 0.1,
                     maxMismatchedPixels: maxMismatch,

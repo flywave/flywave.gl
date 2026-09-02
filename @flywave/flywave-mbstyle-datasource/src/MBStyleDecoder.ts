@@ -692,6 +692,9 @@ class MBElevationOnlyProcessor implements IGeometryProcessor {
 }
 
 export class MBStyleDecoder extends ThemedTileDecoder {
+    /** §772b: all live instances — runtime paint ops must reconfigure every
+     * decoder copy (the geojson model-source path decodes through its own). */
+    static s_instances: MBStyleDecoder[] = [];
     private m_omvAdapter: OmvDataAdapter;
     private m_geoJsonAdapter: GeoJsonDataAdapter;
     private m_layerEvaluator: MBLayerEvaluator | undefined;
@@ -805,8 +808,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         super.configure(options, customOptions);
         if (customOptions?.mbStyle) {
             const style = customOptions.mbStyle as StyleSpecification;
-            this.m_layerEvaluator = new MBLayerEvaluator(style);
-            this.applyThemeToEvaluator();
+            this.applyRuntimeStyle(style);
             // §236: emit the per-tile background fill only for geojson
             // content styles (the coverage tiles then carry the fogged
             // background like mgl's draw_background; raster styles keep the
@@ -933,6 +935,29 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         };
     }
 
+    /** §772b: rebuild the layer evaluator (and derived flags) from `style`. */
+    private applyRuntimeStyle(style: StyleSpecification): void {
+        this.m_layerEvaluator = new MBLayerEvaluator(style);
+        this.applyThemeToEvaluator();
+        const hasBg = (style.layers ?? []).some((l: any) =>
+            l.type === 'background' && (l.layout?.visibility ?? 'visible') !== 'none');
+        const hasGeo = Object.values(style.sources ?? {}).some(
+            (src: any) => (src as any)?.type === 'geojson');
+        const isGlobe = (style as any).projection?.name === 'globe'
+            || (style as any).projection?.type === 'globe';
+        this.m_emitBackgroundTiles = hasBg && (hasGeo || isGlobe);
+        this.m_styleHasTerrain = !!(style as any).terrain;
+        this.m_crossSourceCollisions =
+            (style as any).metadata?.test?.crossSourceCollisions !== false;
+        this.m_styleUsesHdElevation = (style.layers ?? []).some((l: any) => {
+            const ref = l.layout?.['fill-elevation-reference']
+                ?? l.layout?.['line-elevation-reference']
+                ?? l.layout?.['circle-elevation-reference']
+                ?? l.layout?.['symbol-elevation-reference'];
+            return typeof ref === 'string' && ref.startsWith('hd-road');
+        });
+    }
+
     /**
      * Override decodeTile to bypass m_styleSetEvaluator check.
      */
@@ -941,10 +966,18 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         tileKey: TileKey,
         projection: Projection
     ): Promise<DecodedTile | undefined> {
+        if (!MBStyleDecoder.s_instances.includes(this)) MBStyleDecoder.s_instances.push(this);
         if (!this.m_layerEvaluator) {
             return Promise.resolve(undefined);
         }
         return this.decodeThemedTile(data, tileKey, undefined as any, projection);
+    }
+
+    /** §772b: push the settled runtime style into every live decoder. */
+    static reconfigureAll(style: StyleSpecification): void {
+        for (const inst of MBStyleDecoder.s_instances) {
+            try { inst.applyRuntimeStyle(style); } catch { /* keep others alive */ }
+        }
     }
 
     /**
@@ -994,10 +1027,18 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private registerElevationTile(tileKey: TileKey, features: import('./3d-style/elevation/MBElevationFeature').MBElevationFeature[]): void {
         if (!features || features.length === 0) return;
         const key = mbCellTileKeyString(tileKey);
+        // §746: only a genuinely NEW curve provider re-triggers the deferred
+        // re-decode. m_elevationDeferredKeys never shrinks (deferred refs are
+        // re-taken on every decode), so re-registering the SAME tile's
+        // curves on every re-decode round used to set pending forever →
+        // markTilesDirty every frame → unbounded re-decode loop (116k+
+        // decodes in 60s) → renderer OOM crash (trees-use-theme family,
+        // §743 crash 4).
+        const isNew = !this.m_elevationRegistry.has(key);
         this.m_elevationRegistry.delete(key);
         // New curves arrived — tiles that deferred on missing curves can
         // resolve them after a re-decode (mgl reparse-on-provider-arrival).
-        if (this.m_elevationDeferredKeys.size > 0) {
+        if (isNew && this.m_elevationDeferredKeys.size > 0) {
             this.m_elevationRedecodePending = true;
         }
         this.m_elevationRegistry.set(key, features.map(f => ({
@@ -1025,7 +1066,14 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         tileKey: TileKey,
         _styleSetEvaluator: any,
         projection: Projection,
-        zoomOverride?: number
+        zoomOverride?: number,
+        // §747: nesting depth of stash-driven merges. The §643 sticky stash
+        // lets every re-decode re-merge, and a child key finding ANOTHER
+        // cell's stash chains the next merge — an unbounded async recursion
+        // (measured: depth hovering 32-40, 116k decodes in 60s → renderer
+        // OOM crash, trees-use-theme family). Deeper than one re-merge level
+        // the stashes are ignored and the tile decodes plainly.
+        mergeDepth: number = 0
     ): Promise<DecodedTile> {
         if (!this.m_layerEvaluator) {
             return { techniques: [], geometries: [] };
@@ -1047,22 +1095,23 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     : tileKey.level - this.m_storageLevelOffset - 1);
         // §511: the provider fetched four mgl-level children for this cell —
         // decode each against its own tileKey and merge (frame-correct).
-        const pendingChildren = mbPendingChildrenTake(
-            mbCellTileKeyString(tileKey));
+        const pendingChildren = mergeDepth < 2
+            ? mbPendingChildrenTake(mbCellTileKeyString(tileKey))
+            : undefined;
         if (pendingChildren && pendingChildren.length > 0) {
             return this.decodeTileWithChildren(
-                data, tileKey, projection, pendingChildren, zoom);
+                data, tileKey, projection, pendingChildren, zoom, mergeDepth);
         }
         // §518: extra vector sources fetched by the provider for this cell —
         // decode each against its own tileKey + sourceId and merge.
         const cellKeyStr = mbCellTileKeyString(tileKey);
-        if (!s_activeSourceMergeKeys.has(cellKeyStr)) {
+        if (mergeDepth < 2 && !s_activeSourceMergeKeys.has(cellKeyStr)) {
             const pendingSources = mbPendingSourceTilesTake(cellKeyStr);
             if (pendingSources && pendingSources.length > 0) {
                 s_activeSourceMergeKeys.add(cellKeyStr);
                 try {
                     return await this.decodeTileWithSources(
-                        data, tileKey, projection, pendingSources, zoom);
+                        data, tileKey, projection, pendingSources, zoom, mergeDepth);
                 } finally {
                     s_activeSourceMergeKeys.delete(cellKeyStr);
                 }
@@ -1271,10 +1320,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         tileKey: TileKey,
         projection: Projection,
         extras: MBPendingSourceTile[],
-        zoom: number
+        zoom: number,
+        mergeDepth: number = 0
     ): Promise<DecodedTile> {
         const cell = await this.decodeThemedTile(
-            data, tileKey, undefined as any, projection, zoom);
+            data, tileKey, undefined as any, projection, zoom, mergeDepth + 1);
         const base: DecodedTile = cell ?? { techniques: [], geometries: [] };
         const out: DecodedTile = {
             techniques: [...base.techniques],
@@ -1301,7 +1351,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     // GeoJSON decode branch parses it); vector extras the raw
                     // MVT bytes.
                     const child = await this.decodeThemedTile(
-                        (ex.payload ?? ex.bytes) as any, exKey, undefined as any, projection, zoom);
+                        (ex.payload ?? ex.bytes) as any, exKey, undefined as any,
+                        projection, zoom, mergeDepth + 1);
                     if (!child) continue;
                     if (ex.instancesOnly) {
                         const childAny0 = child as any;
@@ -1387,10 +1438,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         tileKey: TileKey,
         projection: Projection,
         children: MBPendingChildTile[],
-        zoom: number
+        zoom: number,
+        mergeDepth: number = 0
     ): Promise<DecodedTile> {
         const cell = await this.decodeThemedTile(
-            data, tileKey, undefined as any, projection, zoom);
+            data, tileKey, undefined as any, projection, zoom, mergeDepth + 1);
         const base: DecodedTile = cell ?? { techniques: [], geometries: [] };
         const out: DecodedTile = {
             techniques: [...base.techniques],
@@ -1409,7 +1461,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             try {
                 const childKey = TileKey.fromRowColumnLevel(ch.y, ch.x, ch.z);
                 const child = await this.decodeThemedTile(
-                    ch.bytes as any, childKey, undefined as any, projection, zoom);
+                    ch.bytes as any, childKey, undefined as any, projection, zoom,
+                    mergeDepth + 1);
                 if (!child) continue;
                 const nTech = out.techniques.length;
                 out.techniques.push(...child.techniques);

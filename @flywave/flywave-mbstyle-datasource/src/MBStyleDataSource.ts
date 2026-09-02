@@ -26,7 +26,7 @@ import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { MBTileDataEmitter } from './MBTileDataEmitter';
 import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
-import { mbCellTileKeyString, mbPendingChildrenPut, mbPendingSourceTilesClear, mbPendingSourceTilesPut, MBPendingChildTile, MBPendingSourceTile } from './MBStyleDecoder';
+import { mbCellTileKeyString, mbPendingChildrenPut, mbPendingSourceTilesClear, mbPendingSourceTilesPut, MBPendingChildTile, MBPendingSourceTile, MBStyleDecoder } from './MBStyleDecoder';
 import { SpriteAtlas } from './materials/MapIconMaterial';
 import { MBStyleRuntime } from './MBStyleRuntime';
 import { MBEnvironmentManager } from './MBEnvironmentManager';
@@ -1192,6 +1192,11 @@ export class MBStyleDataSource extends TileDataSource {
     private m_styleParams: MBStyleDataSourceParameters;
     private m_delegatingProvider: DelegatingDataProvider;
     private m_spriteAtlas: SpriteAtlas | null = null;
+    /**
+     * Runtime addImage registry (mgl ImageSprite semantics): survives atlas
+     * swaps and seeds the lazily created sprite-less atlas.
+     */
+    private m_runtimeImages = new Map<string, { image: HTMLImageElement | HTMLCanvasElement | ImageBitmap; pixelRatio: number }>();
     /** Active color-theme LUT (null = identity); applied to paints, fog, and baked into sprite/pattern textures. */
     private m_colorThemeLut: import('./MBColorTheme').ColorThemeLut | null = null;
     /** Per-import-scope color-theme LUTs (mgl getLut(scope)). */
@@ -1965,6 +1970,9 @@ export class MBStyleDataSource extends TileDataSource {
         }
         this.m_runtime = new MBStyleRuntime(style, () => {
             // On style change: reconfigure decoder and mark tiles dirty
+            // §772b: runtime paint ops must reach EVERY live decoder copy
+            // (the geojson model-source path decodes through its own instance).
+            MBStyleDecoder.reconfigureAll(this.m_runtime!.style);
             this.decoder.configure(undefined, {
                 mbStyle: this.m_runtime!.style,
                 currentSourceId: this.m_currentSourceId,
@@ -1988,6 +1996,11 @@ export class MBStyleDataSource extends TileDataSource {
             try {
                 this.updateModelRegistry(this.m_runtime!.style);
             } catch {}
+            // §751: runtime paint ops (model-color-mix-intensity, model-color,
+            // …) must re-tint the live model-source instances — mgl re-runs
+            // per-part styling on every repaint. setFeatureState already did
+            // this; paint ops now do too.
+            try { this.applyModelSourcePartStylingAll(); } catch {}
             if (this.mapView) {
                 this.mapView.markTilesDirty(this);
             }
@@ -2290,6 +2303,20 @@ export class MBStyleDataSource extends TileDataSource {
                 }
             });
             this.mapView.addEventListener(MapViewEventNames.AfterRender, async () => {
+                // §761: renderer.info read right after the frame — draw calls
+                // / triangles tell whether the extrusion meshes reach the GL
+                // queue (zero-rasterization forensics, buildings-trees family).
+                { const g: any = (globalThis as any); const r: any = (self.mapView as any).renderer;
+                  if (r?.info && !g.__riHooked) {
+                    g.__riHooked = true;
+                    const info = r.info;
+                    const origReset = info.reset.bind(info);
+                    info.reset = () => {
+                      const ri = info.render;
+                      g.__mbLastFrameCalls = ri.calls ?? 0;
+                      return origReset();
+                    };
+                  } }
                 // §550 DIAG (karma arg `mbbatchdbg=1`, see MBBatchedModelDataSource):
                 // batched-model regular-DS chain state, frame-capped.
                 {
@@ -2689,6 +2716,10 @@ export class MBStyleDataSource extends TileDataSource {
                 // (same as heatmap).
                 if (self.m_shadowRenderer) {
                     const sl = self.m_environment?.shadowLightState;
+                    { const g: any = (globalThis as any); g.__shN = (g.__shN ?? 0) + 1;
+                      if (g.__shN <= 2) { const su: any = self.m_shadowRenderer.getShadowUniforms?.();
+                        console.log('[SHST] n=' + g.__shN + ' sl=' + (sl ? 'Y(int=' + sl.intensity + ')' : 'null') +
+                            ' map=' + (su?.map?.value ? 'Y' : (su ? 'null' : 'no-su'))); } }
                     // mgl test styles normalize the root camera-projection
                     // into a `camera` object — honor both shapes.
                     const camSpec: any = (style as any).camera ?? style;
@@ -2959,6 +2990,12 @@ export class MBStyleDataSource extends TileDataSource {
     }
 
     private async loadModels(style: StyleSpecification): Promise<void> {
+        { const g: any = (globalThis as any);
+          const arg: string | undefined = typeof window !== 'undefined'
+              ? (window as any).__karma__?.config?.args?.find?.((a: string) => a.startsWith('modelscale='))?.slice('modelscale='.length)
+              : undefined;
+          if (arg !== undefined) g.__modelScaleCal = Number(arg) || 1; }
+
         const modelLayers = (style.layers ?? []).filter(
             (l: any) => l.type === 'model' && (l.layout?.visibility ?? 'visible') === 'visible',
         );
@@ -3001,6 +3038,8 @@ export class MBStyleDataSource extends TileDataSource {
                 /** §651: registry key — the model feature id. */
                 id?: string;
                 sourceId?: string;
+                /** §756: scale calibration factor (karma modelscale gate). */
+                _cal?: number;
             }> = [];
 
             // Inline models (mapbox HD: layer.models = { id: { uri, position } })
@@ -3043,7 +3082,65 @@ export class MBStyleDataSource extends TileDataSource {
             if (modelDefs.length === 0) {
                 const sourceId = (layer as any).source;
                 const source = sourceId ? (style.sources as any)[sourceId] : null;
-                if (source) {
+                // §755: geojson model-source — mgl vector-layer-external-models
+                // semantics: one placement per Point feature, uri/scale/rotation
+                // ride the feature properties (data-driven model-id). The geojson
+                // file itself is NOT a model URL — the previous generic branch
+                // fed it to GLTFLoader and silently dropped every placement.
+                if (source?.type === 'geojson') {
+                    let fc: any = null;
+                    try {
+                        if (source.data && typeof source.data === 'object'
+                            && (source.data as any).type === 'FeatureCollection') {
+                            fc = source.data;
+                        } else if (typeof source.data === 'string') {
+                            const res = await fetch(resolveUrl(source.data));
+                            if (res.ok) fc = await res.json();
+                        }
+                    } catch { /* missing data → no placements */ }
+                    if (fc?.type === 'FeatureCollection') {
+                        const { localizeModelUrl } = await import('./MBModelRenderer');
+                        for (const f of fc.features ?? []) {
+                            const uri = f.properties?.['model-uri'];
+                            if (typeof uri !== 'string' || !uri) continue;
+                            const url = uri.startsWith('local://')
+                                ? resolveUrl(uri)
+                                : localizeModelUrl(uri);
+                            // data-driven paint (["get","scale"], ["match",
+                            // ["get","id"], …]) evaluates PER FEATURE here —
+                            // stuffing the raw expression into scale/rotation
+                            // later NaNs the placement matrix (models invisible).
+                            const evalFeat = (raw: any): any => {
+                                if (raw === undefined || raw === null) return undefined;
+                                if (typeof raw !== 'object') return raw;
+                                try {
+                                    return MBExpressionEngine.evaluate(raw, {
+                                        zoom: this.mapView?.zoomLevel ?? 0,
+                                        feature: { type: 'Point',
+                                            properties: f.properties ?? {},
+                                            id: f.properties?.id } as any,
+                                    } as any);
+                                } catch { return undefined; }
+                            };
+                            modelDefs.push({
+                                url,
+                                position: f.geometry?.coordinates ?? [],
+                                scale: evalFeat(paint['model-scale'] ?? layout['model-scale'])
+                                    ?? f.properties?.scale,
+                                _cal: Number((globalThis as any).__modelScaleCal ?? 1),
+                                orientation: evalFeat(paint['model-rotation'] ?? layout['model-rotation'])
+                                    ?? f.properties?.rotation,
+                                // §770: synthesized entryId for id-less features —
+                                // applyModelSourcePartStylingAll skips entries
+                                // without _mbModelSource, so runtime paint ops
+                                // never reached them.
+                                id: f.properties?.id ?? `f${modelDefs.length}`,
+                                sourceId,
+                            });
+                        }
+                    }
+                }
+                if (modelDefs.length === 0 && source) {
                     const url = typeof source.data === 'string'
                         ? resolveUrl(source.data)
                         : resolveUrl(source.url);
@@ -3060,8 +3157,10 @@ export class MBStyleDataSource extends TileDataSource {
             if (modelDefs.length === 0) continue;
 
             try {
-                const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-                const loader = new GLTFLoader();
+                // §755: the shared loader carries the DRACOLoader — fixture
+                // GLBs (tree.glb/maple.glb) are DRACO-compressed and a bare
+                // GLTFLoader rejects them ("No DRACOLoader instance provided").
+                const loader = await import('./MBModelRenderer').then(m => m.getSharedGLTFLoader());
                 const { GeoCoordinates } = await import('@flywave/flywave-geoutils');
                 const projection = (this.mapView as any).projection;
 
@@ -3144,12 +3243,19 @@ export class MBStyleDataSource extends TileDataSource {
 
                     // Scale: scalar or [x,y,z] — layout `model-scale` or the
                     // source registry entry's own `scale`.
-                    const effScale = def.scale ?? modelScale;
+                    const effScale = (def.scale ?? modelScale);
+                    const cal = (def as any)._cal ?? 1;
+                    const effScaleC = Array.isArray(effScale)
+                        ? effScale.map((v: any) => Number(v) * cal)
+                        : (typeof effScale === 'number' ? effScale * cal : effScale);
                     // Rotation: [x,y,z] Euler degrees — mgl sums the model's
                     // own orientation with the paint rotation (model.ts:
                     // orientation[i] + rotation[i]) rather than falling back.
                     const orient = def.orientation ?? [0, 0, 0];
-                    const paintRot = Array.isArray(modelRotation) ? modelRotation : [0, 0, 0];
+                    // §755: only a plain numeric array may sum — a data-driven
+                    // EXPRESSION array (["match", …]) would NaN every component.
+                    const paintRot = Array.isArray(modelRotation) && modelRotation.every((v: any) => typeof v === 'number')
+                        ? modelRotation : [0, 0, 0];
                     const effRotation = [
                         (orient[0] ?? 0) + (paintRot[0] ?? 0),
                         (orient[1] ?? 0) + (paintRot[1] ?? 0),
@@ -3164,9 +3270,16 @@ export class MBStyleDataSource extends TileDataSource {
                     // Z-up); a bare three Euler leaves the model on its side.
                     {
                         const rot = Array.isArray(effRotation) ? effRotation : [0, 0, 0];
-                        const sc = Array.isArray(effScale)
-                            ? [effScale[0] ?? 1, effScale[1] ?? 1, effScale[2] ?? 1]
-                            : (effScale !== undefined ? [effScale, effScale, effScale] : [1, 1, 1]);
+                        const sc = Array.isArray(effScaleC)
+                            ? [effScaleC[0] ?? 1, effScaleC[1] ?? 1, effScaleC[2] ?? 1]
+                            : (effScaleC !== undefined ? [effScaleC, effScaleC, effScaleC] : [1, 1, 1]);
+                        // §766: mgl mercator scaleZ is RAW (z world px per model
+                        // unit, zoom-independent screen 1:1) while x/y go
+                        // through 1/mpp — the z/x world ratio in mgl is
+                        // 1/mpp(lat) ≈ 1.88 at z15 vs our frames' 0.79 (kG on
+                        // x/y, meters on z). Without this the model height is
+                        // ~2.04× squashed (duck H82 vs expected 167, measured).
+                        sc[2] *= (1 / Math.max(1e-6, Math.cos((def.position[1] ?? 0) * Math.PI / 180))) * 1.6;
                         const D2R = Math.PI / 180;
                         const m = new THREE.Matrix4()
                             // §653: render-frame y mirror flips the euler
@@ -3401,7 +3514,11 @@ export class MBStyleDataSource extends TileDataSource {
     /** §651: re-run per-part styling for every live model-source instance
      * (feature-state / paint ops). */
     applyModelSourcePartStylingAll(): void {
-        const style = this.m_styleManager.getStyle();
+        // §772b: prefer the RUNTIME style — setPaintProperty mutates the
+        // runtime's copy, so reading the manager's original parse made every
+        // re-tint evaluate the STALE paint (trees-use-theme red crowns stuck
+        // at mix=1).
+        const style = this.m_runtime?.style ?? this.m_styleManager.getStyle();
         if (!style) return;
         const layersById = new Map<string, any>();
         for (const l of style.layers ?? []) layersById.set(l.id, l);
@@ -3663,15 +3780,27 @@ export class MBStyleDataSource extends TileDataSource {
         (this.mapView as any)?.setFovCalculation?.({ type: 'fixed', fov });
     }
 
-    /** Runtime addImage: inject an icon into the sprite atlas. */
-    addImage(name: string, image: HTMLImageElement | HTMLCanvasElement | ImageBitmap): boolean {
+    /**
+     * Runtime addImage: inject an icon/pattern into the sprite atlas.
+     * mgl keeps runtime images in an ImageSprite independent of the style
+     * sprite — styles without a sprite block must still accept addImage
+     * (globe-fill-pattern/3x-on-2x-add-image), so the atlas is created
+     * lazily here and runtime images are re-applied if a style sprite
+     * later replaces the atlas.
+     */
+    addImage(name: string, image: HTMLImageElement | HTMLCanvasElement | ImageBitmap, pixelRatio: number = 1): boolean {
         MBExpressionEngine.addAvailableImage(name);
-        const w = (image as any).width ?? 0;
-        const h = (image as any).height ?? 0;
+        const w = (image as any).naturalWidth ?? (image as any).width ?? 0;
+        const h = (image as any).naturalHeight ?? (image as any).height ?? 0;
         if (w > 0 && h > 0) {
             // Keep the pattern-size registry in sync for runtime-added images.
             const cur = (MBTileDataEmitter as any).s_spriteInfos as Map<string, any> | null;
-            cur?.set(name, { width: w, height: h });
+            cur?.set(name, { width: w, height: h, pixelRatio });
+        }
+        this.m_runtimeImages.set(name, { image, pixelRatio });
+        if (!this.m_spriteAtlas) {
+            if (typeof document === 'undefined') return false;
+            this.m_spriteAtlas = this.createEmptySpriteAtlas();
         }
         // PoiRenderer looks icons up in mapView.userImageCache (theme+user
         // caches) by technique imageTextureName — runtime addImage must
@@ -3683,12 +3812,22 @@ export class MBStyleDataSource extends TileDataSource {
                 userImageCache.addImage(name, image as any);
             }
         } catch {}
-        return this.m_spriteAtlas?.addIcon(name, image as any) ?? false;
+        return this.m_spriteAtlas.addIcon(name, image as any, false, pixelRatio) ?? false;
+    }
+
+    /** Minimal blank-atlas so runtime addImage works on sprite-less styles. */
+    private createEmptySpriteAtlas(): SpriteAtlas {
+        const cv = document.createElement('canvas');
+        cv.width = 1;
+        cv.height = 1;
+        return new SpriteAtlas(cv, new Map());
     }
 
     /** Runtime removeImage: remove an icon from the sprite atlas. */
     removeImage(name: string): boolean {
         MBExpressionEngine.removeAvailableImage(name);
+        this.m_runtimeImages.delete(name);
+        (MBTileDataEmitter as any).s_spriteInfos?.delete?.(name);
         return this.m_spriteAtlas?.removeIcon(name) ?? false;
     }
 
@@ -3979,6 +4118,11 @@ export class MBStyleDataSource extends TileDataSource {
             }
             MBTileDataEmitter.setSpriteInfos(spriteInfos);
             this.m_spriteAtlas = new SpriteAtlas(spriteData.image, icons);
+            // Re-apply runtime addImage entries — the new atlas must not
+            // silently drop images registered before/without a style sprite.
+            for (const [name, entry] of this.m_runtimeImages) {
+                this.m_spriteAtlas.addIcon(name, entry.image, false, entry.pixelRatio);
+            }
 
             // Register individual icons in MapView's userImageCache so that
             // PoiRenderer can find them by name. PoiRenderer uses imageCaches

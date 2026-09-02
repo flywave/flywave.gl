@@ -94,6 +94,22 @@ export function mbHeightRampUniforms(
     return { b0: 0, b1: 1, power: 1, start: 255 / 256, range: 0 };
 }
 
+/**
+ * §754: localize render-test model URIs. mgl's vitest dev server serves the
+ * fixture-hostile URLs below from the repo root (test/integration/models),
+ * and the vendored checkout carries the same files. Without this, geojson
+ * model features pointing at `localhost:63315` / the Khronos GitHub raw URL
+ * fail to load and the models never render (vector-layer-external-models).
+ */
+export function localizeModelUrl(url: string): string {
+    if (typeof url !== 'string') return url;
+    const m = /^https?:\/\/localhost:\d+\/models\/(.+)$/.exec(url);
+    if (m) return `/base/mapbox-gl-js/test/integration/models/${m[1]}`;
+    const khronos = /^https:\/\/raw\.githubusercontent\.com\/KhronosGroup\/glTF-Sample-Models\/[^/]+\/2\.0\/([^/]+)\/glTF\/(.+)$/.exec(url);
+    if (khronos) return `/base/mapbox-gl-js/test/integration/models/${khronos[2]}`;
+    return url;
+}
+
 /** §649: the model-shader light direction. §691 A/B verdict (quantization
  * 101万→4633 −99.5% with PBR branch): models use mgl-EXACT un-mirrored
  * sphericalDirectionToCartesian (az+90 convention); the model geometry's
@@ -238,7 +254,16 @@ export function applyMglModelLighting(
                 shader.uniforms.uMB3DDirColor = { value: ls2 ? ls2.directionalColorLinear : [1, 1, 1] };
                 shader.uniforms.uMB3DDir = { value: modelLightDir(dataSource) };
                 shader.uniforms.uMB3DEmissive = { value: emissiveStrength ?? 0 };
-                shader.uniforms.uMB3DUnlit = { value: unlitMix ?? emissiveStrength ?? 0 };
+                // §744: unlit-clamp A/B gate (`modelclamp=1`) — §724.4 removed
+                // mgl-unlawful clamp(0,1) on the unlit mix; the emission
+                // -strength family regression candidates this restore as a
+                // single-variable A/B.
+                const unlitRaw = unlitMix ?? emissiveStrength ?? 0;
+                shader.uniforms.uMB3DUnlit = {
+                    value: (globalThis as any).__mbModelUnlitClamp
+                        ? Math.min(1, Math.max(0, unlitRaw))
+                        : unlitRaw,
+                };
                 // §655: per-material PBR factors (model.fragment.glsl
                 // u_metallicFactor / u_roughnessFactor).
                 shader.uniforms.uMB3DMetal = { value: mat.metalness ?? 0 };
@@ -344,6 +369,11 @@ export function applyMglModelLighting(
                      uniform float uMBLutOn;
                      vec3 mbLutTap(float rI, float gI, float bI) {
                          float n2 = uMBLutN * uMBLutN;
+                         // §773: mgl applyLUT exact (prelude.fragment:103):
+                         // uvw = col.rbg * (size-1) + 0.5 over a Texture3D
+                         // [N,N,N] unpacked from the N²×N image → image
+                         // texel x = r + g·N, y = b. The previous x = r + b·N,
+                         // y = g transposed g/b.
                          return texture2D(uMBLut,
                              vec2((rI + gI * uMBLutN + 0.5) / n2, (bI + 0.5) / uMBLutN)).rgb;
                      }
@@ -625,7 +655,7 @@ export function applyMglModelLighting(
     });
 }
 
-async function getSharedGLTFLoader(): Promise<GLTFLoaderType> {
+export async function getSharedGLTFLoader(): Promise<GLTFLoaderType> {
     const mod: any = await import('three/examples/jsm/loaders/GLTFLoader.js');
     const loader = new mod.GLTFLoader();
     try {
@@ -949,6 +979,10 @@ export class MBModelRenderer {
     }
 
     private async getPrototype(url: string): Promise<THREE.Object3D | null> {
+        url = localizeModelUrl(url);
+        { const g: any = (globalThis as any); g.__lastProtoUrl = url;
+          g.__protoN = (g.__protoN ?? 0) + 1;
+          if (g.__protoN <= 8) console.log('[PROTO] n=' + g.__protoN + ' url=' + url); }
         const cached = this.m_prototypes.get(url);
         if (cached === 'failed') return null;
         if (cached && cached !== 'loading') return cached;
@@ -965,6 +999,7 @@ export class MBModelRenderer {
             // requested (and skipped); they appear on the next run() pass.
             return proto;
         } catch (err) {
+            console.log('[PROTO-FAIL] url=' + url + ' err=' + String(err).slice(0, 200));
             this.m_prototypes.set(url, 'failed');
             return null;
         }
@@ -1101,9 +1136,20 @@ export class MBModelRenderer {
         // road band occupies ro 2..9.8 — clones at ro 0 rasterize FIRST and
         // are overdrawn to zero visible pixels (mgl draw_model renders the
         // model pass after the road/fill passes).
-        model.traverse((o) => { o.renderOrder = 10; });
-        model.renderOrder = 10;
+        // §773: renderOrder follows the STYLE LAYER ORDER — duplicate model
+        // layers over the same source (trees-use-theme: tree-layer +
+        // tree-layer-diffuse at identical positions) must draw in style order
+        // so the later layer wins the coplanar depth tie, like mgl's
+        // layer-ordered draw.
+        const layersList: any[] = (this.m_dataSource as any).m_runtime?.style?.layers
+            ?? (this.m_dataSource as any).styleManager?.getStyle?.()?.layers ?? [];
+        const layerIdx = Math.max(0, layersList.findIndex((l: any) => l.id === technique._layerId));
+        const ro = 10 + layerIdx * 0.001;
+        model.traverse((o) => { o.renderOrder = ro; });
+        model.renderOrder = ro;
         model.userData._mbLayerId = technique._layerId;
+        { const g: any = (globalThis as any); g.__instN = (g.__instN ?? 0) + 1;
+          if (g.__instN <= 8) console.log('[INST] n=' + g.__instN + ' layer=' + technique._layerId + ' ro=' + ro.toFixed(3) + ' url=' + String(g.__lastProtoUrl ?? '?').slice(-30)); }
         group.add(model);
 
         // mgl shadow pass: models with model-cast-shadows (default true) are
@@ -1138,6 +1184,12 @@ export class MBModelRenderer {
                 : undefined;
             applyMglModelLighting(this.m_dataSource, model, pl.emissive ?? 0, tint,
                 undefined, undefined, undefined,
+                // §774: use-theme 'none' disables the layer LUT entirely
+                // (mgl draw_model ignoreLut → null). §753's global-LUT
+                // experiment was reverted: inverse-LUT proof — the theme
+                // contains NO texel near expected's olive crowns, i.e. mgl
+                // renders these trees UNLUT'd raw vertex green under its
+                // lighting.
                 (technique as any)._paint?.['model-color-use-theme'] === 'none',
                 (technique as any)._paint?.['model-receive-shadows'] !== false);
             if (Number.isFinite(pl.roughness)) {
@@ -1157,6 +1209,9 @@ export class MBModelRenderer {
      * every frame; clones appear once their prototype resolves.
      */
     private processPending(): number {
+        { const g: any = (globalThis as any); g.__ppN = (g.__ppN ?? 0) + 1;
+          if (g.__ppN <= 3) { let tot = 0; for (const t of this.m_tilePlacements.values()) tot += t.placements.length;
+            console.log('[PP] call=' + g.__ppN + ' tiles=' + this.m_tilePlacements.size + ' placements=' + tot + ' registry=' + this.m_registry.size); } }
         const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;
         if (!scene) return;
         let placedCount = 0;

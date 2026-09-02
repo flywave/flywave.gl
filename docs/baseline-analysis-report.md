@@ -449,3 +449,37 @@ globe 相机距离系、fog 逐内容深度语义、depth-occlusion 双 pass、c
 2. P0-A 方位/clamp A/B：回归四组（§8.3）裁决。
 3. 41 例挂起族：按上表归组逐族定位（每族首例栈 dump 即可归因）。
 4. globe-addImage pattern 修复（96.7万）后 globe 域复测。
+---
+
+## 十、2026-09-02 续：P1-A 执行结果（addImage 通道修复 + globe 残差改判 R14）
+
+1. **addImage 运行时注册通道已修复入库（§744）**：`addImage(name, image, pixelRatio)` 惰性建 atlas（无 sprite 样式此前整体丢弃运行时图像）+ `m_runtimeImages` 注册表跨 atlas 换重放 + harness op 透传 pixelRatio。修复后 globe 夹具 pattern 解析恢复（tex=Y@pr3 vs 修复前 NONE）。
+2. **96.7万 px 未兑现的改判（R14，引擎冻结带）**：五连 A/B（细分密度/DoubleSide/关剔除/纯红材质）+ FILLPROBE 实证——globe fill 瓦片被放置在**相机对跖位**（mesh world x = −camera.x，5.71R 之外），整体被地球遮挡，几何零光栅化；静态 style 对照同病 → 非 runtime op 专属。这是引擎 globe 瓦片放置帧镜像问题（与 §二#2 相机距离系同域不同点）。诊断夹具 `globe/globe-fill-pattern/3x-on-2x-static` 留作 R14 修复验收点；karma arg 探针 sphdeg/sphds/nocull/fillflat 入库。
+3. 状态表更新：**#P1-A → 通道修复完成（代码正确性）**；globe-fill-pattern 家族残差归入 §9.5 冻结带（新增 R14 条目）。
+
+### §十一 P0-A/P0-B 执行结果（2026-09-02，§745）
+
+1. **P0-A 裁决：三嫌疑全部排除，默认光向约定维持**。diralt=1 混合结果（glb-tiles 独胜 57k→1.2k，z-offset 门不保）；unlit-clamp 恢复（modelclamp 门）与门灯 alpha-blend 回退（doorblend 门）均零效果。emission/doors 回归归因改判为 R1 直射项激活后的家族光照量级标定深水（非方位镜像差）。
+2. **P0-B 定性：R13 编译修复确认生效（零 Shader Error）但建筑仍零光栅化**——19 个挤出网格"在场景+可见+挂载"却不进像素，与 §585/§612/R14 同签名，**引擎渲染清单级立案**（与 R14 合并）。MAPS3D ×2 无回归。
+3. 9.3 计划状态：P0-A 完成（负裁决也是裁决）；P0-B 复测完成，残差改判引擎冻结带；剩余开放项=P2（conflation 归因、§688 ×0.77、崩溃 4 例定位）+ 引擎渲染清单专项。
+
+### §十二 P2-A 阶段结果（2026-09-02，§746）
+
+1. **崩溃机制定案**：trees-use-theme 页面死亡 = **无界重解码循环 OOM**（RSS 70s 0→5GB → renderer crash），非永 Await/死锁。60s 内同一批 z15 瓦片解码 11.6 万次。
+2. **驱动收窄**：引擎 tile 管线八探针全零（markTilesDirty/缓存 miss/驱逐/重启/解码入口均无参与）→ 循环在解码器内部调用图；头号嫌疑 = §643 粘性 stash 的异步递归再合并。防御修复入库：registerElevationTile 仅新 key 触发 pending（消除另一潜在循环源）。
+3. 崩溃 4 例（trees-use-theme / trees-zoom-based-scale / vector-layer-external-models±import）同族待治；专用会话入口已记档（§746）。
+
+### §十三 崩溃 4 例根治（2026-09-02，§747）
+
+mergeDepth 限深修复落地：§643 粘性 stash 的无界异步递归链截断（depth<2 才消费 stash）。trees-use-theme 203,504（首次出值）/ trees-zoom-based-scale 212,282 / vector-layer-external-models(-import) 40,430×2——**崩溃 4 例全部从"页面崩溃零结果"转为正常渲染出值**；哨兵逐位持平零回归。P2-A 结案。
+
+### §十四 §747 残差归因 + ×0.77 结案（2026-09-02，§749）
+
+1. trees-use-theme 203,504 → 模型 LUT/theme 域（放置/内容干净，背景已主题化，树冠未着色）——归入 §727 专项。
+2. vector-layer-external-models 40,430 → 外部 glTF 模型整体未加载——模型加载专项新立案。
+3. **×0.77 结案**：road 像素 ours==expected 逐位一致，残差已消解。
+4. 剩余开放：引擎渲染清单专项（挤出/globe fill 零光栅化）、模型 LUT、model-external 加载、emission/doors 光照标定、P2-B conflation 归因。
+
+### §十五 trees-use-theme 资产取证（2026-09-02，§752）
+
+绿冠=tree-metallic 原始 COLOR_0 顶点色（非变体错配、非 LUT 链断裂）；残差=use-theme:'none' 下全局主题 LUT 对模型顶点色的作用域与 mgl 的精确语义偏差（draw_model ignoreLut 传 null 的作用范围待端到端对拍）。归入模型 LUT 专项，与 draw_model getBaseColor 端到端重读合并立案。

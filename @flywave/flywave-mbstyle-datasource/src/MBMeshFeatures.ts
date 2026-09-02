@@ -564,7 +564,11 @@ function buildNodeLightsMesh(
             transparent: true,
             // mgl draw_model:716 — light meshes draw in the dedicated
             // light-beam pass with ColorMode.additive.
-            blending: THREE.AdditiveBlending,
+            // §744 A/B gate (`doorblend=1`): alpha-blend fallback for the
+            // indirect-doors family regression (P0-A candidate ③).
+            blending: (globalThis as any).__mbDoorAlphaBlend
+                ? THREE.NormalBlending
+                : THREE.AdditiveBlending,
             depthWrite: false,
             side: THREE.DoubleSide,
         });
@@ -654,11 +658,16 @@ export function applyMeshFeatures(
         root.traverse(o => {
             const mesh = o as THREE.Mesh;
             if (mesh.isMesh && !mesh.geometry.getAttribute(FEATURE_ATTR) && !mesh.userData.__mbPart) {
-                applyMglModelLighting(dataSource, mesh, partsFor(mesh)[0].emissive, undefined, undefined, 0, true, lutOff);
+                // §753: mgl draw_model:241 ignoreLut only nulls the LAYER lut
+                // (model-color property theming); the style-wide color theme
+                // still LUTs the albedo (expected image proof: trees-use-theme
+                // crowns are themed away from raw COLOR_0 green). So the tail
+                // LUT gate must NOT inherit lutOff.
+                applyMglModelLighting(dataSource, mesh, partsFor(mesh)[0].emissive, undefined, undefined, 0, true, false);
                 root.userData.__mbFeatFeatureless.push(mesh);
             }
         });
-        root.userData.__mbFeatState = { zoom, brightness };
+        root.userData.__mbFeatState = { zoom, brightness, paintRev: 0 };
     } catch { /* styling must never break tile loading */ }
 }
 
@@ -676,15 +685,22 @@ export function refreshMeshFeatures(
     paint: any,
     zoom: number,
     dataSource: any,
+    // §751: revision of the layer paint object — a runtime setPaintProperty
+    // mutates the SAME paint object (reference stays equal), so the caller
+    // bumps a revision to force the color-domain re-style below. Without
+    // this the zoom/brightness guard silently skipped paint-only changes
+    // (trees-use-theme: model-color-mix-intensity op never re-tinted).
+    paintRev: number = 0,
 ): void {
     try {
         const prev = root.userData.__mbFeatState as
-            { zoom: number; brightness: number } | undefined;
+            { zoom: number; brightness: number; paintRev?: number } | undefined;
         if (!prev) return; // never styled (or a non-features tile)
         const brightness = mglMeasureLightBrightness(dataSource);
         if (Math.abs(prev.zoom - zoom) < 1e-9
-            && Math.abs(prev.brightness - brightness) < 1e-9) return;
-        root.userData.__mbFeatState = { zoom, brightness };
+            && Math.abs(prev.brightness - brightness) < 1e-9
+            && (prev.paintRev ?? 0) === paintRev) return;
+        root.userData.__mbFeatState = { zoom, brightness, paintRev };
         // §709: per-node tables (same cache build as applyMeshFeatures).
         const tables = new Map<string, PartStyle[]>();
         const partsFor = (mesh: THREE.Mesh): PartStyle[] => {
@@ -892,7 +908,7 @@ function splitByPart(
         sub.userData.__mbMatBaseOpacity = (mat.opacity ?? 1);
         if (mat.transparent) (mat.userData ??= {}).__mbForceTransparent = true;
         const hr = mbHeightRampUniforms(style.heightEmission, bboxZMin, bboxZMax);
-        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr, 0, true, lutOff);
+        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr, 0, true, false);
         sub.userData.__mbHrParams = hr;
         subMeshes.push(sub);
     }

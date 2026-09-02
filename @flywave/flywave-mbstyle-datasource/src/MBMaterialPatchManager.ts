@@ -1063,7 +1063,7 @@ export class MBMaterialPatchManager {
                  uniform float uMbDistCam;
                  varying float vMbWallH;
                  varying vec3 vMbWorldPos;
-                 ${shader.fragmentShader.includes('uniform sampler2D uMBShadowMap') ? '' :
+                 ${shader.fragmentShader.includes('uMBShadowMap') ? '' :
                  `uniform sampler2D uMBShadowMap;
                  uniform mat4 uMBShadowMatrix;
                  uniform float uMBShadowIntensity;`}
@@ -1217,8 +1217,13 @@ export class MBMaterialPatchManager {
                      // metres×0.78 form had the right shape but the wrong
                      // distCam domain (raster-path 6838m value).
                      float mbLen = length(vViewPosition);
-                     float mbT = (fogMglShift * mbLen / max(uMbDistCam, 1.0)
-                         - (fogMglRange.x + fogMglShift))
+                     // §771g: mgl _prelude_fog.fragment fog_range has NO shift
+                     // in the numerator: T = (depth - r0)/(r1 - r0). The old
+                     // (r0 + shift) subtraction under-fogged every frame by
+                     // ~0.23 of the normalized range (ground/buildings stayed
+                     // dark instead of washing to the fog color).
+                     float mbT = (mbLen / max(uMbDistCam, 1.0)
+                         - fogMglRange.x)
                          / max(fogMglRange.y - fogMglRange.x, 0.001);
                      float mbFall = 1.0 - min(1.0, exp(-6.0 * mbT));
                      mbFall *= mbFall * mbFall;
@@ -1526,6 +1531,10 @@ export class MBMaterialPatchManager {
                 this.injectGroundShadow(material as any);
             }
         }
+        if ((globalThis as any).__mbNoCull) {
+            let o: THREE.Object3D | null = obj;
+            while (o) { o.frustumCulled = false; o = o.parent; }
+        }
         switch (techName) {
             case 'fill':
                 if (technique._isLineRibbon) {
@@ -1568,6 +1577,15 @@ export class MBMaterialPatchManager {
                 if (technique._layerId && paint['building-color']) {
                     this.patchBuildingMaterial(material, technique);
                 } else {
+                    if ((globalThis as any).__mbExtFlat) {
+                        // §763 probe: force unlit red — separates "geometry/
+                        // depth invisible" from "shader output invisible".
+                        (material as any).map = null;
+                        (material as any).color = new THREE.Color('#ff0000');
+                        (material as any).onBeforeCompile = () => {};
+                        (material as any).needsUpdate = true;
+                        break;
+                    }
                     this.patchExtrusionMaterial(material, paint, technique, obj as THREE.Mesh);
                 }
                 break;
@@ -2862,16 +2880,26 @@ export class MBMaterialPatchManager {
             // §692 compile-time anchor census: which injection path landed on
             // this material (roads/fills use different shader flavors).
             material.__mbShadowAnchor = 'none';
-            shader.fragmentShader =
-                'uniform sampler2D uMBShadowMap;\n' +
-                'uniform mat4 uMBShadowMatrix;\n' +
-                'uniform float uMBShadowIntensity;\n' +
-                'uniform vec3 uMBGroundShadowFactor;\n' +
-                'uniform vec3 uMBGC[4];\n' +
-                'uniform vec3 uMBEye;\n' +
-                'uniform vec2 uMBRes;\n' +
-                'uniform float uMBShadowDbg;\n' +
-                shader.fragmentShader;
+            // §764: per-name dedupe — the extrusion lighting injection may
+            // already have declared uMBShadowMap/Matrix/Intensity (in EITHER
+            // chain order; both wrappers edit the same shader string), and a
+            // duplicate GLSL declaration is a hard compile error that makes
+            // the extrusions vanish (buildings-trees family).
+            const mbShadowOwn: string[] = [];
+            for (const decl of [
+                'uniform sampler2D uMBShadowMap;\n',
+                'uniform mat4 uMBShadowMatrix;\n',
+                'uniform float uMBShadowIntensity;\n',
+                'uniform vec3 uMBGroundShadowFactor;\n',
+                'uniform vec3 uMBGC[4];\n',
+                'uniform vec3 uMBEye;\n',
+                'uniform vec2 uMBRes;\n',
+                'uniform float uMBShadowDbg;\n',
+            ]) {
+                const name = decl.replace(/^uniform [a-zA-Z0-9]+ /, '').replace(/[;\n]/g, '');
+                if (!shader.fragmentShader.includes(name)) mbShadowOwn.push(decl);
+            }
+            shader.fragmentShader = mbShadowOwn.join('') + shader.fragmentShader;
             const mbShadowDbg4 = !!(globalThis as any).__mbShadowDbg4;
             shader.fragmentShader = tryInsert(
                 shader.fragmentShader, '#include <opaque_fragment>',
@@ -3863,7 +3891,7 @@ export class MBMaterialPatchManager {
         // LIGHTING_3D_MODE last: wrapping HERE guarantees the lighting handler
         // is the OUTERMOST onBeforeCompile — nothing later in this method can
         // capture a chain snapshot without it.
-        if (use3DLights) {
+        if (use3DLights && !(globalThis as any).__mbExtNoLut3D) {
             this.injectExtrusion3DLighting(material, emissiveStrength);
         }
     }
@@ -4810,6 +4838,13 @@ export class MBMaterialPatchManager {
      */
     private patchFillPatternMaterial(material: THREE.Material, technique: any, mglComposite = false): void {
         const tex = this.extractPatternTexture(technique._patternName);
+        if ((globalThis as any).__mbFillFlat) {
+            (material as any).map = null;
+            (material as any).color = new THREE.Color('#ff0000');
+            (material as any).onBeforeCompile = () => {};
+            (material as any).needsUpdate = true;
+            return;
+        }
         if (!tex) {
             // mgl: a pattern missing from the atlas renders the layer
             // invisible — never the black fill-color base. The marker is
@@ -4820,6 +4855,10 @@ export class MBMaterialPatchManager {
             return;
         }
         material.visible = true;
+        // SPHAB probe: globe fills culled? try double-side.
+        if ((globalThis as any).__mbSphDoubleSide) {
+            (material as any).side = THREE.DoubleSide;
+        }
         // Terrain draping: make patterned fill conform to the terrain surface.
         if (!!this.centerDem) this.injectTerrainDrape(material);
         if ((material as any).__mbPatternPatched) return;

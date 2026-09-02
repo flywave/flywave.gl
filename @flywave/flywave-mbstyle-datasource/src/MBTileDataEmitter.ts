@@ -330,10 +330,40 @@ function greatCircleAngle(a: [number, number], b: [number, number]): number {
  */
 const SPHERE_TESSELLATION_MAX_ANGLE = Math.PI / 18; // 10°, engine ground-plane value
 const SPHERE_TESSELLATION_MAX_DEPTH = 10;
+// A/B probe (§744): denser tessellation → shallower chord sag vs the engine
+// ground sphere. Toggle via karma arg `sphdeg=<degrees>`.
+const sphDegArg = typeof window !== 'undefined'
+    ? (window as any).__karma__?.config?.args?.find?.((a: string) => a.startsWith('sphdeg='))
+    : undefined;
+if (typeof window !== 'undefined' &&
+    (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'sphds=1')) {
+    (globalThis as any).__mbSphDoubleSide = true;
+}
+if (typeof window !== 'undefined' &&
+    (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'fillflat=1')) {
+    (globalThis as any).__mbFillFlat = true;
+}
+if (typeof window !== 'undefined' &&
+    (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'nocull=1')) {
+    (globalThis as any).__mbNoCull = true;
+}
+if (typeof window !== 'undefined' &&
+    (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'extflat=1')) {
+    (globalThis as any).__mbExtFlat = true;
+}
+if (typeof window !== 'undefined' &&
+    (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'extnolut=1')) {
+    (globalThis as any).__mbExtNoLut3D = true;
+}
 
 function tessellateForSphere(
     verts: number[], indices: number[], extents: number, decodeInfo: DecodeInfo
 ): { verts: number[]; indices: number[] } {
+    let maxAngle = SPHERE_TESSELLATION_MAX_ANGLE;
+    if (sphDegArg) {
+        const deg = Number(sphDegArg.slice('sphdeg='.length));
+        if (deg > 0.01 && deg < 180) maxAngle = (deg * Math.PI) / 180;
+    }
     const outVerts = verts.slice();
     const outIndices: number[] = [];
     const stack: Array<[number, number, number, number]> = [];
@@ -349,7 +379,7 @@ function tessellateForSphere(
         const angles = [angleOf(ia, ib), angleOf(ib, ic), angleOf(ic, ia)];
         const longest = angles[0] >= angles[1] && angles[0] >= angles[2] ? 0 :
             angles[1] >= angles[2] ? 1 : 2;
-        if (angles[longest] < SPHERE_TESSELLATION_MAX_ANGLE || depth >= SPHERE_TESSELLATION_MAX_DEPTH) {
+        if (angles[longest] < maxAngle || depth >= SPHERE_TESSELLATION_MAX_DEPTH) {
             // The mercator frame is y-south/z-up while the sphere map is
             // east→equatorial/north→z-up: the handedness flip turns camera-
             // facing (front) mercator triangles into back faces on the
@@ -4232,13 +4262,23 @@ export class MBTileDataEmitter {
                     const mScale = evalVec3('model-scale');
                     const translation = evalVec3('model-translation');
                     const opacity = evalScalar('model-opacity', 1);
-                    const colorRaw = (layer as any).paintDefs?.['model-color']?.value
-                        ?? layer.paint?.['model-color'];
-                    const mixRaw = (layer as any).paintDefs?.['model-color-mix-intensity']?.value
-                        ?? layer.paint?.['model-color-mix-intensity'];
+                    // §771: LIVE paint first — paintDefs is the pre-runtime-op
+                    // style snapshot, so after a setPaintProperty op its stale
+                    // value shadowed layer.paint and model-color-mix-intensity
+                    // ops never reached the placement tint (trees-use-theme
+                    // red crowns never cleared).
+                    const colorRaw = layer.paint?.['model-color']
+                        ?? (layer as any).paintDefs?.['model-color']?.value;
+                    const mixRaw = layer.paint?.['model-color-mix-intensity']
+                        ?? (layer as any).paintDefs?.['model-color-mix-intensity']?.value;
                     const colorMix = mixRaw === undefined || mixRaw === null
                         ? undefined
                         : evalScalar('model-color-mix-intensity', NaN);
+                    { const g: any = (globalThis as any);
+                      if ((layer as any)?.id === 'tree-layer') {
+                        g.__cmSeq = (g.__cmSeq ?? 0) + 1;
+                        console.log('[CMIXSEQ] n=' + g.__cmSeq + ' mix=' + JSON.stringify((layer as any)?.paint?.['model-color-mix-intensity']) + ' t=' + Date.now() % 100000);
+                      } }
                     // §521: model-color tints the albedo (mix in LINEAR — mgl
                     // getBaseColor: mix(albedo, sRGBToLinear(v_color_mix), a)).
                     // Resolve to linear RGB (THREE.Color applies ColorManagement).
