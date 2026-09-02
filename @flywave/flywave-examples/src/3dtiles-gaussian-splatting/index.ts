@@ -40,8 +40,8 @@ const initializeMapView = (canvas: HTMLCanvasElement): [MapView, MapControls] =>
         zoomLevel: 19, // Initial zoom level
         canvas: canvas, // Specify render canvas
         theme: {
-            atmosphere:{
-                sunTime:new Date().setHours(7,30)
+            atmosphere: {
+                sunTime: new Date().setHours(7, 30)
             }
             // extends: "resources/tilezen_base_globe.json" // Base theme configuration
         }

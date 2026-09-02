@@ -23,7 +23,8 @@ import {
     Raycaster,
     type Matrix4,
     type Material,
-    type MaterialParameters} from "three/webgpu";
+    type MaterialParameters
+} from "three/webgpu";
 
 import { type CustomAttributeConfig, Tiles3DStyleWatcher } from "./theme/Tiles3DStyleWatcher";
 import { type TilesRendererOptions, TilesRenderer } from "./TilesRenderer";
@@ -227,13 +228,13 @@ export interface TileRenderDataSourceOptions extends DataSourceOptions {
     enableCameraCollision?: boolean;
 }
 
-let tempObject =  new Object3D();
+let tempObject = new Object3D();
 class RootTile extends Tile {
     constructor(tileKey: TileKey, dataSource: TileRenderDataSource) {
         super(dataSource, tileKey);
         this.objects.push(tempObject);
 
-        this["m_maxGeometryHeight"] = 1; 
+        this["m_maxGeometryHeight"] = 1;
         this["m_minGeometryHeight"] = -1;
     }
 
@@ -280,7 +281,7 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
             name: "TileRenderDataSource",
             ...options,
             maxDataLevel: 0,
-            minDataLevel:0
+            minDataLevel: 0
         });
 
         this.m_options = options;

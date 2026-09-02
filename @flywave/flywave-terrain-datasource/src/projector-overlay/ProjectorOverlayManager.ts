@@ -179,5 +179,4 @@ export class ProjectorOverlayManager {
         this.layers.clear();
         this.provider.requestInvalidate();
     }
-
 }

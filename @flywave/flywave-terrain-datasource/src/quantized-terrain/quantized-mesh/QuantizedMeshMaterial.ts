@@ -3,8 +3,18 @@
 
 import * as THREE from "three/webgpu";
 import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
-import { Fn, float, mix as tslMix, select, texture, uniform, uv as uvNode, attribute, vec2, vec4 } from "three/tsl";
-
+import {
+    Fn,
+    float,
+    mix as tslMix,
+    select,
+    texture,
+    uniform,
+    uv as uvNode,
+    attribute,
+    vec2,
+    vec4
+} from "three/tsl";
 
 function dummyTex(): THREE.DataTexture {
     const t = new THREE.DataTexture(

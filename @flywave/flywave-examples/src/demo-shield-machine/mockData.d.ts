@@ -1,45 +1,53 @@
-export function classifyPart(name: any, z: any): {
-    id: string;
-    name: string;
-    namePatterns: RegExp[];
-    zRange: number[];
-    info: {
-        subsystemId: string;
-        name: string;
-        manufacturer: string;
-        model: string;
-        installDate: string;
-        operatingHours: number;
-        status: string;
-        lastMaintenance: string;
-        nextMaintenance: string;
-        temperature: number;
-        vibration: number;
-        power: number;
-        description: string;
-    };
-} | {
-    id: string;
-    name: string;
-    namePatterns: RegExp[];
-    info: {
-        subsystemId: string;
-        name: string;
-        manufacturer: string;
-        model: string;
-        installDate: string;
-        operatingHours: number;
-        status: string;
-        lastMaintenance: string;
-        nextMaintenance: string;
-        temperature: number;
-        vibration: number;
-        power: number;
-        description: string;
-    };
-    zRange?: undefined;
-};
-export function getPartInfo(name: any, z: any): {
+export function classifyPart(
+    name: any,
+    z: any
+):
+    | {
+          id: string;
+          name: string;
+          namePatterns: RegExp[];
+          zRange: number[];
+          info: {
+              subsystemId: string;
+              name: string;
+              manufacturer: string;
+              model: string;
+              installDate: string;
+              operatingHours: number;
+              status: string;
+              lastMaintenance: string;
+              nextMaintenance: string;
+              temperature: number;
+              vibration: number;
+              power: number;
+              description: string;
+          };
+      }
+    | {
+          id: string;
+          name: string;
+          namePatterns: RegExp[];
+          info: {
+              subsystemId: string;
+              name: string;
+              manufacturer: string;
+              model: string;
+              installDate: string;
+              operatingHours: number;
+              status: string;
+              lastMaintenance: string;
+              nextMaintenance: string;
+              temperature: number;
+              vibration: number;
+              power: number;
+              description: string;
+          };
+          zRange?: undefined;
+      };
+export function getPartInfo(
+    name: any,
+    z: any
+): {
     name: any;
     subsystemId: string;
     manufacturer: string;

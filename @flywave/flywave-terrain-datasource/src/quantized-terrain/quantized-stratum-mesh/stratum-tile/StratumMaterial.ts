@@ -1,11 +1,7 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import {
-    log,
-    type TextureNode,
-    type UniformNode,
-} from "three/webgpu";
+import { log, type TextureNode, type UniformNode } from "three/webgpu";
 import {
     PI,
     asin,
@@ -28,7 +24,7 @@ import {
     uv,
     vec2,
     vec3,
-    vec4,
+    vec4
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 

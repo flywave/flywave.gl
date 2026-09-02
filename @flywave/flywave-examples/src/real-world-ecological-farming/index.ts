@@ -71,7 +71,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
                 sunTime: new Date().setHours(10), // Set sun time to 10 AM
                 sunCastShadow: true, // Enable shadows
                 enabled: true // Enable atmospheric effects
-            } 
+            }
         }
     });
 };

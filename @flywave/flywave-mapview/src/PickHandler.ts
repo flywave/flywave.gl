@@ -186,10 +186,7 @@ export class PickHandler {
         // GPU fast path: O(1) depth + pickId readback (requires enableGpuPicking),
         // returning the same full PickResult as the CPU path below. Falls
         // through to CPU when the GPU has no answer yet or missed sky.
-        if (
-            this.mapView.mapRenderingManager?.gpuPicking &&
-            parameters?.useGpuPick !== false
-        ) {
+        if (this.mapView.mapRenderingManager?.gpuPicking && parameters?.useGpuPick !== false) {
             const gpuResult = this.tryGpuPick(x, y);
             if (gpuResult !== null) return [gpuResult];
             if (parameters?.useGpuPick === true) return []; // GPU-only, no fallback
@@ -316,9 +313,7 @@ export class PickHandler {
         // bounding box contains the hit point — same walk as the CPU loop.
         this.raycasterFromScreenPoint(x, y);
         let tile: Tile | undefined;
-        for (const { tile: visibleTile } of this.getIntersectedTiles(
-            this.m_pickingRaycaster
-        )) {
+        for (const { tile: visibleTile } of this.getIntersectedTiles(this.m_pickingRaycaster)) {
             tmpOBB.copy(visibleTile.boundingBox);
             tmpOBB.position.sub(this.mapView.worldCenter);
             tmpOBB.position.x += visibleTile.computeWorldOffsetX();
@@ -347,8 +342,7 @@ export class PickHandler {
             if (details === undefined) {
                 this.m_pickingRaycaster.ray.copy(frozenRay);
                 const intersects = this.m_pickingRaycaster.intersectObject(object, true);
-                details =
-                    intersects.length > 0 ? this.createResult(intersects[0], tile) : null;
+                details = intersects.length > 0 ? this.createResult(intersects[0], tile) : null;
             }
             return details;
         };

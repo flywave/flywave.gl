@@ -492,8 +492,8 @@ class TileGeometryBuilder {
                               level,
                               row,
                               0,
-                              tileCount/2,
-                              tileCount/2,
+                              tileCount / 2,
+                              tileCount / 2,
                               true
                           )
                         : this.generatePatchWithBuckets(
@@ -501,8 +501,8 @@ class TileGeometryBuilder {
                               level,
                               row,
                               0,
-                              tileCount/2,
-                              tileCount/2,
+                              tileCount / 2,
+                              tileCount / 2,
                               true
                           );
                 mode.is_simple_patch = false;

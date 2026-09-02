@@ -2,19 +2,8 @@
 // @ts-nocheck
 
 import * as THREE from "three/webgpu";
-import {
-    PointsNodeMaterial,
-} from "three/webgpu";
-import {
-    Fn,
-    attribute,
-    uniform,
-    vec3,
-    vec4,
-    texture,
-    pointUV,
-    float,
-} from "three/tsl";
+import { PointsNodeMaterial } from "three/webgpu";
+import { Fn, attribute, uniform, vec3, vec4, texture, pointUV, float } from "three/tsl";
 
 export interface HighPrecisionPointMaterialParameters {
     color?: number | string | THREE.Color;

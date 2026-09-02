@@ -20,7 +20,7 @@ import {
     vec3,
     vec4,
     viewZToLogarithmicDepth,
-    viewZToPerspectiveDepth,
+    viewZToPerspectiveDepth
 } from "three/tsl";
 
 import { cameraFar, cameraNear } from "./accessors";

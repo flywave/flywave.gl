@@ -21,10 +21,22 @@
  * Modified from the original source code.
  */
 
-import { HalfFloatType, RenderTarget, type Camera, type Vector2, NodeMaterial, NodeUpdateType, QuadMesh, RendererUtils, type NodeBuilder, type NodeFrame, type SampleNode, type TextureNode, type UniformNode } from "three/webgpu";
+import {
+    HalfFloatType,
+    RenderTarget,
+    type Camera,
+    type Vector2,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils,
+    type NodeBuilder,
+    type NodeFrame,
+    type SampleNode,
+    type TextureNode,
+    type UniformNode
+} from "three/webgpu";
 import { float, Fn, If, ivec2, mix, screenCoordinate, uv, vec3 } from "three/tsl";
-
-
 
 import { outputTexture } from "../../tsl/OutputTextureNode";
 import { Node } from "../../tsl/node";

@@ -24,7 +24,7 @@ const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
 const mapView = new MapView({
     projection: ellipsoidProjection,
     target: new GeoCoordinates(40.721603666587, -73.96000108689394, 0),
-    distance:100,
+    distance: 100,
     canvas,
     theme: {
         extends: "resources/tilezen_base_globe.json"
@@ -57,7 +57,7 @@ async function loadFlywaveGLTF() {
         //@ts-ignore
         result.scene.anchor = ANCHOR_LEFT;
         mapView.mapAnchors.add(result.scene);
-        result.scene.scale.set(100,100,100);
+        result.scene.scale.set(100, 100, 100);
         console.log("[flywave-gltf] Loaded scene:", result.scene);
         //@ts-ignore
         window.flywaveModel = result.scene;
@@ -75,7 +75,7 @@ threeLoader.load(
         //@ts-ignore
         model.anchor = ANCHOR_RIGHT;
         mapView.mapAnchors.add(model);
-        model.scale.set(100,100,100);
+        model.scale.set(100, 100, 100);
         console.log("[three.js GLTFLoader] Loaded scene:", model);
         //@ts-ignore
         window.threeModel = model;

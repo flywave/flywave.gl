@@ -4,7 +4,6 @@
 import { TempNode, type NodeBuilder } from "three/webgpu";
 import { Fn, fwidth, If, smoothstep, uniform, vec4 } from "three/tsl";
 
-
 import type { Node } from "../tsl/node";
 
 import { getAtmosphereContext } from "./AtmosphereContext";

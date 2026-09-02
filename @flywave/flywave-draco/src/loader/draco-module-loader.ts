@@ -42,7 +42,10 @@ export const DRACO_EXTERNAL_LIBRARY_URLS = {
  * the wasm module mid-decode.
  */
 function defaultLibraryPath(): string | undefined {
-    const globalWithBase = globalThis as { FLYWAVE_BASE_URL?: string; window?: { FLYWAVE_BASE_URL?: string } };
+    const globalWithBase = globalThis as {
+        FLYWAVE_BASE_URL?: string;
+        window?: { FLYWAVE_BASE_URL?: string };
+    };
     const base = globalWithBase.FLYWAVE_BASE_URL || globalWithBase.window?.FLYWAVE_BASE_URL;
     if (!base) {
         return undefined;

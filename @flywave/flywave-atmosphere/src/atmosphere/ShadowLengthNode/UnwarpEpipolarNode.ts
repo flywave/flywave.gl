@@ -21,10 +21,24 @@
  * Modified from the original source code.
  */
 
-import { type Camera, type Vector2, type Vector4, HalfFloatType, RenderTarget, RGFormat, type NodeBuilder, type NodeFrame, type SampleNode, type TextureNode, type UniformNode, NodeMaterial, NodeUpdateType, QuadMesh, RendererUtils } from "three/webgpu";
+import {
+    type Camera,
+    type Vector2,
+    type Vector4,
+    HalfFloatType,
+    RenderTarget,
+    RGFormat,
+    type NodeBuilder,
+    type NodeFrame,
+    type SampleNode,
+    type TextureNode,
+    type UniformNode,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils
+} from "three/webgpu";
 import { float, Fn, max, min, uniform, uv, vec2, vec4 } from "three/tsl";
-
-
 
 import { bvecAnd, bvecNot } from "../../tsl/bvec";
 import { Node } from "../../tsl/node";

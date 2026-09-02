@@ -21,10 +21,21 @@
  * Modified from the original source code.
  */
 
-import { type Vector2, type Vector4, FloatType, RenderTarget, type NodeBuilder, type NodeFrame, type TextureNode, type UniformNode, NodeMaterial, NodeUpdateType, QuadMesh, RendererUtils } from "three/webgpu";
+import {
+    type Vector2,
+    type Vector4,
+    FloatType,
+    RenderTarget,
+    type NodeBuilder,
+    type NodeFrame,
+    type TextureNode,
+    type UniformNode,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils
+} from "three/webgpu";
 import { float, Fn, If, max, mix, uint, uv, uvec4, vec2, vec4 } from "three/tsl";
-
-
 
 import { bvecAnd, bvecNot } from "../../tsl/bvec";
 import { FnVar } from "../../tsl/FnVar";

@@ -1,6 +1,13 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type CoordinateSystem, type Matrix4, type Plane, Frustum, Matrix3, Vector3 } from "three/webgpu";
+import {
+    type CoordinateSystem,
+    type Matrix4,
+    type Plane,
+    Frustum,
+    Matrix3,
+    Vector3
+} from "three/webgpu";
 
 // Temporary matrix for calculations
 const _mat3 = new Matrix3();

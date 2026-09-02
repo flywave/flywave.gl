@@ -49,7 +49,10 @@ class GpuPickTest {
             canvas: canvas,
             enableGpuPicking: true,
             theme: {
-                atmosphere: { enabled: true, sunTime: new Date(new Date().setHours(22, 0)).getTime() },
+                atmosphere: {
+                    enabled: true,
+                    sunTime: new Date(new Date().setHours(22, 0)).getTime()
+                },
                 postEffects: { antialiasing: "taa" },
                 toneMappingExposure: 1.5,
                 styles: {
@@ -66,8 +69,8 @@ class GpuPickTest {
                 }
             }
         });
-        (globalThis as any).mapView = this.mapView;   // debug handle
-        (globalThis as any).gpuDs = this.dataSource;  // debug handle
+        (globalThis as any).mapView = this.mapView; // debug handle
+        (globalThis as any).gpuDs = this.dataSource; // debug handle
 
         const controls = new MapControls(this.mapView);
         const ui = new MapControlsUI(controls);
@@ -146,7 +149,10 @@ class GpuPickTest {
 
             let cpuProps: Record<string, any> | undefined;
             if (cpuResults.length > 0 && cpuResults[0].intersection !== undefined) {
-                cpuProps = this.dataSource.getBatchProperties(cpuResults[0].intersection, "_batchid");
+                cpuProps = this.dataSource.getBatchProperties(
+                    cpuResults[0].intersection,
+                    "_batchid"
+                );
             }
 
             this.showResults(
@@ -189,10 +195,7 @@ class GpuPickTest {
                         : undefined;
                 this.stats.lastPropsMs = performance.now() - td;
 
-                const id =
-                    props !== undefined
-                        ? String(props.DOITT_ID ?? props.NAME ?? "")
-                        : "";
+                const id = props !== undefined ? String(props.DOITT_ID ?? props.NAME ?? "") : "";
                 if (id !== "" && id !== this.stats.lastBuildingId) {
                     this.stats.lastBuildingId = id;
                     this.stats.restyleCount++;
@@ -218,7 +221,9 @@ class GpuPickTest {
             `FPS: ${this.stats.fps}\n` +
             `mousemoves: ${this.stats.moves}\n` +
             `GPU pick avg: ${avg.toFixed(3)}ms  max: ${max.toFixed(3)}ms\n` +
-            `detail raycasts: ${this.stats.detailCount} (last: ${this.stats.lastPropsMs.toFixed(2)}ms)\n` +
+            `detail raycasts: ${this.stats.detailCount} (last: ${this.stats.lastPropsMs.toFixed(
+                2
+            )}ms)\n` +
             `restyles: ${this.stats.restyleCount}  building: ${this.stats.lastBuildingId || "-"}`;
     }
 

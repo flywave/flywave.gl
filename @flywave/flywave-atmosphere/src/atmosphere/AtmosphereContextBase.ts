@@ -7,7 +7,6 @@
 import { NodeBuilder, type Renderer, type StructNode } from "three/webgpu";
 import { float, ivec2, struct, uint, uvec2, vec3 } from "three/tsl";
 
-
 import { reinterpretType } from "../tsl/types";
 import type { Node, NodeType } from "../tsl/node";
 

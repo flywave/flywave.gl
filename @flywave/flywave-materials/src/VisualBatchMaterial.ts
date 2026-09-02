@@ -12,7 +12,7 @@ import {
     RGBAFormat,
     type MeshStandardNodeMaterialParameters,
     type Node,
-    type UniformNode,
+    type UniformNode
 } from "three/webgpu";
 import {
     attribute,
@@ -25,7 +25,7 @@ import {
     texture,
     uniform,
     vec2,
-    vec3,
+    vec3
 } from "three/tsl";
 
 /**

@@ -5,7 +5,7 @@
         "rootDir": "./src",
         "jsx": "react-jsx",
         "paths": {
-            "@flywave/flywave.gl": ["../flywave.gl/src"], 
+            "@flywave/flywave.gl": ["../flywave.gl/src"]
         }
     },
     "references": [

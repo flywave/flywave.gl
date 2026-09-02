@@ -4,7 +4,6 @@
 import { type NodeBuilder, TempNode } from "three/webgpu";
 import { Fn, mix, nodeProxy, positionView, uv, vec2, vec3, vec4 } from "three/tsl";
 
-
 import type { Node } from "../tsl/node";
 import { equirectToDirectionWorld } from "../tsl/transformations";
 import { hashValues } from "../tsl/utils";

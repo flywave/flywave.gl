@@ -375,8 +375,7 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
     ): void {
         const entries = this.collectProjectorEntries();
         if (entries.length === 0) return;
-        const scheme =
-            this.dataSource.getProjectorOverlayManager().provider.tilingScheme;
+        const scheme = this.dataSource.getProjectorOverlayManager().provider.tilingScheme;
 
         for (const entry of entries) {
             const transform = computeDecalUvTransform(selfGeoBox, entry.geoBox, scheme);
@@ -469,10 +468,7 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
 
         // Projector-only tiles (no web imagery provider produced an object):
         // still render the quantized mesh so decals have a surface.
-        if (
-            this.collectProjectorEntries().length > 0 &&
-            this.tile.objects.length === 0
-        ) {
+        if (this.collectProjectorEntries().length > 0 && this.tile.objects.length === 0) {
             if (quantizedDataResource?.resource) {
                 const mesh = TileObjectMesh.makeMapViewQuantizedMesh(
                     {

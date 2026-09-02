@@ -99,7 +99,7 @@ const browserConfigs = outputFormats.map(format => {
         },
         optimization: {
             sideEffects: true
-        }, 
+        }
     };
 
     // Merge configuration with experimental settings if they exist

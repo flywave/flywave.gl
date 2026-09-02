@@ -1,5 +1,11 @@
 // @ts-nocheck
-import { Plane, Vector3, type DirectionalLight, type PerspectiveCamera, type Vector2 } from "three/webgpu";
+import {
+    Plane,
+    Vector3,
+    type DirectionalLight,
+    type PerspectiveCamera,
+    type Vector2
+} from "three/webgpu";
 import { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
 import type { NodeFrame } from "three/webgpu";
 

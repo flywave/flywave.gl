@@ -20,7 +20,11 @@ export class TrainSimulator {
     m_retarderModel: THREE.Group<THREE.Object3DEventMap>;
     disableEnvMap(model: any): void;
     createPlaceholder(color: any): THREE.Group<THREE.Object3DEventMap>;
-    createTrain(id: any, carriageCount: any, edgeId: any): {
+    createTrain(
+        id: any,
+        carriageCount: any,
+        edgeId: any
+    ): {
         id: any;
         engine: THREE.Group<THREE.Object3DEventMap>;
         carriages: THREE.Group<THREE.Object3DEventMap>[];
@@ -32,7 +36,14 @@ export class TrainSimulator {
         speed: number;
         pathEdges: any[];
     };
-    moveTrain(id: any, positions: any, edges: any, speed: any, onArrival: any, initialDistance?: number): boolean;
+    moveTrain(
+        id: any,
+        positions: any,
+        edges: any,
+        speed: any,
+        onArrival: any,
+        initialDistance?: number
+    ): boolean;
     stopTrain(id: any): void;
     waitTrain(id: any): void;
     removeTrain(id: any): void;
@@ -45,7 +56,12 @@ export class TrainSimulator {
     update(dt: any): void;
     updateVisual(train: any): void;
     applyRot(obj: any, pos: any, tangent: any): void;
-    lerp(positions: any, tangents: any, dist: any, total: any): {
+    lerp(
+        positions: any,
+        tangents: any,
+        dist: any,
+        total: any
+    ): {
         position: any;
         tangent: any;
     };

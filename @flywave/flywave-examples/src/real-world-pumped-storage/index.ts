@@ -79,8 +79,8 @@ const forceSingleTile = (mapView: MapView, terrainSourceName: string, tileKey: T
                         existing?.offset ?? 0,
                         existing?.elevationRange
                     ),
-                         new TileKeyEntry(
-                        new TileKey(tileKey.row+1,tileKey.column,tileKey.level),
+                    new TileKeyEntry(
+                        new TileKey(tileKey.row + 1, tileKey.column, tileKey.level),
                         existing?.area ?? 0,
                         existing?.offset ?? 0,
                         existing?.elevationRange
@@ -90,7 +90,10 @@ const forceSingleTile = (mapView: MapView, terrainSourceName: string, tileKey: T
         }
         return result;
     };
-    console.log("[single-tile] VisibleTileSet overridden →", `${tileKey.level}/${tileKey.column}/${tileKey.row}`);
+    console.log(
+        "[single-tile] VisibleTileSet overridden →",
+        `${tileKey.level}/${tileKey.column}/${tileKey.row}`
+    );
 };
 
 const makeCalibrationTexture = (): Texture => {
@@ -138,11 +141,7 @@ const makeCalibrationTexture = (): Texture => {
     return tex;
 };
 
-const addPillars = (
-    mapView: MapView,
-    demTerrain: DEMTerrainSourceType,
-    geoBox: GeoBox
-): void => {
+const addPillars = (mapView: MapView, demTerrain: DEMTerrainSourceType, geoBox: GeoBox): void => {
     const corners: Array<[number, number]> = [
         [geoBox.southWest.latitude, geoBox.southWest.longitude],
         [geoBox.southWest.latitude, geoBox.northEast.longitude],
@@ -221,14 +220,14 @@ try {
 
     // The ONE tile the system is allowed to create, and its west half decal.
     const scheme: TilingScheme = demTerrain.getTilingScheme();
-    const tileKey = scheme.getTileKey(new GeoCoordinates(SITE.lat, SITE.lon), TILE_LEVEL) as TileKey;
+    const tileKey = scheme.getTileKey(
+        new GeoCoordinates(SITE.lat, SITE.lon),
+        TILE_LEVEL
+    ) as TileKey;
     const tileBox = scheme.getGeoBox(tileKey);
     const halfBox = new GeoBox(
-        new GeoCoordinates(tileBox.southWest.latitude-0.1, tileBox.southWest.longitude),
-        new GeoCoordinates(
-            tileBox.northEast.latitude-0.003,
-            tileBox.northEast.longitude
-        )
+        new GeoCoordinates(tileBox.southWest.latitude - 0.1, tileBox.southWest.longitude),
+        new GeoCoordinates(tileBox.northEast.latitude - 0.003, tileBox.northEast.longitude)
     );
 
     // ---- DEBUG: 强制固定瓦片（重载 VisibleTileSet 的瓦片选择）----
@@ -237,7 +236,6 @@ try {
 
     console.log("[single-tile] tileGeoBox:", tileBox);
     console.log("[single-tile] decalGeoBox (west half):", halfBox);
- 
 
     const overlayManager: ProjectorOverlayManager = demTerrain.getProjectorOverlayManager();
     overlayManager.addLayer({

@@ -12,9 +12,32 @@
  * Open: http://localhost:8080/cloud-render.html
  */
 
-import { PerspectiveCamera, OrthographicCamera, PlaneGeometry, Mesh, Scene, Vector3, NoToneMapping, WebGPURenderer, NodeMaterial } from "three/webgpu";
-import { Fn, vec3, vec4, uniform, uv, normalize, float, dot, length, mix, sqrt, texture, screenUV } from "three/tsl";
-
+import {
+    PerspectiveCamera,
+    OrthographicCamera,
+    PlaneGeometry,
+    Mesh,
+    Scene,
+    Vector3,
+    NoToneMapping,
+    WebGPURenderer,
+    NodeMaterial
+} from "three/webgpu";
+import {
+    Fn,
+    vec3,
+    vec4,
+    uniform,
+    uv,
+    normalize,
+    float,
+    dot,
+    length,
+    mix,
+    sqrt,
+    texture,
+    screenUV
+} from "three/tsl";
 
 import { GUI } from "dat.gui";
 

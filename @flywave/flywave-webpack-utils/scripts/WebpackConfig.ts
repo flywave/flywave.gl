@@ -147,11 +147,7 @@ export function createBrowserConfig(config?: FlywaveWebpackConfig): Configuratio
 
     return {
         ...baseConfig,
-        externals: [
-            "three",
-            "three/webgpu",
-            "three/tsl"
-        ],
+        externals: ["three", "three/webgpu", "three/tsl"]
     };
 }
 

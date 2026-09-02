@@ -60,7 +60,7 @@ const mapView = new MapView({
     tilt: 0,
     heading: 0,
     canvas: canvas,
-    theme: { 
+    theme: {
         atmosphere: {
             enabled: true,
             sunCastShadow: true,

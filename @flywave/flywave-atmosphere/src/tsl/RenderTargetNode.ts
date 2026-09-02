@@ -1,5 +1,19 @@
 // @ts-nocheck
-import {HalfFloatType, RenderTarget, Vector2, type RenderTargetOptions, type Texture, Node, NodeMaterial, NodeUpdateType, QuadMesh, RendererUtils, type NodeBuilder, type NodeFrame, type TextureNode} from "three/webgpu";
+import {
+    HalfFloatType,
+    RenderTarget,
+    Vector2,
+    type RenderTargetOptions,
+    type Texture,
+    Node,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils,
+    type NodeBuilder,
+    type NodeFrame,
+    type TextureNode
+} from "three/webgpu";
 
 import invariant from "tiny-invariant";
 

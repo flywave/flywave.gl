@@ -1,8 +1,13 @@
 // @ts-nocheck
-import { Matrix4, type Object3D, NodeUpdateType, TempNode, type NodeBuilder, type NodeFrame } from "three/webgpu";
+import {
+    Matrix4,
+    type Object3D,
+    NodeUpdateType,
+    TempNode,
+    type NodeBuilder,
+    type NodeFrame
+} from "three/webgpu";
 import { nodeImmutable, positionLocal, positionPrevious, sub, uniform } from "three/tsl";
-
-
 
 export class HighpVelocityNode extends TempNode {
     static override get type(): string {

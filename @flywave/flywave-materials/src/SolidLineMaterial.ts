@@ -1,12 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import {
-    type LineCaps,
-    type LineDashes } from "@flywave/flywave-datasource-protocol";
+import { type LineCaps, type LineDashes } from "@flywave/flywave-datasource-protocol";
 import * as THREE from "three/webgpu";
-import {NodeMaterial,
-} from "three/webgpu";
+import { NodeMaterial } from "three/webgpu";
 import {
     Fn,
     abs,
@@ -42,9 +39,8 @@ import {
     normalLocal,
     modelViewPosition,
     varying,
-    Discard,
+    Discard
 } from "three/tsl";
-
 
 export enum LineCapsModes {
     CAPS_NONE = 0,

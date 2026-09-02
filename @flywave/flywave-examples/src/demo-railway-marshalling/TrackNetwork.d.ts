@@ -8,11 +8,18 @@ export class TrackNetwork {
     findPath(fromTrackRef: any, toTrackRef: any): any[];
     bfs(startNode: any, targetNodes: any): any[];
     findEdgeByTrackRef(ref: any): any;
-    getPointAtDistance(edge: any, distance: any): {
+    getPointAtDistance(
+        edge: any,
+        distance: any
+    ): {
         position: any;
         tangent: THREE.Vector3;
     };
-    buildPathFromEdges(edges: any, fromTrackRef: any, toTrackRef: any): {
+    buildPathFromEdges(
+        edges: any,
+        fromTrackRef: any,
+        toTrackRef: any
+    ): {
         positions: any[];
         tangents: THREE.Vector3[];
         totalLength: number;

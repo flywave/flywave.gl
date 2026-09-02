@@ -37,7 +37,7 @@ export class GeoLineString {
     private readonly m_coordinates: MinTwoItemsArray<GeoCoordinates>;
     private readonly m_spline_coordinates: MinTwoItemsArray<GeoCoordinates>;
 
-    private readonly m_width: number; 
+    private readonly m_width: number;
 
     /**
      * Creates a GeoLineString instance
@@ -83,11 +83,7 @@ export class GeoLineString {
      * @param options Additional buffer options
      * @returns The GeoPolygon created from the buffered line string
      */
-    toPolygon(options?: {
-        widthFactor?: number;
-        units?: turf.Units;
-        steps?: number; 
-    }): GeoPolygon {
+    toPolygon(options?: { widthFactor?: number; units?: turf.Units; steps?: number }): GeoPolygon {
         const bufferGenerator = new HeightAwareBufferGenerator();
         const buffered = bufferGenerator.generate3DBuffer(
             this.coordinates,

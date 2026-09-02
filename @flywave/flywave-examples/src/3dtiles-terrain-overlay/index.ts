@@ -38,7 +38,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         zoomLevel: 18, // Initial zoom level
         tilt: 70, // Initial tilt angle
         heading: 35.1, // Initial heading angle
-        enableNativeWebglAntialias:false,
+        enableNativeWebglAntialias: false,
         canvas: canvas, // Specify render canvas
         theme: {
             // extends: "resources/tilezen_base_globe.json"

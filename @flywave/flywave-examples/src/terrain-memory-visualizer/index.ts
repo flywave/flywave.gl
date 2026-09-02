@@ -15,7 +15,6 @@ import { EventLog } from "./EventLog";
 const CANVAS_ID = "mapCanvas";
 
 function createLayout(): { sidebar: HTMLElement } {
-
     const sidebar = document.createElement("div");
     sidebar.style.cssText =
         "position:absolute;right:0;top:0;width:40%;height:100%;display:flex;flex-direction:column;background:#111;";

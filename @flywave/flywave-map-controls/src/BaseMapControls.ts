@@ -464,7 +464,11 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             this.inertialDeltaX += (0 - this.inertialDeltaX) * rotationDamping * 0.75;
             this.inertialDeltaY += (0 - this.inertialDeltaY) * rotationDamping * 0.75;
             // 惯性收敛后清除支点，避免过期支点泄漏进后续手势
-            if (!mouseDown[2] && Math.abs(this.inertialDeltaX) < 1e-3 && Math.abs(this.inertialDeltaY) < 1e-3) {
+            if (
+                !mouseDown[2] &&
+                Math.abs(this.inertialDeltaX) < 1e-3 &&
+                Math.abs(this.inertialDeltaY) < 1e-3
+            ) {
                 this.inertialDeltaX = 0;
                 this.inertialDeltaY = 0;
                 this.m_rotatePivotDistance = -1;

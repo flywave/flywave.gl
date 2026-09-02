@@ -6,9 +6,7 @@ import {
     type TransitionValue
 } from "@flywave/flywave-datasource-protocol";
 import * as THREE from "three/webgpu";
-import {
-    MeshStandardNodeMaterial,
-} from "three/webgpu";
+import { MeshStandardNodeMaterial } from "three/webgpu";
 import {
     Fn,
     attribute,
@@ -22,7 +20,7 @@ import {
     positionLocal,
     mix,
     clamp,
-    greaterThanEqual,
+    greaterThanEqual
 } from "three/tsl";
 
 import { type BatchAnimation } from "../TileRenderDataSource";

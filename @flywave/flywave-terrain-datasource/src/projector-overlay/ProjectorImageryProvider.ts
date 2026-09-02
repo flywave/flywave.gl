@@ -1,10 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import {
-    type GeoBox,
-    TileKey,
-    webMercatorTerrainTilingScheme
-} from "@flywave/flywave-geoutils";
+import { type GeoBox, TileKey, webMercatorTerrainTilingScheme } from "@flywave/flywave-geoutils";
 import * as THREE from "three/webgpu";
 
 import { type ITerrainSource, type TerrainResourceTile } from "../TerrainSource";

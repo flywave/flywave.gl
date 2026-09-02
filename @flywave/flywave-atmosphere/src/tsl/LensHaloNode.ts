@@ -1,7 +1,13 @@
 // @ts-nocheck
-import { Vector2, NodeUpdateType, TempNode, type NodeBuilder, type NodeFrame, type TextureNode } from "three/webgpu";
+import {
+    Vector2,
+    NodeUpdateType,
+    TempNode,
+    type NodeBuilder,
+    type NodeFrame,
+    type TextureNode
+} from "three/webgpu";
 import { abs, distance, fract, min, mul, sub, uniform, uv, vec2, vec3 } from "three/tsl";
-
 
 import invariant from "tiny-invariant";
 

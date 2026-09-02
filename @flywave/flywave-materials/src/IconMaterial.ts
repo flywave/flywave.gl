@@ -5,7 +5,6 @@ import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
 import { Fn, attribute, texture, uv as uvNode, vec4, positionLocal, varying } from "three/tsl";
 
-
 export interface IconMaterialParameters {
     map: THREE.Texture;
     rendererCapabilities?: { isWebGL2: boolean; logarithmicDepthBuffer: boolean };

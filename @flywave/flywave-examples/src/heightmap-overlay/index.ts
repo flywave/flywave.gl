@@ -100,11 +100,11 @@ function createSteppedWallMap(
         for (let x = 0; x < width; x++) {
             const index = (y * width + x) * 4;
 
-              const [r, g, b, a] = encodeMapboxHeight(50);
-                data[index] = r;
-                data[index + 1] = g;
-                data[index + 2] = b;
-                data[index + 3] = a;
+            const [r, g, b, a] = encodeMapboxHeight(50);
+            data[index] = r;
+            data[index + 1] = g;
+            data[index + 2] = b;
+            data[index + 3] = a;
         }
     }
 

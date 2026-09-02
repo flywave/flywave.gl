@@ -319,9 +319,7 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
         if (key.startsWith("web:")) {
             // key format: web:<provider-uuid>:<index>
             const uuid = key.slice(4, key.lastIndexOf(":"));
-            return this.dataSource
-                .getWebTileDataSources()
-                .some(provider => provider.uuid === uuid);
+            return this.dataSource.getWebTileDataSources().some(provider => provider.uuid === uuid);
         }
         return false;
     }

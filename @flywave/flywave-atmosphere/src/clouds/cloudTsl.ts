@@ -702,9 +702,7 @@ export const createShadowMarchClouds = (u: CloudUniforms, cascadeIndex: number =
             If(transmittanceIntegral.lessThanEqual(u.shadowMinTransmittance), () => {
                 maxOpticalDepthTail.assign(
                     min(
-                        u.opticalDepthTailScale
-                            .mul(stepSize)
-                            .mul(exp(float(1).sub(sampleCount))),
+                        u.opticalDepthTailScale.mul(stepSize).mul(exp(float(1).sub(sampleCount))),
                         stepSize.mul(0.5)
                     )
                 );
@@ -1312,11 +1310,7 @@ export const createMarchClouds = (u: CloudUniforms): any => {
                                 sunIrradiance.assign(accurateIrr.get("direct"));
                                 skyIrradiance.assign(accurateIrr.get("indirect"));
                             }).Else(() => {
-                                const heightAlpha = remapClamped(
-                                    height,
-                                    u.minHeight,
-                                    u.maxHeight
-                                );
+                                const heightAlpha = remapClamped(height, u.minHeight, u.maxHeight);
                                 sunIrradiance.assign(
                                     mix(minSunIrradiance, maxSunIrradiance, heightAlpha)
                                 );
