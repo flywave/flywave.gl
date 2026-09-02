@@ -2304,10 +2304,16 @@ export class MBStyleDataSource extends TileDataSource {
                 // / triangles tell whether the extrusion meshes reach the GL
                 // queue (zero-rasterization forensics, buildings-trees family).
                 { const g: any = (globalThis as any); const r: any = (self.mapView as any).renderer;
-                  if (r?.info) r.info.autoReset = false;
-                  g.__riN = (g.__riN ?? 0) + 1;
-                  if (g.__riN <= 3) { const ri = r?.info?.render;
-                    console.log('[RIDRAW-CUM] f=' + g.__riN + ' calls=' + ri?.calls + ' tris=' + ri?.triangles); } }
+                  if (r?.info && !g.__riHooked) {
+                    g.__riHooked = true;
+                    const info = r.info;
+                    const origReset = info.reset.bind(info);
+                    info.reset = () => {
+                      const ri = info.render;
+                      g.__mbLastFrameCalls = ri.calls ?? 0;
+                      return origReset();
+                    };
+                  } }
                 // §550 DIAG (karma arg `mbbatchdbg=1`, see MBBatchedModelDataSource):
                 // batched-model regular-DS chain state, frame-capped.
                 {

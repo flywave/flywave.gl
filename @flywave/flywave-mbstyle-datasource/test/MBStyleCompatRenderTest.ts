@@ -2059,6 +2059,21 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 );
 
 
+                // §762: degenerate-frame guard — the engine alternates between
+                // full frames (≥threshold draw calls, buildings included) and
+                // degenerate ones (1 call/960 tris, buildings missing, ~80% of
+                // frames in the buildings-trees family). Wait (bounded) for a
+                // frame with real content before capturing.
+                try {
+                    const g762: any = globalThis as any;
+                    const calDeadline = Date.now() + 15000;
+                    let gIter = 0;
+                    while (Date.now() < calDeadline && (g762.__mbLastFrameCalls ?? 999) < 20) {
+                        await renderFrames(mapView!, dataSource, 1);
+                        if (++gIter <= 8) console.log('[GUARD] iter=' + gIter + ' calls=' + g762.__mbLastFrameCalls);
+                    }
+                    console.log('[GUARD] exit after ' + gIter + ' iters, calls=' + g762.__mbLastFrameCalls);
+                } catch { /* guard is best-effort */ }
                 await ibct.assertCanvasMatchesReference(canvas, entry.name, {
                     threshold: 0.1,
                     maxMismatchedPixels: maxMismatch,

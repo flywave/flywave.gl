@@ -7613,3 +7613,7 @@ RIDRAW 探针改挂 AfterRender 直读并设 `info.autoReset=false` 取累计值
 **§761b. 零光栅化机制收窄：双态渲染实锤——完整帧（143 calls/29,501 tris，含建筑）确实发生但被退化帧（1 call/960 tris）支配，捕获命中退化态（2026-09-03）**：
 
 info.reset 钩子（每次复位前读累计值）14 个样本分布：**10× [1 call/960 tris]（退化帧：无建筑）、2× [143 calls/29,501 tris]（完整帧：含建筑等全部内容）、2× [85 calls/18,089 tris]（中间态）**。结论：①"挤出零光栅化"并非网格永远进不了 GL——**完整帧确实渲染了它们**；②退化帧占 ~80%，harness 的 settle 捕获命中的是退化帧 → buildings 缺席；③这解释了 willCensus（WillRender 时网格在场景）与像素缺失的"矛盾"——退化帧里 tile objects 在渲染清单组装前被清空/未挂回。④下一入口（专用会话）：定位两态切换的驱动——引擎渲染循环中 tile objects 的 add/clear 时机（谁在退化帧把对象清掉了：markTilesDirty 后的 removeDecodedTile？或我们 datasource 的 tilesPending/重解码节奏），并在退化帧出现时阻止捕获（如捕获前校验 calls 阈值）。309 单测绿、tsc 绿。
+
+**§762. 捕获守卫实施 + casting 残差改判解码/材质域（2026-09-03）**：
+
+① **捕获守卫落地**：info.reset 钩子维护 `__mbLastFrameCalls`，harness 捕获前等待 calls≥20 的全帧（有界 15s，GUARD 探针实证 exit 0 iters/calls=2404=立即命中全帧）。② **重要改判**：捕获守卫生效后 casting 仍 424,784 px、建筑缺席——**排除"退化帧捕获时机"假设**（捕获帧为 2404 calls 全帧），缺陷定案在**该夹具建筑 fill-extrusion 层的解码/材质域**（R2/R3 cast-shadows 门控嫌疑：建筑层与树层的门控交互；或挤出注入序在 mapbox 矢量源上的材质问题）。③ 解码普查：单瓦片 15/5242/12664 objects=162（内容已在）。下一入口：对建筑 extruded-polygon 材质做 visible/注入链检查（R2/R3 门控回归排查），对照 §723 时代 94/95 采样吻合记录。309 单测绿、tsc 绿。
