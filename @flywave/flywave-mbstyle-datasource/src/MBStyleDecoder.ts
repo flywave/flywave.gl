@@ -692,6 +692,9 @@ class MBElevationOnlyProcessor implements IGeometryProcessor {
 }
 
 export class MBStyleDecoder extends ThemedTileDecoder {
+    /** §772b: all live instances — runtime paint ops must reconfigure every
+     * decoder copy (the geojson model-source path decodes through its own). */
+    static s_instances: MBStyleDecoder[] = [];
     private m_omvAdapter: OmvDataAdapter;
     private m_geoJsonAdapter: GeoJsonDataAdapter;
     private m_layerEvaluator: MBLayerEvaluator | undefined;
@@ -805,11 +808,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         super.configure(options, customOptions);
         if (customOptions?.mbStyle) {
             const style = customOptions.mbStyle as StyleSpecification;
-            { const g: any = (globalThis as any); g.__cfgN = (g.__cfgN ?? 0) + 1;
-              const tl = (style.layers ?? []).find((l: any) => l.id === 'tree-layer');
-              if (g.__cfgN <= 8) console.log('[CFG] n=' + g.__cfgN + ' treeLayerMix=' + JSON.stringify(tl?.paint?.['model-color-mix-intensity'])); }
-            this.m_layerEvaluator = new MBLayerEvaluator(style);
-            this.applyThemeToEvaluator();
+            this.applyRuntimeStyle(style);
             // §236: emit the per-tile background fill only for geojson
             // content styles (the coverage tiles then carry the fogged
             // background like mgl's draw_background; raster styles keep the
@@ -936,6 +935,29 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         };
     }
 
+    /** §772b: rebuild the layer evaluator (and derived flags) from `style`. */
+    private applyRuntimeStyle(style: StyleSpecification): void {
+        this.m_layerEvaluator = new MBLayerEvaluator(style);
+        this.applyThemeToEvaluator();
+        const hasBg = (style.layers ?? []).some((l: any) =>
+            l.type === 'background' && (l.layout?.visibility ?? 'visible') !== 'none');
+        const hasGeo = Object.values(style.sources ?? {}).some(
+            (src: any) => (src as any)?.type === 'geojson');
+        const isGlobe = (style as any).projection?.name === 'globe'
+            || (style as any).projection?.type === 'globe';
+        this.m_emitBackgroundTiles = hasBg && (hasGeo || isGlobe);
+        this.m_styleHasTerrain = !!(style as any).terrain;
+        this.m_crossSourceCollisions =
+            (style as any).metadata?.test?.crossSourceCollisions !== false;
+        this.m_styleUsesHdElevation = (style.layers ?? []).some((l: any) => {
+            const ref = l.layout?.['fill-elevation-reference']
+                ?? l.layout?.['line-elevation-reference']
+                ?? l.layout?.['circle-elevation-reference']
+                ?? l.layout?.['symbol-elevation-reference'];
+            return typeof ref === 'string' && ref.startsWith('hd-road');
+        });
+    }
+
     /**
      * Override decodeTile to bypass m_styleSetEvaluator check.
      */
@@ -944,10 +966,18 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         tileKey: TileKey,
         projection: Projection
     ): Promise<DecodedTile | undefined> {
+        if (!MBStyleDecoder.s_instances.includes(this)) MBStyleDecoder.s_instances.push(this);
         if (!this.m_layerEvaluator) {
             return Promise.resolve(undefined);
         }
         return this.decodeThemedTile(data, tileKey, undefined as any, projection);
+    }
+
+    /** §772b: push the settled runtime style into every live decoder. */
+    static reconfigureAll(style: StyleSpecification): void {
+        for (const inst of MBStyleDecoder.s_instances) {
+            try { inst.applyRuntimeStyle(style); } catch { /* keep others alive */ }
+        }
     }
 
     /**

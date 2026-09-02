@@ -26,7 +26,7 @@ import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBExpressionEngine } from './MBExpressionEngine';
 import { MBTileDataEmitter } from './MBTileDataEmitter';
 import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
-import { mbCellTileKeyString, mbPendingChildrenPut, mbPendingSourceTilesClear, mbPendingSourceTilesPut, MBPendingChildTile, MBPendingSourceTile } from './MBStyleDecoder';
+import { mbCellTileKeyString, mbPendingChildrenPut, mbPendingSourceTilesClear, mbPendingSourceTilesPut, MBPendingChildTile, MBPendingSourceTile, MBStyleDecoder } from './MBStyleDecoder';
 import { SpriteAtlas } from './materials/MapIconMaterial';
 import { MBStyleRuntime } from './MBStyleRuntime';
 import { MBEnvironmentManager } from './MBEnvironmentManager';
@@ -1970,6 +1970,9 @@ export class MBStyleDataSource extends TileDataSource {
         }
         this.m_runtime = new MBStyleRuntime(style, () => {
             // On style change: reconfigure decoder and mark tiles dirty
+            // §772b: runtime paint ops must reach EVERY live decoder copy
+            // (the geojson model-source path decodes through its own instance).
+            MBStyleDecoder.reconfigureAll(this.m_runtime!.style);
             this.decoder.configure(undefined, {
                 mbStyle: this.m_runtime!.style,
                 currentSourceId: this.m_currentSourceId,

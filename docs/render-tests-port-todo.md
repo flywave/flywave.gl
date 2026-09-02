@@ -7693,3 +7693,7 @@ CFG 探针（decoder.configure 入口）读数：configure n=4-6 收到的 tree-
 **§771g. mgl 精确雾公式落地：casting 729,580→583,378（−20%）、hard-cutoff −19%，雾族零回归（2026-09-03）**：
 
 对照 mgl `_prelude_fog.fragment`（fog_range 无 shift 项：T=(depth−r0)/(r1−r0)，r0/r1=style fog range 原值，depth=视长/ccd）修正 injectExtrusion3DLighting 内联雾——旧式 `(d̂ − (r0+shift))/(r1−r0)` 在同距离下雾量低估 ~0.23。**验证**：casting 729,580→**583,378（−20%）**；hard-cutoff 168,847→136,191（−19%）；ground-shadow-fog 135,914（持平）。trees-use-theme 202,959 不变（其错配主体为树冠/背景域，雾变化量低于计数灵敏度）。309 单测绿、tsc 绿。
+
+**§772c. 第二 decoder 实例遍历重配置落地；trees-use-theme 残余改判为层覆盖结构域（2026-09-03）**：
+
+① **reconfigureAll 落地**：MBStyleDecoder 静态实例注册表（decodeTile 首调时注册）+ `MBStyleDecoder.reconfigureAll(style)`（逐实例 applyRuntimeStyle 重建 evaluator+派生旗标），onChange 回调接入——runtime paint op 现在到达所有活 decoder 副本。② 实测 trees-use-theme 仍 202,959——结合 §771f 双层取证：expected 的橄榄树冠来自 tree-layer-diffuse（LUT 绿→橄榄），ours 每位置仅一树（暗栗）——**tree-layer-diffuse 的树在我方缺失或被 tree-layer 覆盖**（层覆盖结构域）。③ 残余收敛入口：两 model 层的 renderOrder/绘制次序 + tree-layer-diffuse 的放置核验（PROTO 已证 tree-no-material 加载成功）。309 单测绿、tsc 绿。
