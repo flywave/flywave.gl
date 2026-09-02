@@ -7721,3 +7721,7 @@ INST 探针（instantiate 处）实证：tree-layer（ro 10.003）与 tree-layer
 **§774c. trees-use-theme 双树错开实因定案：diffuse 层 model-translation [0,0,100] 的 z 抬升未在我方生效（2026-09-03）**：
 
 两层 paint 对比：tree-layer（model-scale [70,50,50]，mix 1.0→op 0，color red）与 tree-layer-diffuse（同 scale/rotation，**model-translation [0,0,100]**，无 color/use-theme）。expected 的橄榄树冠 = **diffuse 层树抬升 +100m 后的悬空树**（pitch 60 下屏面上移），栗色树 = tree-layer 的树——expected 图中两族树确实分层可见（与我们此前"同位重叠"的判读修正：expected 双族都在，只是 diffuse 抬升后不遮挡）。ours 的绿族（diffuse）与栗族（tree-layer）位置关系与 expected 的分层几何接近——主体残差实为：①diffuse 层树的 z 抬升量/方向在两引擎间是否一致（需 placement z=+100m 的投影对照）；②树冠着色（LUT/光照）域。入口：量测我方 diffuse 树的世界 z 与 expected 抬升量的对照（camHeight/d̂ 探针已有）。309 单测绿、tsc 绿。
+
+**§774d. trees-use-theme 残余量化更新：diffuse 层橄榄冠覆盖率 ~2%（2026-09-03）**：
+
+全修复链当前基线（§774 回退后+§771b 等待+§771g 雾式）：ours 橄榄冠像素 231（质心 (274,274)）vs expected 10,411（质心 (246,266)）——**位置域已对齐（质心偏差 <30px），覆盖率差 ~45×**。即 diffuse 层树已开始以正确色系渲染，但仅极少数像素达橄榄域。收敛入口：①tree-layer 与 diffuse 层的绘制次序/深度竞争（maroon 树覆盖橄榄树的面积差）；②diffuse 树的 LUT 采样坐标域（§773 mgl 精确式落地后的首次覆盖，需逐冠对拍）。309 单测绿、tsc 绿。
