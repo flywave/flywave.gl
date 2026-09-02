@@ -203,6 +203,9 @@ export function applyMglModelLighting(
     // §734: mgl drawMesh:241/255 — model-color-use-theme:'none' passes NULL
     // as the layer LUT, so the whole layer (textures included) is unthemed.
     lutOff?: boolean,
+    // §739: model-receive-shadows (default true) — false layers never sample
+    // the shadow map (mgl draw_model:557-560 shadowRenderer.enabled=false).
+    receiveShadows?: boolean,
 ): void {
     const ls = dataSource?.m_environment?.lighting3DState;
     model.traverse((o) => {
@@ -292,14 +295,19 @@ export function applyMglModelLighting(
                 // §562: model self/ground-shadow reception (mgl
                 // shadowed_light_factor_normal replaces NdotL in the direct
                 // term). Intensity 0 keeps non-shadow styles untouched.
+                // §739: model-receive-shadows:false layers (draw_model:557-560
+                // shadowRenderer.enabled=false) must NOT register the refresh
+                // handle — uMBShIntensity stays 0 and the tail never samples.
                 shader.uniforms.uMBShMap = { value: null as any };
                 shader.uniforms.uMBShMatrix = { value: new THREE.Matrix4() };
                 shader.uniforms.uMBShIntensity = { value: 0 };
-                mbShadowLitUniforms.add(mat.userData.__mbShU = {
-                    map: shader.uniforms.uMBShMap,
-                    matrix: shader.uniforms.uMBShMatrix,
-                    intensity: shader.uniforms.uMBShIntensity,
-                });
+                if (receiveShadows !== false) {
+                    mbShadowLitUniforms.add(mat.userData.__mbShU = {
+                        map: shader.uniforms.uMBShMap,
+                        matrix: shader.uniforms.uMBShMatrix,
+                        intensity: shader.uniforms.uMBShIntensity,
+                    });
+                }
                 // Runtime `setLights`: keep the uniform OBJECTS so a per-frame
                 // sync can refresh their values without a recompile (mirrors
                 // mgl re-uploading u_lighting_* every draw).
@@ -1130,7 +1138,8 @@ export class MBModelRenderer {
                 : undefined;
             applyMglModelLighting(this.m_dataSource, model, pl.emissive ?? 0, tint,
                 undefined, undefined, undefined,
-                (technique as any)._paint?.['model-color-use-theme'] === 'none');
+                (technique as any)._paint?.['model-color-use-theme'] === 'none',
+                (technique as any)._paint?.['model-receive-shadows'] !== false);
             if (Number.isFinite(pl.roughness)) {
                 model.traverse((o) => {
                     const mesh = o as THREE.Mesh;

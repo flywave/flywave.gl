@@ -7520,3 +7520,8 @@ model-state/*（feature-state/opacity/node-lod-zoom/multiple-features/part-opaci
 **§738. 实例化模型 cast-shadows 门控修复——_paint 缺失（2026-09-02，代码落地）**：
 
 静态扫描发现：emitter 的 model 分支从未 stash `_paint` → MBModelRenderer:1099 的 `technique._paint?.['model-cast-shadows'] !== false` 恒 undefined → 恒 true → **cast-shadows:false 的层照常投影**。命中夹具：`trees-zoom-based-scale`（tree-layer false）+ `buildings-trees-shadows-casting`（tree-layer 与 tree-layer-not-receiving 双 false，ml-0901 42.4万——错误的树影很可能占大头）。§734 的实例化 lutOff 门控同样因此失效（读同一字段）。修复：emitter model 分支 stash `props._paint = p`（求值后的 paint dict，与 symbol/extrusion 技术同名约定一致），MBModelRenderer 既有读取自动生效。另核实 0.65 地形阴影抑制（draw_model:541-556）仅 zoom-dep opacity 触发、无夹具命中，维持不实现。单测 305 绿、tsc 绿。
+
+
+**§739. model-receive-shadows per-layer 门控（2026-09-02，代码落地）**：
+
+`model-receive-shadows:false` 命中 4 处——**buildings-trees-shadows-casting 的 tree-layer-not-receiving**（层名即语义：期望该树层不被建筑阴影变暗）+ trees-zoom-based-scale + color-theme/trees-monochrome。我方阴影接收 uniform 刷新为全局（syncModelShadowUniforms 写所有注册 handle）→ false 层照常接收=真分歧。修复：applyMglModelLighting 增 `receiveShadows` 参数（默认 true）——false 层**不注册** `__mbShU` 刷新 handle，uMBShIntensity 恒 0 → tail 的 `uMBShIntensity>0` 采样门永不开启（等价 mgl draw_model:557-560 shadowRenderer.enabled=false）。穿线 instantiate（technique._paint，§738 stash 后生效）与 MBStyleDataSource models 注册表。单测 305 绿、tsc 绿。
