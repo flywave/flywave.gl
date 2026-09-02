@@ -4267,17 +4267,39 @@ export class MBMaterialPatchManager {
             const tilesAtZoom = Math.pow(2, tileZoom);
             const latN = mercLat(hsRow / tilesAtZoom);
             const latS = mercLat((hsRow + 1) / tilesAtZoom);
-            // Default illumination: calibrated 315 — matches the expected
-            // images' mgl generation. Re-wiring experiments (§625, 2026-08-30):
-            // explicit paint 335 → 37433, directional-light azimuth 200 →
-            // 41283, both worse than the constant (36408) — the expected was
-            // likely generated with enable3dLights() inactive and the
-            // direction sensitivity here is small; the family residual
-            // (~36k) is emissive/ground-radiance calibration, not azimuth.
-            // Evaluator default is spec-335: wiring through it flips every
-            // default fixture (+60k, 2026-08-29).
-            const azimuth = 315 * Math.PI / 180 + Math.PI;
+            // §741: mgl hillshade_program:74-89 azimuth semantics —
+            //   anchor 'viewport' (default): azimuthal = rad(direction) − angle
+            //     (angle = −bearing → + bearing in degrees);
+            //   anchor 'map' + 3D lights: azimuthal = the directional light's
+            //     own azimuth (cartesianPositionToSpherical round-trips to it);
+            //   otherwise: rad(direction).
+            // The §625 constant-315 was a calibration of the same knob;
+            // spec default direction is 335 and the §625 delta (36,408 vs
+            // 37,433) is inside single-frame jitter.
+            const dsHs: any = this.m_dataSource;
+            const hsLights = dsHs?.m_environment?.lighting3DState ?? null;
+            const dirDeg = Number(technique._hillshadeDirection ?? 335) || 335;
+            const anchor = technique._hillshadeAnchor ?? 'viewport';
+            let azimuthalDeg: number;
+            if (anchor === 'viewport') {
+                const bearingDeg = Number(dsHs?.m_styleManager?.getStyle?.()?.bearing
+                    ?? dsHs?.mapView?.bearing ?? 0);
+                azimuthalDeg = dirDeg + bearingDeg;
+            } else if (hsLights) {
+                const lightAz = Number(
+                    dsHs?.m_environment?.m_3DDirectional?.direction?.[0] ?? 210);
+                azimuthalDeg = lightAz;
+            } else {
+                azimuthalDeg = dirDeg;
+            }
+            const azimuth = azimuthalDeg * Math.PI / 180 + Math.PI;
             const exaggeration = intensity;
+            // §741: LIGHTING_3D_MODE tail — mix(color×u_ground_radiance,
+            // color, hillshade-emissive-strength) with the CPU-encoded sRGB
+            // radiance from the environment (lights.ts calculateGroundRadiance).
+            const hsGroundRad: [number, number, number] = hsLights
+                ? (hsLights.groundRadiance ?? [1, 1, 1]) : [1, 1, 1];
+            const hsEmissive = Number(technique._hillshadeEmissive ?? 0);
             const colShadow = new THREE.Color(technique.color ?? '#000000');
             const colHighlight = new THREE.Color(technique._hillshadeHighlight ?? '#ffffff');
             const colAccent = new THREE.Color(technique._hillshadeAccent ?? '#000000');
@@ -4290,6 +4312,9 @@ export class MBMaterialPatchManager {
                 shader.uniforms.uMBHsLat = { value: new THREE.Vector2(latN, latS) };
                 shader.uniforms.uMBHsAz = { value: azimuth };
                 shader.uniforms.uMBHsExag = { value: exaggeration };
+                shader.uniforms.uMBHs3D = { value: hsLights ? 1 : 0 };
+                shader.uniforms.uMBHsGroundRad = { value: new THREE.Vector3(hsGroundRad[0], hsGroundRad[1], hsGroundRad[2]) };
+                shader.uniforms.uMBHsEmissive = { value: hsEmissive };
                 shader.uniforms.uMBHsShadow = { value: new THREE.Vector3(colShadow.r, colShadow.g, colShadow.b) };
                 shader.uniforms.uMBHsHighlight = { value: new THREE.Vector3(colHighlight.r, colHighlight.g, colHighlight.b) };
                 shader.uniforms.uMBHsAccent = { value: new THREE.Vector3(colAccent.r, colAccent.g, colAccent.b) };
@@ -4301,6 +4326,9 @@ export class MBMaterialPatchManager {
                      uniform vec2 uMBHsLat;     // tile north/south edge latitude (deg)
                      uniform float uMBHsAz;     // azimuth + PI (mgl convention)
                      uniform float uMBHsExag;   // hillshade-exaggeration
+                     uniform float uMBHs3D;     // LIGHTING_3D_MODE gate
+                     uniform vec3 uMBHsGroundRad; // sRGB ground radiance
+                     uniform float uMBHsEmissive; // hillshade-emissive-strength
                      uniform vec3 uMBHsShadow;
                      uniform vec3 uMBHsHighlight;
                      uniform vec3 uMBHsAccent;
@@ -4400,6 +4428,14 @@ export class MBMaterialPatchManager {
                      vec4 mbShadeC=mix(vec4(uMBHsShadow,1.0),vec4(uMBHsHighlight,1.0),mbShade)
                          *sin(mbSS)*mbCI;
                      vec4 mbGl=mbAccC*(1.0-mbShadeC.a)+mbShadeC;
+                     // §741 mgl LIGHTING_3D_MODE tail
+                     // (apply_lighting_with_emission_ground): the hillshade
+                     // color is lit by the sRGB ground radiance unless the
+                     // layer's hillshade-emissive-strength mixes it back.
+                     if (uMBHs3D > 0.5) {
+                         mbGl.rgb = mix(mbGl.rgb * uMBHsGroundRad, mbGl.rgb,
+                             clamp(uMBHsEmissive, 0.0, 1.0));
+                     }
                      // mgl writes the hillshade value straight to the
                      // framebuffer; three's colorspace_fragment re-encodes
                      // gl_FragColor to sRGB on the way out — pre-decode so the

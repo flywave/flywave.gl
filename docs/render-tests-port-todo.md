@@ -7530,3 +7530,8 @@ model-state/*（feature-state/opacity/node-lod-zoom/multiple-features/part-opaci
 **§740. DEM 压平核心抽纯函数 + 4 例单测锁死（2026-09-02，重构+测试）**：
 
 applyDemFlattening 的 per-tile 数学（行翻转映射/demAtt/region A 均值/region B 衰减传播/防波）抽取为纯函数模块 MBTerrainFlatten.ts（flattenDemFootprint + makeDemFlattenScratch），applyDemFlattening 收敛为编排壳（环境守卫/环世界还原/tile 遍历/幂等守卫/needsUpdate）。新增 MBTerrainFlattenTest 4 例：①行翻转锁死（世界 y∈[6,10] 足迹必须落在数据行 6..9——§729 镜像 bug 的回归防线）；②region A 恒等于覆盖像素均值；③跨台阶足迹的 region A 常数均值严格介于两台阶之间（证明均值+衰减链活着）+远场不变；④跨界足迹跳过（distanceToBorder<0）。309 passing（+4）、tsc 绿。
+
+
+**§741. hillshade illumination/emissive 正式接线（2026-09-02，代码落地——§625/9f7fa341 回退项重启）**：
+
+mgl hillshade_program:74-89 + hillshade.fragment.glsl 全公式对照后接线（此前 +60k 回退的重新裁定：§625 的 315 常量 vs 335 接线差 36,408 vs 37,433 ≈ 2.7%——按"容差应考虑单帧抖动"属噪声级；08-29 的 +60k 实验疑另有缺陷，非接线本身）。**三分支方位语义**：①anchor viewport（默认）= rad(illumination-direction，spec 默认 335) + bearing（mgl azimuthal−=angle，angle=−bearing）；②anchor map + 3D lights = 方向光自身方位角（sphericalDirectionToCartesian→cartesianPositionToSpherical 往返还原原始 az，实测往返恒等）；③否则 rad(direction)。**LIGHTING_3D_MODE 尾巴补齐**（报告 #16"无 emissive 消费者"）：`mix(mbGl.rgb×u_ground_radiance, mbGl.rgb, clamp(hillshade-emissive-strength))`——groundRadiance 用环境既有 CPU 编码 sRGB 值（MBEnvironmentManager:448，lights.ts calculateGroundRadiance 同构），在 mbGl（sRGB 域）上乘、线性预解码前插入。非 3D-lights 样式 uMBHs3D=0 全分支惰性（hillshade/ 主类夹具零影响）。命中：lighting-3d-mode/hillshade/{measure-light,align-with-directional-light,fixed-parameters}（报告 #16 22.6万）+ emissive-strength/hillshade/{terrain,no-terrain,draped-mrt}。风险=335 默认 vs §625 315 标定的方位差（噪声级）+ align-with-directional-light 的方位改由灯光驱动（夹具名即此语义）。309 绿、tsc 绿。

@@ -1421,6 +1421,18 @@ export class MBTileDataEmitter {
                 props._hillshadeIntensity = p['hillshade-exaggeration'] ?? 0.5;
                 props._hillshadeAccent = p['hillshade-accent-color'] ?? '#000000';
                 props._hillshadeHighlight = p['hillshade-highlight-color'] ?? '#ffffff';
+                // §741: mgl hillshade_program:74-89 — illumination-direction
+                // (spec default 335), illumination-anchor (viewport: azimuth
+                // rotates by the map bearing; map + 3D lights: the azimuth
+                // comes from the directional light's own direction), and
+                // hillshade-emissive-strength (LIGHTING_3D_MODE tail
+                // mix(color×groundRadiance, color, e)).
+                props._hillshadeDirection = p['hillshade-illumination-direction']
+                    ?? l['hillshade-illumination-direction'] ?? 335;
+                props._hillshadeAnchor = p['hillshade-illumination-anchor']
+                    ?? l['hillshade-illumination-anchor'] ?? 'viewport';
+                props._hillshadeEmissive = p['hillshade-emissive-strength']
+                    ?? l['hillshade-emissive-strength'] ?? 0;
                 if (l.visibility === 'none') props.enabled = false;
                 break;
             case 'raster':
