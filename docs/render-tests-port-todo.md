@@ -7505,3 +7505,8 @@ mgl APPLY_LUT_ON_GPU（draw_model:172-178：有 color-theme 即对**所有**模�
 **§734. use-theme:'none' 整层 LUT 排除 + 静态扫描收口（2026-09-02，代码落地）**：
 
 ①**修正 §727 的一个偏差**：mgl drawMesh:241/255——`model-color-use-theme:'none'` 的层把 LUT 传 **null**，APPLY_LUT_ON_GPU define 不推 → **整层（含纹理/自发光）不 themed**；§727 的 GPU LUT 对该层照常应用。修复：applyMglModelLighting 增 `lutOff` 参数（uMBLutOn=0 且不绑纹理），穿线全部 6 个调用点（instantiate 经 technique._paint、applyMeshFeatures/refreshMeshFeatures 经 paint、splitByPart 子 mesh、batched whole-tile、MBStyleDataSource models 注册表）。evalPart 的 CPU 门控 §727 已正确，本轮统一由调用方传 `lutOff ? null : lut` 收敛。②**0.65 阴影门控裁定**：mgl draw_model:541-556 的地形下阴影抑制（opacity<0.65 且 opacity 表达式为 ZoomDependentExpression 时跳过 shadow pass）——资产扫描确认无夹具触发（trees-puck-terrain 的 0.5 为常量、非 zoom-dep，mgl 照常投影），不实现，记录在案。③**数据驱动 transform 全量扫描**：227 处 model-scale/rotation/translation 表达式逐项核查——batched 瓦片仅 zoom 插值（applyNodeTransforms 逐帧求值 ✓），feature 驱动全部在实例化/矢量路径（per-feature 求值+§725.4 ✓），无新缺口。单测 300 绿（396ms）、tsc 绿。
+
+
+**§735. model-state 子家族调研——location-indicator 为 JS 未实现语义（2026-09-02，分析记录）**：
+
+model-state/*（feature-state/opacity/node-lod-zoom/multiple-features/part-opacity）用 `model-type:'location-indicator'`。spec 语义="显示于其它 3D 内容之上、被地形遮挡"；但 mgl JS 渲染代码**零消费**（仅 style_layer_properties 声明，行为在原生 SDK）——JS 出的 expected 即普通渲染，我方同样忽略即等价，无需实现。node-lod-zoom 的 LOD 距离切换由 tiler 预拆分瓦片承载（-lod 命名），静态等价 ✓。part-opacity（per-part alpha/opacity）✓ 已实现。feature-state ✓ §725.4。至此 model-layer 静态对齐域再次确认穷尽，余项均为运行时取证（§728 清单①-④+§733 的 gamma A/B 裁定）。
