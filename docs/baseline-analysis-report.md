@@ -450,3 +450,7 @@ mergeDepth 限深修复落地：§643 粘性 stash 的无界异步递归链截�
 2. vector-layer-external-models 40,430 → 外部 glTF 模型整体未加载——模型加载专项新立案。
 3. **×0.77 结案**：road 像素 ours==expected 逐位一致，残差已消解。
 4. 剩余开放：引擎渲染清单专项（挤出/globe fill 零光栅化）、模型 LUT、model-external 加载、emission/doors 光照标定、P2-B conflation 归因。
+
+### §十五 trees-use-theme 资产取证（2026-09-02，§752）
+
+绿冠=tree-metallic 原始 COLOR_0 顶点色（非变体错配、非 LUT 链断裂）；残差=use-theme:'none' 下全局主题 LUT 对模型顶点色的作用域与 mgl 的精确语义偏差（draw_model ignoreLut 传 null 的作用范围待端到端对拍）。归入模型 LUT 专项，与 draw_model getBaseColor 端到端重读合并立案。
