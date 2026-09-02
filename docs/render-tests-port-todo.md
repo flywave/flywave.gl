@@ -7609,3 +7609,7 @@ modelscale=0.5 目视判读：鸭子（黄、眼+橙喙）与枫树（绿）按 
 **§761. 引擎渲染清单定案级事实：主 renderer 每帧仅 1 call/960 tris——可见内容由离屏/合成管线提供（2026-09-03）**：
 
 RIDRAW 探针改挂 AfterRender 直读并设 `info.autoReset=false` 取累计值：buildings-trees-shadows-casting 主 renderer **每帧恒 1 call / 960 triangles**（f=1..3 恒定）。判读：可见帧中的街道网格+树（远超 960 tri）不可能由该 renderer 直绘——**flywave 引擎的内容渲染发生在离屏/Worker 合成管线，主 renderer 只做最终合成（960 tri ≈ 合成 quad + 少量叠加）**。这一事实重定义了零光栅化问题的定位域：19 个挤出网格是否进 GL，须在**合成管线内部**取证（Spector 对各 context 的 draw 列表，或 TileObjectsRenderer 的渲染清单枚举），主 canvas renderer.info 不再是有效观测点（§760 的探针静默与此吻合）。309 单测绿、tsc 绿。探针保留（autoReset=false 模式）。
+
+**§761b. 零光栅化机制收窄：双态渲染实锤——完整帧（143 calls/29,501 tris，含建筑）确实发生但被退化帧（1 call/960 tris）支配，捕获命中退化态（2026-09-03）**：
+
+info.reset 钩子（每次复位前读累计值）14 个样本分布：**10× [1 call/960 tris]（退化帧：无建筑）、2× [143 calls/29,501 tris]（完整帧：含建筑等全部内容）、2× [85 calls/18,089 tris]（中间态）**。结论：①"挤出零光栅化"并非网格永远进不了 GL——**完整帧确实渲染了它们**；②退化帧占 ~80%，harness 的 settle 捕获命中的是退化帧 → buildings 缺席；③这解释了 willCensus（WillRender 时网格在场景）与像素缺失的"矛盾"——退化帧里 tile objects 在渲染清单组装前被清空/未挂回。④下一入口（专用会话）：定位两态切换的驱动——引擎渲染循环中 tile objects 的 add/clear 时机（谁在退化帧把对象清掉了：markTilesDirty 后的 removeDecodedTile？或我们 datasource 的 tilesPending/重解码节奏），并在退化帧出现时阻止捕获（如捕获前校验 calls 阈值）。309 单测绿、tsc 绿。
