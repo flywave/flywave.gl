@@ -7657,3 +7657,7 @@ RST 探针（reset 时同步读 sceneRoot mesh 数）：全帧 sceneMeshes=**164
 **§771. live-paint 修复入库 + trees-use-theme 残余定性为全帧色彩精确域（2026-09-03）**：
 
 ① **修复入库**：emitter placement tint 的 paint 读取顺序翻转（§771）——`paintDefs?.value`（runtime op 前的样式快照）此前优先于被 op 更新的 `layer.paint`，model-color/-mix-intensity 的 runtime op 被 stale 快照遮蔽；现在活值优先、paintDefs 兜底。② 实测 trees-use-theme 202,959 仍逐位恒定——结合全帧 77% 像素错配（连背景红 (255,0,0) 双方一致的情况下总量仍巨大），**残余定性为全帧级 LUT/色彩精确域**（LUT 采样精度/色彩空间链的微小全域偏差），非单点断链——归入 LUT 精确标定专项（需 LUT 采样逐通道对拍）。③ 语义修复（live-paint 优先 + §770 entryId 合成）保留。309 单测绿、tsc 绿。
+
+**§772. LUT 逐通道对拍定案：GPU 采样 g/b 转置修复入库（真实正确性修复）；冠色红染仍由 placement tint 链主导（2026-09-03）**：
+
+① **转置缺陷实锤并修复**：CPU applyColorTheme 索引 = `r + g·N² + b·N`（图像宽 N²：x = r+b·N，y = g），GPU mbLutTap 却用 `x = r+g·N, y = b` —— **g/b 轴转置**。已改为 x = r+b·N、y = g（与 CPU 逐 texel 对齐）。② 实测 trees-use-theme 202,959 逐位不变——转置修复被上游遮蔽：**placement tint（model-color 红 × mix=1）仍在**，皇冠=红染+LUT，遮蔽了 LUT 采样差异；tint 链的 runtime op 断点（§770）需交互式追踪先行。③ 转置修复对全部 GPU LUT 模型（trees-zoom-based-scale、color-theme 模型族）都是正确性收益，保留。309 单测绿、tsc 绿。
