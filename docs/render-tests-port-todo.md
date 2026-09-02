@@ -7669,3 +7669,7 @@ diff 图目视+像素统计：202,959 错配铺满全帧——**ours 背景/地�
 **§771c. LUT 布局对拍确认 + trees-use-theme 背景暗红新洞察（2026-09-03）**：
 
 ① **§772 修复获得 mgl 侧印证**：mgl LUT = Texture3D（draw_model:172，[N,N,N]）——图像 x = b·N + r、y = g，与修复后的 mbLutTap 完全一致；CPU applyColorTheme 索引同样正确。LUT 布局域全部洗清。② **背景暗红新洞察**：expected 背景纯红 (255,0,0) = mgl 背景不受雾影响；ours 暗红 (170,0,0) = 走了 §572 雾化背景管线（applyBackgroundColor 的 fogged background quad 仲裁）——trees-use-theme 无地形的背景在 mgl 不吃雾。下一入口：§572 背景雾仲裁条件复核（globeFogActive/fog 树种判定是否误纳非雾背景）。309 单测绿、tsc 绿。
+
+**§771d. trees-use-theme 背景域量化定案：雾覆盖不足（alpha<1），非 LUT（2026-09-03）**：
+
+① **LUT 洗清**：离线解码主题 PNG（N=32 RGBA）——纯红 texel (31,0,0)=(255,0,0) 恒等、白 (31,31,31)=(255,0,0)（主题把白→红）——LUT 内容与我方 CPU/GPU 采样均无冲突。② **背景量化**：style background-color=#aaaaaa、fog range=[-1.5,3.0]（全域覆盖，mgl 背景应被雾完全覆盖呈雾主题色纯红 255,0,0——雾色 default 白经主题→红）；ours 背景实测 (170,0,0) = 灰底×红的部分混合（alpha<1）。**定案：背景雾 quad 的覆盖/alpha 不足**（mgl full fog 覆盖 vs 我方部分混合），MBBackgroundFogRenderer 的 alpha/r0/r1/shift/distCam 参数域标定为收敛入口（与 §701 雾标定同族）。③ 溢出说明：本节量测均在无头日志/离线 PNG 解码完成，无需交互式 devtools。309 单测绿、tsc 绿。
