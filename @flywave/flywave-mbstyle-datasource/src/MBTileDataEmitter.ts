@@ -347,6 +347,10 @@ if (typeof window !== 'undefined' &&
     (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'nocull=1')) {
     (globalThis as any).__mbNoCull = true;
 }
+if (typeof window !== 'undefined' &&
+    (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'extflat=1')) {
+    (globalThis as any).__mbExtFlat = true;
+}
 
 function tessellateForSphere(
     verts: number[], indices: number[], extents: number, decodeInfo: DecodeInfo

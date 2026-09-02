@@ -1572,6 +1572,15 @@ export class MBMaterialPatchManager {
                 if (technique._layerId && paint['building-color']) {
                     this.patchBuildingMaterial(material, technique);
                 } else {
+                    if ((globalThis as any).__mbExtFlat) {
+                        // §763 probe: force unlit red — separates "geometry/
+                        // depth invisible" from "shader output invisible".
+                        (material as any).map = null;
+                        (material as any).color = new THREE.Color('#ff0000');
+                        (material as any).onBeforeCompile = () => {};
+                        (material as any).needsUpdate = true;
+                        break;
+                    }
                     this.patchExtrusionMaterial(material, paint, technique, obj as THREE.Mesh);
                 }
                 break;

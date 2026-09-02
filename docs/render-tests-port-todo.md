@@ -7617,3 +7617,7 @@ info.reset 钩子（每次复位前读累计值）14 个样本分布：**10× [1
 **§762. 捕获守卫实施 + casting 残差改判解码/材质域（2026-09-03）**：
 
 ① **捕获守卫落地**：info.reset 钩子维护 `__mbLastFrameCalls`，harness 捕获前等待 calls≥20 的全帧（有界 15s，GUARD 探针实证 exit 0 iters/calls=2404=立即命中全帧）。② **重要改判**：捕获守卫生效后 casting 仍 424,784 px、建筑缺席——**排除"退化帧捕获时机"假设**（捕获帧为 2404 calls 全帧），缺陷定案在**该夹具建筑 fill-extrusion 层的解码/材质域**（R2/R3 cast-shadows 门控嫌疑：建筑层与树层的门控交互；或挤出注入序在 mapbox 矢量源上的材质问题）。③ 解码普查：单瓦片 15/5242/12664 objects=162（内容已在）。下一入口：对建筑 extruded-polygon 材质做 visible/注入链检查（R2/R3 门控回归排查），对照 §723 时代 94/95 采样吻合记录。309 单测绿、tsc 绿。
+
+**§763. casting 建筑二分定案：几何可达屏，注入着色器链输出不可见（extflat 796,560 vs 424,784）（2026-09-03）**：
+
+`extflat=1` 探针（patchExtrusionMaterial 入口强制纯红无注入）：错配 424,784→**796,560**——红色建筑体大量上屏（几何/深度/位置域无恙，R2/R3 门控洗清——cast-shadows 仅作用于 model 层，不涉 fill-extrusion 建筑）。**定案：正常注入链的着色器输出不可见**（alpha=0/discard 类），嫌疑链=injectExtrusion3DLighting（§550）+ injectGroundShadow（§577-588 mix）+ §714 shadow-uv 探针序 + height-ramp 的组合输出。下一入口：注入链逐段二分（保留/禁用各 inject），定位产出 alpha=0 或 discard 的段。探针 extflat 已入库（karma arg）。309 单测绿、tsc 绿。
