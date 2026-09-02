@@ -1033,7 +1033,14 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         tileKey: TileKey,
         _styleSetEvaluator: any,
         projection: Projection,
-        zoomOverride?: number
+        zoomOverride?: number,
+        // §747: nesting depth of stash-driven merges. The §643 sticky stash
+        // lets every re-decode re-merge, and a child key finding ANOTHER
+        // cell's stash chains the next merge — an unbounded async recursion
+        // (measured: depth hovering 32-40, 116k decodes in 60s → renderer
+        // OOM crash, trees-use-theme family). Deeper than one re-merge level
+        // the stashes are ignored and the tile decodes plainly.
+        mergeDepth: number = 0
     ): Promise<DecodedTile> {
         if (!this.m_layerEvaluator) {
             return { techniques: [], geometries: [] };
@@ -1055,22 +1062,23 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     : tileKey.level - this.m_storageLevelOffset - 1);
         // §511: the provider fetched four mgl-level children for this cell —
         // decode each against its own tileKey and merge (frame-correct).
-        const pendingChildren = mbPendingChildrenTake(
-            mbCellTileKeyString(tileKey));
+        const pendingChildren = mergeDepth < 2
+            ? mbPendingChildrenTake(mbCellTileKeyString(tileKey))
+            : undefined;
         if (pendingChildren && pendingChildren.length > 0) {
             return this.decodeTileWithChildren(
-                data, tileKey, projection, pendingChildren, zoom);
+                data, tileKey, projection, pendingChildren, zoom, mergeDepth);
         }
         // §518: extra vector sources fetched by the provider for this cell —
         // decode each against its own tileKey + sourceId and merge.
         const cellKeyStr = mbCellTileKeyString(tileKey);
-        if (!s_activeSourceMergeKeys.has(cellKeyStr)) {
+        if (mergeDepth < 2 && !s_activeSourceMergeKeys.has(cellKeyStr)) {
             const pendingSources = mbPendingSourceTilesTake(cellKeyStr);
             if (pendingSources && pendingSources.length > 0) {
                 s_activeSourceMergeKeys.add(cellKeyStr);
                 try {
                     return await this.decodeTileWithSources(
-                        data, tileKey, projection, pendingSources, zoom);
+                        data, tileKey, projection, pendingSources, zoom, mergeDepth);
                 } finally {
                     s_activeSourceMergeKeys.delete(cellKeyStr);
                 }
@@ -1279,10 +1287,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         tileKey: TileKey,
         projection: Projection,
         extras: MBPendingSourceTile[],
-        zoom: number
+        zoom: number,
+        mergeDepth: number = 0
     ): Promise<DecodedTile> {
         const cell = await this.decodeThemedTile(
-            data, tileKey, undefined as any, projection, zoom);
+            data, tileKey, undefined as any, projection, zoom, mergeDepth + 1);
         const base: DecodedTile = cell ?? { techniques: [], geometries: [] };
         const out: DecodedTile = {
             techniques: [...base.techniques],
@@ -1309,7 +1318,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     // GeoJSON decode branch parses it); vector extras the raw
                     // MVT bytes.
                     const child = await this.decodeThemedTile(
-                        (ex.payload ?? ex.bytes) as any, exKey, undefined as any, projection, zoom);
+                        (ex.payload ?? ex.bytes) as any, exKey, undefined as any,
+                        projection, zoom, mergeDepth + 1);
                     if (!child) continue;
                     if (ex.instancesOnly) {
                         const childAny0 = child as any;
@@ -1395,10 +1405,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         tileKey: TileKey,
         projection: Projection,
         children: MBPendingChildTile[],
-        zoom: number
+        zoom: number,
+        mergeDepth: number = 0
     ): Promise<DecodedTile> {
         const cell = await this.decodeThemedTile(
-            data, tileKey, undefined as any, projection, zoom);
+            data, tileKey, undefined as any, projection, zoom, mergeDepth + 1);
         const base: DecodedTile = cell ?? { techniques: [], geometries: [] };
         const out: DecodedTile = {
             techniques: [...base.techniques],
@@ -1417,7 +1428,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             try {
                 const childKey = TileKey.fromRowColumnLevel(ch.y, ch.x, ch.z);
                 const child = await this.decodeThemedTile(
-                    ch.bytes as any, childKey, undefined as any, projection, zoom);
+                    ch.bytes as any, childKey, undefined as any, projection, zoom,
+                    mergeDepth + 1);
                 if (!child) continue;
                 const nTech = out.techniques.length;
                 out.techniques.push(...child.techniques);

@@ -439,3 +439,7 @@ globe 相机距离系、fog 逐内容深度语义、depth-occlusion 双 pass、c
 1. **崩溃机制定案**：trees-use-theme 页面死亡 = **无界重解码循环 OOM**（RSS 70s 0→5GB → renderer crash），非永 Await/死锁。60s 内同一批 z15 瓦片解码 11.6 万次。
 2. **驱动收窄**：引擎 tile 管线八探针全零（markTilesDirty/缓存 miss/驱逐/重启/解码入口均无参与）→ 循环在解码器内部调用图；头号嫌疑 = §643 粘性 stash 的异步递归再合并。防御修复入库：registerElevationTile 仅新 key 触发 pending（消除另一潜在循环源）。
 3. 崩溃 4 例（trees-use-theme / trees-zoom-based-scale / vector-layer-external-models±import）同族待治；专用会话入口已记档（§746）。
+
+### §十三 崩溃 4 例根治（2026-09-02，§747）
+
+mergeDepth 限深修复落地：§643 粘性 stash 的无界异步递归链截断（depth<2 才消费 stash）。trees-use-theme 203,504（首次出值）/ trees-zoom-based-scale 212,282 / vector-layer-external-models(-import) 40,430×2——**崩溃 4 例全部从"页面崩溃零结果"转为正常渲染出值**；哨兵逐位持平零回归。P2-A 结案。
