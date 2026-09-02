@@ -467,7 +467,11 @@ export function applyMglModelLighting(
                          }
                          vec3 mbDiffC = mbAlbedo * (vec3(1.0) - vec3(0.04)) * (1.0 - mbMetalTex);
                          vec3 mbSpecC = mix(vec3(0.04), mbAlbedo, mbMetalTex);
-                         vec3 mbL = normalize(uMB3DDir);
+                         // §733: uMB3DDir is WORLD-space — mbV/mbN are VIEW-
+                         // space, so the shared F/V/D terms need the light in
+                         // view too (the legacy branch recomputes its own with
+                         // mbLLeg; the hemisphere branch never uses these).
+                         vec3 mbL = normalize((viewMatrix * vec4(uMB3DDir, 0.0)).xyz);
                          vec3 mbH = normalize(mbV + mbL);
                          float mbNdotL = clamp(dot(mbN0, mbL), 0.0, 1.0);
                          float mbNdotH = clamp(dot(mbN0, mbH), 0.0, 1.0);
