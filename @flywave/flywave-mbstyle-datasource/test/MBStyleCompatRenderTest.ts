@@ -404,6 +404,8 @@ async function renderFrames(
                             }
                         });
                     };
+                    try { const ri = (mapView as any).renderer?.info?.render;
+                        if (ri) console.log('[RIDRAW] calls=' + ri.calls + ' tris=' + ri.triangles + ' frames=' + ri.frame); } catch {}
                     const tiles = (dataSource as any).getDecodedTiles?.() ?? [];
                     for (const t of tiles) {
                         const tk = t.tileKey ? `${t.tileKey.level}/${t.tileKey.column}/${t.tileKey.row}` : '?';

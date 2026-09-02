@@ -7601,3 +7601,7 @@ GLPRINT 探针（injectGroundLighting 编译期 uniform 打印，buildings-trees
 **§759. external-models 标定现状（0.5 档目视裁决）+ 收尾（2026-09-03）**：
 
 modelscale=0.5 目视判读：鸭子（黄、眼+橙喙）与枫树（绿）按 expected 布局合理落地（鸭左树右、贴地、透视/遮挡正确），仅整体偏大 ~1.5× 且光照差。数值扫描（§757）单调性与目视结论合并判读：数值最优偏小是因为模型覆盖区错配计入（ oversized/undersized 均加错配）+ 光照差常量项——**像素差不是有效标定信号，应以特征锚点（鸭眼/喙、树冠轮廓）目视+量测联立标定**。当前最优工作点 modelscale≈0.5（布局正确），残余=尺度 ~1.5×（疑 flywave zoom+1 帧 2^1 因子的残余）+ 光照。标定方法记档：每档渲染后量测鸭眼 (x,y) 与鸭宽，对照 expected (148.8,132.8)/143px。309 单测绿、tsc 绿。
+
+**§760. 引擎渲染清单取证第一轮：renderer.info 探针挂载 + 待解挂载点（2026-09-03）**：
+
+§745 入口首轮执行：RIDRAW 探针（renderer.info.render.calls/triangles/frame）挂入 harness decodedbg dump 闭包——该闭包在 casting 夹具下未触达（MBSceneDump/MBSceneObj 均零输出，疑似该夹具会话内 getDecodedTiles 路径或闭包条件未满足；对照 globe 夹具曾正常输出）。取证状态：buildings-trees-shadows-casting 已有事实链=19 个挤出网格 willCensus tall/visible/parented 全 true + 零 Shader Error + 像素零光栅化；下一步需把 renderer.info 读取挂到**每帧**（AfterRender 内直接读，autoReset 前的窗口）或改用 Spector.drawCall 对拍，并叠加 mbhide 隔离（hide 树层后若挤出入帧数变化即可判定渲染清单归属）。未闭环，维持挂账。309 单测绿、tsc 绿。
