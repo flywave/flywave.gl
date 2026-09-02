@@ -465,13 +465,16 @@ class MBBatchedModelDecoder implements ITileDecoder {
             // §560: batched-model buildings are shadow CASTERS (mgl
             // shadow_renderer renders every model node into the depth map).
             // Layer 1 per descendant (three tests per-renderable layers);
-            // door-light beams (mgl isLight meshes) never cast.
-            outer.traverse((o: any) => {
-                const m = o.isMesh && o.material
-                    ? (Array.isArray(o.material) ? o.material[0] : o.material) : null;
-                if (!(m as any)?.__mbIsLights) o.layers.enable(1);
-            });
-            shadowCasters.add(outer);
+            // door-light beams (mgl isLight meshes) never cast. §738: the
+            // layer's model-cast-shadows (default true) gates the whole tile.
+            if (this.m_paint?.['model-cast-shadows'] !== false) {
+                outer.traverse((o: any) => {
+                    const m = o.isMesh && o.material
+                        ? (Array.isArray(o.material) ? o.material[0] : o.material) : null;
+                    if (!(m as any)?.__mbIsLights) o.layers.enable(1);
+                });
+                shadowCasters.add(outer);
+            }
 
             // World-space height bound for the tile bounding box (z already
             // scaled by secLat inside `inner`).
