@@ -7701,3 +7701,7 @@ CFG 探针（decoder.configure 入口）读数：configure n=4-6 收到的 tree-
 **§771h-b. trees-use-theme 皇冠亮度域量化定案（2026-09-03）**：
 
 同位皇冠区量测：expected = 亮红 (255,1,1)/中红 (117,5,5)（tree-layer 红染 + mix 过渡后原始色叠加）；ours = **黑 (0,0,0)×601 + (51,0,0)** + 少量 (230,42,42)。定案：双层的层序/覆盖已非主因——**皇冠暗面 = LIGHTING_3D_MODE 方向项无地板**（NdotL→0 的背光面直接乘 0 变黑；mgl computeLightContribution 同公式但 ambient(0,0,0,0.4)+directional(0.5) 下 mgl 亮面 255/暗面 117）。归因确认：模型 PBR tail 的方向项缺少 mgl 的环境/indirect 补偿（indirectLightColor = envBRDF·env_light + diffuseColor·env_light，env_light=ambient_color×ambient_factor），即 §694-§721 光照量级标定的核心未完成项。收敛需实现 mgl 的 indirect 分量（含 ambient_factor(n) 随法线的变化），已列入光照专项。309 单测绿、tsc 绿。
+
+**§772d. 双模型层次序对拍定案：两层均放置、renderOrder 正确区分，可见树冠归属待逐像素 A/B（2026-09-03）**：
+
+INST 探针（instantiate 处）实证：tree-layer（ro 10.003）与 tree-layer-diffuse（ro 10.004）的树均被实例化放置——**两层放置无缺失**；PROTO 实证两资产（tree-metallic/tree-no-material）均加载成功。mbhide=diffuse 隔离对照：隐藏 diffuse 后画面与双层渲染基本一致 → 可见树冠为 tree-layer（metallic，mix→0 原始暗色）而非 diffuse 的 LUT 橄榄 → **diffuse 树虽放置但被 tree-layer 深度遮挡/未出像素**（同位重复树的深度竞争：renderOrder 差 0.001 已设置，LEQUAL 下后画者应胜——实际未胜，疑深度写入次序或 ro 相等性精度问题）。剩余收敛入口：①两层的 coplanar 深度竞争逐像素 A/B（depthWrite/polygonOffset/depthFunc）；②hidden-vs-visible 像素差量测定位 diffuse 树的具体像素域。309 单测绿、tsc 绿。

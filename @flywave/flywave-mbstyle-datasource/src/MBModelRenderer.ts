@@ -978,7 +978,8 @@ export class MBModelRenderer {
 
     private async getPrototype(url: string): Promise<THREE.Object3D | null> {
         url = localizeModelUrl(url);
-        { const g: any = (globalThis as any); g.__protoN = (g.__protoN ?? 0) + 1;
+        { const g: any = (globalThis as any); g.__lastProtoUrl = url;
+          g.__protoN = (g.__protoN ?? 0) + 1;
           if (g.__protoN <= 8) console.log('[PROTO] n=' + g.__protoN + ' url=' + url); }
         const cached = this.m_prototypes.get(url);
         if (cached === 'failed') return null;
@@ -1145,6 +1146,8 @@ export class MBModelRenderer {
         model.traverse((o) => { o.renderOrder = ro; });
         model.renderOrder = ro;
         model.userData._mbLayerId = technique._layerId;
+        { const g: any = (globalThis as any); g.__instN = (g.__instN ?? 0) + 1;
+          if (g.__instN <= 8) console.log('[INST] n=' + g.__instN + ' layer=' + technique._layerId + ' ro=' + ro.toFixed(3) + ' url=' + String(g.__lastProtoUrl ?? '?').slice(-30)); }
         group.add(model);
 
         // mgl shadow pass: models with model-cast-shadows (default true) are
