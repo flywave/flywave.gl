@@ -7597,3 +7597,7 @@ GLPRINT 探针（injectGroundLighting 编译期 uniform 打印，buildings-trees
 **§758. external-models 锚点量化定案：dx 随尺寸缩放、dy=112px 恒定（锚点 z/高度语义差）（2026-09-03）**：
 
 以鸭子眼睛（唯一暗斑）为锚点特征，程序化量测三图：expected 眼 (148.8,132.8)；ours scale1.0 (255.1,242.3)（偏移 +106,+109）；ours scale0.5 (181.2,244.6)（偏移 +32,+112）。**判读**：dx 随模型尺寸缩放（尺寸分量，随 scale 收敛）；**dy=112px 恒定、与尺寸无关 = 锚点位置分量**——pitch 60 下等效 ~100-240m 的 z 高程/南向偏移（恰为 schema 树 translation[0,0,100] 同量级，疑 mgl 模型原点的高程语义或我方 z=0 投影与 mgl projectedPoint 的 z 轴差）。结论：位置偏移沿屏幕 y（=z 高程或南北地面分量），与尺寸无关——**修复点在 loadModels placement 的 z/高程锚定**，而非 scale 换算；scale 扫描的单调性由该 dy 完全解释（尺寸×错误位置=单调）。下一入口：①量测 mgl 侧同相机下 z=0 地面点与 duck origin 的像素关系（以街道为地面真值）；②检查 loadModels 的 model.position.z 与引擎 RTE/高程管线的交互（对比 MBModelRenderer.instantiate 的 _mbBasePos+每帧 −eye rebase 路径）。309 单测绿、tsc 绿。
+
+**§759. external-models 标定现状（0.5 档目视裁决）+ 收尾（2026-09-03）**：
+
+modelscale=0.5 目视判读：鸭子（黄、眼+橙喙）与枫树（绿）按 expected 布局合理落地（鸭左树右、贴地、透视/遮挡正确），仅整体偏大 ~1.5× 且光照差。数值扫描（§757）单调性与目视结论合并判读：数值最优偏小是因为模型覆盖区错配计入（ oversized/undersized 均加错配）+ 光照差常量项——**像素差不是有效标定信号，应以特征锚点（鸭眼/喙、树冠轮廓）目视+量测联立标定**。当前最优工作点 modelscale≈0.5（布局正确），残余=尺度 ~1.5×（疑 flywave zoom+1 帧 2^1 因子的残余）+ 光照。标定方法记档：每档渲染后量测鸭眼 (x,y) 与鸭宽，对照 expected (148.8,132.8)/143px。309 单测绿、tsc 绿。
