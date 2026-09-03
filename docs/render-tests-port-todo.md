@@ -7745,3 +7745,7 @@ INST 探针（instantiate 处）实证：tree-layer（ro 10.003）与 tree-layer
 **§775c. 挤出雾深度域同款修正 A/B：负裁决回退，§771g 挤出形式维持（2026-09-03）**：
 
 把 §775b 的 fov-adjusted range + shift·depth 形式套到挤出雾 §771g 内联式——**全面回归**：buildings-trees-shadows-casting 583,378→729,522（+25%）、ground-shadow-fog-hard-cutoff 135,022→174,292（+29%）、ground-shadow-fog 134,719→150,104（+11%）、fog/default 448 持平。已回滚（回滚后 hard-cutoff 复测 135,022 逐位恢复）。**裁决**：模型尾（米域 vViewPosition + §775b fov-adjusted 形式）与挤出尾（§771g raw-range 形式）各自贴合其 fixture 域——两尾深度域语义差异本身未解（假说：挤出 v_fog_pos 在 mgl 走 mercatorFogMatrix 非均匀缩放（xy=wsFog·wsf、z=cppm·wsf，z 放大 ~pixelsPerMeter 倍率），欧氏 length(vViewPosition) 对建筑竖向片段的等效深度与模型冠不同；需 mgl 端到端 depth 探针对拍）。与 §186/§1002 的分域标定先例一致，挤出维持 §771g。309 单测绿、tsc 绿。
+
+**§775d. default-orientation +932 归因结案：§743-§774d 历史提交所为，非 §775（2026-09-03）**：
+
+checkout 8ec5758c（§774d）的三处 src（MBModelRenderer/MBStyleDataSource/MBEnvironmentManager）跑 default-orientation = **3,797，与 §775 代码逐位一致**——+932（相对 §742 时代记录 2,865）由 §743-§774d 间历史提交引入（嫌疑域：§747 mergeDepth/§772-§773 LUT 转置链），与 §775 系无关。arrow.gltf 材质均有名（Material.002/Material.001）→ §775 DIFFUSE 分支未触发，佐证无涉。挂历史回归清单（与 MAPS3D-1159 6.6k 同类）。309 单测绿、tsc 绿。
