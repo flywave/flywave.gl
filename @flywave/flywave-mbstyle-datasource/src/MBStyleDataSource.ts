@@ -2096,6 +2096,9 @@ export class MBStyleDataSource extends TileDataSource {
         // Wire the style's tile sources (vector priority, else a composite of
         // all GeoJSON-format sources). Sets m_currentSourceId and delegate.
         await this.wireTileSources(style, sources);
+        this.m_wiredSourceSig = JSON.stringify(
+            (style.sources as any) ?? {},
+        );
 
         // Preload real mapbox glyph metrics for the style's font stacks so
         // the worker-based decoder can shape text accurately (line breaking
@@ -4340,10 +4343,55 @@ export class MBStyleDataSource extends TileDataSource {
         const style = this.m_runtime?.style ?? this.m_styleManager?.getStyle();
         if (!style || !this.mapView) return;
 
+        // §779 (mgl setStyle semantics): a wholesale style swap replaces the
+        // source set too. The decoder consumes the runtime style directly,
+        // but the tile providers (delegate/composite) are built from the
+        // styleManager's resolved sources — re-resolve + re-wire when the
+        // source object changed, or the new style's sources never issue a
+        // single tile request (change-projection/set-style rendered an empty
+        // globe: satellite + geojson silently absent). Batched-model sources
+        // are excluded: their wiring registers datasources that is not
+        // re-entrant, and no current fixture swaps them at runtime.
+        const rtStyle = this.m_runtime?.style as any;
+        if (rtStyle?.sources) {
+            const nextSig = JSON.stringify(rtStyle.sources);
+            const hasBatched = Object.values(rtStyle.sources as any)
+                .some((s: any) => s?.type === 'batched-model')
+                || (this.m_wiredSourceSig?.includes('"batched-model"') ?? false);
+            if (nextSig !== this.m_wiredSourceSig && !hasBatched) {
+                this.m_wiredSourceSig = nextSig;
+                await this.m_styleManager.loadStyle(rtStyle);
+                const sources = this.m_styleManager.getResolvedSources();
+                const maxSourceZoom = Math.max(
+                    1,
+                    ...[...sources.values()].map(s => (s as any).maxzoom ?? 22),
+                );
+                this.maxDataLevel = Math.min(22, maxSourceZoom);
+                await this.wireTileSources(rtStyle, sources);
+            }
+        }
+
         // Cheap re-applies — always safe to re-run.
+        // §779: mgl setStyle PRESERVES the map camera — the camera is map
+        // state, not style state (a style swap never touches the transform
+        // unless the style is used to create the map). Only re-apply camera
+        // settings the new style actually carries; defaulting the missing
+        // zoom to 0 re-rendered the globe at zoom 0 (change-projection
+        // set-style: globe ~3× too small, map-aligned circles huge).
+        const hasCam = (style as any).zoom !== undefined
+            || (style as any).center !== undefined
+            || (style as any).bearing !== undefined
+            || (style as any).pitch !== undefined;
         this.applyBackgroundColor(style);
-        this.applyCameraSettings(style);
-        this.applyProjection(style);
+        if (hasCam) {
+            this.applyCameraSettings(style);
+            this.applyProjection(style);
+            // §779: mgl recomputes the camera distance on a projection
+            // change (transform._calcMatrices re-runs on setStyle too).
+            this.reapplyCamera();
+        } else {
+            this.applyProjection(style);
+        }
         this.buildClipMask(style);
 
         // Sprite atlas: reload only if the URL changed.
@@ -4414,6 +4462,12 @@ export class MBStyleDataSource extends TileDataSource {
     private m_lastAppliedSprite: string | undefined;
     /** Tracks the last glyphs URL applied, to skip redundant reloads. */
     private m_lastAppliedGlyphs: string | undefined;
+    /**
+     * Signature (JSON) of the style.sources object whose tile providers are
+     * currently wired through wireTileSources — reloadStyle re-wires only
+     * when a runtime setStyle changed the source set (§779).
+     */
+    private m_wiredSourceSig: string | undefined;
 
     /**
      * Override setFeatureState to trigger tile re-decode when feature state changes.

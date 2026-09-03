@@ -7785,3 +7785,15 @@ MBModelRenderer 补 `mpix=x,y|grid` 探针（karma arg，raycast 实例化 tile 
 **§778. globe-circle 上屏修复：circle Points 主通道被背景雾盘 overlay 覆盖（2026-09-03）**：
 
 **归因**：circle 技术走原生 THREE.Points 管线（CirclePointsMaterial，gl_PointSize=常量、depthTest=false、depthWrite=false），对象/位置/NDC 全部正确（探针实测：ndc(0,0) 屏幕中心、深度 17.87e6 ∈ [near 17.37e6, far 23.08e6]）但仍不上屏——**背景雾盘 overlay**（MBBackgroundFogRenderer.run()，AfterRender 期主渲染之后自绘）把主通道画好的圆整个盖掉（globe 白盘=fog 白色盘）。size=400/128 的放大实验证实管线通、紫色只出现在盘外天空（盘内被雾盘盖）。mercator 圆通过（0 像素差）恰因 mercator 背景是平涂 clear 无 overlay。**修复**：AfterRender 钩子收集球面 circle 对象（renderOrder=10），在 backgroundFog quad 之后用**独立 layer(7)+不 clear 的二次 render** 把圆点叠画到雾盘之上；overlay 期临时 material.depthTest=true——复用主通道写入的地面线性深度，把越过地平线的圆裁掉（mgl 地平线遮挡语义）。**结果**（globe-circle 子族）：default **7,021→5,148**（圆上屏、位置正确）、horizontal 5,749→4,637、near-horizon 2,655→6,387（*回退*：可见但尺寸/裁剪未标定）、vertical-* +2~3k（同因）。**回退归因**：circle-pitch-scale=map 在球面的半径缩放（mgl 按 globe 局部 scale 插值，我方为常量 px）与地平线裁剪精度——归 circle-on-globe 标定专项（与 §777 光照域并列）。change-projection/* 140,828/234,734 持平（set-style+投影复合域另案）。309 单测绿、tsc 绿。
+
+**§779. change-projection 双夹具对齐：setStyle 源重接线 + 相机保持 + globe 内容纬度镜像根修（2026-09-03）**：
+
+三重根因、三笔修复（309 单测绿、tsc 绿）：
+
+① **setStyle 后源集从未接线（黑球根因）**：`rt.setStyle` 只换 runtime style，`reloadStyle` 只重配 decoder，而 tile provider（delegate/composite）由 styleManager 的 resolved sources 构建 —— 换 style 后新 sources（satellite+geojson）一个 tile 请求都不发，globe 渲染成空盘。修复：reloadStyle 入口对 runtime style.sources 做 JSON 签名比对（`m_wiredSourceSig`，connect 时记录），变化则 `styleManager.loadStyle` + 重算 maxDataLevel + `wireTileSources` 重接线；batched-model 源排除（其 wiring 注册 datasource 不可重入）。
+
+② **setStyle 相机误重置（小球根因）**：内层 style 无 zoom/center，reloadStyle 无条件 `applyCameraSettings` 把缺省 zoom=0 灌进相机 → globe 缩为 zoom0 尺寸（半径 ~78px vs 期望 230px）、map 对齐圆随之巨大。mgl 语义：setStyle 是地图状态、不动相机。修复：reloadStyle 仅当新 style 实际携带 zoom/center/bearing/pitch 才重排相机（有则 applyCameraSettings + applyProjection + reapplyCamera，无则仅 applyProjection 保持现相机）。
+
+③ **globe 内容纬度镜像（全 globe 族深层根因，R15 结案）**：程序化 blob 质心对拍实证 change-projection 渲染 = expected 的垂直镜像（4 圆 y' = 512−y 逐点吻合，flip 后 diff 145k→82k）。层层探针（相机位/四元数/RTE 矩阵/顶点 dump）+ node 数值复现定位：GeoJSON/MVT 解码管线对 tile-local y 统一做 y-up 翻转（`mvtTransform: py' = scale − 2·top − py`，§511 机制），而 tile2world 的 §267 球面分支把该翻转后的 py 当 y-down 行号喂 `tileYToLat` → 纬度精确取反（赤道不动、北半球画到南边）。历史上以 tessellateForSphere 的 winding 反转补偿了朝向，故填充可见但内容整体镜像，此前所有 globe 检查（default/near-horizon 圆在 (0,0)）均镜像不变量，未被发现。修复：球面分支与 tileToLatLng 对 raw mercator 纬度取反（lat = −tileYToLat(top,py,scale)，数学上严格等价 row_true = scale−top−py），并撤销 tessellateForSphere 的 winding 反转（它补偿的正是该镜像）。
+
+④ **回测**（定向跑测，未全量）：set-projection **140,833→81,446（−42%）**、set-style **234,733→201,727（−14%，且从"黑球/小球"变为正确球体+纹理+圆）**。哨兵：globe-circle/default **5,148→914（−82%）**、globe-default **23,415→14,393（−38%）**、globe-circle/near-horizon 6,387→5,495、globe-fill-extrusion/default 26,007→25,964（持平）——全 globe 族无回归、普遍受益。残留：两夹具剩余 diff 主体为卫星纹理亮度/清晰度域（我方 z1 父瓦片 overzoom vs expected z2 真瓦片的对比度差），归 texture 域另案。

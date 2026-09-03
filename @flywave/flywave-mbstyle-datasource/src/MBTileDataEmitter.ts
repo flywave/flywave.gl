@@ -268,8 +268,15 @@ function tile2world(
     // world origin, nowhere near the sphere surface. Reproject each corner
     // through the sphere projection like the custom-projection branch.
     if (proj?.type === 1 /* ProjectionType.Spherical */) {
+        // §779: the decode pipeline delivers tile-local y in the y-UP frame
+        // (mvtTransform/transformPoints flip: py_up = scale − 2·top − py_down),
+        // so the raw mercator row rebuilt as top+py is the mirrored row and
+        // tileYToLat returns the MIRRORED latitude — the entire globe content
+        // (raster fills, circles, lines) rendered north-south mirrored about
+        // the equator (change-projection probes: circle abs z = −ECEF z,
+        // exact y' = 512−y image mirror). Negate back to the true latitude.
+        const lat = -tileYToLat(top, py, scale);
         const lng = ((left + px) / scale) * 360 - 180;
-        const lat = tileYToLat(top, py, scale);
         const w = proj.projectPoint({ longitude: lng, latitude: lat, altitude: 0 });
         target.x = w.x;
         target.y = w.y;
@@ -307,7 +314,9 @@ function tileToLatLng(
     const scale = Math.pow(2, decodeInfo.tileKey.level + N);
     const top = lat2tile(north, decodeInfo.tileKey.level + N);
     const left = Math.round(((west + 180) / 360) * scale);
-    return [((left + px) / scale) * 360 - 180, tileYToLat(top, py, scale)];
+    // §779: py arrives y-up (mvtTransform flip) — negate the raw mercator
+    // latitude exactly like the sphere branch of tile2world above.
+    return [((left + px) / scale) * 360 - 180, -tileYToLat(top, py, scale)];
 }
 
 /** Great-circle angular distance between two [lng, lat] pairs (radians). */
@@ -380,12 +389,11 @@ function tessellateForSphere(
         const longest = angles[0] >= angles[1] && angles[0] >= angles[2] ? 0 :
             angles[1] >= angles[2] ? 1 : 2;
         if (angles[longest] < maxAngle || depth >= SPHERE_TESSELLATION_MAX_DEPTH) {
-            // The mercator frame is y-south/z-up while the sphere map is
-            // east→equatorial/north→z-up: the handedness flip turns camera-
-            // facing (front) mercator triangles into back faces on the
-            // sphere. Reverse the winding so fills face outward (mgl globe
-            // tile semantics; mirrors the engine ground plane's corner order).
-            outIndices.push(ia, ic, ib);
+            // §779: with the mirrored latitude fixed (tile2world sphere
+            // branch), the tile-space (y-down) → sphere embedding keeps the
+            // earcut winding outward-facing as-is — the previous reversal
+            // compensated the §267 mirror and turned fills back-facing.
+            outIndices.push(ia, ib, ic);
             continue;
         }
         // Split the longest edge (p,q) with opposite vertex r.
