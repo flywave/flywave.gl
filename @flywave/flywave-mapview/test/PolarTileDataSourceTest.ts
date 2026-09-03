@@ -164,6 +164,15 @@ describe("PolarTileDataSource", function () {
             assert.equal(south.objects.length, 1);
         });
 
+        it("Falls back to bundled default styles when theme has no polar styleSet", async function () {
+            await dataSource.setTheme({ styles: {} });
+            const north = dataSource.getTile(TileKey.fromRowColumnLevel(2, 1, 2));
+            const south = dataSource.getTile(TileKey.fromRowColumnLevel(0, 1, 2));
+
+            assert.equal(north.objects.length, 1);
+            assert.equal(south.objects.length, 1);
+        });
+
         it("Creates meshes with proper materials", async function () {
             await dataSource.setTheme(theme_both);
             const north = dataSource.getTile(TileKey.fromRowColumnLevel(2, 1, 2));
@@ -233,6 +242,69 @@ describe("PolarTileDataSource", function () {
 
             assert.equal(tile1.objects.length, 0);
             assert.equal(tile2.objects.length, 0);
+        });
+
+        describe("uv attribute", function () {
+            function getTileUvs(tile: Tile): THREE.Vector2[] {
+                const uvs: THREE.Vector2[] = [];
+                for (const tileObject of tile.objects) {
+                    const mesh = tileObject as THREE.Mesh;
+                    const uvAttribute = mesh.geometry.getAttribute("uv");
+                    assert.isDefined(uvAttribute, "polar cap geometry should have uvs");
+                    for (let i = 0; i < uvAttribute.count; i++) {
+                        uvs.push(new THREE.Vector2(uvAttribute.getX(i), uvAttribute.getY(i)));
+                    }
+                }
+                return uvs;
+            }
+
+            it("Has uvs for every vertex, within [0, 1]", function () {
+                for (const tileKey of [
+                    TileKey.fromRowColumnLevel(0, 0, 1),
+                    TileKey.fromRowColumnLevel(0, 1, 2),
+                    TileKey.fromRowColumnLevel(2, 1, 2),
+                    TileKey.fromRowColumnLevel(1, 2, 3)
+                ]) {
+                    const tile = dataSource.getTile(tileKey);
+                    if (tile.objects.length === 0) {
+                        continue;
+                    }
+                    const mesh = tile.objects[0] as THREE.Mesh;
+                    const positionCount = mesh.geometry.getAttribute("position").count;
+                    const uvs = getTileUvs(tile);
+                    assert.equal(uvs.length, positionCount);
+                    for (const uv of uvs) {
+                        assert.isAtLeast(uv.x, 0);
+                        assert.isAtMost(uv.x, 1);
+                        assert.isAtLeast(uv.y, 0);
+                        assert.isAtMost(uv.y, 1);
+                    }
+                }
+            });
+
+            it("Maps the pole to the disc center and the cap edge to the rim", function () {
+                // Level-1 tile contains the pole vertex itself. In the polar tiling
+                // scheme rows run bottom-up: row 0 is the south half at level 1.
+                const southTile = dataSource.getTile(TileKey.fromRowColumnLevel(0, 0, 1));
+                const southUvs = getTileUvs(southTile);
+                assert.isTrue(
+                    southUvs.some(uv => uv.distanceTo(new THREE.Vector2(0.5, 0.5)) < 1e-6),
+                    "south pole vertex should map to disc center"
+                );
+
+                const northTile = dataSource.getTile(TileKey.fromRowColumnLevel(1, 0, 1));
+                const northUvs = getTileUvs(northTile);
+                assert.isTrue(
+                    northUvs.some(uv => uv.distanceTo(new THREE.Vector2(0.5, 0.5)) < 1e-6),
+                    "pole vertex should map to disc center"
+                );
+                assert.isTrue(
+                    northUvs.some(
+                        uv => Math.abs(uv.distanceTo(new THREE.Vector2(0.5, 0.5)) - 0.5) < 1e-6
+                    ),
+                    "cap edge vertex should map to the rim of the unit disc"
+                );
+            });
         });
 
         it("Geometry should not exceed pole radius", function () {

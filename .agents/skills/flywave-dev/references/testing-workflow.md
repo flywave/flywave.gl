@@ -26,6 +26,19 @@
 | `pnpm run-rendering-tests`（渲染回归全链） | 缺 `build-tests` 脚本、`scripts/with-http-server.ts`、`webpack.tests.config.js`、`mocha-webdriver-runner` 依赖 |
 | `pnpm pre-test` 中的 LicenseHeaderTest | 正则仍是 HERE 头格式 + 依赖 `git log` 年份（与本仓库 AGENTS.md 禁 git 冲突）；其中 **ImportTest（架构守卫）可单独跑**：`pnpm code-pre-tests` |
 
+**2026-09 补充勘察**（本机 macOS / Node 22 实测，2026-08 清单里标"可用"的
+两项实际也断）：
+
+- `pnpm --filter <pkg> test`：包内 test 脚本 glob 是 `./test/*.js`，但 tsc
+  产物在 `lib/test/`——mocha 直接报 "No test files found"。且根
+  `node_modules` 缺 `@flywave/*` 工作区符号链接（即使补上链接，lib 产物是
+  无扩展名 ESM，Node 22 原生跑不了，本仓库 lib 从未支持裸 node 直跑）。
+  改动后的最低验证闭环目前实际是：`pnpm --filter <pkg> build`（tsc 全量
+  严格类型检查，含 test/*.ts）+ 纯逻辑抽出来用独立脚本断言。
+- `pnpm eslint`：`.eslintrc.json` 引用的 `prettier/@typescript-eslint`
+  已在 eslint-config-prettier 8 合并进 `prettier`，配置链启动即崩（与改动
+  无关的既有问题）。`pnpm prettier` 正常。
+
 ### ❌ 文档幻觉（不存在，勿引用）
 
 `docs/docs/development/*.md` 里的 Jest、`jest.config.js`、`pnpm test:watch`、

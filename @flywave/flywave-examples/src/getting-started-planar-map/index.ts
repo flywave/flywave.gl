@@ -68,7 +68,9 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
     demTerrain.addWebTileDataSource(
         new ArcGISTileProvider({
             minDataLevel: 0,
-            maxDataLevel: 18
+            maxDataLevel: 18,
+            // TODO(debug): local tile mirror for offline debugging, restore after debug
+            tileUrlTemplate: "http://127.0.0.1:9090/tile/{z}/{y}/{x}"
         })
     );
 };
@@ -87,6 +89,9 @@ try {
 
     // 4. Configure DEM terrain data source
     configureDEMTerrainSource(mapView);
+
+    // TODO(debug): temporary handle for runtime inspection, remove after debug
+    (window as any).__mapView = mapView;
 
     console.log("Planar map getting started example initialized successfully");
 } catch (error) {

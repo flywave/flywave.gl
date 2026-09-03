@@ -3325,10 +3325,7 @@ export class MapView extends EventDispatcher {
             if (this.m_postEffects.fogLight !== undefined) {
                 // Lights are NOT part of the theme config — they register at
                 // runtime via addFogLight/removeFogLight (bloom-object style).
-                Object.assign(
-                    this.mapRenderingManager.fogLight,
-                    this.m_postEffects.fogLight
-                );
+                Object.assign(this.mapRenderingManager.fogLight, this.m_postEffects.fogLight);
             }
             if (this.m_postEffects.antialiasing !== undefined) {
                 this.mapRenderingManager.antialiasing = this.m_postEffects.antialiasing;

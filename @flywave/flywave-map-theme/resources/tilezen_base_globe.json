@@ -59,14 +59,14 @@
             {
                 "description": "North pole",
                 "when": ["==", ["get", "kind"], "north_pole"],
-                "technique": "fill",
+                "technique": "standard",
                 "renderOrder": 5,
                 "color": ["ref", "northPoleColor"]
             },
             {
                 "description": "South pole",
                 "when": ["==", ["get", "kind"], "south_pole"],
-                "technique": "fill",
+                "technique": "standard",
                 "renderOrder": 5,
                 "color": ["ref", "southPoleColor"]
             }

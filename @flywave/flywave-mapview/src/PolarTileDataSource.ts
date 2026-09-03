@@ -2,6 +2,7 @@
 
 import {
     type FlatTheme,
+    type Style,
     type StyleSet,
     type Technique,
     type Theme,
@@ -18,11 +19,47 @@ import {
 } from "@flywave/flywave-geoutils";
 import * as THREE from "three/webgpu";
 
+import { LoggerManager } from "@flywave/flywave-utils";
+
 import { type DataSourceOptions, DataSource } from "./DataSource";
 import { createMaterial } from "./DecodedTileHelpers";
 import { MapObjectAdapter } from "./MapObjectAdapter";
 import { ThemeLoader } from "./ThemeLoader";
 import { Tile } from "./Tile";
+
+const logger = LoggerManager.instance.create("PolarTileDataSource");
+
+/**
+ * Bundled polar cap imagery shipped in `@flywave/flywave-map-theme/resources/polar`
+ * (and copied to `resources/polar` of the aggregate package dist). NASA Blue Marble
+ * shaded relief with bathymetry, public domain. Polar-aspect discs: pole at the
+ * center, Web Mercator latitude limit (~85.0511°) at the rim, oriented like
+ * EPSG:3413 (north: prime meridian pointing down) / EPSG:3031 (south: pointing up).
+ */
+const DEFAULT_NORTH_POLE_TEXTURE_URL = "resources/polar/north_pole.jpg";
+const DEFAULT_SOUTH_POLE_TEXTURE_URL = "resources/polar/south_pole.jpg";
+
+/**
+ * Fallback styles used when the map theme does not define a `polar` styleSet (e.g.
+ * minimal inline themes), so the caps always render. The `standard` (lit) technique
+ * matches the terrain materials' response to scene lighting; colors mirror the
+ * definitions of the bundled globe theme and are untinted once the bundled
+ * imagery loads.
+ */
+const DEFAULT_POLAR_STYLES: Style[] = [
+    {
+        when: ["==", ["get", "kind"], "north_pole"],
+        technique: "standard",
+        attr: { color: "#436981", renderOrder: 5 },
+        styleSet: "polar"
+    },
+    {
+        when: ["==", ["get", "kind"], "south_pole"],
+        technique: "standard",
+        attr: { color: "#87959a", renderOrder: 5 },
+        styleSet: "polar"
+    }
+];
 
 export interface PolarTileDataSourceOptions extends DataSourceOptions {
     /**
@@ -55,6 +92,11 @@ export class PolarTileDataSource extends DataSource {
     private m_styleSetEvaluator?: StyleSetEvaluator;
     private m_northPoleEntry?: TechniqueEntry;
     private m_southPoleEntry?: TechniqueEntry;
+    private m_disposed: boolean = false;
+
+    private m_northPoleTexture?: Promise<THREE.Texture>;
+    private m_southPoleTexture?: Promise<THREE.Texture>;
+    private readonly m_textureLoader = new THREE.TextureLoader();
 
     constructor({
         name = "polar",
@@ -85,6 +127,16 @@ export class PolarTileDataSource extends DataSource {
 
     /** @override */
     dispose() {
+        this.m_disposed = true;
+        for (const texturePromise of [this.m_northPoleTexture, this.m_southPoleTexture]) {
+            texturePromise
+                ?.then(texture => texture.dispose())
+                .catch(() => {
+                    /* texture never loaded */
+                });
+        }
+        this.m_northPoleTexture = undefined;
+        this.m_southPoleTexture = undefined;
         if (this.m_northPoleEntry) {
             this.m_northPoleEntry.material.dispose();
             delete this.m_northPoleEntry;
@@ -134,6 +186,10 @@ export class PolarTileDataSource extends DataSource {
             styleSet = theme.styles[this.styleSetName];
         }
 
+        if (styleSet === undefined || styleSet.length === 0) {
+            styleSet = DEFAULT_POLAR_STYLES;
+        }
+
         this.m_styleSetEvaluator = new StyleSetEvaluator({
             styleSet: styleSet ?? [],
             definitions: theme.definitions,
@@ -144,7 +200,87 @@ export class PolarTileDataSource extends DataSource {
         this.m_northPoleEntry = this.createTechiqueEntry("north_pole");
         this.m_southPoleEntry = this.createTechiqueEntry("south_pole");
 
+        this.applyPoleTexture(this.m_northPoleEntry, true);
+        this.applyPoleTexture(this.m_southPoleEntry, false);
+
         this.mapView.markTilesDirty(this);
+    }
+
+    /**
+     * Kicks off (once) and attaches the bundled pole imagery texture to the technique
+     * material. The theme fill color is untinted only when the imagery actually shows;
+     * if the texture fails to load, the flat theme color stays as fallback.
+     */
+    private applyPoleTexture(entry: TechniqueEntry | undefined, isNorth: boolean): void {
+        if (entry === undefined) {
+            return;
+        }
+        const material = entry.material as THREE.MeshBasicMaterial;
+        this.getOrCreatePoleTexture(isNorth)
+            .then(texture => {
+                // Skip if the datasource was disposed or the theme (and thus the entry)
+                // was replaced while loading.
+                if (
+                    this.m_disposed ||
+                    (isNorth ? entry !== this.m_northPoleEntry : entry !== this.m_southPoleEntry)
+                ) {
+                    return;
+                }
+                // Untint the theme fill color only once imagery is actually showing,
+                // so a failed load keeps the flat theme color as fallback.
+                material.color?.set("#ffffff");
+                material.map = texture;
+                material.needsUpdate = true;
+                this.mapView.markTilesDirty(this);
+                this.mapView.update();
+            })
+            .catch(error => {
+                logger.warn(`Failed to load polar cap texture: ${error}`);
+            });
+    }
+
+    private getOrCreatePoleTexture(isNorth: boolean): Promise<THREE.Texture> {
+        let texturePromise = isNorth ? this.m_northPoleTexture : this.m_southPoleTexture;
+        if (texturePromise === undefined) {
+            const url = this.resolveResourceUrl(
+                isNorth ? DEFAULT_NORTH_POLE_TEXTURE_URL : DEFAULT_SOUTH_POLE_TEXTURE_URL
+            );
+            texturePromise = this.m_textureLoader.loadAsync(url).then(texture => {
+                texture.colorSpace = THREE.SRGBColorSpace;
+                texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+                texture.minFilter = THREE.LinearMipmapLinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                texture.generateMipmaps = true;
+                return texture;
+            });
+            if (isNorth) {
+                this.m_northPoleTexture = texturePromise;
+            } else {
+                this.m_southPoleTexture = texturePromise;
+            }
+        }
+        return texturePromise;
+    }
+
+    /**
+     * Resolves a bundled resource path the same way as the aggregate package's
+     * `mapAssetsUriResolver`: via the MapView uriResolver when one is injected,
+     * else `window.FLYWAVE_BASE_URL`, else page-relative.
+     */
+    private resolveResourceUrl(path: string): string {
+        const resolver = this.mapView.uriResolver;
+        if (resolver !== undefined) {
+            return resolver.resolveUri(path);
+        }
+        const baseUrl =
+            typeof window !== "undefined"
+                ? (window as { FLYWAVE_BASE_URL?: string }).FLYWAVE_BASE_URL
+                : undefined;
+        if (baseUrl) {
+            const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+            return base + path;
+        }
+        return path;
     }
 
     /** @override */
@@ -332,12 +468,38 @@ export class PolarTileDataSource extends DataSource {
 
         const geometry = new THREE.BufferGeometry();
 
+        const normals: number[] = [];
         const vertices: THREE.Vector3[] = points.map(point => {
             const projected = dstProjection.projectPoint(point, new THREE.Vector3());
+            // Radial normal (captured before removing the tile center offset) so lit
+            // standard materials shade the cap like the sphere it closes.
+            const normal = projected.clone().normalize();
+            normals.push(normal.x, normal.y, normal.z);
             projected.sub(tile.center);
             return projected;
         });
         geometry.setFromPoints(vertices);
+        geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+
+        // Disc UV mapping over the cap: r=0 at the pole, r=1 at the Web Mercator
+        // latitude limit. Oriented like EPSG:3413 (north: prime meridian down, 90°E
+        // right) and EPSG:3031 (south: prime meridian up, 90°E right), so imagery
+        // exported from GIBS/Worldview polar views maps 1:1. Derived from lon/lat
+        // (not tile-local coords) to stay continuous across tiles.
+        const capSpan = 90 - maxLat;
+        const uvs: number[] = [];
+        for (const point of points) {
+            const radius = THREE.MathUtils.clamp((90 - Math.abs(point.latitude)) / capSpan, 0, 1);
+            const angle = THREE.MathUtils.degToRad(point.longitude);
+            const dx = Math.sin(angle) * radius * 0.5;
+            const dy = Math.cos(angle) * radius * 0.5;
+            if (isNorthPole) {
+                uvs.push(0.5 + dx, 0.5 - dy);
+            } else {
+                uvs.push(0.5 + dx, 0.5 + dy);
+            }
+        }
+        geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
 
         const indices: number[] = [];
         for (let i = 1; i < vertices.length - 1; i++) {
