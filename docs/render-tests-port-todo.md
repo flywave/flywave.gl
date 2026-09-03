@@ -7807,3 +7807,11 @@ MBModelRenderer 补 `mpix=x,y|grid` 探针（karma arg，raycast 实例化 tile 
 - 新首测基线：poles 18.1–22.8 万、heatmap 1.2–23.1 万、zoom-visibility 5.9–18.3 万、horizon 21.6 万。
 
 **新量化域（下一入口）：globe 圆盘内部雾晕缺失**。set-projection 径向剖面（海区，中心→limb）：expected 灰雾从 +8（r=135）单调升至 +92（r=225，朝白），我方几乎为零——这是 mgl 逐 fragment 内容雾（globe_raster.fragment 的 fog_apply_premultiplied；glow_progress ramp + globeFixedFogRange [2,4.5]；limb 处理论 fog_opacity ≈ 0.42，与剖面吻合）。我方雾链路（fog_fragment globe 分支、fogGlobeMode=1、scene.fog、updateGlobeFogCenter 每帧同步）基建齐备但 raster 材质上未生效（疑 USE_FOG 编译期缺失或材质 uniform 快照陈旧）——下一阶段单点：raster 材质 fog 接线 A/B（fogprobe/fogDebugT=1 可视化 fogT 分布），预期对 poles/horizon/zoom-visibility/change-projection 等全部含 raster 的 globe 夹具大幅收敛。
+
+**§779c. globe raster 内容雾接线：圆盘雾晕落地——globe-default 1,473、set-projection 8,522（2026-09-03）**：
+
+§779b 量化的"圆盘内部雾晕缺失"根因定案：mgl fog_fragment chunk（含 globe glow_progress 分支）确实编译进了 raster 的 MeshBasicMaterial 程序，但 chunk 的自定义 uniforms（fogGlobeMode/Center/Radius/Scale/Transition/Range + fogAlpha）不是 three 逐帧刷新的标准雾属性，且内置材质没有 `.uniforms` 供 syncFogUniforms 遍历同步——GLSL 缺省 0 使雾恒灭（与 §775 的"GLSL 默认 0 使 fog_fragment 惰性"同构）。修复：patchRasterMaterial 的 onBeforeCompile 中把 UniformsLib.fog 的**活体 uniform 对象**直接共享进 shader.uniforms（球面投影门控；mercator 保持 §216 的刻意惰性），环境管理器的每帧更新即直达程序。
+
+回测：set-projection **81,446→8,522**（自 §779 前 140,833 累计 **−94%**）、globe-default **14,393→1,473**（累计 **−94%**）；poles/north-image **228,263→169,916（−26%）**、poles/north **225,279→181,628（−19%）**、poles/south-image **187,045→158,277（−15%）**、north-image-raster-colorization 220,491→194,213（−12%）；无回退（fill-extrusion 全族逐位持平——挤出材质 §673/§777 在 globe 已 fog=false；circle 子族 914/4,638/5,495/7,821 持平；heatmap/geojson/horizon/zoom-visibility 持平——它们的残差在别的域）。set-style 201,727→213,541（+12k：expected 的 z2 清晰纹理上雾 vs 我方 z1 overzoom 模糊纹理上雾，纹理分辨率域），set-projection 同域残留为纹理清晰度差。工具入库：karma arg `fogdbg=1/2/3` → fogDebugTProbe（fogT 剖面/无雾基色/最终因子可视化）。309 单测绿、tsc 绿。
+
+globe 域剩余：poles ~17-19 万（极区投影/瓦片域）、heatmap ~1.2-23 万、zoom-visibility ~6-18 万、horizon 21.6 万、set-style ~21 万（纹理分辨率/过zoom域为主）。

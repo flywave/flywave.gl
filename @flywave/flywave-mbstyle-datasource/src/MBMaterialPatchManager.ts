@@ -1884,6 +1884,29 @@ export class MBMaterialPatchManager {
                 } catch {}
                 shader.uniforms.uMBRasMap = { value: texture };
                 shader.uniforms.uMBRasUvOff = { value: [rect[0], rect[1]] };
+                // §779c: globe content fog — the mgl fog_fragment chunk
+                // (globe glow_progress branch) compiles into the raster
+                // program, but its custom uniforms (fogGlobeMode/Center/
+                // Radius/Scale/Transition/Range + fogAlpha) are NOT part of
+                // three's per-frame fog refresh, and built-in materials have
+                // no `.uniforms` for syncFogUniforms to traverse — the GLSL
+                // defaults (0) made the fog permanently inert on raster
+                // (globe disks rendered without the limb haze ramp).
+                // Share the LIVE UniformsLib.fog objects so the per-frame
+                // environment updates flow straight into the program. Gated
+                // to the sphere projection: on mercator the raster fog stays
+                // deliberately inert (§216 calibration).
+                if ((this.m_dataSource as any).mapView?.projection?.type === 1) {
+                    const fogLib = (THREE.UniformsLib.fog as any);
+                    shader.uniforms.fogGlobeMode = fogLib.fogGlobeMode;
+                    shader.uniforms.fogGlobeCenter = fogLib.fogGlobeCenter;
+                    shader.uniforms.fogGlobeScale = fogLib.fogGlobeScale;
+                    shader.uniforms.fogGlobeRadius = fogLib.fogGlobeRadius;
+                    shader.uniforms.fogGlobeTransition = fogLib.fogGlobeTransition;
+                    if (fogLib.fogGlobeRange) shader.uniforms.fogGlobeRange = fogLib.fogGlobeRange;
+                    shader.uniforms.fogAlpha = fogLib.fogAlpha;
+                    shader.uniforms.fogDebugT = fogLib.fogDebugT;
+                }
                 shader.uniforms.uMBRasUvScl = { value: [rect[2], rect[3]] };
                 shader.uniforms.uMBRasBMin = { value: brightness[0] };
                 shader.uniforms.uMBRasBMax = { value: brightness[1] };

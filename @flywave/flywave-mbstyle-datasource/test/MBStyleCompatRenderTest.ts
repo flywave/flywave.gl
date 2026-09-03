@@ -167,6 +167,15 @@ function discoverTests(): TestEntry[] {
 {
     const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("decodedbg="))?.slice("decodedbg=".length);
+    // §779b: fogdbg=N → MBEnvironmentManager.fogDebugTProbe (1 = fogT
+    // profile, 2 = unfogged base color, 3 = final fog factor).
+    const fdbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("fogdbg="))?.slice("fogdbg=".length);
+    if (fdbg) {
+        import("../src/MBEnvironmentManager").then((mod: any) => {
+            mod.MBEnvironmentManager.fogDebugTProbe = Number(fdbg) || 0;
+        });
+    }
     if (dbg === "1") {
         (globalThis as any).__mbDecodeDbg = true;
         // §667: prototype-level createTextElements census — installed at
