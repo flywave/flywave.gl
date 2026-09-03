@@ -7769,3 +7769,7 @@ modeltz 扫描门（karma arg 覆盖）+ 五点扫描（trees-use-theme：1.0→
 **§775i. tz=1.4 受影响夹具定向验证：无回归（2026-09-03）**：
 
 28 夹具带 model-translation，z≠0 受 tz=1.4 影响的定向集（5 例一个会话）：density-reduction（z=100，pitch10）**4,688**（§661 基线 4,760 微改善）；model-translation（z=2）5,639（z 差 0.6 可忽略，首测基线）；model-elevation-reference/ground（z=0.4+terrain）181,260、sea（z=20+terrain）188,667——§9.6 挂起族在 §747 后首次出值，无历史对照，记为首测基线（tz 影响小：z→0.56/28）；landmark-translation(-lod) 48,063/103,030——batched 路径不经 instantiate，tz 不适用（既状值）。结论：tz=1.4 定向验证无回归，维持默认。注：batched 路径（Tiled3dModelBucket）的 translation 应用点在 MBBatchedModel 系，若其 fixtures 出现同款双冠重叠症状，可同款扫描（挂探针专项清单）。309 单测绿、tsc 绿。
+
+**§775j. mpix 层归属探针入库 + 橄榄冠质心偏移量测（2026-09-03）**：
+
+MBModelRenderer 补 `mpix=x,y|grid` 探针（karma arg，raycast 实例化 tile 组，dump 层 id/ro/材质/距离，POST mb-probe-dump；模型未实例化时逐帧重试）。实测：探针触发（models=1408 ✓）但 **64 采样格全 miss**——RTE 重基帧下 matrixWorld 与相机世界坐标帧不一致（batched 版 pix= 的同款坑），raycast 归属不可用，挂改造项（需在 rebase 后的相机系做 ray 或改用 GPU readback+层 id 输出）。改用**纯图像几何量测**完成归因：橄榄冠连通域质心 ours vs expected——x 对齐（±1px），**y 一致偏下 +7~8px**（(187,338)/(300,321)/(389,376)/(87,272) vs (186,331)/(301,313)/(390,369)/(86,265)），blob 高度矮 20-25%（32/27/30 vs 41/38/30）。即橄榄露出区偏下偏矮 = diffuse 栗冠下缘盖得更低——z 抬升（§775h 定标 1.4）与树大小域的联合残差，维持 pixpick 专项深水区立案。309 单测绿、tsc 绿。

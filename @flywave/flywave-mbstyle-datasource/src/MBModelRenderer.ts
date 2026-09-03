@@ -1159,6 +1159,88 @@ export class MBModelRenderer {
         const placed = this.processPending();
         if (pending || placed > 0) { this.m_extraFrames = 3; }
         if (this.m_extraFrames > 0) { this.m_extraFrames--; this.m_mapView.update?.(); }
+        this.maybePixpick();
+    }
+
+    /** §775j: screen-space layer-ownership probe for the per-feature model
+     * path (karma arg `mpix=x,y` for one pixel, `mpix=grid` for a 64px
+     * survey) — raycasts the instantiated tile groups and dumps each hit's
+     * style layer id / render order / material so a crown pixel can be
+     * attributed to tree-layer vs tree-layer-diffuse (the double-canopy
+     * overlap domain). Same POST channel as the batched pixpick. */
+    private m_pixProbed = false;
+    private maybePixpick(): void {
+        if (this.m_pixProbed) return;
+        const mpix = (globalThis as any).__karmaArgs?.mpix
+            ?? (window as any).__karma__?.config?.args?.find?.((a: string) => a.startsWith('mpix='))?.slice(5);
+        if (!mpix) return;
+        const scene = (this.m_mapView as any)?.m_scene as THREE.Scene | undefined;
+        if (!scene) return;
+        let total = 0;
+        for (const g of this.m_tileGroups.values()) total += g.children.length;
+        if (total === 0) return; // models not instantiated yet — retry next frame
+        this.m_pixProbed = true;
+        try {
+            const cam = (this.m_mapView as any).camera as THREE.PerspectiveCamera;
+            const cv = (this.m_mapView as any).canvas as HTMLCanvasElement;
+            const W = cv?.clientWidth || 512;
+            const H = cv?.clientHeight || 512;
+            const groups: THREE.Object3D[] = [];
+            for (const g of this.m_tileGroups.values()) { g.updateMatrixWorld(true); groups.push(g); }
+            const ray = new THREE.Raycaster();
+            const pick = (px: number, py: number) => {
+                ray.setFromCamera(new THREE.Vector2((px / W) * 2 - 1, -((py / H) * 2 - 1)), cam);
+                const hits = ray.intersectObjects(groups, true);
+                return hits.slice(0, 4).map(hit => {
+                    const m = hit.object as any;
+                    let o: any = m;
+                    while (o && o.userData?._mbLayerId === undefined && o.parent) o = o.parent;
+                    const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+                    return {
+                        dist: +hit.distance.toFixed(2),
+                        layer: o?.userData?._mbLayerId ?? null,
+                        ro: m.renderOrder ?? null,
+                        matName: mat?.name ?? null,
+                        baseColor: mat?.color ? mat.color.toArray().map((v: number) => +v.toFixed(3)) : null,
+                        vertexColors: !!mat?.vertexColors,
+                    };
+                });
+            };
+            const payload: Record<string, unknown> = { probe: 'mpix', W, H, groups: groups.length, models: total };
+            if (mpix === 'grid') {
+                const cells: Record<string, unknown>[] = [];
+                for (let py = 32; py < H; py += 64) {
+                    for (let px = 32; px < W; px += 64) {
+                        const hits = pick(px, py);
+                        cells.push({ px, py, layer: hits[0]?.layer ?? null, dist: hits[0]?.dist ?? null });
+                    }
+                }
+                payload.mode = 'grid';
+                payload.cells = cells;
+            } else {
+                const [pxs, pys] = mpix.split(',').map(v => parseInt(v, 10));
+                payload.pix = [pxs, pys];
+                payload.hits = pick(pxs, pys);
+            }
+            const fb = (globalThis as any).__karmaArgs?.['feedback-url']
+                ?? (window as any).__karma__?.config?.args?.find?.((a: string) => a.startsWith('feedback-url='))?.slice(13);
+            if (fb) {
+                fetch(`${fb}/mb-probe-dump`, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify(payload),
+                }).catch(() => {});
+            }
+        } catch (e) {
+            const fb = (window as any).__karma__?.config?.args?.find?.((a: string) => a.startsWith('feedback-url='))?.slice(13);
+            if (fb) {
+                fetch(`${fb}/mb-probe-dump`, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ probe: 'mpix', error: String((e as Error)?.stack ?? e) }),
+                }).catch(() => {});
+            }
+        }
     }
 
     private ensureTileGroup(tile: Tile, scene: THREE.Scene): THREE.Group {
