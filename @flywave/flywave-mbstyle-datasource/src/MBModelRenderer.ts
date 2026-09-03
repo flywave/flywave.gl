@@ -204,6 +204,11 @@ export function syncModelFogUniforms(mapView: any, env?: any): void {
     }
     for (const u of mbModelFogUniforms) {
         u.uMbDistCam.value = distCam;
+        // §775e: mercatorZfromAltitude(1, centerLat) — metres→mercator-Z for
+        // the fog-space horizon term (mgl mercatorFogMatrix z lane).
+        const centerLat = (mapView?.center?.lat ?? 37.8) * Math.PI / 180;
+        u.uMbMercZPerMeter.value = 1 / Math.max(1e-6,
+            EarthConstants.EQUATORIAL_CIRCUMFERENCE * Math.cos(centerLat));
         // Fog runs ONLY when the style actually declares it (env.m_fogState
         // non-null). Without this gate the lib's initial fogAlpha=1 + white
         // default color wash every no-fog model style (geojson-source-with-
@@ -400,6 +405,13 @@ export function applyMglModelLighting(
                         value: ((mvz as any)?.focalLength ?? 768) *
                             EarthConstants.EQUATORIAL_CIRCUMFERENCE / (256 * Math.pow(2, mvz?.zoomLevel ?? 16)),
                     };
+                    // §775e: mercatorZfromAltitude(1, lat) — the mgl fog-space
+                    // z lane's metres→mercator-Z ratio (refreshed per frame in
+                    // syncModelFogUniforms).
+                    shader.uniforms.uMbMercZPerMeter = {
+                        value: 1 / Math.max(1e-6, EarthConstants.EQUATORIAL_CIRCUMFERENCE
+                            * Math.cos((mvz?.center?.lat ?? 37.8) * Math.PI / 180)),
+                    };
                     if (!ls2 && (globalThis as any).__mbModelFog !== false) {
                         mbModelFogUniforms.add(mat.userData.__mbFogU = {
                             fogAlpha: shader.uniforms.fogAlpha,
@@ -410,6 +422,7 @@ export function applyMglModelLighting(
                             fogVertLimit: shader.uniforms.fogVertLimit,
                             mbFogColor: shader.uniforms.mbFogColor,
                             uMbDistCam: shader.uniforms.uMbDistCam,
+                            uMbMercZPerMeter: shader.uniforms.uMbMercZPerMeter,
                         });
                     }
                 }
@@ -474,6 +487,7 @@ export function applyMglModelLighting(
                      uniform vec2 fogVertLimit;
                      uniform vec3 mbFogColor;
                      uniform float uMbDistCam;
+                     uniform float uMbMercZPerMeter;
                      uniform sampler2D uMBLut;
                      uniform float uMBLutN;
                      uniform float uMBLutOn;
@@ -542,10 +556,18 @@ export function applyMglModelLighting(
                          mbFall *= mbFall * mbFall;
                          float mbFogDepth = fogAlpha * min(1.0, 1.00747 * mbFall);
                          float mbFactor = mbFogDepth;
-                         // mgl fog_horizon_blending(pos/depth): per-fragment
-                         // camera-relative z (models have tall fragments, unlike
-                         // the ground-plane approximation used for extrusions).
-                         float mbDirZ = (vMbWorldPos.z - fogCamHeight) / max(mbLen, 1.0);
+                         // mgl fog_horizon_blending(pos/depth): pos is in
+                         // FOG space, where the z lane is scaled by
+                         // mercatorZfromAltitude (mercatorFogMatrix metersToPixel
+                         // = [wsFog, wsFog, cppm]) — ground-content dir.z is
+                         // ~1e-8 and the horizon term NEVER attenuates map
+                         // content (only fragments above the camera). The
+                         // previous metres/metres dir.z (−0.1..−0.27) against
+                         // the mapped blend (0.025) gave t≈4 and wiped the fog
+                         // off every distant crown (row剖面: 远处 147 vs
+                         // expected 222).
+                         float mbDirZ = (vMbWorldPos.z - fogCamHeight)
+                             * uMbMercZPerMeter / max(mbLen, 1.0);
                          float mbHz = max(0.0, mbDirZ / max(fogHorizonBlend, 1e-4));
                          mbFactor *= fogAlpha * exp(-3.0 * mbHz * mbHz);
                          if (fogVertLimit.x > 0.0 || fogVertLimit.y > 0.0) {

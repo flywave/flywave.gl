@@ -7749,3 +7749,7 @@ INST 探针（instantiate 处）实证：tree-layer（ro 10.003）与 tree-layer
 **§775d. default-orientation +932 归因结案：§743-§774d 历史提交所为，非 §775（2026-09-03）**：
 
 checkout 8ec5758c（§774d）的三处 src（MBModelRenderer/MBStyleDataSource/MBEnvironmentManager）跑 default-orientation = **3,797，与 §775 代码逐位一致**——+932（相对 §742 时代记录 2,865）由 §743-§774d 间历史提交引入（嫌疑域：§747 mergeDepth/§772-§773 LUT 转置链），与 §775 系无关。arrow.gltf 材质均有名（Material.002/Material.001）→ §775 DIFFUSE 分支未触发，佐证无涉。挂历史回归清单（与 MAPS3D-1159 6.6k 同类）。309 单测绿、tsc 绿。
+
+**§775e. 模型雾 horizon 项 mercator z 压缩（语义忠实性修复，像素零变化）（2026-09-03）**：
+
+行剖面分析（远处冠 ours 147 vs expected 222）曾疑 horizon 项错杀远处雾——修正 mbDirZ 为雾空间 z（乘 mercatorZfromAltitude = 1/(C·cos(lat))，mercatorFogMatrix 的 z lane cppm 缩放，新 uniform uMbMercZPerMeter 每帧按 center.lat 同步）。实测 trees-use-theme **139,006 逐位持平**——原因：修正前 max(0, 负 dirZ) 已将该项归零（地面内容 dirZ<0），修正后 mercator 压缩 z≈1e-8·位移仍归零，两形式在地面内容上数学等价；保留修正作为 mgl 语义忠实性（相机上方片段 t>0 时才生效，与 fog_uniforms 的 fog 空间定义一致）。远处冠亮度差的真因不在 horizon（需要 pixpick 逐像素 depth/T 对拍定位，与双树层叠结构域合并立案）。哨兵 ground-shadow-fog 134,719 / hard-cutoff 135,022 持平。309 单测绿、tsc 绿。
