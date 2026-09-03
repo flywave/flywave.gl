@@ -58,15 +58,34 @@ export type DEMLayerKind = "base" | "overlay" | "projector";
 // ---------------------------------------------------------------------------
 
 // Height-map (elevation) texture — vertex displacement + fragment workaround.
-const _heightMapTex = texture(emptyOpaqueTex);
+//
+// LOAD-BEARING: every shared texture node below needs its OWN dummy texture
+// instance. TextureNode.getUniformHash() is `this.value.uuid`, and at build
+// time that is the dummy's uuid — two nodes sharing one dummy would hash
+// identically, UniformNode.generate() would merge them into ONE binding, and
+// the later node would sample the earlier node's texture forever (imagery
+// silently sampling the height-map → gray terrain).
+const _heightMapTex = texture(dummyTex(255));
 _heightMapTex.onObjectUpdate(({ object }) => object.heightMapTexture ?? emptyOpaqueTex);
 
 // Ground-modification (brush/excavation) height+mask texture.
-const _modifierTex = texture(emptyOpaqueTex);
+const _modifierTex = texture(dummyTex(255));
 _modifierTex.onObjectUpdate(({ object }) => object.modifierTexture ?? emptyOpaqueTex);
 
-// This layer's albedo / decal texture.
-const _layerTex = texture(emptyOpaqueTex);
+// This layer's albedo / decal texture — SHARED node used DIRECTLY in the
+// graph. NEVER re-wrap it as `texture(_layerTex, uv)`: the re-wrap CLONES
+// the node, the clone carries no update callback and the base never enters
+// the build graph, so onObjectUpdate would never fire and the sampled
+// texture stays stuck on the dummy (the "gray satellite" bug).
+//
+// Load-bearing construction detail: the node is created WITHOUT a uv
+// argument, so `updateMatrix` stays true and TextureNode.setup() ends its
+// updateType re-computation with OBJECT (matrix uniform present). Passing
+// the uv to texture() — or assigning `.uvNode` before setUpdateMatrix runs
+// — would let setup() stomp updateType back to NONE and the per-draw swap
+// below would never execute. NodeFrame.updateNode() honors updateType at
+// CALL time, not registration time.
+const _layerTex = texture(dummyTex(255));
 _layerTex.onObjectUpdate(({ object }) => object.layerTexture ?? emptyOpaqueTex);
 
 // Per-mesh plain-value uniforms (resolved per draw call from the mesh).
@@ -246,41 +265,58 @@ function withHeightMapVisibilityFix(color, nodes) {
 }
 
 // --- Base variant: lit, one imagery texture as albedo or solid fallback ---
+//
+// The color graph is a SHARED singleton assigned to every tile: identical
+// node instances across materials keep NodeMaterial.customProgramCacheKey()
+// (which recursively hashes node identities) equal for every tile, so the
+// renderer shares ONE NodeBuilderState / WGSL for the whole scene. Per-tile
+// imagery arrives through _layerTex's OBJECT update + binding rebind, and
+// per-tile scalars through the onObjectUpdate uniforms — none of which
+// affect the compiled shader.
 const s_baseNodes = (() => {
-    const colorNode = Fn(() => {
-        const mapUv = vec2(s_sharedNodes.texUv.x, s_sharedNodes.webMercatorY);
-        const tUv = vec2(
-            mapUv.x.mul(_uvTransform.x).add(_uvTransform.z),
-            mapUv.y.mul(_uvTransform.y).add(_uvTransform.w)
-        );
-        const inRange = tUv.x
-            .greaterThanEqual(float(-0.01))
-            .and(tUv.x.lessThanEqual(float(1.01)))
-            .and(tUv.y.greaterThanEqual(float(-0.01)))
-            .and(tUv.y.lessThanEqual(float(1.01)));
-        const imageryColor = texture(_layerTex, tUv);
-        const useImagery = _hasImagery.equal(1).and(inRange);
-        const color = select(useImagery, imageryColor, vec4(_fallbackColor, 1.0));
+    const mapUv = vec2(s_sharedNodes.texUv.x, s_sharedNodes.webMercatorY);
+    const tUv = vec2(
+        mapUv.x.mul(_uvTransform.x).add(_uvTransform.z),
+        mapUv.y.mul(_uvTransform.y).add(_uvTransform.w)
+    );
+    // Attach the uv AFTER construction (plain property write) — see the
+    // load-bearing note on _layerTex above.
+    _layerTex.uvNode = tUv;
+    const inRange = tUv.x
+        .greaterThanEqual(float(-0.01))
+        .and(tUv.x.lessThanEqual(float(1.01)))
+        .and(tUv.y.greaterThanEqual(float(-0.01)))
+        .and(tUv.y.lessThanEqual(float(1.01)));
 
+    const colorNode = Fn(() => {
+        const useImagery = _hasImagery.equal(1).and(inRange);
+        const color = select(useImagery, _layerTex, vec4(_fallbackColor, 1.0));
         return withHeightMapVisibilityFix(color, s_sharedNodes);
     })();
 
     return { colorNode };
 })();
 
-// NOTE: the old shared overlay color graph (s_overlayNodes) was removed —
-// overlay/projector materials now build per-instance colorNodes (plain
-// expressions, byte-identical WGSL per mode → still one pipeline per mode).
-// See DEMTileOverlayMaterial for the two sampling modes.
+// NOTE: the base material's graph above and the overlay/projector colorNodes
+// are per-VARIANT singletons (not per material instance): byte-identical
+// WGSL per variant → still one pipeline per variant. The decal TEXTURE of
+// overlay materials remains per-material (rebound via `.value =` by
+// TerrainLayerMesh.setLayerTexture) because overlay/projector layers may mix
+// several different textures across tiles at the same time — a single shared
+// node could only hold one of them per draw.
 
 /**
  * Lit base terrain material — exactly one per tile. Owns depth writing,
  * lighting, shadow receiving and picking. Renders the first available
  * imagery texture as albedo, or a solid fallback color.
  *
- * Per-mesh data is read at draw time via onObjectUpdate from the mesh; this
- * material never stores per-tile state, so all tiles share ONE compiled
- * pipeline.
+ * All TSL graphs are SHARED module-level singletons; per-tile state
+ * (imagery texture, uvTransform, hasImagery, geometry uniforms) is resolved
+ * at draw time via OBJECT-type node updates reading plain properties from
+ * the mesh (see TerrainLayerMesh). Never store per-tile state on the
+ * material — that forks the builder cache key (NodeMaterial
+ * .customProgramCacheKey() hashes node identities) and forces one shader
+ * graph build per tile, which drops frames while tiles stream in.
  */
 export class DEMTileBaseMaterial extends MeshStandardNodeMaterial {
     constructor(parameters?: THREE.MeshStandardMaterialParameters) {

@@ -512,11 +512,10 @@ export class TerrainLayerMesh extends Mesh {
         if (uvTransform) {
             this.uvTransform.copy(uvTransform);
         }
-        // Rebind the per-material texture node IN PLACE (module-level shared
-        // texture nodes lose per-object values in this architecture — see
-        // DEMTileLayerMaterial). Reference guard: these setters fire on every
-        // tile-cache event; rebinding an unchanged texture would still
-        // trigger a binding refresh.
+        // Legacy per-material rebind hook. The shared-graph base material
+        // picks the texture up per draw via its OBJECT-type node update
+        // (reading this.layerTexture), so this branch is inert for it; it
+        // remains for materials that still carry a per-material texture node.
         const mat = this.material as any;
         if (mat.imageryTexNode && mat.imageryTexNode.value !== (tex ?? emptyOpaqueTex)) {
             mat.imageryTexNode.value = tex ?? emptyOpaqueTex;

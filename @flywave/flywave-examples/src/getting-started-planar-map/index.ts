@@ -7,6 +7,24 @@ import {
     MapControlsUI,
     mercatorProjection
 } from "@flywave/flywave.gl";
+import { NodeBuilder } from "three/webgpu";
+
+// TODO(debug): temporary shader build/compile counters, remove after debug.
+// graphBuilds = NodeBuilder.build() calls (node graph recompute, one per
+// NodeBuilderState cache miss); compiles = backend.createProgram calls (WGSL
+// stage compiled to a GPU module); pipelines = backend.createRenderPipeline.
+const fwStats: any = ((window as any).__fwStats = { graphBuilds: 0, compiles: 0, pipelines: 0, byMaterial: {} });
+{
+    const proto: any = (NodeBuilder as any).prototype;
+    const origBuild = proto.build;
+    proto.build = function (...args: unknown[]) {
+        fwStats.graphBuilds++;
+        const key =
+            (this.material && this.material.constructor && this.material.constructor.name) || "unknown";
+        fwStats.byMaterial[key] = (fwStats.byMaterial[key] || 0) + 1;
+        return origBuild.apply(this, args);
+    };
+}
 
 /**
  * Get map canvas element
@@ -68,9 +86,7 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
     demTerrain.addWebTileDataSource(
         new ArcGISTileProvider({
             minDataLevel: 0,
-            maxDataLevel: 18,
-            // TODO(debug): local tile mirror for offline debugging, restore after debug
-            tileUrlTemplate: "http://127.0.0.1:9090/tile/{z}/{y}/{x}"
+            maxDataLevel: 18
         })
     );
 };
@@ -92,6 +108,19 @@ try {
 
     // TODO(debug): temporary handle for runtime inspection, remove after debug
     (window as any).__mapView = mapView;
+
+    // TODO(debug): count GPU-side compiles/pipeline creations, remove after debug
+    const backend: any = (mapView as any).renderer.backend;
+    const origCreateProgram = backend.createProgram.bind(backend);
+    backend.createProgram = (...args: unknown[]) => {
+        fwStats.compiles++;
+        return origCreateProgram(...args);
+    };
+    const origCreateRenderPipeline = backend.createRenderPipeline.bind(backend);
+    backend.createRenderPipeline = (...args: unknown[]) => {
+        fwStats.pipelines++;
+        return origCreateRenderPipeline(...args);
+    };
 
     console.log("Planar map getting started example initialized successfully");
 } catch (error) {
