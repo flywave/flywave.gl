@@ -2311,6 +2311,29 @@ export class MBStyleDataSource extends TileDataSource {
                 }
             });
             this.mapView.addEventListener(MapViewEventNames.AfterRender, async () => {
+                // §778: on the sphere projection, circle Points objects are
+                // the NEAREST opaque geometry, so three's front-to-back sort
+                // draws them FIRST (CirclePointsMaterial has depthWrite off)
+                // and the tessellated ground meshes drawn afterwards overwrite
+                // their pixels — circles vanish on the globe. Lift them above
+                // the ground via renderOrder (depthTest is already off; the
+                // atmosphere dome at ro 1000 still composites over them near
+                // the limb, mirroring mgl's atmosphere-over-map order).
+                if (self.mapView?.projection?.type === 1) {
+                    const root778 = self.mapView.scene;
+                    if (root778) {
+                        const objs778: any[] = ((self as any).__mbCircleObjs ??= []);
+                        objs778.length = 0;
+                        root778.traverse((o: any) => {
+                            if (o.userData?.technique?.name === 'circles') {
+                                // §778: draw after the ground despite the
+                                // nearest-first opaque sort (depthWrite off).
+                                o.renderOrder = 10;
+                                objs778.push(o);
+                            }
+                        });
+                    }
+                }
                 // §761: renderer.info read right after the frame — draw calls
                 // / triangles tell whether the extrusion meshes reach the GL
                 // queue (zero-rasterization forensics, buildings-trees family).
@@ -2751,6 +2774,41 @@ export class MBStyleDataSource extends TileDataSource {
                 }
                 if (self.m_backgroundFogRenderer) {
                     self.m_backgroundFogRenderer.run();
+                }
+                // §778: globe circle overlay — the backgroundFog quad paints
+                // after the main pass and washes the circle points (mgl draws
+                // circles AFTER the background). Re-render only the circle
+                // objects on top via a dedicated layer, no clear.
+                {
+                    const objs778: any[] = (self as any).__mbCircleObjs ?? [];
+                    const live778 = objs778.filter((o: any) => o.parent);
+                    if (self.mapView?.projection?.type === 1 && live778.length > 0) {
+                        const r778: any = (self.mapView as any).renderer;
+                        const cam778: any = (self.mapView as any).m_rteCamera
+                            ?? self.mapView.camera;
+                        if (r778 && cam778) {
+                            const prevMask = cam778.layers.mask;
+                            const prevAutoClear = r778.autoClear;
+                            r778.autoClear = false;
+                            cam778.layers.set(7);
+                            // §778: depth-TEST (not write) against the ground
+                            // from the main pass — circles beyond the horizon
+                            // are occluded by the globe like mgl; the flat
+                            // self-material has depthTest off for the same
+                            // pass, so toggle it per overlay.
+                            for (const o of live778) {
+                                o.layers.set(7);
+                                o.material.depthTest = true;
+                            }
+                            r778.render((self.mapView as any).scene, cam778);
+                            for (const o of live778) {
+                                o.layers.mask = 1;
+                                o.material.depthTest = false;
+                            }
+                            cam778.layers.mask = prevMask;
+                            r778.autoClear = prevAutoClear;
+                        }
+                    }
                 }
                 // §775: model-tail self-drawn mgl fog — refresh the per-frame
                 // fog uniforms (fogAlpha/horizon/camHeight/range + themed
