@@ -1339,7 +1339,13 @@ export class MBModelRenderer {
             // (~11.8 m at z15) was A/B-falsified on geojson-source-with-
             // schema — 43,671 px (raw metres) vs 60,153 (converted) — and
             // reverted to the raw-metre form.
-            model.position.z += translation[2] ?? 0;
+            // §775h: mgl model-frame z vs our metres world frame — sweep
+            // on trees-use-theme + geojson-source-with-schema (both carry
+            // model-translation [0,0,100]) gives a clear optimum at 1.4
+            // (1.0 → 139,006/41,968; 1.4 → 132,515/11,441; 2.0 →
+            // 141,900/49,450). `modeltz=` karma arg overrides for A/B.
+            const tzf = Number((globalThis as any).__mbModelTzFactor ?? 1.4);
+            model.position.z += (translation[2] ?? 0) * (Number.isFinite(tzf) ? tzf : 1.4);
         }
         m.setPosition(model.position);
         model.matrixAutoUpdate = false;

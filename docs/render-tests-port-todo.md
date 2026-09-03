@@ -7761,3 +7761,7 @@ checkout 8ec5758c（§774d）的三处 src（MBModelRenderer/MBStyleDataSource/M
 **§775g 补充：z 放大版的冠面积方向证据（2026-09-03）**：
 
 宽松阈值面积量测（olive=橄榄系/maroon=栗红系）：expected olive 9,827 / maroon 241,504；ours raw100 olive 7,075 / maroon 190,834；ours lift×2.02 olive **8,562** / maroon 188,928——**放大抬升的橄榄面积方向正确（+21% 向 expected 靠近）**，净 px 回归（139,006→141,900）来自位移副产物错位（冠边缘/背景暴露）。即：translation z 的有效屏幕位移介于 raw 与 ×2.02 之间、且树大小/冠形状域（§605 tree-area 1:2.55 历史残差同域）存在系统差——归树几何微观域，与 pixpick 层归属对拍合并为下会话探针专项（z 因子扫描 + 逐树面积对拍可一并覆盖）。
+
+**§775h. translation z 域因子定标 1.4：geojson-source-with-schema −73.8%、trees-use-theme −34.7%（2026-09-03）**：
+
+modeltz 扫描门（karma arg 覆盖）+ 五点扫描（trees-use-theme：1.0→139,006、1.4→**132,515**、1.5→132,710、1.6→134,598、2.0→141,900）锁定谷底 1.4；**geojson-source-with-schema(-add-layer) 交叉验证 41,968→11,441（−73%）**——双夹具同时大幅收敛，排除过拟合。定标：mgl 模型帧 z 与我方米域世界帧的比率 ≈1.4（量级与 1/cos(lat)=1.29 同向，含 §652/§766 同族的经验标定成分），`modeltz=` arg 保留覆盖。默认值 1.4 入库（instantiate 路径 translation z；无 translation 夹具零影响——default-orientation 等不触该分支）。哨兵 ground-shadow-fog 134,719 / hard-cutoff 135,022 持平。309 单测绿、tsc 绿。会话累计：trees-use-theme 202,959→**132,515（−34.7%）**、geojson-source-with-schema 43,671→**11,441（−73.8%）**。

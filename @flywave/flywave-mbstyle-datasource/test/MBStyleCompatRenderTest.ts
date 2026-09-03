@@ -155,6 +155,12 @@ function discoverTests(): TestEntry[] {
     const mg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modellightgamma="))?.slice("modellightgamma=".length);
     if (mg === "1") (globalThis as any).__mbModelLightGamma = true;
+    // §775g: model-translation z factor sweep (1 = raw metres semantics).
+    const tz = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("modeltz="))?.slice("modeltz=".length);
+    if (tz !== undefined && Number.isFinite(Number(tz))) {
+        (globalThis as any).__mbModelTzFactor = Number(tz);
+    }
 }
 // Decode census: per-tile technique/vertex counts (is content reaching the
 // emitter at all — data vs render side split for blank domains).
