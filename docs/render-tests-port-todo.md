@@ -7765,3 +7765,7 @@ checkout 8ec5758c（§774d）的三处 src（MBModelRenderer/MBStyleDataSource/M
 **§775h. translation z 域因子定标 1.4：geojson-source-with-schema −73.8%、trees-use-theme −34.7%（2026-09-03）**：
 
 modeltz 扫描门（karma arg 覆盖）+ 五点扫描（trees-use-theme：1.0→139,006、1.4→**132,515**、1.5→132,710、1.6→134,598、2.0→141,900）锁定谷底 1.4；**geojson-source-with-schema(-add-layer) 交叉验证 41,968→11,441（−73%）**——双夹具同时大幅收敛，排除过拟合。定标：mgl 模型帧 z 与我方米域世界帧的比率 ≈1.4（量级与 1/cos(lat)=1.29 同向，含 §652/§766 同族的经验标定成分），`modeltz=` arg 保留覆盖。默认值 1.4 入库（instantiate 路径 translation z；无 translation 夹具零影响——default-orientation 等不触该分支）。哨兵 ground-shadow-fog 134,719 / hard-cutoff 135,022 持平。309 单测绿、tsc 绿。会话累计：trees-use-theme 202,959→**132,515（−34.7%）**、geojson-source-with-schema 43,671→**11,441（−73.8%）**。
+
+**§775i. tz=1.4 受影响夹具定向验证：无回归（2026-09-03）**：
+
+28 夹具带 model-translation，z≠0 受 tz=1.4 影响的定向集（5 例一个会话）：density-reduction（z=100，pitch10）**4,688**（§661 基线 4,760 微改善）；model-translation（z=2）5,639（z 差 0.6 可忽略，首测基线）；model-elevation-reference/ground（z=0.4+terrain）181,260、sea（z=20+terrain）188,667——§9.6 挂起族在 §747 后首次出值，无历史对照，记为首测基线（tz 影响小：z→0.56/28）；landmark-translation(-lod) 48,063/103,030——batched 路径不经 instantiate，tz 不适用（既状值）。结论：tz=1.4 定向验证无回归，维持默认。注：batched 路径（Tiled3dModelBucket）的 translation 应用点在 MBBatchedModel 系，若其 fixtures 出现同款双冠重叠症状，可同款扫描（挂探针专项清单）。309 单测绿、tsc 绿。
