@@ -4685,18 +4685,46 @@ export class MBStyleDataSource extends TileDataSource {
                 const { MBMapProjection } = require('./MBMapProjection');
                 const customProj = new MBMapProjection(projConfig);
                 (this.mapView as any).projection = customProj;
+                // Custom projections render in draping/planar space — never
+                // use the mgl globe camera model.
+                (this.mapView as any).__mglGlobeCam = false;
                 return;
             } catch {}
         }
 
         if (projConfig.name === 'globe') {
             (this.mapView as any).projection = sphereProjection;
+            // §776: enable the mgl globe camera model in the engine's
+            // zoom↔distance conversions (globe altitude = ccd·conv above the
+            // sea-level point) so the rendered globe matches mapbox's size.
+            (this.mapView as any).__mglGlobeCam = true;
         } else {
             const currentType = this.mapView.projection?.type;
             if (currentType === ProjectionType.Spherical) {
                 (this.mapView as any).projection = mercatorProjection;
             }
+            (this.mapView as any).__mglGlobeCam = false;
         }
+    }
+
+    /**
+     * Re-apply the style camera with the CURRENT projection. mgl recomputes
+     * the camera distance whenever the projection changes (setProjection op
+     * / style projection) because the globe altitude model differs from the
+     * mercator plane model; flywave must do the same or the map keeps the
+     * distance computed under the previous projection (§776: globe-default
+     * rendered with the mercator plane distance → globe ~1.41× too small).
+     */
+    public reapplyCamera(): void {
+        if (!this.mapView) return;
+        const style = this.m_styleManager?.getStyle() ?? this.m_runtime?.style;
+        if (!style) return;
+        // Sync the globe-camera flag with the live mapView projection (the
+        // test harness swaps the projection directly on the MapView).
+        (this.mapView as any).__mglGlobeCam =
+            this.mapView.projection?.type === 1 /* ProjectionType.Spherical */;
+        this.applyCameraSettings(style);
+        this.pushMapboxZoom();
     }
 
     /**
@@ -4789,45 +4817,12 @@ export class MBStyleDataSource extends TileDataSource {
                     }
                 } catch {}
             }
-            // §274: sphere camera framing — mgl exact. mgl places the globe
-            // center at plane z = −ws/2π and the camera at z = ccd·conv
-            // (globe_util calculateGlobePosMatrix + transform
-            // cameraToCenterDistance·pixelsPerMercatorPixel), so
-            //   d/R = 1 + 2π·ccd·conv/ws
-            // with ccd = (h_css/2)/tan(fov/2), ws = 512·2^zoom, and
-            // conv = sec(lat)/√2 — the GLOBE_SCALE_MATCH_LATITUDE (45°)
-            // normalization (globe.ts pixelSpaceConversion, interpT = 0 at
-            // globe zooms). The engine's plane formula
-            // d = R + f·EarthC/(256·2^zw) mixes curvature wrongly and drifts
-            // with canvas size; solve for the flywave zoom landing on the
-            // mgl distance and re-orient with it so internal state stays
-            // consistent.
-            if (this.mapView.projection?.type === 1 /* Spherical */) {
-                const cv = (this.mapView as any).canvas as HTMLCanvasElement | undefined;
-                const pr = ((this.mapView as any).m_pixelRatio ?? 1) || 1;
-                const hCss = (cv?.clientHeight || cv?.height || 256) / pr;
-                const fovR = ((this.mapView.camera?.fov ?? 36.87) * Math.PI) / 180;
-                const styleZ = typeof style.zoom === 'number' ? style.zoom : 0;
-                const latRad = ((center[1] ?? 0) * Math.PI) / 180;
-                const conv = 1 / (Math.cos(latRad) * Math.SQRT2);
-                const ccd = hCss / 2 / Math.tan(fovR / 2);
-                const ws = 512 * Math.pow(2, styleZ);
-                const R = 6378137; // EQUATORIAL_RADIUS (sphereProjection)
-                const dTarget = R * (1 + (2 * Math.PI * ccd * conv) / ws);
-                const fDev = (hCss * pr) / 2 / Math.tan(fovR / 2);
-                const dz = dTarget - R;
-                if (dz > 0) {
-                    const zw = Math.log2((fDev * 40075017) / (256 * dz));
-                    if (Number.isFinite(zw)) {
-                        const gc = new GeoCoordinates(center[1], center[0]);
-                        this.mapView.setCameraGeolocationAndZoom(gc, zw, bearing, pitch);
-                        // The engine zoomLevel getter now reports the
-                        // compensated zoom; the style zoom is authoritative
-                        // for the decoder's camera functions.
-                        (this as any).m_styleBoxZoom = styleZ;
-                    }
-                }
-            }
+            // §776: the §274 sphere re-zoom block is superseded — the engine's
+            // calculateDistanceFromZoomLevel now applies the mgl globe
+            // altitude model directly (see Utils.MglGlobeCamOptions), so the
+            // plain setCameraGeolocationAndZoom above already lands on the
+            // mgl camera distance, and the zoom getter round-trips the set
+            // zoom exactly (no m_styleBoxZoom bookkeeping needed).
         } catch {}
     }
 

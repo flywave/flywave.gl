@@ -2242,11 +2242,18 @@ export class MBTileDataEmitter {
             // / is_flat_base): "flat" uses the FEATURE CENTROID elevation so
             // roofs/bases stay horizontal; "terrain" (base default) is
             // per-vertex.
-            const heightAlign = (layer.paint as any)['fill-extrusion-height-alignment'] ?? 'flat';
-            const baseAlign = (layer.paint as any)['fill-extrusion-base-alignment'] ?? 'terrain';
-            const cw = this.m_decodeInfo.center;
-            const grounds: number[] = new Array(ringCount);
-            let centroidElev = 0;
+        const heightAlign = (layer.paint as any)['fill-extrusion-height-alignment'] ?? 'flat';
+        const baseAlign = (layer.paint as any)['fill-extrusion-base-alignment'] ?? 'terrain';
+        const cw = this.m_decodeInfo.center;
+        // §777: on the sphere projection the footprint lands on the ECEF
+        // sphere (§267) but "up" is the vertex RADIAL direction — adding the
+        // height to the ECEF z component extrudes sideways (toward the +Z
+        // pole axis), the walls cut inside the globe and the (opaque,
+        // depth-winning) ground hides them entirely (globe-fill-extrusion
+        // family rendered empty). Offset bottom/top along the radial.
+        const sphericalUp = (this.m_decodeInfo.targetProjection as any)?.type === 1;
+        const grounds: number[] = new Array(ringCount);
+        let centroidElev = 0;
             if (this.m_terrainSampler) {
                 for (let i = 0; i < ringCount; i++) {
                     const w = this.project(
@@ -2312,12 +2319,26 @@ export class MBTileDataEmitter {
                 const ground = this.m_terrainSampler ? grounds[i] : 0;
                 const baseGround = baseAlign === 'flat' ? centroidElev : ground;
                 const topGround = heightAlign === 'flat' ? centroidElev : ground;
+                let bx = w.x, by = w.y, bz = w.z;
+                let tx = w.x, ty = w.y, tz = w.z;
+                if (sphericalUp) {
+                    // radial direction at the vertex (absolute ECEF frame)
+                    const rx = w.x + cw.x, ry = w.y + cw.y, rz = w.z + cw.z;
+                    const len = Math.hypot(rx, ry, rz) || 1;
+                    const ux = rx / len, uy = ry / len, uz = rz / len;
+                    bx += ux * (baseGround + floorHeight);
+                    by += uy * (baseGround + floorHeight);
+                    bz += uz * (baseGround + floorHeight);
+                    tx += ux * (topGround + height);
+                    ty += uy * (topGround + height);
+                    tz += uz * (topGround + height);
+                }
                 // bottom vertex
-                geo.positions.push(w.x, w.y, baseGround + floorHeight);
+                geo.positions.push(bx, by, sphericalUp ? bz : baseGround + floorHeight);
                 geo.extrusionAxis.push(0, 0, 0, 0);
                 if (isPatternExtrusion) geo.uvs.push(edgeDists[i], baseGround + floorHeight);
                 // top vertex
-                geo.positions.push(w.x, w.y, topGround + height);
+                geo.positions.push(tx, ty, sphericalUp ? tz : topGround + height);
                 geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
                 if (isPatternExtrusion) geo.uvs.push(edgeDists[i], topGround + height);
             }
@@ -2345,7 +2366,15 @@ export class MBTileDataEmitter {
                     );
                     const ground = this.m_terrainSampler ? grounds[i] : 0;
                     const topGround = heightAlign === 'flat' ? centroidElev : ground;
-                    geo.positions.push(w.x, w.y, topGround + height);
+                    let tx = w.x, ty = w.y, tz = w.z;
+                    if (sphericalUp) {
+                        const rx = w.x + cw.x, ry = w.y + cw.y, rz = w.z + cw.z;
+                        const len = Math.hypot(rx, ry, rz) || 1;
+                        tx += (rx / len) * (topGround + height);
+                        ty += (ry / len) * (topGround + height);
+                        tz += (rz / len) * (topGround + height);
+                    }
+                    geo.positions.push(tx, ty, sphericalUp ? tz : topGround + height);
                     geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
                     geo.uvs.push(w.x, w.y);
                 }

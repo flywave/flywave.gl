@@ -2405,13 +2405,20 @@ export class MapView extends EventDispatcher {
         this.geoCenter = geoPos;
         let limitedPitch = Math.min(MapViewUtils.MAX_TILT_DEG, pitchDeg);
         if (this.projection.type === ProjectionType.Spherical) {
-            const maxPitchRadWithCurvature = Math.asin(
-                EarthConstants.EQUATORIAL_RADIUS /
-                    (MapViewUtils.calculateDistanceToGroundFromZoomLevel(this, zoomLevel) +
-                        EarthConstants.EQUATORIAL_RADIUS)
-            );
-            const maxPitchDegWithCurvature = THREE.MathUtils.radToDeg(maxPitchRadWithCurvature);
-            limitedPitch = Math.min(limitedPitch, maxPitchDegWithCurvature);
+            // §776: in mgl-globe camera mode the curvature clamp must not
+            // apply — it derives the limit from the plane distance, which at
+            // low zoom is far above the globe and clamps e.g. pitch 45° to
+            // ~7.5°. mgl constrains globe pitch only by its own maxPitch
+            // (default 85°), so mimic that.
+            if ((this as any).__mglGlobeCam !== true) {
+                const maxPitchRadWithCurvature = Math.asin(
+                    EarthConstants.EQUATORIAL_RADIUS /
+                        (MapViewUtils.calculateDistanceToGroundFromZoomLevel(this, zoomLevel) +
+                            EarthConstants.EQUATORIAL_RADIUS)
+                );
+                const maxPitchDegWithCurvature = THREE.MathUtils.radToDeg(maxPitchRadWithCurvature);
+                limitedPitch = Math.min(limitedPitch, maxPitchDegWithCurvature);
+            }
         }
         // Orbit around the target (like `lookAt`): the geo position stays at the
         // screen center for any pitch. Rotating the camera in place instead

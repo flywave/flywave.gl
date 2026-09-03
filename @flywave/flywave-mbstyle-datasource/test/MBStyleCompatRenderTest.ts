@@ -1053,6 +1053,13 @@ async function processOperations(
                         (dataSource as any).applyBackgroundColor?.(st);
                     }
                 } catch { /* best-effort */ }
+                // §776: mgl recomputes the camera distance whenever the
+                // projection changes (the globe altitude model differs from
+                // the mercator plane model — transform._calcMatrices re-runs
+                // on setProjection). Re-apply the style camera or the globe
+                // renders with the distance chosen under the old projection
+                // (globe-default: ~1.41× too small).
+                (dataSource as any).reapplyCamera?.();
                 break;
             }
             case "setLights":

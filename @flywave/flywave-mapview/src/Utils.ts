@@ -1598,17 +1598,98 @@ export namespace MapViewUtils {
     }
 
     /**
+     * Mapbox-globe camera parity (§776): optional fields a MapView (or
+     * caller) may provide so the zoom↔distance conversions below switch from
+     * the tangent-plane formula to mgl's globe camera model.
+     *
+     * mgl (transform.ts) places the camera at altitude
+     *   H_px = ccd_px · pixelSpaceConversion
+     * ABOVE the sea-level point (not the plane distance), where
+     *   ccd_px = (h/2)/tan(fov/2)  (≡ flywave focalLength in px)
+     * and pixelSpaceConversion (globe.ts) at low zoom equals cos(45°) — the
+     * GLOBE_SCALE_MATCH_LATITUDE normalization — blending towards
+     * 1/cos(lat) across the projection interpolation range [3,5] (adjusted
+     * by log2(viewportMaxSize/1024)). Without the factor the rendered globe
+     * is ~1.41× too small (camera too far out).
+     */
+    export interface MglGlobeCamOptions {
+        projection?: Projection;
+        target?: GeoCoordinates;
+        getCanvasClientSize?: () => { width: number; height: number };
+        /** Set by MBStyleDataSource when the active style projection is globe. */
+        __mglGlobeCam?: boolean;
+    }
+
+    function mglGlobeCamActive(options: MglGlobeCamOptions): boolean {
+        return (
+            options.__mglGlobeCam === true &&
+            options.projection?.type === ProjectionType.Spherical
+        );
+    }
+
+    /**
+     * mgl globe `pixelSpaceConversion` (globe.ts) for the given flywave zoom.
+     * `flyZoom` is flywave's zoom convention (mapbox zoom + 1).
+     */
+    export function mglGlobePixelSpaceConversion(
+        flyZoom: number,
+        targetLatRad: number,
+        viewportMaxSizeCssPx: number
+    ): number {
+        const styleZoom = flyZoom - 1;
+        const size = Math.min(1024, Math.max(1, viewportMaxSizeCssPx));
+        const rangeAdjustment = Math.log2(size / 1024);
+        // globe projection range is [3, 5] (globe.ts constructor)
+        const zoomA = 3 + rangeAdjustment;
+        const zoomB = 5 + rangeAdjustment;
+        const t = THREE.MathUtils.smoothstep(styleZoom, zoomA, zoomB);
+        const secRef = 1 / Math.cos(Math.PI / 4); // GLOBE_SCALE_MATCH_LATITUDE = 45°
+        const secLat = 1 / Math.max(1e-6, Math.cos(targetLatRad));
+        return 1 / (secRef + (secLat - secRef) * t);
+    }
+
+    function mglGlobeTargetLatRad(options: MglGlobeCamOptions): number {
+        const lat = options.target?.latitude ?? 0;
+        const clamped = Math.min(89.5, Math.max(-89.5, lat));
+        return (clamped * Math.PI) / 180;
+    }
+
+    function mglGlobeViewportMaxSize(options: MglGlobeCamOptions): number {
+        try {
+            const size = options.getCanvasClientSize?.();
+            if (size && size.width > 0 && size.height > 0) {
+                return Math.max(size.width, size.height);
+            }
+        } catch {}
+        return 512;
+    }
+
+    /**
      * Calculates and returns the distance to the target point.
+     *
+     * When the mapbox-globe camera mode is active (spherical projection +
+     * `__mglGlobeCam`), the mgl globe altitude model applies: the plane
+     * distance is scaled by mgl's `pixelSpaceConversion` (≈cos(45°) at low
+     * zoom), matching mapbox's globe screen size exactly.
      *
      * @param options - Necessary subset of MapView properties to compute the distance.
      * @param zoomLevel - The zoom level to get the equivalent height to.
      */
     export function calculateDistanceFromZoomLevel(
-        options: { focalLength: number },
+        options: { focalLength: number } & MglGlobeCamOptions,
         zoomLevel: number
     ): number {
         const tileSize = EarthConstants.EQUATORIAL_CIRCUMFERENCE / Math.pow(2, zoomLevel);
-        return (options.focalLength * tileSize) / 256;
+        let distance = (options.focalLength * tileSize) / 256;
+        if (mglGlobeCamActive(options)) {
+            const conv = mglGlobePixelSpaceConversion(
+                zoomLevel,
+                mglGlobeTargetLatRad(options),
+                mglGlobeViewportMaxSize(options)
+            );
+            distance *= conv;
+        }
+        return distance;
     }
 
     /**
@@ -1627,15 +1708,28 @@ export namespace MapViewUtils {
      * @param distance - The distance in meters, which are scene units in {@link MapView}.
      */
     export function calculateZoomLevelFromDistance(
-        options: { focalLength: number; minZoomLevel: number; maxZoomLevel: number },
+        options: { focalLength: number; minZoomLevel: number; maxZoomLevel: number } & MglGlobeCamOptions,
         distance: number
     ): number {
         const tileSize = (256 * distance) / options.focalLength;
-        const zoomLevel = THREE.MathUtils.clamp(
-            Math.log2(EarthConstants.EQUATORIAL_CIRCUMFERENCE / tileSize),
-            options.minZoomLevel,
-            options.maxZoomLevel
-        );
+        let zoomLevel = Math.log2(EarthConstants.EQUATORIAL_CIRCUMFERENCE / tileSize);
+        if (mglGlobeCamActive(options)) {
+            // Invert distance(zoom) = plane(zoom)·conv(zoom): iterate
+            // z ← planeZoom(distance) + log2(conv(z)); conv ∈ [~0.71, ~1.41]
+            // so log2(conv) ∈ [−0.5, 0.5] and the fixed point converges fast.
+            const latRad = mglGlobeTargetLatRad(options);
+            const maxSize = mglGlobeViewportMaxSize(options);
+            for (let i = 0; i < 6; i++) {
+                const conv = mglGlobePixelSpaceConversion(zoomLevel, latRad, maxSize);
+                const next = zoomLevel + Math.log2(conv);
+                if (Math.abs(next - zoomLevel) < 1e-9) {
+                    zoomLevel = next;
+                    break;
+                }
+                zoomLevel = next;
+            }
+        }
+        zoomLevel = THREE.MathUtils.clamp(zoomLevel, options.minZoomLevel, options.maxZoomLevel);
         return snapToCeilingZoomLevel(zoomLevel);
     }
 

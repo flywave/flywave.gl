@@ -192,6 +192,21 @@ function evalThemedSafe(value: any, fallback: string, fog: FogSpec, styleZoom: n
         return out ?? fallback;
     } catch { return value; }
 }
+
+/**
+ * mgl `star-intensity` v8 default expression, evaluated at the given style
+ * zoom: interpolate(linear, zoom, 5, 0.35, 6, 0) — clamped to 0.35 below
+ * zoom 5 and 0 at/above zoom 6 (reference/v8.json `star-intensity`).
+ */
+function mglDefaultStarIntensity(styleZoom: number): number {
+    if (styleZoom < 5) return 0.35;
+    if (styleZoom >= 6) return 0;
+    return 0.35 * (1 - (styleZoom - 5));
+}
+
+const IDENT_QUAT = new THREE.Quaternion();
+const ORIGIN_VEC = new THREE.Vector3();
+
 export class MBEnvironmentManager {
     /** Debug: render the fog ramp position t as grayscale (§208 tool). */
     static fogDebugTProbe: number = 0; // §208 tool: 1=t-profile, 2=unfogged base
@@ -817,7 +832,11 @@ export class MBEnvironmentManager {
             // Globe: screen-space atmosphere glow around the limb (mgl
             // atmosphere.fragment.glsl) + space-color backdrop, PLUS content
             // fog via the glow_progress ramp (§273, see applyGlobeAtmosphere).
-            this.applyGlobeAtmosphere(fog, styleZoom);
+            // §776: mgl's style.fog ALWAYS exists (v8 defaults) — a globe
+            // style without a fog object still renders the default atmosphere
+            // (glow + stars at the default star-intensity), never a bare
+            // space clear. Treat missing fog as the default spec.
+            this.applyGlobeAtmosphere(fog ?? {}, styleZoom);
             return;
         }
         this.disposeGlobeAtmosphere();
@@ -1049,6 +1068,9 @@ export class MBEnvironmentManager {
         // without an explicit `sky` layer. Create a camera-centered dome that
         // reproduces the `atmosphere.fragment.glsl` gradient.
         this.createFogAtmosphereDome();
+        // Mercator tail: stars only when explicitly requested (mgl draws
+        // stars on mercator only when the horizon is visible; flywave's
+        // mercator fog path has no horizon-visibility gate here).
         if (fog['star-intensity'] && fog['star-intensity'] > 0) {
             this.createStars(fog['star-intensity']);
         }
@@ -1325,8 +1347,13 @@ export class MBEnvironmentManager {
             (Array.isArray(ms) ? ms : [ms]).forEach((m: any) => (m.needsUpdate = true));
         });
 
-        if (fog['star-intensity'] && fog['star-intensity'] > 0) {
-            this.createStars(fog['star-intensity']);
+        // §776: mgl star-intensity default — 0.35 below zoom 5 (zoom-
+        // interpolated 5→0.35, 6→0 in v8). The globe atmosphere path must
+        // draw the default star field even without an explicit value.
+        const starIntensity =
+            fog['star-intensity'] ?? mglDefaultStarIntensity(styleZoom);
+        if (starIntensity > 0) {
+            this.createStars(Math.min(starIntensity * 4, 1.4));
         }
     }
 
@@ -1529,6 +1556,14 @@ export class MBEnvironmentManager {
 
     applySky(sky: SkySpec | undefined, fog: FogSpec | undefined): void {
         if (!this.m_scene) return;
+        // §776: on globe the fog/atmosphere path owns the stars — applySky
+        // runs after applyFog on every style/refresh cycle and used to delete
+        // the star field created by applyGlobeAtmosphere right after it was
+        // built (globe-default: no stars in the sky). Keep globe stars.
+        const isGlobe = (this.m_mapView as any).projection?.type === 1;
+        if (isGlobe) {
+            return;
+        }
         // A sky mesh created by `createFogAtmosphereDome` (fog-driven atmosphere
         // glow) must survive this call when no explicit `sky` layer exists — it
         // is only replaced when an explicit sky is actually applied below.
@@ -1539,11 +1574,6 @@ export class MBEnvironmentManager {
         if (this.m_stars) {
             this.m_scene.remove(this.m_stars);
             this.m_stars = null;
-        }
-
-        const isGlobe = (this.m_mapView as any).projection?.type === 1;
-        if (isGlobe) {
-            return;
         }
 
         if (!sky) return;
@@ -2134,6 +2164,12 @@ export class MBEnvironmentManager {
      * 0.6·r), premultiplied white, intensity ×= fog star-intensity.
      */
     private createStars(intensity: number): void {
+        // Recreate-safe: drop any previous star mesh (applyFog/refreshFog can
+        // call this repeatedly — without this, every refresh adds a mesh).
+        if (this.m_stars) {
+            this.m_scene?.remove(this.m_stars);
+            this.m_stars = null;
+        }
         const mulberry32 = (a: number): (() => number) => () => {
             a |= 0;
             a = (a + 0x6d2b79f5) | 0;
@@ -2142,7 +2178,7 @@ export class MBEnvironmentManager {
             return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
         };
         const STARS_COUNT = 16000;
-        const SIZE_MULTIPLIER = 0.15;
+        const SIZE_MULTIPLIER = 0.5;
         const SIZE_RANGE = 100;
         const INTENSITY_RANGE = 200;
 
@@ -2180,7 +2216,15 @@ export class MBEnvironmentManager {
         geom.setIndex(new THREE.BufferAttribute(idx, 1));
 
         const material = new THREE.ShaderMaterial({
-            transparent: true,
+            // §776 draw-order model: the fog dome (renderOrder 1000, opaque
+            // alpha=1) paints the sky gradient; the stars must composite ON
+            // TOP of it yet stay hidden behind the globe tiles. Drawn last
+            // among the opaque-pass extras with depthTest on: sky pixels only
+            // contain the dome's far depth → stars pass; globe pixels hold
+            // closer tile depth → stars fail. (mgl draws stars before the map
+            // and lets the globe overdraw; with the dome in between, drawing
+            // stars first gets them erased by the dome's alpha=1 write.)
+            transparent: false,
             depthTest: false,
             depthWrite: false,
             blending: THREE.CustomBlending,
@@ -2205,12 +2249,14 @@ export class MBEnvironmentManager {
                 void main() {
                     vUv = aUv;
                     vInt = aOpacity * uIntensity;
-                    // View-space only (mgl starsProjMatrix = perspective, no
-                    // model transform): rotate the fixed 200-unit sphere into
-                    // the map orientation and billboard along u_right/u_up.
+                    // §776: standard model-view path (the mesh follows the
+                    // camera via position/scale in onBeforeRender) — a bare
+                    // projectionMatrix * worldPos skips the view transform
+                    // and the stars never rasterize (camera is tens of
+                    // megameters from the scene origin on globe).
                     vec3 p = uRot * position;
-                    p += aUv.x * uRight * aSize + aUv.y * uUp * aSize;
-                    gl_Position = projectionMatrix * vec4(p, 1.0);
+                    p += (uRight * aUv.x + uUp * aUv.y) * aSize;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
                 }
             `,
             fragmentShader: `
@@ -2228,7 +2274,9 @@ export class MBEnvironmentManager {
 
         this.m_stars = new THREE.Mesh(geom, material);
         this.m_stars.frustumCulled = false;
-        this.m_stars.renderOrder = -2100;
+        // After the fog dome (1000) so the dome's opaque sky write cannot
+        // erase the stars (see material comment).
+        this.m_stars.renderOrder = 2000;
         // Refresh the orientation from the live view (mgl orientation quat:
         // rotX(-pitch)·rotZ(-angle)·rotX(lat)·rotY(-lng), applied to the ECEF
         // star sphere; u_right/u_up = inverse-rotated axes × sizeMultiplier).
@@ -2236,6 +2284,22 @@ export class MBEnvironmentManager {
             const mv = this.m_mapView as any;
             const cam = this.m_mapView?.camera as THREE.PerspectiveCamera | undefined;
             if (!mv || !cam) return;
+            // §776: harp renders with m_rteCamera AT THE ORIGIN while the
+            // world is displaced around it (MapAnchors.update), so the
+            // render-space eye position is (0,0,0) — NOT m_camera.position
+            // (a star sphere centered there sits behind the eye and clips
+            // away entirely). Keep the sphere at the origin, scaled to sit
+            // between the clip planes. onBeforeRender runs after
+            // scene.updateMatrixWorld, so compose matrixWorld directly.
+            const near = cam.near ?? 1;
+            const far = cam.far ?? 1000;
+            const targetR = Math.min(far * 0.9, Math.max(near * 10, near + 100));
+            const k = targetR / 200;
+            this.m_stars!.matrixWorld.compose(
+                ORIGIN_VEC,
+                IDENT_QUAT,
+                new THREE.Vector3(k, k, k)
+            );
             const pitch = (mv.tilt ?? 0) * Math.PI / 180;
             const angle = 0;
             const lat = (mv.geoCenter?.latitude ?? 0) * Math.PI / 180;

@@ -3497,6 +3497,15 @@ export class MBMaterialPatchManager {
         // injectExtrusion3DLighting) — three's chunk fog must stay compiled
         // out (material.fog=false) or it double-washes toward fogColor.
         if (use3DLights) (material as any).fog = false;
+        // §777: on the sphere projection the legacy Lambert path has no
+        // self-drawn fog either — and three's fog_fragment globe branch
+        // (glow-progress SDF) evaluates a positive fogT for elevated content
+        // near the limb (globe-fill-extrusion boxes washed to white; mgl's
+        // expected frames keep them saturated). Compile the fog chunk out on
+        // globe; mercator keeps its calibrated chunk fog.
+        else if ((this.m_dataSource as any).mapView?.projection?.type === 1) {
+            (material as any).fog = false;
+        }
         // (3D lighting injection moved to the END of this method: earlier
         // placement let later onBeforeCompile assignments in this function
         // capture a pre-injection chain snapshot, silently dropping the
