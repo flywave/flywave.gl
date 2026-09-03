@@ -214,6 +214,7 @@ export function syncModelFogUniforms(mapView: any, env?: any): void {
             if (lib.fogHorizonBlend) u.fogHorizonBlend.value = lib.fogHorizonBlend.value;
             if (lib.fogCamHeight) u.fogCamHeight.value = lib.fogCamHeight.value;
             if (lib.fogMglRange?.value) (u.fogMglRange.value as THREE.Vector2).copy(lib.fogMglRange.value);
+            if (lib.fogMglShift) u.fogMglShift.value = lib.fogMglShift.value;
             if (lib.fogVertLimit?.value) (u.fogVertLimit.value as THREE.Vector2).copy(lib.fogVertLimit.value);
             if (sceneFogColor) (u.mbFogColor.value as THREE.Color).copy(sceneFogColor);
         } else {
@@ -391,6 +392,7 @@ export function applyMglModelLighting(
                     shader.uniforms.fogHorizonBlend = { value: fogLib.fogHorizonBlend?.value ?? 0.05 };
                     shader.uniforms.fogCamHeight = { value: fogLib.fogCamHeight?.value ?? 1000 };
                     shader.uniforms.fogMglRange = { value: (fogLib.fogMglRange?.value ?? new THREE.Vector2(0.5, 10)).clone() };
+                    shader.uniforms.fogMglShift = { value: fogLib.fogMglShift?.value ?? 1 };
                     shader.uniforms.fogVertLimit = { value: (fogLib.fogVertLimit?.value ?? new THREE.Vector2(0, 0)).clone() };
                     shader.uniforms.mbFogColor = { value: new THREE.Color(1, 1, 1) };
                     const mvz = (dataSource as any)?.mapView;
@@ -404,6 +406,7 @@ export function applyMglModelLighting(
                             fogHorizonBlend: shader.uniforms.fogHorizonBlend,
                             fogCamHeight: shader.uniforms.fogCamHeight,
                             fogMglRange: shader.uniforms.fogMglRange,
+                            fogMglShift: shader.uniforms.fogMglShift,
                             fogVertLimit: shader.uniforms.fogVertLimit,
                             mbFogColor: shader.uniforms.mbFogColor,
                             uMbDistCam: shader.uniforms.uMbDistCam,
@@ -467,6 +470,7 @@ export function applyMglModelLighting(
                      uniform float fogHorizonBlend;
                      uniform float fogCamHeight;
                      uniform vec2 fogMglRange;
+                     uniform float fogMglShift;
                      uniform vec2 fogVertLimit;
                      uniform vec3 mbFogColor;
                      uniform float uMbDistCam;
@@ -523,8 +527,16 @@ export function applyMglModelLighting(
                      // materials (uMBFogOn=0 keeps their calibrated pixels).
                      vec3 mbFogDisplay(vec3 disp) {
                          float mbLen = length(vViewPosition);
-                         float mbT = (mbLen / max(uMbDistCam, 1.0)
-                             - fogMglRange.x)
+                         // §775b: mgl fogUniformValues uploads the FOV-ADJUSTED
+                         // range (Fog.state getter adds 0.5/tan(fov/2) to both
+                         // ends, fog.ts:86-93 — that is why the shader's
+                         // fog_range has "no shift"), and mercatorFogMatrix
+                         // reduces the depth to shift·dist/distCam (§701).
+                         // §771g's raw-range + unshifted-depth form
+                         // over-fogged near content (crown wash T 0.63 vs
+                         // expected 0.49 on trees-use-theme).
+                         float mbDepth = fogMglShift * mbLen / max(uMbDistCam, 1.0);
+                         float mbT = (mbDepth - (fogMglRange.x + fogMglShift))
                              / max(fogMglRange.y - fogMglRange.x, 0.001);
                          float mbFall = 1.0 - min(1.0, exp(-6.0 * mbT));
                          mbFall *= mbFall * mbFall;
