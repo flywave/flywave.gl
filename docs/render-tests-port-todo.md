@@ -7753,3 +7753,7 @@ checkout 8ec5758c（§774d）的三处 src（MBModelRenderer/MBStyleDataSource/M
 **§775e. 模型雾 horizon 项 mercator z 压缩（语义忠实性修复，像素零变化）（2026-09-03）**：
 
 行剖面分析（远处冠 ours 147 vs expected 222）曾疑 horizon 项错杀远处雾——修正 mbDirZ 为雾空间 z（乘 mercatorZfromAltitude = 1/(C·cos(lat))，mercatorFogMatrix 的 z lane cppm 缩放，新 uniform uMbMercZPerMeter 每帧按 center.lat 同步）。实测 trees-use-theme **139,006 逐位持平**——原因：修正前 max(0, 负 dirZ) 已将该项归零（地面内容 dirZ<0），修正后 mercator 压缩 z≈1e-8·位移仍归零，两形式在地面内容上数学等价；保留修正作为 mgl 语义忠实性（相机上方片段 t>0 时才生效，与 fog_uniforms 的 fog 空间定义一致）。远处冠亮度差的真因不在 horizon（需要 pixpick 逐像素 depth/T 对拍定位，与双树层叠结构域合并立案）。哨兵 ground-shadow-fog 134,719 / hard-cutoff 135,022 持平。309 单测绿、tsc 绿。
+
+**§775g. translation z 的 §766 因子 A/B：负裁决回退，raw 米语义终裁（2026-09-03）**：
+
+§775e 后图像判读"橄榄露出面积不足"疑 translation z 抬升不够，试 §766 同款因子（×(1/cos)·1.6≈2.02）——**三夹具全回归**：trees-use-theme 139,006→141,900、geojson-source-with-schema 41,968→49,450、-add-layer 同。已回滚（工作区恢复 §775e 状态）。**终裁**：mgl 两条模型路径（calculateModelMatrix offset / bucket va[offset+6]）的 translation z 均为 raw 米，§766 的 ×2.02 是模型**几何缩放**域差（顶点 z），不适用于 translation；橄榄露出面积差的真因在双树层叠的内容域（冠形状/层绘制像素归属），需 pixpick 逐像素层归属对拍，维持 §775e 的深水区立案。309 单测绿、tsc 绿。
