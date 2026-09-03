@@ -7757,3 +7757,7 @@ checkout 8ec5758c（§774d）的三处 src（MBModelRenderer/MBStyleDataSource/M
 **§775g. translation z 的 §766 因子 A/B：负裁决回退，raw 米语义终裁（2026-09-03）**：
 
 §775e 后图像判读"橄榄露出面积不足"疑 translation z 抬升不够，试 §766 同款因子（×(1/cos)·1.6≈2.02）——**三夹具全回归**：trees-use-theme 139,006→141,900、geojson-source-with-schema 41,968→49,450、-add-layer 同。已回滚（工作区恢复 §775e 状态）。**终裁**：mgl 两条模型路径（calculateModelMatrix offset / bucket va[offset+6]）的 translation z 均为 raw 米，§766 的 ×2.02 是模型**几何缩放**域差（顶点 z），不适用于 translation；橄榄露出面积差的真因在双树层叠的内容域（冠形状/层绘制像素归属），需 pixpick 逐像素层归属对拍，维持 §775e 的深水区立案。309 单测绿、tsc 绿。
+
+**§775g 补充：z 放大版的冠面积方向证据（2026-09-03）**：
+
+宽松阈值面积量测（olive=橄榄系/maroon=栗红系）：expected olive 9,827 / maroon 241,504；ours raw100 olive 7,075 / maroon 190,834；ours lift×2.02 olive **8,562** / maroon 188,928——**放大抬升的橄榄面积方向正确（+21% 向 expected 靠近）**，净 px 回归（139,006→141,900）来自位移副产物错位（冠边缘/背景暴露）。即：translation z 的有效屏幕位移介于 raw 与 ×2.02 之间、且树大小/冠形状域（§605 tree-area 1:2.55 历史残差同域）存在系统差——归树几何微观域，与 pixpick 层归属对拍合并为下会话探针专项（z 因子扫描 + 逐树面积对拍可一并覆盖）。
