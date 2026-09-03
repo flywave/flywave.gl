@@ -1714,19 +1714,32 @@ export namespace MapViewUtils {
         const tileSize = (256 * distance) / options.focalLength;
         let zoomLevel = Math.log2(EarthConstants.EQUATORIAL_CIRCUMFERENCE / tileSize);
         if (mglGlobeCamActive(options)) {
-            // Invert distance(zoom) = plane(zoom)·conv(zoom): iterate
-            // z ← planeZoom(distance) + log2(conv(z)); conv ∈ [~0.71, ~1.41]
-            // so log2(conv) ∈ [−0.5, 0.5] and the fixed point converges fast.
+            // Invert distance(zoom) = plane(zoom)·conv(zoom). The previous
+            // fixed-point iteration (z ← z + log2(conv(z))) DIVERGES when the
+            // target latitude makes conv(z) < 1 for every z (e.g. lat 76°:
+            // secLat 4.16 > secRef √2 ⇒ conv ∈ (0.24, 0.71), log2 always
+            // negative — the map has no fixed point and drifts −0.5/iter,
+            // misreporting zoom 4.0 → 1.0 and wrecking tile LOD). Solve
+            // g(z) = planeZoom + log2(conv(z)) − z = 0 by bisection: g is
+            // continuous, strictly decreasing in z (conv varies ≤ ~2 stops
+            // while z sweeps the full range).
             const latRad = mglGlobeTargetLatRad(options);
             const maxSize = mglGlobeViewportMaxSize(options);
-            for (let i = 0; i < 6; i++) {
-                const conv = mglGlobePixelSpaceConversion(zoomLevel, latRad, maxSize);
-                const next = zoomLevel + Math.log2(conv);
-                if (Math.abs(next - zoomLevel) < 1e-9) {
-                    zoomLevel = next;
-                    break;
+            const g = (z: number) =>
+                zoomLevel + Math.log2(mglGlobePixelSpaceConversion(z, latRad, maxSize)) - z;
+            let lo = 0;
+            let hi = 30;
+            if (g(lo) <= 0) {
+                zoomLevel = lo;
+            } else if (g(hi) >= 0) {
+                zoomLevel = hi;
+            } else {
+                for (let i = 0; i < 40; i++) {
+                    const mid = (lo + hi) / 2;
+                    if (g(mid) > 0) lo = mid;
+                    else hi = mid;
                 }
-                zoomLevel = next;
+                zoomLevel = (lo + hi) / 2;
             }
         }
         zoomLevel = THREE.MathUtils.clamp(zoomLevel, options.minZoomLevel, options.maxZoomLevel);

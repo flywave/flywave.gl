@@ -323,6 +323,38 @@ class RasterTileDataProvider extends DataProvider {
             // texture → un-textured white quad (49k px).
             return JSON.stringify({ type: 'FeatureCollection', features: [] });
         }
+        // §780: pole-row tiles register a globe pole cap (mgl GLOBE_POLES
+        // fan; mercator ends at ±85.0511° and the cap region is
+        // unrepresentable in our mercator quad pipeline). mgl draws these
+        // caps whenever the covering includes a pole-row tile, sampling the
+        // tile texture's edge row (pixel-probe on globe-poles/north: the
+        // expected pole = the dark z1 edge-row streaks at raster-opacity
+        // OVER the fogged background dome).
+        {
+            const maxRow = Math.pow(2, z) - 1;
+            if (z > 0 && (y === 0 || y === maxRow)) {
+                const spanCap = Math.pow(2, z - anc.srcZ);
+                const fwCap = 1 / spanCap;
+                const fx0Cap = (x - anc.srcX * spanCap) * fwCap;
+                const fy0Cap = (y - anc.srcY * spanCap) * fwCap;
+                // Edge-row v (flipY space), nudged half a texel inside.
+                const dvCap = fwCap / 256;
+                const vEdgeCap = y === 0
+                    ? 1 - fy0Cap - 0.5 * dvCap
+                    : 1 - (fy0Cap + fwCap) + 0.5 * dvCap;
+                const { MBGlobePoleCaps } = await import('./MBGlobePoleCaps');
+                MBGlobePoleCaps.register({
+                    key: `${z}/${x}/${y}`,
+                    isNorth: y === 0,
+                    lon0: (x / Math.pow(2, z)) * 360 - 180,
+                    lon1: ((x + 1) / Math.pow(2, z)) * 360 - 180,
+                    texUrl: tileUrl(anc.srcZ, anc.srcX, anc.srcY),
+                    u0: fx0Cap,
+                    u1: fx0Cap + fwCap,
+                    vEdge: vEdgeCap,
+                });
+            }
+        }
         return JSON.stringify({
             type: 'FeatureCollection',
             features: [buildFeature(z, x, y, anc.srcZ, anc.srcX, anc.srcY)],
@@ -2778,6 +2810,66 @@ export class MBStyleDataSource extends TileDataSource {
                 if (self.m_backgroundFogRenderer) {
                     self.m_backgroundFogRenderer.run();
                 }
+                // §780: globe pole caps (mgl GLOBE_POLES) — sync the fan
+                // meshes registered by the raster provider into the scene.
+                try {
+                    const { MBGlobePoleCaps } = await import('./MBGlobePoleCaps');
+                    if (self.mapView?.projection?.type === 1) {
+                        let capOpacity = 0;
+                        const layers780: any[] = self.m_runtime?.style?.layers ?? [];
+                        const ras780 = layers780.find((l: any) =>
+                            l.type === 'raster' && l.layout?.visibility !== 'none');
+                        if (ras780) {
+                            try {
+                                const { MBExpressionEngine } = require('./MBExpressionEngine');
+                                capOpacity = Number(MBExpressionEngine.evaluate(
+                                    ras780.paint?.['raster-opacity'] ?? 1,
+                                    { zoom: (self.mapView as any).zoomLevel - 1, feature: undefined } as any,
+                                )) || 0;
+                            } catch {
+                                capOpacity = Number(ras780.paint?.['raster-opacity'] ?? 1) || 0;
+                            }
+                        }
+                        // §780: the background pole fill — mgl's globe
+                        // background geometry covers the full sphere, so the
+                        // polar void beyond ±85.05° shows the fogged
+                        // background color (globe-poles expected is
+                        // continuous darkorange past the mercator edge).
+                        try {
+                            const bg780 = layers780.find((l: any) =>
+                                l.type === 'background' && l.layout?.visibility !== 'none');
+                            let bgOpacity = 1;
+                            if (bg780) {
+                                let bgColor: any = bg780.paint?.['background-color'] ?? '#000000';
+                                bgOpacity = Number(bg780.paint?.['background-opacity'] ?? 1);
+                                try {
+                                    const { MBExpressionEngine } = require('./MBExpressionEngine');
+                                    bgColor = MBExpressionEngine.evaluate(bgColor, {
+                                        zoom: (self.mapView as any).zoomLevel - 1,
+                                        feature: undefined,
+                                    } as any) ?? bgColor;
+                                    bgOpacity = Number(MBExpressionEngine.evaluate(
+                                        bg780.paint?.['background-opacity'] ?? 1,
+                                        { zoom: (self.mapView as any).zoomLevel - 1, feature: undefined } as any,
+                                    )) || 0;
+                                } catch {}
+                                MBGlobePoleCaps.registerBackground(new THREE.Color(String(bgColor)));
+                            } else {
+                                MBGlobePoleCaps.registerBackground(null);
+                            }
+                            MBGlobePoleCaps.sync(self.mapView, capOpacity, bgOpacity);
+                        } catch {
+                            MBGlobePoleCaps.registerBackground(null);
+                        }
+                        if (!(globalThis as any).__mbPoleCapOff) {
+                            MBGlobePoleCaps.render(
+                                self.mapView,
+                                (self.m_environment as any)?.m_fog ?? null);
+                        }
+                    } else {
+                        MBGlobePoleCaps.clear();
+                    }
+                } catch { /* best-effort */ }
                 // §778: globe circle overlay — the backgroundFog quad paints
                 // after the main pass and washes the circle points (mgl draws
                 // circles AFTER the background). Re-render only the circle

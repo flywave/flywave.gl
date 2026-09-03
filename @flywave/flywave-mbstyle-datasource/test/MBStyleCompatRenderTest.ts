@@ -92,6 +92,12 @@ function discoverTests(): TestEntry[] {
     if (dbg === "1") (globalThis as any).__mbLiteDbg = true;
 }
 {
+    {
+        // §780 A/B: polecapprobe=1 disables the pole-cap draw channel.
+        const v = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("polecapprobe="))?.slice("polecapprobe=".length);
+        if (v === "1") (globalThis as any).__mbPoleCapOff = true;
+    }
     const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("rtdump="))?.slice("rtdump=".length);
     if (dbg === "1") (globalThis as any).__mbRtDump = true;
