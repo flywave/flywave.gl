@@ -7797,3 +7797,13 @@ MBModelRenderer 补 `mpix=x,y|grid` 探针（karma arg，raycast 实例化 tile 
 ③ **globe 内容纬度镜像（全 globe 族深层根因，R15 结案）**：程序化 blob 质心对拍实证 change-projection 渲染 = expected 的垂直镜像（4 圆 y' = 512−y 逐点吻合，flip 后 diff 145k→82k）。层层探针（相机位/四元数/RTE 矩阵/顶点 dump）+ node 数值复现定位：GeoJSON/MVT 解码管线对 tile-local y 统一做 y-up 翻转（`mvtTransform: py' = scale − 2·top − py`，§511 机制），而 tile2world 的 §267 球面分支把该翻转后的 py 当 y-down 行号喂 `tileYToLat` → 纬度精确取反（赤道不动、北半球画到南边）。历史上以 tessellateForSphere 的 winding 反转补偿了朝向，故填充可见但内容整体镜像，此前所有 globe 检查（default/near-horizon 圆在 (0,0)）均镜像不变量，未被发现。修复：球面分支与 tileToLatLng 对 raw mercator 纬度取反（lat = −tileYToLat(top,py,scale)，数学上严格等价 row_true = scale−top−py），并撤销 tessellateForSphere 的 winding 反转（它补偿的正是该镜像）。
 
 ④ **回测**（定向跑测，未全量）：set-projection **140,833→81,446（−42%）**、set-style **234,733→201,727（−14%，且从"黑球/小球"变为正确球体+纹理+圆）**。哨兵：globe-circle/default **5,148→914（−82%）**、globe-default **23,415→14,393（−38%）**、globe-circle/near-horizon 6,387→5,495、globe-fill-extrusion/default 26,007→25,964（持平）——全 globe 族无回归、普遍受益。残留：两夹具剩余 diff 主体为卫星纹理亮度/清晰度域（我方 z1 父瓦片 overzoom vs expected z2 真瓦片的对比度差），归 texture 域另案。
+
+**§779b. §779 纬度镜像根修 globe 族定向批测验证（44 例，2026-09-03）**：
+
+定向批测 globe-circle 子族（12）+ globe-fill-extrusion（13）+ globe-poles（6）+ globe-geojson（1）+ globe-heatmap（8）+ globe-zoom-visibility（4）+ globe-default/horizon。**无回退、普遍受益**：
+
+- 显著改善：globe-circle/default **5,148→914（−82%）**、globe-default **23,415→14,393（−38%）**、globe-fill-pattern/pattern **71,610→53,223（−26%）**、near-horizon 6,387→5,495、globe-circle/default-zoomed 7,821（首测）。
+- 持平（与 §776-§778 记录逐位/近逐位一致）：horizontal 4,638、translate 16,944、opacity 34,000、multipolygon-subdivision 109,250（109,240）、symbol-z-offset 族 10.6–16.3 万（~105–163k）、zero-height 族 6,489/105,202/141,421（与历史 6,489–82,786/105,128–109,168/138,742–141,504 区间一致，angle-limit = 历史最优）——**winding 反转撤销在全部填充类夹具上无回退**。
+- 新首测基线：poles 18.1–22.8 万、heatmap 1.2–23.1 万、zoom-visibility 5.9–18.3 万、horizon 21.6 万。
+
+**新量化域（下一入口）：globe 圆盘内部雾晕缺失**。set-projection 径向剖面（海区，中心→limb）：expected 灰雾从 +8（r=135）单调升至 +92（r=225，朝白），我方几乎为零——这是 mgl 逐 fragment 内容雾（globe_raster.fragment 的 fog_apply_premultiplied；glow_progress ramp + globeFixedFogRange [2,4.5]；limb 处理论 fog_opacity ≈ 0.42，与剖面吻合）。我方雾链路（fog_fragment globe 分支、fogGlobeMode=1、scene.fog、updateGlobeFogCenter 每帧同步）基建齐备但 raster 材质上未生效（疑 USE_FOG 编译期缺失或材质 uniform 快照陈旧）——下一阶段单点：raster 材质 fog 接线 A/B（fogprobe/fogDebugT=1 可视化 fogT 分布），预期对 poles/horizon/zoom-visibility/change-projection 等全部含 raster 的 globe 夹具大幅收敛。
