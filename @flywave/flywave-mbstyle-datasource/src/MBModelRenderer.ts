@@ -24,6 +24,7 @@
 
 import * as THREE from 'three';
 import { Tile } from '@flywave/flywave-mapview';
+import { EarthConstants } from '@flywave/flywave-geoutils';
 import { shadowCasters } from './MBShadowRenderer';
 
 interface ModelPlacement {
@@ -173,6 +174,54 @@ export function syncModelShadowUniforms(shadowState: {
     }
 }
 
+// §775: per-material mgl model-fog uniform handles. mgl fogs EVERY model
+// (model.fragment.glsl tail: fog_apply_premultiplied) but the engine's
+// fog_fragment override runs with fogAlpha=0 for model materials — the
+// custom fog keys were added to UniformsLib.fog AFTER three's module-load
+// merge, so built-in materials never cloned them (§145 note) and the GLSL
+// default 0 silently disabled the fog for models. The model tail therefore
+// self-draws the §771g mgl-exact fog (material.fog=false, §673 pattern) and
+// these handles are refreshed per frame from AfterRender.
+const mbModelFogUniforms = new Set<any>();
+
+export function syncModelFogUniforms(mapView: any, env?: any): void {
+    if (mbModelFogUniforms.size === 0) return;
+    const lib = (THREE.UniformsLib as any).fog ?? {};
+    // §701: camera-to-center metres (same formula as the extrusion
+    // per-frame refresh — probe-verified vs mgl camera distance).
+    const distCam = ((mapView as any)?.focalLength ?? 768) *
+        EarthConstants.EQUATORIAL_CIRCUMFERENCE / (256 * Math.pow(2, mapView?.zoomLevel ?? 16));
+    // The env's m_fogState.color is the THEMED fog color (LUT applied in
+    // applyFog). mapView.scene.fog can be the engine's own unthemed fog —
+    // the first probe run read white(1,1,1) from it while the 2D layers
+    // rendered the themed red.
+    const sceneFogColor = (env?.m_fogState?.color
+        ?? mapView?.scene?.fog?.color) as THREE.Color | undefined;
+    if ((globalThis as any).__mbDecodeDbg
+        && ((globalThis as any).__mbFogSyncCnt = ((globalThis as any).__mbFogSyncCnt ?? 0) + 1) <= 3) {
+        // eslint-disable-next-line no-console
+        console.log(`[MBModelFog] n=${mbModelFogUniforms.size} alpha=${lib.fogAlpha?.value} range=${JSON.stringify(lib.fogMglRange?.value)} camH=${lib.fogCamHeight?.value} distCam=${distCam.toFixed(0)} color=${sceneFogColor ? [sceneFogColor.r.toFixed(2), sceneFogColor.g.toFixed(2), sceneFogColor.b.toFixed(2)].join(',') : 'none'} mapView=${mapView ? 'ok' : 'MISSING'}`);
+    }
+    for (const u of mbModelFogUniforms) {
+        u.uMbDistCam.value = distCam;
+        // Fog runs ONLY when the style actually declares it (env.m_fogState
+        // non-null). Without this gate the lib's initial fogAlpha=1 + white
+        // default color wash every no-fog model style (geojson-source-with-
+        // schema +16.7k, default-orientation +932).
+        const fogOn = !!env?.m_fogState;
+        if (fogOn) {
+            if (lib.fogAlpha) u.fogAlpha.value = lib.fogAlpha.value;
+            if (lib.fogHorizonBlend) u.fogHorizonBlend.value = lib.fogHorizonBlend.value;
+            if (lib.fogCamHeight) u.fogCamHeight.value = lib.fogCamHeight.value;
+            if (lib.fogMglRange?.value) (u.fogMglRange.value as THREE.Vector2).copy(lib.fogMglRange.value);
+            if (lib.fogVertLimit?.value) (u.fogVertLimit.value as THREE.Vector2).copy(lib.fogVertLimit.value);
+            if (sceneFogColor) (u.mbFogColor.value as THREE.Color).copy(sceneFogColor);
+        } else {
+            u.fogAlpha.value = 0;
+        }
+    }
+}
+
 /**
  * §727: GPU color-theme LUT for the model tail (mgl APPLY_LUT_ON_GPU,
  * draw_model.ts:172-178 — pushed for every model draw when the style has a
@@ -240,10 +289,15 @@ export function applyMglModelLighting(
             // handles both the 3D-lights and the legacy-light paths (styles
             // without lights rendered native black: no scene lights).
             mat.__mbMglLit = true;
+            // §775: legacy-light model materials self-draw the mgl fog in the
+            // shader tail — compile out three's fog chunk (§673 pattern) so it
+            // cannot double-wash. Set OUTSIDE onBeforeCompile: material.fog is
+            // read for the USE_FOG define before the compile hook runs.
+            if (!ls && (globalThis as any).__mbModelFog !== false) (mat as any).fog = false;
             if ((globalThis as any).__mbDecodeDbg
                 && ((globalThis as any).__mbLitCnt = ((globalThis as any).__mbLitCnt ?? 0) + 1) <= 6) {
                 // eslint-disable-next-line no-console
-                console.log(`[MBLight] patch mat=${mat.name ?? '?'} type=${mat.type} metal=${mat.metalness} has3D=${ls ? 1 : 0}`);
+                console.log(`[MBLight] patch mat=${mat.name ?? '?'} type=${mat.type} metal=${mat.metalness} has3D=${ls ? 1 : 0} fogOn=${(!ls && (globalThis as any).__mbModelFog !== false) ? 1 : 0} noMat=${mat.userData?.__mbNoMaterial ? 1 : 0} fog=${(mat as any).fog}`);
             }
             const origOnCompile = mat.onBeforeCompile;
             mat.onBeforeCompile = (shader: any) => {
@@ -313,6 +367,49 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBHas3DLights = {
                     value: ls2 ? 1 : 0,
                 };
+                // §775: mgl DIFFUSE_SHADED gate for no-material glTF
+                // primitives (draw_model setupMeshDraw `!material.defined`;
+                // tagged at prototype load). Only the legacy-light path
+                // switches branches — the 3D-lights families keep their
+                // §557/§655 calibration untouched.
+                shader.uniforms.uMBNoMat = {
+                    value: mat.userData?.__mbNoMaterial ? 1 : 0,
+                };
+                // §775: self-drawn mgl model fog (mgl model fragment tail
+                // fog_apply_premultiplied). Legacy-light styles disable the
+                // engine's fog chunk (§673 pattern — it runs inert for these
+                // materials anyway since fogAlpha never cloned into them, and
+                // a live binding would double-wash); 3D-lights materials keep
+                // material.fog untouched so their calibrated pixels are
+                // bit-identical.
+                shader.uniforms.uMBFogOn = {
+                    value: (ls2 || (globalThis as any).__mbModelFog === false) ? 0 : 1,
+                };
+                {
+                    const fogLib = (THREE.UniformsLib as any).fog ?? {};
+                    shader.uniforms.fogAlpha = { value: fogLib.fogAlpha?.value ?? 0 };
+                    shader.uniforms.fogHorizonBlend = { value: fogLib.fogHorizonBlend?.value ?? 0.05 };
+                    shader.uniforms.fogCamHeight = { value: fogLib.fogCamHeight?.value ?? 1000 };
+                    shader.uniforms.fogMglRange = { value: (fogLib.fogMglRange?.value ?? new THREE.Vector2(0.5, 10)).clone() };
+                    shader.uniforms.fogVertLimit = { value: (fogLib.fogVertLimit?.value ?? new THREE.Vector2(0, 0)).clone() };
+                    shader.uniforms.mbFogColor = { value: new THREE.Color(1, 1, 1) };
+                    const mvz = (dataSource as any)?.mapView;
+                    shader.uniforms.uMbDistCam = {
+                        value: ((mvz as any)?.focalLength ?? 768) *
+                            EarthConstants.EQUATORIAL_CIRCUMFERENCE / (256 * Math.pow(2, mvz?.zoomLevel ?? 16)),
+                    };
+                    if (!ls2 && (globalThis as any).__mbModelFog !== false) {
+                        mbModelFogUniforms.add(mat.userData.__mbFogU = {
+                            fogAlpha: shader.uniforms.fogAlpha,
+                            fogHorizonBlend: shader.uniforms.fogHorizonBlend,
+                            fogCamHeight: shader.uniforms.fogCamHeight,
+                            fogMglRange: shader.uniforms.fogMglRange,
+                            fogVertLimit: shader.uniforms.fogVertLimit,
+                            mbFogColor: shader.uniforms.mbFogColor,
+                            uMbDistCam: shader.uniforms.uMbDistCam,
+                        });
+                    }
+                }
                 shader.uniforms.uMB3DTint = { value: tint?.color ?? [0, 0, 0] };
                 shader.uniforms.uMB3DTintA = { value: tint?.mix ?? 0 };
                 shader.uniforms.uMBHbs = { value: [hr.b0, hr.b1, hr.power, hr.start] };
@@ -364,6 +461,15 @@ export function applyMglModelLighting(
                      uniform float uMBHas3DLights;
                      uniform float uMBPortMode;
                      uniform float uMBModelGamma;
+                     uniform float uMBNoMat;
+                     uniform float uMBFogOn;
+                     uniform float fogAlpha;
+                     uniform float fogHorizonBlend;
+                     uniform float fogCamHeight;
+                     uniform vec2 fogMglRange;
+                     uniform vec2 fogVertLimit;
+                     uniform vec3 mbFogColor;
+                     uniform float uMbDistCam;
                      uniform sampler2D uMBLut;
                      uniform float uMBLutN;
                      uniform float uMBLutOn;
@@ -408,6 +514,34 @@ export function applyMglModelLighting(
                          float a004 = min(r.x * r.x, exp2(-9.28 * NdotV)) * r.x + r.y;
                          vec2 AB = vec2(-1.04, 1.04) * a004 + r.zw;
                          return specularColor * AB.x + AB.y;
+                     }
+                     // §775: mgl model fragment tail fog (fog_apply_premultiplied
+                     // → fog_apply), §771g exact range form. Input/output in the
+                     // DISPLAY domain — mgl fogs after linearTosRGB; the caller
+                     // converts and pow(2.2)s back so three's output encoder
+                     // lands on the mgl display value. Disabled for 3D-lights
+                     // materials (uMBFogOn=0 keeps their calibrated pixels).
+                     vec3 mbFogDisplay(vec3 disp) {
+                         float mbLen = length(vViewPosition);
+                         float mbT = (mbLen / max(uMbDistCam, 1.0)
+                             - fogMglRange.x)
+                             / max(fogMglRange.y - fogMglRange.x, 0.001);
+                         float mbFall = 1.0 - min(1.0, exp(-6.0 * mbT));
+                         mbFall *= mbFall * mbFall;
+                         float mbFogDepth = fogAlpha * min(1.0, 1.00747 * mbFall);
+                         float mbFactor = mbFogDepth;
+                         // mgl fog_horizon_blending(pos/depth): per-fragment
+                         // camera-relative z (models have tall fragments, unlike
+                         // the ground-plane approximation used for extrusions).
+                         float mbDirZ = (vMbWorldPos.z - fogCamHeight) / max(mbLen, 1.0);
+                         float mbHz = max(0.0, mbDirZ / max(fogHorizonBlend, 1e-4));
+                         mbFactor *= fogAlpha * exp(-3.0 * mbHz * mbHz);
+                         if (fogVertLimit.x > 0.0 || fogVertLimit.y > 0.0) {
+                             float mbVertP = smoothstep(fogVertLimit.x, fogVertLimit.y, vMbWorldPos.z);
+                             float mbOpLimit = 1.0 - smoothstep(0.9, 1.0, mbFogDepth);
+                             mbFactor *= 1.0 - min(mbVertP, mbOpLimit);
+                         }
+                         return mix(disp, mbFogColor, clamp(mbFactor, 0.0, 1.0) * uMBFogOn);
                      }
                      void main() {`
                 );
@@ -612,7 +746,30 @@ export function applyMglModelLighting(
                              vec3 mbTinted = mix(mbAlbedo, uMB3DTint, uMB3DTintA);
                              vec3 mbUnlit = mbTinted * mbAo + mbEmissive;
                              gl_FragColor.rgb = mix(mbCol, mbUnlit, uMB3DUnlit);
-                        } else {
+                        } else if (uMBNoMat > 0.5) {
+                            // §775: mgl DIFFUSE_SHADED legacy-light variant
+                            // (getDiffuseShadedColor, !LIGHTING_3D_MODE — the
+                            // fill-extrusion formula): no specular, no indirect,
+                            // a 0.03 ambient floor, and the mgl output is
+                            // written to the framebuffer WITHOUT linearTosRGB.
+                            // mbAlbedo here is the raw (post-LUT) vertex-color
+                            // domain mgl feeds the formula.
+                            vec3 mbLLeg = normalize((viewMatrix * vec4(uMB3DLegacyPos, 0.0)).xyz);
+                            float mbNL = clamp(dot(mbN0, mbLLeg), 0.0, 1.0);
+                            float mbCV = dot(mbAlbedo, vec3(0.2126, 0.7152, 0.0722));
+                            float mbDir = mix(1.0 - uMB3DLegacyInt,
+                                max((1.0 - mbCV) + uMB3DLegacyInt, 1.0), mbNL);
+                            vec3 mbFloor = mix(vec3(0.0), vec3(0.3), vec3(1.0) - uMB3DLegacyColor);
+                            vec3 mbDiff = vec3(0.03) + clamp(
+                                mbAlbedo * mbDir * uMB3DLegacyColor, mbFloor, vec3(1.0));
+                            vec3 mbTinted = mix(mbAlbedo, uMB3DTint, uMB3DTintA);
+                            vec3 mbUnlit = mbTinted;
+                            vec3 mbDisp = clamp(mix(mbDiff, mbUnlit, uMB3DUnlit), 0.0, 1.0);
+                            // mgl writes DIFFUSE_SHADED raw (no output
+                            // conversion) then fogs in the display domain;
+                            // pow(2.2) pre-compensates three's encoder.
+                            gl_FragColor.rgb = pow(mbFogDisplay(mbDisp), vec3(2.2));
+                         } else {
                             // §661: legacy light path — u_lightpos drives the
                             // DIRECT term (view-transformed, mgl anchor
                             // viewport); the shared mbSpecTerm above uses the
@@ -645,7 +802,20 @@ export function applyMglModelLighting(
                              mbCol += mbEmissive;
                              vec3 mbTinted = mix(mbAlbedo, uMB3DTint, uMB3DTintA);
                              vec3 mbUnlit = mbTinted * mbAo + mbEmissive;
-                             gl_FragColor.rgb = mix(mbCol, mbUnlit, uMB3DUnlit);
+                             vec3 mbOut = mix(mbCol, mbUnlit, uMB3DUnlit);
+                             // §775: mgl fogs the PBR output AFTER linearTosRGB
+                             // (display domain); convert → fog → pow(2.2) so
+                             // three's encoder lands on the mgl display value.
+                             // With fog inert the branch is byte-identical to
+                             // the pre-§775 write (the pow roundtrip would
+                             // otherwise jitter threshold-edge pixels).
+                             if (uMBFogOn > 0.5 && fogAlpha > 0.0) {
+                                 gl_FragColor.rgb = pow(
+                                     mbFogDisplay(pow(max(mbOut, vec3(0.0)), vec3(1.0 / 2.2))),
+                                     vec3(2.2));
+                             } else {
+                                 gl_FragColor.rgb = mbOut;
+                             }
                          }
                      }`
                 );
@@ -994,6 +1164,29 @@ export class MBModelRenderer {
         try {
             const gltf = await (await getSharedGLTFLoader()).loadAsync(url);
             const proto: THREE.Object3D = gltf.scene;
+            // §775: mgl DIFFUSE_SHADED gate — draw_model.ts setupMeshDraw pushes
+            // DIFFUSE_SHADED when `!material.defined` (glTF primitive with no
+            // material; also the whole non-mesh-features tile path). three's
+            // GLTFLoader substitutes a default metalness-1 MeshStandardMaterial
+            // for those primitives, which our PBR tail renders near-black —
+            // tag them so the tail can take the mgl DIFFUSE_SHADED branch.
+            const parser = (gltf as any).parser;
+            const jsonMeshes = parser?.json?.meshes;
+            proto.traverse((o: any) => {
+                if (!o.isMesh) return;
+                const ref = parser?.associations?.get?.(o);
+                let noMat = false;
+                if (ref && jsonMeshes?.[ref.meshes]?.primitives?.[ref.primitives]) {
+                    noMat = jsonMeshes[ref.meshes].primitives[ref.primitives].material === undefined;
+                } else {
+                    const mats = Array.isArray(o.material) ? o.material : [o.material];
+                    noMat = mats.every((m: any) => m && !m.name);
+                }
+                if (noMat) {
+                    const mats = Array.isArray(o.material) ? o.material : [o.material];
+                    for (const m of mats) { if (m) m.userData.__mbNoMaterial = true; }
+                }
+            });
             this.m_prototypes.set(url, proto);
             // Instances cloned from this prototype may already have been
             // requested (and skipped); they appear on the next run() pass.
@@ -1102,6 +1295,16 @@ export class MBModelRenderer {
         if (translation) {
             model.position.x += translation[0] ?? 0;
             model.position.y += translation[1] ?? 0;
+            // §775: mgl's model frame has METRES on the z channel — the
+            // bucket bake keeps translation[2] raw (model_bucket.ts
+            // va[offset+6], shader pos.z = translate.z) AND the model
+            // geometry z unscaled (the ×1.0 z lane in meter_to_tile), while
+            // the tile/lighting matrices rescale z with pixelsPerMeter
+            // (draw_model.ts zScaleMatrix [1,1,ppm]). So [0,0,100] lifts by
+            // 100 m, same metre semantics as XY. A tile-units reading
+            // (~11.8 m at z15) was A/B-falsified on geojson-source-with-
+            // schema — 43,671 px (raw metres) vs 60,153 (converted) — and
+            // reverted to the raw-metre form.
             model.position.z += translation[2] ?? 0;
         }
         m.setPosition(model.position);

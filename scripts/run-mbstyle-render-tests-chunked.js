@@ -209,7 +209,10 @@ async function main() {
         const label = `${i + 1}..${i + chunk.length}/${pending.length}`;
         console.log(`\n### session [${label}]: ${chunk.map((c) => c.fx).join(", ")}`);
         await runKarmaSession(
-            chunk.map((c) => c.fx),
+            // §743: category-anchored filters — bare leaf names substring-
+            // match same-named tests in OTHER categories (filter=default
+            // re-ran every globe */default test) and overwrite their results.
+            chunk.map((c) => `${c.cat}/${c.fx}`),
             port,
             sessionTimeoutMs,
             label,
@@ -233,7 +236,9 @@ async function main() {
         console.log(`\n### resume attempt ${attempt}: ${missing.length} fixtures missing.`);
         const chunk = missing.slice(0, batch).map((m) => m.fx);
         if (chunk.length === 0) break;
-        await runKarmaSession(chunk, port, sessionTimeoutMs, `resume-${attempt}`);
+        await runKarmaSession(
+            chunk.map((m) => `${m.cat}/${m.fx}`),
+            port, sessionTimeoutMs, `resume-${attempt}`);
     }
 
     summarize();

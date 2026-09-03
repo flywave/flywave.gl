@@ -7725,3 +7725,15 @@ INST 探针（instantiate 处）实证：tree-layer（ro 10.003）与 tree-layer
 **§774d. trees-use-theme 残余量化更新：diffuse 层橄榄冠覆盖率 ~2%（2026-09-03）**：
 
 全修复链当前基线（§774 回退后+§771b 等待+§771g 雾式）：ours 橄榄冠像素 231（质心 (274,274)）vs expected 10,411（质心 (246,266)）——**位置域已对齐（质心偏差 <30px），覆盖率差 ~45×**。即 diffuse 层树已开始以正确色系渲染，但仅极少数像素达橄榄域。收敛入口：①tree-layer 与 diffuse 层的绘制次序/深度竞争（maroon 树覆盖橄榄树的面积差）；②diffuse 树的 LUT 采样坐标域（§773 mgl 精确式落地后的首次覆盖，需逐冠对拍）。309 单测绿、tsc 绿。
+
+**§775. trees-use-theme 模型雾 + DIFFUSE_SHADED + 雾色主题化 + 雾 pitch 窗口：-19.5%（2026-09-03）**：
+
+① **mbgl 代码段分析四定案**：(a) geojson 模型层走 ModelBucket→drawInstancedNode，无材质 glTF primitive 经 setupMeshDraw `!material.defined` 强制 **DIFFUSE_SHADED**（getDiffuseShadedColor 非 3D 分支 = fill-extrusion 简式公式：0.03 地板、无镜面/无 indirect、**输出不做 linearTosRGB**）；three GLTFLoader 对无材质 primitive 塞默认 MeshStandardMaterial（metalness=1）→ 我方 §661 PBR 分支渲染成黑冠（§774 的 0-51 黑域实为此）。(b) mgl 模型片元尾部有 **fog_apply_premultiplied**——我方模型尾完全没有雾（fogAlpha 等 custom fog uniforms 是 three 模块加载后才加进 UniformsLib.fog 的，内建材质从未克隆到，GLSL 默认 0 使引擎 fog_fragment 惰性）；expected 的橄榄冠 = metallic 层绿冠（PBR legacy 光照，水平光 [1,110,90]→u_lightpos=(0.94,0.342,0)，相机 bearing0 正视受光南面）经 **红色雾洗**（雾色 = LUT(白) = (255,0,0)，T≈0.3-0.4）——§774 的"橄榄不经 LUT"与冠覆盖率差由此闭合。(c) **FOG_PITCH_START=45 / END=65**（fog_helpers.ts:10），我方 env 用了 60/65——pitch 60 时 mgl 雾 alpha=0.84、我方=0，全 fixture 的雾整体缺失（§771d 的"背景雾 alpha<1"实为同一根因）。(d) mgl 雾色**经主题 LUT**（fogUniformValues style.getLut）。
+
+② **修复清单（5 项入库）**：模型尾自绘 §771g 同款 mgl 精确雾（mbFogDisplay，display 域 fog + pow(2.2) 预补偿 three 输出编码，material.fog=false §673 式防双洗，mbmodelfog=0 A/B 门）；无材质 primitive 于 loadPrototype 打标（parser.associations 查 glTF json primitive.material===undefined）→ uMBNoMat 走新 DIFFUSE_SHADED legacy 分支；env 雾 pitch 窗口 60/65→**45/65**；env.setColorTheme 后 refreshFog 重放 + datasource 建 env 时回填 m_colorThemeLut（修 LUT 异步早于 env 创建导致的白雾）；syncModelFogUniforms 每帧喂雾色（m_fogState.color 主题化）/distCam，且 **fogState 为 null（无 fog 样式）时 alpha=0** + §661 分支雾关闭时保持旧写入逐位一致。
+
+③ **translation z 瓦片单位误读→证伪→回滚（诚实记档）**：曾按 model_bucket va[offset+6] 原样烘焙判读 z 为瓦片单位（z15≈11.8m）并实现换算；geojson-source-with-schema stash 基线对照 **43,671（基线米语义）vs 60,153（换算）** 证伪——mgl 模型帧 z 通道本就是**米**（shader meter_to_tile 的 z lane ×1.0 + draw_model zScaleMatrix [1,1,ppm]），[0,0,100] = 抬升 100m（§774c 的"悬空树"判读正确）。已回滚为米语义并记档完整代码证据。
+
+④ **回测**（单夹具+哨兵，未跑全量）：trees-use-theme **202,959→163,476（−19.5%）**——背景域逐像素吻合（(20,20)=(231,0,0) vs expected (230,0,0)，§771d 背景残差 closure），双族冠结构对齐（栗冠+橄榄下缘），黑冠 72,409→16,243；geojson-source-with-schema **43,671→41,968（−1.7k）**、-add-layer 43,723→41,968。哨兵：fog/default 448 ✓、ground-shadow-fog 135,918（基线 135,914 持平 ✓）、buildings-trees-shadows-fog 560k→415,709（**−26%**，pitch 窗口收益）、-fade 538,283（−4%）。309 单测绿、tsc 绿。
+
+⑤ **白底归属定案**：geojson-source-with-schema 的白色背景在 HEAD 基线跑测（43,671）下同样存在（(10,10)/(256,256)/(256,420) 全白 vs expected 黑）——归已提交的 §771h 背景雾 quad 低 pitch 扩展（无主题样式雾色为白），非本次引入；挂 §771h 复核项。残留观察：default-orientation 2,865→3,797（+932，无 fog 无 translation，疑 DIFFUSE 分支对未命名材质的触发域或 SwiftShader pow 精度，单独立项）。下一入口：冠雾洗比例 T 的标定（ours 冠区 (169,20,20) vs expected (141,4,4) 略亮）、maroon 族亮度域、default-orientation +932。

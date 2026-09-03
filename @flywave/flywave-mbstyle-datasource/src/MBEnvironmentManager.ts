@@ -541,6 +541,12 @@ export class MBEnvironmentManager {
     /** Mapbox `color-theme` LUT (null = identity). */
     setColorTheme(lut: import('./MBColorTheme').ColorThemeLut | null): void {
         this.m_colorThemeLut = lut;
+        // §775: the fog color is THEMED (mgl fogUniformValues applies
+        // style.getLut at upload — fog.ts, fogUniformValues). applyFog first
+        // runs at connect, typically BEFORE the async root LUT resolves, and
+        // the fog then stays unthemed white (trees-use-theme washed
+        // pink-white instead of the mgl red). Re-apply with the LUT in hand.
+        if (lut && this.m_lastFogSpec) this.refreshFog();
     }
 
     /**
@@ -936,9 +942,12 @@ export class MBEnvironmentManager {
             return 1;
         })();
         // mgl only enables fog at high pitch: u_fog_color.a = getOpacity(pitch)
-        // = smoothstep(FOG_PITCH_START=60, FOG_PITCH_END=65, pitch) · color.a
-        // (painter.ts fogUniformValues). Compute pitch from the actual view
-        // direction (0 = straight down) so it can't drift from camera state.
+        // = smoothstep(FOG_PITCH_START, FOG_PITCH_END, pitch) · color.a
+        // (fog_helpers.ts: FOG_PITCH_START=45, FOG_PITCH_END=65 — the old
+        // 60/65 window zeroed the fog for every pitch-45..65 style, e.g.
+        // trees-use-theme at pitch 60 rendered with NO model fog at all).
+        // Compute pitch from the actual view direction (0 = straight down) so
+        // it can't drift from camera state.
         // GLOBE skips the pitch factor (fog.ts getOpacity: isGlobe → 1.0).
         const isSphereProj =
             (this.m_mapView as any)?.projection?.type === 1 /* Spherical */;
@@ -946,7 +955,7 @@ export class MBEnvironmentManager {
         if (cam && !isSphereProj) {
             const dir = cam.getWorldDirection(new THREE.Vector3());
             const pitchDeg = Math.acos(Math.min(1, Math.max(-1, -dir.z))) * 180 / Math.PI;
-            const s = Math.min(Math.max((pitchDeg - 60) / (65 - 60), 0), 1);
+            const s = Math.min(Math.max((pitchDeg - 45) / (65 - 45), 0), 1);
             pitchFactor = s * s * (3 - 2 * s);
         }
         const alpha = pitchFactor * colorAlpha;

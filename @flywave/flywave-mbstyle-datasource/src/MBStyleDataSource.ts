@@ -2109,6 +2109,14 @@ export class MBStyleDataSource extends TileDataSource {
 
         if (this.mapView) {
             this.m_environment = new MBEnvironmentManager(this.mapView);
+            // §775: the root color-theme LUT resolves ASYNC (loadColorTheme
+            // at style-load) and may land BEFORE this block creates the env —
+            // applyColorTheme's env.setColorTheme then no-ops on the null
+            // env and the fog renders unthemed (trees-use-theme white fog
+            // instead of mgl's LUT red). Re-sync the env from the datasource.
+            if (this.m_colorThemeLut) {
+                this.m_environment.setColorTheme(this.m_colorThemeLut);
+            }
             this.m_environment.applyLights(
                 (style as any).lights as any,
                 style.light,
@@ -2744,6 +2752,13 @@ export class MBStyleDataSource extends TileDataSource {
                 if (self.m_backgroundFogRenderer) {
                     self.m_backgroundFogRenderer.run();
                 }
+                // §775: model-tail self-drawn mgl fog — refresh the per-frame
+                // fog uniforms (fogAlpha/horizon/camHeight/range + themed
+                // env fog color + zoom-dependent distCam).
+                try {
+                    const { syncModelFogUniforms } = await import('./MBModelRenderer');
+                    syncModelFogUniforms(self.mapView, self.m_environment);
+                } catch { /* best-effort */ }
 
                 if (self.m_debugTileBoundaries) self.drawTileBoundaries();
                 const tc = self.m_environment?.terrainController;
