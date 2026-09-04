@@ -8079,3 +8079,9 @@ hideq 升级为持久 interval（先收集后移除，修三处 bug：undefined 
 **§814. horizon-cull 实验：无效果；域转工程对拍（2026-09-05 终）**：
 
 WillRender 同步 hideq=horizon（mgl isLngLatBehindGlobe 判据：dot(外法线, 指向相机) < 0 隐藏）实测 125,982 不变——场景帧内无网格落在 horizon 后侧（或 RTE 坐标系下 globe center≠场景原点使判据失真：census camH=2.58e7 vs dome-geom d=9.23e6 存在 ~2.8× 单位差，RTE 系里 globe center 不在场景原点）。**至此场景级（traverse/visible/remove/WillRender）与 shader 级（domedbg/fogT）手段全部穷尽**，白带物主与 mgl 渐变机制需：①统一坐标系的对拍（mgl transform vs flywave RTE+lookAt 的屏幕空间射线，mgl 本地渲染实例）；②或 RenderDoc 帧调试。zero-height simple/complex（各 ~126k）挂账于此。本域已交付：dome 公式正确性证实、effectiveFogSpec、domedbg/hideq/horizon 探针、九轮排除实验。
+
+**§813d. hide 终极轮（removeFromParent + WillRender + 放宽类名）：仍 bit 级不变——白物非场景可遍历对象（2026-09-05 终）**：
+
+hideq 升级三连：①类名放宽 `includes("MeshBasic")`（覆盖 MapMeshBasicMaterial 子类）；②WillRender 同步钩子（消除 200ms interval 与渲染循环的竞态）；③collect-then-removeFromParent（visible=false 会被引擎逐帧重置，移除才持久）。实测全部 **125,982 bit 级不变**——白色满幅物不是场景树中任何可遍历的白色 MeshBasic 网格。至此排除清单：背景层样式对象、注入背景 quad（n=4 白 MeshBasic）、远侧瓦背面、月球、引擎 Celestia 大气、太阳 helper。剩余可能：①引擎瓦片渲染走自有 collector，scene 树移除/visible 不影响其绘制（TileObjectRenderer 每帧重挂对象）——须用引擎 API（markTilesDirty/数据源开关）而非场景操作；②白物为 tile-fog 之外的渲染层（深度预渲染/后处理）。
+
+**下一步建议**：①用数据源开关二分（dataSource.enabled=false 或从 mapView 摘除 MBStyleDataSource 后渲染——白带若消失即确证瓦片管线，再按 source 逐个二分）；②确认后实施 §798/§807b 的 horizon culling（引擎 TileObjectRenderer 层或 decode 层剔除越球瓦片）。
