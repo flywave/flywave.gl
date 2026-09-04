@@ -117,6 +117,7 @@ function main() {
             ...(process.env.MBSTYLE_EXTFLAT ? ["extflat=1"] : []),
             ...(process.env.MBSTYLE_EXTDBG ? ["extdbg=1"] : []),
             ...(process.env.MBSTYLE_EXTNOLIGHT ? ["extnolight=1"] : []),
+            ...(process.env.MBSTYLE_TERRHIDE ? ["terhide=1"] : []),
             ...(process.env.MBSTYLE_EXTNOLUT ? ["extnolut=1"] : []),
             ...(process.env.MBSTYLE_SHADOWDISABLE ? ["shadowdisable=1"] : [])];
         // detached:true makes the child a process-group leader (POSIX) so the

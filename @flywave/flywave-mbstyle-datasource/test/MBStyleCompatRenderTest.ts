@@ -354,6 +354,29 @@ async function renderUntilSettled(
         // quota — scene attachment is the signal that content is drawable.
         let count = 0;
         (mapView as any).scene?.traverse?.((o: any) => { if (o.isMesh) count++; });
+        // §795 scene census: what meshes exist, their materials/colors/bounds.
+        if ((globalThis as any).__mbExtRouteDbg && count > 0
+            && !(globalThis as any).__mbCensusDone) {
+            (globalThis as any).__mbCensusDone = true;
+            const rows: string[] = [];
+            (mapView as any).scene?.traverse?.((o: any) => {
+                if (!o.isMesh) return;
+                const mat: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                const g = o.geometry;
+                g.computeBoundingSphere?.();
+                const bs = g.boundingSphere;
+                rows.push(`mat=${mat?.type} col=#${mat?.color?.getHexString?.() ?? '?'} map=${!!mat?.map} ro=${o.renderOrder} vis=${o.visible} n=${g.attributes?.position?.count} bsR=${bs?.radius?.toExponential(2)} bsC=(${bs?.center?.x?.toExponential(1)},${bs?.center?.y?.toExponential(1)},${bs?.center?.z?.toExponential(1)})`);
+            });
+            const fb = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+                a.startsWith("feedback-url="))?.slice("feedback-url=".length);
+            if (fb) {
+                fetch(`${fb}/mb-probe-dump`, {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ probe: "scene-census", log: rows }),
+                }).catch(() => { });
+            }
+        }
         if (count === lastCount) {
             stable++;
         } else {
@@ -1091,6 +1114,23 @@ async function processOperations(
                 // the space clear + fogged disc must take over.
                 const fogEnv0 = (dataSource as any).m_environment;
                 fogEnv0?.refreshFog?.();
+                // §796: the terrain build is projection-framed — under the
+                // sphere it must be torn down (env skips Spherical), and a
+                // later switch back to mercator must rebuild it. Re-apply the
+                // style's terrain spec after the projection swap.
+                try {
+                    const stT = (dataSource as any).styleManager?.getStyle?.() ?? {};
+                    await fogEnv0?.applyTerrain?.(
+                        stT.terrain
+                            ? { ...(stT.terrain as any), encoding: (dataSource as any).m_demEncoding }
+                            : undefined,
+                        (dataSource as any).m_demTileUrl,
+                        stT.zoom ?? 8,
+                        stT.center ?? [0, 0],
+                        (dataSource as any).m_demMaxZoom,
+                        (dataSource as any).m_demTileSize,
+                    );
+                } catch { /* best-effort */ }
                 try {
                     const st = (dataSource as any).styleManager?.getStyle() ?? {};
                     // §572d: viewport-aligned backgrounds own a fullscreen

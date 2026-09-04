@@ -7927,3 +7927,13 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 **§788(a) 假设修正（探针实证，extdbg=1 新增 rasAttach/ras404 探针 + `mbExtRoutePush` 统一 flush）**：high-exaggeration（152,331）的 z1 卫星纹理**全部挂载成功**（rasAttach ×4-6，w=258 padded，无 ras404）——白盘不是纹理挂载失败，而是该夹具的 **`terrain:{exaggeration:240}` 地形垂披域**（白色赤道带越出球缘 = 夸大地形网格）。§788 取证里的 "z1 卫星纹理未挂载(c=ffffff)" 结论按此修正：decodedbg 探到的白瓦属 exaggeration/垂披链，非 patcher attach 失败。地形+globe+exaggeration 另案立案。
 
 **新工具**：`mbExtRoutePush()` 模块级探针助手（2s 去抖 POST /mb-probe-dump，晚到 attach 各自重 arm）；`MBSTYLE_EXTDBG=1` 现同时开启技术路由 + raster 挂载链探针。
+
+**§796. globe 地形半实现隔离：Spherical 下跳过 terrain 构建 + setProjection 重应用（2026-09-05 续）**：
+
+**根因（scene-census 新探针实证）**：地形机件是 mercator 框架（XY 平面 3×3 网格、z-up 抬升、RTT 垂披在 Spherical 直接 bail），globe 上建出的未垂披白色网格（MeshStandardMaterial ro=-100 n=16641）以 renderOrder -100 画在 dome 之后、卫星瓦片之前，把 240× 抬升的深度收益变成**白盘覆盖imagery**。普查清单：6×n=5 卫星平面 quad（§788(b) overzoom 路径）、9×n=16641 地形网格、ro=±MAX 双 ShaderMaterial（引擎 sky/ground atmosphere）。
+
+**修复**：① `MBEnvironmentManager.applyTerrain` 入口在 `projection.type===1` 时置 `terrain=undefined`（dispose 照跑，镜像 TerrainDraping 的 globe bail），等球面框架地形实现后再启用；② harness `setProjection` 操作后重应用 style 的 terrain spec（运行时 setProjection 切球面时原 terrain 以 mercator 框架建出后从不清算；切回 mercator 亦可重建）。诊断开关 `terhide`/`MBSTYLE_TERRHIDE` 移除。
+
+**回测**：high-exaggeration **152,331→10,718（−93%）**、north-pole-padded-dem **57,874→5,143**；unset-terrain 40,152 / line-placement-terrain 23,174 / map-text-rotation 3,004 / south-pole-padded-dem 9,578 / text-pitch-alignment 6,262 持平（它们的残差与地形网格无关）。
+
+**新立案**：globe-terrain 153,037 与 imports/globe-terrain 242,222 与地形网格无关（跳过后 bit 级不变）——census 显示其为 n=6-14 白色 MeshBasicMaterial quad（map=false，imagery 注入未生效或该内容本身白色），属瓦片 imagery 域，另案。scene-census 探针（extdbg=1 附带）入库。

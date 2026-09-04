@@ -2810,6 +2810,16 @@ export class MBEnvironmentManager {
             console.log('[MBTerr] applyTerrain src=' + (terrain ? terrain.source : 'null')
                 + ' url=' + (demTileUrl ? 'yes' : 'NULL') + ' zoom=' + zoom);
         }
+        // §796: globe (Spherical) projection — the terrain machinery is
+        // mercator-framed (XY-plane 3×3 grid; the RTT drape bails on
+        // Spherical, TerrainDraping.onAfterRender), so building it under the
+        // sphere rendered the un-draped WHITE grid OVER the satellite tiles
+        // (high-exaggeration 152,331 / globe-terrain 153k / imports
+        // /globe-terrain 242k white discs). Mirror the drape's own bail:
+        // skip cleanly until a sphere-framed terrain path exists.
+        if ((this.m_mapView as any)?.projection?.type === 1) {
+            terrain = undefined;
+        }
         if (!this.m_scene) return;
         // Dispose previous terrain (legacy single mesh + multi-tile controller).
         if (this.m_terrainMesh) {
@@ -2861,6 +2871,12 @@ export class MBEnvironmentManager {
                 1, // radius → 3×3 grid around center
                 terrain.encoding === 'terrarium' ? 'terrarium' : 'mapbox',
             );
+            if (this.m_terrainController.meshCount > 0
+                && (globalThis as any).__mbTerrHide) {
+                for (const mesh of this.m_terrainController.meshes) {
+                    (mesh as any).visible = false;
+                }
+            }
             if (this.m_terrainController.meshCount > 0) {
                 // mapbox terrain semantics: content rides the terrain —
                 // world-space elevation sampler for the engine's
