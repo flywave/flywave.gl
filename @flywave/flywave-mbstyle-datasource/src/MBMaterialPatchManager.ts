@@ -14,6 +14,29 @@ interface MaterialPatchState {
 
 const rasterTextureCache = new Map<string, THREE.Texture>();
 const rasterTextureLoader = new THREE.TextureLoader();
+// §794: async raster-attach probes land via /mb-probe-dump (console
+// forwarding is flaky, §510); late attaches fire after the patch-time
+// flush, so each probe re-arms its own debounced POST.
+function mbExtRoutePush(line: string): void {
+    const g = globalThis as any;
+    if (!g.__mbExtRouteDbg) return;
+    const buf: string[] = (g.__mbExtRouteLog ??= []);
+    if (buf.length < 800) buf.push(line);
+    if (g.__mbExtRouteTimer) return;
+    g.__mbExtRouteTimer = setTimeout(() => {
+        g.__mbExtRouteTimer = undefined;
+        const fb = (window as any).__karma__?.config?.args
+            ?.find?.((a: string) => a.startsWith('feedback-url='))
+            ?.slice('feedback-url='.length);
+        if (fb) {
+            fetch(`${fb}/mb-probe-dump`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ probe: 'ext-route', log: (globalThis as any).__mbExtRouteLog }),
+            }).catch(() => {});
+        }
+    }, 2000);
+}
 // Cache of cropped sprite sub-rect textures used for fill/line/extrusion patterns.
 const patternTextureCache = new Map<string, THREE.Texture>();
 let patternTextureCacheAtlas: unknown = null;
@@ -1539,25 +1562,7 @@ export class MBMaterialPatchManager {
         // route through, and which patch branch fires? Console forwarding is
         // flaky in the karma page (§510) — buffer and POST via /mb-probe-dump.
         if ((globalThis as any).__mbExtRouteDbg) {
-            const buf: string[] = ((globalThis as any).__mbExtRouteLog ??= []);
-            if (buf.length < 400) {
-                buf.push(`tech=${techName} layer=${technique._layerId} mat=${material.type} h=${technique.height} b=${technique.floorHeight} isLine=${(obj as any).isLine} op=${(material as any).opacity}`);
-                if (!(globalThis as any).__mbExtRouteTimer) {
-                    (globalThis as any).__mbExtRouteTimer = setTimeout(() => {
-                        (globalThis as any).__mbExtRouteTimer = undefined;
-                        const fb = (window as any).__karma__?.config?.args
-                            ?.find?.((a: string) => a.startsWith('feedback-url='))
-                            ?.slice('feedback-url='.length);
-                        if (fb) {
-                            fetch(`${fb}/mb-probe-dump`, {
-                                method: 'POST',
-                                headers: { 'content-type': 'application/json' },
-                                body: JSON.stringify({ probe: 'ext-route', log: (globalThis as any).__mbExtRouteLog }),
-                            }).catch(() => {});
-                        }
-                    }, 2000);
-                }
-            }
+            mbExtRoutePush(`tech=${techName} layer=${technique._layerId} mat=${material.type} h=${technique.height} b=${technique.floorHeight} isLine=${(obj as any).isLine} op=${(material as any).opacity}`);
         }
         switch (techName) {
             case 'fill':
@@ -1802,7 +1807,7 @@ export class MBMaterialPatchManager {
         // brightness/contrast/saturation/hue chain (mgl raster paint) is
         // folded into the same injection; with default paint values it is
         // the identity transform.
-        const rect = (technique._rasterUvRect as number[] | undefined) ?? [0, 0, 1, 1];
+        let rect = (technique._rasterUvRect as number[] | undefined) ?? [0, 0, 1, 1];
         // Base under the raster: the style's background color (mgl default
         // black when a background layer exists, engine white otherwise).
         // raster-opacity blending must happen in sRGB NUMERIC space like mgl
@@ -1855,6 +1860,9 @@ export class MBMaterialPatchManager {
             }
         } catch {}
         const attach = (texture: THREE.Texture) => {
+            if ((globalThis as any).__mbExtRouteDbg) {
+                mbExtRoutePush(`rasAttach url=${url} tex=${texture.uuid} w=${(texture as any).image?.width ?? '?'}`);
+            }
             // mgl mipmapped raster tiles — keep the mipmap min filter here
             // too (this ran AFTER applyRasterFilters and silently reset it,
             // voiding the mipmap parity fix).
@@ -2303,7 +2311,52 @@ export class MBMaterialPatchManager {
             try {
                 (this.m_dataSource as any).mapView?.update?.();
             } catch {}
-        }, undefined, () => {});
+        }, undefined, () => {
+            // §794: mgl raster tile 404 falls back to PARENT tile imagery
+            if ((globalThis as any).__mbExtRouteDbg) {
+                mbExtRoutePush(`ras404 url=${url}`);
+            }
+            // (tile.ts overzoom): walk z-1, z-2, … and attach the ancestor
+            // texture with the child's region composed into the UV rect.
+            // Missing deep-zoom satellite tiles (2-x-x/3-x-x in the local
+            // fixture set) were rendering as bare white quads (§788c).
+            const m = url.match(/^(.*\/)(\d+)-(\d+)-(\d+)(\.\w+)$/);
+            if (!m) return;
+            const dzMax = Number(m[2]);
+            const walk = (dz: number) => {
+                if (dz > dzMax) return;
+                const az = dzMax - dz;
+                const ax = Number(m[3]) >> dz;
+                const ay = Number(m[4]) >> dz;
+                const aUrl = `${m[1]}${az}-${ax}-${ay}${m[5]}`;
+                const span = 1 / (1 << dz);
+                const cx = Number(m[3]) - (ax << dz);
+                const cy = Number(m[4]) - (ay << dz);
+                const attachAncestor = (tex: THREE.Texture) => {
+                    // Child region within the ancestor's flipY texture:
+                    // compose the child's own uv rect with its tile-space
+                    // span (u unflipped, v flipped by flipY).
+                    rect = [
+                        cx * span + rect[0] * span,
+                        1 - (cy + 1) * span + rect[1] * span,
+                        rect[2] * span,
+                        rect[3] * span,
+                    ];
+                    attach(tex);
+                    try { (this.m_dataSource as any).notifyRasterAttached?.(); } catch {}
+                    try { (this.m_dataSource as any).mapView?.update?.(); } catch {}
+                };
+                const acached = rasterTextureCache.get(aUrl);
+                if (acached) { attachAncestor(acached); return; }
+                rasterTextureLoader.load(aUrl, (tex) => {
+                    tex.colorSpace = THREE.SRGBColorSpace;
+                    tex.needsUpdate = true;
+                    rasterTextureCache.set(aUrl, tex);
+                    attachAncestor(tex);
+                }, undefined, () => walk(dz + 1));
+            };
+            walk(1);
+        });
     }
 
     private patchFillMaterial(material: THREE.Material, paint: any, technique?: any): void {

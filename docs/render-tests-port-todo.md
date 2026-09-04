@@ -7917,3 +7917,13 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 **排查记录（如实）**：中途 complex 一度读作 13,673→103,828 "恶化 ~90k"，A/B（stash tess / 中和 §792 门）证明与两改动均无关——根因是**基线数字与夹具映射搞反**（fam-base2 回执顺序 angle-limit=13,673、complex=106,029，此前误按字母序对号）。教训：数字↔夹具对应必须以服务端 `received results for {name}` 相邻行为准，不得按执行顺序推断。另：后台 shell 的 cwd 会跨调用漂移，git/路径操作须用绝对路径或 `git -C`（本次误弹旧 stash 造成三文件冲突，已 `checkout --` 恢复、旧 stash 原样保留）。
 
 **挤出域新残差**：simple 125,982（大气背底 ~100k + 边线带）、complex 103,828（同）、angle-limit 6,256（近收敛）。下一入口不变：①大气背底校准（域 A 续）；②边线带（edgeIndex 描边 vs mgl roof-outline）。
+
+**§794. raster 瓦片 404 祖先回退（overzoom 语义对齐 mgl tile.ts）+ §788(a) 假设修正（2026-09-05）**：
+
+**修复**：`patchRasterMaterial` 的 `rasterTextureLoader.load` onError 此前为空 no-op（404 瓦 = 无纹理白四边形）。现按 mgl overzoom 语义逐级祖先回退：z−1→z−2→…，命中后把子瓦片在祖先 flipY 纹理中的区域组合进 UV rect（u 不翻转、v 翻转：off=[cx·span, 1−(cy+1)·span+rect[1]·span], scl=rect·span），祖先纹理按其自身 URL 入 `rasterTextureCache` 供同批子瓦复用。`rect` 由 const 放宽为 let（attach 的 onBeforeCompile 闭包按绑定读取，attach 前赋值即可生效）。
+
+**回测**：globe-antialiasing/default **7,287→5,090**、tilted 2,180、horizon-blend 5,918；poles 全族（north 52,666/south 13,679/images 62,745/52,016/colorization 53,980）与 §791b 噪声带持平；globe-default 2,707。零回归。
+
+**§788(a) 假设修正（探针实证，extdbg=1 新增 rasAttach/ras404 探针 + `mbExtRoutePush` 统一 flush）**：high-exaggeration（152,331）的 z1 卫星纹理**全部挂载成功**（rasAttach ×4-6，w=258 padded，无 ras404）——白盘不是纹理挂载失败，而是该夹具的 **`terrain:{exaggeration:240}` 地形垂披域**（白色赤道带越出球缘 = 夸大地形网格）。§788 取证里的 "z1 卫星纹理未挂载(c=ffffff)" 结论按此修正：decodedbg 探到的白瓦属 exaggeration/垂披链，非 patcher attach 失败。地形+globe+exaggeration 另案立案。
+
+**新工具**：`mbExtRoutePush()` 模块级探针助手（2s 去抖 POST /mb-probe-dump，晚到 attach 各自重 arm）；`MBSTYLE_EXTDBG=1` 现同时开启技术路由 + raster 挂载链探针。
