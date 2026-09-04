@@ -8033,3 +8033,9 @@ MapViewEnvironment.update() 增加 mgl-globe 门：`__mglGlobeCam && Spherical` 
 **域现状（如实）**：相机放置与 mgl 逐米一致（zoom4.5/pitch70/dist5.31e6）；dome-geom 值正常（R=6.37e6/d=9.23e6/horizon 43.65°）；几何推演 limb 应在画面外下方（全帧盘内）→ dome 击中白铺满"正确"，但 **expected 同相机几何下上区却是 navy 渐变+亮弧**——说明 mgl 的实际渲染相机/投影与我们的帧几何仍有未定位的屏幕空间差异（mgl transform 的 globe 矩阵链 vs flywave RTE+lookAt），非单一 uniform 可修。下一入口：mgl `_calcMatrices`/globeMatrix 与我方 lookAtImpl 的屏幕空间射线对拍（同一相机参数下逐像素反投影对比），或以 mgl expected 为基准做 dome 击中域边界的经验校准（把 uHorizonAngle 加 offset 使渐变带落位 y210-258）。
 
 **已入库**：引擎大气 mgl-globe 禁用门（MapViewEnvironment，语义正确保留）、domedbg/frontcull/cam-dist/lookat+stack/dome-geom 探针族。
+
+**§810. 大气背底域机制修正：渐变带 = mgl globe fog 作用于白色 background 瓦（2026-09-05 终十二）**：
+
+几何复核（pitch70/dist5.31e6 → limb 在画面外下方 ~76°，全帧皆盘内）：mgl expected 上区的 navy→白渐变**不是 dome 大气辉光**（大气辉光只在 limb 可见时出现，本相机几何下 limb 不可见），而是 **mgl globe fog 施加于白色 background 瓦**的结果——远离相机的瓦片 glow-progress 高，fog 把 white 推向 space-color（#010b19 深蓝）；弧 y210-258 = 瓦片覆盖边界（更远处无瓦，clear=space-color 深蓝延续）。我方现状：背景 quad 在同区域渲染**纯白未吃雾**（current y32-512 = (255,255,255)），即 §244 注入 quad 的 mgl fog 公式在 globe 上未生效/参数未落位。
+
+**修复方向（替换 §809 的 dome 经验校准）**：排查注入 background quad 的 fog 链——① `_mbBgTile` 的 MB_RASTER_MGL_FOG/mgl fog 公式分支在 globe（fogGlobeMode=1）下的 fogT 计算；② fogAlpha/fogColor/space-color uniform 是否流入背景材质（fogGlobeMode=1 已在 applyGlobeAtmosphere 设置）；③ 对拍 mgl fill.fragment 的 fog_apply_premultiplied（背景层同样吃 fog）。落位后 zero-height simple/complex 的上区渐变带（~200k）预期收敛，且 dome 击中白在瓦片吃雾后仅剩真正的空间区（y0-31 现状已有辉光）。
