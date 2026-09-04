@@ -8089,3 +8089,11 @@ hideq 升级三连：①类名放宽 `includes("MeshBasic")`（覆盖 MapMeshBas
 **§814b. dsdisable 实验记录（2026-09-05 终）**：
 
 dsdisable=1（跳过 addDataSource）实验：首跑因 reapplyCamera 在未挂载时抛错中断（已加 reapplyCamera 守卫）；修复后 mismatch 143,547，帧内**黄色板仍渲染**——板体绘制来源超出场景树/数据源二分可解释范围（无数据源即无解码即无几何，但板在）。可能：harness 之外存在第二条瓦片/几何注入路径，或帧内容为前次状态残留（浏览器复用）。white-band 域的物主定位需真渲染级调试（RenderDoc / three.js SpectorJS 捕帧）。本域工具全部入库：dsdisable/domedbg/hideq/cam-dist/lookat+stack/census+VIEW/dome-geom。
+
+**§815. glow 钳制实验零变化——白带根因最终收敛为 globe zoom→相机高度换算（2026-09-05 终）**：
+
+dome glow 加 max(horizonAngle,0) 钳制（防盘内 exp 爆炸）：125,982 与 globe-default 2,707 均 bit 级不变——渲染带内 t 本就 ≤1，钳制为纯防护性保留。至此 dome 内部数学全部自洽，**白带 = dome 击中白本身（几何上正确的盘内铺色）**，与 mgl expected（limb 弧 y210-258 + 上方渐变）的差异 100% 归结为 **globe zoom→相机高度换算**：
+
+zero-height-clipping-simple（zoom 3.5/pitch 70）：我方放置高度 h≈2.86e6 m（dome-geom 实测 |C−O|=9.23e6）→ dip=acos(R/(R+h))≈43.6° → limb 在画面外下方 → 击中白铺满全帧。mgl expected limb 弧在 y210-258（轴上 ~1.6-3.4°）→ 反解 mgl 相机高度 h≈0.36-0.55e6 m——**差 5-7×**。两套公式（我方 focal×C/2^flyZoom×conv vs mgl mercatorZfromZoom×pixelSpaceConversion）的最终高度换算存在系统性倍差（疑 mgl 的 mercatorZ 单位定义或 pixelSpaceConversion 的应用点不同）。
+
+**最终修复路径（需 mgl 数值提取）**：在 mgl 本地实例中对该夹具打印 transform.cameraPosition 的 ECEF 高度，反解我方 calculateDistanceFromZoomLevel 的 globe 分支系数。该修正属相机域（§780/781 谱系第三支），修正后 limb/辉光带落位，大气背底域（simple/complex 各 ~126k）+ 可能连带 poles/symbol-z-offset 构图一并收敛。dome glow 钳制保留（防护性）。
