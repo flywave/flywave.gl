@@ -7997,3 +7997,9 @@ VIEW 探针（scene-census 扩展：m_viewRanges + DataSource.maxGeometryHeight�
 zero-height-clipping-simple 逐列扫描：expected 地平线弧 **y210(中心)–258(边缘)**（弧形弯曲，辉光渐变占上方 240px：navy(13,29,58)→(184,193,214) 递亮向下）；我方地平线 **y≈4**（全列平直），辉光带仅 4-30px，其余全被 dome 击中白覆盖。**即：pitch-70 globe 相机的地平线在我方帧内比 mgl 高 ~18°**——大气渐变被压缩到画面顶端，残差 ~126k 主体即此。
 
 关键换算：pitch 70° 时 limb 高角 = acos(R/d)−70°；我方 limb y4 → acos(R/d)≈88.2° → d≈31.8R??（或等价地：我方 horizon-dip 角标定使 limb 顶到画面上缘）。mgl limb y210-258 → acos(R/d)−70 ≈ atan((256−210..258)/768) ≈ 3.4-1.1° → acos(R/d) ≈ 71-73° → d ≈ R/cos(71.5°) ≈ 3.15R——与 §792 态相机公式量级一致！**结论修正：相机距离量级正确（~3.2R），但 limb 的屏幕投影位置差 18°** ——疑点收敛到 dome shader 的 uHorizonAngle/uGlobePos/uGlobeRadius uniform（view-space 球心/半径的换算）或引擎 horizon-dip 公式，而非相机距离本身。下一入口：dome onBeforeRender 的 uGlobePos/uGlobeRadius/uHorizonAngle 逐值探针对拍 mgl draw_atmosphere.ts（horizonAngle = acos(distToHorizon/globeCenterDistance)，globeRadius 含 custom-AA 修正分支）。
+
+**§806. dome 逐值探针命中：pitch-70 下 zoomLevel getter 发散 2.6 档（§780 谱系，2026-09-05）**：
+
+dome-geom 探针（extdbg=1，onBeforeRender one-shot）实测 zero-height-clipping-simple（style zoom 0.9 → 放置 1.9，pitch 70）：**mapView.zoomLevel = 4.5000000000027**（+2.6 档！）、相机 |pos|=9.228e6（高度 2.86e6 m，按 1.9 公式应 ~2.6e7 量级）、R=6.371e6、uHorizonAngle=0.762rad(43.65°)、tanHalfFov=0.3333、fadeout=0.0504。几何推演：pitch 70 + 高度 2.86e6 → horizon 在轴下 ~23°（画面外下方）→ 整帧皆盘内 → dome 击中白铺满（辉光仅存顶端 normDist>1.135 的 4-30px 带）。**mgl（zoom 0.9 正确放置）地平线在 y210-258 → 我方 18° 偏差的根因 = 相机放置/getter 在 pitch-70 球面分支的发散**，非 dome shader 标定。
+
+**下一入口**：setCameraGeolocationAndZoom pitch 分支的球面距离换算与 zoomLevel getter（calculateZoomLevelFromDistance 二分）在 pitch>0 时的互逆性取证（§780 修过 target 纬度、§781 修过旧 target conv——本条是 pitch 轴的第三例）。修复后 limb/辉光带应随相机高度一并归位，zero-height simple/complex ~250k 与大气背底域预计大头收敛。dome-geom 探针入库。
