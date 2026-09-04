@@ -19,6 +19,7 @@ import {
     setGlobalReporter,
     RenderingTestResultReporter,
 } from "@flywave/flywave-test-utils";
+import * as THREE from "three";
 import { assert } from "chai";
 
 import { ALL_TESTS as INDEXED_TESTS } from "./render-tests-index";
@@ -379,9 +380,22 @@ async function renderUntilSettled(
             const hideQuadFrame = (mv: any) => {
                 if (!mv?.scene) return;
                 const doomed: any[] = [];
+                const camW = mv.camera?.getWorldPosition?.(new THREE.Vector3());
                 mv.scene.traverse((o: any) => {
                     if (!o.isMesh) return;
                     const mat: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                    if (hq === "horizon") {
+                        // §814: mgl isLngLatBehindGlobe — a tile whose
+                        // outward normal faces away from the camera is beyond
+                        // the horizon and must not paint (far-side white cap).
+                        try {
+                            const wp = o.getWorldPosition(new THREE.Vector3());
+                            const out = wp.clone().normalize();
+                            const toCam = camW.clone().sub(wp).normalize();
+                            if (out.dot(toCam) < 0) doomed.push(o);
+                        } catch { }
+                        return;
+                    }
                     if (mat?.type?.includes("MeshBasic") &&
                         (!mat.color || mat.color.getHexString() === "ffffff")) {
                         doomed.push(o);
@@ -391,11 +405,14 @@ async function renderUntilSettled(
                 // the children array (three crashes / skips siblings).
                 for (const o of doomed) {
                     o.visible = false;
-                    o.parent?.remove(o);
+                    if (hq !== "horizon") o.parent?.remove(o);
                 }
             };
-            const iv = setInterval(() => hideQuadFrame((window as any).__mbTestMapView), 200);
-            (window as any).__mbHideQuadIv = iv;
+            // §811b: the 200ms interval raced with the render loop (the
+            // engine re-adds/re-enables tile objects between ticks) — hide
+            // synchronously in WillRender instead.
+            const mv0 = (window as any).__mbTestMapView;
+            mv0?.on?.("WillRender", () => hideQuadFrame((window as any).__mbTestMapView));
         }
         (mapView as any).scene?.traverse?.((o: any) => {
             if (!o.isMesh) return;

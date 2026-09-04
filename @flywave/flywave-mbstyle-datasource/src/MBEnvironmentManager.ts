@@ -44,6 +44,8 @@ THREE.ShaderChunk.fog_pars_fragment = `
 	uniform float fogGlobeRadius;
 	uniform float fogGlobeTransition;
 	uniform vec2 fogGlobeRange;
+	// §813d: globe fog target transitions to space-color at high t.
+	uniform vec3 fogSpaceColor;
 	varying float vFogHeight;
 	varying vec3 vFogPos;
 #endif
@@ -97,6 +99,11 @@ THREE.ShaderChunk.fog_fragment = `
 	float fogFalloff = 1.0 - min(1.0, exp(-6.0 * fogT));
 	fogFalloff *= fogFalloff * fogFalloff;
 	float fogFactor = fogAlpha * min(1.0, 1.00747 * fogFalloff);
+vec3 fogTargetCol = fogColor;
+	if (fogGlobeMode > 0.5) {
+		fogTargetCol = mix(fogColor, fogSpaceColor,
+			smoothstep(fogGlobeRange.y - (fogGlobeRange.y - fogGlobeRange.x) * 0.5, fogGlobeRange.y, fogT));
+	}
 	// mgl fog_horizon_blending: fade the fog out ABOVE the horizon —
 	// t = max(0, cameraDir.z / horizonBlend); factor = color.a * exp(-3t²).
 	// Map fragments sit at z ≈ 0, so cameraDir.z ≈ -camHeight / depth (negative
@@ -126,7 +133,7 @@ THREE.ShaderChunk.fog_fragment = `
 		gl_FragColor = vec4(vec3(fogFactor), 1.0);
 		return;
 	}
-	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
+	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogTargetCol, fogFactor );
 #endif
 `;
 THREE.ShaderChunk.fog_pars_vertex = `
@@ -1400,6 +1407,17 @@ export class MBEnvironmentManager {
         };
         this.m_scene!.add(this.m_globeAtmo);
 
+        // §813d: materials compiled BEFORE scene.fog existed (mercator
+        // phase / early frames) lack USE_FOG and never recompile on their
+        // own — the background tiles then render unfogged white over the
+        // whole disc. Force a recompile now that the fog is live (mirror of
+        // the fog-undefined branch below).
+        this.m_scene?.traverse((o: any) => {
+            const ms = o.material;
+            if (!ms) return;
+            (Array.isArray(ms) ? ms : [ms]).forEach((m: any) => (m.needsUpdate = true));
+        });
+
         // §273: mgl globe also fogs the map CONTENT — fog_apply's
         // u_is_globe branch ramps by glow_progress (view-ray SDF to the
         // globe center, see the fog_fragment chunk). scene.fog makes the
@@ -1420,6 +1438,8 @@ export class MBEnvironmentManager {
         // EQUATORIAL_RADIUS here left the face fog ramp ~1px past the dome
         // boundary — a blue high-color bleed across the near-limb face.
         lib.fogGlobeRadius.value = R;
+		lib.fogSpaceColor = lib.fogSpaceColor ?? { value: new THREE.Color() };
+		lib.fogSpaceColor.value.copy(spaceColor);
         const worldSize = 512 * Math.pow(2, styleZoom);
         lib.fogGlobeScale.value =
             (worldSize / 2 / Math.PI - 1) / EarthConstants.EQUATORIAL_RADIUS;

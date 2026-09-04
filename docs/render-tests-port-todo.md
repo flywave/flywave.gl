@@ -8075,3 +8075,7 @@ hideq 放宽为 `type.includes("MeshBasic")` 隐藏全部 n=4 白色 quad（不�
 hideq 升级为持久 interval（先收集后移除，修三处 bug：undefined mapview 崩溃/traverse 中删除/类名+map 过滤过严），把场景中**所有**白色 MeshBasic* 网格（任意顶点数）从场景树移除：125,982 **bit 级不变**——白带不是任何可遍历的白色 MeshBasic 网格绘制的。同时落地 effectiveFogSpec（无 fog 键+有背景层 → mgl 默认 fog 参数；对 simple 无效因该夹具自带 fog 键，但对真正无 fog 键的 globe 背景夹具是正确的 mgl 对齐）。
 
 **域最终状态**：所有静态候选穷尽后，白带的最可能来源只剩：①渲染管线层面（深度/模板/多 pass 合成）而非场景对象——需 RenderDoc/WebGL 帧调试；②mgl 生成 expected 的版本语义与 vendored 源码的版本差。zero-height simple/complex（各 ~126k）与大气背底域挂账，需帧调试工具链支持。本会话在该域完成：dome 公式正确性证实、九轮排除实验、探针族五件套，全部如实入账。
+
+**§814. horizon-cull 实验：无效果；域转工程对拍（2026-09-05 终）**：
+
+WillRender 同步 hideq=horizon（mgl isLngLatBehindGlobe 判据：dot(外法线, 指向相机) < 0 隐藏）实测 125,982 不变——场景帧内无网格落在 horizon 后侧（或 RTE 坐标系下 globe center≠场景原点使判据失真：census camH=2.58e7 vs dome-geom d=9.23e6 存在 ~2.8× 单位差，RTE 系里 globe center 不在场景原点）。**至此场景级（traverse/visible/remove/WillRender）与 shader 级（domedbg/fogT）手段全部穷尽**，白带物主与 mgl 渐变机制需：①统一坐标系的对拍（mgl transform vs flywave RTE+lookAt 的屏幕空间射线，mgl 本地渲染实例）；②或 RenderDoc 帧调试。zero-height simple/complex（各 ~126k）挂账于此。本域已交付：dome 公式正确性证实、effectiveFogSpec、domedbg/hideq/horizon 探针、九轮排除实验。
