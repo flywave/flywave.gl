@@ -8049,3 +8049,9 @@ frontcull=1（globe fill/circle 材质 FrontSide）实测 127,875 分毫不变�
 hideq 逐档实验（z0 bsR>1e7 / z1 5-10e6 / z2 <5e6 三档白色 n=4 quad 依次 visible=false）：三档 **125,982 分毫不变**——白带不是 census 里的白色 quad 组画的。结合此前排除链（mbhide=background、frontcull、引擎大气、domedbg 显示 dome 仅 y0-3 可见），剩余唯一自洽解释：**白带 = dome 自身的击中白**（normDist<0.98 在我方相机下铺满 y4-512），而 mgl 同相机的 limb 落在 y210-258（limb 可见，其上为辉光渐变+太空）——即 **mgl 相机的地平线比我方高 ~18°**（等价地：我方相机高度 h≈1.82e6 m→dip 48°，mgl limb 可见要求 h≈0.36e6 m→dip ~19°，差 ~2.6×相机高度；或两者 pitch 语义在球面上的落点不同）。
 
 **收敛方向（最终）**：globe 相机高度 = target 距离 × cos(pitch) 的语义差——mgl 的 pitch 旋转不改相机到 TARGET 的距离，但相机到地面的高度还取决于 target 在球面的位置与 110° 角几何；下一入口：以 mgl transform._calcCameraPosition 的球面高度公式（altitude = mercatorZfromZoom×pixelSpaceConversion，pitch 只改方向不改高度）逐值对拍我方 lookAtImpl 的放置高度——修正后 limb/辉光带/大气背底域（~250k）一次收敛，且可能同时改善 poles/symbol-z-offset 家族的构图。hideq 探针入库。
+
+**§812. 大气背底域最终开放问题与实验方向（2026-09-05 收口）**：
+
+mgl 源码事实链：fog 创建 gated on stylesheet.fog（style.ts:1082）；无 fog → 无 FOG define（瓦片不雾化）、无 atmosphere glow（painter.ts:1307 gate）、clear=transparent。但 zero-height-clipping-simple expected 上区存在 **navy(13,29,58)→白 渐变**——该 navy 来源无法由 vendored mgl 源码直接解释。候选：① expected 生成版本的 mgl 对 globe 无 fog 样式仍以默认 fog（color 白/space #010b19/range [2,4.5]）渲染（fog 自动创建或 globe 特例）；② mgl 地球基座网格（uncovered 区的深蓝基座）+ 大气辉光的组合。expected 渐变形态（远处深蓝→近处白）与"默认 fog 雾化远瓦"高度吻合。
+
+**实验方向（下一轮首个实验）**：globe && 样式无 fog 键 && 有 background 层 → 我方按 mgl 默认 fog 参数（space #010b19→#367ab9 插值、range globeFixed [2,4.5]、color 白）启用 globe fog/dome 管线（即 §782 的白 clear 特例收窄为"无背景层的 bare 帧"）。预期 zero-height simple/complex 上区渐变带（~200k）收敛；collision/show-unsupported 等 bare 帧保持白不回归。
