@@ -8101,3 +8101,9 @@ zero-height-clipping-simple（zoom 3.5/pitch 70）：我方放置高度 h≈2.86
 **§815c. 相机几何闭卷复核与白物定位现状（2026-09-05 终二）**：
 
 严格几何复核（修正此前符号错误）：zero-height-clipping-simple 相机（h=1.82e6 m，pitch 70，dist 5.31e6）——地平线 depression=acos(R/(R+h))=18.8° 低于水平，视轴高出水平 20° → **地平线（limb）在轴下 18.8°+20°−90°...**（limb 高角 = 20°−18.8° = 1.2° 高于视轴）→ **limb 弧落在 y≈240——与 expected 弧 y210-258 一致**！即 mgl expected 的弧就是几何 limb ✓。我方同相机的几何 limb 也在 y≈213 附近（§793 谱系瓦片球面贴合一经确认），**我方渲染却在 y4 处由白接管**——白物为"延伸到几何 limb 之上 200px 的绘制"，且 hideq 移除/隐藏（含 WillRender 同步、放宽类名、removeFromParent）全部无效 → 白物对场景树操作免疫（疑 TileObjectRenderer 每帧重挂）或为非 traverse 对象。**最终收敛路径不变**：引擎渲染层（TileObjectRenderer 或 datasource 层）对 globe 越球瓦的 horizon culling（mgl isLngLatBehindGlobe 判据：dot(外法线, 指向相机)<0），需在引擎瓦片可见性判定处（VisibleTileSet/DataSource tile loading）落地而非场景树后处理。white-band 探针族（hideq/domedbg/census/dsdisable）已齐备。
+
+**§815d. colorWrite=false 实验：无变化——白物候选全部排除，域最终挂账（2026-09-05 终）**：
+
+hideq=horizon 改为对越球 quad 材质设 colorWrite=false（材质属性持久、不受逐帧重置）：125,982 分毫不变——越球 quad 亦非白带绘制者。至此排除清单最终版：背景层样式对象、注入背景 quad（visible/remove/colorWrite 三手段）、远侧瓦背面（FrontSide）、月球、引擎 Celestia 大气（enabled=false 移除）、太阳 helper。白带绘制者对场景树与材质属性的所有静态干预免疫，**需渲染级帧捕获（RenderDoc/SpectorJS 逐 draw-call）定位**——已超出静态分析可达范围，域最终挂账。
+
+**本会话大气背底域净结论**：①dome 击中白/辉光公式与 mgl 同源且自洽（domedbg 逐像素证实）；②相机放置与 mgl 逐米一致；③剩余 ~126k/夹具的白带绘制者需帧捕获工具链定位。全部探针（domedbg/hideq 三形态/dsdisable/cam-dist/lookat+stack/census+VIEW/dome-geom/rasAttach/colorWrite）已入库供后续会话使用。

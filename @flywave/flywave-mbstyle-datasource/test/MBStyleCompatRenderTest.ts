@@ -392,7 +392,10 @@ async function renderUntilSettled(
                             const wp = o.getWorldPosition(new THREE.Vector3());
                             const out = wp.clone().normalize();
                             const toCam = camW.clone().sub(wp).normalize();
-                            if (out.dot(toCam) < 0) doomed.push(o);
+                            if (out.dot(toCam) < 0) {
+                                const mats: any = Array.isArray(o.material) ? o.material : [o.material];
+                                for (const m of mats) m.colorWrite = false;
+                            }
                         } catch { }
                         return;
                     }
