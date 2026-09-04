@@ -2065,6 +2065,16 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         }
                     }
                 }
+                // §817: rmstyle=<id-substr> → remove layers from the style
+                // BEFORE datasource creation (source-level bisection; the
+                // §516 mbhide visible=false gets reset by the engine).
+                const rmArg = (window as any).__karma__?.config?.args
+                    ?.find?.((a: string) => a.startsWith("rmstyle="))?.slice("rmstyle=".length);
+                if (rmArg) {
+                    const needles = rmArg.split(",");
+                    style.layers = (style.layers ?? []).filter((l: any) =>
+                        !needles.some(n => l.id.includes(n) || l.type === n));
+                }
                 const dataSource = new MBStyleDataSource({
                     style,
                     decoder: new MBStyleDecoder(),

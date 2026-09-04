@@ -120,6 +120,7 @@ function main() {
             ...(process.env.MBSTYLE_TERRHIDE ? ["terhide=1"] : []),
             ...(process.env.MBSTYLE_DOMEDBG ? ["domedbg=1"] : []),
             ...(process.env.MBSTYLE_DSDISABLE ? ["dsdisable=1"] : []),
+            ...(process.env.MBSTYLE_RMSTYLE ? [`rmstyle=${process.env.MBSTYLE_RMSTYLE}`] : []),
             ...(process.env.MBSTYLE_HIDEQ ? [`hideq=${process.env.MBSTYLE_HIDEQ}`] : []),
             ...(process.env.MBSTYLE_HIDEQ ? [] : []),
             ...(process.env.MBSTYLE_FRONTCULL ? ["frontcull=1"] : []),
