@@ -2857,6 +2857,13 @@ export class MBStyleDataSource extends TileDataSource {
                             } else {
                                 MBGlobePoleCaps.registerBackground(null);
                             }
+                            // §781: hand the globe background-pattern quad (if
+                            // any) to the after-pass so it renders sandwiched
+                            // between the background dome and the pole fans —
+                            // mgl bends the background pattern around the
+                            // sphere and paints it under every content layer.
+                            MBGlobePoleCaps.setPatternQuad(
+                                (self.m_environment as any)?.m_backgroundPatternGlobeQuad ?? null);
                             MBGlobePoleCaps.sync(self.mapView, capOpacity, bgOpacity);
                         } catch {
                             MBGlobePoleCaps.registerBackground(null);

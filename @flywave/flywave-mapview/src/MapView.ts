@@ -3134,10 +3134,31 @@ export class MapView extends EventDispatcher {
     private lookAtImpl(params: Partial<LookAtParams>): void {
         const tilt = Math.min(getOptionValue(params.tilt, this.tilt), MapViewUtils.MAX_TILT_DEG);
         const heading = getOptionValue(params.heading, this.heading);
+        // §781: in the mgl globe camera mode the zoom→distance conversion is
+        // latitude-dependent (pixelSpaceConversion uses the TARGET latitude).
+        // When the caller sets target and zoom together, `this.target` still
+        // holds the PREVIOUS target here (it is only updated by
+        // updateLookAtSettings after placement — e.g. the first placement of a
+        // session still has MapViewDefaults.target lat 25°), so the camera
+        // landed on the distance of a different latitude while the zoom
+        // getter (reading the NEW target) inverted it with the right one:
+        // e.g. globe zoom 5.23 @lat 46.4° round-tripped to 5.84 — a −0.4
+        // zoomLevel error that broke tile LOD for the whole globe family.
+        // Resolve the new target BEFORE converting zoom to distance.
+        const zoomTarget =
+            params.target !== undefined ? GeoCoordinates.fromObject(params.target) : this.target;
         const distance =
             params.zoomLevel !== undefined
                 ? MapViewUtils.calculateDistanceFromZoomLevel(
-                      this,
+                      zoomTarget === this.target
+                          ? this
+                          : {
+                                focalLength: this.focalLength,
+                                projection: this.projection,
+                                target: zoomTarget,
+                                getCanvasClientSize: () => this.getCanvasClientSize(),
+                                __mglGlobeCam: (this as any).__mglGlobeCam,
+                            },
                       THREE.MathUtils.clamp(
                           params.zoomLevel,
                           this.m_minZoomLevel,

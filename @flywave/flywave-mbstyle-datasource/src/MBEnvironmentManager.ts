@@ -65,13 +65,22 @@ THREE.ShaderChunk.fog_fragment = `
 		//   glow = length(dot(c, dir)*dir - c) / globeRadius + π/2
 		//   t = mix(glow, depth, globeTransition)
 		// with dir = normalize(viewPos) and c = globe center in view space.
-		// glow is NORMALIZED by the globe radius (sphere radii, dimensionless);
-		// depth (used only during the mercator transition) is in mgl world
-		// units via fogGlobeScale (radius worldSize/2π − 1).
+		// glow is NORMALIZED by the globe radius (sphere radii, dimensionless).
+		// §781: depth must land in the same O(1) band as the glow (mgl's
+		// globe fog_pos is a camera-relative mercator fraction, ~0.01-0.3 at
+		// the transition zooms — measured from the vendored mgl transform
+		// _calcFogMatrices chain). The previous scale (worldSize/2π−1 per
+		// world unit = mercator pixels per metre) put depth at ~600 for a
+		// disc-interior fragment, so the moment globeTransition > 0 (style
+		// zoom > 5) the mixed t saturated fogT → the whole disc washed to the
+		// fog color (globe-transition family regression after the §781
+		// camera fix moved mid-lat fixtures past zoom 5). Express depth in
+		// earth-circumference fractions: ~0.005-0.35 across zoom 3-6.5, so
+		// the interior stays below fogGlobeRange.x exactly like mgl.
 		vec3 fogDir = normalize(vFogPos);
 		vec3 cp = dot(fogGlobeCenter, fogDir) * fogDir;
 		float fogGlow = length(cp - fogGlobeCenter) / max(fogGlobeRadius, 1.0) + 1.5707963;
-		float fogDepthMgl = length(vFogPos) * fogGlobeScale;
+		float fogDepthMgl = length(vFogPos) / max(fogGlobeRadius * 6.2831853, 1.0);
 		float t = mix(fogGlow, fogDepthMgl, fogGlobeTransition);
 		// §296: on globe, mgl Fog.state uses the globeFixedFogRange [2, 4.5]
 		// (transition-interpolated) — NOT the raw mercator [0.5, 10].
@@ -524,6 +533,12 @@ export class MBEnvironmentManager {
         return this.m_terrainController.sampleElevation(worldX, worldY);
     }
     private m_backgroundQuad: THREE.Mesh | null = null;
+    /**
+     * §781: globe background-pattern quad — frustum-mapped, rendered in the
+     * pole-cap explicit after-pass (never in the main scene). Null on
+     * mercator / when no background-pattern is active.
+     */
+    m_backgroundPatternGlobeQuad: THREE.Mesh | null = null;
     /** §357: live background-pattern uniforms (shared Vector2s auto-update). */
     private m_bgPatternInfo: {
         texture: THREE.Texture;
@@ -2338,6 +2353,14 @@ export class MBEnvironmentManager {
             this.m_backgroundQuad = null;
             this.m_bgPatternInfo = null;
         }
+        // §781: drop the previous globe-pattern quad (owned here, rendered
+        // by the pole-cap after-pass via MBGlobePoleCaps.setPatternQuad).
+        if (this.m_backgroundPatternGlobeQuad) {
+            const gq = this.m_backgroundPatternGlobeQuad;
+            (gq.geometry as THREE.BufferGeometry).dispose();
+            (gq.material as THREE.Material).dispose();
+            this.m_backgroundPatternGlobeQuad = null;
+        }
 
         if (!patternName || !spriteAtlas) return;
 
@@ -2425,21 +2448,46 @@ export class MBEnvironmentManager {
                 );
             }
             updatePhase(renderer);
+            // §781: globe variant — the pattern tiles in MERCATOR WORLD
+            // pixels at the current style zoom (mgl anchors the pattern to
+            // the world pixel grid, and on the sphere that grid bends with
+            // the surface). Keep the scale live with the zoom.
+            if (globeQuad && this.m_mapView) {
+                const mz = Number((this.m_mapView as any).zoomLevel);
+                const styleZoom = Number.isFinite(mz) ? Math.max(0, mz - 1) : 0;
+                globeWs.value = 512 * Math.pow(2, styleZoom);
+            }
         };
         const renderer0 = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
         if (renderer0) updateRepeat(renderer0);
         tex.needsUpdate = true;
 
+        // §781: on globe the pattern must BEND with the sphere like mgl's
+        // per-tile background bucket. The flat screen-space quad (mercator
+        // path below) tiled the pattern straight across the viewport and the
+        // pole-cap background dome painted over the disc — transforms family
+        // rendered "flat pattern + black ball". Instead: the same frustum-
+        // mapped quad, but the fragment raycasts each pixel onto the sphere
+        // and tiles the pattern in mercator world pixels (rays that miss the
+        // sphere discard, so the space region stays clean). The quad is NOT
+        // added to the main scene: it renders in the pole-cap explicit
+        // after-pass (MBGlobePoleCaps.setPatternQuad) sandwiched between the
+        // background dome and the pole fans, depth-tested against the main
+        // pass so real content stays on top.
+        const isGlobe =
+            Number((this.m_mapView as any).projection?.type) === 1;
+        let globeQuad: THREE.Mesh | null = null;
+        const globeWs = { value: 512 };
         const material = new THREE.MeshBasicMaterial({
             map: tex,
             // mapbox's background_pattern shader has no u_color uniform —
             // the pattern is drawn as-is. Multiplying by background-color
             // (default #000000) would paint the whole quad black.
             color: new THREE.Color('#ffffff'),
-            transparent: bgOpacity < 1,
+            transparent: bgOpacity < 1 || isGlobe,
             opacity: bgOpacity,
             depthWrite: false,
-            depthTest: false,
+            depthTest: isGlobe,
         });
         // Tile the atlas sub-rectangle in the fragment shader:
         //   tx = fract(uv.x * nx - phaseX), ty = fract((1-uv.y) * ny - phaseY)
@@ -2456,17 +2504,70 @@ export class MBEnvironmentManager {
                     iconInfo ? iconInfo.width : 1,
                     iconInfo ? iconInfo.height : 1),
             };
+            shader.uniforms.uMBPatGlobe = { value: isGlobe ? 1 : 0 };
+            shader.uniforms.uMBPatGlobeWs = globeWs;
+            shader.uniforms.uMBPatDispPx = {
+                value: new THREE.Vector2(disp(0), disp(1)),
+            };
+            // §779c: share the LIVE fog uniforms (the pole-cap pass sets
+            // scene.fog so the globe content fog fades the pattern into the
+            // limb glow like mgl's background tiles).
+            const fogLib = THREE.UniformsLib.fog as any;
+            for (const key of ['fogGlobeMode', 'fogGlobeCenter', 'fogGlobeScale',
+                'fogGlobeRadius', 'fogGlobeTransition', 'fogGlobeRange', 'fogAlpha']) {
+                if (fogLib[key]) shader.uniforms[key] = fogLib[key];
+            }
+            shader.vertexShader = shader.vertexShader.replace(
+                'void main() {',
+                `varying vec3 vMBPatWorld;
+                 void main() {`,
+            );
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <project_vertex>',
+                `#include <project_vertex>
+                 vMBPatWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
+            );
             shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
                 `uniform vec2 uMBPatOrigin; uniform vec2 uMBPatSize; uniform vec2 uMBPatCount; uniform vec2 uMBPatPhase; uniform vec2 uMBPatPxSize;
+                 uniform float uMBPatGlobe; uniform float uMBPatGlobeWs; uniform vec2 uMBPatDispPx;
+                 varying vec3 vMBPatWorld;
                  void main() {`,
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <map_fragment>',
                 `#ifdef USE_MAP
-                    vec2 mbPatT = vec2(
-                        fract(vMapUv.x * uMBPatCount.x - uMBPatPhase.x),
-                        fract((1.0 - vMapUv.y) * uMBPatCount.y - uMBPatPhase.y));
+                    vec2 mbPatT;
+                    if (uMBPatGlobe > 0.5) {
+                        // Raycast the pixel onto the sphere (world origin,
+                        // radius uMBPatGlobeRadius) and tile the pattern in
+                        // mercator world pixels so it bends with the surface.
+                        vec3 mbO = cameraPosition;
+                        vec3 mbD = vMBPatWorld - mbO;
+                        float mbA = dot(mbD, mbD);
+                        float mbB = 2.0 * dot(mbO, mbD);
+                        float mbC = dot(mbO, mbO) - uMBPatGlobeRadius * uMBPatGlobeRadius;
+                        float mbDisc = mbB * mbB - 4.0 * mbA * mbC;
+                        if (mbDisc < 0.0) { discard; }
+                        float mbT = (-mbB - sqrt(mbDisc)) / (2.0 * mbA);
+                        if (mbT <= 0.0) { discard; }
+                        vec3 mbHit = mbO + mbT * mbD;
+                        // flywave sphere convention: x=R cosLat cosLng,
+                        // y=R cosLat sinLng, z=R sinLat.
+                        float mbLat = atan(mbHit.z, length(mbHit.xy));
+                        float mbLng = atan(mbHit.y, mbHit.x);
+                        // Outside the mercator band (±85.05°) mgl draws the
+                        // pole caps instead of the pattern.
+                        float mbYn = 0.5 - log(tan(0.7853981633974483 + mbLat * 0.5)) / 6.2831853;
+                        if (mbYn < 0.0 || mbYn > 1.0) { discard; }
+                        float mbXn = mbLng / 6.2831853 + 0.5;
+                        vec2 mbWorldPx = vec2(mbXn, mbYn) * uMBPatGlobeWs;
+                        mbPatT = fract(mbWorldPx / max(uMBPatDispPx, vec2(1e-6)));
+                    } else {
+                        mbPatT = vec2(
+                            fract(vMapUv.x * uMBPatCount.x - uMBPatPhase.x),
+                            fract((1.0 - vMapUv.y) * uMBPatCount.y - uMBPatPhase.y));
+                    }
                     // Half-texel inset: LINEAR filtering at the fract seam
                     // would blend in the atlas' neighbouring (padding) texels.
                     vec2 mbPatPx = clamp(1.0 / uMBPatPxSize, 0.0, 0.25);
@@ -2481,7 +2582,22 @@ export class MBEnvironmentManager {
                     diffuseColor *= sampledDiffuseColor;
                 #endif`,
             );
+            shader.uniforms.uMBPatGlobeRadius = { value: EarthConstants.EQUATORIAL_RADIUS };
         };
+
+        if (isGlobe) {
+            // Frustum-mapped quad, private to the pole-cap after-pass.
+            const geom = new THREE.PlaneGeometry(2, 2);
+            globeQuad = new THREE.Mesh(geom, material);
+            globeQuad.frustumCulled = false;
+            globeQuad.renderOrder = 1.5;
+            this.attachFrustumPlacement(globeQuad, updateRepeat);
+            this.m_backgroundPatternGlobeQuad = globeQuad;
+            this.m_backgroundQuad = null;
+            this.m_bgPatternInfo = null;
+            (this.m_mapView as any).update?.();
+            return;
+        }
 
         this.installBackgroundQuad(material, updateRepeat);
     }
@@ -2500,7 +2616,24 @@ export class MBEnvironmentManager {
         this.m_backgroundQuad = new THREE.Mesh(geom, material);
         this.m_backgroundQuad.frustumCulled = false;
         this.m_backgroundQuad.renderOrder = -10000;
+        this.attachFrustumPlacement(this.m_backgroundQuad, onBeforeFrame);
 
+        // The quad is added asynchronously (sprite fetch) — likely after the
+        // last scheduled frame. Adding a scene object does not itself request
+        // a redraw, so without this the pattern never appears in the capture.
+        this.m_scene.add(this.m_backgroundQuad);
+        (this.m_mapView as any).update?.();
+    }
+
+    /**
+     * §781: orient a fullscreen quad every frame to exactly cover the
+     * frustum (viewport-aligned background semantics), refreshing tiling/
+     * phase first via `onBeforeFrame`.
+     */
+    private attachFrustumPlacement(
+        mesh: THREE.Mesh,
+        onBeforeFrame?: (renderer: THREE.WebGLRenderer) => void,
+    ): void {
         // The previous placement derived the quad orientation from
         // inverse(projection * view) via setFromRotationMatrix — but the
         // inverse projection is not a rotation matrix, so the extracted
@@ -2508,7 +2641,7 @@ export class MBEnvironmentManager {
         // (every background-pattern case rendered as pure black).
         // Instead: place the quad on the camera axis, oriented with the
         // camera and scaled to exactly cover the frustum at that depth.
-        this.m_backgroundQuad.onBeforeRender = (renderer: THREE.WebGLRenderer, _scene: THREE.Scene, camera: THREE.Camera) => {
+        mesh.onBeforeRender = (renderer: THREE.WebGLRenderer, _scene: THREE.Scene, camera: THREE.Camera) => {
             onBeforeFrame?.(renderer);
             // Robust fullscreen placement: unproject the four NDC corners at
             // mid-depth and fit the quad to them. Deriving orientation from
@@ -2536,17 +2669,11 @@ export class MBEnvironmentManager {
                 up.clone().normalize(),
                 normal,
             );
-            this.m_backgroundQuad!.position.copy(center);
-            this.m_backgroundQuad!.quaternion.setFromRotationMatrix(m);
+            mesh.position.copy(center);
+            mesh.quaternion.setFromRotationMatrix(m);
             // PlaneGeometry(2,2) spans ±1 → scale by half the edge lengths.
-            this.m_backgroundQuad!.scale.set(right.length() / 2, up.length() / 2, 1);
+            mesh.scale.set(right.length() / 2, up.length() / 2, 1);
         };
-
-        // The quad is added asynchronously (sprite fetch) — likely after the
-        // last scheduled frame. Adding a scene object does not itself request
-        // a redraw, so without this the pattern never appears in the capture.
-        this.m_scene.add(this.m_backgroundQuad);
-        (this.m_mapView as any).update?.();
     }
 
     /**

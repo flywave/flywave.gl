@@ -55,6 +55,34 @@ export class MBGlobePoleCaps {
     private static s_textures = new Map<string, THREE.Texture>();
     private static s_meshes = new Map<string, THREE.Mesh>();
     private static s_scene: THREE.Scene | null = null;
+    /**
+     * §781: globe background-pattern quad (owned by MBEnvironmentManager).
+     * Rendered in this explicit pass so it lands on the sphere surface with
+     * the same z-order as the caps: background dome (renderOrder 1) →
+     * pattern (1.5) → pole fans (2). Depth-tested (LEQUAL) against the main
+     * pass, so real content drawn closer still occludes it.
+     */
+    private static s_patternQuad: THREE.Mesh | null = null;
+
+    /**
+     * Attach/detach the globe background-pattern quad. Called every
+     * AfterRender from the datasource; pass null on mercator or when the
+     * style has no background-pattern.
+     */
+    public static setPatternQuad(mesh: THREE.Mesh | null): void {
+        if (this.s_patternQuad === mesh) return;
+        if (this.s_patternQuad && this.s_scene) {
+            this.s_scene.remove(this.s_patternQuad);
+        }
+        this.s_patternQuad = mesh;
+        if (mesh) {
+            if (!this.s_scene) {
+                this.s_scene = new THREE.Scene();
+                this.s_scene.name = 'MBGlobePoleCapsScene';
+            }
+            this.s_scene.add(mesh);
+        }
+    }
     private static s_loader: THREE.TextureLoader | null = null;
     private static s_lastOpacity = -1;
     private static s_lastBgOpacity = 1;
@@ -73,6 +101,9 @@ export class MBGlobePoleCaps {
     public static clear(): void {
         this.s_descriptors.clear();
         this.s_level = -1;
+        // §781: detach the globe background-pattern quad too (mercator or
+        // non-globe styles have no after-pass pattern).
+        this.setPatternQuad(null);
     }
 
     /**
@@ -133,6 +164,15 @@ export class MBGlobePoleCaps {
             for (const [, mesh] of this.s_meshes) mesh.geometry.dispose();
             this.s_meshes.clear();
             this.s_scene?.clear();
+            // §781: styles with a background-pattern but no pole descriptors
+            // still render the pattern quad through this pass.
+            if (spherical && this.s_patternQuad) {
+                if (!this.s_scene) {
+                    this.s_scene = new THREE.Scene();
+                    this.s_scene.name = 'MBGlobePoleCapsScene';
+                }
+                this.s_scene.add(this.s_patternQuad);
+            }
             return;
         }
         if (!this.s_scene) {
@@ -202,6 +242,12 @@ export class MBGlobePoleCaps {
             this.s_meshes.set(key, mesh);
             this.s_scene.add(mesh);
         }
+        // §781: keep the background-pattern quad between the background dome
+        // (renderOrder 1) and the pole fans (2) — sync()'s scene clears and
+        // descriptor rebuilds detach it.
+        if (this.s_patternQuad && this.s_patternQuad.parent !== this.s_scene) {
+            this.s_scene.add(this.s_patternQuad);
+        }
     }
 
     /**
@@ -210,7 +256,7 @@ export class MBGlobePoleCaps {
      * caps beyond the globe horizon are occluded like mgl.
      */
     public static render(mapView: any, fog?: THREE.Fog | null): void {
-        if (!this.s_scene || this.s_meshes.size === 0) return;
+        if (!this.s_scene || (this.s_meshes.size === 0 && !this.s_patternQuad)) return;
         // Content fog on the caps (mgl fogs the globe background/raster caps
         // like any ground content). three recompiles the programs when the
         // scene's fog toggles (fog is part of the program cache key).
