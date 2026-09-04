@@ -7937,3 +7937,11 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 **回测**：high-exaggeration **152,331→10,718（−93%）**、north-pole-padded-dem **57,874→5,143**；unset-terrain 40,152 / line-placement-terrain 23,174 / map-text-rotation 3,004 / south-pole-padded-dem 9,578 / text-pitch-alignment 6,262 持平（它们的残差与地形网格无关）。
 
 **新立案**：globe-terrain 153,037 与 imports/globe-terrain 242,222 与地形网格无关（跳过后 bit 级不变）——census 显示其为 n=6-14 白色 MeshBasicMaterial quad（map=false，imagery 注入未生效或该内容本身白色），属瓦片 imagery 域，另案。scene-census 探针（extdbg=1 附带）入库。
+
+**§797. hillshade DEM 404 祖先回退（§794 同谱系）+ globe-terrain 倒置域取证（2026-09-05 续二）**：
+
+**修复**：`patchHillshadeMaterial` 的 DEM 加载 onError 原 no-op。现逐级祖先回退（z−1→…），命中后把子瓦区域从祖先图像裁剪放大到全分辨率 CanvasTexture（hillshade shader 假设纹理即本瓦，裁剪保持像素步长 ~1 DEM texel、shader 零改动），按子 URL 入 `rasterTextureCache`。globe-terrain 夹具 z5 仅有 5-28-12（无关区域），mgl 靠父瓦 z4-10/11-5、z3-5/6-2 获得覆盖。
+
+**回测**：globe-terrain 153,037 分毫不变（零回归；该夹具主残差不在 hillshade 数据，见下）。fallback 语义与 §794 raster 回退一致，待 hillshade 实际 404 的夹具受益。
+
+**新域取证：globe-terrain 黑白倒置（153,037 残差主体）**：expected=黑色空间（上）+白色地形晕渲（下，pitch 70 望向远方）；我方=白色（上）+黑色（下）+顶部一条地形带——**上下倒置**。MBCapCtx 探针 px=(0,0,0)。注意本夹具无 fog 键（§782 门 → 白 clear，天空白是对的），但地面侧全黑（background 白层未画到球面？）且地形带位置在画面上缘而非下缘——疑似 globe pitch-70 相机放置（§781 谱系）或 background 球面绘制域。下一入口：①globe pitch-70 相机地平线方向取证（对拍 camera 距离/俯仰）；②background 层在无 fog globe 夹具的球面绘制。

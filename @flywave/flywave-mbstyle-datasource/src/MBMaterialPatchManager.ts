@@ -4661,7 +4661,55 @@ export class MBMaterialPatchManager {
                 try {
                     (this.m_dataSource as any).mapView?.update?.();
                 } catch {}
-            }, undefined, () => {});
+            }, undefined, () => {
+                // §797: DEM 404 → ancestor fallback (mgl source-cache over-
+                // zooms DEMs the same way). The hillshade shader assumes the
+                // texture covers exactly this tile, so crop the child's
+                // region out of the ancestor image instead of remapping UVs.
+                const m = url.match(/^(.*\/)(\d+)-(\d+)-(\d+)(\.\w+)$/);
+                if (!m || typeof document === 'undefined') return;
+                const dzMax = Number(m[2]);
+                const walk = (dz: number) => {
+                    if (dz > dzMax) return;
+                    const az = dzMax - dz;
+                    const ax = Number(m[3]) >> dz;
+                    const ay = Number(m[4]) >> dz;
+                    const aUrl = `${m[1]}${az}-${ax}-${ay}${m[5]}`;
+                    const finish = (tex: THREE.Texture) => {
+                        try {
+                            const img: any = (tex as any).image;
+                            const w = img.width ?? img.naturalWidth;
+                            const h = img.height ?? img.naturalHeight;
+                            const span = 1 / (1 << dz);
+                            const cx = (Number(m[3]) - (ax << dz)) * span;
+                            const cy = (Number(m[4]) - (ay << dz)) * span;
+                            const cv = document.createElement('canvas');
+                            cv.width = w; cv.height = h;
+                            const cx2 = cv.getContext('2d')!;
+                            // Source is the child's region scaled up to full
+                            // resolution so the pixel step stays ~1 DEM texel.
+                            cx2.drawImage(img,
+                                cx * w, cy * h, w * span, h * span,
+                                0, 0, w, h);
+                            const cropped = new THREE.CanvasTexture(cv);
+                            cropped.minFilter = THREE.LinearFilter;
+                            cropped.magFilter = THREE.LinearFilter;
+                            rasterTextureCache.set(url, cropped);
+                            applyShader(cropped);
+                            try { (this.m_dataSource as any).mapView?.update?.(); } catch {}
+                        } catch { /* tainted/undecodable — stay unshaded */ }
+                    };
+                    const acached = rasterTextureCache.get(aUrl);
+                    if (acached) { finish(acached); return; }
+                    rasterTextureLoader.load(aUrl, (tex) => {
+                        tex.minFilter = THREE.LinearFilter;
+                        tex.magFilter = THREE.LinearFilter;
+                        rasterTextureCache.set(aUrl, tex);
+                        finish(tex);
+                    }, undefined, () => walk(dz + 1));
+                };
+                walk(1);
+            });
         }
     }
 
