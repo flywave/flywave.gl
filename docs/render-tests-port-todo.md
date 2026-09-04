@@ -7907,3 +7907,13 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 **残余（129,152）diff 构成**：① 上半幅空间/大气背底整体缺失（我方白 vs mgl 蓝渐变+大气辉光）——域 A/§787 fogged-fit 校准域，本夹具 fog 仅 `star-intensity:0`（fog 键存在）；② 薄片上缘弯曲度——大跨度多边形（100°宽）未球面细分，平面直边 vs mgl 弯边（§788b 入口：overzoom 要素走 tessellateForSphere）；③ 边线描边带。下轮入口：②球面细分（几何域独立可验）→①大气背底校准。
 
 **附带修复**：karma webpack 缓存中毒排查路径——`/tmp/_karma_webpack_*` 旧 bundle 会让新改动静默失效（266 编译错误时 karma 仍跑旧包）；`scripts/run-mbstyle-render-tests.js` 的 KARMA_ARGS 会整体覆盖环境变量（扩展调试开关须加在 karmaClientArgs）。零结果目录按平台分片（web-Edge-150 旧 vs web-ChromeHeadless-149 新），summarize 会混打陈旧数据，核对须以 `wrong pixels` 服务端行为准。
+
+**§793. 球面细分落地：globe zero-height 薄片屋顶 tessellateForSphere（全家族净 −28.6k，零回归，2026-09-04 终四）**：
+
+`emitExtrudedPolygon` 的屋顶 earcut 三角化此前不过 §271 球面细分（fill 路径有、挤出路径漏），大跨度薄片以平面直边切进球体。修复：globe && rawHeight==0 && rawFloor==0 && 无地形 && 无 pattern 时，屋顶三角化走 `tessellateForSphere` 并发射专用屋顶顶点（径向抬升 + extrusionAxis(0,0,h,1)，仿 pattern-extrusion 专用屋顶分支）；高挤出不动（未细分墙体与弯曲屋顶会裂缝）。
+
+**回测（与 §792 叠加，对照 §791b 基线 angle-limit 13,673 / complex 106,029 / simple 144,982）**：angle-limit **13,673→6,256（−54%）**、complex **106,029→103,828**、simple **144,982→125,982（−13%）**，净 **−28.6k**，逐例改善零回归。探针像素与 diff 图证实薄片弧度已现、内部大面积吻合，残差集中在边线带与大气背底。
+
+**排查记录（如实）**：中途 complex 一度读作 13,673→103,828 "恶化 ~90k"，A/B（stash tess / 中和 §792 门）证明与两改动均无关——根因是**基线数字与夹具映射搞反**（fam-base2 回执顺序 angle-limit=13,673、complex=106,029，此前误按字母序对号）。教训：数字↔夹具对应必须以服务端 `received results for {name}` 相邻行为准，不得按执行顺序推断。另：后台 shell 的 cwd 会跨调用漂移，git/路径操作须用绝对路径或 `git -C`（本次误弹旧 stash 造成三文件冲突，已 `checkout --` 恢复、旧 stash 原样保留）。
+
+**挤出域新残差**：simple 125,982（大气背底 ~100k + 边线带）、complex 103,828（同）、angle-limit 6,256（近收敛）。下一入口不变：①大气背底校准（域 A 续）；②边线带（edgeIndex 描边 vs mgl roof-outline）。

@@ -1667,6 +1667,7 @@ export class MBTileDataEmitter {
                     featureStart,
                     featureId,
                     properties,
+                    extents,
                 );
                 continue;
             }
@@ -2195,6 +2196,7 @@ export class MBTileDataEmitter {
         featureStart: number,
         featureId: string | number | undefined,
         properties: Record<string, any>,
+        extents: number,
     ): void {
         // §283: the per-vertex DEM lift is baked below — flag it so the
         // material patcher's shader-side DEM add (§118) doesn't double-lift.
@@ -2388,6 +2390,34 @@ export class MBTileDataEmitter {
                 }
                 for (let i = 0; i < triIndices.length; i++) {
                     geo.indices.push(roofBase + triIndices[i]);
+                }
+            } else if (
+                // §793: globe zero-height sheets — subdivide the roof
+                // triangulation so a large footprint hugs the sphere (mgl's
+                // frame curves the sheet; straight earcut edges cut through
+                // the globe: zero-height-clipping residual ②). Only the
+                // degenerate sheet case — a tall extrusion's unsubdivided
+                // walls would crack against a curved roof.
+                sphericalUp && rawHeight === 0 && rawFloor === 0 &&
+                !this.m_terrainSampler
+            ) {
+                const tess = tessellateForSphere(allVerts, triIndices, extents, this.m_decodeInfo);
+                const roofBase = geo.positions.length / 3;
+                for (let i = 0; i < tess.verts.length / 2; i++) {
+                    const w = this.project(
+                        new THREE.Vector2(tess.verts[i * 2], tess.verts[i * 2 + 1])
+                    );
+                    let tx = w.x, ty = w.y, tz = w.z;
+                    const rx = w.x + cw.x, ry = w.y + cw.y, rz = w.z + cw.z;
+                    const len = Math.hypot(rx, ry, rz) || 1;
+                    tx += (rx / len) * (centroidElev + height);
+                    ty += (ry / len) * (centroidElev + height);
+                    tz += (rz / len) * (centroidElev + height);
+                    geo.positions.push(tx, ty, tz);
+                    geo.extrusionAxis.push(0, 0, height, 1);
+                }
+                for (let i = 0; i < tess.indices.length; i++) {
+                    geo.indices.push(roofBase + tess.indices[i]);
                 }
             } else {
                 for (let i = 0; i < triIndices.length; i++) {
