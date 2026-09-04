@@ -383,7 +383,22 @@ async function renderUntilSettled(
                 const camW = mv.camera?.getWorldPosition?.(new THREE.Vector3());
                 mv.scene.traverse((o: any) => {
                     if (!o.isMesh) return;
-                    const mat: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                    const matA: any = Array.isArray(o.material) ? o.material : [o.material];
+                    // §816: hideq=allon/alloncw → keep ONLY the yellow sheet.
+                    // MATERIAL colorWrite=false persists across the engine's
+                    // per-frame tile remounting (unlike visible/remove).
+                    if (hq === "allon" || hq === "alloncw") {
+                        const keep = matA.some((m: any) =>
+                            m?.color?.getHexString?.() === "ffff00");
+                        for (const m of matA) {
+                            if (!keep && m.colorWrite !== false) {
+                                m.colorWrite = false;
+                                m.needsUpdate = true;
+                            }
+                        }
+                        return;
+                    }
+                    const mat: any = matA[0];
                     if (hq === "horizon") {
                         // §814: mgl isLngLatBehindGlobe — a tile whose
                         // outward normal faces away from the camera is beyond
@@ -428,7 +443,7 @@ async function renderUntilSettled(
             // engine re-adds/re-enables tile objects between ticks) — hide
             // synchronously in WillRender instead.
             const mv0 = (window as any).__mbTestMapView;
-            mv0?.on?.("WillRender", () => hideQuadFrame((window as any).__mbTestMapView));
+            mv0?.addEventListener?.("WillRender", () => hideQuadFrame((window as any).__mbTestMapView));
         }
         (mapView as any).scene?.traverse?.((o: any) => {
             if (!o.isMesh) return;
