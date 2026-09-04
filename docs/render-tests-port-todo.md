@@ -8085,3 +8085,7 @@ WillRender 同步 hideq=horizon（mgl isLngLatBehindGlobe 判据：dot(外法线
 hideq 升级三连：①类名放宽 `includes("MeshBasic")`（覆盖 MapMeshBasicMaterial 子类）；②WillRender 同步钩子（消除 200ms interval 与渲染循环的竞态）；③collect-then-removeFromParent（visible=false 会被引擎逐帧重置，移除才持久）。实测全部 **125,982 bit 级不变**——白色满幅物不是场景树中任何可遍历的白色 MeshBasic 网格。至此排除清单：背景层样式对象、注入背景 quad（n=4 白 MeshBasic）、远侧瓦背面、月球、引擎 Celestia 大气、太阳 helper。剩余可能：①引擎瓦片渲染走自有 collector，scene 树移除/visible 不影响其绘制（TileObjectRenderer 每帧重挂对象）——须用引擎 API（markTilesDirty/数据源开关）而非场景操作；②白物为 tile-fog 之外的渲染层（深度预渲染/后处理）。
 
 **下一步建议**：①用数据源开关二分（dataSource.enabled=false 或从 mapView 摘除 MBStyleDataSource 后渲染——白带若消失即确证瓦片管线，再按 source 逐个二分）；②确认后实施 §798/§807b 的 horizon culling（引擎 TileObjectRenderer 层或 decode 层剔除越球瓦片）。
+
+**§814b. dsdisable 实验记录（2026-09-05 终）**：
+
+dsdisable=1（跳过 addDataSource）实验：首跑因 reapplyCamera 在未挂载时抛错中断（已加 reapplyCamera 守卫）；修复后 mismatch 143,547，帧内**黄色板仍渲染**——板体绘制来源超出场景树/数据源二分可解释范围（无数据源即无解码即无几何，但板在）。可能：harness 之外存在第二条瓦片/几何注入路径，或帧内容为前次状态残留（浏览器复用）。white-band 域的物主定位需真渲染级调试（RenderDoc / three.js SpectorJS 捕帧）。本域工具全部入库：dsdisable/domedbg/hideq/cam-dist/lookat+stack/census+VIEW/dome-geom。

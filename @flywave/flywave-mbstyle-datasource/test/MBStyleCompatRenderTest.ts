@@ -1226,7 +1226,10 @@ async function processOperations(
                 // on setProjection). Re-apply the style camera or the globe
                 // renders with the distance chosen under the old projection
                 // (globe-default: ~1.41× too small).
-                (dataSource as any).reapplyCamera?.();
+                if (!(window as any).__karma__?.config?.args?.some?.(
+                    (a: string) => a === "dsdisable=1")) {
+                    (dataSource as any).reapplyCamera?.();
+                }
                 break;
             }
             case "setLights":
@@ -2036,9 +2039,18 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     decoder: new MBStyleDecoder(),
                 });
 
-                await mapView.addDataSource(dataSource);
-                (window as any).__mbTestMapView = mapView;
-                (window as any).__mbTestDS = dataSource;
+                // §814b: dsdisable=1 → engine-only frame (no tile content)
+                // for the white-band source bisection.
+                console.log("[DSGATE] args=", JSON.stringify((window as any).__karma__?.config?.args), "match=", (window as any).__karma__?.config?.args?.some?.((a: string) => a === "dsdisable=1"));
+                if ((window as any).__karma__?.config?.args?.some?.(
+                    (a: string) => a === "dsdisable=1")) {
+                    (window as any).__mbTestMapView = mapView;
+                    (window as any).__mbTestDS = dataSource;
+                } else {
+                    await mapView.addDataSource(dataSource);
+                    (window as any).__mbTestMapView = mapView;
+                    (window as any).__mbTestDS = dataSource;
+                }
 
                 // If the style has a glyphs URL, build real mapbox-font
                 // FontCatalogs from PBF SDF glyphs and inject them — replacing
