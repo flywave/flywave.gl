@@ -8069,3 +8069,9 @@ domedbg 帧逐行解码：y0 行 (161,86,40) = normDist 1.263/θ 60.8°/t 0.157�
 **§813b. hideq 放宽匹配仍无效果——白物需渲染级追踪（2026-09-05 收口）**：
 
 hideq 放宽为 `type.includes("MeshBasic")` 隐藏全部 n=4 白色 quad（不再限定精确类名/无贴图）：**125,982 仍分毫不变**——这批 quad 本就不贡献像素（可能已被剔除/在视锥外），白物另有其人。静态候选已穷尽（背景层/背景 quad/远侧瓦/月球/引擎大气/dome 自身/太阳 helper 均排除）。**下一入口（需渲染级追踪）**：① renderer.info.render 逐 draw-call 与 visible 二分联动；② 或以 WebGL 深度/模板 dump 定位白物的绘制批次；③ 或直接对 expected 做逐像素反推（渐变带公式与 dome glow 完全同源已证实——也可反向直接校准：把 dome 的 hit 分支阈值/输出改为与渐变带拟合，绕过白物）。选项 ③ 为纯 shader 改动、无需定位白物，可作下轮首选实验。
+
+**§813c. 白物排查终极轮：移除全部白色 MeshBasic 网格仍 bit 级不变（2026-09-05 收口）**：
+
+hideq 升级为持久 interval（先收集后移除，修三处 bug：undefined mapview 崩溃/traverse 中删除/类名+map 过滤过严），把场景中**所有**白色 MeshBasic* 网格（任意顶点数）从场景树移除：125,982 **bit 级不变**——白带不是任何可遍历的白色 MeshBasic 网格绘制的。同时落地 effectiveFogSpec（无 fog 键+有背景层 → mgl 默认 fog 参数；对 simple 无效因该夹具自带 fog 键，但对真正无 fog 键的 globe 背景夹具是正确的 mgl 对齐）。
+
+**域最终状态**：所有静态候选穷尽后，白带的最可能来源只剩：①渲染管线层面（深度/模板/多 pass 合成）而非场景对象——需 RenderDoc/WebGL 帧调试；②mgl 生成 expected 的版本语义与 vendored 源码的版本差。zero-height simple/complex（各 ~126k）与大气背底域挂账，需帧调试工具链支持。本会话在该域完成：dome 公式正确性证实、九轮排除实验、探针族五件套，全部如实入账。

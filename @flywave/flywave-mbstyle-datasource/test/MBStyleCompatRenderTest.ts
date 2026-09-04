@@ -372,6 +372,31 @@ async function renderUntilSettled(
         // quota — scene attachment is the signal that content is drawable.
         let count = 0;
         const hq = (globalThis as any).__mbHideQuad;
+        // §813c: late-loading tiles appear AFTER the stable loop stops —
+        // register a persistent per-frame hide so the bisection covers them.
+        if (hq && !(globalThis as any).__mbHideQuadHook) {
+            (globalThis as any).__mbHideQuadHook = true;
+            const hideQuadFrame = (mv: any) => {
+                if (!mv?.scene) return;
+                const doomed: any[] = [];
+                mv.scene.traverse((o: any) => {
+                    if (!o.isMesh) return;
+                    const mat: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                    if (mat?.type?.includes("MeshBasic") &&
+                        (!mat.color || mat.color.getHexString() === "ffffff")) {
+                        doomed.push(o);
+                    }
+                });
+                // remove AFTER the traversal — removing mid-traverse corrupts
+                // the children array (three crashes / skips siblings).
+                for (const o of doomed) {
+                    o.visible = false;
+                    o.parent?.remove(o);
+                }
+            };
+            const iv = setInterval(() => hideQuadFrame((window as any).__mbTestMapView), 200);
+            (window as any).__mbHideQuadIv = iv;
+        }
         (mapView as any).scene?.traverse?.((o: any) => {
             if (!o.isMesh) return;
             count++;
