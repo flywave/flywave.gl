@@ -8097,3 +8097,7 @@ dome glow 加 max(horizonAngle,0) 钳制（防盘内 exp 爆炸）：125,982 与
 zero-height-clipping-simple（zoom 3.5/pitch 70）：我方放置高度 h≈2.86e6 m（dome-geom 实测 |C−O|=9.23e6）→ dip=acos(R/(R+h))≈43.6° → limb 在画面外下方 → 击中白铺满全帧。mgl expected limb 弧在 y210-258（轴上 ~1.6-3.4°）→ 反解 mgl 相机高度 h≈0.36-0.55e6 m——**差 5-7×**。两套公式（我方 focal×C/2^flyZoom×conv vs mgl mercatorZfromZoom×pixelSpaceConversion）的最终高度换算存在系统性倍差（疑 mgl 的 mercatorZ 单位定义或 pixelSpaceConversion 的应用点不同）。
 
 **最终修复路径（需 mgl 数值提取）**：在 mgl 本地实例中对该夹具打印 transform.cameraPosition 的 ECEF 高度，反解我方 calculateDistanceFromZoomLevel 的 globe 分支系数。该修正属相机域（§780/781 谱系第三支），修正后 limb/辉光带落位，大气背底域（simple/complex 各 ~126k）+ 可能连带 poles/symbol-z-offset 构图一并收敛。dome glow 钳制保留（防护性）。
+
+**§815c. 相机几何闭卷复核与白物定位现状（2026-09-05 终二）**：
+
+严格几何复核（修正此前符号错误）：zero-height-clipping-simple 相机（h=1.82e6 m，pitch 70，dist 5.31e6）——地平线 depression=acos(R/(R+h))=18.8° 低于水平，视轴高出水平 20° → **地平线（limb）在轴下 18.8°+20°−90°...**（limb 高角 = 20°−18.8° = 1.2° 高于视轴）→ **limb 弧落在 y≈240——与 expected 弧 y210-258 一致**！即 mgl expected 的弧就是几何 limb ✓。我方同相机的几何 limb 也在 y≈213 附近（§793 谱系瓦片球面贴合一经确认），**我方渲染却在 y4 处由白接管**——白物为"延伸到几何 limb 之上 200px 的绘制"，且 hideq 移除/隐藏（含 WillRender 同步、放宽类名、removeFromParent）全部无效 → 白物对场景树操作免疫（疑 TileObjectRenderer 每帧重挂）或为非 traverse 对象。**最终收敛路径不变**：引擎渲染层（TileObjectRenderer 或 datasource 层）对 globe 越球瓦的 horizon culling（mgl isLngLatBehindGlobe 判据：dot(外法线, 指向相机)<0），需在引擎瓦片可见性判定处（VisibleTileSet/DataSource tile loading）落地而非场景树后处理。white-band 探针族（hideq/domedbg/census/dsdisable）已齐备。
