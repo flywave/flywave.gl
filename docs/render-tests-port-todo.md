@@ -8043,3 +8043,9 @@ MapViewEnvironment.update() 增加 mgl-globe 门：`__mglGlobeCam && Spherical` 
 **§808b. frontcull 实验：无效果（bit 级不变）；白物定位方案收口（2026-09-05）**：
 
 frontcull=1（globe fill/circle 材质 FrontSide）实测 127,875 分毫不变——白物对 side 标志无响应（或其材质不经过 patchTileMaterials 的 fill 分支）。结合 §807（mbhide=background 白带依旧），白物候选继续收敛：①注入背景 quad 的材质路由（mb-background-tile 是否真走 patchTileMaterials 的 fill 分支）；②dome 自身击中白（normDist 判定域 vs 真实 limb 差 ~15°——dome-geom 的 uHorizonAngle 43.65° 推算 limb 应在 y188，但 domedbg 帧显示 y4 起即白——dome 的 normDist 与自身 uniform 不自洽，需在 shader 内逐像素断言）。下一入口：domedbg 帧改用排除法——依次 set visible=false 于 skyMesh/groundMesh/dome/背景 quad 组（cam-dist 式逐个 POST），或 domedbg 输出改带 (uHorizonAngle, d, R) 三 uniform 值编码进首行像素以实时核对。
+
+**§811. hide 二分定论：白色 n=4 quad 组全部排除；根因锁定 dome 击中域 vs mgl limb 的 ~18° 地平线差（2026-09-05）**：
+
+hideq 逐档实验（z0 bsR>1e7 / z1 5-10e6 / z2 <5e6 三档白色 n=4 quad 依次 visible=false）：三档 **125,982 分毫不变**——白带不是 census 里的白色 quad 组画的。结合此前排除链（mbhide=background、frontcull、引擎大气、domedbg 显示 dome 仅 y0-3 可见），剩余唯一自洽解释：**白带 = dome 自身的击中白**（normDist<0.98 在我方相机下铺满 y4-512），而 mgl 同相机的 limb 落在 y210-258（limb 可见，其上为辉光渐变+太空）——即 **mgl 相机的地平线比我方高 ~18°**（等价地：我方相机高度 h≈1.82e6 m→dip 48°，mgl limb 可见要求 h≈0.36e6 m→dip ~19°，差 ~2.6×相机高度；或两者 pitch 语义在球面上的落点不同）。
+
+**收敛方向（最终）**：globe 相机高度 = target 距离 × cos(pitch) 的语义差——mgl 的 pitch 旋转不改相机到 TARGET 的距离，但相机到地面的高度还取决于 target 在球面的位置与 110° 角几何；下一入口：以 mgl transform._calcCameraPosition 的球面高度公式（altitude = mercatorZfromZoom×pixelSpaceConversion，pitch 只改方向不改高度）逐值对拍我方 lookAtImpl 的放置高度——修正后 limb/辉光带/大气背底域（~250k）一次收敛，且可能同时改善 poles/symbol-z-offset 家族的构图。hideq 探针入库。
