@@ -1354,7 +1354,12 @@ export class MBEnvironmentManager {
                     float horizonAngle = globe_pos_dot_dir < 0.0
                         ? PI - theta - uHorizonAngle : theta - uHorizonAngle;
                     horizonAngle /= PI;
-                    float t = exp(-horizonAngle / uFadeout);
+                    // §815: clamp the glow exponent — inside the disc horizonAngle goes
+                    // negative and exp() explodes, extrapolating the premultiplied
+                    // color to yellow/white full-screen artifacts (mgl never
+                    // reaches this path inside the disc: normDist<0.98 early
+                    // return happens first).
+                    float t = exp(-max(horizonAngle, 0.0) / uFadeout);
                     // mgl color pass output: (c2 * t, t) premultiplied.
                     vec3 c0 = mix(uSpaceColor.rgb, uHighColor.rgb, uHighColor.a);
                     vec3 c1 = mix(c0, uFogColor.rgb, uFogColor.a);

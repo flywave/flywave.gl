@@ -404,8 +404,21 @@ async function renderUntilSettled(
                 // remove AFTER the traversal — removing mid-traverse corrupts
                 // the children array (three crashes / skips siblings).
                 for (const o of doomed) {
-                    o.visible = false;
-                    if (hq !== "horizon") o.parent?.remove(o);
+                    if (hq === "horizon") {
+                        // §814b: FrontSide on the material persists (no
+                        // per-frame reset) and back-face culls the far-side
+                        // sphere surface that paints above the limb.
+                        const mats: any = Array.isArray(o.material) ? o.material : [o.material];
+                        for (const m of mats) {
+                            if (m.side !== THREE.FrontSide) {
+                                m.side = THREE.FrontSide;
+                                m.needsUpdate = true;
+                            }
+                        }
+                    } else {
+                        o.visible = false;
+                        o.parent?.remove(o);
+                    }
                 }
             };
             // §811b: the 200ms interval raced with the render loop (the
