@@ -379,8 +379,8 @@ async function renderUntilSettled(
             const mat: any = Array.isArray(o.material) ? o.material[0] : o.material;
             const g = o.geometry;
             const n = g?.attributes?.position?.count ?? 0;
-            if (mat?.type === "MeshBasicMaterial" && n === 4 &&
-                !mat.map && (!mat.color || mat.color.getHexString() === "ffffff")) {
+            if (hq === "moon" && o.name === "Moon") { o.visible = false; return; }
+            if (mat?.type === "MeshBasicMaterial" && n === 4) {
                 g.computeBoundingSphere?.();
                 const bsR = g.boundingSphere?.radius ?? 0;
                 const band = bsR > 1e7 ? "z0" : bsR > 5e6 ? "z1" : "z2";

@@ -8061,3 +8061,7 @@ mgl 源码事实链：fog 创建 gated on stylesheet.fog（style.ts:1082）；�
 effectiveFogSpec（无 fog 键 + 有背景层 → mgl 默认 fog 参数）落地三调用点，tsc 绿——但 zero-height-clipping-simple **125,982 分毫不变**：该夹具**本身带 fog 键**（{star-intensity:0}），实验未命中新路径（对真正无 fog 键的 globe 背景夹具仍是正确的 mgl 对齐改进，保留）。globe-default 哨兵 2,707 持平、mercator collision 分类批测无回归。
 
 **域定论（几何闭卷）**：zoom3.5/pitch70/dist5.31e6 的相机下，地平线 dip=38.9°、axis 高于水平 20° → limb 在轴下 ~59°（画面外 y≈1500）——**mgl expected 的 y210-258 弧不可能是几何 limb**；同帧 fogT 上限 ~0.28（不足 0.9 剔除阈值）→ 渐变也非 fog 剔除边界。mgl expected 上区 navy 渐变+亮弧的真实生成机制需要 mgl 实际运行对拍（怀疑：生成 expected 的 mgl 版本的 globe 相机 pitch/高度语义与 vendored 源码存在版本差，或 tile-fog 之外的专用绘制）。我方当前帧（dome 击中白铺满）在"全帧盘内"几何下是自洽的。本域从"可修 bug"降级为"mgl 渲染行为对拍研究"，需 mgl 本地渲染环境支持。
+
+**§813. hide 二分扩展：n=4 白 quad 全隐藏仍 bit 级不变——白物为 dome 与黄板之间的未知满幅对象（2026-09-05）**：
+
+domedbg 帧逐行解码：y0 行 (161,86,40) = normDist 1.263/θ 60.8°/t 0.157（真实 dome 调试输出）；y4+ 纯白 (255,255,255) 非 dome 调试输出（调试 R≤128 不可能 255）→ **dome 辉光公式与 mgl 完全同源且工作正常**（帧内 normDist≥1.376 全为空间区，glow 饱和白弧+向上渐变正是 mgl expected 的形态）。白色满幅物位于 dome（ro=−2000）与黄板（ro=1）之间，且不是：n=4 白 quad（全部隐藏无变化）、background 层（mbhide）、远侧瓦（frontcull）、月球（#dddddd n=1089 已试）、引擎大气（已禁用）。下一入口：①用 renderer.info.render{calls,triangles} 与逐对象 visible 二分联动定位实际绘制者；②检查 mapAnchors 挂载的对象是否在 scene.traverse 覆盖之外（census 遗漏）；③ Celestia.sun/moon/light 图形（SunLight 的可视光晕网格？）。
