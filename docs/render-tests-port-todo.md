@@ -7979,3 +7979,9 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 mgl 源码实锤：fill_extrusion.fragment 的**全部光照代码都在 `#ifdef LIGHTING_3D_MODE` 内**（无 `lights` 数组 → 不编译，色=原色×opacity 直出，适用所有高度）——§790/§792 的前提就此坐实。据此实现 globe 直出注入（跳过 Lambert + `opaque_fragment` 替换为 `diffuseColor` 直写 + uMBUnlitOpacity）：实测 symbol-z-offset-zoom-in **150,846→158,284 恶化**，且逐点采样显示大部分板块**整个消失**（背景浅蓝露出，仅剩墨西哥暗块）——`opaque_fragment` 替换疑似引发 GLSL 编译失败→材质整体不渲染（r178 fragment 作用域/块名需 shader 级调试）。已回退。
 
 **域结论更新**：① symbol-z-offset 家族的暗化与光照注入路径无关（三种光照路径——世界帧/瓦片本地帧/无光照——mismatch 均 ~150k 级）——残差主体在**几何/剔除域**（巨板 3000km 高，相机在其高度范围内，可见面判定/近远景裁剪/背板深度），而非着色；② fill-extrusion/default 也从 23,203（§799 实验态）到 25,993（直出态）波动，同样指向非光照因素。下一入口：巨板几何取证（decodedbg 顶点转储对拍 mgl globe_raster 的板体面片；近远景裁剪面板 vs mgl farthestPixelDistanceOnPlane 的 3000km 高度容忍）。
+
+**§802. 巨板几何取证：裁剪面标定定量实锤（2026-09-05 终六）**：
+
+VIEW 探针（scene-census 扩展：m_viewRanges + DataSource.maxGeometryHeight）实测 symbol-z-offset-zoom-in：**far=1.333e7 / near=1.526e4 / 相机距球心 1.485e7 / maxGeomDS=3e6（上报正确）**。三重裁剪问题实锤：① far 不足——相机到远侧板顶 ≈2.1e7 > 1.333e7，远侧几何被远平面削除；② near 过大——15km 近平面削掉近旁掠过的巨板墙体（画面上部垂直条纹伪影来源）；③ far/near≈87 万 → 深度精度崩坏，板墙/板顶 z-fighting（暗色错片获胜）。MapView.updateCameras 的 maxGeometryHeightScaled 链路本身工作（DS 上报 3e6 已进 far 计算），但 ClipPlanesEvaluator 对 3000km 级 extrusion 的 near/far 分配不匹配。
+
+**下一入口**：ClipPlanesEvaluator（globe 分支）巨高度标定——near 随最近内容距离收紧（mgl near≈相机高度分数级），far 用 farthestPixelDistanceOnPlane + maxGeometryHeight 全半径外推；同时评估 logarithmic depth（mgl globe 渲染配套）解决深度精度。挂账夹具：symbol-z-offset ×4（~332k）+ fill-extrusion/default + vertical_gradient。

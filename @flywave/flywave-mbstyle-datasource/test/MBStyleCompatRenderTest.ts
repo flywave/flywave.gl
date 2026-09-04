@@ -369,6 +369,9 @@ async function renderUntilSettled(
             });
             const fb = (window as any).__karma__?.config?.args?.find?.((a: string) =>
                 a.startsWith("feedback-url="))?.slice("feedback-url=".length);
+            const mv: any = (window as any).__mbTestMapView;
+            const vr = mv?.m_viewRanges;
+            rows.push(`VIEW far=${vr?.far?.toExponential(3)} near=${vr?.near?.toExponential(3)} camH=${mv?.camera?.position?.length?.().toExponential(3)} maxGeomDS=${JSON.stringify((window as any).__mbTestDS?.maxGeometryHeight)} maxGeomMV=${mv?.m_maxGeometryHeight}`);
             if (fb) {
                 fetch(`${fb}/mb-probe-dump`, {
                     method: "POST",
@@ -1959,6 +1962,8 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 });
 
                 await mapView.addDataSource(dataSource);
+                (window as any).__mbTestMapView = mapView;
+                (window as any).__mbTestDS = dataSource;
 
                 // If the style has a glyphs URL, build real mapbox-font
                 // FontCatalogs from PBF SDF glyphs and inject them — replacing
