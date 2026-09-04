@@ -1363,6 +1363,27 @@ export class MBEnvironmentManager {
             material.uniforms.uBgDisc.value = this.m_globeBgColor ? 1 : 0;
             material.uniforms.uBgDiscAlpha.value = this.m_globeBgAlpha;
             if (this.m_globeBgColor) material.uniforms.uBgDiscColor.value.copy(this.m_globeBgColor);
+            // §805: one-shot dome-geometry dump (limb y4 vs mgl y210 probe).
+            if ((globalThis as any).__mbExtRouteDbg && !(globalThis as any).__mbDomeDumped) {
+                (globalThis as any).__mbDomeDumped = true;
+                const fbD = (window as any).__karma__?.config?.args
+                    ?.find?.((a: string) => a.startsWith('feedback-url='))
+                    ?.slice('feedback-url='.length);
+                if (fbD) fetch(`${fbD}/mb-probe-dump`, {
+                    method: 'POST', headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                        probe: 'dome-geom',
+                        R: R, d: d, dh: dh,
+                        horizonAngleRad: material.uniforms.uHorizonAngle.value,
+                        tanHalfFov: material.uniforms.uTanHalfFov.value,
+                        aspect: material.uniforms.uAspect.value,
+                        fadeout: fadeout,
+                        zoom: this.m_mapView?.zoomLevel,
+                        camPos: c.position.toArray(),
+                        camFov: c.fov,
+                    }),
+                }).catch(() => {});
+            }
         };
         this.m_scene!.add(this.m_globeAtmo);
 
