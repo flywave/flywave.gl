@@ -7973,3 +7973,9 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 **§800b. symbol-z-offset 量化对拍（2026-09-05 终四）**：
 
 逐点采样（US 板/墨西哥/加拿大/天区）：我方/expected 亮度比 **0.05–0.57**，且随位置/要素发散——超出 Lambert mix≥0.5 的可达范围，说明除光照帧外还有**第二重压暗**（疑：瓦片本地帧实验中未初始化 varying→NaN 的教训已修，但基线态的暗化仍无法由 mix(0.5,1,NdotL) 解释）。mgl 侧 US 墙色 (194,136,80) vs #f38953=(243,137,83)：G/B≈1.0、R≈0.8——**色相偏移而非亮度缩放**，提示 expected 墙体颜色掺入了光色/不同 stop 的混合，或 mgl 的 wall 光照乘法在色相上作用。瓦片本地帧实验（vMBLocalPos 导线法线 + 本地光向，修正未初始化 anchor 后）151,172 vs 150,846 基本中性——**NdotL 帧不是残差主因**，实验未入库。下一入口：①对拍 mgl fill_extrusion.fragment 的 wall 光照精确公式（light-color 混合 vs 亮度缩放）；②opacity 0.9 的合成路径（0.9×color+0.1×?）逐通道验证。
+
+**§801. 挤出直出路径实验：证伪回退（2026-09-05 终五）**：
+
+mgl 源码实锤：fill_extrusion.fragment 的**全部光照代码都在 `#ifdef LIGHTING_3D_MODE` 内**（无 `lights` 数组 → 不编译，色=原色×opacity 直出，适用所有高度）——§790/§792 的前提就此坐实。据此实现 globe 直出注入（跳过 Lambert + `opaque_fragment` 替换为 `diffuseColor` 直写 + uMBUnlitOpacity）：实测 symbol-z-offset-zoom-in **150,846→158,284 恶化**，且逐点采样显示大部分板块**整个消失**（背景浅蓝露出，仅剩墨西哥暗块）——`opaque_fragment` 替换疑似引发 GLSL 编译失败→材质整体不渲染（r178 fragment 作用域/块名需 shader 级调试）。已回退。
+
+**域结论更新**：① symbol-z-offset 家族的暗化与光照注入路径无关（三种光照路径——世界帧/瓦片本地帧/无光照——mismatch 均 ~150k 级）——残差主体在**几何/剔除域**（巨板 3000km 高，相机在其高度范围内，可见面判定/近远景裁剪/背板深度），而非着色；② fill-extrusion/default 也从 23,203（§799 实验态）到 25,993（直出态）波动，同样指向非光照因素。下一入口：巨板几何取证（decodedbg 顶点转储对拍 mgl globe_raster 的板体面片；近远景裁剪面板 vs mgl farthestPixelDistanceOnPlane 的 3000km 高度容忍）。
