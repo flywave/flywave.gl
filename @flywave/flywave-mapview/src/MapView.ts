@@ -3169,6 +3169,15 @@ export class MapView extends EventDispatcher {
                 ? params.distance
                 : this.m_targetDistance;
 
+        if ((globalThis as any).__mbExtRouteDbg) {
+            const fbL = (window as any).__karma__?.config?.args
+                ?.find?.((a: string) => a.startsWith('feedback-url='))
+                ?.slice('feedback-url='.length);
+            if (fbL) fetch(`${fbL}/mb-probe-dump`, {
+                method: 'POST', headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ probe: 'lookat', log: [`zoom=${params.zoomLevel} distance=${distance?.toExponential(4)} tilt=${tilt} minZ=${(this as any).m_minZoomLevel} maxZ=${(this as any).m_maxZoomLevel} targetLat=${zoomTarget?.latitude} stack=${new Error().stack?.split('\n').slice(2, 7).join(' | ')}`] }),
+            }).catch(() => {});
+        }
         let target: GeoCoordinates | undefined;
         if (params.bounds !== undefined) {
             let geoPoints: GeoCoordLike[];

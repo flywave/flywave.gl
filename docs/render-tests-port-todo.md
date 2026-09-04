@@ -8003,3 +8003,9 @@ zero-height-clipping-simple 逐列扫描：expected 地平线弧 **y210(中心)�
 dome-geom 探针（extdbg=1，onBeforeRender one-shot）实测 zero-height-clipping-simple（style zoom 0.9 → 放置 1.9，pitch 70）：**mapView.zoomLevel = 4.5000000000027**（+2.6 档！）、相机 |pos|=9.228e6（高度 2.86e6 m，按 1.9 公式应 ~2.6e7 量级）、R=6.371e6、uHorizonAngle=0.762rad(43.65°)、tanHalfFov=0.3333、fadeout=0.0504。几何推演：pitch 70 + 高度 2.86e6 → horizon 在轴下 ~23°（画面外下方）→ 整帧皆盘内 → dome 击中白铺满（辉光仅存顶端 normDist>1.135 的 4-30px 带）。**mgl（zoom 0.9 正确放置）地平线在 y210-258 → 我方 18° 偏差的根因 = 相机放置/getter 在 pitch-70 球面分支的发散**，非 dome shader 标定。
 
 **下一入口**：setCameraGeolocationAndZoom pitch 分支的球面距离换算与 zoomLevel getter（calculateZoomLevelFromDistance 二分）在 pitch>0 时的互逆性取证（§780 修过 target 纬度、§781 修过旧 target conv——本条是 pitch 轴的第三例）。修复后 limb/辉光带应随相机高度一并归位，zero-height simple/complex ~250k 与大气背底域预计大头收敛。dome-geom 探针入库。
+
+**§806b-更正. zoomLevel"发散"是夹具混淆误报（如实撤回，2026-09-05）**：
+
+zero-height-clipping-simple 的 style 实为 **zoom 3.5 / center [−8,−16] / pitch 70**（此前误记 0.9/[0,0]，那是 angle-limit 夹具）。dome-geom/cam-dist 探针读到的 zoomLevel 4.5 = 3.5+1 **完全正确**；放置距离 5.31e6 与 mgl 公式（768×C/(512·2^3.5)×conv(lat−16,t≈0.28)=5.32e6）**逐米吻合**——相机放置无 bug，§806 的"getter 发散 2.6 档"撤回。
+
+**大气背底域现状定论**：相机一致（放置对齐 mgl）前提下，expected 上区（navy→亮弧渐变 + y210-258 弧）与 mgl atmosphere.fragment 的 normDist<0.98 黑分支/辉光环的组合行为，需要在 RenderDoc 级逐帧对拍才能定位（我方 dome 同公式却输出击中白满帧）。本域(各 ~100-126k)挂账：dome shader 逐像素对拍（pix 探针扩展到 dome 的 normDist/ha/t 三通道输出）。

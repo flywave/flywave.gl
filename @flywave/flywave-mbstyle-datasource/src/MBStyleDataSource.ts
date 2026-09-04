@@ -5156,6 +5156,26 @@ export class MBStyleDataSource extends TileDataSource {
             const { GeoCoordinates } = require('@flywave/flywave-geoutils');
             const geoCoord = new GeoCoordinates(center[1], center[0]);
             this.mapView.setCameraGeolocationAndZoom(geoCoord, zoom, bearing, pitchAB);
+            // §806 probe: camera-to-target distance right after placement vs
+            // after later frames — who moves the camera?
+            if ((globalThis as any).__mbExtRouteDbg) {
+                const dumpDist = (tag: string) => {
+                    try {
+                        const camP = (this.mapView as any).camera.position as THREE.Vector3;
+                        const tgtP = (this.mapView as any).projection.projectPoint(geoCoord as any, new THREE.Vector3());
+                        const fbD = (window as any).__karma__?.config?.args
+                            ?.find?.((a: string) => a.startsWith('feedback-url='))
+                            ?.slice('feedback-url='.length);
+                        if (fbD) fetch(`${fbD}/mb-probe-dump`, {
+                            method: 'POST', headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({ probe: 'cam-dist', log: [`${tag} dist=${camP.distanceTo(tgtP).toExponential(4)} zoomLevel=${(this.mapView as any).zoomLevel}`] }),
+                        }).catch(() => {});
+                    } catch {}
+                };
+                dumpDist('post-place');
+                setTimeout(() => dumpDist('t+3000'), 3000);
+                setTimeout(() => dumpDist('t+8000'), 8000);
+            }
             // §700: empirical camera probe — dumped via /mb-probe-dump (the
             // karma runner swallows browser consoles). Values must match mgl's
             // placement: slant d = focal·C/(256·2^flyZoom) ≡ ccd_px·C/(512·2^styleZoom),
