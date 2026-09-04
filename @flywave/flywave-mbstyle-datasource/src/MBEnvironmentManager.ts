@@ -844,14 +844,50 @@ export class MBEnvironmentManager {
         this.m_lastFogZoom = styleZoom;
         const isGlobe = (this.m_mapView as any).projection?.type === 1;
         if (isGlobe) {
+            // §782: mgl's Style only creates this.fog when the stylesheet HAS
+            // a fog key (style.ts _createFog is gated on `stylesheet.fog`), so
+            // the painter's atmosphere gate `if (this.style.fog && ...)` then
+            // skips drawStars AND drawAtmosphereGlow entirely and the clear
+            // stays (0,0,0,0) — which the render-test harness composites to
+            // WHITE. Fixture cross-check: collision/at-transition-zoom/
+            // show-unsupported-layer (no fog key) expect a bare frame, while
+            // globe-default/transforms/poles (fog: {} present) expect the
+            // full space glow + stars. Our previous "treat missing fog as the
+            // default spec" (§776) painted the space backdrop + stars into
+            // every fog-less globe fixture. Mirror the mgl gate instead.
+            if (fog === undefined) {
+                this.m_globeFogActive = false;
+                this.m_globeBgColor = null;
+                this.disposeGlobeAtmosphere();
+                if (this.m_stars) {
+                    this.m_scene.remove(this.m_stars);
+                    this.m_stars = null;
+                }
+                (THREE.UniformsLib.fog as any).fogGlobeMode.value = 0;
+                if (this.m_fog) {
+                    this.m_scene.fog = null;
+                    this.m_fog = null;
+                }
+                this.m_fogState = null;
+                // White clear = mgl's transparent space composited over the
+                // white test canvas. The datasource re-runs
+                // applyBackgroundColor after this for styles with a
+                // background layer (flat clear path, globeFogActive false).
+                (this.m_mapView as any).clearColor = 0xffffff;
+                (this.m_mapView as any).clearAlpha = 1;
+                // The fog chunk is baked in at compile time — force a
+                // recompile now that scene.fog is gone (mirror the apply path).
+                this.m_scene?.traverse((o: any) => {
+                    const ms = o.material;
+                    if (!ms) return;
+                    (Array.isArray(ms) ? ms : [ms]).forEach((m: any) => (m.needsUpdate = true));
+                });
+                return;
+            }
             // Globe: screen-space atmosphere glow around the limb (mgl
             // atmosphere.fragment.glsl) + space-color backdrop, PLUS content
             // fog via the glow_progress ramp (§273, see applyGlobeAtmosphere).
-            // §776: mgl's style.fog ALWAYS exists (v8 defaults) — a globe
-            // style without a fog object still renders the default atmosphere
-            // (glow + stars at the default star-intensity), never a bare
-            // space clear. Treat missing fog as the default spec.
-            this.applyGlobeAtmosphere(fog ?? {}, styleZoom);
+            this.applyGlobeAtmosphere(fog, styleZoom);
             return;
         }
         this.disposeGlobeAtmosphere();

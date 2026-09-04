@@ -2173,6 +2173,13 @@ export class MBStyleDataSource extends TileDataSource {
                     this.styleHasContentLayers(style) && hasGeojsonContent;
             } catch {}
             this.m_environment.applyFog(style.fog, style.zoom ?? 0);
+            // §782: fog-less globe styles skip the atmosphere entirely (mgl
+            // painter gate on style.fog) — the clear falls back to the
+            // background layer's color, or white without one. applyFog reset
+            // the clear to white; re-apply the background on top of that.
+            if (style.fog === undefined) {
+                this.applyBackgroundColor(style);
+            }
             // A `sky` layer's paint drives the skybox (gradient/atmosphere),
             // mirroring mapbox's sky_style_layer. The top-level `style.sky`
             // (fog-driven atmosphere) takes precedence when both exist.
@@ -4514,6 +4521,12 @@ export class MBStyleDataSource extends TileDataSource {
             this.applyBackgroundColor(style);
             this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style), this.styleHasContentLayers(style));
             this.m_environment.applyFog(style.fog, style.zoom ?? 0);
+            // §782: mirror of the connect-path re-apply — a fog-less globe
+            // style ends with a white clear from applyFog's atmosphere-off
+            // branch; restore the background layer's flat clear over it.
+            if (style.fog === undefined) {
+                this.applyBackgroundColor(style);
+            }
             this.m_environment.applySky(
                 this.buildSkyFromLayers(style) ?? style.sky,
                 style.fog,

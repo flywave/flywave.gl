@@ -421,7 +421,20 @@ async function renderFrames(
                                 o.updateWorldMatrix?.(true, false);
                                 const e = o.matrixWorld?.elements ?? [0, 0, 0];
                                 const pos = o.position;
-                                samples.push(`${key} local=(${pos.x?.toFixed?.(1)},${pos.y?.toFixed?.(1)},${pos.z?.toFixed?.(1)}) world=(${e[12]?.toFixed?.(1)},${e[13]?.toFixed?.(1)},${e[14]?.toFixed?.(1)}) nvert=${o.geometry?.attributes?.position?.count ?? '?'}`);
+                                // §782: first vertices + index count — tile-
+                                // partition forensics (are the per-tile pieces
+                                // clipped or full-quad duplicates?).
+                                let vdump = '';
+                                const pa = o.geometry?.attributes?.position;
+                                if (pa) {
+                                    const n = Math.min(4, pa.count);
+                                    const parts: string[] = [];
+                                    for (let vi = 0; vi < n; vi++) {
+                                        parts.push(`(${pa.getX(vi)?.toFixed?.(0)},${pa.getY(vi)?.toFixed?.(0)},${pa.getZ(vi)?.toFixed?.(0)})`);
+                                    }
+                                    vdump = ` v[0..${pa.count}]=${parts.join('')} idx=${o.geometry?.index?.count ?? '?'}`;
+                                }
+                                samples.push(`${key} local=(${pos.x?.toFixed?.(1)},${pos.y?.toFixed?.(1)},${pos.z?.toFixed?.(1)}) world=(${e[12]?.toFixed?.(1)},${e[13]?.toFixed?.(1)},${e[14]?.toFixed?.(1)}) nvert=${o.geometry?.attributes?.position?.count ?? '?'}${vdump}`);
                             }
                         });
                     };
