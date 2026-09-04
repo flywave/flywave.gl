@@ -97,6 +97,20 @@ export class MapViewEnvironment {
         }
         this.updateLights();
         this.m_celestia.update();
+        // §809: mgl-globe camera mode — the engine's scattering atmosphere
+        // (skyMesh/groundMesh, drawn at ro=−MIN/+MAX) paints a bright haze
+        // over the mgl-style globe content (zero-height simple/complex white
+        // band). mgl renders its own atmosphere; disable the engine one while
+        // the mgl globe camera is active, restore otherwise.
+        if (this.m_celestia) {
+            const mv: any = this.m_mapView;
+            const mglGlobe = mv.__mglGlobeCam === true &&
+                mv.projection?.type === ProjectionType.Spherical;
+            const atmo = this.m_celestia.mapViewAtmosphere;
+            if (atmo && atmo.enabled === mglGlobe) {
+                atmo.enabled = !mglGlobe;
+            }
+        }
     }
 
     updateClearColor(clearColor?: string, clearAlpha?: number) {

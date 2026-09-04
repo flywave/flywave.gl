@@ -15,7 +15,8 @@ export class Celestia extends THREE.Object3D {
     private moon: THREE.Object3D;
     private enabled: { sun: boolean; moon: boolean };
     private currentDate: Date;
-    private mapViewAtmosphere: MapViewAtmosphere;
+    // §809: exposed for the mgl-globe parity gate in MapViewEnvironment.
+    mapViewAtmosphere: MapViewAtmosphere;
 
     constructor(mapView: MapView) {
         super();
