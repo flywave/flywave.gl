@@ -59,24 +59,30 @@ export type DEMLayerKind = "base" | "overlay" | "projector";
 
 // Height-map (elevation) texture — vertex displacement + fragment workaround.
 //
-// LOAD-BEARING: every shared texture node below needs its OWN dummy texture
-// instance. TextureNode.getUniformHash() is `this.value.uuid`, and at build
-// time that is the dummy's uuid — two nodes sharing one dummy would hash
-// identically, UniformNode.generate() would merge them into ONE binding, and
-// the later node would sample the earlier node's texture forever (imagery
-// silently sampling the height-map → gray terrain).
+// LOAD-BEARING: every shared texture node needs its OWN dummy texture
+// instance BOTH at module init AND as its per-draw fallback.
+// TextureNode.getUniformHash() is `this.value.uuid`; UniformNode.generate()
+// merges nodes that hash alike into ONE binding. Two paths put two nodes on
+// the same value, and either one silently kills a binding:
+// 1. sharing one dummy instance at module init (fixed below), and
+// 2. the per-draw callbacks collapsing to a SHARED fallback
+//    (`?? emptyOpaqueTex`) whenever tile data has not arrived yet — on a cold
+//    load the FIRST build then hashes nodes identically, the imagery node is
+//    merged into the height-map binding, its own binding never exists, and
+//    every tile draw fails WebGPU validation → whole tiles silently vanish.
 const _heightMapTex = texture(dummyTex(255));
-_heightMapTex.onObjectUpdate(({ object }) => object.heightMapTexture ?? emptyOpaqueTex);
+const _heightMapFallback = dummyTex(255);
+_heightMapTex.onObjectUpdate(({ object }) => object.heightMapTexture ?? _heightMapFallback);
 
 // Ground-modification (brush/excavation) height+mask texture.
 const _modifierTex = texture(dummyTex(255));
-_modifierTex.onObjectUpdate(({ object }) => object.modifierTexture ?? emptyOpaqueTex);
+const _modifierFallback = dummyTex(255);
+_modifierTex.onObjectUpdate(({ object }) => object.modifierTexture ?? _modifierFallback);
 
 // This layer's albedo / decal texture — SHARED node used DIRECTLY in the
-// graph. NEVER re-wrap it as `texture(_layerTex, uv)`: the re-wrap CLONES
-// the node, the clone carries no update callback and the base never enters
-// the build graph, so onObjectUpdate would never fire and the sampled
-// texture stays stuck on the dummy (the "gray satellite" bug).
+// graph. Re-wrapping it as `texture(_layerTex, uv)` clones the node and the
+// clone does not carry this update callback; keep sampling through this node
+// itself (attach uv via `.uvNode`, see below).
 //
 // Load-bearing construction detail: the node is created WITHOUT a uv
 // argument, so `updateMatrix` stays true and TextureNode.setup() ends its
@@ -86,7 +92,8 @@ _modifierTex.onObjectUpdate(({ object }) => object.modifierTexture ?? emptyOpaqu
 // below would never execute. NodeFrame.updateNode() honors updateType at
 // CALL time, not registration time.
 const _layerTex = texture(dummyTex(255));
-_layerTex.onObjectUpdate(({ object }) => object.layerTexture ?? emptyOpaqueTex);
+const _layerFallback = dummyTex(255);
+_layerTex.onObjectUpdate(({ object }) => object.layerTexture ?? _layerFallback);
 
 // Per-mesh plain-value uniforms (resolved per draw call from the mesh).
 const _uvTransform = uniform(new THREE.Vector4(1, 1, 0, 0));
