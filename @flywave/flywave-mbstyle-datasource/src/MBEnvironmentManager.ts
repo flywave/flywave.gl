@@ -1275,6 +1275,7 @@ export class MBEnvironmentManager {
                 uHighColor: { value: new THREE.Vector4(highColor.r, highColor.g, highColor.b, propAlpha(rawHigh)) },
                 uSpaceColor: { value: new THREE.Vector4(spaceColor.r, spaceColor.g, spaceColor.b, propAlpha(rawSpace)) },
                 uBgDisc: { value: this.m_globeBgColor ? 1 : 0 },
+                uDomeDbg: { value: 0 },
                 uBgDiscAlpha: { value: this.m_globeBgAlpha },
                 uBgDiscColor: { value: this.m_globeBgColor ?? new THREE.Color(1, 1, 1) },
             },
@@ -1298,6 +1299,7 @@ export class MBEnvironmentManager {
                 uniform vec4 uSpaceColor;
                 uniform float uBgDisc;
                 uniform float uBgDiscAlpha;
+                uniform float uDomeDbg;
                 uniform vec3 uBgDiscColor;
                 varying vec2 vNdc;
                 #define PI 3.141592653589793
@@ -1307,6 +1309,16 @@ export class MBEnvironmentManager {
                     vec3 closestPoint = globe_pos_dot_dir * dir;
                     float distToCenter = length(closestPoint - uGlobePos);
                     float normDist = distToCenter / uGlobeRadius;
+                    if (uDomeDbg > 0.5) {
+                        float thetaDbg = asin(clamp(distToCenter / length(uGlobePos), -1.0, 1.0));
+                        float haDbg = globe_pos_dot_dir < 0.0
+                            ? 3.14159265 - thetaDbg - uHorizonAngle
+                            : thetaDbg - uHorizonAngle;
+                        haDbg /= 3.14159265;
+                        float tDbg = exp(-haDbg / uFadeout);
+                        gl_FragColor = vec4(clamp(normDist * 0.5, 0.0, 1.0), thetaDbg / 3.14159265, clamp(tDbg, 0.0, 1.0), 1.0);
+                        return;
+                    }
                     if (normDist < 0.98) {
                         // §570b: with a background layer the disc carries the
                         // fogged background (mgl tile-geometry background) —
@@ -1363,6 +1375,7 @@ export class MBEnvironmentManager {
             material.uniforms.uBgDisc.value = this.m_globeBgColor ? 1 : 0;
             material.uniforms.uBgDiscAlpha.value = this.m_globeBgAlpha;
             if (this.m_globeBgColor) material.uniforms.uBgDiscColor.value.copy(this.m_globeBgColor);
+            material.uniforms.uDomeDbg.value = (globalThis as any).__mbDomeDbg ? 1 : 0;
             // §805: one-shot dome-geometry dump (limb y4 vs mgl y210 probe).
             if ((globalThis as any).__mbExtRouteDbg && !(globalThis as any).__mbDomeDumped) {
                 (globalThis as any).__mbDomeDumped = true;

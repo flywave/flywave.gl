@@ -8009,3 +8009,9 @@ dome-geom 探针（extdbg=1，onBeforeRender one-shot）实测 zero-height-clipp
 zero-height-clipping-simple 的 style 实为 **zoom 3.5 / center [−8,−16] / pitch 70**（此前误记 0.9/[0,0]，那是 angle-limit 夹具）。dome-geom/cam-dist 探针读到的 zoomLevel 4.5 = 3.5+1 **完全正确**；放置距离 5.31e6 与 mgl 公式（768×C/(512·2^3.5)×conv(lat−16,t≈0.28)=5.32e6）**逐米吻合**——相机放置无 bug，§806 的"getter 发散 2.6 档"撤回。
 
 **大气背底域现状定论**：相机一致（放置对齐 mgl）前提下，expected 上区（navy→亮弧渐变 + y210-258 弧）与 mgl atmosphere.fragment 的 normDist<0.98 黑分支/辉光环的组合行为，需要在 RenderDoc 级逐帧对拍才能定位（我方 dome 同公式却输出击中白满帧）。本域(各 ~100-126k)挂账：dome shader 逐像素对拍（pix 探针扩展到 dome 的 normDist/ha/t 三通道输出）。
+
+**§807. dome 逐像素探针落地 + 未识别白色覆盖物定性（2026-09-05）**：
+
+domedbg=1（MBSTYLE_DOMEDBG）落地：dome fragment 按 `uDomeDbg` 输出 R=normDist/2、G=θ/π、B=辉光 t 的直通编码。实测 zero-height-clipping-simple：dome 调试色仅在 **y0 一行**（(161,86,40) → normDist≈1.26、t≈0.16，空间区）与**底部带**（蓝=盘内近 limb）可见；**y4–460 的满幅白色由另一个未知物体绘制**——隐藏 background 层（mbhide=background）后该白色依旧 → 排除 background 层。候选：引擎 MapViewAtmosphere skyMesh（球面 R×1.025，mapAnchors ro=−MIN 先画，若 depthWrite/颜色异常则白色满幅）。下一入口：simple 夹具 scene-census + 依次隐藏 skyMesh/dome 二分定位白色物主；白色物定位后，dome 击中域边界校准（limb y4 vs mgl y210 的 ~18°）即可继续。
+
+工具入库：domedbg=1（MBSTYLE_DOMEDBG）、dome-geom 一次性几何 dump、cam-dist 放置后距离跟踪、lookat+stack。

@@ -185,6 +185,12 @@ function discoverTests(): TestEntry[] {
     // §791c: extdbg=1 → extrusion technique-route probe ([MBExtRoute]/[MBExtPatch]).
     const edbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("extdbg="))?.slice("extdbg=".length);
+    // §807: domedbg=1 → dome shader encodes normDist/θ/t into RGB.
+    const ddbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("domedbg="))?.slice("domedbg=".length);
+    if (ddbg === "1") {
+        (globalThis as any).__mbDomeDbg = true;
+    }
     // §791c: extnolight=1 → skip legacy Lambert for zero-height extrusions.
     const enl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("extnolight="))?.slice("extnolight=".length);
