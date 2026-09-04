@@ -8015,3 +8015,9 @@ zero-height-clipping-simple 的 style 实为 **zoom 3.5 / center [−8,−16] / 
 domedbg=1（MBSTYLE_DOMEDBG）落地：dome fragment 按 `uDomeDbg` 输出 R=normDist/2、G=θ/π、B=辉光 t 的直通编码。实测 zero-height-clipping-simple：dome 调试色仅在 **y0 一行**（(161,86,40) → normDist≈1.26、t≈0.16，空间区）与**底部带**（蓝=盘内近 limb）可见；**y4–460 的满幅白色由另一个未知物体绘制**——隐藏 background 层（mbhide=background）后该白色依旧 → 排除 background 层。候选：引擎 MapViewAtmosphere skyMesh（球面 R×1.025，mapAnchors ro=−MIN 先画，若 depthWrite/颜色异常则白色满幅）。下一入口：simple 夹具 scene-census + 依次隐藏 skyMesh/dome 二分定位白色物主；白色物定位后，dome 击中域边界校准（limb y4 vs mgl y210 的 ~18°）即可继续。
 
 工具入库：domedbg=1（MBSTYLE_DOMEDBG）、dome-geom 一次性几何 dump、cam-dist 放置后距离跟踪、lookat+stack。
+
+**§807b. simple 夹具白色覆盖物 census 定性（2026-09-05 终九）**：
+
+scene-census 实测 zero-height-clipping-simple：**11 个 `MeshBasicMaterial #ffffff n=4` quad（bsR=3.54e6/7.08e6/1.42e7 三档）**= 各 LOD 的 background 注入瓦片，其中 bsR=1.42e7（≈2.2R）者顶点明显越出球面（球面顶点包围球不可能 >R）→ **部分背景 quad 未经球面投影/细分，平面直铺越出 limb**，与 dome 辉光带（y0 行）叠加构成上区白色。另有黄色 extrusion 板（n=10, ro=1）、ro=±MAX 双 ShaderMaterial、VIEW far=3.231e7/near=2.34e6/camH=2.579e7（场景单位，与 dome-geom 的 9.23e6 米制存在 ~2.8× 单位差，后续对拍须统一坐标系）。
+
+**修复方向**：① 背景注入 quad 在 Spherical 下必须走 tessellateForSphere（§779 细分覆盖注入路径——疑 decodeInfo.targetProjection 在注入 decode 时未置球面，或部分 LOD 瓦 decode 于投影切换前）；② 越球顶点钳制/剔除（limb culling）。两者落地点均在 MBTileDataEmitter fill 路径与 MBStyleDecoder 注入处。剩余 ~100-126k/夹具预计大头收敛于此。
