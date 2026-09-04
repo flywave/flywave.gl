@@ -8025,3 +8025,11 @@ scene-census 实测 zero-height-clipping-simple：**11 个 `MeshBasicMaterial #f
 **§808. front-cull 实验：无效果；白物候选收敛到引擎 sky/ground 网格（2026-09-05 终十）**：
 
 frontcull=1（globe fill/circle 材质 FrontSide，剔除远侧瓦片）实测 zero-height-clipping-simple 127,875 **分毫不变**——白带非远侧瓦片背面。结合 §807（隐藏 background 层白带依旧），**白色满幅覆盖物（y4–460）既非 background 层、亦非瓦片背面，候选收敛为引擎级网格：MapViewAtmosphere 的 skyMesh/groundMesh（ScatteringShader，白亮散射色，ro=−MIN/+MAX）**。mgl 无此物（mgl 的空间/大气全部走自身 atmosphere quad）。下一入口：定位 MapViewAtmosphere 的实例化与启用条件（globe 是否应禁用其 ground/scattering 网格，或改用 mgl 等效的天空绘制），白色物主确认后 zero-height simple/complex、大气背底域大头（各 ~100-126k）预期收敛。frontcull/domedbg 探针保留入库。
+
+**§809. 引擎大气禁用实验：零效果；大气背底域转为屏幕空间射线对拍立案（2026-09-05 终十一）**：
+
+MapViewEnvironment.update() 增加 mgl-globe 门：`__mglGlobeCam && Spherical` 时 `celestia.mapViewAtmosphere.enabled = false`（引擎 scattering sky/ground 网格移除），否则恢复。实测 zero-height-clipping-simple **125,982 分毫不变**——sky/ground 网格非白带物主（或未激活）。至此背景层/远侧瓦/引擎大气候选全部排除。
+
+**域现状（如实）**：相机放置与 mgl 逐米一致（zoom4.5/pitch70/dist5.31e6）；dome-geom 值正常（R=6.37e6/d=9.23e6/horizon 43.65°）；几何推演 limb 应在画面外下方（全帧盘内）→ dome 击中白铺满"正确"，但 **expected 同相机几何下上区却是 navy 渐变+亮弧**——说明 mgl 的实际渲染相机/投影与我们的帧几何仍有未定位的屏幕空间差异（mgl transform 的 globe 矩阵链 vs flywave RTE+lookAt），非单一 uniform 可修。下一入口：mgl `_calcMatrices`/globeMatrix 与我方 lookAtImpl 的屏幕空间射线对拍（同一相机参数下逐像素反投影对比），或以 mgl expected 为基准做 dome 击中域边界的经验校准（把 uHorizonAngle 加 offset 使渐变带落位 y210-258）。
+
+**已入库**：引擎大气 mgl-globe 禁用门（MapViewEnvironment，语义正确保留）、domedbg/frontcull/cam-dist/lookat+stack/dome-geom 探针族。
