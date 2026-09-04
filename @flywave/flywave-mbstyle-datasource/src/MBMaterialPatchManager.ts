@@ -3542,6 +3542,43 @@ export class MBMaterialPatchManager {
         const camera = mapView?.camera as THREE.PerspectiveCamera | undefined;
         const bearingRad = ((mapView?.heading ?? 0) * Math.PI) / 180;
         let lightDirWorld = (lightState?.dir ?? new THREE.Vector3(0.2875, -0.498, 0.996)).clone();
+        // §791: on the sphere projection the mgl legacy light is VIEWPORT-
+        // anchored — its up-component (cos(polar) = 0.866) is measured against
+        // the LOCAL up at the map center, so the roof-face NdotL ≈ 0.87
+        // everywhere on the globe. Our previous WORLD-frame z-up default
+        // ([0.2875, −0.498, 0.996] points at lat ~60N) sits nearly parallel
+        // to the local horizon in the southern hemisphere: at lat −16 the
+        // roof NdotL ≈ 0.066 → every zero-height/symbol-z-offset extrusion
+        // sheet rendered at 0.27× its paint color (~750k across the family).
+        // Re-express the light in the ENU frame at the map center.
+        if ((this.m_dataSource as any).mapView?.projection?.type === 1) {
+            try {
+                const gc = (mapView as any).center.geoCenter;
+                const φ = (gc.latitude * Math.PI) / 180;
+                const λ = (gc.longitude * Math.PI) / 180;
+                const E = new THREE.Vector3(-Math.sin(λ), Math.cos(λ), 0);
+                const N = new THREE.Vector3(
+                    -Math.sin(φ) * Math.cos(λ),
+                    -Math.sin(φ) * Math.sin(λ),
+                    Math.cos(φ)
+                );
+                const U = new THREE.Vector3(
+                    Math.cos(φ) * Math.cos(λ),
+                    Math.cos(φ) * Math.sin(λ),
+                    Math.sin(φ)
+                );
+                // mgl legacy light position [r, azimuthal 210°, polar 30°]:
+                // the local dir = (sin(polar)·sin(az), sin(polar)·cos(az),
+                // cos(polar)) in (east, north, up).
+                const azRad = (210 * Math.PI) / 180;
+                const pRad = (30 * Math.PI) / 180;
+                lightDirWorld = new THREE.Vector3()
+                    .addScaledVector(E, Math.sin(pRad) * Math.sin(azRad))
+                    .addScaledVector(N, Math.sin(pRad) * Math.cos(azRad))
+                    .addScaledVector(U, Math.cos(pRad))
+                    .normalize();
+            } catch { /* fall through to the world-frame default */ }
+        }
         if (bearingRad !== 0) {
             lightDirWorld.applyAxisAngle(new THREE.Vector3(0, 0, 1), -bearingRad);
         }
