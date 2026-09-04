@@ -7963,3 +7963,9 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 假设 §790"原色直出"适用于全部挤出 → 实验旗 `extnolightglobe=1`（globe 上全部跳过 legacy Lambert）实测：symbol-z-offset-map-aligned **10,538→102,958（+92k 恶化）**、zoom-in 150,846→152,906、default 23,203。结论：**symbol-z-offset 家族的 expected 是带光照的**（墙体明暗可见）——legacy Lambert 在 height>0 的 globe 挤出上是正确且必要的，§792 的 height==0 豁免恰好划对边界（薄片在 mgl 的"无光照"观感来自屋顶 NdotL≈0.87 → 因子 0.93 近满亮，而非无光照路径）。已回退实验旗，零代码变更。
 
 **symbol-z-offset 残差（150,846+99,961+70,948+10,538 ≈ 332k）重定性**：非光照域——现状图 vs expected 显示①整体色偏/压暗集中于特定板块（US 板暗灰 vs 亮橙，疑似 data-driven fill 颜色或光照因子按朝向发散）；②顶部垂直条纹伪影（墙体拉伸）；③map-aligned 符号锚定。下一入口：symbol-z-offset-map-aligned 的 data-driven 颜色/高度逐要素对拍（decodedbg 顶点转储 + partHist 探针）。
+
+**§800. symbol-z-offset 屋顶常量 NdotL 实验：证伪回退 + 巨板墙体域定性（2026-09-05 终三）**：
+
+假设 §799"色偏=屋顶 NdotL 随距离发散"→ 实验（extrusionAxis.w 平顶判别 + 屋顶常量 NdotL=cos(polar)=0.866、globe 跳过世界帧梯度分支）实测 symbol-z-offset-zoom-in 150,846→**154,560（+3.7k 略恶化）**，已回退。
+
+**逐像素对拍新事实**：zoom-in 夹具（z2.22/pitch30，color_group→hsl 色、高度 3000km→300km 巨板）的暗色大区不是屋顶而是**巨板的南向墙体**（相机从墨西哥南望，三板 >300km 高，视野大部分是 US 板南墙）——expected 该墙亮橙（mgl legacy 光 azimuthal 210°=南西向，南墙 NdotL 高），我方近黑（墙体导线法线 × 中心 ENU 光的 NdotL≈0）。**根因假设收敛到墙体法线帧或光向**：mgl 墙法线在瓦片本地帧恒为水平方位角，光照结果与板块位置无关；我方 ECEF 导线法线 × 中心 ENU 光向在远离中心的板块上失效。下一入口：墙体 NdotL 改瓦片本地方位角帧（需要 tile→light 的方位角 uniform，每瓦一个，由 patcher 按 tileKey 计算），或直接用 extrusionAxis 墙体拉伸方向在 fragment 重建水平法线。
