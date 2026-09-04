@@ -8055,3 +8055,9 @@ hideq 逐档实验（z0 bsR>1e7 / z1 5-10e6 / z2 <5e6 三档白色 n=4 quad 依�
 mgl 源码事实链：fog 创建 gated on stylesheet.fog（style.ts:1082）；无 fog → 无 FOG define（瓦片不雾化）、无 atmosphere glow（painter.ts:1307 gate）、clear=transparent。但 zero-height-clipping-simple expected 上区存在 **navy(13,29,58)→白 渐变**——该 navy 来源无法由 vendored mgl 源码直接解释。候选：① expected 生成版本的 mgl 对 globe 无 fog 样式仍以默认 fog（color 白/space #010b19/range [2,4.5]）渲染（fog 自动创建或 globe 特例）；② mgl 地球基座网格（uncovered 区的深蓝基座）+ 大气辉光的组合。expected 渐变形态（远处深蓝→近处白）与"默认 fog 雾化远瓦"高度吻合。
 
 **实验方向（下一轮首个实验）**：globe && 样式无 fog 键 && 有 background 层 → 我方按 mgl 默认 fog 参数（space #010b19→#367ab9 插值、range globeFixed [2,4.5]、color 白）启用 globe fog/dome 管线（即 §782 的白 clear 特例收窄为"无背景层的 bare 帧"）。预期 zero-height simple/complex 上区渐变带（~200k）收敛；collision/show-unsupported 等 bare 帧保持白不回归。
+
+**§812b. default-fog 实验无效与域状态定论（2026-09-05 终十三）**：
+
+effectiveFogSpec（无 fog 键 + 有背景层 → mgl 默认 fog 参数）落地三调用点，tsc 绿——但 zero-height-clipping-simple **125,982 分毫不变**：该夹具**本身带 fog 键**（{star-intensity:0}），实验未命中新路径（对真正无 fog 键的 globe 背景夹具仍是正确的 mgl 对齐改进，保留）。globe-default 哨兵 2,707 持平、mercator collision 分类批测无回归。
+
+**域定论（几何闭卷）**：zoom3.5/pitch70/dist5.31e6 的相机下，地平线 dip=38.9°、axis 高于水平 20° → limb 在轴下 ~59°（画面外 y≈1500）——**mgl expected 的 y210-258 弧不可能是几何 limb**；同帧 fogT 上限 ~0.28（不足 0.9 剔除阈值）→ 渐变也非 fog 剔除边界。mgl expected 上区 navy 渐变+亮弧的真实生成机制需要 mgl 实际运行对拍（怀疑：生成 expected 的 mgl 版本的 globe 相机 pitch/高度语义与 vendored 源码存在版本差，或 tile-fog 之外的专用绘制）。我方当前帧（dome 击中白铺满）在"全帧盘内"几何下是自洽的。本域从"可修 bug"降级为"mgl 渲染行为对拍研究"，需 mgl 本地渲染环境支持。

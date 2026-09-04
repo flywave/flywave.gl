@@ -4,6 +4,24 @@ import {
     Theme,
 } from '@flywave/flywave-datasource-protocol';
 import { TileKey, webMercatorTilingScheme, sphereProjection, mercatorProjection, ProjectionType } from '@flywave/flywave-geoutils';
+import { FogSpec } from './MBStyleSpec';
+
+/**
+ * §812: mgl default fog parameters (style-spec v8 fog defaults). Globe
+ * fixtures WITH a background layer but WITHOUT a fog key render the
+ * default-fog atmosphere gradient in mgl expected frames (navy space
+ * gradient over fogged white tiles) — apply these when style.fog is
+ * absent so the globe fog/dome pipeline engages for content-bearing
+ * styles; bare frames keep §782's white clear.
+ */
+const MGL_DEFAULT_FOG_SPEC: any = {
+    'color': '#ffffff',
+    'high-color': '#245cdf',
+    'space-color': ['interpolate', ['linear'], ['zoom'], 4, '#010b19', 7, '#367ab9'],
+    'horizon-blend': ['interpolate', ['linear'], ['zoom'], 4, 0.2, 7, 0.1],
+    'star-intensity': ['interpolate', ['linear'], ['zoom'], 5, 0.35, 6, 0],
+    'range': [0.5, 10]
+};
 import { Tile } from '@flywave/flywave-mapview';
 import { MapViewEventNames } from '@flywave/flywave-mapview';
 import {
@@ -2326,7 +2344,7 @@ export class MBStyleDataSource extends TileDataSource {
                 MBAtmosphereRenderer.contentStandDown =
                     this.styleHasContentLayers(style) && hasGeojsonContent;
             } catch {}
-            this.m_environment.applyFog(style.fog, style.zoom ?? 0);
+            this.m_environment.applyFog(this.effectiveFogSpec(style), style.zoom ?? 0);
             // §782/§785: re-apply the background AFTER applyFog. Fog-less
             // globe styles skip the atmosphere entirely (mgl painter gate on
             // style.fog) and need the flat background clear restored. Fog-ful
@@ -3979,7 +3997,7 @@ export class MBStyleDataSource extends TileDataSource {
             try {
                 this.m_environment.applyLights(style?.lights, style?.light);
                 this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style), this.styleHasContentLayers(style));
-                this.m_environment.applyFog(style?.fog, style?.zoom ?? 0);
+                this.m_environment.applyFog(this.effectiveFogSpec(style), style?.zoom ?? 0);
                 // Re-run applySky ONLY when a scoped theme actually exists —
                 // re-applying an (absent) sky on every theme propagation
                 // replaces the fog-driven atmosphere dome and regressed the
@@ -4677,7 +4695,7 @@ export class MBStyleDataSource extends TileDataSource {
             this.m_environment.applyLights((style as any).lights ?? (style as any).light ? [(style as any).light] : undefined);
             this.applyBackgroundColor(style);
             this.m_environment.setStyleHasBackground(this.styleHasBackgroundLayer(style), this.styleHasContentLayers(style));
-            this.m_environment.applyFog(style.fog, style.zoom ?? 0);
+            this.m_environment.applyFog(this.effectiveFogSpec(style), style.zoom ?? 0);
             // §782/§785: mirror of the connect-path re-apply (see above).
             this.applyBackgroundColor(style);
             this.m_environment.applySky(
@@ -5102,6 +5120,17 @@ export class MBStyleDataSource extends TileDataSource {
             this.mapView.projection?.type === 1 /* ProjectionType.Spherical */;
         this.applyCameraSettings(style);
         this.pushMapboxZoom();
+    }
+
+    /**
+     * §812: effective fog spec — style fog, or the mgl default-fog
+     * parameters for globe styles carrying a background layer.
+     */
+    private effectiveFogSpec(style: any): FogSpec | undefined {
+        if (style.fog) return style.fog;
+        const hasBg = (style.layers ?? []).some((l: any) => l.type === 'background' &&
+            ((l.layout as any)?.visibility ?? 'visible') !== 'none');
+        return hasBg ? { ...(MGL_DEFAULT_FOG_SPEC as any) } : undefined;
     }
 
     /**
