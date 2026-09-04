@@ -7985,3 +7985,9 @@ mgl 源码实锤：fill_extrusion.fragment 的**全部光照代码都在 `#ifdef
 VIEW 探针（scene-census 扩展：m_viewRanges + DataSource.maxGeometryHeight）实测 symbol-z-offset-zoom-in：**far=1.333e7 / near=1.526e4 / 相机距球心 1.485e7 / maxGeomDS=3e6（上报正确）**。三重裁剪问题实锤：① far 不足——相机到远侧板顶 ≈2.1e7 > 1.333e7，远侧几何被远平面削除；② near 过大——15km 近平面削掉近旁掠过的巨板墙体（画面上部垂直条纹伪影来源）；③ far/near≈87 万 → 深度精度崩坏，板墙/板顶 z-fighting（暗色错片获胜）。MapView.updateCameras 的 maxGeometryHeightScaled 链路本身工作（DS 上报 3e6 已进 far 计算），但 ClipPlanesEvaluator 对 3000km 级 extrusion 的 near/far 分配不匹配。
 
 **下一入口**：ClipPlanesEvaluator（globe 分支）巨高度标定——near 随最近内容距离收紧（mgl near≈相机高度分数级），far 用 farthestPixelDistanceOnPlane + maxGeometryHeight 全半径外推；同时评估 logarithmic depth（mgl globe 渲染配套）解决深度精度。挂账夹具：symbol-z-offset ×4（~332k）+ fill-extrusion/default + vertical_gradient。
+
+**§804. far 平面余量实验：证伪回退 + symbol-z-offset 定论（2026-09-05 终七）**：
+
+实现 §802 立案（球面 far 计算加 2×maxElevation 余量 + constraints 不把球面 far 钳回 farMax）实测：**map-aligned 10,538→102,515（+92k 暴涨）**、zoom-in 150,846→152,950、padded-dem/high-exaggeration 持平。已回退。
+
+**定论（三重实验闭环）**：①远侧几何原本被 far 裁掉是**正确行为**——放出来渲染成暗块反而恶化，说明暗块就是板体自身渲染结果（与 §801"非着色域"结论合并修正：暗化与光照路径无关，但也不是裁剪问题）；②symbol-z-offset 家族 (~332k) 的真实残差 = **mgl globe_raster_program 球面垂披管线与我们瓦片管线的系统性差异**（3000km 巨板跨瓦片渲染、深宽比、背面剔除的综合），与 globe-terrain(153k)/imports(242k) 同属"球面垂披"大域，等待 §798 定义的引擎级实现，patcher/evaluator 层已无可摘果实。本域关闭。
