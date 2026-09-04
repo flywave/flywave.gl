@@ -7945,3 +7945,9 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 **回测**：globe-terrain 153,037 分毫不变（零回归；该夹具主残差不在 hillshade 数据，见下）。fallback 语义与 §794 raster 回退一致，待 hillshade 实际 404 的夹具受益。
 
 **新域取证：globe-terrain 黑白倒置（153,037 残差主体）**：expected=黑色空间（上）+白色地形晕渲（下，pitch 70 望向远方）；我方=白色（上）+黑色（下）+顶部一条地形带——**上下倒置**。MBCapCtx 探针 px=(0,0,0)。注意本夹具无 fog 键（§782 门 → 白 clear，天空白是对的），但地面侧全黑（background 白层未画到球面？）且地形带位置在画面上缘而非下缘——疑似 globe pitch-70 相机放置（§781 谱系）或 background 球面绘制域。下一入口：①globe pitch-70 相机地平线方向取证（对拍 camera 距离/俯仰）；②background 层在无 fog globe 夹具的球面绘制。
+
+**§797b. globe-terrain 倒置域取证修正（mgl 源码对读，2026-09-05 续三）**：
+
+相机探针（mbcam）实证我方 globe pitch-70 相机几何完全正确（高度≈47.8 万米=d·cos70、倾角 70°、朝向地平线）——**倒置不是相机俯仰反向**，而是颜色/内容域问题：① mgl `painter.ts:1254` clear 逻辑：无 fog 键 → `Color.transparent`（合成白），有 fog → space-color；globe-terrain expected 的黑色上区因此**不是太空**——② mgl terrain-on-globe 走 `globe_raster_program`（u_globe_matrix/u_globe_pos/u_globe_radius，globe_raster_program.ts）把 raster/hillshade 瓦片直接铺上**全球球面网格**（GLOBE_VERTEX_GRID_SIZE，image_source.ts 消费），未覆盖区域呈网格底色（黑）——expected 黑区即未覆盖球面网格，白色区为 hillshade 晕渲。我方现状：§796 跳过 terrain 后球面无内容 → 白 clear 露出（上白），background 白层未画到的近地区域黑（下黑），顺序恰反。
+
+**实现方向（替代 §796 的"干净跳过"终态）**：sphere-framed terrain——①全球球面网格（或按瓦片球面细分 quad，复用 §779 tessellateForSphere）+ DEM 径向抬升；②uncovered 底色=黑（或 fog space-color）；③hillshade/raster 经球面 UV 采样。届时 §796 的跳过门替换为该路径。globe-terrain(153k)/imports/globe-terrain(242k)/line-placement-terrain(23k) 三域届时一并处理。
