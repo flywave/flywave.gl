@@ -1523,6 +1523,16 @@ export class MBMaterialPatchManager {
         }
 
         const techName = technique.name;
+        // §808: on the sphere, far-side tiles project into the upper frame
+        // above the limb; with DoubleSide fills they paint over the dome
+        // glow (white band, zero-height simple/complex). mgl culls globe
+        // tile back faces (CullFace.backCW). FrontSide keeps near-side
+        // fills intact and culls the far side.
+        if ((globalThis as any).__mbFrontCull &&
+            (this.m_dataSource as any).mapView?.projection?.type === 1 &&
+            (techName === 'fill' || techName === 'circles')) {
+            (material as any).side = THREE.FrontSide;
+        }
         const paint = technique._paint ?? {};
         const layout = technique._layout ?? {};
         // §244: injected background tiles use the exact mgl fog formula.

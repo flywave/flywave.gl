@@ -8021,3 +8021,7 @@ domedbg=1（MBSTYLE_DOMEDBG）落地：dome fragment 按 `uDomeDbg` 输出 R=nor
 scene-census 实测 zero-height-clipping-simple：**11 个 `MeshBasicMaterial #ffffff n=4` quad（bsR=3.54e6/7.08e6/1.42e7 三档）**= 各 LOD 的 background 注入瓦片，其中 bsR=1.42e7（≈2.2R）者顶点明显越出球面（球面顶点包围球不可能 >R）→ **部分背景 quad 未经球面投影/细分，平面直铺越出 limb**，与 dome 辉光带（y0 行）叠加构成上区白色。另有黄色 extrusion 板（n=10, ro=1）、ro=±MAX 双 ShaderMaterial、VIEW far=3.231e7/near=2.34e6/camH=2.579e7（场景单位，与 dome-geom 的 9.23e6 米制存在 ~2.8× 单位差，后续对拍须统一坐标系）。
 
 **修复方向**：① 背景注入 quad 在 Spherical 下必须走 tessellateForSphere（§779 细分覆盖注入路径——疑 decodeInfo.targetProjection 在注入 decode 时未置球面，或部分 LOD 瓦 decode 于投影切换前）；② 越球顶点钳制/剔除（limb culling）。两者落地点均在 MBTileDataEmitter fill 路径与 MBStyleDecoder 注入处。剩余 ~100-126k/夹具预计大头收敛于此。
+
+**§808. front-cull 实验：无效果；白物候选收敛到引擎 sky/ground 网格（2026-09-05 终十）**：
+
+frontcull=1（globe fill/circle 材质 FrontSide，剔除远侧瓦片）实测 zero-height-clipping-simple 127,875 **分毫不变**——白带非远侧瓦片背面。结合 §807（隐藏 background 层白带依旧），**白色满幅覆盖物（y4–460）既非 background 层、亦非瓦片背面，候选收敛为引擎级网格：MapViewAtmosphere 的 skyMesh/groundMesh（ScatteringShader，白亮散射色，ro=−MIN/+MAX）**。mgl 无此物（mgl 的空间/大气全部走自身 atmosphere quad）。下一入口：定位 MapViewAtmosphere 的实例化与启用条件（globe 是否应禁用其 ground/scattering 网格，或改用 mgl 等效的天空绘制），白色物主确认后 zero-height simple/complex、大气背底域大头（各 ~100-126k）预期收敛。frontcull/domedbg 探针保留入库。

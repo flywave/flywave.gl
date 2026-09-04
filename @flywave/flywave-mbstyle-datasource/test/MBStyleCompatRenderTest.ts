@@ -185,6 +185,12 @@ function discoverTests(): TestEntry[] {
     // §791c: extdbg=1 → extrusion technique-route probe ([MBExtRoute]/[MBExtPatch]).
     const edbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("extdbg="))?.slice("extdbg=".length);
+    // §808: frontcull=1 → FrontSide on globe fill/circle tiles (far-side cull).
+    const fc = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("frontcull="))?.slice("frontcull=".length);
+    if (fc === "1") {
+        (globalThis as any).__mbFrontCull = true;
+    }
     // §807: domedbg=1 → dome shader encodes normDist/θ/t into RGB.
     const ddbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("domedbg="))?.slice("domedbg=".length);
