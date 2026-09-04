@@ -7969,3 +7969,7 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 假设 §799"色偏=屋顶 NdotL 随距离发散"→ 实验（extrusionAxis.w 平顶判别 + 屋顶常量 NdotL=cos(polar)=0.866、globe 跳过世界帧梯度分支）实测 symbol-z-offset-zoom-in 150,846→**154,560（+3.7k 略恶化）**，已回退。
 
 **逐像素对拍新事实**：zoom-in 夹具（z2.22/pitch30，color_group→hsl 色、高度 3000km→300km 巨板）的暗色大区不是屋顶而是**巨板的南向墙体**（相机从墨西哥南望，三板 >300km 高，视野大部分是 US 板南墙）——expected 该墙亮橙（mgl legacy 光 azimuthal 210°=南西向，南墙 NdotL 高），我方近黑（墙体导线法线 × 中心 ENU 光的 NdotL≈0）。**根因假设收敛到墙体法线帧或光向**：mgl 墙法线在瓦片本地帧恒为水平方位角，光照结果与板块位置无关；我方 ECEF 导线法线 × 中心 ENU 光向在远离中心的板块上失效。下一入口：墙体 NdotL 改瓦片本地方位角帧（需要 tile→light 的方位角 uniform，每瓦一个，由 patcher 按 tileKey 计算），或直接用 extrusionAxis 墙体拉伸方向在 fragment 重建水平法线。
+
+**§800b. symbol-z-offset 量化对拍（2026-09-05 终四）**：
+
+逐点采样（US 板/墨西哥/加拿大/天区）：我方/expected 亮度比 **0.05–0.57**，且随位置/要素发散——超出 Lambert mix≥0.5 的可达范围，说明除光照帧外还有**第二重压暗**（疑：瓦片本地帧实验中未初始化 varying→NaN 的教训已修，但基线态的暗化仍无法由 mix(0.5,1,NdotL) 解释）。mgl 侧 US 墙色 (194,136,80) vs #f38953=(243,137,83)：G/B≈1.0、R≈0.8——**色相偏移而非亮度缩放**，提示 expected 墙体颜色掺入了光色/不同 stop 的混合，或 mgl 的 wall 光照乘法在色相上作用。瓦片本地帧实验（vMBLocalPos 导线法线 + 本地光向，修正未初始化 anchor 后）151,172 vs 150,846 基本中性——**NdotL 帧不是残差主因**，实验未入库。下一入口：①对拍 mgl fill_extrusion.fragment 的 wall 光照精确公式（light-color 混合 vs 亮度缩放）；②opacity 0.9 的合成路径（0.9×color+0.1×?）逐通道验证。
