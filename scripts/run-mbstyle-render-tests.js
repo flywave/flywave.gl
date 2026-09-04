@@ -119,6 +119,7 @@ function main() {
             ...(process.env.MBSTYLE_EXTNOLIGHT ? ["extnolight=1"] : []),
             ...(process.env.MBSTYLE_TERRHIDE ? ["terhide=1"] : []),
             ...(process.env.MBSTYLE_DOMEDBG ? ["domedbg=1"] : []),
+            ...(process.env.MBSTYLE_HIDEQ ? [`hideq=${process.env.MBSTYLE_HIDEQ}`] : []),
             ...(process.env.MBSTYLE_FRONTCULL ? ["frontcull=1"] : []),
             ...(process.env.MBSTYLE_EXTNOLUT ? ["extnolut=1"] : []),
             ...(process.env.MBSTYLE_SHADOWDISABLE ? ["shadowdisable=1"] : [])];

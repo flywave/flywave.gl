@@ -191,6 +191,12 @@ function discoverTests(): TestEntry[] {
     if (fc === "1") {
         (globalThis as any).__mbFrontCull = true;
     }
+    // §811: hideq=<z0|z1|z2|all> → hide white n=4 background quads by LOD band.
+    const hq = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("hideq="))?.slice("hideq=".length);
+    if (hq) {
+        (globalThis as any).__mbHideQuad = hq;
+    }
     // §807: domedbg=1 → dome shader encodes normDist/θ/t into RGB.
     const ddbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("domedbg="))?.slice("domedbg=".length);
@@ -365,7 +371,22 @@ async function renderUntilSettled(
         // populate early, but the engine uploads geometry on a per-frame
         // quota — scene attachment is the signal that content is drawable.
         let count = 0;
-        (mapView as any).scene?.traverse?.((o: any) => { if (o.isMesh) count++; });
+        const hq = (globalThis as any).__mbHideQuad;
+        (mapView as any).scene?.traverse?.((o: any) => {
+            if (!o.isMesh) return;
+            count++;
+            if (!hq) return;
+            const mat: any = Array.isArray(o.material) ? o.material[0] : o.material;
+            const g = o.geometry;
+            const n = g?.attributes?.position?.count ?? 0;
+            if (mat?.type === "MeshBasicMaterial" && n === 4 &&
+                !mat.map && (!mat.color || mat.color.getHexString() === "ffffff")) {
+                g.computeBoundingSphere?.();
+                const bsR = g.boundingSphere?.radius ?? 0;
+                const band = bsR > 1e7 ? "z0" : bsR > 5e6 ? "z1" : "z2";
+                if (hq === "all" || hq === band) o.visible = false;
+            }
+        });
         // §795 scene census: what meshes exist, their materials/colors/bounds.
         if ((globalThis as any).__mbExtRouteDbg && count > 0
             && !(globalThis as any).__mbCensusDone) {
