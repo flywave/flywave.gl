@@ -7951,3 +7951,9 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 相机探针（mbcam）实证我方 globe pitch-70 相机几何完全正确（高度≈47.8 万米=d·cos70、倾角 70°、朝向地平线）——**倒置不是相机俯仰反向**，而是颜色/内容域问题：① mgl `painter.ts:1254` clear 逻辑：无 fog 键 → `Color.transparent`（合成白），有 fog → space-color；globe-terrain expected 的黑色上区因此**不是太空**——② mgl terrain-on-globe 走 `globe_raster_program`（u_globe_matrix/u_globe_pos/u_globe_radius，globe_raster_program.ts）把 raster/hillshade 瓦片直接铺上**全球球面网格**（GLOBE_VERTEX_GRID_SIZE，image_source.ts 消费），未覆盖区域呈网格底色（黑）——expected 黑区即未覆盖球面网格，白色区为 hillshade 晕渲。我方现状：§796 跳过 terrain 后球面无内容 → 白 clear 露出（上白），background 白层未画到的近地区域黑（下黑），顺序恰反。
 
 **实现方向（替代 §796 的"干净跳过"终态）**：sphere-framed terrain——①全球球面网格（或按瓦片球面细分 quad，复用 §779 tessellateForSphere）+ DEM 径向抬升；②uncovered 底色=黑（或 fog space-color）；③hillshade/raster 经球面 UV 采样。届时 §796 的跳过门替换为该路径。globe-terrain(153k)/imports/globe-terrain(242k)/line-placement-terrain(23k) 三域届时一并处理。
+
+**§798. dome 击中黑底实验证伪 + globe terrain 垂披语义定论（2026-09-05 终）**：
+
+实验：dome 击中分支按 style.terrain 存在选择黑底（模拟 mgl 未覆盖球面网格底色）——globe-terrain 153,037 **bit 级不变**，证伪：白区不是 dome 而是 **background 层 quad 铺满全球**（本夹具有 background white 层；mgl 侧同区域黑 = terrain 模式下瓦片改道 RTT 垂披 framebuffer，未覆盖区为 RTT 黑 clear，background 也只画进 RTT 被垂披，不再裸铺球面）。已回退 dome 改动（无死代码）。
+
+**定论**：globe+terrain 的对齐必须实现 mgl `globe_raster_program` 语义——①瓦片（含 background）经 `u_globe_matrix` 球面网格垂披渲染；②未覆盖区=RTT 黑底；③DEM 抬升在同一网格。这是引擎级工程（等效 mgl DrapeRenderMode.elevated 的球面版），非 patcher 层可修，单独立项。§796 的跳过门保持为当前最优近似（high-exaggeration 10.7k/north-pole-padded-dem 5.1k），globe-terrain(153k)/imports(242k) 挂账等待该实现。
