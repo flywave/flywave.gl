@@ -1269,6 +1269,7 @@ export class MBEnvironmentManager {
                 uBgDisc: { value: this.m_globeBgColor ? 1 : 0 },
                 uBgDiscAlpha: { value: this.m_globeBgAlpha },
                 uBgDiscColor: { value: this.m_globeBgColor ?? new THREE.Color(1, 1, 1) },
+                uBgFogRange: { value: (THREE.UniformsLib.fog as any).fogGlobeRange.value },
             },
             vertexShader: `
                 varying vec2 vNdc;
@@ -1291,6 +1292,7 @@ export class MBEnvironmentManager {
                 uniform float uBgDisc;
                 uniform float uBgDiscAlpha;
                 uniform vec3 uBgDiscColor;
+                uniform vec2 uBgFogRange;
                 varying vec2 vNdc;
                 #define PI 3.141592653589793
                 void main() {
@@ -1304,15 +1306,31 @@ export class MBEnvironmentManager {
                         // fogged background (mgl tile-geometry background) —
                         // approximate with the globe fog ramp.
                         if (uBgDisc > 0.5) {
-                            // §570b: mgl paints the disc with the (lightly
-                            // fogged) background tile geometry — measured
-                            // essentially the flat background color, with a
-                            // limb blend into the atmosphere ramp.
-                            vec3 c0i = mix(uBgDiscColor.rgb, uSpaceColor.rgb,
-                                           smoothstep(0.975, 1.0, normDist));
+                            // §570b: mgl paints the disc with the background
+                            // tile geometry FOGGED like any content (§780
+                            // fit: (175,140,98) = 0.5·dark_sat +
+                            // 0.5·fogged_darkorange) — apply the same
+                            // glow-ramp fog the fog_fragment globe branch
+                            // uses, then the limb blend into the atmosphere
+                            // ramp.
+                            float mbGlow = normDist + 1.5707963;
+                            float mbT = (mbGlow - uBgFogRange.x) /
+                                max(uBgFogRange.y - uBgFogRange.x, 0.001);
+                            float mbFall = 1.0 - min(1.0, exp(-6.0 * mbT));
+                            mbFall = mbFall * mbFall * mbFall;
+                            float mbFog = uFogColor.a * min(1.0, 1.00747 * mbFall);
+                            vec3 c0i = mix(uBgDiscColor.rgb, uFogColor.rgb, mbFog);
+                            c0i = mix(c0i, uSpaceColor.rgb,
+                                      smoothstep(0.975, 1.0, normDist));
                             gl_FragColor = vec4(c0i, uBgDiscAlpha);
                         } else {
-                            gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+                            // §784: mgl NATIVE parity branch —
+                            // "render test parity since white canvas is
+                            // assumed": hit-globe pixels with no content
+                            // render WHITE (an empty disc composites to
+                            // white; the space clear showed as a dark disc
+                            // and broke the fill-pattern family, 390k).
+                            gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
                         }
                         return;
                     }
