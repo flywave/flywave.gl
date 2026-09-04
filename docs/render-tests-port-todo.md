@@ -7861,3 +7861,11 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 **globe/ 族剩余（§783 末）**：set-style 纹理域（circle/change-projection/set-style 213,545 + symbols/set-style 23,177 + albers/raster 63k×2 + unset-terrain/with-diff 40k×2 ≈ 460k）；挤出域（symbol-z-offset-zoom-in 150,524/labeling 160,776、zero-height 141,421/105,202 ≈ 460k）；poles 精标定（north 59,684/south 41,893/images 75k/65k/67k ≈ 300k）；heatmap 族（near-transition 230,543 头部 + 12-33k 尾部 ≈ 370k）；geojson/clustered 168,137（点三重绘制嫌疑——clustered 分支 getTile 返回原始数据不过滤，与 §783 同源）；fill-pattern/3x 390k（§780 zoom 副作用域）。
 
 **§783b. 聚类源瓦片去重（语义对齐，168,137 域另案）**：clustered 分支的 getTile（含 zoom≥clusterMaxZoom 的原始回退）补 filterFeaturesToTile 逐瓦片点去重——聚类锚定质心、只属于拥有它的瓦片（mgl 逐瓦片重算聚类的近似）。实测 globe-geojson/clustered 168,136 持平：该夹具残差是聚类圆渲染本身（计数/半径/位置域），非点重复；去重语义保留。
+
+**§784. 域 B 续：globe 大气击中像素 NATIVE 白盘（fill-pattern −97%、clustered −88%、video −59%；poles 系 +303k 交互退化如实入账，2026-09-04 续三）**：
+
+**mgl atmosphere.fragment.glsl 的 NATIVE 分支注释自证**："render test parity since white canvas is assumed"——击中球体（normDist<0.98）且无内容的像素，JS 版写 (0,0,0,0) 透明（合成白底），NATIVE 版直接写 vec4(1,1,1,1) 白。我方 dome 的击中分支此前写 (0,0,0,0)，让 spaceColor 的 clearColor 透出 = 无内容球盘呈深蓝底，而 mgl 参照合成是白底。
+
+**修复**：dome 击中无内容分支改写 vec4(1,1,1,1)（白盘），clearColor 维持 spaceColor（天空辉光不变——白底实验实测天空全面变亮、globe-default 1,504→181k/transforms→211k/poles→178k，已回退）。
+
+**回测（净 −366k，逐夹具如实）**：fill-pattern/3x **390,391→12,983（−97%，diff 图证实图案相位已对、余为盘底与辉光标定）**、video 241,928→**98,756（−59%）**、geojson/clustered **168,136→19,810（−88%）**；零扰动：transforms 85,068、heatmap/default 24,235、horizon 216,482、padding 221,119、circle/default 7,021、symbol-z-offset-zoom-in(+labeling)、zero-height、near-transition、albers/raster、ocean/tile-edges PASS 维持。**退化（如实）**：poles 全族 +281k（north 59,684→110,663、south→110,041、images→130,575/133,347/121,760——高 pitch 瓦片覆盖缺口处白底露出，此前 space 底"遮丑"更接近 mgl 的深色极区内容；§780 ③ 瓦片域交互）+ set-style(circle) 213,545→239,150 (+25.6k)。tsc 绿。

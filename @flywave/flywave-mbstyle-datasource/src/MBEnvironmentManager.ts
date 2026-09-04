@@ -1240,9 +1240,10 @@ export class MBEnvironmentManager {
         const distToHorizon = Math.sqrt(Math.max(dc * dc - R * R, 0));
         const horizonAngle = Math.acos(Math.min(1, distToHorizon / dc));
 
-        // Space color as the clear backdrop (outside the globe) — its
-        // property alpha composites over the white test canvas (mgl renders
-        // the atmosphere premultiplied over a transparent framebuffer).
+        // §570b/§784: the clear carries the space color (the glow's far
+        // tint — mgl's visible sky is glow-dominant, t≈1 across the frame
+        // at these zooms). The DISC interior is handled by the dome's hit
+        // branch below, which writes the mgl NATIVE parity color (white).
         (this.m_mapView as any).clearColor = spaceColor.getHex();
         (this.m_mapView as any).clearAlpha = propAlpha(rawSpace);
         this.m_globeFogActive = true;
@@ -1312,7 +1313,16 @@ export class MBEnvironmentManager {
                                            smoothstep(0.975, 1.0, normDist));
                             gl_FragColor = vec4(c0i, uBgDiscAlpha);
                         } else {
-                            gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+                            // §784: mgl NATIVE parity branch —
+                            // "render test parity since white canvas is
+                            // assumed" (atmosphere.fragment.glsl): hit-globe
+                            // pixels with no content render WHITE. Our clear
+                            // is the space color, so writing transparent here
+                            // (the JS branch) let the space backdrop show
+                            // through as a dark disc where mgl's reference
+                            // composites the fill-pattern family's disc to
+                            // white (390k px).
+                            gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
                         }
                         return;
                     }
