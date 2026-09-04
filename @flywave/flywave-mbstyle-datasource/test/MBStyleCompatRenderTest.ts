@@ -182,6 +182,27 @@ function discoverTests(): TestEntry[] {
             mod.MBEnvironmentManager.fogDebugTProbe = Number(fdbg) || 0;
         });
     }
+    // §791c: extdbg=1 → extrusion technique-route probe ([MBExtRoute]/[MBExtPatch]).
+    const edbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("extdbg="))?.slice("extdbg=".length);
+    // §791c: extnolight=1 → skip legacy Lambert for zero-height extrusions.
+    const enl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("extnolight="))?.slice("extnolight=".length);
+    if (enl === "1") {
+        (globalThis as any).__mbExtNoLightZeroH = true;
+    }
+    if (edbg === "1") {
+        (globalThis as any).__mbExtRouteDbg = true;
+        const efb = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("feedback-url="))?.slice("feedback-url=".length);
+        if (efb) {
+            fetch(`${efb}/mb-probe-dump`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ probe: "ext-route-gate", args: (window as any).__karma__?.config?.args }),
+            }).catch(() => { });
+        }
+    }
     if (dbg === "1") {
         (globalThis as any).__mbDecodeDbg = true;
         // §667: prototype-level createTextElements census — installed at

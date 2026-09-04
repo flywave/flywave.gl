@@ -7895,3 +7895,15 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 **§790. 挤出域取证：zero-height 族压暗 = legacy Lambert 因子链（下轮校准入口）**：zero-height-clipping-simple（141,421→144,982 持平域）逐点采样实证：几何/位置全对（挤出薄片形状、视角、白底全吻合），差异纯为**亮度因子**——expected 顶面满亮黄（mgl 无 lights 数组时 LIGHTING_3D_MODE 不定义 → 原色直出，v8 语义实证 painter.ts enable3dLights = ambient&&directional 仅来自 stylesheet.lights），我方 legacy Lambert（默认光 dir=[0.2875,−0.498,0.996] intensity 0.5）在球面法线+垂直梯度下因子收敛 0.27×。legacy 公式本体与 mgl fill_extrusion.vertex 一致（mix(1−intensity, max(1−colorvalue+intensity,1), NdotL) + 梯度 clamp），差异在球面投影下法线帧/世界光向的换算——需 mgl 公式的球面适配校准（§454/§557 谱系续）。zero-height ×3（144,982+106,016+13,667 ≈ 265k）、symbol-z-offset ×4（150,524+160,776+99,935+70,933 ≈ 482k）同源待校准。本轮 dome 小退化（vertical_gradient +10.4k、zero-height-angle-limit +7.2k、simple +3.6k ≈ +21k）为 dome 背底白 vs space 暗对半透明挤出像素的量化差，随校准一并解决。
 
 **§791b. ENU 光向实测裁决（无效果如实入账）**：patchExtrusionMaterial 的 ENU 光向补丁实测对 zero-height/symbol-z-offset **零效果**（144,982/150,524/160,776 分毫不变）——zero-height 压暗根因**不在 legacy Lambert 光向帧**，而在 height=0 挤出的发射/着色路径本身（可能走了 flat-fill 技术或另一着色链）。ENU 光向变换保留（mgl viewport 锚定语义正确、无害），poles 族本轮实测 north 47,135/south 28,632（部分为已知双峰噪声），真实残差域仍为 §788 三入口（纹理挂载/overzoom 平面解码/404 回退）。下一轮挤出域入口改为：height=0 挤出的技术路由与着色链探针（patchExtrusionMaterial 是否被调用、map 是否挂载）。
+
+**§792. 挤出域根修落地：globe zero-height 薄片跳过 legacy Lambert（满亮直出，2026-09-04 续三）**：
+
+**路由探针（新工具 `extdbg=1`/MBSTYLE_EXTDBG，console 转发不可靠（§510）故走 /mb-probe-dump 通道）**：zero-height 夹具的挤出确实路由 `extruded-polygon` → `patchExtrusionMaterial`（MeshStandardMaterial 薄片 + ShaderMaterial 边线双对象，use3D=false，globe proj=1）——§791b 的 ENU 光向"零效果"根因不在路由，而在 legacy Lambert 注入内部的**世界帧法线判定**：`uMBViewToWorld * 屏幕导线法线` 的 `abs(mbWorldN.z)<0.5` 分支在球面上把屋顶判为墙 → 走 vMBHeight 梯度因子 → 0.27×。ENU 光向改不了这个判定，故分毫不变（如实验证）。
+
+**修复**：`patchExtrusionMaterial` 的 legacy Lambert 注入对 **globe 投影 && height==0 && base==0** 跳过（§790 取证：mgl 无 `lights` 数组 → LIGHTING_3D_MODE 不定义 → 原色直出）。mercator 校准行为不动（门含 projection.type===1）。实验开关 `extnolight=1`（MBSTYLE_EXTNOLIGHT）保留。
+
+**回测**：zero-height-clipping-simple **144,982→129,152（−15.8k）**、angle-limit **106,029→104,485**、complex **13,673→13,660**，探针像素 (69,69,3)→(255,255,8)=满亮黄与 expected 一致；symbol-z-offset ×4（map-aligned 10,538/labeling 99,961/zoom-in 150,846/70,948）与基线逐位持平（height>0 不进门）。tsc 绿。
+
+**残余（129,152）diff 构成**：① 上半幅空间/大气背底整体缺失（我方白 vs mgl 蓝渐变+大气辉光）——域 A/§787 fogged-fit 校准域，本夹具 fog 仅 `star-intensity:0`（fog 键存在）；② 薄片上缘弯曲度——大跨度多边形（100°宽）未球面细分，平面直边 vs mgl 弯边（§788b 入口：overzoom 要素走 tessellateForSphere）；③ 边线描边带。下轮入口：②球面细分（几何域独立可验）→①大气背底校准。
+
+**附带修复**：karma webpack 缓存中毒排查路径——`/tmp/_karma_webpack_*` 旧 bundle 会让新改动静默失效（266 编译错误时 karma 仍跑旧包）；`scripts/run-mbstyle-render-tests.js` 的 KARMA_ARGS 会整体覆盖环境变量（扩展调试开关须加在 karmaClientArgs）。零结果目录按平台分片（web-Edge-150 旧 vs web-ChromeHeadless-149 新），summarize 会混打陈旧数据，核对须以 `wrong pixels` 服务端行为准。

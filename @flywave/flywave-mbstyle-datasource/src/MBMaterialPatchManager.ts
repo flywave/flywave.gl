@@ -1535,6 +1535,30 @@ export class MBMaterialPatchManager {
             let o: THREE.Object3D | null = obj;
             while (o) { o.frustumCulled = false; o = o.parent; }
         }
+        // §791c probe: which technique do zero-height extrusions actually
+        // route through, and which patch branch fires? Console forwarding is
+        // flaky in the karma page (§510) — buffer and POST via /mb-probe-dump.
+        if ((globalThis as any).__mbExtRouteDbg) {
+            const buf: string[] = ((globalThis as any).__mbExtRouteLog ??= []);
+            if (buf.length < 400) {
+                buf.push(`tech=${techName} layer=${technique._layerId} mat=${material.type} h=${technique.height} b=${technique.floorHeight} isLine=${(obj as any).isLine} op=${(material as any).opacity}`);
+                if (!(globalThis as any).__mbExtRouteTimer) {
+                    (globalThis as any).__mbExtRouteTimer = setTimeout(() => {
+                        (globalThis as any).__mbExtRouteTimer = undefined;
+                        const fb = (window as any).__karma__?.config?.args
+                            ?.find?.((a: string) => a.startsWith('feedback-url='))
+                            ?.slice('feedback-url='.length);
+                        if (fb) {
+                            fetch(`${fb}/mb-probe-dump`, {
+                                method: 'POST',
+                                headers: { 'content-type': 'application/json' },
+                                body: JSON.stringify({ probe: 'ext-route', log: (globalThis as any).__mbExtRouteLog }),
+                            }).catch(() => {});
+                        }
+                    }, 2000);
+                }
+            }
+        }
         switch (techName) {
             case 'fill':
                 if (technique._isLineRibbon) {
@@ -3482,6 +3506,11 @@ export class MBMaterialPatchManager {
     }
 
     private patchExtrusionMaterial(material: THREE.Material, paint: any, technique: any, mesh?: THREE.Mesh): void {
+        // §791c probe: confirm entry + the legacy-Lambert lighting route.
+        if ((globalThis as any).__mbExtRouteDbg) {
+            const buf: string[] = ((globalThis as any).__mbExtRouteLog ??= []);
+            buf.push(`ENTERED patchExtrusionMaterial layer=${technique._layerId} mat=${material.type} h=${technique.height} use3D=${((this.m_dataSource as any).m_environment?.extrusionLightState?.use3DLights) === true} proj=${(this.m_dataSource as any).mapView?.projection?.type}`);
+        }
         // Translucent extrusions blend once at paint opacity. The engine's
         // DepthPrePass path composites at an effective 0.5×alpha (probe-measured
         // on SwiftShader) and the prepass is disabled on the technique; without
@@ -3840,7 +3869,17 @@ export class MBMaterialPatchManager {
             // gradient for side surfaces. Computed on the sRGB paint color.
             // Skipped when the style uses the 3D `lights` API (LIGHTING_3D_MODE
             // shader path handles those separately).
-            if (!use3DLights) {
+            // §792: zero-height sheets on the globe render full-bright in mgl
+            // (§790: no `lights` array → LIGHTING_3D_MODE undefined → paint
+            // color direct). The legacy Lambert chain — calibrated in the
+            // MERCATOR world frame — collapses the sheet to 0.27× there (its
+            // world-z branch never sees the globe-sphere normal as "roof").
+            // Skip it for base==height==0 on the globe; mercator calibration
+            // is untouched. ENU light re-expression (§791) measurably does not
+            // reach these pixels (world-frame normal test still fails).
+            if (!use3DLights &&
+                !((this.m_dataSource as any).mapView?.projection?.type === 1 &&
+                  height === 0 && base === 0)) {
                 shader.uniforms.uMBLightDirWorld = { value: lightDirWorld };
                 shader.uniforms.uMBLightColor = { value: lightColor };
                 shader.uniforms.uMBLightIntensity = { value: lightIntensity };
