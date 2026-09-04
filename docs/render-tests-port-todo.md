@@ -7957,3 +7957,9 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 实验：dome 击中分支按 style.terrain 存在选择黑底（模拟 mgl 未覆盖球面网格底色）——globe-terrain 153,037 **bit 级不变**，证伪：白区不是 dome 而是 **background 层 quad 铺满全球**（本夹具有 background white 层；mgl 侧同区域黑 = terrain 模式下瓦片改道 RTT 垂披 framebuffer，未覆盖区为 RTT 黑 clear，background 也只画进 RTT 被垂披，不再裸铺球面）。已回退 dome 改动（无死代码）。
 
 **定论**：globe+terrain 的对齐必须实现 mgl `globe_raster_program` 语义——①瓦片（含 background）经 `u_globe_matrix` 球面网格垂披渲染；②未覆盖区=RTT 黑底；③DEM 抬升在同一网格。这是引擎级工程（等效 mgl DrapeRenderMode.elevated 的球面版），非 patcher 层可修，单独立项。§796 的跳过门保持为当前最优近似（high-exaggeration 10.7k/north-pole-padded-dem 5.1k），globe-terrain(153k)/imports(242k) 挂账等待该实现。
+
+**§799. globe 全量挤出跳过 legacy Lambert 实验：证伪回退（2026-09-05 终二）**：
+
+假设 §790"原色直出"适用于全部挤出 → 实验旗 `extnolightglobe=1`（globe 上全部跳过 legacy Lambert）实测：symbol-z-offset-map-aligned **10,538→102,958（+92k 恶化）**、zoom-in 150,846→152,906、default 23,203。结论：**symbol-z-offset 家族的 expected 是带光照的**（墙体明暗可见）——legacy Lambert 在 height>0 的 globe 挤出上是正确且必要的，§792 的 height==0 豁免恰好划对边界（薄片在 mgl 的"无光照"观感来自屋顶 NdotL≈0.87 → 因子 0.93 近满亮，而非无光照路径）。已回退实验旗，零代码变更。
+
+**symbol-z-offset 残差（150,846+99,961+70,948+10,538 ≈ 332k）重定性**：非光照域——现状图 vs expected 显示①整体色偏/压暗集中于特定板块（US 板暗灰 vs 亮橙，疑似 data-driven fill 颜色或光照因子按朝向发散）；②顶部垂直条纹伪影（墙体拉伸）；③map-aligned 符号锚定。下一入口：symbol-z-offset-map-aligned 的 data-driven 颜色/高度逐要素对拍（decodedbg 顶点转储 + partHist 探针）。
