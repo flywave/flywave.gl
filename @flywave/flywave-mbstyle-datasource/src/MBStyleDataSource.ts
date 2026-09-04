@@ -613,6 +613,122 @@ class HillshadeTileDataProvider extends DataProvider {
 /** Style-level: any layer uses a *-sort-key paint (points stay in all tiles). */
 let s_keepPointsForSortKey = false;
 
+/** geojson lat → normalized mercator y (0 = south, 1 = north). */
+function mercYof(lat: number): number {
+    const s = Math.max(-0.99999, Math.min(0.99999, Math.sin((lat * Math.PI) / 180)));
+    return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+}
+
+/** normalized mercator y → geojson lat. */
+function latOfMercY(y: number): number {
+    const n = Math.PI * (1 - 2 * y);
+    return (180 / Math.PI) * Math.atan(Math.sinh(n));
+}
+
+/**
+ * §783: Sutherland–Hodgman clip of a polygon ring against the tile's
+ * mercator rect (x = lng, y = normalized mercator y — the same space the
+ * tiles partition). mgl's geojson-vt always clips polygons per tile; this
+ * provider kept them whole in every intersecting tile ("clipped at render")
+ * — but the globe emit renders each tile's geometry VERBATIM, so a feature
+ * spanning N column tiles drew N stacked translucent copies
+ * (at-transition-zoom: 0.5-blue quad drawn 3× — 255×0.125 = 32 exact).
+ * Winding is preserved (holes stay holes); a polygon whose exterior ring
+ * clips away is dropped whole. Returns null when nothing remains.
+ */
+function clipRingToTile(
+    ring: number[][],
+    west: number,
+    east: number,
+    southY: number,
+    northY: number
+): number[][] | null {
+    const open =
+        ring.length > 1 &&
+        ring[0][0] === ring[ring.length - 1][0] &&
+        ring[0][1] === ring[ring.length - 1][1]
+            ? ring.slice(0, -1)
+            : ring.slice();
+    if (open.length < 3) return null;
+    let poly: number[][] = open.map(([lng, lat]) => [lng, mercYof(lat)]);
+    const edges: Array<[(p: number[]) => boolean, (a: number[], b: number[]) => number[]]> = [
+        [
+            (p) => p[0] >= west,
+            (a, b) => [west, a[1] + (b[1] - a[1]) * ((west - a[0]) / (b[0] - a[0]))],
+        ],
+        [
+            (p) => p[0] <= east,
+            (a, b) => [east, a[1] + (b[1] - a[1]) * ((east - a[0]) / (b[0] - a[0]))],
+        ],
+        [
+            (p) => p[1] >= northY,
+            (a, b) => [a[0] + (b[0] - a[0]) * ((northY - a[1]) / (b[1] - a[1])), northY],
+        ],
+        [
+            (p) => p[1] <= southY,
+            (a, b) => [a[0] + (b[0] - a[0]) * ((southY - a[1]) / (b[1] - a[1])), southY],
+        ],
+    ];
+    for (const [inside, isect] of edges) {
+        const input = poly;
+        poly = [];
+        for (let i = 0; i < input.length; i++) {
+            const cur = input[i];
+            const prev = input[(i + input.length - 1) % input.length];
+            const cin = inside(cur);
+            const pin = inside(prev);
+            if (cin) {
+                if (!pin) poly.push(isect(prev, cur));
+                poly.push(cur);
+            } else if (pin) {
+                poly.push(isect(prev, cur));
+            }
+        }
+        if (poly.length === 0) return null;
+    }
+    if (poly.length < 3) return null;
+    return poly.map(([x, y]) => [x, latOfMercY(y)]);
+}
+
+/**
+ * Clip a Polygon/MultiPolygon to the tile rect. Exterior dropped → polygon
+ * dropped (surviving holes alone would break tessellation); holes clip
+ * independently. Returns null when nothing remains inside the tile.
+ */
+function clipPolygonFeatureToTile(
+    coords: any,
+    isMulti: boolean,
+    west: number,
+    east: number,
+    southY: number,
+    northY: number
+): any | null {
+    const clipPoly = (poly: number[][][]): number[][][] | null => {
+        if (poly.length === 0) return null;
+        const exterior = clipRingToTile(poly[0], west, east, southY, northY);
+        if (!exterior) return null;
+        exterior.push([...exterior[0]]);
+        const rings = [exterior];
+        for (let h = 1; h < poly.length; h++) {
+            const hole = clipRingToTile(poly[h], west, east, southY, northY);
+            if (hole && hole.length >= 3) {
+                hole.push([...hole[0]]);
+                rings.push(hole);
+            }
+        }
+        return rings;
+    };
+    if (isMulti) {
+        const out: number[][][][] = [];
+        for (const poly of coords as number[][][][]) {
+            const clipped = clipPoly(poly);
+            if (clipped) out.push(clipped);
+        }
+        return out.length > 0 ? out : null;
+    }
+    return clipPoly(coords as number[][][]);
+}
+
 function filterFeaturesToTile(fc: any, tileKey: any, keepPointsEverywhere?: boolean): any {
     if (!fc || typeof fc !== 'object') return fc;
     // Normalize bare Feature / bare geometry into a FeatureCollection (the
@@ -692,6 +808,25 @@ function filterFeaturesToTile(fc: any, tileKey: any, keepPointsEverywhere?: bool
                         return !!b && !(b[0] > east || b[2] < west || b[3] < south || b[1] > north);
                     })());
             if (!keep) continue;
+        } else if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
+            // §783: polygons are CLIPPED to the tile rect (geojson-vt
+            // semantics). Keeping them whole drew N stacked copies for a
+            // feature spanning N tiles wherever the paint is translucent.
+            const southY = mercYof(south);
+            const northY = mercYof(north);
+            const isMulti = geomType === 'MultiPolygon';
+            const clipped = clipPolygonFeatureToTile(
+                f.geometry.coordinates,
+                isMulti,
+                west,
+                east,
+                southY,
+                northY
+            );
+            if (!clipped) continue;
+            if (clipped !== f.geometry.coordinates) {
+                f = { ...f, geometry: { ...f.geometry, coordinates: clipped } };
+            }
         } else if (geomType) {
             const bbox = geomBbox(f.geometry);
             if (!bbox || bbox[0] > east || bbox[2] < west || bbox[3] < south || bbox[1] > north) {
