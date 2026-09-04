@@ -7859,3 +7859,5 @@ globe-poles 全 6 例首阶段归因（三重缺陷，定向跑测验证，未�
 **回测**：at-transition-zoom **746,978→0 PASS**（自 §779 前 746,980 全帧空白，本域累计 −100%）；mercator **fill-color/fill-opacity/fill-outline-color/fill-translate/default 全部 0 PASS**；globe 哨兵逐位持平（globe-default 1,504、circle/default 7,021、geojson/clustered 168,137 点域不变、transition-fill 10,798、with-symbols 16,557）。tsc 绿。
 
 **globe/ 族剩余（§783 末）**：set-style 纹理域（circle/change-projection/set-style 213,545 + symbols/set-style 23,177 + albers/raster 63k×2 + unset-terrain/with-diff 40k×2 ≈ 460k）；挤出域（symbol-z-offset-zoom-in 150,524/labeling 160,776、zero-height 141,421/105,202 ≈ 460k）；poles 精标定（north 59,684/south 41,893/images 75k/65k/67k ≈ 300k）；heatmap 族（near-transition 230,543 头部 + 12-33k 尾部 ≈ 370k）；geojson/clustered 168,137（点三重绘制嫌疑——clustered 分支 getTile 返回原始数据不过滤，与 §783 同源）；fill-pattern/3x 390k（§780 zoom 副作用域）。
+
+**§783b. 聚类源瓦片去重（语义对齐，168,137 域另案）**：clustered 分支的 getTile（含 zoom≥clusterMaxZoom 的原始回退）补 filterFeaturesToTile 逐瓦片点去重——聚类锚定质心、只属于拥有它的瓦片（mgl 逐瓦片重算聚类的近似）。实测 globe-geojson/clustered 168,136 持平：该夹具残差是聚类圆渲染本身（计数/半径/位置域），非点重复；去重语义保留。

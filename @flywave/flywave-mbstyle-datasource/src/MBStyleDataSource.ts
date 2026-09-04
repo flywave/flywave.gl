@@ -888,12 +888,31 @@ class GeoJSONDataProvider extends DataProvider {
             }
         }
         const zoom = tileKey.level;
-        if (zoom >= this.m_clusterMaxZoom) return this.m_geoJsonData;
+        if (zoom >= this.m_clusterMaxZoom) {
+            // §783: same per-tile point dedup as the unclustered path — the
+            // raw payload would repeat every point across all intersecting
+            // tiles (clustered draws included).
+            try {
+                return JSON.stringify(
+                    filterFeaturesToTile(JSON.parse(this.m_geoJsonData), tileKey, this.m_keepPointsEverywhere)
+                );
+            } catch {
+                return this.m_geoJsonData;
+            }
+        }
         if (!this.m_clusteredCache.has(zoom)) {
             const clustered = this.clusterAtZoom(zoom);
             this.m_clusteredCache.set(zoom, clustered);
         }
-        return this.m_clusteredCache.get(zoom)!;
+        // §783: clusters are anchored to their centroid — a cluster renders
+        // once, in the tile that owns it, not in every intersecting tile.
+        try {
+            return JSON.stringify(
+                filterFeaturesToTile(JSON.parse(this.m_clusteredCache.get(zoom)!), tileKey, false)
+            );
+        } catch {
+            return this.m_clusteredCache.get(zoom)!;
+        }
     }
 
     /**
