@@ -7991,3 +7991,9 @@ VIEW 探针（scene-census 扩展：m_viewRanges + DataSource.maxGeometryHeight�
 实现 §802 立案（球面 far 计算加 2×maxElevation 余量 + constraints 不把球面 far 钳回 farMax）实测：**map-aligned 10,538→102,515（+92k 暴涨）**、zoom-in 150,846→152,950、padded-dem/high-exaggeration 持平。已回退。
 
 **定论（三重实验闭环）**：①远侧几何原本被 far 裁掉是**正确行为**——放出来渲染成暗块反而恶化，说明暗块就是板体自身渲染结果（与 §801"非着色域"结论合并修正：暗化与光照路径无关，但也不是裁剪问题）；②symbol-z-offset 家族 (~332k) 的真实残差 = **mgl globe_raster_program 球面垂披管线与我们瓦片管线的系统性差异**（3000km 巨板跨瓦片渲染、深宽比、背面剔除的综合），与 globe-terrain(153k)/imports(242k) 同属"球面垂披"大域，等待 §798 定义的引擎级实现，patcher/evaluator 层已无可摘果实。本域关闭。
+
+**§805. 大气背底域根因定位：pitch-70 地平线标定偏差（2026-09-05 终八）**：
+
+zero-height-clipping-simple 逐列扫描：expected 地平线弧 **y210(中心)–258(边缘)**（弧形弯曲，辉光渐变占上方 240px：navy(13,29,58)→(184,193,214) 递亮向下）；我方地平线 **y≈4**（全列平直），辉光带仅 4-30px，其余全被 dome 击中白覆盖。**即：pitch-70 globe 相机的地平线在我方帧内比 mgl 高 ~18°**——大气渐变被压缩到画面顶端，残差 ~126k 主体即此。
+
+关键换算：pitch 70° 时 limb 高角 = acos(R/d)−70°；我方 limb y4 → acos(R/d)≈88.2° → d≈31.8R??（或等价地：我方 horizon-dip 角标定使 limb 顶到画面上缘）。mgl limb y210-258 → acos(R/d)−70 ≈ atan((256−210..258)/768) ≈ 3.4-1.1° → acos(R/d) ≈ 71-73° → d ≈ R/cos(71.5°) ≈ 3.15R——与 §792 态相机公式量级一致！**结论修正：相机距离量级正确（~3.2R），但 limb 的屏幕投影位置差 18°** ——疑点收敛到 dome shader 的 uHorizonAngle/uGlobePos/uGlobeRadius uniform（view-space 球心/半径的换算）或引擎 horizon-dip 公式，而非相机距离本身。下一入口：dome onBeforeRender 的 uGlobePos/uGlobeRadius/uHorizonAngle 逐值探针对拍 mgl draw_atmosphere.ts（horizonAngle = acos(distToHorizon/globeCenterDistance)，globeRadius 含 custom-AA 修正分支）。
