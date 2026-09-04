@@ -8107,3 +8107,7 @@ zero-height-clipping-simple（zoom 3.5/pitch 70）：我方放置高度 h≈2.86
 hideq=horizon 改为对越球 quad 材质设 colorWrite=false（材质属性持久、不受逐帧重置）：125,982 分毫不变——越球 quad 亦非白带绘制者。至此排除清单最终版：背景层样式对象、注入背景 quad（visible/remove/colorWrite 三手段）、远侧瓦背面（FrontSide）、月球、引擎 Celestia 大气（enabled=false 移除）、太阳 helper。白带绘制者对场景树与材质属性的所有静态干预免疫，**需渲染级帧捕获（RenderDoc/SpectorJS 逐 draw-call）定位**——已超出静态分析可达范围，域最终挂账。
 
 **本会话大气背底域净结论**：①dome 击中白/辉光公式与 mgl 同源且自洽（domedbg 逐像素证实）；②相机放置与 mgl 逐米一致；③剩余 ~126k/夹具的白带绘制者需帧捕获工具链定位。全部探针（domedbg/hideq 三形态/dsdisable/cam-dist/lookat+stack/census+VIEW/dome-geom/rasAttach/colorWrite）已入库供后续会话使用。
+
+**§816. colorWrite 实验：无变化——白带绘制者对场景树+材质属性全部干预免疫（2026-09-05 终）**：
+
+hideq=alloncw（WillRender 钩子对全部白色 MeshBasic* 材质设 colorWrite=false+needsUpdate，材质属性跨帧持久不受瓦片重挂影响）：125,982 分毫不变。叠加此前证据（removeFromParent 移除、visible=false、数据源禁用均无效），**白带绘制者对场景树与材质属性的所有可达干预免疫**。且 dsdisable 帧（无数据源）出现黄色板体（255,255,8）——存在数据源之外的几何绘制路径或引擎瓦片收集器每帧重挂。定位白物需渲染级帧捕获（RenderDoc/SpectorJS draw-call 级），静态与运行时钩子手段已全部穷尽。域最终挂账（zero-height simple/complex 各 ~126k）。
