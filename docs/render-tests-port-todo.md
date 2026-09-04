@@ -8065,3 +8065,7 @@ effectiveFogSpec（无 fog 键 + 有背景层 → mgl 默认 fog 参数）落地
 **§813. hide 二分扩展：n=4 白 quad 全隐藏仍 bit 级不变——白物为 dome 与黄板之间的未知满幅对象（2026-09-05）**：
 
 domedbg 帧逐行解码：y0 行 (161,86,40) = normDist 1.263/θ 60.8°/t 0.157（真实 dome 调试输出）；y4+ 纯白 (255,255,255) 非 dome 调试输出（调试 R≤128 不可能 255）→ **dome 辉光公式与 mgl 完全同源且工作正常**（帧内 normDist≥1.376 全为空间区，glow 饱和白弧+向上渐变正是 mgl expected 的形态）。白色满幅物位于 dome（ro=−2000）与黄板（ro=1）之间，且不是：n=4 白 quad（全部隐藏无变化）、background 层（mbhide）、远侧瓦（frontcull）、月球（#dddddd n=1089 已试）、引擎大气（已禁用）。下一入口：①用 renderer.info.render{calls,triangles} 与逐对象 visible 二分联动定位实际绘制者；②检查 mapAnchors 挂载的对象是否在 scene.traverse 覆盖之外（census 遗漏）；③ Celestia.sun/moon/light 图形（SunLight 的可视光晕网格？）。
+
+**§813b. hideq 放宽匹配仍无效果——白物需渲染级追踪（2026-09-05 收口）**：
+
+hideq 放宽为 `type.includes("MeshBasic")` 隐藏全部 n=4 白色 quad（不再限定精确类名/无贴图）：**125,982 仍分毫不变**——这批 quad 本就不贡献像素（可能已被剔除/在视锥外），白物另有其人。静态候选已穷尽（背景层/背景 quad/远侧瓦/月球/引擎大气/dome 自身/太阳 helper 均排除）。**下一入口（需渲染级追踪）**：① renderer.info.render 逐 draw-call 与 visible 二分联动；② 或以 WebGL 深度/模板 dump 定位白物的绘制批次；③ 或直接对 expected 做逐像素反推（渐变带公式与 dome glow 完全同源已证实——也可反向直接校准：把 dome 的 hit 分支阈值/输出改为与渐变带拟合，绕过白物）。选项 ③ 为纯 shader 改动、无需定位白物，可作下轮首选实验。
