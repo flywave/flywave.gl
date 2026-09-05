@@ -1525,7 +1525,10 @@ export class MBEnvironmentManager {
         const starIntensity =
             fog['star-intensity'] ?? mglDefaultStarIntensity(styleZoom);
         if (starIntensity > 0) {
-            this.createStars(Math.min(starIntensity * 4, 1.4));
+            // §824: mgl passes star-intensity straight through
+            // (v_intensity = a_opacity * star-intensity) — the previous x4
+            // boost over-brightened the field once the star size matched.
+            this.createStars(starIntensity);
         }
     }
 
@@ -2364,7 +2367,10 @@ export class MBEnvironmentManager {
             return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
         };
         const STARS_COUNT = 16000;
-        const SIZE_MULTIPLIER = 0.5;
+        // §824: mgl createDefaultStarsParams sizeMultiplier = 0.15 — A/B
+        // verified closest to expected on globe-default (2,478 vs 2,509 @0.3
+        // and 2,709 @0.5).
+        const SIZE_MULTIPLIER = 0.15;
         const SIZE_RANGE = 100;
         const INTENSITY_RANGE = 200;
 
