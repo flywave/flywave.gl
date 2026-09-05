@@ -5004,6 +5004,12 @@ export class MBStyleDataSource extends TileDataSource {
                             return;
                         }
                     } catch { /* fall through to the flat path */ }
+                    // §819 NOTE: on globe without fog mgl's sky is black space,
+                    // but overriding the flat background clear to black here is
+                    // a net LOSS while near-field tile content is still missing
+                    // (globe-terrain 153k→241k: the white clear was padding the
+                    // not-yet-rendered terrain region). Revisit after the
+                    // missing-tile content domain is fixed.
                     const c = new THREE.Color(color);
                     // Mapbox 3D `lights` (lighting-3d-mode): the background is a
                     // ground layer → `color * u_ground_radiance` (mix toward
@@ -5127,10 +5133,13 @@ export class MBStyleDataSource extends TileDataSource {
      * parameters for globe styles carrying a background layer.
      */
     private effectiveFogSpec(style: any): FogSpec | undefined {
-        if (style.fog) return style.fog;
-        const hasBg = (style.layers ?? []).some((l: any) => l.type === 'background' &&
-            ((l.layout as any)?.visibility ?? 'visible') !== 'none');
-        return hasBg ? { ...(MGL_DEFAULT_FOG_SPEC as any) } : undefined;
+        // §819: mgl creates the fog system ONLY when the style has a fog key
+        // (style.ts:1082 gate) — no fog key → no FOG define, no atmosphere
+        // glow, black space (globe-transition/pitch and globe-terrain
+        // expected black skies). The previous "synthesize mgl default fog
+        // for no-fog styles carrying a background layer" painted an
+        // atmosphere dome where mgl paints nothing.
+        return style.fog;
     }
 
     /**

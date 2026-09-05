@@ -2250,7 +2250,9 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                             // §818j: per-draw pixel trace — after each late draw,
                             // read one sky-region pixel; the first draw that
                             // turns it white is the white-band painter.
-                            if ((globalThis as any).__mbPxTrace && drawLog.length > 8000) {
+                            const pxFrom9 = parseInt((window as any).__karma__?.config?.args
+                                ?.find?.((a: string) => a.startsWith("pxfrom="))?.slice(7) ?? "8000");
+                            if ((globalThis as any).__mbPxTrace && drawLog.length > pxFrom9) {
                                 const r9 = origRBD(camera, scene, geometry, material, object, group);
                                 try {
                                     const gl9 = rendererAny.getContext();
