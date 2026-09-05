@@ -8163,3 +8163,11 @@ globe-transition/pitch 与 globe-terrain 的 expected 天空为**纯黑**（mgl�
 对照 mgl 源码（draw_atmosphere.ts createDefaultStarsParams + stars.vertex/fragment.glsl）逐项对齐 createStars：①**SIZE_MULTIPLIER 0.5→0.15**（mgl 默认值；A/B：0.15→2,478 / 0.3→2,509 / 0.5→2,709，0.15 最优）；②globe 路径强度去掉 ×4 补偿（mgl v_intensity = a_opacity × star-intensity 直通）；③k 缩放实验（uRight/uUp ×k）回退——matrixWorld 已含 k，双重缩放使星 quad 变巨贴片（111k）。星点生成（mulberry32(30)/mulberry32(300)、16000 点、半径 200、均匀球面分布）与 mgl 逐位一致——星点位置本就对齐，差距在 size/强度。globe-default 天空区亮像素对比：cur 7,756 vs exp 9,318（此前 250 vs 1,103），剩余 1.5k 差异为星点尺寸/位置的细微差与大气渐变细节。哨兵：antimeridian-left PASS 0、set-style/default 21,296 持平。
 
 **§825. globe-padding 残差归属（2026-09-05 终）**：148,545 持平（白带部分已由 §818-§822 解决）。对比帧定位两项残差：①`setPadding {top:256,left:128}` 在 globe 投影下未生效——expected 地球因 padding 下移至画面底部，我方仍近似居中；②地球尺寸差 ~2.5×（expected 直径超出底缘 vs 我方 ~390px）——低缩放相机距离差（§2673 域）。**归属：§780/781 相机域（padding 语义 + 低缩放距离），挂账待相机域专项**。
+
+**§826. globe-padding 专项修复：setPadding 以相机姿态旋转实现——148,545→20,057（−86.5%）（2026-09-05 终）**：
+
+**根因机制补全**：主点（setPrincipalPoint）已正确写入 m_camera 且持久（PADDBG 实证），渲染相机投影亦携带偏移（drawlog p8/p9=(0.25,−0.5) 实测）——但地球盘心纹丝不动而天空/大气移动 233k px：**引擎 MapAnchors 把地图内容锚定在画布中心，逐帧位移抵消投影级偏移**（锚定内容对主点免疫，非锚定层如 dome/天空照移）。
+
+**修复**：harness setPadding 改为**相机姿态旋转**近似（mgl padding 的视觉等价）：以 padding 半量（cx=(left−right)/2, cy=(top−bottom)/2 px）换算为绕相机 up/right 轴的旋转（pxPerRad=h/(2·tan(fov/2))），挂 Update 事件（先于 rte 拷贝）对 camera.quaternion 做 qBase·qΔ 绝对设置。实测地球中心 (308,418) vs expected (305,414)（4px 内），**148,545→20,057**。其余 setPadding 夹具（building/cutoff-fade 112,223、nyc-night-buildings 496,088）数字不变零回归；skybox/horizon-visibility/padding 3,303（无历史基线，小残差）。
+
+**注**：旋转近似与 mgl 的主点语义在近距/高 pitch 下有细微透视差；引擎级正解 = MapAnchors 支持 padding 偏移（挂账相机域专项）。

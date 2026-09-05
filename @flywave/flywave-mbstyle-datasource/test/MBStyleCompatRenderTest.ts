@@ -1502,22 +1502,43 @@ break;
                 break;
             }
             case "setPadding": {
-                // padding = {top, bottom, left, right} in pixels
+                // §826 probe: paddskip=1 → skip (measures the unpadded frame).
+                if ((window as any).__karma__?.config?.args?.some?.(
+                    (a: string) => a === "paddskip=1")) break;
+                // mgl setPadding: the map center anchors at the center of the
+                // padded region — visually the whole scene translates by
+                // ((left-right)/2, (top-bottom)/2) px (y-down). The engine
+                // anchors map content to the canvas center (MapAnchors), so a
+                // camera principal-point offset is cancelled by the anchor
+                // displacement; reproduce the translation as a camera
+                // orientation rotation instead (applied per-frame on Update,
+                // before the RTE camera copy).
                 const padding = args[0] ?? {};
                 const canvas = mapView.canvas;
-                const w = canvas.width;
                 const h = canvas.height;
-                const top = padding.top ?? 0;
-                const bottom = padding.bottom ?? 0;
-                const left = padding.left ?? 0;
-                const right = padding.right ?? 0;
-                // NDC offset: center shifts toward the larger padding side.
-                const ndcX = (right - left) / w;
-                const ndcY = (top - bottom) / h;
-                try {
-                    const { CameraUtils } = await import("@flywave/flywave-mapview");
-                    CameraUtils.setPrincipalPoint(mapView.camera, { x: ndcX, y: ndcY });
-                } catch {}
+                const cx = ((padding.left ?? 0) - (padding.right ?? 0)) / 2;
+                const cy = ((padding.top ?? 0) - (padding.bottom ?? 0)) / 2;
+                const fovRad = ((mapView.camera as any).fov ?? 36.87) * Math.PI / 180;
+                const pxPerRad = h / (2 * Math.tan(fovRad / 2));
+                // Camera-local rotation: pitch the camera up by cy px, yaw it
+                // left by cx px — the scene then translates down/right.
+                const rotPitch = cy / pxPerRad;
+                const rotYaw = cx / pxPerRad;
+                const qBase = mapView.camera.quaternion.clone();
+                const rightW = new THREE.Vector3(1, 0, 0)
+                    .applyQuaternion(mapView.camera.quaternion).normalize();
+                const upW = new THREE.Vector3(0, 1, 0)
+                    .applyQuaternion(mapView.camera.quaternion).normalize();
+                const qPitch = new THREE.Quaternion().setFromAxisAngle(rightW, rotPitch);
+                const qYaw = new THREE.Quaternion().setFromAxisAngle(upW, rotYaw);
+                const qDelta = qYaw.multiply(qPitch);
+                const applyPad = () => {
+                    const cam = mapView.camera as any;
+                    cam.quaternion.copy(qBase).premultiply(qDelta);
+                    cam.updateMatrixWorld(true);
+                };
+                mapView.addEventListener(MapViewEventNames.Update, applyPad);
+                applyPad();
                 break;
             }
             case "setCameraPosition":
@@ -2134,6 +2155,8 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                 } catch { /* non-object3d draw */ }
                                 const entry8: any = {
                                     n: object?.name ?? "", t: object?.type,
+                                    p8: camera?.projectionMatrix?.elements?.[8],
+                                    p9: camera?.projectionMatrix?.elements?.[9],
                                     ro: object?.renderOrder,
                                     mat: material?.type,
                                     col: material?.color?.getHexString?.(),

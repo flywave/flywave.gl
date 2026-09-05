@@ -3364,6 +3364,12 @@ export class MapView extends EventDispatcher {
         this.m_rteCamera.position.setScalar(0);
         this.m_rteCamera.updateMatrixWorld(true);
         this.m_rteCamera.projectionMatrix.copy(this.m_camera.projectionMatrix);
+        // §826: share the view-offset (principal point) state — the copy above
+        // carries the offset inside projectionMatrix, but any later
+        // updateProjectionMatrix() on the RTE camera (which has no view of its
+        // own) rebuilt a centered projection and dropped the principal point
+        // (globe-padding: the padded center shift never reached the render).
+        this.m_rteCamera.view = this.m_camera.view;
 
         this.m_textElementsRenderer?.updateCamera();
 
