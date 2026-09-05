@@ -4407,12 +4407,20 @@ export class MBMaterialPatchManager {
         }
         if ((material as any).__mbHillshadePatched) return;
 
+        // §822: hide the quad until its DEM texture is applied — the raw
+        // material carries the technique color (hillshade-shadow default
+        // #000000) and painted a black band over the near field while the
+        // DEM load (or its 404 ancestor fallback) was pending/failed
+        // (globe-terrain black domain).
+        if (obj) (obj as THREE.Mesh).visible = false;
+
         const intensity = technique._hillshadeIntensity ?? 0.5;
 
         const applyShader = (demTex: THREE.Texture) => {
             if ((material as any).__mbHillshadePatched) return;
             (material as any).__mbHillshadePatched = true;
             (material as any).map = demTex;
+            if (obj) (obj as THREE.Mesh).visible = true;
 
             // Determine the DEM border/buffer: mapbox raster-dem tiles may ship
             // pre-padded images (e.g. 258x258 for buffer=1, 260x260 for buffer=2)
