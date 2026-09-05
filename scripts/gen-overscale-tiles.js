@@ -38,44 +38,12 @@ function remapGeometry(geom, qx, qy) {
     );
 }
 
-// Sutherland–Hodgman clip of one ring to [0, extent]^2 (integer coords kept).
+// Sutherland–Hodgman clip via the workspace geometry lib (exact).
+const { clipPolygon } = require(path.join(__dirname, "..", "@flywave", "flywave-geometry", "lib", "src", "ClipPolygon.js"));
+const THREE = require(path.join(__dirname, "..", "node_modules", "three"));
 function clipRing(ring, EXT) {
-    const out = [];
-    const inside = (x, y, xmin, ymin, xmax, ymax) =>
-        x >= xmin && x <= xmax && y >= ymin && y <= ymax;
-    const n = ring.length;
-    for (let i = 0; i < n; i++) {
-        const a = ring[i], b = ring[(i + 1) % n];
-        const aIn = inside(a[0], a[1], 0, 0, EXT, EXT);
-        const bIn = inside(b[0], b[1], 0, 0, EXT, EXT);
-        if (aIn) out.push([a[0], a[1]]);
-        if (aIn !== bIn) {
-            // intersect segment a-b with the square (param t along a→b)
-            const dx = b[0] - a[0], dy = b[1] - a[1];
-            // find the earliest boundary crossing
-            let t = 1;
-            if (dx !== 0) {
-                if (dx > 0 && a[0] < EXT) t = Math.min(t, (EXT - a[0]) / dx);
-                if (dx < 0 && a[0] > 0) t = Math.min(t, (0 - a[0]) / dx);
-            }
-            if (dy !== 0) {
-                if (dy > 0 && a[1] < EXT) t = Math.min(t, (EXT - a[1]) / dy);
-                if (dy < 0 && a[1] > 0) t = Math.min(t, (0 - a[1]) / dy);
-            }
-            if (t < 1) out.push([Math.round(a[0] + dx * t), Math.round(a[1] + dy * t)]);
-        }
-    }
-    // dedupe consecutive duplicates
-    const ded = [];
-    for (const p of out) {
-        const last = ded[ded.length - 1];
-        if (!last || last[0] !== p[0] || last[1] !== p[1]) ded.push(p);
-    }
-    while (ded.length >= 2) {
-        const f = ded[0], l = ded[ded.length - 1];
-        if (f[0] === l[0] && f[1] === l[1]) ded.pop(); else break;
-    }
-    return ded;
+    const clipped = clipPolygon(ring.map(p => new THREE.Vector2(p[0], p[1])), EXT);
+    return clipped.map(p => [Math.round(p.x), Math.round(p.y)]);
 }
 
 function clipFeatureGeometry(type, geom, EXT) {

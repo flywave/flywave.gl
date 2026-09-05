@@ -8306,3 +8306,7 @@ z6 覆盖对拍重新解读（z6 row 22-24 = lat 44.3-48.9，z5 row 10-12 = 45.1
 **§844b. 会话收口状态（2026-09-06）**：
 
 全级别 coverdump 探针代码已入库（dump tileCache 全部瓦 + decodedTile.techniques 计数），但最近一轮运行探针未触发（运行间状态不一致，同配置先前轮次曾成功）。roundzoom=1 现帧（白天空+蓝地面、无黄色 fill、恒 209,345）比默认关（28,382）恶化——门保持默认关。**下一会话精确入口**：①带 MBSTYLE_COVERDUMP=1 单独跑 pitch，确认全级别 dump 的 tileCache 内容（z5 row 12 是否在覆盖/解码）；②按 decodedTile 有无二分定位 row-12 瓦不渲染的环节；③z6 fill 特征弃置点（MBStyleDataProcessor 上游）。
+
+**§846. 球面垂披前置/overzoom 收敛达成：roundzoom=1 + 真裁剪 z6 overscale 瓦 → pitch 28,046（<基线 28,382）（2026-09-06）**：
+
+生成器三修后（①字段号对齐 MVT schema：name=1/features=2/keys=3/values=4/extent=5/version=15；②数值改 spec 标准 uint/sint varint；③多边形几何用 pbf ClosePath（无参数）+ **flywave-geometry clipPolygon（Sutherland-Hodgman，Vector2）真裁剪**替换手写近似裁剪），16 块 z6 overscale 瓦重建。roundzoom=1 复测：**pitch 28,046 < 基线 28,382**，帧面为连续无缝的黄陆/蓝水（无接缝、无空洞），缺失带渲染出 overscale 内容。经验：pbf v5 writeMessage 回调签名 fn(obj,pbf)、字段写入必须用 writeXxxField(tag,val)（writeVarint/writeString 不带 tag）。roundzoom 门默认关（其他 globe 夹具未回归验证，逐夹具启用待定）。**剩余 28,046** = 带位置差（mgl 渲染球 k≈1.009，§836a）+ 海岸线细节——仍需 globeMatrix 复刻收尾。

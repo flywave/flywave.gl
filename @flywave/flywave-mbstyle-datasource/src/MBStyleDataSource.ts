@@ -2528,6 +2528,8 @@ export class MBStyleDataSource extends TileDataSource {
                 }
             });
             this.mapView.addEventListener(MapViewEventNames.AfterRender, async () => {
+                // eslint-disable-next-line no-console
+                if ((globalThis as any).__mbCoverDump) console.log('[MBCoverDumpReg] after-render fired, dumps=', (globalThis as any).__mbCoverDumps ?? 0);
                 // §835: cover dump — the datasource tileCache keys decoded to
                 // z/x/y, for diffing against mgl's coveringTiles reference.
                 if ((globalThis as any).__mbCoverDump && ((globalThis as any).__mbCoverDumps ?? 0) < 6) {
@@ -2549,6 +2551,8 @@ export class MBStyleDataSource extends TileDataSource {
                             });
                             if (shapes.length) keys.push('SHAPE:' + JSON.stringify(shapes));
                             keys.sort();
+                            // eslint-disable-next-line no-console
+                            console.log('[MBCoverDump]', keys.join(' | '));
                             const fbD = (window as any).__karma__?.config?.args
                                 ?.find?.((a: string) => a.startsWith('feedback-url='))
                                 ?.slice('feedback-url='.length);
@@ -2557,8 +2561,11 @@ export class MBStyleDataSource extends TileDataSource {
                                 body: JSON.stringify({ probe: 'cover', log: keys }),
                             }).catch(() => {});
                         }
-                    } catch {}
-                    }, 1500);
+                    } catch (e) {
+                        // eslint-disable-next-line no-console
+                        console.error('[MBCoverDumpErr]', String(e));
+                    }
+                    }, 300);
                 }
                 // §778: on the sphere projection, circle Points objects are
                 // the NEAREST opaque geometry, so three's front-to-back sort
