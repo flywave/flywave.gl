@@ -8227,3 +8227,9 @@ globe-circle/change-projection/set-style（213k，几乎全帧逐像素失配 25
 **§834. globe-terrain 66k×2 架构根因：静态 3×3 DEM 网格 vs mgl 动态逐瓦 LOD（2026-09-05）**：
 
 TerrainController.build(demTileUrl, zoom, center, exaggeration, radius=1, encoding) 是**静态单 zoom 的 3×3 中心网格**（applyTerrain 按 floor(styleZoom)−offset 取一级，globe-terrain z5.1 → z4-5 远瓦），无逐瓦 LOD、无裙边拼接、无按相机的动态调度——而 mgl 是 VisibleTileSet 式的动态 terrain 瓦 LOD（近相机高 z、远相机低 z，§822 实测我方近场浮雕缺失即此）。**正解 = TerrainController 升级为动态 DEM LOD 调度器**（复用 VisibleTileSet 瓦覆盖 → 每 DEM 瓦建 mesh + 裙边 → zoom/相机变化增量重建），属引擎级专项；radius 参数已是网格扩展点，增量路径可先做"相机移动/zoom 变化时以相机中心重建网格"的近似（refreshTerrain 在 update 事件中按当前相机 geoCenter 调 build，静帧收益有限、动态测试收益大）。挂账于此。
+
+**§835. k 值精确测量：mgl 盘缘=名义 normDist 1.009-1.015（瓦片量化带），farcover 二次否定（2026-09-06）**：
+
+真值页 k 测量落地（ECEF 相机 + 逐像素射线到地心距离 / 名义 R，up 基向量需 cross(fwd,right) 手性修正）。中心列实测：pitch **1.009**、zero-height-simple **1.015**、poles-north **0.998**、poles-south **1.000**、globe-default **0.995**、horizon **0.987**。解读修正：k 无干净的 lat/zoom 模型，散布 0.99-1.03 = **mgl 最后一环瓦的边界落点量化**（边缘停在某个瓦行界上，随相机落在不同纬圈）——即 mgl 的瓦覆盖约到名义 limb 外 ~0-1.5%（一个瓦环），我方到 0.996-0.998（差约一环）。**"渲染球面半径标定"前提弱化**：mgl 渲染球 ≈ 名义球（±瓦量化），差异实为**瓦覆盖终点差一环**。
+
+farcover 二次实验（本轮修正：写入点移到 applyProjection——style.projection 夹具不跑 reapplyCamera，§830 的否定系未生效的假阴性）：pitch 28,382 仍分毫不变、其余夹具全零变化（draw 亦无增）——frustum far 扩展仍不改变覆盖，边界由 FrustumIntersection 遍历/ClipPlanesEvaluator 其他环节决定。**下轮入口（唯一）**：对 pitch 夹具 dump 我方 VisibleTileSet 覆盖集 vs mgl coveringTiles 参照集（mgl-covering-tiles-ref.js 的 globe 版），定位缺失环瓦在遍历的哪一步被剔（frustum 面序/OBB 相交/shouldSplit/canGetTile），实施定向放行。
