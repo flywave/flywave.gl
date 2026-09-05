@@ -288,6 +288,11 @@ function discoverTests(): TestEntry[] {
     if (ss !== undefined) (globalThis as any).__mbSphereScale = Number(ss);
 }
 {
+    const cd = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("coverdump="))?.slice("coverdump=".length);
+    if (cd === "1") (globalThis as any).__mbCoverDump = true;
+}
+{
     // §682: camera A/B offsets (yaw/pitch degrees) for framing calibration.
     const yawAB = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("yawab="))?.slice("yawab=".length);

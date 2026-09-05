@@ -8233,3 +8233,11 @@ TerrainController.build(demTileUrl, zoom, center, exaggeration, radius=1, encodi
 真值页 k 测量落地（ECEF 相机 + 逐像素射线到地心距离 / 名义 R，up 基向量需 cross(fwd,right) 手性修正）。中心列实测：pitch **1.009**、zero-height-simple **1.015**、poles-north **0.998**、poles-south **1.000**、globe-default **0.995**、horizon **0.987**。解读修正：k 无干净的 lat/zoom 模型，散布 0.99-1.03 = **mgl 最后一环瓦的边界落点量化**（边缘停在某个瓦行界上，随相机落在不同纬圈）——即 mgl 的瓦覆盖约到名义 limb 外 ~0-1.5%（一个瓦环），我方到 0.996-0.998（差约一环）。**"渲染球面半径标定"前提弱化**：mgl 渲染球 ≈ 名义球（±瓦量化），差异实为**瓦覆盖终点差一环**。
 
 farcover 二次实验（本轮修正：写入点移到 applyProjection——style.projection 夹具不跑 reapplyCamera，§830 的否定系未生效的假阴性）：pitch 28,382 仍分毫不变、其余夹具全零变化（draw 亦无增）——frustum far 扩展仍不改变覆盖，边界由 FrustumIntersection 遍历/ClipPlanesEvaluator 其他环节决定。**下轮入口（唯一）**：对 pitch 夹具 dump 我方 VisibleTileSet 覆盖集 vs mgl coveringTiles 参照集（mgl-covering-tiles-ref.js 的 globe 版），定位缺失环瓦在遍历的哪一步被剔（frustum 面序/OBB 相交/shouldSplit/canGetTile），实施定向放行。
+
+**§835b. 决定性对拍：pitch 相机下我方覆盖 4 瓦 vs mgl 10 瓦混合 LOD（2026-09-06）**：
+
+工具落地：真值页导出 mgl `transform.coveringTiles({tileSize:256})`（同相机逐瓦 id）；我方新增 `coverdump=1` 探针（AfterRender 后 8s 采样 `m_visibleTiles.m_dataSourceCache.m_tileCache`，TileKey 解码 z/x/y）。pitch 相机实测：
+- **mgl 10 瓦混合 LOD**：z4×2（7-8/4）+ z5×2（15-16/10）+ **z6×6（31-32/22-24，近场精细级）**；
+- **我方 4 瓦单级**：仅 z5 2×2（15-16/10-11，lat ~22-45°）。
+
+即我方覆盖**既粗（近场缺 z6 环）又窄（缺远/侧向环瓦）**——y331-375 缺失带=mgl 的 z6 近场环；set-style 的"栅格细节差异"、紫圆错位与此同源（LOD 相位差）。远 cover 的 frustum far 扩展无效与此吻合：缺环不是 far 裁剪，而是**遍历的 shouldSplit/LOD 选择在该相机下停在 z5**（mgl 的 LOD 用 tileScaleAdjustment + maxDivergence 0.3 的球面补偿，transform.ts:1466-1490，我方 mglDistanceLod 未启用或参数不同）。**下轮入口**：①pitch 相机下开启 `mglDistanceLod`（VisibleTileSet 既有 opt-in，§323）对拍覆盖集；②如仍差，移植 mgl coveringTiles 的球面 tileScaleAdjustment 分支。瓦文件已随夹具分发（mgl 用同集渲染成功），无 404 风险。

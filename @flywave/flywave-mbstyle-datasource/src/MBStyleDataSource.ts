@@ -2528,6 +2528,36 @@ export class MBStyleDataSource extends TileDataSource {
                 }
             });
             this.mapView.addEventListener(MapViewEventNames.AfterRender, async () => {
+                // §835: cover dump — the datasource tileCache keys decoded to
+                // z/x/y, for diffing against mgl's coveringTiles reference.
+                if ((globalThis as any).__mbCoverDump && !(globalThis as any).__mbCoverDumped) {
+                    (globalThis as any).__mbCoverDumped = true;
+                    // wait for the scene to settle before sampling the cache
+                    setTimeout(() => {
+                    try {
+                        const vts = (this.mapView as any).m_visibleTiles;
+                        const cache = vts?.m_dataSourceCache?.m_tileCache;
+                        {
+                            const keys: string[] = [];
+                            const shapes: any[] = [];
+                            cache.forEach((tile: any) => {
+                                const tk: any = tile.tileKey;
+                                if (shapes.length < 2) shapes.push({ lvl: tk?.level, col: tk?.column, row: tk?.row, ctor: tk?.constructor?.name });
+                                if (tk?.level !== undefined) keys.push(`${tk.level}/${tk.column}/${tk.row}`);
+                            });
+                            if (shapes.length) keys.push('SHAPE:' + JSON.stringify(shapes));
+                            keys.sort();
+                            const fbD = (window as any).__karma__?.config?.args
+                                ?.find?.((a: string) => a.startsWith('feedback-url='))
+                                ?.slice('feedback-url='.length);
+                            if (fbD) fetch(`${fbD}/mb-probe-dump`, {
+                                method: 'POST', headers: { 'content-type': 'application/json' },
+                                body: JSON.stringify({ probe: 'cover', log: keys }),
+                            }).catch(() => {});
+                        }
+                    } catch {}
+                    }, 8000);
+                }
                 // §778: on the sphere projection, circle Points objects are
                 // the NEAREST opaque geometry, so three's front-to-back sort
                 // draws them FIRST (CirclePointsMaterial has depthWrite off)
