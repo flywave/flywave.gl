@@ -298,6 +298,12 @@ function discoverTests(): TestEntry[] {
     if (rz === "1") (globalThis as any).__mbRoundZoom = true;
 }
 {
+    // §841b: surface the swallowed decode exceptions (MBStyleDecoder catch).
+    const de = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("decodeerr="))?.slice("decodeerr=".length);
+    if (de === "1") (globalThis as any).__mbDecodeErr = true;
+}
+{
     // §682: camera A/B offsets (yaw/pitch degrees) for framing calibration.
     const yawAB = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("yawab="))?.slice("yawab=".length);

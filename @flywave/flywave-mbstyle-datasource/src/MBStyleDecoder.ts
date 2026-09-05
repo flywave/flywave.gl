@@ -603,6 +603,14 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_worldview, this.m_center,
         );
         if (matched.length === 0 || !this.m_emitter) return;
+        // §841b one-shot: why do z6 overscale fill features match nothing?
+        if (layer === 'country_boundaries' && !(globalThis as any).__mbCbProbe) {
+            (globalThis as any).__mbCbProbe = true;
+            // eslint-disable-next-line no-console
+            console.log('[MBCbProbe] zoom=', this.m_zoom, 'srcId=', effectiveSourceId,
+                'matched=', matched.length, 'ext=', extents,
+                'geo0=', JSON.stringify(geometry[0]?.rings?.[0]?.slice(0, 3)));
+        }
         let visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
         // §634 conflation replacement: fill-extrusion polygons inside a model
         // footprint are REPLACED by the 3D model (mgl model-layer conflation)
@@ -1275,7 +1283,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         } catch (e) {
             if ((globalThis as any).__mbDecodeErr) {
                 // eslint-disable-next-line no-console
-                console.error('[MBDecodeErr]', tileKey.level, tileKey.column, tileKey.row, e);
+                console.error('[MBDecodeErr]', tileKey.level, tileKey.column, tileKey.row, String((e as any)?.message ?? e));
             }
             injectBackground();
             return emitter.getDecodedTile();

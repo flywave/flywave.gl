@@ -450,6 +450,13 @@ export class OmvDataAdapter implements DataAdapter, OmvVisitor {
      * @param feature - The polygon features to process.
      */
     visitPolygonFeature(feature: com.mapbox.pb.Tile.IFeature): void {
+        // §841c one-shot probe: does the adapter see country_boundaries
+        // polygons in the generated z6 overscale tiles?
+        if (!(globalThis as any).__mbOmvCb && this.m_layer?.name === "country_boundaries") {
+            (globalThis as any).__mbOmvCb = true;
+            // eslint-disable-next-line no-console
+            console.log('[MBOmv] visitPolygonFeature country_boundaries, geom=', feature.geometry === undefined ? "undef" : "present");
+        }
         if (feature.geometry === undefined) {
             return;
         }
@@ -464,7 +471,17 @@ export class OmvDataAdapter implements DataAdapter, OmvVisitor {
             modifierFunc
         );
         if (!properties) {
+            if (!(globalThis as any).__mbOmvNull) {
+                (globalThis as any).__mbOmvNull = true;
+                // eslint-disable-next-line no-console
+                console.log('[MBOmv] properties NULL for country_boundaries');
+            }
             return;
+        }
+        if (!(globalThis as any).__mbOmvAfter) {
+            (globalThis as any).__mbOmvAfter = true;
+            // eslint-disable-next-line no-console
+            console.log('[MBOmv] after-filter props=', JSON.stringify(properties).slice(0, 80));
         }
 
         const layerName = this.m_layer.name;

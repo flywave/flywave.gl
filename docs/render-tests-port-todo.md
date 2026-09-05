@@ -8290,3 +8290,7 @@ roundzoom 修正版（round(displayZoom)，去掉 −1 offset——mgl coveringZ
 **§841. worker 解码埋点推进：decodedbg 无输出待修 + roundzoom=1 需保持默认关（2026-09-06）**：
 
 vectortile 包重建（karma 用 lib 预编译产物，src 改动须 `npx tsc -p` 重建）后 worker-decode 探针仍无 POST（z6 瓦 404 已消失=瓦加载成功）。decodedbg=1 亦无 [MBTileDec] 输出（49k 行日志中零命中；MBCam 49,508 次=applyCameraSettings 海量调用实证、MBRZ 2 次=一次性 ✓）——**decodedbg 日志链自身需排查**（疑 __mbDecodeDbg 设置/作用域断点）。roundzoom=1 现帧：白天区 + 蓝色地面（色源未定性），无黄色 fill，恒 209,345 比基线 28,382 恶化 → **roundzoom 门必须保持默认关**。下一会话入口：①修 decodedbg 输出链（主线程 in-process decoder，globalThis 应共享——为何零输出）；②借其输出定位 z6 fill 特征弃置点；③确认蓝色地面色源（fog？ds 瓦？）。
+
+**§842. overscale 复测终局：拼缝错位证实 overscale 无法替代真实 z6 数据（2026-09-06）**：
+
+修正 ClosePath/字段号/裁剪后，z6 overscale 瓦全面渲染：pitch 125,806（比 209k 改善，但仍劣于基线 28,382）。当前帧 = 满覆盖黄蓝拼块但**沿 z5 瓦边界有直线接缝与错位**——因为 overscale 瓦的内容是 z5 父瓦多边形（已在 z5 边界被源数据裁剪），拼回 z6 后邻瓦内容不连续；而 expected 的 z6 瓦是真实 z6 精度的连续几何。**结论：pitch 缺失带的正解必须有真实 z6 数据**（overscale 路线封闭，与 §839 terrain 同构——本地瓦集裁剪导致）。三项引擎专项之外，pitch 余带与 terrain 桶均已定性为**本地数据受限**：补齐真实 z6 数据 + 数据补齐后按 §840 的 roundzoom 修正版即可收敛。roundzoom 门保持默认关。
