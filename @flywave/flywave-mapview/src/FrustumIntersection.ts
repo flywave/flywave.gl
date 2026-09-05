@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+    EarthConstants,
     OrientedBox3,
     Projection,
     ProjectionType,
@@ -274,7 +275,25 @@ export class FrustumIntersection {
             //   - mgl's z tile-units are cos(lat)-compressed relative to its x/y
             //     tile-units; flywave's z is true meters while x/y are projected
             //     mercator meters, so the z-term and dz use altitude/cos(lat).
-            if (this.mglDistanceLod && uniqueZoomLevels.size > 0) {
+            // §836: mgl coveringTiles globe branch — ECEF-meter mirror of
+            // transform.ts shouldSplit (isGlobe): per-corner forward distance
+            // vs 2^(maxZoom−z)·(ccd/tileSize)·tileScaleAdjustment, with the
+            // globe tileScaleAdjustment (maxDivergence 0.3 center-lod
+            // compromise / relativeTileScale ÷ mercatorScaleRatio) and
+            // distToSplitScale(≈cameraHeight, distance). The planar branch
+            // below assumes a Box3/mercator frame and must not run on the
+            // sphere (OrientedBox3 has no .min/.max — §835c crash).
+            if (this.mglDistanceLod && uniqueZoomLevels.size > 0 &&
+                this.mapView.projection.type === ProjectionType.Spherical) {
+                const maxZoomLod = Math.max(...uniqueZoomLevels);
+                if (tileKey.level < maxZoomLod &&
+                    this.mglGlobeDistanceLodStop(tilingScheme, tileKey, offset, maxZoomLod)) {
+                    this.lodStoppedEntries.push(tileEntry);
+                    continue;
+                }
+            }
+            if (this.mglDistanceLod && uniqueZoomLevels.size > 0 &&
+                this.mapView.projection.type !== ProjectionType.Spherical) {
                 const maxZoomLod = Math.max(...uniqueZoomLevels);
                 if (tileKey.level < maxZoomLod) {
                     const cam = this.m_camera;
@@ -404,6 +423,109 @@ export class FrustumIntersection {
             }
         }
         return { tileKeyEntries: this.m_tileKeyEntries, calculationFinal: cache.calculationFinal };
+    }
+
+    /**
+     * §836: mgl coveringTiles shouldSplit for the globe projection
+     * (transform.ts isGlobe path), in ECEF meters:
+     *  - closestDistance = min over tile ground corners of dot(corner−cam, fwd)
+     *    (mgl: per-corner dot(distanceXyz, camera.forward()), no z replacement)
+     *  - distToSplit = 2^(maxZoom−z) · (ccd/tileSize) · tileScaleAdjustment
+     *    · distToSplitScale(dz≈cameraHeight, closestDistance), in
+     *    covering-zoom tile units (1 unit = C/2^maxZoom m on the equator)
+     *  - tileScaleAdjustment: center-latitude tiles 1/max(1, msr−0.3)
+     *    (mgl's maxDivergence 0.3 compromise), others
+     *    min(1, circ(closestLat)/circ(centerLat) ÷ msr)
+     *  - mgl border case: a tile containing the center point always splits.
+     * Stop subdividing (return true) when closest ≥ distToSplit and the tile
+     * does not contain the center.
+     */
+    private mglGlobeDistanceLodStop(
+        tilingScheme: TilingScheme,
+        tileKey: TileKey,
+        offset: number,
+        maxZoomLod: number
+    ): boolean {
+        const cam = this.m_camera;
+        const fwd = cam.getWorldDirection(tmpVectors3[0]);
+        const camPos = cam.position;
+        const C = 40075016.686;
+        const tileSizePx = this.mglDistanceLodTileSize;
+        const ccdPx =
+            0.5 / Math.tan((cam.fov * Math.PI) / 180 / 2) *
+            this.mapView.viewportHeight;
+        const msr = EarthConstants.EQUATORIAL_RADIUS === 0 ? 1 :
+            Math.cos(Math.PI / 4) / Math.cos(((this.mapView as any).geoCenter?.latitude ?? 45) * Math.PI / 180);
+
+        const geoBox = getGeoBox(tilingScheme, tileKey, offset);
+        // tileScaleAdjustment (mgl globe branch)
+        const cl = Math.min(
+            Math.max(((this.mapView as any).geoCenter?.latitude ?? 0), geoBox.southWest.latitude),
+            geoBox.northEast.latitude
+        );
+        let adj: number;
+        const circLat = (lat: number) => Math.cos(lat * Math.PI / 180);
+        if (cl === ((this.mapView as any).geoCenter?.latitude ?? 0)) {
+            adj = 1 / Math.max(1, msr - 0.3);
+        } else {
+            adj = Math.min(1, circLat(cl) / circLat((this.mapView as any).geoCenter?.latitude ?? 0) / msr);
+        }
+
+        // covering-tile unit in meters (equator)
+        const unitM = C / Math.pow(2, maxZoomLod);
+        // camera height above the sphere
+        const dCam = camPos.length();
+        const camH = dCam - EarthConstants.EQUATORIAL_RADIUS;
+
+        // ground corners (on-sphere) → forward distances
+        const pts: Array<[number, number]> = [
+            [geoBox.southWest.latitude, geoBox.southWest.longitude],
+            [geoBox.southWest.latitude, geoBox.northEast.longitude],
+            [geoBox.northEast.latitude, geoBox.southWest.longitude],
+            [geoBox.northEast.latitude, geoBox.northEast.longitude]
+        ];
+        let closest = Infinity;
+        let closestFull = Infinity;
+        const proj = this.mapView.projection;
+        for (const [lat, lng] of pts) {
+            proj.projectPoint({ latitude: lat, longitude: lng, altitude: 0 } as any, tmpVectors3[1]);
+            const dx = tmpVectors3[1].x - camPos.x;
+            const dy = tmpVectors3[1].y - camPos.y;
+            const dz = tmpVectors3[1].z - camPos.z;
+            const f = dx * fwd.x + dy * fwd.y + dz * fwd.z;
+            if (f < closest) closest = f;
+            const full = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (full < closestFull) closestFull = full;
+        }
+
+        // mgl distToSplitScale (acute-angle stretch), dz ≈ cameraHeight
+        const dz = Math.max(camH, 1e-6);
+        let scaleF = 1.0;
+        if (closestFull * 0.707 >= dz) {
+            const r = closestFull / dz;
+            const k = r - 1 / 0.707;
+            scaleF = r / (1 / 0.707 + (Math.pow(1.1, k + 1) - 1) / (1.1 - 1) - 1);
+        }
+
+        const distToSplitM =
+            Math.pow(2, maxZoomLod - tileKey.level) *
+            (ccdPx / tileSizePx) *
+            adj *
+            scaleF *
+            unitM;
+
+        if (closest < distToSplitM) {
+            return false; // split
+        }
+        // mgl border case: tile containing the center point always splits
+        const cLat = (this.mapView as any).geoCenter?.latitude;
+        const cLng = (this.mapView as any).geoCenter?.longitude;
+        if (typeof cLat === 'number' && typeof cLng === 'number' &&
+            cLat >= geoBox.southWest.latitude && cLat <= geoBox.northEast.latitude &&
+            cLng >= geoBox.southWest.longitude && cLng <= geoBox.northEast.longitude) {
+            return false;
+        }
+        return true; // stop
     }
 
     private getTileKeyEntry(

@@ -8245,3 +8245,12 @@ farcover 二次实验（本轮修正：写入点移到 applyProjection——styl
 **§835c. mglDistanceLod 球面崩溃根因 + 覆盖对拍结论（2026-09-06）**：
 
 `lodcmp=1` 实测：mglDistanceLod 分支（FrustumIntersection.ts:277+，§323 实现）按**平面投影**写——`cache.tileBounds as THREE.Box3` 取 box.min/max.x/y、camPos.z 作高度、mv.geoCenter/worldTarget；球面投影下 obbIntersections=true → tileBounds 是 **OrientedBox3**（无 .max）→ `Cannot read properties of undefined (reading 'x')` 渲染循环持续崩溃（§323 后从未在球面用过）。**正解 = 实现球面版 distance-LOD**：按 mgl transform.ts coveringTiles 的 isGlobe 分支（dz=aabb.distanceZ(cameraPoint)、relativeTileScale=circumferenceAtLatitude 比、tileScaleAdjustment=maxDivergence 0.3 折中），在 OBB 角点上求 camera-forward 投影距离，替换/并行于现有平面分支。落地后 pitch 相机覆盖应从 4 瓦单级 z5 扩为 mgl 的 10 瓦混合 z4/z5/z6，缺失带（y331-375）与 set-style 细节差异预计随之收敛。lodcmp=1 门与 coverdump 探针保留入库（崩溃前勿在球面开 mglDistanceLod）。
+
+**§836. 球面 distance-LOD 首版落地 + 覆盖结构差定位（2026-09-06）**：
+
+`mglGlobeDistanceLodStop()` 已实现并入 traversal（ECEF 米制 mirror：OBB 角点 forward 距离 vs 2^(maxZoom−z)·(ccd/tileSize)·tileScaleAdjustment·distToSplitScale，globe 版 adj=maxDivergence 0.3/relativeTileScale÷msr，含 contains-center 强制细分；planar 分支以 `projection.type!==Spherical` 门隔离，§835c 崩溃消除）。实测：pitch 覆盖仍 4 瓦 z5（分支总返回 split，未触发 stop）——**真正的结构差不在 distance-LOD**：
+
+1. **细度**：我方 maxZoomLod=5（source dataZoomLevel 封顶），mgl 覆盖含 **z6 overscale 瓦**（mgl 的 coveringZoom 由相机推导、可超 source 级 overzoom 渲染）；我方 `ds.shouldSubdivide` 在 dataZoomLevel 停止。
+2. **广度**：mgl 含 z4 远环瓦（7-8/4，随 limb 展宽的经度跨度），我方整环缺失——远环剔除点仍未定位（frustum far 扩展两次均无效；疑 MapTileCuller/extendedFrustumCulling 或 root-tile 生成）。
+
+**正解拆解（引擎专项，下轮）**：①coveringZoom 允许 overzoom 超过 source dataZoomLevel（OverscaledTileID 语义）；②远环 root-tile 生成/剔除定位（dump FrustumIntersection 各步剔除计数即可二分）。两处均在 FrustumIntersection/VisibleTileSet，与渲染无关、风险低。本轮球面 LOD 分支与门保留（gated，无行为变化：28,382 逐位持平验证）。
