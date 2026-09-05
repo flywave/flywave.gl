@@ -8139,3 +8139,7 @@ globe-transition/pitch 与 globe-terrain 的 expected 天空为**纯黑**（mgl�
 **回测**：multipolygon ×2 109,240→**9,482**（−91%）、symbol-z-offset-zoom-in 150,524→73,103（−51%）、map-aligned 99,958→69,874（−30%）、map-aligned-labeling −10.5k、zoom-in-labeling −4.1k、pattern −5.5k；fe/default、emissive-strength ×2、translate、opacity、stack-interleaved、zero-height-angle-limit 全部中性。**fe 家族净 −327,527 px 零回归**。mercator building 族抽查：buildings-trees-shadows-fog 554,741→774,358（+220k）落于该族已知不稳定带（§6282：50-86 万 flip-flop），后续单测复核；同轮 mercator fill-extrusion-color/height/multiple 无异常。哨兵：globe-default 2,709、zero-height-simple 19,731 持平。
 
 **探针入库**：`nolights=1`（applyLights 早退）、`noinject=1`（跳过 extrusion Lambert 注入）、`pxfrom=N`（pxTrace 起始 draw 序号）、`shadowdisable=1`（既有）。注意：karma 残留进程会让 webpack 出陈旧 bundle（本次多次 A/B 被坑）——每轮 A/B 前 `pkill -f karma` 并用 `grep -c` 校验 bundle 含改动后再读数。
+
+**§821. buildings +220k A/B 定论非回归；globe-terrain 黑域绘制者定位（2026-09-05）**：
+
+①**buildings-trees-shadows-fog A/B（git show cdd2b6cf 前后单测）**：§820 前后均 **415,709 分毫不差**——非 §820 回归；§820 前的"554,741→774,358"系主结果目录混合批次文件的污染对比。现值 415,709 低于该族历史带（§6282：50-86 万），实际为改善后水平。②**globe-terrain 黑域（153,040）**：drawlog 定位黑区绘制者 = 多个 **ro=1 黑色 MeshBasic 网格**（col=000000，vn 7/10/15/34，与白色地形 quad 混杂），疑 hillshade/DEM 相关网格在 globe 下渲染黑；修复尝试——applyTerrain 创建 TerrainController 后补 `setBaseColor(clearColor)`（applyBackgroundColor 的 setBaseColor 在控制器存在前静默空转，中性加固保留）后数字不变——黑物非控制器底色。**下一入口**：pxTrace 黑区像素（256, GL-y 100→screen 412 以下区域）定位具体 draw，或 hillshade DEM 解码在 globe 分支的黑帧排查。terrain 桶挂账于此（153,040），pitch 天空语义（198,191）同挂账。

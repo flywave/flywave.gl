@@ -2991,6 +2991,17 @@ export class MBEnvironmentManager {
                 1, // radius → 3×3 grid around center
                 terrain.encoding === 'terrarium' ? 'terrarium' : 'mapbox',
             );
+            // §821: the style background owns the terrain base —
+            // applyBackgroundColor runs BEFORE this controller exists (its
+            // `terrainController?.setBaseColor` silently no-ops), so re-apply
+            // the current clear color here or the mesh renders its default
+            // black base (globe-terrain's near-field black band).
+            try {
+                const cc = (this.m_mapView as any).clearColor;
+                if (typeof cc === 'number') {
+                    this.m_terrainController.setBaseColor(cc);
+                }
+            } catch { /* best-effort */ }
             if (this.m_terrainController.meshCount > 0
                 && (globalThis as any).__mbTerrHide) {
                 for (const mesh of this.m_terrainController.meshes) {
