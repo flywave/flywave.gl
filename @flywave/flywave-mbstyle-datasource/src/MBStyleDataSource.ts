@@ -4919,7 +4919,14 @@ export class MBStyleDataSource extends TileDataSource {
         // vs mgl's z6 near field, §835b).
         if ((globalThis as any).__mbRoundZoom &&
             Number((this.mapView as any).projection?.type) === 1) {
-            z = Math.round(z);
+            // mgl coveringZoomLevel = round(styleZoom) for 512 vector tiles;
+            // our display zoom (6) already equals that, so drop the −1 offset.
+            z = Math.round(zoomLevel);
+            if (!(globalThis as any).__mbRzLogged) {
+                (globalThis as any).__mbRzLogged = true;
+                // eslint-disable-next-line no-console
+                console.log('[MBRZ] roundzoom active, z=', z, 'viewZoom=', zoomLevel);
+            }
         }
         return Math.max(
             this.minDataLevel,

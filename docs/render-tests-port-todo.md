@@ -8270,3 +8270,7 @@ roundzoom=1 实验（mgl vector roundZoom 语义）实测无效——覆盖仍 4
 **§839. terrain 66k×2 决定性发现：本地数据受限，非实现受限（2026-09-06）**：
 
 DEM 瓦清单核查：夹具中心 [72.42,37.06] 8° 范围内本地仅 **1 块 z4 瓦**（4/11/6）；z5 中心瓦（5/22/12）、z6-12 全部缺失。而 expected.png 的满帧高频浮雕需要 z9-12 DEM（本地 z≥9 共 258 块散布全球，唯区域附近无）——expected 由 **CI 完整瓦集**生成，本地 checkout 已裁剪。**后果**：即使 §838 两件套完美实现，本地渲染也无法复现该浮雕（本地 vendored mgl 同样会渲染平坦地形）——该 66k×2 桶为**数据受限**，指标上不可收敛。实施 §838 两件套的验收基准应改为「本地 vendored mgl 实渲染对拍」（真值页 mgl-render-style.html 已具备该能力，本地 mgl 同样缺数据 → 两者均平坦 → 一致性可验）。在此之前本桶实现无指标收益，维持挂账；如需真值数据，须向 fixture 瓦集补齐区域 z9-12 DEM（数据工程，非代码）。
+
+**§840. pitch 余带决定性发现：同为本地数据受限（缺 6/31-32/22-24.mvt），非代码（2026-09-06）**：
+
+roundzoom 修正版（round(displayZoom)，去掉 −1 offset——mgl coveringZoomLevel=round(styleZoom)=6 对 512 vector）实测：覆盖成功扩展为 **z6 全环（含 6/31/22、6/31/23 等 mgl 同款瓦）**，但 mismatch 28,382→**209,345**：6/31-32/22-24.mvt **本地不存在**（fixture 瓦集被裁剪），请求 404 → z5 父瓦已被细分删除 → 空洞。expected.png（CI 完整瓦集）含这些 overscale 瓦的内容（y331-375 的水/陆）。**与 §839 terrain 同构：本地数据受限，指标不可收敛**。代码保留：`roundzoom=1` 门（mgl vector roundZoom 语义，修正版公式 round(displayZoom)）在瓦集补齐后即为正确实现；默认关。需补数据：`6/31-32 × 20-24.mvt` 系列（及远环 4/7-8/4、4/7-8/5 等）。至此 pitch 余带与 terrain 桶定性完成：**剩余残差全部为数据或 mgl 渲染模型层面，代码侧无 further 动作**。
