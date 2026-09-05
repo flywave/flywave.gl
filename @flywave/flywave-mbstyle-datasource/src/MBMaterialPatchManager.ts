@@ -4711,6 +4711,10 @@ export class MBMaterialPatchManager {
                     (this.m_dataSource as any).mapView?.update?.();
                 } catch {}
             }, undefined, () => {
+                if (typeof window !== 'undefined' &&
+                    (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'projstamp=1')) {
+                    console.log('[HSD404] dem 404, fallback walk:', url);
+                }
                 // §797: DEM 404 → ancestor fallback (mgl source-cache over-
                 // zooms DEMs the same way). The hillshade shader assumes the
                 // texture covers exactly this tile, so crop the child's
