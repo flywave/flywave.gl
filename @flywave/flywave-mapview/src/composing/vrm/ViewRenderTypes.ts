@@ -43,10 +43,11 @@ export interface IColorGradingLUTConfig {
 /**
  * One volumetric fog light (lamp glow through haze). Plain data — registered
  * at runtime via `mapView.addFogLight`; add/remove/reposition never rebuilds
- * the node graph, only uniform slots change.
+ * the node graph, only uniform slots change. To move a light, update
+ * `position` and call `addFogLight` again.
  */
 export interface IFogLightDef {
-    /** Geographic position of the light (converted to world once on add). */
+    /** Geographic position of the light (projected to the world frame on add). */
     position: GeoCoordinates;
     /** Light color, 0xRRGGBB. */
     color: number;
@@ -59,8 +60,6 @@ export interface IFogLightDef {
      * consumed premultiplied at uniform upload time. Defaults to 1.
      */
     visibility?: number;
-    /** World-frame position cached by `MapView.addFogLight` (do not set). */
-    worldPosition?: THREE.Vector3;
 }
 
 export interface IFogLightConfig {
@@ -140,8 +139,11 @@ export interface IViewRenderManager {
     readonly config: IViewRenderConfig;
     bloomObjects: Set<THREE.Object3D>;
     bloomIgnoreObjects: Set<THREE.Object3D>;
-    /** Fog lights registered for the volumetric halo pass (plain data defs). */
-    fogLights: Set<IFogLightDef>;
+    /**
+     * Fog lights registered for the volumetric halo pass, keyed by def with
+     * the def's geo position projected to the world frame (filled on add).
+     */
+    fogLights: Map<IFogLightDef, THREE.Vector3>;
     /**
      * Per-frame light uniform refresh (world → camera-relative view space).
      * Called from `MapView.render` right before the frame is submitted; cheap

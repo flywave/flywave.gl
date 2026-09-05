@@ -48,12 +48,6 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             },
             toneMappingExposure: urlNight ? 0.6 : 1,
             postEffects: {
-                bloom: {
-                    enabled: true,
-                    strength: 1.2,
-                    radius: 0.67,
-                    luminancePassThreshold: 0.5
-                },
                 fogLight: {
                     enabled: !urlFogLightOff,
                     intensity: 1,
@@ -137,8 +131,7 @@ const setupGui = (mapView: MapView, gui: GUI): void => {
         exposure: urlNight ? 0.6 : 1,
         fogLightEnabled: !urlFogLightOff,
         fogLightIntensity: 1,
-        fogLightDensity: 0.002,
-        bloomStrength: 1.2
+        fogLightDensity: 0.002
     };
 
     const atmosphere = gui.addFolder("Night Scene");
@@ -151,8 +144,6 @@ const setupGui = (mapView: MapView, gui: GUI): void => {
     fog.add(state, "fogLightIntensity", 0, 6, 0.05).name("intensity").onChange(applyFogLight);
     fog.add(state, "fogLightDensity", 0, 0.01, 0.0001).name("density").onChange(applyFogLight);
     fog.open();
-
-    gui.add(state, "bloomStrength", 0, 4, 0.05).name("bloom strength").onChange(applyBloom);
 
     function applyHour(): void {
         const hours = Math.floor(state.hour);
@@ -179,15 +170,6 @@ const setupGui = (mapView: MapView, gui: GUI): void => {
                     intensity: state.fogLightIntensity,
                     density: state.fogLightDensity
                 }
-            }
-        });
-        mapView.update();
-    }
-
-    function applyBloom(): void {
-        mapView.patchTheme({
-            postEffects: {
-                bloom: { enabled: state.bloomStrength > 0, strength: state.bloomStrength }
             }
         });
         mapView.update();

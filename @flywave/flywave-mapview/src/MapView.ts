@@ -1591,17 +1591,17 @@ export class MapView extends EventDispatcher {
 
     /**
      * Register a volumetric fog light (lamp glow through haze). The geo
-     * position is converted to a world-frame cache once on add; afterwards
+     * position is projected to the world frame once on add; afterwards
      * add/remove/reposition only touch uniform slots — the node graph is
      * rebuilt only by the `postEffects.fogLight.enabled` switch. Lights
-     * beyond the fixed capacity (32) are ignored.
+     * beyond the fixed capacity (32) are ignored. To move a light, update
+     * the def's `position` and call this again.
      */
     addFogLight(def: IFogLightDef): void {
-        def.worldPosition = this.projection.projectPoint(
-            def.position,
-            def.worldPosition ?? new THREE.Vector3()
+        this.mapRenderingManager.addFogLight(
+            def,
+            this.projection.projectPoint(def.position, new THREE.Vector3())
         );
-        this.mapRenderingManager.addFogLight(def);
         this.update();
     }
 

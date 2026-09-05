@@ -160,8 +160,8 @@ three/addons 的 `LUTCubeLoader`/`LUT3dlLoader`**——它们内部裸
 **注册表用法**（人机接口照 bloom 的 add/remove）：
 
 ```typescript
-// position 用 GeoCoordinates；worldPosition 缓存由 addFogLight 内部
-// projectPoint 填（之后每帧减相机位置再转视空间）
+// position 用 GeoCoordinates；投影成世界坐标的缓存在渲染端内部
+// （vrm.fogLights: Map<def, Vector3>，公开类型上没有该字段）
 mapView.addFogLight({ position: new GeoCoordinates(lat, lng, h),
                       color: 0xffb45c, intensity: 1.5, radius: 60 });
 mapView.removeFogLight(def); // 同一对象身份

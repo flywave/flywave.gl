@@ -17,11 +17,7 @@ import type { Renderer } from "three/webgpu";
 import { uniform, vec3 } from "three/tsl";
 
 import { type IPassManager } from "./IPassManager";
-import {
-    type IViewRenderManager,
-    type AntialiasingMode,
-    type IFogLightDef
-} from "./vrm";
+import { type IViewRenderManager, type AntialiasingMode, type IFogLightDef } from "./vrm";
 import { TranslucentLayerEffect, OUTLINE_LAYER_BIT } from "./vrm/TranslucentLayerEffect";
 
 export enum MSAASampling {
@@ -90,11 +86,12 @@ export interface IMapRenderingManager extends IPassManager {
     removeIgnoreBloomObject(object: THREE.Object3D): void;
 
     /**
-     * Register a fog light (volumetric lamp halo). Plain data def; the
-     * `worldPosition` cache is filled by the caller (MapView) once. Adding,
-     * removing or moving lights never rebuilds the node graph.
+     * Register a fog light (volumetric lamp halo). Plain data def plus the
+     * def's geo position already projected to the world frame by the caller
+     * (MapView). Adding, removing or moving lights never rebuilds the node
+     * graph.
      */
-    addFogLight(def: IFogLightDef): void;
+    addFogLight(def: IFogLightDef, worldPosition: THREE.Vector3): void;
     removeFogLight(def: IFogLightDef): void;
     /** Per-frame uniform refresh (world → camera-relative view space). */
     updateFogLights(
@@ -222,7 +219,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_customEffects: Map<string, ICustomEffect> = new Map();
     private m_pendingBloomObjects: THREE.Object3D[] = [];
     private m_pendingOutlineObjects: THREE.Object3D[] = [];
-    private m_pendingFogLights: IFogLightDef[] = [];
+    private m_pendingFogLights: { def: IFogLightDef; world: THREE.Vector3 }[] = [];
     private m_gpuPicking: boolean = false;
 
     private _viewRenderManager?: IViewRenderManager;
@@ -326,8 +323,8 @@ export class MapRenderingManager implements IMapRenderingManager {
                 this.applyOutlineLayer(obj, true);
             }
             this.m_pendingOutlineObjects = [];
-            for (const def of this.m_pendingFogLights) {
-                vrm.fogLights.add(def);
+            for (const { def, world } of this.m_pendingFogLights) {
+                vrm.fogLights.set(def, world);
             }
             this.m_pendingFogLights = [];
         }
@@ -387,15 +384,15 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.applyBloomMrtNode(object, 0);
     }
 
-    addFogLight(def: IFogLightDef): void {
-        this.m_pendingFogLights.push(def);
+    addFogLight(def: IFogLightDef, worldPosition: THREE.Vector3): void {
+        this.m_pendingFogLights.push({ def, world: worldPosition });
         const vrm = this.viewRenderManager;
         if (vrm == null) return;
-        vrm.fogLights.add(def);
+        vrm.fogLights.set(def, worldPosition);
     }
 
     removeFogLight(def: IFogLightDef): void {
-        this.m_pendingFogLights = this.m_pendingFogLights.filter(d => d !== def);
+        this.m_pendingFogLights = this.m_pendingFogLights.filter(d => d.def !== def);
         this.viewRenderManager?.fogLights.delete(def);
     }
 

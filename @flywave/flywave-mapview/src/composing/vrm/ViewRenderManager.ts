@@ -158,19 +158,25 @@ export class ViewRenderManager implements IViewRenderManager {
      * the inverse of the render camera's world matrix (position-less RTE
      * rotation).
      */
-    updateFogLights(cameraWorldPosition: THREE.Vector3, cameraWorldMatrixInverse: THREE.Matrix4): void {
+    updateFogLights(
+        cameraWorldPosition: THREE.Vector3,
+        cameraWorldMatrixInverse: THREE.Matrix4
+    ): void {
         const u = this.m_fogLightUniforms;
         if (u === undefined) return; // graph not built (effect never enabled)
+        // The node reads the (created-once, reused-across-rebuilds) uniform
+        // slots, so mirror the live config into them every frame — slider
+        // changes go through config only.
+        u.intensity.value = this.config.fogLight.intensity;
+        u.density.value = this.config.fogLight.density;
         // UniformArrayNode keeps the ORIGINAL object array in `.array` (its
         // `.value` is the BufferNode's null!) and re-uploads it per render —
         // mutate the Vector3/Vector4 slots in place.
         const posArr = u.positions.array as THREE.Vector3[];
         const dataArr = u.data.array as THREE.Vector4[];
         let slot = 0;
-        for (const def of this.fogLights) {
+        for (const [def, world] of this.fogLights) {
             if (slot >= FOG_LIGHT_CAPACITY) break;
-            const world = def.worldPosition;
-            if (world === undefined) continue;
             _fogLightOffset.set(
                 world.x - cameraWorldPosition.x,
                 world.y - cameraWorldPosition.y,
@@ -216,8 +222,12 @@ export class ViewRenderManager implements IViewRenderManager {
 
     bloomObjects: Set<THREE.Object3D> = new Set();
     bloomIgnoreObjects: Set<THREE.Object3D> = new Set();
-    /** Fog lights feeding the halo pass; plain data defs (see MapRenderingManager). */
-    fogLights: Set<IFogLightDef> = new Set();
+    /**
+     * Fog lights feeding the halo pass, keyed by def (re-adding a def moves
+     * it) with the def's geo position projected to the world frame once on
+     * add — the per-frame upload must not redo the projection.
+     */
+    fogLights: Map<IFogLightDef, THREE.Vector3> = new Map();
     /** Persistent fog-light uniform slots; reused across graph rebuilds. */
     private m_fogLightUniforms?: IFogLightUniforms;
     /**

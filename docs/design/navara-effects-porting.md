@@ -483,8 +483,8 @@ Failed to allocate texture` → `WriteTexture: Data offset is too large` →
 | `mapview/composing/vrm/ViewRenderTypes.ts` | `IFogLightDef`（GeoCoordinates/color/intensity/radius/visibility）+ `IFogLightConfig` + `fogLights` Set + `updateFogLights()` 接口 |
 | `mapview/composing/vrm/effects/fogLight.ts` | TSL 移植：`depthToViewZ`/`screenToPositionView` 复用 aerial 的深度重建；`Loop` 32 槽固定展开，槽位超 count 按 0 处理（免动态分支）；返回 `vec4(acc, 0)` 加性合成 |
 | `ViewRenderManager.ts` | buildNodeGraph 在 **bloom 块之前**插入（线性域、tonemapping 前）；持久 uniform 槽位跨重建复用；`updateFogLights` 每帧世界系偏移 × RTE 相机逆矩阵 → 视空间 |
-| `MapRenderingManager.ts` | `addFogLight`/`removeFogLight`（照 bloom 的 Set + pending 队列模式）+ `fogLight` 配置槽 + sync 时 enabled-diff 才 `needsUpdate` |
-| `MapView.ts` | 公共 `addFogLight`/`removeFogLight`（内部 projectPoint 缓存 worldPosition + `update()`）；`setPostEffects` 清除/应用；render 里每帧推 uniform |
+| `MapRenderingManager.ts` | `addFogLight`/`removeFogLight`（照 bloom 的 pending 队列模式，注册表为 `Map<def, 世界坐标>`）+ `fogLight` 配置槽 + sync 时 enabled-diff 才 `needsUpdate` |
+| `MapView.ts` | 公共 `addFogLight`/`removeFogLight`（内部 projectPoint 投影进渲染端注册表，不污染公开 def 类型 + `update()`）；`setPostEffects` 清除/应用；render 里每帧推 uniform |
 | `examples/src/fog-light/` | 夜景示例：4 盏冷暖灯 + blocks + DEM/卫星底图，GUI（sun hour/exposure/fog intensity/density/bloom），`?night=off`、`?foglight=off` 参数 |
 
 ### 与 navara 的设计偏差
