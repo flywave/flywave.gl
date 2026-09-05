@@ -293,6 +293,11 @@ function discoverTests(): TestEntry[] {
     if (cd === "1") (globalThis as any).__mbCoverDump = true;
 }
 {
+    const rz = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("roundzoom="))?.slice("roundzoom=".length);
+    if (rz === "1") (globalThis as any).__mbRoundZoom = true;
+}
+{
     // §682: camera A/B offsets (yaw/pitch degrees) for framing calibration.
     const yawAB = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("yawab="))?.slice("yawab=".length);

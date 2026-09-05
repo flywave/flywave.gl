@@ -4912,9 +4912,18 @@ export class MBStyleDataSource extends TileDataSource {
     }
 
     getDataZoomLevel(zoomLevel: number): number {
+        let z = zoomLevel + this.storageLevelOffset;
+        // §836a EXPERIMENT (roundzoom=1): mgl coveringZoomLevel uses
+        // Math.round for vector sources (roundZoom=true) — floor left our
+        // globe cover a full level coarser near the horizon (pitch: 4×z5
+        // vs mgl's z6 near field, §835b).
+        if ((globalThis as any).__mbRoundZoom &&
+            Number((this.mapView as any).projection?.type) === 1) {
+            z = Math.round(z);
+        }
         return Math.max(
             this.minDataLevel,
-            Math.min(this.maxDataLevel, zoomLevel + this.storageLevelOffset)
+            Math.min(this.maxDataLevel, z)
         );
     }
 
