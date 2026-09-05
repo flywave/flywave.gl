@@ -8207,3 +8207,7 @@ globe-transition/pitch 与 globe-terrain 的 expected 天空为**纯黑**（mgl�
 **§832. set-style 纹理域量化：全帧栅格亮度系统偏移（2026-09-05）**：
 
 globe-circle/change-projection/set-style（213k，几乎全帧逐像素失配 256,648/262,144）的本质 = **raster 卫星瓦亮度系统偏移**：同位置采样 ours vs expected = 海洋 (32,35,41) vs (8,10,17)、陆地 (110,112,116) vs (48,52,54)——我方整体偏亮 ~+30-60（≈一次额外的 gamma/编码差），非几何/构图问题（紫圆位置/大小对齐）。此前目视"我方更暗"实为白色 glow halo 更强造成的印象。修复方向：globe 路径 raster 纹理上传/采样的 colorspace 链（sRGB↔linear 往返一次多余的编码，§820 在 fill-extrusion 注入链修过同构问题）+ glow halo 强度标定。预计连带 set-style 家族（globe-set-style/raster、symbols/set-style、circle/change-projection）~460k。
+
+**§832b. set-style 修正：非全局亮度偏移，是空间错位 + halo 覆盖（2026-09-05，修正 §832）**：
+
+逐点采样配对证伪"全帧亮度系统偏移"：同帧多点中暗洋 (7,7,15)→(5,7,13)、(5,13,23)→(10,13,20) 等完全吻合（栅格 colorspace 链无辜），而失配点呈三类：①**白 halo 覆盖**（(350,420)：expected 荒漠棕 vs 我方近白——我方右下辉光过强叠在瓦上）；②**紫圆错位**（(200,200)：expected 陆地 vs 我方紫圆——circle 几何/位置偏移）；③**卫星细节差异**（(110,150)：(48,52,54) vs (110,112,116)——不同 LOD/瓦相位的影像内容）。真值页实渲染 vendored mgl（setStyle op 已支持，local:// 瓦重写）：其主色桶与 expected 一致（暗 navy 洋 + 白辉光），确认 mgl-current=expected，偏差全在我方。**下轮入口**：①我方辉光/halo 在无-fog 样式上的来源（不应有 dome——查 MBGlobePoleCaps/极帽辉光或背景穹顶残留）；②circle 层 globe 投影错位；③栅格 LOD 选择。
