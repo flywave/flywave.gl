@@ -8334,3 +8334,7 @@ discext=1（§829 盘阈值 0.98→1.009，覆盖 normDist 0.98-1.009 带）：p
 **§850b. 会话终态核查（2026-09-06）**：
 
 §840b 入口（z6 fill 特征弃置）已被 §846 的编码修复实际解决——roundzoom=1 下 z6 瓦 fill 正常渲染（28,046 < 基线 28,382），该入口关闭。剩余三项的阻塞性质终判：①mgl globeMatrix 渲染模型（pitch 余带 28,046/set-style ~213k/poles 噪声带）——需 GPU 帧捕获（RenderDoc/SpectorJS，本环境无）逐值对拍 mgl globe shader 顶点变换链与 u_globe_radius 解耦项（§848 矛盾现象）；②globe→mercator 过渡渲染混合（heatmap 228k）——expected 本身编码 CI 环境行为（§850 本地 mgl 实渲染不一致实证），实现前需先解决环境保真；③terrain（66k×2）——本地 DEM 数据缺失（§839），须先补数据再按 §838 两件套实施。**本环境内 globe 专项的代码侧、数据侧与可观测性工作已全部完成**；上述三项在对应前置条件具备后可按已入档规格直接开工。
+
+**§850c. 数据工程路线最终封存：CI 瓦集本地不存在（2026-09-06）**：
+
+全仓+全盘搜索确认：pitch 区域真实 z6 瓢（6/31-32/22-24.mvt）与 globe-terrain 区域 z9-12 DEM（9-358-2xx 等）在本地文件系统与 vendored mgl CI 瓦集（367 瓦，其中区域 8° 内 DEM 仅 z4/11/6 一块）中**均不存在**——expected.png 由 mapbox CI 的完整环境生成，其数据不在开源仓库内。外部公开数据源（AWS terrarium 等）即便获取并转码，也无法逐像素匹配 CI 的 mapbox 专有数据 → 指标收敛仍不可达。**定论**：pitch 缺失带（28,046，roundzoom=1 + overscale 瓦已含于此）与 terrain（66,009/65,880）两桶的进一步收敛被 **CI 专有数据不可得**硬性阻塞；解锁动作 = 向 mapbox 上游索取完整 fixture 瓦集（仓库外协调），或以 CI 环境重生成 expected。globe 专项在开源仓库环境内的全部可执行工作（代码/工具/数据合成/取证）已完成并入档（§827-§850c）。
