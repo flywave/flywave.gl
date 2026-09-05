@@ -8302,3 +8302,7 @@ vectortile 包重建（karma 用 lib 预编译产物，src 改动须 `npx tsc -p
 **§844. pitch 缺失带精确化：覆盖缺相机以北 z5 row 12+（frustum far 扩展未生效，需遍历埋点）（2026-09-06 终）**：
 
 z6 覆盖对拍重新解读（z6 row 22-24 = lat 44.3-48.9，z5 row 10-12 = 45.1-55.8）：我方覆盖止于 z5 row 11（lat 48.9-51.8），**缺 row 12+（45.1-48.9，相机以北视野延伸带）**——mgl 覆盖经 z6 overzoom 到达 row 22-24（=z5 row 12）且无缝（overzoom 渲染父瓦整体放大，无逐子瓦接缝）。farcover（frustum far 扩展）两轮无效的原因未定位——写点已确认执行（applyProjection 门），疑遍历内另有 near/far 来源（ClipPlanesEvaluator 的 viewRanges 直入 camera.projectionMatrix 更新）或 root-tile 候选生成即不含。**下轮入口（单点）**：在 FrustumIntersection.compute 的 workList 循环内加临时 dump（tileKey + frustum 判定结果），跑 pitch 夹具看 row-12 瓦在哪一步被剔（root 候选/shouldSplit 前的 intersects/canGetTile），即可定位。roundzoom 门默认关保持。
+
+**§844b. 会话收口状态（2026-09-06）**：
+
+全级别 coverdump 探针代码已入库（dump tileCache 全部瓦 + decodedTile.techniques 计数），但最近一轮运行探针未触发（运行间状态不一致，同配置先前轮次曾成功）。roundzoom=1 现帧（白天空+蓝地面、无黄色 fill、恒 209,345）比默认关（28,382）恶化——门保持默认关。**下一会话精确入口**：①带 MBSTYLE_COVERDUMP=1 单独跑 pitch，确认全级别 dump 的 tileCache 内容（z5 row 12 是否在覆盖/解码）；②按 decodedTile 有无二分定位 row-12 瓦不渲染的环节；③z6 fill 特征弃置点（MBStyleDataProcessor 上游）。
