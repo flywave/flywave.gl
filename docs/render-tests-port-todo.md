@@ -8298,3 +8298,7 @@ vectortile 包重建（karma 用 lib 预编译产物，src 改动须 `npx tsc -p
 **§843. 数据补齐路线证伪：CI 瓦集本无 z6 瓦——expected 即父瓦放大渲染（2026-09-06 终）**：
 
 核查 vendored mgl CI 瓦集（mapbox-gl-js/test/integration/tiles，367 瓦）：**z6 的 6/31-32 瓦同样不存在**（z5 仅 5-15/16 × 10-12）；globe-terrain 区域 z9-12 DEM 也只有零散区域瓦。即 **mgl CI 渲染 expected 时同样 404 了 z6 → SourceCache 保留 z5 父瓦并放大渲染（overzoom：父瓦 mesh 整体 ×2 覆盖子槽位，无逐子瓦裁剪）→ expected 的带内内容本就是无缝的父瓦放大内容**。我方逐子瓦裁剪拼合（125k）存在父边界接缝，注定无法达到无缝——数据补齐路线证伪（无数据可补）。**正解（引擎特性，唯一）**：z6 覆盖槽位缺失数据时，以 z5 父瓦 mesh 放大 ×2 渲染该 2×2 子区（mgl updateRetainedTiles+overzoom 语义）。需 TileObjectRenderer/瓦发射管线支持"父瓦几何渲染到子瓦槽位"的变换，代码入口在 VisibleTileSet 覆盖生成（lodStoppedEntries 已有类似结构）。roundzoom 门默认关保持；本桶挂账为引擎 overzoom 渲染特性。
+
+**§844. pitch 缺失带精确化：覆盖缺相机以北 z5 row 12+（frustum far 扩展未生效，需遍历埋点）（2026-09-06 终）**：
+
+z6 覆盖对拍重新解读（z6 row 22-24 = lat 44.3-48.9，z5 row 10-12 = 45.1-55.8）：我方覆盖止于 z5 row 11（lat 48.9-51.8），**缺 row 12+（45.1-48.9，相机以北视野延伸带）**——mgl 覆盖经 z6 overzoom 到达 row 22-24（=z5 row 12）且无缝（overzoom 渲染父瓦整体放大，无逐子瓦接缝）。farcover（frustum far 扩展）两轮无效的原因未定位——写点已确认执行（applyProjection 门），疑遍历内另有 near/far 来源（ClipPlanesEvaluator 的 viewRanges 直入 camera.projectionMatrix 更新）或 root-tile 候选生成即不含。**下轮入口（单点）**：在 FrustumIntersection.compute 的 workList 循环内加临时 dump（tileKey + frustum 判定结果），跑 pitch 夹具看 row-12 瓦在哪一步被剔（root 候选/shouldSplit 前的 intersects/canGetTile），即可定位。roundzoom 门默认关保持。
