@@ -8274,3 +8274,7 @@ DEM 瓦清单核查：夹具中心 [72.42,37.06] 8° 范围内本地仅 **1 块 
 **§840. pitch 余带决定性发现：同为本地数据受限（缺 6/31-32/22-24.mvt），非代码（2026-09-06）**：
 
 roundzoom 修正版（round(displayZoom)，去掉 −1 offset——mgl coveringZoomLevel=round(styleZoom)=6 对 512 vector）实测：覆盖成功扩展为 **z6 全环（含 6/31/22、6/31/23 等 mgl 同款瓦）**，但 mismatch 28,382→**209,345**：6/31-32/22-24.mvt **本地不存在**（fixture 瓦集被裁剪），请求 404 → z5 父瓦已被细分删除 → 空洞。expected.png（CI 完整瓦集）含这些 overscale 瓦的内容（y331-375 的水/陆）。**与 §839 terrain 同构：本地数据受限，指标不可收敛**。代码保留：`roundzoom=1` 门（mgl vector roundZoom 语义，修正版公式 round(displayZoom)）在瓦集补齐后即为正确实现；默认关。需补数据：`6/31-32 × 20-24.mvt` 系列（及远环 4/7-8/4、4/7-8/5 等）。至此 pitch 余带与 terrain 桶定性完成：**剩余残差全部为数据或 mgl 渲染模型层面，代码侧无 further 动作**。
+
+**§840a. z6 overscale 瓦生成器入库 + worker 解码管线追踪为下一步（2026-09-06）**：
+
+`scripts/gen-overscale-tiles.js` 入库：解码 z5 父瓦（@mapbox/vector-tile，注意 loadGeometry 返回 {x,y} 点对象）→ 象限重映射（×2 − 象限偏移，不裁剪 = mgl overzoom 行为）→ pbf v5 重编码（v5 API：writeMessage 回调签名 fn(obj,pbf)、字段写入须用 writeXxxField(tag,val)——writeVarint(tag,val) 不带 tag）。16 块 z6 瓦已生成且 @mapbox/vector-tile 解码验证通过。运行时实测：**background 从 z6 渲染 ✓（盘缘出现球面弧），但 fill（country_boundaries 黄色）仍不渲染**，pitch 恒 209,345。**下一步（唯一）**：追踪 worker 端 MVT 解码/发射管线（VectorTileDataEmitter/MBTileDataEmitter）对 z6 瓦的处理——嫌疑：越界几何在解码期被裁剪丢弃、或 fill technique 的瓦过滤条件（source-layer/zoom）拒了 z6。管线修通后 pitch 缺失带（y331-395 蓝色已就位、缺黄色 fill）预计大幅收敛。
