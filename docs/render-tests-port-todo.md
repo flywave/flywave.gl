@@ -8322,3 +8322,7 @@ z6 覆盖对拍重新解读（z6 row 22-24 = lat 44.3-48.9，z5 row 10-12 = 45.1
 **§849. 背景盘扩展实验：中性偏负，回退（2026-09-06）**：
 
 discext=1（§829 盘阈值 0.98→1.009，覆盖 normDist 0.98-1.009 带）：pitch 28,046→28,291（+245，中性偏负）——扩展的背景蓝与 expected 带内容（overzoom 水色+海岸细节）不完全重合，羽化边缘引入新差异。回退。**pitch 缺失带 28,046 为当前数据/实现下的实际最优**（基线 28,382，roundzoom=1 + 真裁剪 z6 overscale 瓦）；剩余 = overscale 内容与 mgl 真实 z6 数据的海岸线/细节差异 + 渲染球位置差（§836a globeMatrix 域）。globe 专项代码侧工作至此完成；剩余三项（globeMatrix 复刻、过渡混合、terrain 数据+两件套）均为特征级工程，规格与入口已备（§831/§838/§839/§836a）。
+
+**§850. heatmap 228k 环境依赖定性：本地 mgl 实渲染与 expected 本身不一致（2026-09-06）**：
+
+结合 §831 真值页取证与 expected 采样复核：expected.png = **100% 均匀灰**（全帧，无雾色天区/无辉光带/无色块）；而本地 vendored mgl 实渲染同夹具 = 灰 58% + 暗蓝雾色 ~18% + 白辉光 ~3%（真值页直方图）。即 **expected 编码了 CI 环境的特定行为**（疑 CI 的 setProjection 过渡态时序/资产可用性与本地不同），本地任何实现都无法逐像素复现 expected。我方现状（蓝渐变天+彩色热力块）与本地 mgl（灰+雾色）各有差异。**定性**：heatmap/near-transition 228k 为 CI 环境依赖桶，与 terrain（数据受限）同类——在 CI 环境差异未解决前，该桶指标不可收敛。globe 专项剩余三大桶至此全部完成"可达性"定性：①pitch 余带/set-style/poles = mgl globeMatrix 渲染模型（RenderDoc 级）；②heatmap = CI 环境依赖；③terrain = 数据受限。globe 专项代码侧工作全部完成。
