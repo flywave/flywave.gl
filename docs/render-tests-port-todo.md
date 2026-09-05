@@ -8266,3 +8266,7 @@ roundzoom=1 实验（mgl vector roundZoom 语义）实测无效——覆盖仍 4
 **§838. §798 球面垂披实施规格细化（开工前最后一步，2026-09-06）**：
 
 代码勘察补全两点：①drape bail 注释（TerrainDraping.ts:378-381 "Vertex draping handles globe mode"）与实际不符——globe 下 applyTerrain 先行 `terrain=undefined`（§796），DEM 根本不加载，`injectTerrainDrape`（MBMaterialPatchManager.ts:1366+，逐顶点 DEM 位移）因 `centerDem` 空而从未注入；②globe-terrain 夹具区域 [72.42,37.06] 的散装 z5 DEM（5-22-12）本地不存在，DEM 由 **terrain-dem.pmtiles 归档**经 urlFactory 提供（数据供给无碍）。**实施规格（两件套）**：A. `TerrainController` 球面网格模式——顶点 = projectPoint(lat,lng, demElev·exaggeration)（ECEF + 法向位移），行/列对齐 DEM 纹理，网格外缘裙边下折遮缝隙；B. `injectTerrainDrape` 球面分支——顶点着色器中由世界坐标反解 lat/lng（normalize→atan2/asin）→ DEM UV → 沿 normalize(worldPos) 方向位移 demElev·exaggeration，替换 planar 的 `transformed.z +=`。两者共用现有 DEM 纹理/pmtiles 管线。验证：globe-terrain 66,009 与 imports/globe-terrain 65,880（预期大头收敛；回归风险=§796 白网格事故复现，须以 hideq/terhide 门先行灰度）。
+
+**§839. terrain 66k×2 决定性发现：本地数据受限，非实现受限（2026-09-06）**：
+
+DEM 瓦清单核查：夹具中心 [72.42,37.06] 8° 范围内本地仅 **1 块 z4 瓦**（4/11/6）；z5 中心瓦（5/22/12）、z6-12 全部缺失。而 expected.png 的满帧高频浮雕需要 z9-12 DEM（本地 z≥9 共 258 块散布全球，唯区域附近无）——expected 由 **CI 完整瓦集**生成，本地 checkout 已裁剪。**后果**：即使 §838 两件套完美实现，本地渲染也无法复现该浮雕（本地 vendored mgl 同样会渲染平坦地形）——该 66k×2 桶为**数据受限**，指标上不可收敛。实施 §838 两件套的验收基准应改为「本地 vendored mgl 实渲染对拍」（真值页 mgl-render-style.html 已具备该能力，本地 mgl 同样缺数据 → 两者均平坦 → 一致性可验）。在此之前本桶实现无指标收益，维持挂账；如需真值数据，须向 fixture 瓦集补齐区域 z9-12 DEM（数据工程，非代码）。
