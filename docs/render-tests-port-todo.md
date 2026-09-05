@@ -8278,3 +8278,7 @@ roundzoom 修正版（round(displayZoom)，去掉 −1 offset——mgl coveringZ
 **§840a. z6 overscale 瓦生成器入库 + worker 解码管线追踪为下一步（2026-09-06）**：
 
 `scripts/gen-overscale-tiles.js` 入库：解码 z5 父瓦（@mapbox/vector-tile，注意 loadGeometry 返回 {x,y} 点对象）→ 象限重映射（×2 − 象限偏移，不裁剪 = mgl overzoom 行为）→ pbf v5 重编码（v5 API：writeMessage 回调签名 fn(obj,pbf)、字段写入须用 writeXxxField(tag,val)——writeVarint(tag,val) 不带 tag）。16 块 z6 瓦已生成且 @mapbox/vector-tile 解码验证通过。运行时实测：**background 从 z6 渲染 ✓（盘缘出现球面弧），但 fill（country_boundaries 黄色）仍不渲染**，pitch 恒 209,345。**下一步（唯一）**：追踪 worker 端 MVT 解码/发射管线（VectorTileDataEmitter/MBTileDataEmitter）对 z6 瓦的处理——嫌疑：越界几何在解码期被裁剪丢弃、或 fill technique 的瓦过滤条件（source-layer/zoom）拒了 z6。管线修通后 pitch 缺失带（y331-395 蓝色已就位、缺黄色 fill）预计大幅收敛。
+
+**§840b. 排查推进：z6 瓦已可解码，卡点锁定 worker MVT 解码/发射管线（2026-09-06）**：
+
+逐项排除：MVT 字段号（Layer name=1/features=2/keys=3/values=4/extent=5/version=15，初次实现写串已修）、数值编码（改 spec 标准的 uint/sint varint）、keys/values 字节序（前置测试）——均无效，pitch 恒 209,345。现状：**background 从 z6 瓦渲染 ✓（弧形盘缘出现），fill（country_boundaries）特征完全不可见**。同一 z6 瓦文件经 @mapbox/vector-tile 解码验证正常（features/properties/geometry 齐全）→ 卡点在 flywave worker 端 MVT 解码/发射管线（VectorTileDataEmitter）对生成瓦的处理。生成器（scripts/gen-overscale-tiles.js）已入库可复现 16 瓦。**下轮入口**：在 VectorTileDataEmitter 的 mvt 解析处对 6/31-32/22-24 埋点（feature 计数/裁剪统计），定位 fill 特征在哪一步被弃（解码异常？extent 外几何裁剪？fill technique 的 source-layer/zoom 过滤？）。fill 通后 pitch 预计 209k→接近 28k 基线以下（缺失带补上 overscale 内容）。

@@ -101,14 +101,6 @@ function writeLayer(pbf, layer) {
         feats.push({ tags, type: f.type, geom });
     }
     // MVT layer schema: name=1, features=2, keys=3, values=4, extent=5, version=15
-    pbf.writeStringField(1, layer.name);
-    for (const f of feats) {
-        pbf.writeMessage(2, (_obj, fp) => {
-            fp.writePackedVarint(2, f.tags);
-            fp.writeVarintField(3, f.type);
-            fp.writePackedVarint(4, f.geom);
-        });
-    }
     for (const k of keys) pbf.writeStringField(3, k);
     for (const v of values) {
         pbf.writeMessage(4, (_obj, vp) => {
@@ -117,6 +109,13 @@ function writeLayer(pbf, layer) {
             else if (v.enc === "i") vp.writeSVarintField(6, v.v);
             else if (v.enc === "d") vp.writeDoubleField(3, v.v);
             else if (v.enc === "b") vp.writeBooleanField(7, v.v);
+        });
+    }
+    for (const f of feats) {
+        pbf.writeMessage(2, (_obj, fp) => {
+            fp.writePackedVarint(2, f.tags);
+            fp.writeVarintField(3, f.type);
+            fp.writePackedVarint(4, f.geom);
         });
     }
     pbf.writeVarintField(15, layer.version ?? 2);
