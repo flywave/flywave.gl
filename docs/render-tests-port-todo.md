@@ -8211,3 +8211,7 @@ globe-circle/change-projection/set-style（213k，几乎全帧逐像素失配 25
 **§832b. set-style 修正：非全局亮度偏移，是空间错位 + halo 覆盖（2026-09-05，修正 §832）**：
 
 逐点采样配对证伪"全帧亮度系统偏移"：同帧多点中暗洋 (7,7,15)→(5,7,13)、(5,13,23)→(10,13,20) 等完全吻合（栅格 colorspace 链无辜），而失配点呈三类：①**白 halo 覆盖**（(350,420)：expected 荒漠棕 vs 我方近白——我方右下辉光过强叠在瓦上）；②**紫圆错位**（(200,200)：expected 陆地 vs 我方紫圆——circle 几何/位置偏移）；③**卫星细节差异**（(110,150)：(48,52,54) vs (110,112,116)——不同 LOD/瓦相位的影像内容）。真值页实渲染 vendored mgl（setStyle op 已支持，local:// 瓦重写）：其主色桶与 expected 一致（暗 navy 洋 + 白辉光），确认 mgl-current=expected，偏差全在我方。**下轮入口**：①我方辉光/halo 在无-fog 样式上的来源（不应有 dome——查 MBGlobePoleCaps/极帽辉光或背景穹顶残留）；②circle 层 globe 投影错位；③栅格 LOD 选择。
+
+**§832c. halo 再修正：非过强而是错位——全部收敛到 §830 渲染球面半径标定（2026-09-05 终）**：
+
+量化：near-white(>230) 像素我方 4,846 vs expected **12,404**——expected 辉光更强，我方 halo 非过强而是**位置/形状错**（(350,420) 采样点落在我方 halo 带内而 expected 同点为荒漠）。skipdraw=transparent 212,990 无变化（halo 非 transparent pass）。结论：set-style 的 halo/覆盖带/紫圆错位与 pitch 余带同源——**我方渲染 limb 比 mgl 低 ~45 行（§830 的 0.6% 渲染球面尺度差）**，辉光环、瓦覆盖边缘、圆盘边全部随之错位。**唯一上游正解 = 引擎渲染球面半径标定（§798 域）**：瓦片球面投影、background 盘、辉光环统一按 mgl 渲染球面（含 ws/(2π)−1 与 mercatorScaleRatio 耦合）重标定后，pitch 余带、set-style halo/构图、poles 噪声带预计一并收敛。单点局部补偿（盘半径、far plane）已逐一实测无效或净负（§828/§830），不再回炉。
