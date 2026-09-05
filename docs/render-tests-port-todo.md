@@ -8258,3 +8258,7 @@ farcover 二次实验（本轮修正：写入点移到 applyProjection——styl
 **§836a. 模型修正：k 无单一模型，带内内容=mgl 像素空间放大球露出的远环瓦（2026-09-06 终）**：
 
 roundzoom=1 实验（mgl vector roundZoom 语义）实测无效——覆盖仍 4×z5、pitch 28,382 持平（门保留）。结合 §835 全部 k 样本（0.995/0.998/1.000/1.009/1.015/1.034，跨夹具无单调模型）与本轮瓦文件核查（fixture **不含** 6-31-2x 瓦）：mgl 的 y331-375 带内容 = 其**像素空间渲染球比名义大 ~0.9%**，使远环瓦（z4/7-8/4 即 lng90-180E、z6=overscale 自 z5）投影到名义 limb 之上可见；k 随夹具漂移系 mgl globeMatrix（shader 空间半径+相机耦合）与 mercator 相机导出链的固有差异，非可拟合的 (lat,zoom) 解析面。**结论**：本域正解 = 在我方瓦片投影/盘/辉光中复刻 mgl 的 globeMatrix 渲染模型（shader 级，§798），经验常数缩放已否定（§833 净负）、解析模型不存在（本轮）。roundzoom/spherescale 门保留（gated no-op）。pitch 28.4k、set-style halo、poles 噪声带挂账于此，需 mgl globe shader 矩阵逐值对拍（RenderDoc 级）方可推进。
+
+**§837. terrain 66k×2 补充事实：球面下 terrain 整体跳过 + 高 z DEM 依赖 PMTiles（2026-09-06）**：
+
+复核 applyTerrain 确认：`(projection.type===1) → terrain=undefined`（§796 门）——globe-terrain/imports/globe-terrain 的 66k 残差是**球面上完全没有地形网格**（非粗化）。实施球面地形的前置清单：①球面 DEM 网格（ECEF 顶点 + 高程位移 + 裙边）；②贴图链（RTT drape 在球面 bail——需球面 draping 或逐瓦 UV）；③高 z DEM 供给——夹具区域 [72.42,37.06] 的 z9+ 散瓦本地不存在，需 terrain-dem.pmtiles 归档按需取瓦（PMTiles 基建已在，demTileUrl pmtiles 分支已接）。三项合计 = §798 球面垂披专项本体，工作量引擎级（周级），非单会话可落地。挂账清单以本节为准。
