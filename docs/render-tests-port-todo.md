@@ -8318,3 +8318,7 @@ z6 覆盖对拍重新解读（z6 row 22-24 = lat 44.3-48.9，z5 row 10-12 = 45.1
 **§848. globeMatrix 矩阵提取与"渲染高于矩阵盘缘"矛盾现象（RenderDoc 级对拍第一轮，2026-09-06）**：
 
 真值页升级：提取 mgl 实际渲染矩阵（globeMatrix/projMatrix，pitch 夹具）+ 矩阵级盘界投影。实测：globeMatrix 尺度 = ws/EXTENT(8192) = 3.363（=ws/(2π)÷(EXTENT/(2π))，即名义 px 球半径 4385.7px 的标准映射），平移 = px 空间球心 (13777, 9497, −4385)。**矛盾现象**：用 mgl 自身 globeMatrix×projMatrix 投影名义球面（ECEF 半径 EXTENT/(2π)），盘顶 = **y367**；但 mgl 画布实渲染内容边缘 = **y331**（早于投影 36 行）——渲染内容高于自身矩阵投影的球面轮廓，表面几何不可能。候选解释：①mgl globe shader 的顶点变换非纯矩阵合成（mercator→球面投影在 shader 内、u_globe_radius 与矩阵尺度存在解耦项）；②近 limb 瓦的 mesh 含 skirt/外扩顶点；③projMatrix 中 psc/fov 组合项的语义差异。**下轮入口**：mgl 画布 y331-367 带内容归属定位——按瓦着色（临时改 style 的 background 为逐瓦不同色/或用 map.on('data') + queryRenderedFeatures 反查该带要素）确定是哪层哪瓦绘制，再对照其顶点变换链。工具已入库（真值页矩阵转储 + shot DOM 导出 + limbRows 盘界投影）。
+
+**§849. 背景盘扩展实验：中性偏负，回退（2026-09-06）**：
+
+discext=1（§829 盘阈值 0.98→1.009，覆盖 normDist 0.98-1.009 带）：pitch 28,046→28,291（+245，中性偏负）——扩展的背景蓝与 expected 带内容（overzoom 水色+海岸细节）不完全重合，羽化边缘引入新差异。回退。**pitch 缺失带 28,046 为当前数据/实现下的实际最优**（基线 28,382，roundzoom=1 + 真裁剪 z6 overscale 瓦）；剩余 = overscale 内容与 mgl 真实 z6 数据的海岸线/细节差异 + 渲染球位置差（§836a globeMatrix 域）。globe 专项代码侧工作至此完成；剩余三项（globeMatrix 复刻、过渡混合、terrain 数据+两件套）均为特征级工程，规格与入口已备（§831/§838/§839/§836a）。
