@@ -8189,3 +8189,11 @@ globe-transition/pitch 与 globe-terrain 的 expected 天空为**纯黑**（mgl�
 **回测（829g 定向批）**：pitch **28,382**（三次运行逐位稳定；余 28.4k=远瓦覆盖带，我方内容边缘 y375 vs mgl y335 约 40 行）；zero-height ×3、horizon、heatmap/near-transition、terrain、globe-default(2,474) 全部逐位持平零回归；poles 南北在 33-54k 间波动（该族已记录的会话噪声带，north 829d 曾 42.8k）。**事故记录（829f，已修）**：曾把 fog 族也改走"无盘"分支且误删 fog 族 setGlobeBackground 调用 → 全 fog 夹具 +100k（dome uBgDisc=0 → 盘背白）；恢复双路径后 fog 族逐字节还原。**下会话入口**：pitch 余 28.4k 的远瓦覆盖带（mgl coveringTiles 远距覆盖至 y335，我方 y375）——尝试 VisibleTileSet 既有 `frustumFarOverride` 选项（§787 入库，未实测）。
 
 **本日累计（§827-§829）**：相机域（§780/781 谱系）闭卷；pitch −84.7%；探针/工具：mgl-ref-camera 真值页、disc-geom one-shot dump、uDiscDbg 三级染色、MBSTYLE_BLACKCLEAR 门。
+
+**§830. pitch 余 28.4k 远瓦覆盖带：三实验否定 + 渲染球面尺度差实锤（2026-09-05 终）**：
+
+真值页升级（品红背景样式 + preserveDrawingBuffer + idle 帧等待 + readPixels 探测）：**vendored mgl 实渲染的盘缘 = y331-333**，与 expected 逐行一致；我方内容/盘缘 = y376。失配带 331-388（23.7k，盘 331-375 段水陆混合）+ 散布带 397-542（5.6k 海岸线）+ 底缘 2.2k，合计 31.5k（自算逐像素；harness 报 28,382 含 threshold）。我方运行时相机经 cam-dist 探针证实 1.1058e6（=mgl 1.1046e6，0.1%）。
+
+三实验：①`frustumFarOverride=4e7`（reapplyCamera 运行时写入 m_visibleTileSetOptions）：draw 数 8009→8002 无变化——覆盖边界不在 frustum far（疑 ClipPlanesEvaluator 球面地平线裁剪或 LOD）。②盘内阈值 0.98→1.0（补 0.98-1.0 环带）：pitch 28,382→28,379 无感，terrain +25。③盘半径补偿 +0.6%（mgl 渲染球面比标称 ECEF 球大 ~0.6% 的实测：asin 反推 mgl β=77.98° vs 标称 76.24°）：pitch 28,382→27,794（−0.6k，带内陆地仍缺），terrain 66,009→68,127（+2.1k）——净负，回退。
+
+**定论**：mgl 的**渲染球面**相对相机比标称 ECEF 球大 ~0.6-0.7%（像素空间 globeMatrix/ws-(2π) 半径与 mercator 尺度相机距离的耦合），近地平视角（pitch85/189km）放大成 45 行地平内容差。该带内水部可由盘补偿收约一半，但陆部需真实瓦片（我们的瓦调度+球面贴合半径也小同样的 0.6%）——**正解 = 引擎瓦片球面投影半径按 mgl 渲染球面标定（含 ws/(2π)−1 与 mercatorScaleRatio 的耦合项）**，属 §798 球面垂披引擎域。本域挂账：pitch 28.4k、heatmap/near-transition 228k（同近地平几何）预计大头在此。
