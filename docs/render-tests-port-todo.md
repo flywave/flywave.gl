@@ -8262,3 +8262,7 @@ roundzoom=1 实验（mgl vector roundZoom 语义）实测无效——覆盖仍 4
 **§837. terrain 66k×2 补充事实：球面下 terrain 整体跳过 + 高 z DEM 依赖 PMTiles（2026-09-06）**：
 
 复核 applyTerrain 确认：`(projection.type===1) → terrain=undefined`（§796 门）——globe-terrain/imports/globe-terrain 的 66k 残差是**球面上完全没有地形网格**（非粗化）。实施球面地形的前置清单：①球面 DEM 网格（ECEF 顶点 + 高程位移 + 裙边）；②贴图链（RTT drape 在球面 bail——需球面 draping 或逐瓦 UV）；③高 z DEM 供给——夹具区域 [72.42,37.06] 的 z9+ 散瓦本地不存在，需 terrain-dem.pmtiles 归档按需取瓦（PMTiles 基建已在，demTileUrl pmtiles 分支已接）。三项合计 = §798 球面垂披专项本体，工作量引擎级（周级），非单会话可落地。挂账清单以本节为准。
+
+**§838. §798 球面垂披实施规格细化（开工前最后一步，2026-09-06）**：
+
+代码勘察补全两点：①drape bail 注释（TerrainDraping.ts:378-381 "Vertex draping handles globe mode"）与实际不符——globe 下 applyTerrain 先行 `terrain=undefined`（§796），DEM 根本不加载，`injectTerrainDrape`（MBMaterialPatchManager.ts:1366+，逐顶点 DEM 位移）因 `centerDem` 空而从未注入；②globe-terrain 夹具区域 [72.42,37.06] 的散装 z5 DEM（5-22-12）本地不存在，DEM 由 **terrain-dem.pmtiles 归档**经 urlFactory 提供（数据供给无碍）。**实施规格（两件套）**：A. `TerrainController` 球面网格模式——顶点 = projectPoint(lat,lng, demElev·exaggeration)（ECEF + 法向位移），行/列对齐 DEM 纹理，网格外缘裙边下折遮缝隙；B. `injectTerrainDrape` 球面分支——顶点着色器中由世界坐标反解 lat/lng（normalize→atan2/asin）→ DEM UV → 沿 normalize(worldPos) 方向位移 demElev·exaggeration，替换 planar 的 `transformed.z +=`。两者共用现有 DEM 纹理/pmtiles 管线。验证：globe-terrain 66,009 与 imports/globe-terrain 65,880（预期大头收敛；回归风险=§796 白网格事故复现，须以 hideq/terhide 门先行灰度）。
