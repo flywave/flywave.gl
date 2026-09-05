@@ -8282,3 +8282,7 @@ roundzoom 修正版（round(displayZoom)，去掉 −1 offset——mgl coveringZ
 **§840b. 排查推进：z6 瓦已可解码，卡点锁定 worker MVT 解码/发射管线（2026-09-06）**：
 
 逐项排除：MVT 字段号（Layer name=1/features=2/keys=3/values=4/extent=5/version=15，初次实现写串已修）、数值编码（改 spec 标准的 uint/sint varint）、keys/values 字节序（前置测试）——均无效，pitch 恒 209,345。现状：**background 从 z6 瓦渲染 ✓（弧形盘缘出现），fill（country_boundaries）特征完全不可见**。同一 z6 瓦文件经 @mapbox/vector-tile 解码验证正常（features/properties/geometry 齐全）→ 卡点在 flywave worker 端 MVT 解码/发射管线（VectorTileDataEmitter）对生成瓦的处理。生成器（scripts/gen-overscale-tiles.js）已入库可复现 16 瓦。**下轮入口**：在 VectorTileDataEmitter 的 mvt 解析处对 6/31-32/22-24 埋点（feature 计数/裁剪统计），定位 fill 特征在哪一步被弃（解码异常？extent 外几何裁剪？fill technique 的 source-layer/zoom 过滤？）。fill 通后 pitch 预计 209k→接近 28k 基线以下（缺失带补上 overscale 内容）。
+
+**§840c. z6 瓦数据补齐完成 + worker 解码链问题锁定（2026-09-06）**：
+
+16 块 z6 overscale 瓦（6/30-33×20-23，@mapbox/vector-tile 解码验证：country_boundaries 4 特征 5461 点齐全）已入 fixture 瓦集。roundzoom=1 复测：pitch 209,345 与生成前逐位相同——z6 瓦已加载入 tileCache（morton 码实测）但 **decodedTile=none（coverdump 探针 tech 计数）**：fill 不渲染；background 从 z6 正常渲染（盘缘弧线出现）。roundzoom 门默认关（基线 28,382 不受影响）。**下轮入口（唯一）**：①worker 解码埋点（VectorTileDecoder.getDecodedTile 对 z6 瓦 POST 技术计数到 mb-probe-dump；worker 内 fetch 可达 karma 反馈端口）确认 z6 瓦解码产出；②按产出定位弃置环节（worker 解析异常静默吞/technique 过滤/发射裁剪）。fill 通后 pitch 预计 209k → <28k（缺失带补上 overscale 水陆内容）。
