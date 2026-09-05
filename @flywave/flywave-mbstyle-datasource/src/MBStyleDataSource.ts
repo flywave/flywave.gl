@@ -2541,7 +2541,11 @@ export class MBStyleDataSource extends TileDataSource {
                             const shapes: any[] = [];
                             cache.forEach((tile: any) => {
                                 const tk: any = tile.tileKey;
-                                if (shapes.length < 2) shapes.push({ lvl: tk?.level, col: tk?.column, row: tk?.row, ctor: tk?.constructor?.name });
+                                if (tk?.level === 6) {
+                                    const dt = tile.decodedTile;
+                                    const techs = dt?.techniques;
+                                    keys.push(`${tk.level}/${tk.column}/${tk.row}:tech=${techs ? techs.length : "none"}:gid=${tk.mortonCode?.() ?? "?"}`);
+                                }
                                 if (tk?.level !== undefined) keys.push(`${tk.level}/${tk.column}/${tk.row}`);
                             });
                             if (shapes.length) keys.push('SHAPE:' + JSON.stringify(shapes));
