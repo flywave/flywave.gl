@@ -8330,3 +8330,7 @@ discext=1（§829 盘阈值 0.98→1.009，覆盖 normDist 0.98-1.009 带）：p
 **§848b. queryRenderedFeatures 反查为空——带绘制者非 feature-queryable，RenderDoc/Spector 必需（2026-09-06）**：
 
 真值页加 queryRenderedFeatures([[0,331],[512,367]]) 反查（品红背景样式下）：**返回空**——y331-367 带的品红内容（背景瓦绘制，画布像素已证实）不出现在 query 结果中。结论：该带绘制者非 feature-queryable 路径（mgl globe 的背景/瓦绘制在 query 管线之外，或 grazing-angle 下 query 管线自身排除），**RenderDoc/SpectorJS 级帧捕获为此域唯一可行工具**（本环境无 GPU 帧捕获设施）。§848 矛盾现象（渲染内容高于矩阵盘缘 36 行）挂账待 RenderDoc 环境；globe 专项在本环境的可执行工作全部完成。
+
+**§850b. 会话终态核查（2026-09-06）**：
+
+§840b 入口（z6 fill 特征弃置）已被 §846 的编码修复实际解决——roundzoom=1 下 z6 瓦 fill 正常渲染（28,046 < 基线 28,382），该入口关闭。剩余三项的阻塞性质终判：①mgl globeMatrix 渲染模型（pitch 余带 28,046/set-style ~213k/poles 噪声带）——需 GPU 帧捕获（RenderDoc/SpectorJS，本环境无）逐值对拍 mgl globe shader 顶点变换链与 u_globe_radius 解耦项（§848 矛盾现象）；②globe→mercator 过渡渲染混合（heatmap 228k）——expected 本身编码 CI 环境行为（§850 本地 mgl 实渲染不一致实证），实现前需先解决环境保真；③terrain（66k×2）——本地 DEM 数据缺失（§839），须先补数据再按 §838 两件套实施。**本环境内 globe 专项的代码侧、数据侧与可观测性工作已全部完成**；上述三项在对应前置条件具备后可按已入档规格直接开工。
