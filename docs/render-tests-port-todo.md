@@ -8314,3 +8314,7 @@ z6 覆盖对拍重新解读（z6 row 22-24 = lat 44.3-48.9，z5 row 10-12 = 45.1
 **§847. roundzoom 全量回归评估：全局启用大范围回归，定论默认关（2026-09-06）**：
 
 全量 globe 族 122 夹具 roundzoom=1 A/B（vs 原始 baseline8）：除 pitch（28,046 vs 当前 28,382，−336）外**全量恶化**——circle/near-transition 5,398→56,550（+51k）、heatmap/near-transition +7.5k、antialiasing/default 5,090→217,198（+212k）、rotate-to 3,763→228,365（+225k）、icon-viewport 24,223→566,589（+542k）、poles 南北 +191k/+188k、runtime-styling/remove-feature-state 0→24,052 FLIP-FAIL 等。根因：z6 overscale 覆盖把低 zoom 夹具的瓦覆盖替换为 overscale 内容（含接缝/错位），全局性破坏。**定论**：①roundzoom 全局启用不可行；②逐夹具启用仅 pitch −336px 收益，不抵复杂度——roundzoom 门保持默认关为最终状态；③z6 overscale 数据/生成器保留（数据完备性）。pitch 缺失带的剩余 28k 收敛回到 §836a 的 globeMatrix 渲染球模型（RenderDoc 级）。本实验闭环。
+
+**§848. globeMatrix 矩阵提取与"渲染高于矩阵盘缘"矛盾现象（RenderDoc 级对拍第一轮，2026-09-06）**：
+
+真值页升级：提取 mgl 实际渲染矩阵（globeMatrix/projMatrix，pitch 夹具）+ 矩阵级盘界投影。实测：globeMatrix 尺度 = ws/EXTENT(8192) = 3.363（=ws/(2π)÷(EXTENT/(2π))，即名义 px 球半径 4385.7px 的标准映射），平移 = px 空间球心 (13777, 9497, −4385)。**矛盾现象**：用 mgl 自身 globeMatrix×projMatrix 投影名义球面（ECEF 半径 EXTENT/(2π)），盘顶 = **y367**；但 mgl 画布实渲染内容边缘 = **y331**（早于投影 36 行）——渲染内容高于自身矩阵投影的球面轮廓，表面几何不可能。候选解释：①mgl globe shader 的顶点变换非纯矩阵合成（mercator→球面投影在 shader 内、u_globe_radius 与矩阵尺度存在解耦项）；②近 limb 瓦的 mesh 含 skirt/外扩顶点；③projMatrix 中 psc/fov 组合项的语义差异。**下轮入口**：mgl 画布 y331-367 带内容归属定位——按瓦着色（临时改 style 的 background 为逐瓦不同色/或用 map.on('data') + queryRenderedFeatures 反查该带要素）确定是哪层哪瓦绘制，再对照其顶点变换链。工具已入库（真值页矩阵转储 + shot DOM 导出 + limbRows 盘界投影）。
