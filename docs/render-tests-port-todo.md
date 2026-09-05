@@ -8241,3 +8241,7 @@ farcover 二次实验（本轮修正：写入点移到 applyProjection——styl
 - **我方 4 瓦单级**：仅 z5 2×2（15-16/10-11，lat ~22-45°）。
 
 即我方覆盖**既粗（近场缺 z6 环）又窄（缺远/侧向环瓦）**——y331-375 缺失带=mgl 的 z6 近场环；set-style 的"栅格细节差异"、紫圆错位与此同源（LOD 相位差）。远 cover 的 frustum far 扩展无效与此吻合：缺环不是 far 裁剪，而是**遍历的 shouldSplit/LOD 选择在该相机下停在 z5**（mgl 的 LOD 用 tileScaleAdjustment + maxDivergence 0.3 的球面补偿，transform.ts:1466-1490，我方 mglDistanceLod 未启用或参数不同）。**下轮入口**：①pitch 相机下开启 `mglDistanceLod`（VisibleTileSet 既有 opt-in，§323）对拍覆盖集；②如仍差，移植 mgl coveringTiles 的球面 tileScaleAdjustment 分支。瓦文件已随夹具分发（mgl 用同集渲染成功），无 404 风险。
+
+**§835c. mglDistanceLod 球面崩溃根因 + 覆盖对拍结论（2026-09-06）**：
+
+`lodcmp=1` 实测：mglDistanceLod 分支（FrustumIntersection.ts:277+，§323 实现）按**平面投影**写——`cache.tileBounds as THREE.Box3` 取 box.min/max.x/y、camPos.z 作高度、mv.geoCenter/worldTarget；球面投影下 obbIntersections=true → tileBounds 是 **OrientedBox3**（无 .max）→ `Cannot read properties of undefined (reading 'x')` 渲染循环持续崩溃（§323 后从未在球面用过）。**正解 = 实现球面版 distance-LOD**：按 mgl transform.ts coveringTiles 的 isGlobe 分支（dz=aabb.distanceZ(cameraPoint)、relativeTileScale=circumferenceAtLatitude 比、tileScaleAdjustment=maxDivergence 0.3 折中），在 OBB 角点上求 camera-forward 投影距离，替换/并行于现有平面分支。落地后 pitch 相机覆盖应从 4 瓦单级 z5 扩为 mgl 的 10 瓦混合 z4/z5/z6，缺失带（y331-375）与 set-style 细节差异预计随之收敛。lodcmp=1 门与 coverdump 探针保留入库（崩溃前勿在球面开 mglDistanceLod）。

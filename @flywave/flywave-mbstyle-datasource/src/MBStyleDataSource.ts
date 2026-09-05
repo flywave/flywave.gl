@@ -2530,9 +2530,8 @@ export class MBStyleDataSource extends TileDataSource {
             this.mapView.addEventListener(MapViewEventNames.AfterRender, async () => {
                 // §835: cover dump — the datasource tileCache keys decoded to
                 // z/x/y, for diffing against mgl's coveringTiles reference.
-                if ((globalThis as any).__mbCoverDump && !(globalThis as any).__mbCoverDumped) {
-                    (globalThis as any).__mbCoverDumped = true;
-                    // wait for the scene to settle before sampling the cache
+                if ((globalThis as any).__mbCoverDump && ((globalThis as any).__mbCoverDumps ?? 0) < 6) {
+                    (globalThis as any).__mbCoverDumps = ((globalThis as any).__mbCoverDumps ?? 0) + 1;
                     setTimeout(() => {
                     try {
                         const vts = (this.mapView as any).m_visibleTiles;
@@ -2556,7 +2555,7 @@ export class MBStyleDataSource extends TileDataSource {
                             }).catch(() => {});
                         }
                     } catch {}
-                    }, 8000);
+                    }, 1500);
                 }
                 // §778: on the sphere projection, circle Points objects are
                 // the NEAREST opaque geometry, so three's front-to-back sort
@@ -5169,6 +5168,16 @@ export class MBStyleDataSource extends TileDataSource {
             // zoom↔distance conversions (globe altitude = ccd·conv above the
             // sea-level point) so the rendered globe matches mapbox's size.
             (this.mapView as any).__mglGlobeCam = true;
+            // §835b: mgl coveringTiles distance-LOD opt-in (§323) — mixed-LOD
+            // cover (z4/z5/z6 at pitch-85) vs our single-level z5 2×2.
+            if ((globalThis as any).__karma__?.config?.args?.some?.(
+                (a: string) => a === 'lodcmp=1')) {
+                const vtsOptions = (this.mapView as any).m_visibleTileSetOptions;
+                if (vtsOptions) {
+                    vtsOptions.mglDistanceLod = true;
+                    vtsOptions.mglDistanceLodTileSize = 256;
+                }
+            }
         } else {
             const currentType = this.mapView.projection?.type;
             if (currentType === ProjectionType.Spherical) {
