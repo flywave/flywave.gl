@@ -8215,3 +8215,11 @@ globe-circle/change-projection/set-style（213k，几乎全帧逐像素失配 25
 **§832c. halo 再修正：非过强而是错位——全部收敛到 §830 渲染球面半径标定（2026-09-05 终）**：
 
 量化：near-white(>230) 像素我方 4,846 vs expected **12,404**——expected 辉光更强，我方 halo 非过强而是**位置/形状错**（(350,420) 采样点落在我方 halo 带内而 expected 同点为荒漠）。skipdraw=transparent 212,990 无变化（halo 非 transparent pass）。结论：set-style 的 halo/覆盖带/紫圆错位与 pitch 余带同源——**我方渲染 limb 比 mgl 低 ~45 行（§830 的 0.6% 渲染球面尺度差）**，辉光环、瓦覆盖边缘、圆盘边全部随之错位。**唯一上游正解 = 引擎渲染球面半径标定（§798 域）**：瓦片球面投影、background 盘、辉光环统一按 mgl 渲染球面（含 ws/(2π)−1 与 mercatorScaleRatio 耦合）重标定后，pitch 余带、set-style halo/构图、poles 噪声带预计一并收敛。单点局部补偿（盘半径、far plane）已逐一实测无效或净负（§828/§830），不再回炉。
+
+**§833. 渲染球面半径标定实验：常量缩放否定——所需比例随 lat/zoom 变（2026-09-05 终）**：
+
+实施 `spherescale=<f>` karma 门（默认 1.0 恒等零行为变化，基建保留）：`__mbSphereScale` 单旋钮同步缩放 SphereProjection.unitScale + fog dome/盘/雾/图案球半径（globeRadiusScaled()）。实测两点：
+- **1.003**：pitch 28,382→23,487（−4.9k）✓、zero-height ×3 −0.9k ✓、set-style 持平；但 poles/south +18.9k、poles/north +5.3k、images +3.7~5.7k、heatmap/near-transition +12k、circle/near-transition +4.6k、horizon +0.5k——**净大幅负**。
+- **1.0063**：pitch →22,730（−5.6k）、zero-height −1.1k；circle +9.9k、heatmap +13k、horizon +1.5k、globe-default +0.6k——同样净负。
+
+**定论**：pitch/zero-height（lat 0~-16°中低纬）受益、poles（lat ±76°）与近过渡夹具受损——**mgl 渲染球面的等效比例是 lat/zoom 依赖的**（与其 mercatorScaleRatio=cos45°/cos(lat)·interpolate(t) 一致：中纬 ~1.07、高纬 ~2.9），不存在常量补偿。正解 = 在瓦片投影/盘/辉光半径中按 mgl 的 pixelSpaceConversion 逐帧模型化该比例（引擎域，需与 §787 的 ws/(2π)−1 耦合项一并推导），且必须保证低纬收益不外溢为高纬回归。spherescale 旋钮与 globeRadiusScaled() 基建入库，供该模型标定复用。

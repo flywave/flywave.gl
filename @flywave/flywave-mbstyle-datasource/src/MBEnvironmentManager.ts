@@ -161,16 +161,22 @@ THREE.ShaderChunk.fog_vertex = `
 // were merged (copied) from it at three's module-load time, so they must be
 // patched too — otherwise the GLSL `uniform float fogAlpha;` default stays 0
 // and the fog is disabled.
+// §833: rendered-sphere radius calibration (spherescale karma arg) —
+// every globe-radius consumer (projection unit, dome, disc, fog, pattern)
+// scales together so the rendered limb matches mgl's.
+const globeRadiusScaled = (): number =>
+    EarthConstants.EQUATORIAL_RADIUS * ((globalThis as any).__mbSphereScale ?? 1);
+
 (THREE.UniformsLib.fog as any).fogDebugT = { value: 0 };
 if (!('fogAlpha' in THREE.UniformsLib.fog)) {
     (THREE.UniformsLib.fog as any).fogAlpha = { value: 1 };
     (THREE.UniformsLib.fog as any).fogHorizonBlend = { value: 0.05 };
     (THREE.UniformsLib.fog as any).fogCamHeight = { value: 1000 };
     (THREE.UniformsLib.fog as any).fogVertLimit = { value: new THREE.Vector2(0, 0) };
-    (THREE.UniformsLib.fog as any).fogGlobeMode = { value: 0 };
+(THREE.UniformsLib.fog as any).fogGlobeMode = { value: 0 };
     (THREE.UniformsLib.fog as any).fogGlobeCenter = { value: new THREE.Vector3() };
     (THREE.UniformsLib.fog as any).fogGlobeScale = { value: 1 };
-    (THREE.UniformsLib.fog as any).fogGlobeRadius = { value: EarthConstants.EQUATORIAL_RADIUS };
+    (THREE.UniformsLib.fog as any).fogGlobeRadius = { value: globeRadiusScaled() };
     (THREE.UniformsLib.fog as any).fogGlobeTransition = { value: 0 };
     // §296: mgl Fog.state globe range (globeFixedFogRange [2,4.5] ↔
     // fov-adjusted style range, by the globe→mercator transition).
@@ -1230,7 +1236,7 @@ export class MBEnvironmentManager {
         }
         const cam = this.m_mapView.camera;
         cam.updateMatrixWorld(true);
-        const R = EarthConstants.EQUATORIAL_RADIUS;
+        const R = globeRadiusScaled();
         const material = new THREE.ShaderMaterial({
             transparent: false,
             depthTest: false,
@@ -1419,7 +1425,7 @@ export class MBEnvironmentManager {
         // shrink for custom AA — without it the dome silhouette sits ~1px
         // outside mgl's and saturates the limb (§285).
         const wsGlobe = 512 * Math.pow(2, styleZoom);
-        const R = EarthConstants.EQUATORIAL_RADIUS *
+        const R = globeRadiusScaled() *
             (wsGlobe / (2 * Math.PI) - 1) / (wsGlobe / (2 * Math.PI));
         const distToHorizon = Math.sqrt(Math.max(dc * dc - R * R, 0));
         const horizonAngle = Math.acos(Math.min(1, distToHorizon / dc));
@@ -2901,7 +2907,7 @@ export class MBEnvironmentManager {
                     diffuseColor *= sampledDiffuseColor;
                 #endif`,
             );
-            shader.uniforms.uMBPatGlobeRadius = { value: EarthConstants.EQUATORIAL_RADIUS };
+            shader.uniforms.uMBPatGlobeRadius = { value: globeRadiusScaled() };
         };
 
         if (isGlobe) {

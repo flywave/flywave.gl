@@ -280,6 +280,14 @@ function discoverTests(): TestEntry[] {
     if (ft === "1") (globalThis as any).__mbFogTDbg = true;
 }
 {
+    // §833: rendered-sphere radius calibration — scale the globe projection
+    // unit (and every globe-radius consumer) by the measured mgl rendered/
+    // nominal ratio (~1.0063, see §830).
+    const ss = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("spherescale="))?.slice("spherescale=".length);
+    if (ss !== undefined) (globalThis as any).__mbSphereScale = Number(ss);
+}
+{
     // §682: camera A/B offsets (yaw/pitch degrees) for framing calibration.
     const yawAB = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("yawab="))?.slice("yawab=".length);

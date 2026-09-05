@@ -3,7 +3,7 @@ import {
     ITileDecoder,
     Theme,
 } from '@flywave/flywave-datasource-protocol';
-import { TileKey, webMercatorTilingScheme, sphereProjection, mercatorProjection, ProjectionType } from '@flywave/flywave-geoutils';
+import { TileKey, webMercatorTilingScheme, sphereProjection, mercatorProjection, ProjectionType, EarthConstants } from '@flywave/flywave-geoutils';
 import { FogSpec } from './MBStyleSpec';
 
 /**
@@ -5126,6 +5126,14 @@ export class MBStyleDataSource extends TileDataSource {
         }
 
         if (projConfig.name === 'globe') {
+            // §833: rendered-sphere radius calibration — mgl's RENDERED globe
+            // is ~0.6% larger relative to the camera than the nominal ECEF
+            // sphere (pixel-space globeMatrix vs mercator-scale camera, §830).
+            // Scale the projection unit; camera distances (meters) stay put so
+            // the camera sits relatively closer and the limb rises to mgl's.
+            (sphereProjection as any).unitScale =
+                EarthConstants.EQUATORIAL_RADIUS *
+                ((globalThis as any).__mbSphereScale ?? 1);
             (this.mapView as any).projection = sphereProjection;
             // §776: enable the mgl globe camera model in the engine's
             // zoom↔distance conversions (globe altitude = ccd·conv above the
