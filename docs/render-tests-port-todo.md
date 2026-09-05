@@ -8310,3 +8310,7 @@ z6 覆盖对拍重新解读（z6 row 22-24 = lat 44.3-48.9，z5 row 10-12 = 45.1
 **§846. 球面垂披前置/overzoom 收敛达成：roundzoom=1 + 真裁剪 z6 overscale 瓦 → pitch 28,046（<基线 28,382）（2026-09-06）**：
 
 生成器三修后（①字段号对齐 MVT schema：name=1/features=2/keys=3/values=4/extent=5/version=15；②数值改 spec 标准 uint/sint varint；③多边形几何用 pbf ClosePath（无参数）+ **flywave-geometry clipPolygon（Sutherland-Hodgman，Vector2）真裁剪**替换手写近似裁剪），16 块 z6 overscale 瓦重建。roundzoom=1 复测：**pitch 28,046 < 基线 28,382**，帧面为连续无缝的黄陆/蓝水（无接缝、无空洞），缺失带渲染出 overscale 内容。经验：pbf v5 writeMessage 回调签名 fn(obj,pbf)、字段写入必须用 writeXxxField(tag,val)（writeVarint/writeString 不带 tag）。roundzoom 门默认关（其他 globe 夹具未回归验证，逐夹具启用待定）。**剩余 28,046** = 带位置差（mgl 渲染球 k≈1.009，§836a）+ 海岸线细节——仍需 globeMatrix 复刻收尾。
+
+**§847. roundzoom 全量回归评估：全局启用大范围回归，定论默认关（2026-09-06）**：
+
+全量 globe 族 122 夹具 roundzoom=1 A/B（vs 原始 baseline8）：除 pitch（28,046 vs 当前 28,382，−336）外**全量恶化**——circle/near-transition 5,398→56,550（+51k）、heatmap/near-transition +7.5k、antialiasing/default 5,090→217,198（+212k）、rotate-to 3,763→228,365（+225k）、icon-viewport 24,223→566,589（+542k）、poles 南北 +191k/+188k、runtime-styling/remove-feature-state 0→24,052 FLIP-FAIL 等。根因：z6 overscale 覆盖把低 zoom 夹具的瓦覆盖替换为 overscale 内容（含接缝/错位），全局性破坏。**定论**：①roundzoom 全局启用不可行；②逐夹具启用仅 pitch −336px 收益，不抵复杂度——roundzoom 门保持默认关为最终状态；③z6 overscale 数据/生成器保留（数据完备性）。pitch 缺失带的剩余 28k 收敛回到 §836a 的 globeMatrix 渲染球模型（RenderDoc 级）。本实验闭环。
