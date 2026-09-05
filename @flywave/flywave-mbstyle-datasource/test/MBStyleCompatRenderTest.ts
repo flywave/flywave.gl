@@ -219,6 +219,12 @@ function discoverTests(): TestEntry[] {
         (globalThis as any).__mbPxTrace = true;
         (globalThis as any).__mbPxTraceArr = [];
     }
+    // §821b: hsdbg=N → hillshade shader debug stage selector (via __mbHsDbg).
+    const hsdbgArg = (window as any).__karma__?.config?.args?.find?.(
+        (a: string) => a.startsWith("hsdbg="))?.slice("hsdbg=".length);
+    if (hsdbgArg) {
+        (globalThis as any).__mbHsDbg = Number(hsdbgArg);
+    }
     // §791c: extnolight=1 → skip legacy Lambert for zero-height extrusions.
     const enl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("extnolight="))?.slice("extnolight=".length);

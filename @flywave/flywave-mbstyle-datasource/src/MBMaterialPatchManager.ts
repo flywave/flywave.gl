@@ -4400,6 +4400,11 @@ export class MBMaterialPatchManager {
     private patchHillshadeMaterial(material: THREE.Material, technique: any, obj?: THREE.Mesh): void {
         const url = technique._hillshadeDemUrl as string;
         if (!url) return;
+        if (typeof window !== 'undefined' &&
+            (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'projstamp=1')) {
+            console.log('[HSDL] dem url=', url, 'zoom=', technique._tileZoom,
+                'row=', technique._tileRow, 'col=', technique._tileCol);
+        }
         if ((material as any).__mbHillshadePatched) return;
 
         const intensity = technique._hillshadeIntensity ?? 0.5;
@@ -4542,6 +4547,10 @@ export class MBMaterialPatchManager {
                 shader.uniforms.uMBHs3D = { value: hsLights ? 1 : 0 };
                 shader.uniforms.uMBHsGroundRad = { value: new THREE.Vector3(hsGroundRad[0], hsGroundRad[1], hsGroundRad[2]) };
                 shader.uniforms.uMBHsEmissive = { value: hsEmissive };
+                // §821b: hsdbg=N → output intermediate hillshade stages as
+                // colors (1=raw DEM elevation, 2=deriv, 3=premultiplied mbGl).
+                const hsDbg = Number((globalThis as any).__mbHsDbg ?? 0);
+                shader.uniforms.uMBHsDbg = { value: hsDbg };
                 shader.uniforms.uMBHsShadow = { value: new THREE.Vector3(colShadow.r, colShadow.g, colShadow.b) };
                 shader.uniforms.uMBHsHighlight = { value: new THREE.Vector3(colHighlight.r, colHighlight.g, colHighlight.b) };
                 shader.uniforms.uMBHsAccent = { value: new THREE.Vector3(colAccent.r, colAccent.g, colAccent.b) };
@@ -4556,6 +4565,7 @@ export class MBMaterialPatchManager {
                      uniform float uMBHs3D;     // LIGHTING_3D_MODE gate
                      uniform vec3 uMBHsGroundRad; // sRGB ground radiance
                      uniform float uMBHsEmissive; // hillshade-emissive-strength
+                     uniform float uMBHsDbg;    // §821b debug stage selector
                      uniform vec3 uMBHsShadow;
                      uniform vec3 uMBHsHighlight;
                      uniform vec3 uMBHsAccent;
@@ -4669,7 +4679,19 @@ export class MBMaterialPatchManager {
                      // encoded output equals the mgl value.
                      vec3 mbHsF=clamp(mbGl.rgb+vec3(1.0-mbGl.a),0.0,1.0);
                      vec3 mbHsLin=mix(mbHsF/12.92,pow((mbHsF+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),mbHsF));
-                     gl_FragColor=vec4(mbHsLin,1.0);`
+                     if (uMBHsDbg > 0.5) {
+                         // §821b debug stages: 1=raw DEM elevation, 2=deriv xy,
+                         // 3=premultiplied hillshade before the output encode.
+                         if (uMBHsDbg < 1.5) {
+                             gl_FragColor = vec4(vec3(clamp((mbA + 8000.0) / 9000.0, 0.0, 1.0)), 1.0);
+                         } else if (uMBHsDbg < 2.5) {
+                             gl_FragColor = vec4(mbDeriv.x * 0.5 + 0.5, mbDeriv.y * 0.5 + 0.5, 0.5, 1.0);
+                         } else {
+                             gl_FragColor = vec4(mbGl.rgb, 1.0);
+                         }
+                     } else {
+                     gl_FragColor=vec4(mbHsLin,1.0);
+                     }`
                 );
             };
             material.needsUpdate = true;
