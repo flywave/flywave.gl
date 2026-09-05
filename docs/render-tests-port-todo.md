@@ -8203,3 +8203,7 @@ globe-transition/pitch 与 globe-terrain 的 expected 天空为**纯黑**（mgl�
 真值工具升级：`tmp/mgl-render-style.html` 直接以夹具真实样式（含 setProjection op）实例化 vendored mgl，readPixels 直方图+边缘测量（品红背景/preserveDrawingBuffer/idle 帧等待）。heatmap/near-transition（z5.6 p84，过渡带内 globeToMercatorTransition t=smoothstep(5,6,5.6)≈0.65）实渲染：**满帧覆盖**——主色 grey(128,128,128) 桶 151,848px（=background grey 铺满全帧）+ 暗蓝雾色桶 ~46k（fog space 色）+ 白辉光带 ~7k，**无 heatmap 色块、无几何 limb**。而 expected PNG 为 100% 均匀灰（连雾色天区都没有——疑 expected 生成版本的过渡态更接近 mercator 或 op 时序差异）。我方现状：硬 globe 切换 → 盘(lavender)+dome 蓝梯度天+heatmap 红色块（mgl 无块）。
 
 **归属**：globe→mercator 过渡渲染域（过渡期瓦片逐渐平面化、覆盖扩展至满帧、天空收缩；flywave 为硬切换，§515 明示）。正解=引擎实现 mgl 的 globeToMercatorTransition 渲染混合（§798 球面垂披域），patcher/evaluator 层无可摘果实。附带发现：heatmap 色块为我方独有——mgl 在该相机下 heatmap 无输出（过渡态瓦片覆盖/密度管道），我方 weight/density 管道独立成立，可单独排查（blob 不应有）。
+
+**§832. set-style 纹理域量化：全帧栅格亮度系统偏移（2026-09-05）**：
+
+globe-circle/change-projection/set-style（213k，几乎全帧逐像素失配 256,648/262,144）的本质 = **raster 卫星瓦亮度系统偏移**：同位置采样 ours vs expected = 海洋 (32,35,41) vs (8,10,17)、陆地 (110,112,116) vs (48,52,54)——我方整体偏亮 ~+30-60（≈一次额外的 gamma/编码差），非几何/构图问题（紫圆位置/大小对齐）。此前目视"我方更暗"实为白色 glow halo 更强造成的印象。修复方向：globe 路径 raster 纹理上传/采样的 colorspace 链（sRGB↔linear 往返一次多余的编码，§820 在 fill-extrusion 注入链修过同构问题）+ glow halo 强度标定。预计连带 set-style 家族（globe-set-style/raster、symbols/set-style、circle/change-projection）~460k。
