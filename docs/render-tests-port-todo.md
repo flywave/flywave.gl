@@ -8294,3 +8294,7 @@ vectortile 包重建（karma 用 lib 预编译产物，src 改动须 `npx tsc -p
 **§842. overscale 复测终局：拼缝错位证实 overscale 无法替代真实 z6 数据（2026-09-06）**：
 
 修正 ClosePath/字段号/裁剪后，z6 overscale 瓦全面渲染：pitch 125,806（比 209k 改善，但仍劣于基线 28,382）。当前帧 = 满覆盖黄蓝拼块但**沿 z5 瓦边界有直线接缝与错位**——因为 overscale 瓦的内容是 z5 父瓦多边形（已在 z5 边界被源数据裁剪），拼回 z6 后邻瓦内容不连续；而 expected 的 z6 瓦是真实 z6 精度的连续几何。**结论：pitch 缺失带的正解必须有真实 z6 数据**（overscale 路线封闭，与 §839 terrain 同构——本地瓦集裁剪导致）。三项引擎专项之外，pitch 余带与 terrain 桶均已定性为**本地数据受限**：补齐真实 z6 数据 + 数据补齐后按 §840 的 roundzoom 修正版即可收敛。roundzoom 门保持默认关。
+
+**§843. 数据补齐路线证伪：CI 瓦集本无 z6 瓦——expected 即父瓦放大渲染（2026-09-06 终）**：
+
+核查 vendored mgl CI 瓦集（mapbox-gl-js/test/integration/tiles，367 瓦）：**z6 的 6/31-32 瓦同样不存在**（z5 仅 5-15/16 × 10-12）；globe-terrain 区域 z9-12 DEM 也只有零散区域瓦。即 **mgl CI 渲染 expected 时同样 404 了 z6 → SourceCache 保留 z5 父瓦并放大渲染（overzoom：父瓦 mesh 整体 ×2 覆盖子槽位，无逐子瓦裁剪）→ expected 的带内内容本就是无缝的父瓦放大内容**。我方逐子瓦裁剪拼合（125k）存在父边界接缝，注定无法达到无缝——数据补齐路线证伪（无数据可补）。**正解（引擎特性，唯一）**：z6 覆盖槽位缺失数据时，以 z5 父瓦 mesh 放大 ×2 渲染该 2×2 子区（mgl updateRetainedTiles+overzoom 语义）。需 TileObjectRenderer/瓦发射管线支持"父瓦几何渲染到子瓦槽位"的变换，代码入口在 VisibleTileSet 覆盖生成（lodStoppedEntries 已有类似结构）。roundzoom 门默认关保持；本桶挂账为引擎 overzoom 渲染特性。
