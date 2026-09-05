@@ -2258,7 +2258,8 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                     const gl9 = rendererAny.getContext();
                                     const px9 = (globalThis as any).__mbPxPx ??
                                         ((globalThis as any).__mbPxPx = new Uint8Array(4));
-                                    gl9.readPixels(256, 411, 1, 1, gl9.RGBA, gl9.UNSIGNED_BYTE, px9);
+                                    const py9 = parseInt((window as any).__karma__?.config?.args?.find?.((a: string) => a.startsWith('pxy='))?.slice(4) ?? '411');
+                                    gl9.readPixels(256, py9, 1, 1, gl9.RGBA, gl9.UNSIGNED_BYTE, px9);
                                     const arr9 = (globalThis as any).__mbPxTraceArr;
                                     if (arr9 && (arr9.length === 0 ||
                                         arr9[arr9.length - 1][1] !== px9[0] ||
