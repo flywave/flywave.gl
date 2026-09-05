@@ -8286,3 +8286,7 @@ roundzoom 修正版（round(displayZoom)，去掉 −1 offset——mgl coveringZ
 **§840c. z6 瓦数据补齐完成 + worker 解码链问题锁定（2026-09-06）**：
 
 16 块 z6 overscale 瓦（6/30-33×20-23，@mapbox/vector-tile 解码验证：country_boundaries 4 特征 5461 点齐全）已入 fixture 瓦集。roundzoom=1 复测：pitch 209,345 与生成前逐位相同——z6 瓦已加载入 tileCache（morton 码实测）但 **decodedTile=none（coverdump 探针 tech 计数）**：fill 不渲染；background 从 z6 正常渲染（盘缘弧线出现）。roundzoom 门默认关（基线 28,382 不受影响）。**下轮入口（唯一）**：①worker 解码埋点（VectorTileDecoder.getDecodedTile 对 z6 瓦 POST 技术计数到 mb-probe-dump；worker 内 fetch 可达 karma 反馈端口）确认 z6 瓦解码产出；②按产出定位弃置环节（worker 解析异常静默吞/technique 过滤/发射裁剪）。fill 通后 pitch 预计 209k → <28k（缺失带补上 overscale 水陆内容）。
+
+**§841. worker 解码埋点推进：decodedbg 无输出待修 + roundzoom=1 需保持默认关（2026-09-06）**：
+
+vectortile 包重建（karma 用 lib 预编译产物，src 改动须 `npx tsc -p` 重建）后 worker-decode 探针仍无 POST（z6 瓦 404 已消失=瓦加载成功）。decodedbg=1 亦无 [MBTileDec] 输出（49k 行日志中零命中；MBCam 49,508 次=applyCameraSettings 海量调用实证、MBRZ 2 次=一次性 ✓）——**decodedbg 日志链自身需排查**（疑 __mbDecodeDbg 设置/作用域断点）。roundzoom=1 现帧：白天区 + 蓝色地面（色源未定性），无黄色 fill，恒 209,345 比基线 28,382 恶化 → **roundzoom 门必须保持默认关**。下一会话入口：①修 decodedbg 输出链（主线程 in-process decoder，globalThis 应共享——为何零输出）；②借其输出定位 z6 fill 特征弃置点；③确认蓝色地面色源（fog？ds 瓦？）。

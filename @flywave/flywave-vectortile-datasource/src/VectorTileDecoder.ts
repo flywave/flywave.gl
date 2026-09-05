@@ -84,6 +84,29 @@ export class VectorTileDataProcessor implements IGeometryProcessor {
         );
 
         this.m_dataAdapter.process(data, decodeInfo, this);
+        // §841: worker decode probe — report per-technique counts for the
+        // pitch z6 overscale tiles to the result server (POSTs from worker).
+        try {
+            const tk: any = this.m_tileKey;
+            if (tk?.level === 6 && tk?.column >= 30 && tk?.column <= 33 && tk?.row >= 20 && tk?.row <= 23) {
+                const dt = this.m_decodedTileEmitter.getDecodedTile();
+                const techs = (dt as any)?.techniques ?? [];
+                const counts: Record<string, number> = {};
+                for (const t of techs) {
+                    const n = (t as any)?.technique?.name ?? (t as any)?.name ?? "unk";
+                    counts[n] = (counts[n] ?? 0) + 1;
+                }
+                const dl = (data as ArrayBuffer).byteLength ?? -1;
+                void fetch("http://localhost:8127/mb-probe-dump", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({
+                        probe: "worker-decode",
+                        log: [`${tk.level}/${tk.column}/${tk.row} techniques=${techs.length} counts=${JSON.stringify(counts)} dataLen=${dl}`],
+                    }),
+                }).catch(() => {});
+            }
+        } catch { /* probe only */ }
         return this.m_decodedTileEmitter.getDecodedTile();
     }
 
