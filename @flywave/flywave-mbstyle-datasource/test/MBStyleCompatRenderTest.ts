@@ -199,10 +199,25 @@ function discoverTests(): TestEntry[] {
         (globalThis as any).__mbHideQuad = hq;
     }
     // §807: domedbg=1 → dome shader encodes normDist/θ/t into RGB.
+    // §818: domedbg=2 → paint mode: disc/uBgDisc=RED, disc/white-backing=GREEN,
+    // glow region=BLUE — reveals which dome branch owns each pixel and
+    // whether an overpainting object covers the dome.
     const ddbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("domedbg="))?.slice("domedbg=".length);
     if (ddbg === "1") {
         (globalThis as any).__mbDomeDbg = true;
+    } else if (ddbg === "2") {
+        (globalThis as any).__mbDomeDbg = 2;
+    }
+    // §818: drawlog=1 → log every WebGL draw call (object/material/renderOrder)
+    // in submission order — render-level identification of the white-band
+    // painter (scene traversals between frames see no tile objects:
+    // m_sceneRoot is cleared post-frame, which is why every §808-§817
+    // scene-level hide experiment was a no-op).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "drawlog=1")) {
+        (globalThis as any).__mbDrawLog = [];
+        (globalThis as any).__mbPxTrace = true;
+        (globalThis as any).__mbPxTraceArr = [];
     }
     // §791c: extnolight=1 → skip legacy Lambert for zero-height extrusions.
     const enl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
@@ -2046,6 +2061,218 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 // the 800ms text fade-in so glyph opacity matches the baseline.
                 mapView.disableFading = true;
 
+                // §818g: clearprob=1 → force a magenta clear color every
+                // frame — identifies regions that NOTHING draws (clear-color
+                // white-band hypothesis, §569 clearColor arbitration).
+                if ((window as any).__karma__?.config?.args?.some?.(
+                    (a: string) => a === "clearprob=1")) {
+                    mapView.addEventListener(MapViewEventNames.WillRender, () => {
+                        (mapView as any).clearColor = 0xff00ff;
+                        (mapView as any).clearAlpha = 1;
+                    });
+                }
+
+                // §818: renderBufferDirect draw-call logger — identifies the
+                // painter of any screen region at RENDER level (draw order,
+                // material, object identity). Scene traversals between frames
+                // miss tile objects entirely (m_sceneRoot is cleared
+                // post-frame), which invalidated every scene-level hide probe.
+                const drawLog = (globalThis as any).__mbDrawLog;
+                if (drawLog && !(mapView as any).__mbDrawLogHook) {
+                    (mapView as any).__mbDrawLogHook = true;
+                    const rendererAny = (mapView as any).renderer as any;
+                    const origRBD = rendererAny.renderBufferDirect.bind(rendererAny);
+                    const tmpV8 = new THREE.Vector3();
+                    const tmpM = new THREE.Matrix4();
+                    rendererAny.renderBufferDirect =
+                        (camera: any, scene: any, geometry: any, material: any, object: any, group: any) => {
+                            if (drawLog.length < 40000) {
+                                // §818i: skipdraw=transparent → silently drop
+                                // the transparent fullscreen suspects (star
+                                // quads, trailing overlay quad) to bisect the
+                                // white-band painter by elimination.
+                                if ((window as any).__karma__?.config?.args?.some?.(
+                                    (a: string) => a === "skipdraw=transparent") &&
+                                    material?.transparent === true &&
+                                    (object?.renderOrder ?? 0) > 0) {
+                                    drawLog.push({ skipped: 1, ro: object?.renderOrder, vn: geometry?.attributes?.position?.count });
+                                    return undefined as any;
+                                }
+                                if ((window as any).__karma__?.config?.args?.some?.(
+                                    (a: string) => a === "skipdraw=alltrans") &&
+                                    material?.transparent === true) {
+                                    drawLog.push({ skipped: 3, ro: object?.renderOrder, vn: geometry?.attributes?.position?.count });
+                                    return undefined as any;
+                                }
+                                if ((window as any).__karma__?.config?.args?.some?.(
+                                    (a: string) => a === "skipdraw=atmo") &&
+                                    material?.type === "ShaderMaterial" &&
+                                    material?.transparent === true &&
+                                    object?.renderOrder === 0 &&
+                                    geometry?.attributes?.position?.count === 4) {
+                                    drawLog.push({ skipped: 4, ro: 0, vn: 4 });
+                                    return undefined as any;
+                                }
+                                if ((window as any).__karma__?.config?.args?.some?.(
+                                    (a: string) => a === "skipdraw=overlay") &&
+                                    material?.transparent === true &&
+                                    object?.renderOrder === 0 &&
+                                    geometry?.attributes?.position?.count === 4) {
+                                    drawLog.push({ skipped: 2, ro: 0, vn: 4 });
+                                    return undefined as any;
+                                }
+                                let wp: string | undefined;
+                                try {
+                                    const p = object.getWorldPosition(new THREE.Vector3());
+                                    wp = `${p.x.toExponential(1)},${p.y.toExponential(1)},${p.z.toExponential(1)}`;
+                                } catch { /* non-object3d draw */ }
+                                const entry8: any = {
+                                    n: object?.name ?? "", t: object?.type,
+                                    ro: object?.renderOrder,
+                                    mat: material?.type,
+                                    col: material?.color?.getHexString?.(),
+                                    tr: material?.transparent === true ? 1 : 0,
+                                    vn: geometry?.attributes?.position?.count,
+                                    wp,
+                                };
+                                // §818b: for white tile meshes (the white-band
+                                // painters) record the screen-space extent of
+                                // the world bounding sphere, plus the camera
+                                // matrices on the first dome draw of a frame.
+                                try {
+                                    const isDome = object?.renderOrder === -2000;
+                                    const isWhiteTile = object?.renderOrder === 0 &&
+                                        material?.type === "MeshBasicMaterial" &&
+                                        material?.color?.getHexString?.() === "ffffff";
+                                    if (isWhiteTile && geometry?.boundingSphere) {
+                                        // §818h: paint white tile quads BLUE in
+                                        // paint-id mode (material mutation is
+                                        // persistent across remounts).
+                                        if ((window as any).__karma__?.config?.args?.some?.(
+                                            (a: string) => a === "paintid=1")) {
+                                            (material as any).color?.set?.(0x0000ff);
+                                        }
+                                        // §818f: identify the owning tile — walk
+                                        // parents for a Tile (has tileKey) and read
+                                        // the MapObjectAdapter level.
+                                        let tk8: any = null;
+                                        let o8: any = object;
+                                        while (o8) {
+                                            if (o8.tileKey !== undefined) { tk8 = o8.tileKey; break; }
+                                            o8 = o8.parent;
+                                        }
+                                        entry8.lvl = object?.userData?.mapAdapter?.level ?? tk8?.level;
+                                        entry8.mc = tk8 ? tk8.mortonCode() : undefined;
+                                        object.updateWorldMatrix?.(true, false);
+                                        tmpM.copy(object.matrixWorld);
+                                        const bs = geometry.boundingSphere;
+                                        const c = tmpV8.copy(bs.center).applyMatrix4(tmpM);
+                                        const camInv = (camera as any).matrixWorldInverse ??
+                                            (camera as any).matrixWorld.clone().invert();
+                                        const vp = tmpM.identity().multiplyMatrices(
+                                            (camera as any).projectionMatrix, camInv);
+                                        const v4 = new THREE.Vector4();
+                                        const proj = (v: THREE.Vector3) => {
+                                            v4.set(v.x, v.y, v.z, 1).applyMatrix4(vp);
+                                            return [v4.x / v4.w, v4.y / v4.w];
+                                        };
+                                        const [cx, cy] = proj(c);
+                                        // screen radius: project center ± right*r
+                                        const right = new THREE.Vector3().setFromMatrixColumn(
+                                            (camera as any).matrixWorld, 0).multiplyScalar(bs.radius);
+                                        const [rx, ry] = proj(c.clone().add(right));
+                                        entry8.bs = {
+                                            c: `${c.x.toExponential(1)},${c.y.toExponential(1)},${c.z.toExponential(1)}`,
+                                            r: bs.radius.toExponential(2),
+                                            ndc: `${cx.toFixed(2)},${cy.toFixed(2)}`,
+                                            ndcR: `${rx.toFixed(2)},${ry.toFixed(2)}`,
+                                        };
+                                        // §818c: dump world-space vertices (≤120)
+                                        // for the offline sphere-conformance fit.
+                                        // Dedup by (vn, bs-center): the same tiles
+                                        // redraw every frame — one sample each, and
+                                        // the POST stays under the server body limit.
+                                        const posAttr = geometry.attributes?.position;
+                                        const dedup8 = `${posAttr?.count}:${bs.center.x.toFixed(0)},${bs.center.y.toFixed(0)},${bs.center.z.toFixed(0)}`;
+                                        const seen8: Map<string, any> =
+                                            ((globalThis as any).__mbWvSamples ??= new Map());
+                                        if (posAttr && posAttr.count <= 200 && !seen8.has(dedup8)
+                                            && seen8.size < 64) {
+                                            const wv: number[] = [];
+                                            const v3 = new THREE.Vector3();
+                                            const step = Math.max(1, Math.floor(posAttr.count / 120));
+                                            for (let vi = 0; vi < posAttr.count; vi += step) {
+                                                v3.fromBufferAttribute(posAttr as any, vi).applyMatrix4(object.matrixWorld);
+                                                wv.push(Number(v3.x.toPrecision(6)), Number(v3.y.toPrecision(6)), Number(v3.z.toPrecision(6)));
+                                            }
+                                            seen8.set(dedup8, {
+                                                key: dedup8,
+                                                vn: posAttr.count,
+                                                bsC: entry8.bs.c,
+                                                bsR: entry8.bs.r,
+                                                ndc: entry8.bs.ndc,
+                                                ud: object.userData ? JSON.stringify(object.userData).slice(0, 200) : "",
+                                                wv,
+                                            });
+                                        }
+                                    }
+                                    if (isDome) {
+                                        // §818: overwrite — keep the LAST
+                                        // dome draw's camera/uniform snapshot.
+                                        (globalThis as any).__mbCamDumped = true;
+                                            const u8 = (globalThis as any).__mbDomeUniforms;
+                                            entry8.cam = {
+                                                pos: camera.matrixWorld.elements.slice(12, 15),
+                                                fov: (camera as any).fov,
+                                                near: (camera as any).near,
+                                                far: (camera as any).far,
+                                                globePos: u8?.uGlobePos?.value?.toArray?.(),
+                                                horizonAngle: u8?.uHorizonAngle?.value,
+                                                globeRadius: u8?.uGlobeRadius?.value,
+                                                tanHalfFov: u8?.uTanHalfFov?.value,
+                                                aspect: u8?.uAspect?.value,
+                                                fadeout: u8?.uFadeout?.value,
+                                                fogColor: u8?.uFogColor?.value?.toArray?.(),
+                                                highColor: u8?.uHighColor?.value?.toArray?.(),
+                                                spaceColor: u8?.uSpaceColor?.value?.toArray?.(),
+                                                highAlpha: u8?.uHighColor?.value?.a,
+                                                matTr: (globalThis as any).__mbDomeMat?.transparent,
+                                                matBlend: (globalThis as any).__mbDomeMat?.blending,
+                                                proj: Array.from((camera as any).projectionMatrix.elements)
+                                                    .map((v: number) => Number(v.toPrecision(6))),
+                                                mwi: Array.from((camera.matrixWorld.clone().invert() as any).elements)
+                                                    .map((v: number) => Number(v.toPrecision(6))),
+                                            };
+                                        }
+                                } catch { /* probe is best-effort */ }
+                                drawLog.push(entry8);
+                            }
+                            // §818j: per-draw pixel trace — after each late draw,
+                            // read one sky-region pixel; the first draw that
+                            // turns it white is the white-band painter.
+                            if ((globalThis as any).__mbPxTrace && drawLog.length > 8000) {
+                                const r9 = origRBD(camera, scene, geometry, material, object, group);
+                                try {
+                                    const gl9 = rendererAny.getContext();
+                                    const px9 = (globalThis as any).__mbPxPx ??
+                                        ((globalThis as any).__mbPxPx = new Uint8Array(4));
+                                    gl9.readPixels(256, 411, 1, 1, gl9.RGBA, gl9.UNSIGNED_BYTE, px9);
+                                    const arr9 = (globalThis as any).__mbPxTraceArr;
+                                    if (arr9 && (arr9.length === 0 ||
+                                        arr9[arr9.length - 1][1] !== px9[0] ||
+                                        arr9[arr9.length - 1][2] !== px9[1] ||
+                                        arr9[arr9.length - 1][3] !== px9[2])) {
+                                        arr9.push([drawLog.length, px9[0], px9[1], px9[2],
+                                            material?.type, object?.renderOrder,
+                                            geometry?.attributes?.position?.count]);
+                                    }
+                                } catch { /* trace is best-effort */ }
+                                return r9;
+                            }
+                            return origRBD(camera, scene, geometry, material, object, group);
+                        };
+                }
+
                 const style = localizeStyle(entry.style);
                 // Fake canvas must exist in the DOM before the datasource
                 // connects — canvas sources resolve the element by id at
@@ -2315,6 +2542,31 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     }
                     console.log('[GUARD] exit after ' + gIter + ' iters, calls=' + g762.__mbLastFrameCalls);
                 } catch { /* guard is best-effort */ }
+
+                // §818: POST the draw-call log (whole session; the captured
+                // frame is the tail) before the IBCT comparison.
+                if ((globalThis as any).__mbDrawLog?.length) {
+                    try {
+                        const fb8 = (window as any).__karma__?.config?.args
+                            ?.find?.((a: string) => a.startsWith("feedback-url="))
+                            ?.slice("feedback-url=".length);
+                        if (fb8) {
+                            await fetch(`${fb8}/mb-probe-dump`, {
+                                method: "POST",
+                                headers: { "content-type": "application/json" },
+                                body: JSON.stringify({
+                                    probe: "drawlog",
+                                    fixture: entry.name,
+                                    calls: (globalThis as any).__mbDrawLog,
+                                    pxTrace: (globalThis as any).__mbPxTraceArr,
+                                    wvSamples: Array.from(
+                                        (globalThis as any).__mbWvSamples?.values?.() ?? []),
+                                }),
+                            });
+                        }
+                    } catch { /* probe is best-effort */ }
+                }
+
                 await ibct.assertCanvasMatchesReference(canvas, entry.name, {
                     threshold: 0.1,
                     maxMismatchedPixels: maxMismatch,

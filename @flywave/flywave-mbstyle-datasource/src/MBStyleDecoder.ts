@@ -1118,6 +1118,15 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             }
         }
         const decodeInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
+        // §818d: decode-time projection stamp — proves which tiles decode
+        // under a stale projection across a setProjection swap (the white-band
+        // z0 plane-quad root cause). Probe-gated to keep batch logs clean.
+        if (typeof window !== 'undefined' &&
+            (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'projstamp=1')) {
+            console.log('[MBPROJ] decode tile=', tileKey.mortonCode(),
+                'level=', (tileKey as any).level, 'projType=', (projection as any)?.type,
+                'time=', Date.now() % 100000);
+        }
         const emitter = new MBTileDataEmitter(tileKey, decodeInfo, zoom);
         // Bearing resolves `*-translate-anchor: viewport` (mapbox rotates the
         // viewport translate by -bearing in the map frame).

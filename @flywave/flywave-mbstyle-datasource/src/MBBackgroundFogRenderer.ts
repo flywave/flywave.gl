@@ -70,6 +70,14 @@ export class MBBackgroundFogRenderer {
     /** Draw the background fog gradient. Call once per frame from AfterRender. */
     run(): void {
         const state = this.m_getFogState();
+        // §818: a null/disabled state must HIDE the mesh — during a
+        // projection switch the plane-math quad left over from the mercator
+        // phase would otherwise keep rendering with stale uniforms on the
+        // globe (the white-band family: fog-white from the plane horizon
+        // row down over the atmosphere glow).
+        if (this.m_mesh) {
+            this.m_mesh.visible = state?.enabled === true && state.alpha > 0.001;
+        }
         if (!state || !state.enabled || state.alpha <= 0.001) return;
         const renderer = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
         if (!renderer) return;

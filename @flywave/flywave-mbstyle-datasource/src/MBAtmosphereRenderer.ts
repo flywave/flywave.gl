@@ -42,6 +42,12 @@ export class MBAtmosphereRenderer {
     /** Draw the atmosphere gradient. Call once per frame from AfterRender. */
     run(): void {
         const state = this.m_getState();
+        // §818: a null state must HIDE the mesh — the stale quad from a
+        // mercator phase would keep rendering with plane-horizon math on the
+        // globe (fog-white over the atmosphere glow above the limb).
+        if (this.m_mesh) {
+            this.m_mesh.visible = state != null;
+        }
         if (!state) return;
         // §228/§241: content tiles own the ground; the sky region still
         // needs painting — a FLAT fog-color glow (the mgl expected sky at

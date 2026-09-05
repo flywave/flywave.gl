@@ -1634,6 +1634,19 @@ export class MBTileDataEmitter {
             // formula (mix(bgColor, fogColor, α²) band matches mgl exactly).
             if (properties?._sourceId === '__mb_background__') {
                 (this.m_techniques[techniqueIdx] as any)._mbBgTile = true;
+                // §818e: per-background-quad emission stamp — pairs with the
+                // drawlog to identify which decode produced the sky-crossing
+                // white quad (stale-projection root cause).
+                if (typeof window !== 'undefined' &&
+                    (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'projstamp=1')) {
+                    const sphericalUp = (this.m_decodeInfo.targetProjection as any)?.type === 1;
+                    const w0 = this.project(new THREE.Vector2(0, 0));
+                    console.log('[BGSTAMP] tileLevel=', this.m_decodeInfo.tileKey.level,
+                        'code=', this.m_decodeInfo.tileKey.mortonCode(),
+                        'spherical=', sphericalUp,
+                        'v0=', w0.x.toFixed(0) + ',' + w0.y.toFixed(0) + ',' + w0.z.toFixed(0),
+                        'time=', Date.now() % 100000);
+                }
             }
             // Key by technique: a geometry's groups must all share one technique.
             // TileGeometryCreator builds one single-material object per group and

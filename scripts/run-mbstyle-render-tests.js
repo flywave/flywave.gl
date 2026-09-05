@@ -81,6 +81,9 @@ function main() {
         const karmaArgs = [
             "karma", "start",
             "--browsers", "ChromeHeadlessNoSandbox",
+            // §818: parallel probe runs alongside the chunked batch need a
+            // separate karma server port (default 9876 is per-process global).
+            "--port", process.env.MBSTYLE_KARMA_PORT || "9876",
         ];
         // karma client args -> KARMA_ARGS env (space separated).
         const karmaClientArgs = [...filters.map((f) => `filter=${f}`), `feedback-url=http://localhost:${port}`,
@@ -118,7 +121,12 @@ function main() {
             ...(process.env.MBSTYLE_EXTDBG ? ["extdbg=1"] : []),
             ...(process.env.MBSTYLE_EXTNOLIGHT ? ["extnolight=1"] : []),
             ...(process.env.MBSTYLE_TERRHIDE ? ["terhide=1"] : []),
-            ...(process.env.MBSTYLE_DOMEDBG ? ["domedbg=1"] : []),
+            ...(process.env.MBSTYLE_DOMEDBG ? [`domedbg=${process.env.MBSTYLE_DOMEDBG}`] : []),
+            ...(process.env.MBSTYLE_DRAWLOG ? ["drawlog=1"] : []),
+            ...(process.env.MBSTYLE_PROJSTAMP ? ["projstamp=1"] : []),
+            ...(process.env.MBSTYLE_CLEARPROB ? ["clearprob=1"] : []),
+            ...(process.env.MBSTYLE_PAINTID ? ["paintid=1"] : []),
+            ...(process.env.MBSTYLE_SKIPDRAW ? [`skipdraw=${process.env.MBSTYLE_SKIPDRAW}`] : []),
             ...(process.env.MBSTYLE_DSDISABLE ? ["dsdisable=1"] : []),
             ...(process.env.MBSTYLE_RMSTYLE ? [`rmstyle=${process.env.MBSTYLE_RMSTYLE}`] : []),
             ...(process.env.MBSTYLE_HIDEQ ? [`hideq=${process.env.MBSTYLE_HIDEQ}`] : []),

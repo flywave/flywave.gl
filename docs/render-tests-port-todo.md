@@ -8111,3 +8111,17 @@ hideq=horizon 改为对越球 quad 材质设 colorWrite=false（材质属性持�
 **§816. colorWrite 实验：无变化——白带绘制者对场景树+材质属性全部干预免疫（2026-09-05 终）**：
 
 hideq=alloncw（WillRender 钩子对全部白色 MeshBasic* 材质设 colorWrite=false+needsUpdate，材质属性跨帧持久不受瓦片重挂影响）：125,982 分毫不变。叠加此前证据（removeFromParent 移除、visible=false、数据源禁用均无效），**白带绘制者对场景树与材质属性的所有可达干预免疫**。且 dsdisable 帧（无数据源）出现黄色板体（255,255,8）——存在数据源之外的几何绘制路径或引擎瓦片收集器每帧重挂。定位白物需渲染级帧捕获（RenderDoc/SpectorJS draw-call 级），静态与运行时钩子手段已全部穷尽。域最终挂账（zero-height simple/complex 各 ~126k）。
+
+**§818. globe 白带域破案：渲染级 draw-call 日志定位 MBBackgroundFogRenderer/MBAtmosphereRenderer 平面雾 quad 越球涂白——三夹具 −84%/−89%/−91%（2026-09-05）**：
+
+**基建突破（此前 §808-§816 全部实验无效的根因）**：①scene 树帧间为空——`m_sceneRoot` 每帧清空，瓦片对象只在 render pass 内存在，一切帧间 traverse（hideq/census/colorWrite）从未触到瓦片网格，全部"位级不变"系空转；②新工具 `drawlog=1`：hook `renderer.renderBufferDirect`（每 draw 记录 对象/材质/ro/顶点数/世界位/包围球 NDC 投影），辅以 `MBSTYLE_DRAWLOG`/`pxTrace`（>8000 号 draw 后逐 draw readPixels 天空区像素，首个染白 draw 即凶手）、`domedbg=2`（dome 三分支染色：disc-uBgDisc=红/disc-backing=绿/glow=蓝）、`paintid=1`（白 quad 现场染蓝）、`clearprob=1`（clear 染品红）、`skipdraw=atmo|alltrans|overlay|transparent`（按签名跳过绘制）、`projstamp=1`（解码期投影戳 + 背景注入戳）。karma 并行跑需 `MBSTYLE_KARMA_PORT`（9876 被批测占用时 ChromeHeadless 直接 crash）。
+
+**取证链**：①paint-mode 帧：黄板完美渲染（板从未坏），dome glow 仅 y0-3 可见，y4-511 被不透明白盖住 dome 的红/绿染色——白物画在 dome 之后、板之前；②pxTrace 锁定凶手签名：`ShaderMaterial, ro=0, vn=4, transparent` 全屏 quad（每帧最后一笔）；③逐一对应 = **MBBackgroundFogRenderer**（mercator 平面雾 quad：屏幕地平线行 uHorizon=(256−hPx·0.9)/512 在 pitch70 ≈ y4.3，之下涂 fogSrgb 白×fogAlpha=1——白带起点 y4 分毫吻合）与 **MBAtmosphereRenderer**（同平面语义的辉光 quad，同样在 globe 越界涂白）；④skipdraw=atmo（drawlog 开启时）实测白带消失、dome 辉光梯度完好：**125,980→19,731（−84%）**。
+
+**根因综合**：`setProjection` 切换后（projection setter 已 clearTileCache+重建 VisibleTileSet）两个 mercator 平面语义的全屏 quad（背景雾 + 大气辉光，run() 在 state 无效时只 return 不隐藏）以切换前 uniform 继续渲染：平面地平线行（y≈4）之上的 globe 辉光/太空区域被雾白覆盖。相机几何、瓦片球面贴合（顶点最小二乘拟合 |v−C|=6,378,134m 残差 ±6m）、dome uniform（uGlobePos=R^T·(0−pos) 逐分量正确）全部无辜——§807b-§816 的 dome 内 uniform 不自洽假说、平面弦外伸假说、far-side 背面瓦假说均被本次渲染级证据否定。
+
+**修复（正式）**：①`MBEnvironmentManager.atmosphereState`/`backgroundFogState` getter 在 `projection.type===1` 时返回 null（mgl 的 globe 天空由 applyGlobeAtmosphere 的 m_globeAtmo dome 承担，两 quad 是 mercator 尾巴）；②两 renderer 的 `run()` 在 state null/disabled 时 `m_mesh.visible=false`（此前只 return 不隐藏——正是切换后泄漏的机制）；③`createFogAtmosphereDome` 加 globe 门（移除 mercator 相位遗留的 dome 并不再创建）。**§815c 提议的引擎层 horizon culling 实测非必需**：VisibleTileSet 中心角剔除版已实现并验证（能剔 5 瓦/帧），但它使 globe-default 2,709→30,422 回归（远相机下中心判据过激剔除 limb 附近可见卫星瓦）而白带修复不需要它——已整体回退，仅记录否定结果。
+
+**回测（定向）**：zero-height-clipping-simple 125,980→**19,731**（−84%）、complex 103,830→**11,688**（−89%）、globe-horizon 216,394→**19,945**（−91%）、globe-default 2,709 哨兵持平（无回归）。全量 globe 族批测与剩余 19.7k/11.7k/19.9k 残差构成（梯度过渡带位置 vs dome 辉光拟合、卫星瓦亮度域）另节记录。
+
+**§818b. 全量批测终值（2026-09-05）**：globe 族 122/123 采集（90 与基线可同比）：9 夹具改善、净省 **495,789 px**——horizon 216,394→19,945（−91%）、zero-height-simple 125,980→19,731（−84%）、complex 103,830→11,695（−89%）、padding 221,019→148,545（−33%）、circle/near-transition 26,048→5,398（−79%）、zero-height-angle-limit −31%、fe/default −8%、transition/with-symbols −10%、heatmap/near-transition −1%。**回归 2 处（+28k）**：poles/south 13,683→37,404、poles/north 31,097→35,420——远相机极点视角的天空梯度变暗（先前 atmosphere quad 的白色抬升在极点视角恰好更接近 expected），后续以 dome 辉光 fadeout/blend 的远相机标定收口（详见 rendering-test-results/mbstyle-globe-eval-0905b）。新探针族（drawlog/pxTrace/paintid/clearprob/skipdraw/projstamp，全部 karma-arg 门控）入库。

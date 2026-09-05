@@ -257,6 +257,12 @@ export class MBEnvironmentManager {
         hasContentLayers: boolean;
     } | null {
         if (!this.m_fog || !this.m_fogState || this.m_bgFogParams == null) return null;
+        // §818: on the globe projection the background-fog quad's plane math
+        // (screen-horizon line + ray∩ground-plane distance) is meaningless —
+        // it painted fog-white from the plane horizon row (y≈4 at pitch 70)
+        // down over the whole frame, over the globe glow region (the
+        // white-band family). mgl's globe sky is the atmosphere dome's job.
+        if ((this.m_mapView as any).projection?.type === 1) return null;
         return {
             enabled: true,
             color: this.m_fog.color,
@@ -305,6 +311,14 @@ export class MBEnvironmentManager {
     } | null {
         const st = this.m_fogState;
         if (!st) return null;
+        // §818: on the globe projection the screen-space glow quad's
+        // plane-horizon math paints fog-white over the region above the
+        // globe limb (the white-band family, −105k px on zero-height-
+        // clipping). The globe atmosphere dome (applyGlobeAtmosphere) owns
+        // the glow there — mgl's drawAtmosphereGlow is globe-aware and the
+        // dome reproduces it (the dome's glow gradient matches the expected
+        // arc exactly once the quad stops overpainting it).
+        if ((this.m_mapView as any).projection?.type === 1) return null;
         // An explicit sky layer supersedes the atmosphere glow: mgl draws
         // the sky pass AFTER the atmosphere (painter.ts opaque→atmosphere→
         // sky) at max depth, so the sky layer's fragments replace the glow
@@ -1186,6 +1200,15 @@ export class MBEnvironmentManager {
      * transparent so the map tiles show through.
      */
     private applyGlobeAtmosphere(fog: FogSpec | undefined, styleZoom: number): void {
+        // §818: the mercator fog-atmosphere dome (plane screen-horizon math)
+        // paints fog-white over the globe glow region above the limb — the
+        // white-band family. createFogAtmosphereDome's own globe gate never
+        // runs here (nothing re-calls applyFog after the projection swap),
+        // so remove the dome on every globe atmosphere application instead.
+        if (this.m_skyMesh && this.m_skyMesh.userData.__mbFogAtmosphereDome) {
+            this.m_scene?.remove(this.m_skyMesh);
+            this.m_skyMesh = null;
+        }
         if (!fog) {
             this.m_globeFogActive = false;
             this.m_globeBgColor = null;
@@ -1316,6 +1339,15 @@ export class MBEnvironmentManager {
                     vec3 closestPoint = globe_pos_dot_dir * dir;
                     float distToCenter = length(closestPoint - uGlobePos);
                     float normDist = distToCenter / uGlobeRadius;
+                    if (uDomeDbg > 1.5) {
+                        // §818 paint mode: branch ownership per pixel.
+                        if (normDist < 0.98) {
+                            gl_FragColor = uBgDisc > 0.5 ? vec4(1.0, 0.0, 0.0, 1.0) : vec4(0.0, 1.0, 0.0, 1.0);
+                        } else {
+                            gl_FragColor = vec4(0.0, 0.0, 1.0, 1.0);
+                        }
+                        return;
+                    }
                     if (uDomeDbg > 0.5) {
                         float thetaDbg = asin(clamp(distToCenter / length(uGlobePos), -1.0, 1.0));
                         float haDbg = globe_pos_dot_dir < 0.0
@@ -1369,6 +1401,9 @@ export class MBEnvironmentManager {
             `,
         });
         this.m_globeAtmo = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+        // §818: expose uniforms for the harness drawlog probe.
+        (globalThis as any).__mbDomeUniforms = material.uniforms;
+        (globalThis as any).__mbDomeMat = material;
         this.m_globeAtmo.frustumCulled = false;
         this.m_globeAtmo.renderOrder = -2000;
         // Refresh the globe geometry uniforms before each draw — the camera
@@ -1387,7 +1422,7 @@ export class MBEnvironmentManager {
             material.uniforms.uBgDisc.value = this.m_globeBgColor ? 1 : 0;
             material.uniforms.uBgDiscAlpha.value = this.m_globeBgAlpha;
             if (this.m_globeBgColor) material.uniforms.uBgDiscColor.value.copy(this.m_globeBgColor);
-            material.uniforms.uDomeDbg.value = (globalThis as any).__mbDomeDbg ? 1 : 0;
+            material.uniforms.uDomeDbg.value = (globalThis as any).__mbDomeDbg ? (globalThis as any).__mbDomeDbg === true ? 1 : (globalThis as any).__mbDomeDbg : 0;
             // §805: one-shot dome-geometry dump (limb y4 vs mgl y210 probe).
             if ((globalThis as any).__mbExtRouteDbg && !(globalThis as any).__mbDomeDumped) {
                 (globalThis as any).__mbDomeDumped = true;
@@ -1533,6 +1568,20 @@ export class MBEnvironmentManager {
 
     private createFogAtmosphereDome(): void {
         if (!this.m_scene || !this.m_fogState) return;
+        // §818: on the globe projection the plane-semantics sky dome is
+        // wrong: its screen-horizon reference and elevation math assume the
+        // flat map, so above the globe limb it paints fog-white over the
+        // region mgl fills with the atmosphere glow (the white-band family,
+        // ro=1000 over everything). The globe atmosphere dome
+        // (applyGlobeAtmosphere) owns the sky — remove any dome left over
+        // from a mercator phase and never create one here.
+        if ((this.m_mapView as any).projection?.type === 1) {
+            if (this.m_skyMesh && this.m_skyMesh.userData.__mbFogAtmosphereDome) {
+                this.m_scene.remove(this.m_skyMesh);
+                this.m_skyMesh = null;
+            }
+            return;
+        }
         // An explicit sky layer supersedes the fog dome (mgl sky pass draws
         // after the atmosphere glow). applySky removes the dome when the sky
         // is applied, but applyFog re-entry paths (theme propagation, zoom
