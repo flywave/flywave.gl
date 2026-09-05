@@ -8326,3 +8326,7 @@ discext=1（§829 盘阈值 0.98→1.009，覆盖 normDist 0.98-1.009 带）：p
 **§850. heatmap 228k 环境依赖定性：本地 mgl 实渲染与 expected 本身不一致（2026-09-06）**：
 
 结合 §831 真值页取证与 expected 采样复核：expected.png = **100% 均匀灰**（全帧，无雾色天区/无辉光带/无色块）；而本地 vendored mgl 实渲染同夹具 = 灰 58% + 暗蓝雾色 ~18% + 白辉光 ~3%（真值页直方图）。即 **expected 编码了 CI 环境的特定行为**（疑 CI 的 setProjection 过渡态时序/资产可用性与本地不同），本地任何实现都无法逐像素复现 expected。我方现状（蓝渐变天+彩色热力块）与本地 mgl（灰+雾色）各有差异。**定性**：heatmap/near-transition 228k 为 CI 环境依赖桶，与 terrain（数据受限）同类——在 CI 环境差异未解决前，该桶指标不可收敛。globe 专项剩余三大桶至此全部完成"可达性"定性：①pitch 余带/set-style/poles = mgl globeMatrix 渲染模型（RenderDoc 级）；②heatmap = CI 环境依赖；③terrain = 数据受限。globe 专项代码侧工作全部完成。
+
+**§848b. queryRenderedFeatures 反查为空——带绘制者非 feature-queryable，RenderDoc/Spector 必需（2026-09-06）**：
+
+真值页加 queryRenderedFeatures([[0,331],[512,367]]) 反查（品红背景样式下）：**返回空**——y331-367 带的品红内容（背景瓦绘制，画布像素已证实）不出现在 query 结果中。结论：该带绘制者非 feature-queryable 路径（mgl globe 的背景/瓦绘制在 query 管线之外，或 grazing-angle 下 query 管线自身排除），**RenderDoc/SpectorJS 级帧捕获为此域唯一可行工具**（本环境无 GPU 帧捕获设施）。§848 矛盾现象（渲染内容高于矩阵盘缘 36 行）挂账待 RenderDoc 环境；globe 专项在本环境的可执行工作全部完成。
