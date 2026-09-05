@@ -127,6 +127,8 @@ function main() {
             ...(process.env.MBSTYLE_CLEARPROB ? ["clearprob=1"] : []),
             ...(process.env.MBSTYLE_PAINTID ? ["paintid=1"] : []),
             ...(process.env.MBSTYLE_SKIPDRAW ? [`skipdraw=${process.env.MBSTYLE_SKIPDRAW}`] : []),
+            ...(process.env.MBSTYLE_NOLIGHTS ? ["nolights=1"] : []),
+            ...(process.env.MBSTYLE_NOINJECT ? ["noinject=1"] : []),
             ...(process.env.MBSTYLE_DSDISABLE ? ["dsdisable=1"] : []),
             ...(process.env.MBSTYLE_RMSTYLE ? [`rmstyle=${process.env.MBSTYLE_RMSTYLE}`] : []),
             ...(process.env.MBSTYLE_HIDEQ ? [`hideq=${process.env.MBSTYLE_HIDEQ}`] : []),

@@ -3569,6 +3569,13 @@ export class MBMaterialPatchManager {
     }
 
     private patchExtrusionMaterial(material: THREE.Material, paint: any, technique: any, mesh?: THREE.Mesh): void {
+        // §820: technique-cached materials are visited once per mounted tile —
+        // without this guard every visit wraps ANOTHER onBeforeCompile block
+        // and the legacy-light mix multiplies itself N times (the
+        // multipolygon-subdivision pair's uniform ~0.4× darkening: two stacked
+        // 0.8×mix × 0.75×gradient applications).
+        if ((material as any).__mbExtrusionPatched === true) return;
+        (material as any).__mbExtrusionPatched = true;
         // §791c probe: confirm entry + the legacy-Lambert lighting route.
         if ((globalThis as any).__mbExtRouteDbg) {
             const buf: string[] = ((globalThis as any).__mbExtRouteLog ??= []);
@@ -3942,7 +3949,9 @@ export class MBMaterialPatchManager {
             // reach these pixels (world-frame normal test still fails).
             if (!use3DLights &&
                 !((this.m_dataSource as any).mapView?.projection?.type === 1 &&
-                  height === 0 && base === 0)) {
+                  height === 0 && base === 0) &&
+                !(typeof window !== 'undefined' &&
+                  (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'noinject=1'))) {
                 shader.uniforms.uMBLightDirWorld = { value: lightDirWorld };
                 shader.uniforms.uMBLightColor = { value: lightColor };
                 shader.uniforms.uMBLightIntensity = { value: lightIntensity };
@@ -3983,12 +3992,14 @@ export class MBMaterialPatchManager {
                      {
                          // The renderer's output color space is linear (the
                          // mapview captures to sRGB only at compositing time), so
-                         // gl_FragColor.rgb at this point is the LINEAR paint color.
-                         // Mapbox's fill-extrusion lighting is computed on the
-                         // sRGB paint values and yields an sRGB result; convert the
-                         // input to sRGB, do the mapbox math, then linearize the
-                         // output so the final capture reproduces the sRGB result.
-                         vec3 mbPaintSrgb = linearToSrgb(gl_FragColor.rgb);
+                         // gl_FragColor.rgb at this point is the LINEAR paint color
+                         // — SCENE-LIT (ambient + directional ≈ 0.4× for the
+                         // legacy I=0.2 light, the multipolygon/symbol-z-offset
+                         // darkening). mgl computes fill-extrusion lighting on
+                         // the UNLIT sRGB paint: read diffuseColor.rgb instead
+                         // (still in scope; the scene-light output is discarded),
+                         // do the mapbox math in sRGB, then linearize the output.
+                         vec3 mbPaintSrgb = linearToSrgb(diffuseColor.rgb);
                          float mbColorValue = dot(mbPaintSrgb, vec3(0.2126, 0.7152, 0.0722));
                          vec3 mbColor = mbPaintSrgb + vec3(0.03);
                          // Flat normal: FLAT_SHADED so vNormal is undefined; use
@@ -4005,7 +4016,13 @@ export class MBMaterialPatchManager {
                              mbNdotL *= (1.0 - uMBVerticalGradient) + uMBVerticalGradient * clamp((vMBHeight + uMBHeightBase) * pow(uMBHeightTop / 150.0, 0.5), mbR, 1.0);
                          }
                          vec3 mbResultSrgb = clamp(mbColor * mbNdotL * uMBLightColor, mix(vec3(0.0), vec3(0.3), 1.0 - uMBLightColor), vec3(1.0));
-                         gl_FragColor.rgb = srgbToLinear(mbResultSrgb);
+                         // §820: mbResultSrgb is already in OUTPUT (sRGB-encoded)
+                         // space — colorspace_fragment is the LAST chunk that
+                         // encodes; wrapping it in srgbToLinear here re-darkened
+                         // every channel by its own linear ratio (the
+                         // multipolygon/symbol-z-offset saturation darkening:
+                         // r×0.94 g×0.59 b×0.31).
+                         gl_FragColor.rgb = mbResultSrgb;
                          // Force the blend weight: material-level opacity was
                          // not reaching the fragment on this path (probed), the
                          // onBeforeCompile injection is.

@@ -688,6 +688,14 @@ export class MBEnvironmentManager {
 
     applyLights(lights: Light3DProperties[] | undefined, legacyLight?: any): void {
         if (!this.m_scene) return;
+        // §820 probe: nolights=1 → no scene lights at all (lit materials render
+        // flat paint color) — bisects the extrusion darkening domain.
+        if (typeof window !== 'undefined' &&
+            (window as any).__karma__?.config?.args?.some?.((a: string) => a === 'nolights=1')) {
+            this.clearLights();
+            this.m_use3DLights = false;
+            return;
+        }
         this.clearLights();
         this.updateModelLegacyLight(legacyLight);
         this.m_lightAzimuthalPolar =
@@ -707,6 +715,10 @@ export class MBEnvironmentManager {
                 const legacyColor = new THREE.Color(
                     this.themeLightColor(legacyLight.color ?? '#ffffff'));
                 const legacyIntensity = legacyLight.intensity ?? 0.5;
+                // §820: the extrusion materials' mgl-formula injection reads the
+                // UNLIT diffuseColor now, so these scene lights no longer reach
+                // the extrusion output (they remain for other legacy-lit
+                // materials; mercator intensities stay as calibrated).
                 this.m_ambientColor = legacyColor;
                 this.m_ambientIntensity = legacyIntensity;
                 this.m_ambientLight = new THREE.AmbientLight(legacyColor, legacyIntensity);
