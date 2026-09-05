@@ -4995,13 +4995,45 @@ export class MBStyleDataSource extends TileDataSource {
                     }
                 }
                 if (this.mapView) {
-                    // §570b: on globe with fog the atmosphere's SPACE color owns
-                    // the canvas clear; the background becomes the fogged disc.
+                    // §570b/§829: on globe the background belongs to the sphere
+                    // disc — with fog the atmosphere's space color owns the sky
+                    // and the disc carries the fogged background; without fog
+                    // mgl draws NO atmosphere (black sky) but the disc still
+                    // carries the plain background (mgl background renders
+                    // per-tile on the globe). Both cases register the disc
+                    // color; the flat full-screen mercator clear is not used.
                     try {
-                        if (this.m_environment?.globeFogActive
-                            && Number((this.mapView as any).projection?.type) === 1) {
-                            this.m_environment.setGlobeBackground(new THREE.Color(color), opacity);
-                            return;
+                        if (Number((this.mapView as any).projection?.type) === 1) {
+                            if (this.effectiveFogSpec(style) !== undefined) {
+                                // Fog style — §570b original behavior: with the
+                                // atmosphere active the space color owns the sky
+                                // and the dome disc carries the fogged background.
+                                if (this.m_environment?.globeFogActive) {
+                                    this.m_environment.setGlobeBackground(new THREE.Color(color), opacity);
+                                    return;
+                                }
+                                // transient (fog not yet applied): flat clear,
+                                // applyFog re-runs applyBackgroundColor after.
+                            } else {
+                                // §829: NO-FOG globe — mgl draws no atmosphere
+                                // (transparent clear → the harness composites the
+                                // reference over WHITE, so the sky must be the
+                                // engine's opaque white clear), but the background
+                                // still renders per-tile ON the sphere: register
+                                // the disc color and keep the styled color OFF
+                                // the full-screen clear.
+                                this.m_environment?.setGlobeBackground(new THREE.Color(color), opacity);
+                                (this.mapView as any).clearColor = 0xffffff;
+                                (this.mapView as any).clearAlpha = 1;
+                                // terrain ground shows the background where no
+                                // drape content exists (same as the flat path).
+                                try {
+                                    this.m_environment?.terrainController?.setBaseColor(
+                                        new THREE.Color(color).getHex());
+                                    this.m_terrainDraping?.requestBake?.();
+                                } catch {}
+                                return;
+                            }
                         }
                     } catch { /* fall through to the flat path */ }
                     // §819 NOTE: on globe without fog mgl's sky is black space,

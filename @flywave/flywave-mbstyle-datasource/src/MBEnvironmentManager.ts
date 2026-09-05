@@ -890,8 +890,6 @@ export class MBEnvironmentManager {
             // every fog-less globe fixture. Mirror the mgl gate instead.
             if (fog === undefined) {
                 this.m_globeFogActive = false;
-                this.m_globeBgColor = null;
-                this.disposeGlobeAtmosphere();
                 if (this.m_stars) {
                     this.m_scene.remove(this.m_stars);
                     this.m_stars = null;
@@ -902,12 +900,26 @@ export class MBEnvironmentManager {
                     this.m_fog = null;
                 }
                 this.m_fogState = null;
-                // White clear = mgl's transparent space composited over the
-                // white test canvas. The datasource re-runs
-                // applyBackgroundColor after this for styles with a
-                // background layer (flat clear path, globeFogActive false).
-                (this.m_mapView as any).clearColor = 0xffffff;
-                (this.m_mapView as any).clearAlpha = 1;
+                // §829: keep a registered background color — the disc-only
+                // quad still paints the background ON the sphere (mgl
+                // background renders per-tile on the globe even with no fog
+                // system); the sky (outside the disc) becomes the clear.
+                // NOTE: this runs before the datasource's applyBackgroundColor
+                // re-run, which sets the black clear for the disc path.
+                if (this.m_globeBgColor) {
+                    // §829: white clear — see the disc-path note in
+                    // MBStyleDataSource.applyBackgroundColor (the transparent
+                    // reference is composited over white by compareImages).
+                    (this.m_mapView as any).clearColor = 0xffffff;
+                    (this.m_mapView as any).clearAlpha = 1;
+                    this.applyGlobeDiscBackground();
+                } else {
+                    // White clear = mgl's transparent space composited over the
+                    // white test canvas (bare frames, no background layer).
+                    (this.m_mapView as any).clearColor = 0xffffff;
+                    (this.m_mapView as any).clearAlpha = 1;
+                    this.disposeGlobeAtmosphere();
+                }
                 // The fog chunk is baked in at compile time — force a
                 // recompile now that scene.fog is gone (mirror the apply path).
                 this.m_scene?.traverse((o: any) => {
@@ -1192,6 +1204,126 @@ export class MBEnvironmentManager {
     setGlobeBackground(color: THREE.Color, alpha: number): void {
         this.m_globeBgColor = color;
         this.m_globeBgAlpha = alpha;
+        // §829: no-fog globe — the background disc quad is created here so
+        // both apply orders (fog-then-background and background-then-fog)
+        // converge on the same state.
+        if (!this.m_globeFogActive &&
+            Number((this.m_mapView as any).projection?.type) === 1) {
+            this.applyGlobeDiscBackground();
+        }
+    }
+
+    /**
+     * §829: disc-only globe background (no fog). mgl with no fog key draws
+     * NO atmosphere and clears transparent (black over the test canvas), but
+     * the background layer still renders per-tile ON the sphere — the visible
+     * globe disc carries the background color and the sky stays black. Our
+     * previous flat-clear path colored the WHOLE frame (sky included). This
+     * quad is the fog-free variant of the atmosphere dome: inside the disc =
+     * background color (limb-blended to black), outside = transparent (the
+     * black clear shows through).
+     */
+    private applyGlobeDiscBackground(): void {
+        if (this.m_globeAtmo) {
+            // Existing dome (fog variant) — update the disc uniforms only.
+            return;
+        }
+        const cam = this.m_mapView.camera;
+        cam.updateMatrixWorld(true);
+        const R = EarthConstants.EQUATORIAL_RADIUS;
+        const material = new THREE.ShaderMaterial({
+            transparent: false,
+            depthTest: false,
+            depthWrite: false,
+            blending: THREE.CustomBlending,
+            blendSrc: THREE.OneFactor,
+            blendDst: THREE.OneMinusSrcAlphaFactor,
+            uniforms: {
+                uGlobePos: { value: new THREE.Vector3() },
+                uGlobeRadius: { value: R },
+                uHorizonAngle: { value: 0 },
+                uTanHalfFov: { value: Math.tan((cam.fov * Math.PI / 180) / 2) },
+                uAspect: { value: (cam as THREE.PerspectiveCamera).aspect ?? 1 },
+                uBgDiscAlpha: { value: this.m_globeBgAlpha },
+                uBgDiscColor: { value: this.m_globeBgColor ?? new THREE.Color(1, 1, 1) },
+                uDiscDbg: { value: 0 },
+            },
+            vertexShader: `
+                varying vec2 vNdc;
+                void main() {
+                    vNdc = position.xy;
+                    gl_Position = vec4(position.xy, 0.99999, 1.0);
+                }
+            `,
+            fragmentShader: `
+                precision highp float;
+                uniform vec3 uGlobePos;
+                uniform float uGlobeRadius;
+                uniform float uTanHalfFov;
+                uniform float uAspect;
+                uniform float uBgDiscAlpha;
+                uniform vec3 uBgDiscColor;
+                uniform float uDiscDbg;
+                varying vec2 vNdc;
+                void main() {
+                    vec3 dir = normalize(vec3(vNdc.x * uTanHalfFov * uAspect, vNdc.y * uTanHalfFov, -1.0));
+                    float globe_pos_dot_dir = dot(uGlobePos, dir);
+                    vec3 closestPoint = globe_pos_dot_dir * dir;
+                    float distToCenter = length(closestPoint - uGlobePos);
+                    float normDist = distToCenter / uGlobeRadius;
+                    if (uDiscDbg > 0.5) {
+                        if (uDiscDbg > 1.5) {
+                            // §829 numeric dump: R = normDist/4, G = |uGlobePos|/1e7, B = uHorizonAngle/π.
+                            gl_FragColor = vec4(clamp(normDist / 4.0, 0.0, 1.0), clamp(length(uGlobePos) / 1e7, 0.0, 1.0), acos(clamp(dot(normalize(uGlobePos), dir), -1.0, 1.0)) / 3.14159, 1.0);
+                            return;
+                        }
+                        gl_FragColor = normDist < 0.98 ? vec4(1.0, 0.0, 0.0, 1.0) : vec4(0.0, 0.0, 1.0, 1.0);
+                        return;
+                    }
+                    if (normDist < 0.98) {
+                        vec3 c = mix(uBgDiscColor, vec3(0.0), smoothstep(0.975, 1.0, normDist));
+                        gl_FragColor = vec4(c * uBgDiscAlpha, uBgDiscAlpha);
+                    } else {
+                        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+                    }
+                }
+            `,
+        });
+        this.m_globeAtmo = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+        this.m_globeAtmo.frustumCulled = false;
+        this.m_globeAtmo.renderOrder = -2000;
+        this.m_globeAtmo.onBeforeRender = () => {
+            const c = this.m_mapView.camera;
+            c.updateMatrixWorld(true);
+            const vm = new THREE.Matrix4().copy(c.matrixWorld).invert();
+            const gc = new THREE.Vector3(0, 0, 0).applyMatrix4(vm);
+            const d = Math.max(gc.length(), 1);
+            const dh = Math.sqrt(Math.max(d * d - R * R, 0));
+            material.uniforms.uGlobePos.value.copy(gc);
+            material.uniforms.uHorizonAngle.value = Math.acos(Math.min(1, dh / d));
+            material.uniforms.uTanHalfFov.value = Math.tan((c.fov * Math.PI / 180) / 2);
+            material.uniforms.uAspect.value = (c as THREE.PerspectiveCamera).aspect ?? 1;
+            material.uniforms.uBgDiscAlpha.value = this.m_globeBgAlpha;
+            if (this.m_globeBgColor) material.uniforms.uBgDiscColor.value.copy(this.m_globeBgColor);
+            material.uniforms.uDiscDbg.value = (globalThis as any).__mbDomeDbg === 2 ? 3 : 0;
+            // §829: one-shot numeric dump of the disc uniforms (extdbg gate).
+            if ((globalThis as any).__mbExtRouteDbg && !(globalThis as any).__mbDiscDumped) {
+                (globalThis as any).__mbDiscDumped = true;
+                try {
+                    const fbD = (window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith('feedback-url='))
+                        ?.slice('feedback-url='.length);
+                    if (fbD) fetch(`${fbD}/mb-probe-dump`, {
+                        method: 'POST', headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({
+                            probe: 'disc-geom',
+                            log: [`uGlobePos=${gc.toArray().map(v => v.toExponential(4)).join(',')} d=${d.toExponential(4)} R=${R} horizonAngle=${material.uniforms.uHorizonAngle.value} tanHalfFov=${material.uniforms.uTanHalfFov.value} aspect=${material.uniforms.uAspect.value} bgAlpha=${this.m_globeBgAlpha} bgColor=${this.m_globeBgColor?.getHexString()}`],
+                        }),
+                    }).catch(() => {});
+                } catch {}
+            }
+        };
+        this.m_scene?.add(this.m_globeAtmo);
     }
 
     private disposeGlobeAtmosphere(): void {
@@ -1223,11 +1355,21 @@ export class MBEnvironmentManager {
         }
         if (!fog) {
             this.m_globeFogActive = false;
-            this.m_globeBgColor = null;
-            this.disposeGlobeAtmosphere();
             if (this.m_fog) {
                 this.m_scene!.fog = null;
                 this.m_fog = null;
+            }
+            // §829: no fog → no atmosphere (mgl style.ts:1082 gate) and the
+            // sky is the clear color. But a background layer still paints the
+            // globe disc (mgl renders background per-tile ON the sphere): keep
+            // a disc-only quad when a background color was registered. The
+            // previously-forced null of m_globeBgColor here erased that state
+            // and flattened the background to a full-screen mercator clear
+            // (globe-transition/pitch: sky AND water both owned by the clear).
+            if (this.m_globeBgColor) {
+                this.applyGlobeDiscBackground();
+            } else {
+                this.disposeGlobeAtmosphere();
             }
             return;
         }

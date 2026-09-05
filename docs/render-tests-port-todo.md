@@ -8171,3 +8171,21 @@ globe-transition/pitch 与 globe-terrain 的 expected 天空为**纯黑**（mgl�
 **修复**：harness setPadding 改为**相机姿态旋转**近似（mgl padding 的视觉等价）：以 padding 半量（cx=(left−right)/2, cy=(top−bottom)/2 px）换算为绕相机 up/right 轴的旋转（pxPerRad=h/(2·tan(fov/2))），挂 Update 事件（先于 rte 拷贝）对 camera.quaternion 做 qBase·qΔ 绝对设置。实测地球中心 (308,418) vs expected (305,414)（4px 内），**148,545→20,057**。其余 setPadding 夹具（building/cutoff-fade 112,223、nyc-night-buildings 496,088）数字不变零回归；skybox/horizon-visibility/padding 3,303（无历史基线，小残差）。
 
 **注**：旋转近似与 mgl 的主点语义在近距/高 pitch 下有细微透视差；引擎级正解 = MapAnchors 支持 padding 偏移（挂账相机域专项）。
+
+**§827. mgl 真值对拍工具落地 + 相机域闭卷：放置公式与 mgl 逐米一致，"5-9× 高度倍差"系手算参照值错误（2026-09-05）**：
+
+新工具 `tmp/mgl-ref-camera.html`：chrome-headless-shell `--dump-dom --virtual-time-budget` + 本地 http 服务（file:// 下 ESM 动态 import 被 CORS 拦）加载 vendored mgl `dist/esm-dev/mapbox-gl.js`，实例化真实 Map（projection globe + 夹具相机参数），输出 `cameraToCenterDistance/pixelsPerMeter/camToPivotMeters/ECEF 高度` 等。真值表：pitch(z5.75 p85 lat48.7 512×768) ccd=760.32px、camToPivot=1.1046e6 m、ECEF 高度 1.892e5 m；zero-height-simple 4.836e6；horizon 2.80e7；padding 3.22e7；poles-north/south 2.89e6/2.74e6；circle/heatmap-near-transition 5.82e5/1.14e6。
+
+**闭卷**：我方 `calculateDistanceFromZoomLevel = focalLength·C/ws·conv` 与 mgl `ccd/ppm` 逐 fixture 吻合到 0.1%（pitch：1152·1454.4·0.6599=1.1047e6 vs mgl 1.1046e6；zero-height-simple conv(−16°,t=0.844)=0.9102 → 4.836e6 vs mgl 4.830e6）。§806b 的"逐米吻合"实为拿**未乘 conv 的手算值**（5.32e6）当 mgl 真值——真值是 4.836e6，而 dome-geom 实测的中心距 9.228e6 恰好对应已应用 conv 的几何（sqrt((R+1.654e6)²+4.545e6²)=9.22e6）。§780/781/815/823 挂账的"zoom→相机高度 5-9× 倍差"不存在，相机域闭卷。
+
+**§828. 两否定实验（均整体回退，仅记录）**：①**horizon culling**（FrustumIntersection 加 mgl `globeTiltAtLngLat>π/2·1.01` 判据 + `__mglHorizonCull` 门）：pitch 185k→**368k 恶化**、poles/south 回归、目标夹具全不变——我方瓦片覆盖在 limb 处已与 mgl 一致，越球瓦不是残差来源。②**黑色 clear**（`blackclear=1` 门，无-fog globe clear 改黑）：pitch→198k、terrain 66k→**154k**、poles 回归——且发现 pitch 的水域=**background 本身**（该夹具仅 background+country-fill 两层，水域即 background 色透出）。（实验补丁已整体回退，未入库。）
+
+**§829. 无-fog globe 球面 background 盘：globe-transition/pitch 185,083→28,382（−84.7%）（2026-09-05 终）**：
+
+**机制**：mgl 无 fog 键 → 不建 fog 系统（style.ts:1082）→ 无大气、clear=(0,0,0,0)；expected PNG 天空为 **alpha=0 透明**，`compareImages` 把 reference 合成到**白底**后比对 → 我方天空必须是**不透明白**。而 background 层 mgl 是**逐瓦画在球面上**的：盘内=background 色（"水域"）、盘外=透明。我方原 flat-clear 路径把 background 色刷满全帧 → 天空 169k px 全失配。
+
+**修复（双路径）**：datasource `applyBackgroundColor` 在 globe 分支按 `effectiveFogSpec` 分流——fog 族：原 §570b 逻辑逐字节保留（globeFogActive 时 setGlobeBackground+return，稳态不碰 clear）；无-fog 族：`setGlobeBackground(色)` + **clear 白** + terrain setBaseColor(background 色)。env 新增 `applyGlobeDiscBackground()`：盘专用 quad（与 dome 同几何数学：normDist<0.98 盘内=mglLimbs 混合的 background 色、盘外输出 vec4(0)，CustomBlending 预乘），ro=−2000、逐帧 onBeforeRender 刷新 uGlobePos/uHorizonAngle；`applyFog`/`applyGlobeAtmosphere` 的无-fog 分支不再清空 `m_globeBgColor`（原逻辑会抹掉盘色退回 flat clear），有盘色时保留/重建盘。
+
+**回测（829g 定向批）**：pitch **28,382**（三次运行逐位稳定；余 28.4k=远瓦覆盖带，我方内容边缘 y375 vs mgl y335 约 40 行）；zero-height ×3、horizon、heatmap/near-transition、terrain、globe-default(2,474) 全部逐位持平零回归；poles 南北在 33-54k 间波动（该族已记录的会话噪声带，north 829d 曾 42.8k）。**事故记录（829f，已修）**：曾把 fog 族也改走"无盘"分支且误删 fog 族 setGlobeBackground 调用 → 全 fog 夹具 +100k（dome uBgDisc=0 → 盘背白）；恢复双路径后 fog 族逐字节还原。**下会话入口**：pitch 余 28.4k 的远瓦覆盖带（mgl coveringTiles 远距覆盖至 y335，我方 y375）——尝试 VisibleTileSet 既有 `frustumFarOverride` 选项（§787 入库，未实测）。
+
+**本日累计（§827-§829）**：相机域（§780/781 谱系）闭卷；pitch −84.7%；探针/工具：mgl-ref-camera 真值页、disc-geom one-shot dump、uDiscDbg 三级染色、MBSTYLE_BLACKCLEAR 门。
