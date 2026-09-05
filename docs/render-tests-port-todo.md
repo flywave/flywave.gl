@@ -8161,3 +8161,5 @@ globe-transition/pitch 与 globe-terrain 的 expected 天空为**纯黑**（mgl�
 **§824. 星空渲染对齐：sizeMultiplier/强度对齐 mgl——globe-default 2,709→2,478（2026-09-05）**：
 
 对照 mgl 源码（draw_atmosphere.ts createDefaultStarsParams + stars.vertex/fragment.glsl）逐项对齐 createStars：①**SIZE_MULTIPLIER 0.5→0.15**（mgl 默认值；A/B：0.15→2,478 / 0.3→2,509 / 0.5→2,709，0.15 最优）；②globe 路径强度去掉 ×4 补偿（mgl v_intensity = a_opacity × star-intensity 直通）；③k 缩放实验（uRight/uUp ×k）回退——matrixWorld 已含 k，双重缩放使星 quad 变巨贴片（111k）。星点生成（mulberry32(30)/mulberry32(300)、16000 点、半径 200、均匀球面分布）与 mgl 逐位一致——星点位置本就对齐，差距在 size/强度。globe-default 天空区亮像素对比：cur 7,756 vs exp 9,318（此前 250 vs 1,103），剩余 1.5k 差异为星点尺寸/位置的细微差与大气渐变细节。哨兵：antimeridian-left PASS 0、set-style/default 21,296 持平。
+
+**§825. globe-padding 残差归属（2026-09-05 终）**：148,545 持平（白带部分已由 §818-§822 解决）。对比帧定位两项残差：①`setPadding {top:256,left:128}` 在 globe 投影下未生效——expected 地球因 padding 下移至画面底部，我方仍近似居中；②地球尺寸差 ~2.5×（expected 直径超出底缘 vs 我方 ~390px）——低缩放相机距离差（§2673 域）。**归属：§780/781 相机域（padding 语义 + 低缩放距离），挂账待相机域专项**。
