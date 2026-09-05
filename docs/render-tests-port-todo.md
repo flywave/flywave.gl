@@ -8223,3 +8223,7 @@ globe-circle/change-projection/set-style（213k，几乎全帧逐像素失配 25
 - **1.0063**：pitch →22,730（−5.6k）、zero-height −1.1k；circle +9.9k、heatmap +13k、horizon +1.5k、globe-default +0.6k——同样净负。
 
 **定论**：pitch/zero-height（lat 0~-16°中低纬）受益、poles（lat ±76°）与近过渡夹具受损——**mgl 渲染球面的等效比例是 lat/zoom 依赖的**（与其 mercatorScaleRatio=cos45°/cos(lat)·interpolate(t) 一致：中纬 ~1.07、高纬 ~2.9），不存在常量补偿。正解 = 在瓦片投影/盘/辉光半径中按 mgl 的 pixelSpaceConversion 逐帧模型化该比例（引擎域，需与 §787 的 ws/(2π)−1 耦合项一并推导），且必须保证低纬收益不外溢为高纬回归。spherescale 旋钮与 globeRadiusScaled() 基建入库，供该模型标定复用。
+
+**§834. globe-terrain 66k×2 架构根因：静态 3×3 DEM 网格 vs mgl 动态逐瓦 LOD（2026-09-05）**：
+
+TerrainController.build(demTileUrl, zoom, center, exaggeration, radius=1, encoding) 是**静态单 zoom 的 3×3 中心网格**（applyTerrain 按 floor(styleZoom)−offset 取一级，globe-terrain z5.1 → z4-5 远瓦），无逐瓦 LOD、无裙边拼接、无按相机的动态调度——而 mgl 是 VisibleTileSet 式的动态 terrain 瓦 LOD（近相机高 z、远相机低 z，§822 实测我方近场浮雕缺失即此）。**正解 = TerrainController 升级为动态 DEM LOD 调度器**（复用 VisibleTileSet 瓦覆盖 → 每 DEM 瓦建 mesh + 裙边 → zoom/相机变化增量重建），属引擎级专项；radius 参数已是网格扩展点，增量路径可先做"相机移动/zoom 变化时以相机中心重建网格"的近似（refreshTerrain 在 update 事件中按当前相机 geoCenter 调 build，静帧收益有限、动态测试收益大）。挂账于此。
