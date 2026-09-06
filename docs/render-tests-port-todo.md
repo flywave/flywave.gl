@@ -8350,3 +8350,7 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 **§852. 过渡混合首次实施：坐标系不一致导致恶化，回退（2026-09-06）**：
 
 在 tile2world 的 Spherical 分支实现球面→mercator 平面顶点插值（gated），pitch 恶化至 221,388。**根因**：球面 ECEF（原点=球心，半径=米）与 mercator 平面（原点=mercator 原点，单位=mercator 米）是**不同坐标系**——直接线性插值产生位于两个坐标系之间的垃圾坐标。mgl 的过渡插值之所以有效，是因为其 globeMatrix 与投影矩阵在**同一像素空间**操作（顶点从瓦片坐标 → 球面 ECEF(px) → globeMatrix → projMatrix，mercator 插值也在该 px 空间内进行）。**正解**：过渡插值必须在**渲染矩阵空间**实施（vertex shader 内 mix(spherePos, mercatorPos, phase) 而非 CPU 端 tile2world），需要在瓦发射管线中传入双坐标 + 过渡相位，由 GPU 在统一的投影空间完成混合。这需要修改 tile 发射器的几何格式（每个顶点额外携带 mercator 坐标 attribute + phase uniform），属特征级实现。回退本实验，规格更新入档。
+
+**§853. zoom 依赖球面缩放实验：无效果，回退（2026-09-06）**：
+
+在 applyProjection 实施了 zoom 依赖的球面 unitScale（`1 + 0.009 × smoothstep(5,6,styleZoom)`）：z5.75 pitch 缩放 1.0076、z3 poles 缩放 1.0、z5.6 heatmap 缩放 1.0058。定向跑批（pitch/zero-height/globe-default/poles/near-transition/horizon）：**全部夹具数值与基线逐位一致**。原因：投影 unitScale 的 0.9% 变化只影响已有瓦的顶点位置（亚像素级），不改变瓦覆盖范围（覆盖由遍历的 frustum/LOD 决定）。**定论**：pitch 缺失带的 36 行渲染差不可通过球面微缩放修复——需要 roundzoom=1（z6 覆盖 + overscale 瓦，§846 已验证 28,046）或 globeToMercatorTransition 顶点过渡混合（shader 级，§852）。globe 专项在本环境的全部可执行工作已完成。
