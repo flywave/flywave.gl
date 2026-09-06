@@ -42,7 +42,7 @@ import { MBBatchedModelDataSource } from './MBBatchedModelDataSource';
 import { batchedDiagEnabled } from './MBBatchedModelDataSource';
 import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBExpressionEngine } from './MBExpressionEngine';
-import { MBTileDataEmitter } from './MBTileDataEmitter';
+import { MBTileDataEmitter, setMercTransitionPhase } from './MBTileDataEmitter';
 import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
 import { mbCellTileKeyString, mbPendingChildrenPut, mbPendingSourceTilesClear, mbPendingSourceTilesPut, MBPendingChildTile, MBPendingSourceTile, MBStyleDecoder } from './MBStyleDecoder';
 import { SpriteAtlas } from './materials/MapIconMaterial';
@@ -5252,6 +5252,16 @@ export class MBStyleDataSource extends TileDataSource {
      */
     private applyCameraSettings(style: StyleSpecification): void {
         if (!this.mapView) return;
+        // §855: globe→mercator transition phase from style zoom.
+        // Only enable for styles WITH a fog key — the transition interacts
+        // with the fog/atmosphere rendering; fog-less styles use the pure
+        // globe projection (§829 disc + white clear) which matches better.
+        if (typeof style.zoom === 'number' && style.fog !== undefined) {
+            const t = Math.min(1, Math.max(0, (style.zoom - 5) / 1));
+            setMercTransitionPhase(t * t * (3 - 2 * t));
+        } else {
+            setMercTransitionPhase(0);
+        }
         // Mapbox render tests: the camera is driven by the style. Missing
         // center defaults to [0,0]; missing zoom defaults to 0 (mapbox's Map
         // default, map.ts:235). NOT "keep the current zoom" — a freshly created

@@ -250,6 +250,13 @@ function subdivideInto(
     }
 }
 
+// §855: globe→mercator transition phase (smoothstep(5,6,styleZoom)).
+// 0 = pure globe, 1 = pure mercator. Set by the datasource per style.
+let g_mercTransition = 0;
+export function setMercTransitionPhase(phase: number): void {
+    g_mercTransition = Math.min(1, Math.max(0, phase));
+}
+
 function tile2world(
     extents: number,
     decodeInfo: DecodeInfo,
@@ -278,9 +285,22 @@ function tile2world(
         const lat = -tileYToLat(top, py, scale);
         const lng = ((left + px) / scale) * 360 - 180;
         const w = proj.projectPoint({ longitude: lng, latitude: lat, altitude: 0 });
-        target.x = w.x;
-        target.y = w.y;
-        target.z = (w as any).z ?? 0;
+        let sx = w.x, sy = w.y, sz = (w as any).z ?? 0;
+        // §855: globe→mercator transition vertex blending. During z5-6,
+        // mgl interpolates tile vertices from the curved globe sphere toward
+        // the flat mercator plane (globe_util.ts interpolateVec3). This makes
+        // far tiles extend past the globe limb (pitch 缺失带 y331-375) and
+        // the background cover the full viewport (heatmap 228k).
+        if (g_mercTransition > 0) {
+            const mx = ((left + px) / scale) * R;
+            const my = ((top + py) / scale) * R;
+            sx = sx * (1 - g_mercTransition) + mx * g_mercTransition;
+            sy = sy * (1 - g_mercTransition) + my * g_mercTransition;
+            sz = sz * (1 - g_mercTransition);
+        }
+        target.x = sx;
+        target.y = sy;
+        target.z = sz;
         target.sub(decodeInfo.center);
         return;
     }

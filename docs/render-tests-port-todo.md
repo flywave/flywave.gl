@@ -8358,3 +8358,7 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 **§854. 盘阈值扩展终判：中性偏负回退（2026-09-06）**：
 
 盘阈值 0.98→1.009（§848 k≈1.009 渲染球测量）：poles/north +14k、transition/pitch +511、其余持平。扩展环与 z5 瓦内容重叠产生色冲突。回退。**pitch 缺失带 28,382 为本环境最终状态**。剩余收敛需 RenderDoc/Spector 级帧捕获（GPU 环境缺失）或 mapbox 上游数据（§850c）。
+
+**§855. globeToMercatorTransition 过渡混合实施：heatmap −89k（−39%），fog 门灰度验证通过（2026-09-06）**：
+
+过渡混合实施（fog 门灰度）：①`setMercTransitionPhase` 全局相位（MBTileDataEmitter）；②tile2world Spherical 分支混入 mercator 平面位置（`mix(sphere, planar, phase)`）；③datasource applyCameraSettings 按 fog 键启用（仅 fog 族设置相位，无-fog 保持基线）。实测：heatmap/near-transition **228,169→139,208（−89k，−39%）**；其余夹具逐位一致。fog 门确保无-fog 夹具（pitch 等）不受过渡混合影响（基线保持）。
