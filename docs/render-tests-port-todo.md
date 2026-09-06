@@ -8597,3 +8597,7 @@ forceDirectRender 门（MapRenderingManager.render 分支直绘强制）+ 盘专
 **§873b2. 探针周期终版收口：盘 uniforms/uGP 数据齐备，24,024×2 维持——three 渲染内部专项终版入档（2026-09-07 终）**：
 
 终版探针数据：盘 in m_discScene ✓ 渲染通道 rgd=249 ✓ uBgDiscColor 探针值 (0)（疑似截断或数值 0——若为数值 0 则 vec3 uniform 上传异常即根因之一）uBgDiscAlpha=1 ✓ uGlobeRadius=R ✓ uGlobePos=(0,0,−R)（相机距心 R，理论上中心像素 normDist=0 应画黑）——但帧全白 → 盘 fragment 的内分支输出未上屏。剩余排查需 three 渲染内部（Uniform 上传类型/程序绑定）专项。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得，需向 mapbox 上游索取或 CI 重生成 expected）。
+
+**§873c2. uBg=(0) 疑点消除：THREE.Color.toJSON=getHex——uniform 值正确（黑），盘 fragment 不执行确认（2026-09-07 终）**：
+
+复核 bundled three r178 Color.toJSON（Color.js:938 返回 getHex() 数值）+ node 实证（JSON.stringify(Color(0,0,0))="0"）：探针 uBg=(0) = **hex 0 = 黑色 ✓ uniform 值正确**——"数值 0"疑点消除。盘 uniforms/对象状态全对（黑/alpha1/R/(0,0,−R)），但 DOMEDBG=2 无调试色、帧全白 → **盘 fragment 从未执行**（盘 mesh 被 three 处理（onBeforeRender fired ✓）但 draw 未产生像素）。**剩余排查需 three 渲染内部专项**：①渲染列表逐 item 审计（renderLists.get(scene,depth).opaque 逐 item 的 object/material/program dump——探针已能触达 renderLists.get ✓）；②盘 ShaderMaterial 程序绑定 dump（program.cacheKey/诊断）；③对比正常夹具（globe-default 的 dome 在渲染列表中的 item）与 with-diff 的差异。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得，需向 mapbox 上游索取或 CI 重生成 expected）。
