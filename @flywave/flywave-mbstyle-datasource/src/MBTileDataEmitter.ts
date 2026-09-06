@@ -255,6 +255,14 @@ function subdivideInto(
 let g_mercTransition = 0;
 export function setMercTransitionPhase(phase: number): void {
     g_mercTransition = Math.min(1, Math.max(0, phase));
+    // §858: bridged to the mapview coverage traversal (FrustumIntersection)
+    // — mgl blends each tile AABB's corners toward their mercator corners
+    // during the transition (globe_util.ts getTileAABB), so the tile COVER
+    // expands toward the plane in lockstep with the blended vertex
+    // geometry. mapview cannot import from this package (dependency
+    // direction), so mirror the phase through the harness global (same
+    // pattern as __mbYawAB).
+    (globalThis as any).__mbMercTransitionPhase = g_mercTransition;
 }
 
 function tile2world(

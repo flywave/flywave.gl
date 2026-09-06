@@ -1317,7 +1317,15 @@ export class MBEnvironmentManager {
             material.uniforms.uTanHalfFov.value = Math.tan((c.fov * Math.PI / 180) / 2);
             material.uniforms.uAspect.value = (c as THREE.PerspectiveCamera).aspect ?? 1;
             material.uniforms.uBgDiscAlpha.value = this.m_globeBgAlpha;
-            if (this.m_globeBgColor) material.uniforms.uBgDiscColor.value.copy(this.m_globeBgColor);
+            // §858: THREE.Color stores LINEAR components (ColorManagement);
+            // the custom disc ShaderMaterial writes gl_FragColor raw (no
+            // colorspace_fragment), so the sRGB paint color must be restored
+            // before upload — linear grey #808080 rendered as 55/255
+            // (globe-heatmap/circle near-transition ground).
+            if (this.m_globeBgColor) {
+                material.uniforms.uBgDiscColor.value
+                    .copy(this.m_globeBgColor).convertLinearToSRGB();
+            }
             material.uniforms.uDiscDbg.value = (globalThis as any).__mbDomeDbg === 2 ? 3 : 0;
             // §829: one-shot numeric dump of the disc uniforms (extdbg gate).
             if ((globalThis as any).__mbExtRouteDbg && !(globalThis as any).__mbDiscDumped) {
@@ -1588,7 +1596,11 @@ export class MBEnvironmentManager {
             material.uniforms.uAspect.value = (c as THREE.PerspectiveCamera).aspect ?? 1;
             material.uniforms.uBgDisc.value = this.m_globeBgColor ? 1 : 0;
             material.uniforms.uBgDiscAlpha.value = this.m_globeBgAlpha;
-            if (this.m_globeBgColor) material.uniforms.uBgDiscColor.value.copy(this.m_globeBgColor);
+            // §858: same linear→sRGB restoration as the disc-only path.
+            if (this.m_globeBgColor) {
+                material.uniforms.uBgDiscColor.value
+                    .copy(this.m_globeBgColor).convertLinearToSRGB();
+            }
             material.uniforms.uDomeDbg.value = (globalThis as any).__mbDomeDbg ? (globalThis as any).__mbDomeDbg === true ? 1 : (globalThis as any).__mbDomeDbg : 0;
             // §805: one-shot dome-geometry dump (limb y4 vs mgl y210 probe).
             if ((globalThis as any).__mbExtRouteDbg && !(globalThis as any).__mbDomeDumped) {

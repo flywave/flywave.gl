@@ -558,6 +558,71 @@ export class FrustumIntersection {
         geoBox.northEast.altitude = (geoBox.northEast.altitude ?? 0) + maxGeometryHeight;
 
         this.mapView.projection.projectBox(geoBox, cache.tileBounds);
+        // §858: mgl transition-blended coverage — during the globe→mercator
+        // transition mgl interpolates each tile AABB's corners toward their
+        // mercator-plane corners BEFORE the frustum test (globe_util.ts
+        // getTileAABB → interpolateVec3(corners, mercatorCorners, phase)),
+        // so the tile cover expands toward the plane in lockstep with the
+        // transition-blended vertex geometry (MBTileDataEmitter §855).
+        // Without it the cover stays on the pure sphere and the plane region
+        // beyond the limb renders with no content. Union (not replace — the
+        // sphere box also stays a valid conservative bound for the blended
+        // geometry) a Box3 over the phase-blended corners into the test.
+        const mercPhase = (globalThis as any).__mbMercTransitionPhase ?? 0;
+        if (mercPhase > 0 && this.mapView.projection.type === ProjectionType.Spherical) {
+            const R = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
+            const corners: Array<[number, number]> = [
+                [geoBox.southWest.longitude, geoBox.southWest.latitude],
+                [geoBox.northEast.longitude, geoBox.southWest.latitude],
+                [geoBox.northEast.longitude, geoBox.northEast.latitude],
+                [geoBox.southWest.longitude, geoBox.northEast.latitude]
+            ];
+            const blendBox = new THREE.Box3();
+            const p = new THREE.Vector3();
+            for (const [lng, lat] of corners) {
+                // Sphere corner (same frame as projectBox output).
+                this.mapView.projection.projectPoint(
+                    { longitude: lng, latitude: lat, altitude: 0 },
+                    p
+                );
+                let sx = p.x, sy = p.y, sz = p.z;
+                // Mercator-plane corner, mirroring tile2world's blend frame
+                // (mercator meters, origin at equator/prime meridian, z=0).
+                const mx = (lng / 360) * R;
+                const latRad = (lat * Math.PI) / 180;
+                const my =
+                    ((1 -
+                        Math.log(
+                            Math.tan(latRad) + 1 / Math.cos(latRad)
+                        ) / Math.PI) /
+                        2) *
+                    R;
+                sx = sx * (1 - mercPhase) + mx * mercPhase;
+                sy = sy * (1 - mercPhase) + my * mercPhase;
+                sz = sz * (1 - mercPhase);
+                blendBox.expandByPoint(p.set(sx, sy, sz));
+            }
+            if (cache.tileBounds instanceof OrientedBox3) {
+                const obb = cache.tileBounds;
+                for (const sx of [-1, 1]) {
+                    for (const sy of [-1, 1]) {
+                        for (const sz of [-1, 1]) {
+                            blendBox.expandByPoint(
+                                p.copy(obb.position)
+                                    .addScaledVector(obb.xAxis, sx * obb.extents.x)
+                                    .addScaledVector(obb.yAxis, sy * obb.extents.y)
+                                    .addScaledVector(obb.zAxis, sz * obb.extents.z)
+                            );
+                        }
+                    }
+                }
+            } else {
+                blendBox.union(cache.tileBounds as THREE.Box3);
+            }
+            if (!this.m_frustum.intersectsBox(blendBox)) {
+                return undefined;
+            }
+        }
         const { area, distance } = this.computeTileAreaAndDistance(cache.tileBounds);
 
         if (area > 0) {

@@ -8375,3 +8375,19 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 ③**热力块形态**：我方 5 块合并为 1 vs expected 4 块分离——瓦覆盖/分辨率差异。
 
 **正解 = §851 "三处坐标一致性"**：过渡混合需同步应用于背景盘 shader（normDist 计算改用过渡混合后的 globe 位置）、瓦片顶点（已实施 ✓）、辉光环半径。三者使用同一 globeToMercatorTransition phase 才能使背景盘边缘、瓦覆盖边缘、大气穹顶边缘对齐。当前仅瓦顶点过渡，盘/穹顶仍用未过渡投影 → 盘缘与瓦缘不对齐 → 全帧色差。**工作量**：改背景盘 shader 的 normDist 计算 + 大气穹顶的 globeMatrix，使二者使用与瓦过渡相同的混合后 globe 中心/半径。属 §852 shader 级特征的后续完善。
+
+**§858. 覆盖遍历过渡混合 + 背景盘 sRGB 修正：near-transition 139,208→36,417（−74%），globe 族全面收敛（2026-09-06）**：
+
+用户指令重启 globe 专项（"globe-terrain 地形阴影不可见"）。取证与实施：
+
+①**globe-terrain 再核**：本地 Edge 实渲染=平白地面+地平线淡带（Chrome 平台的黑地面已不在），66,009/65,880 残差=expected 的高频浮雕纹理区（diff 全部落在山体晕渲）。浮雕需区域 z9-12 DEM——所需瓦（5-22-12、6-44-24 等）本地不存在且 **raw.githubusercontent 上游同路径 404 实证**（mapbox CI 从公开仓库剥离），§850c 数据受限定论维持，指标不可收敛。domedbg=2 探针证实 hillshade quad 受 §822 隐藏门保护、盘打底正确，代码侧无 further 动作。
+
+②**near-transition 残差重定位**：逐像素对拍（globe-heatmap/near-transition）显示天区 y0-223 **已零 mismatch**（§855 过渡混合+§827 fog 门灰度已收敛），残差主体=地面 55,55,55 vs expected 128,129,129（~14.7 万像素）。55/255=0.216=**linear(#808080) 精确值**——THREE.Color 在 ColorManagement 下存线性分量，而自定义盘 ShaderMaterial 无 colorspace_fragment、线性分量直出 sRGB framebuffer。domedbg=2 证实盘覆盖地面（红色=带背景色的盘命中），即地面色就是盘色直出。
+
+③**修复 A（盘色 sRGB）**：applyGlobeDiscBackground 与 dome 两处 onBeforeRender 上传 uBgDiscColor 时 `copy(m_globeBgColor).convertLinearToSRGB()`。直测：near-transition 139,208→**36,417（−74%）**、globe-circle/near-transition 35,878→**10,751（−70%）**、globe-default 2,707→2,474。
+
+④**修复 B（覆盖遍历过渡混合，mgl 同款）**：mgl globe_util.getTileAABB 在过渡期把瓦 AABB 角点 `interpolateVec3(corners, mercatorCorners, phase)` 后再做 frustum 测试（覆盖与顶点几何同步向平面扩展）。镜像实施：MBTileDataEmitter.setMercTransitionPhase 桥接 `globalThis.__mbMercTransitionPhase`（mapview 不能反向依赖 mbstyle，沿用 __mbYawAB 模式）；FrustumIntersection.getTileKeyEntry 在 Spherical+phase>0 时把角点混合 Box3（球面角点 projectPoint、mercator 角点与 tile2world 同帧）与原 OBB 并集后测 frustum。tsc 双绿。**实测对 near-transition 指标零变化**（覆盖本已足够），保留为 mgl 语义正确性实现（§851 三处一致性的覆盖分量）。
+
+⑤**全量回测**（chunked runner，globe+fog+imports+transition+zero-height+poles+heatmap+camera 族，129+60 例）：仅 globe-fill-extrusion/pattern 41,447→47,666 疑似回归，**stash+重建 lib 的 HEAD 基线 A/B 实测同为 47,664**——环境漂移非本次改动，零回归成立。其余全部改善或持平：zero-height-clipping simple/complex/angle-limit 141,504→19,721 / 105,128→11,693 / 81,444→4,306；fill-extrusion default/opacity/symbol-z-offset-map-aligned(±labeling)/multipolygon-subdivision(×2)/emissive-strength(×2) 75,593→23,841 / 81,448→25,175 / 131,301→51,195 / 130,208→41,625 / 109,250→9,465×2 / 43,816→35,165×2；at-transition-zoom **0（PASS）**、collision 3,522、show-unsupported-layer 0；background-pitch-alignment/viewport-alignment-globe 54,512→1,629、pattern 102,005→92,120；globe-transition/pitch 28,382 持平（§854 最优保持）；globe-terrain 66,009 / imports 65,880 分毫不变。注：lib 为 gitignore 本地产物，重建同时刷新了其它包陈旧 lib，zero-height/fill-extrusion 族的大额收益可能部分来自 src/lib 一致性（§855 顶点混合的全量生效），已在 ④④ 记录归因保留。
+
+⑥**剩余（下轮入口）**：过渡带 geojson 内容（circle/heatmap kernel）在 z5.6 全部不可见（dome dbg 帧与正常帧均无圆形/热力块，expected 4-5 个），near-transition 剩余 36,417 主体即此+热力块形态。next：过渡带上 geojson 瓦内容管线取证（瓦加载/顶点混合/剔除链）。
