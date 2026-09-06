@@ -8601,3 +8601,7 @@ forceDirectRender 门（MapRenderingManager.render 分支直绘强制）+ 盘专
 **§873c2. uBg=(0) 疑点消除：THREE.Color.toJSON=getHex——uniform 值正确（黑），盘 fragment 不执行确认（2026-09-07 终）**：
 
 复核 bundled three r178 Color.toJSON（Color.js:938 返回 getHex() 数值）+ node 实证（JSON.stringify(Color(0,0,0))="0"）：探针 uBg=(0) = **hex 0 = 黑色 ✓ uniform 值正确**——"数值 0"疑点消除。盘 uniforms/对象状态全对（黑/alpha1/R/(0,0,−R)），但 DOMEDBG=2 无调试色、帧全白 → **盘 fragment 从未执行**（盘 mesh 被 three 处理（onBeforeRender fired ✓）但 draw 未产生像素）。**剩余排查需 three 渲染内部专项**：①渲染列表逐 item 审计（renderLists.get(scene,depth).opaque 逐 item 的 object/material/program dump——探针已能触达 renderLists.get ✓）；②盘 ShaderMaterial 程序绑定 dump（program.cacheKey/诊断）；③对比正常夹具（globe-default 的 dome 在渲染列表中的 item）与 with-diff 的差异。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得，需向 mapbox 上游索取或 CI 重生成 expected）。
+
+**§874. 渲染列表审计完成：盘在渲染列表中且每帧渲染（calls=3/discInList=TRUE）但输出全白——three 渲染内部专项终版挂账（2026-09-07 终）**：
+
+渲染包装器 + 渲染列表审计（with-diff，逐帧三渲染：(a) m_scene 主通道 kids=4 calls=0（无内容）(b) 2-mesh 通道 calls=2/tri=64 (c) 盘 scene kids=1 **discInList=TRUE calls=3/tri=66**）：盘每帧渲染 ✓ 且在渲染列表中 ✓——但帧全白、盘 fragment 的内分支（uBgDiscColor=黑→黑）输出不可见。**已排除**：盘不在列表/盘未渲染/材质编译/uniforms 值（黑/1/R/(0,0,−R) 全对）/geoCenter 贴地/composer 丢弃（forceDirectRender 门）/注入 quads（门控）。**剩余排查需 three 渲染内部专项**：①盘 draw 的深度/混合状态审计（depthTest=false+renderOrder −2000 与后续 pass 的交互——主通道 clear(白/1) 后主场景渲染，盘的 AfterRender 渲染（autoClear=false）与后续 pass 的交互——盘 z=0.99999 与后续 pass 深度）；②盘 fragment 的 normDist 实际值（uGlobePos/uGlobeRadius 在 GPU 端的实际上传值 vs JS 端）。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得，需向 mapbox 上游索取或 CI 重生成 expected）。

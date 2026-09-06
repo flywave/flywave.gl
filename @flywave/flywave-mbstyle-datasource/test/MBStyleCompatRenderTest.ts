@@ -2126,7 +2126,18 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         const r = orig872(scene872, camera872);
                         if (log872.length < 60) {
                             const atmo = (globalThis as any).__mbAtmo871;
-                            log872.push(`kids=${scene872?.children?.length} discIn=${atmo ? scene872?.children?.includes(atmo) : '?'} calls=${r872d.info.render.calls} tri=${r872d.info.render.triangles}`);
+                            let rlInfo = '';
+                            try {
+                                const list = r872d.renderLists?.get?.(scene872, 0);
+                                if (list) {
+                                    const op = list.opaque ?? [];
+                                    const discIt = op.find((it: any) => it.object === atmo);
+                                    rlInfo = ` RLop=${op.length} discInList=${!!discIt} opTypes=${op.slice(0, 4).map((it: any) => it.object?.type ?? '?').join('/')}`;
+                                } else {
+                                    rlInfo = ` RL=none`;
+                                }
+                            } catch (e) { rlInfo = ` RL=ERR ${e}`; }
+                            log872.push(`kids=${scene872?.children?.length} discIn=${atmo ? scene872?.children?.includes(atmo) : '?'} calls=${r872d.info.render.calls} tri=${r872d.info.render.triangles}${rlInfo}`);
                         }
                         return r;
                     };
