@@ -257,7 +257,8 @@ export class MBGlobePoleCaps {
                         c.visible = vis;
                         results.push(`hide[${name}]=${px}`);
                     }
-                    // hide ALL top-level children at once
+                    // hide ALL top-level children at once, then restore ONE
+                    // at a time — each restore identifies one black writer.
                     const saves = tops.map(({ c }) => c.visible);
                     tops.forEach(({ c }) => (c.visible = false));
                     render();
@@ -267,6 +268,11 @@ export class MBGlobePoleCaps {
                     render();
                     results.push(`hideAllNoBg=${readPx()}`);
                     scene.background = bgSave;
+                    for (const { c, name } of tops) {
+                        c.visible = true;
+                        render();
+                        results.push(`restore[${name}]=${readPx()}`);
+                    }
                     tops.forEach(({ c }, i) => (c.visible = saves[i]));
                     (globalThis as any).__mb865bisectRows = results;
                 }

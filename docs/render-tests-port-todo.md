@@ -8493,3 +8493,7 @@ decode 侧探针落地（injectBackground 后扫描 geometries bbox）：z1×4 +
 **§870. with-diff 续：盘外空间白化无指标变化——黑色为多子树叠加写（2026-09-07）**：
 
 §869c 的盘 shader 空间分支白化（else → vec4(1,1,1,1)）落地后 with-diff 仍 40,152、set-style/default/transition 全部不变——空间黑不是盘写的 (0,0,0,0)，而是**多个子树的叠加不透明黑写**（逐个隐藏顶层子树均不清除，hideAll 才透明）：sceneRoot 内的 z0/z1 背景注入 quads（其屏幕覆盖超出球盘的原因待查——顶点在球面内但三角形网覆盖出缘，疑 §779 细分网格的极区连接三角形）+ MBGlobePoleCaps 的黑极冠扇（with-diff 背景 #000 → bg 扇黑）。盘 shader 白化保留（语义显式化，防透明黑 stamp 回归）。**下一入口**：①多写者二分（hideAll 基础上逐个恢复子树，定位每个黑写者）；②z0/z1 背景注入 quad 的屏幕覆盖范围实测（投影 4 角+网格采样点）；③极冠扇在 zoom 0 的覆盖范围核对（bg 扇不应出球盘）。
+
+**§871. with-diff 收口：帧时序依赖的黑色写入者（探针重绘不复现），引擎渲染图级挂账（2026-09-07）**：
+
+§870 的多写者二分（hideAll 后逐个恢复子树 + readPixels）结果出人意料：恢复**任何**子树（sceneRoot/overlayScene/Mesh/Object3D×2）后 (5,5) 均保持 (0,0,0,0) 透明——探针重绘不复现黑色；且背景注入 quad 的 bbox 证明其顶点在球面内（投影应限于球盘）。而 DOMEDBG=2 帧（真实帧循环内）全黑无盘调试色。两者合并的唯一自洽解释：黑色写入者是**帧时序依赖**的（真实帧循环的某次绘制/状态翻转在 AfterRender 探针重绘时不复现——如 renderOrder 极值对象、pass 间状态泄漏、或 onBeforeRender 副作用），scene-census/renderer.info 级的逐 draw 排除已超出 patcher 层。**挂账为引擎渲染图级专项**；探针工具（bisect/restore/px/state/bg869）全部入库可复用。with-diff 维持 40,152。
