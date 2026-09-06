@@ -8362,3 +8362,16 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 **§855. globeToMercatorTransition 过渡混合实施：heatmap −89k（−39%），fog 门灰度验证通过（2026-09-06）**：
 
 过渡混合实施（fog 门灰度）：①`setMercTransitionPhase` 全局相位（MBTileDataEmitter）；②tile2world Spherical 分支混入 mercator 平面位置（`mix(sphere, planar, phase)`）；③datasource applyCameraSettings 按 fog 键启用（仅 fog 族设置相位，无-fog 保持基线）。实测：heatmap/near-transition **228,169→139,208（−89k，−39%）**；其余夹具逐位一致。fog 门确保无-fog 夹具（pitch 等）不受过渡混合影响（基线保持）。
+
+**§856. heatmap 139k 余量分析：过渡混合仅覆盖瓦几何，需"三处坐标一致性"（2026-09-06）**：
+
+§855 过渡混合实施后 heatmap/near-transition 228,169→139,208（−39%）。帧面对比：
+- expected：暗蓝天区 + 平直地平线 + **灰色平面**（全帧背景）+ 4 个分离热力块
+- 我方：蓝天渐变 + 弯曲 limb + **淡紫盘面** + 1 个合并大热力块
+
+剩余 139k 的三个来源：
+①**地面色差**：我方淡紫 vs expected 灰——背景盘 uBgDiscColor 与瓦背景色不一致（盘用 §829 颜色、瓦背景来自 z6 overscale 瓦的 background 层），且盘 normDist 阈值 0.98 限制了覆盖范围；
+②**天区色差**：我方蓝渐变 vs expected 暗蓝——fog space 色插值参数差；
+③**热力块形态**：我方 5 块合并为 1 vs expected 4 块分离——瓦覆盖/分辨率差异。
+
+**正解 = §851 "三处坐标一致性"**：过渡混合需同步应用于背景盘 shader（normDist 计算改用过渡混合后的 globe 位置）、瓦片顶点（已实施 ✓）、辉光环半径。三者使用同一 globeToMercatorTransition phase 才能使背景盘边缘、瓦覆盖边缘、大气穹顶边缘对齐。当前仅瓦顶点过渡，盘/穹顶仍用未过渡投影 → 盘缘与瓦缘不对齐 → 全帧色差。**工作量**：改背景盘 shader 的 normDist 计算 + 大气穹顶的 globeMatrix，使二者使用与瓦过渡相同的混合后 globe 中心/半径。属 §852 shader 级特征的后续完善。
