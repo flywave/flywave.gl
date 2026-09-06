@@ -8567,3 +8567,7 @@ lookat 探针（extdbg 已有）实测 with-diff 全流程：setZoom 0 → flyZo
 **§872i. 渲染列表审计结果：with-diff 主通道渲染列表为空（opaque=0/trans=0）——白帧=纯 clear（2026-09-07 终）**：
 
 `renderer.renderLists.get(mapView.scene, 0)`（公开 API）实测：**opaque=0/trans=0**——with-diff 的主通道根本未绘制任何对象（白帧=纯 clear ✓ 与 24,024 一致）。盘对象在场景中（inScene=true/vis=true/黑 uniforms ✓）却不在渲染列表 → three 的 projectObject 在某帧将其排除（visible 翻转/层掩码/matrixWorld NaN 类）。**下轮入口（精确）**：①逐帧 visible 探针（每 AfterRender 记录 atmo.visible + scene.children.length——定位排除发生的帧与触发者）；②three projectObject 排除条件审计（layers/visible/matrixWorld NaN）；③修复后黑盘（mgl background #000 on globe）出现 → with-diff/unset-terrain 收敛至 AA 级。globe-terrain 66k 维持仓库外协调挂账。
+
+**§872i2. 定位收窄完成：地表 quad 帧间被反复卸载（sceneRoot n=0↔4 抖动）——覆盖计算/远平面翻转（2026-09-07 终）**：
+
+世界顶点探针 + 场景计数实证：①相机放置链正确（lookat distance=2.1253e7=3.3R ✓ mgl 模型值）；②渲染网格世界顶点正常（z0 quad 球面 wrap lng −180..180/lat −85..85 ✓ 无越界）；③**sceneRoot children 帧间 n=0↔4 翻转**——地表 quad（背景注入）在部分帧被整体卸载 → 卸载帧全白。**根因=覆盖计算帧级翻转**（FrustumIntersection/远平面/可见瓦集合判定在部分帧丢失 z0/z1 瓦）。**下轮入口（精确）**：①VisibleTileSet.updateRenderList 逐帧 dump covering 集合（哪帧丢哪瓦）；②FrustumIntersection 球面分支的 far 平面/视锥判定在 zoom 0 pitch 0 相机下的翻转点；③修复后 with-diff/unset-terrain 黑盘呈现 → 收敛。globe-terrain 66k 维持仓库外协调挂账（DEM fixture 瓦不可得，需向 mapbox 上游索取或 CI 重生成）。
