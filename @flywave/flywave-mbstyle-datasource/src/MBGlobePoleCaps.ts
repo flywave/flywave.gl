@@ -315,7 +315,7 @@ export class MBGlobePoleCaps {
                     });
                     try {
                         const atmo871 = (globalThis as any).__mbAtmo871 ?? null;
-                        rows870.push(`disc inScene=${atmo871 ? (mapView as any).scene.children.includes(atmo871) : 'no-atmo'} vis=${atmo871?.visible} ro=${atmo871?.renderOrder} uBg=(${atmo871 ? JSON.stringify(atmo871.material?.uniforms?.uBgDiscColor?.value) : '-'}) uGP=${JSON.stringify(atmo871?.material?.uniforms?.uGlobePos?.value ?? null)} fired=${(globalThis as any).__mbAtmoFired ?? 0} camMask=${(mapView as any).camera?.layers?.mask} atmoMask=${atmo871?.layers?.mask} scKids=${(mapView as any).scene?.children?.length}`);
+                        rows870.push(`disc inScene=${atmo871 ? (mapView as any).scene.children.includes(atmo871) : 'no-atmo'} vis=${atmo871?.visible} ro=${atmo871?.renderOrder} uBg=(${atmo871 ? JSON.stringify(atmo871.material?.uniforms?.uBgDiscColor?.value) : '-'}) uGP=${JSON.stringify(atmo871?.material?.uniforms?.uGlobePos?.value ?? null)} fired=${(globalThis as any).__mbAtmoFired ?? 0} camMask=${(mapView as any).camera?.layers?.mask} atmoMask=${atmo871?.layers?.mask} scKids=${(mapView as any).scene?.children?.length} camPos=${JSON.stringify((mapView as any).camera?.position ?? null)} camN=${(mapView as any).camera?.position?.length?.().toFixed?.(0) ?? '?'}`);
                         // §872e: render-list audit — three's own draw list for
                         // the last frame (opaque/translucent arrays).
                         const rlAny: any = (mapView as any).renderer?.renderLists;
