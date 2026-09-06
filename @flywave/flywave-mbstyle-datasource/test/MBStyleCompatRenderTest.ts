@@ -2115,6 +2115,22 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 });
                 // §872b: surface shader compile/link errors loudly in tests.
                 try { (mapView as any).m_renderer.debug.checkShaderErrors = true; } catch {}
+                // §872d: render-graph dump — wrap renderer.render to log the
+                // per-call scene population and draw stats (with-diff alpha).
+                try {
+                    const r872d: any = (mapView as any).m_renderer;
+                    const orig872 = r872d.render.bind(r872d);
+                    const log872: any[] = [];
+                    (globalThis as any).__mbRenderLog = log872;
+                    r872d.render = function(scene872: any, camera872: any) {
+                        const r = orig872(scene872, camera872);
+                        if (log872.length < 60) {
+                            const atmo = (globalThis as any).__mbAtmo871;
+                            log872.push(`kids=${scene872?.children?.length} discIn=${atmo ? scene872?.children?.includes(atmo) : '?'} calls=${r872d.info.render.calls} tri=${r872d.info.render.triangles}`);
+                        }
+                        return r;
+                    };
+                } catch {}
 
                 // render-tests capture a static frame shortly after load; disable
                 // the 800ms text fade-in so glyph opacity matches the baseline.

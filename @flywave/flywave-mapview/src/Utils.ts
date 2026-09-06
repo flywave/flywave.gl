@@ -803,6 +803,16 @@ export namespace MapViewUtils {
             // the height of the camera in the tangent space.
             const height = distance * Math.cos(pitchRad);
             result.add(tangentSpace.y).add(tangentSpace.z.setLength(height));
+            // §872j probe: placement output (with-diff altitude loss).
+            try {
+                if ((globalThis as any).__mbExtRouteDbg) {
+                    const g = (globalThis as any);
+                    g.__mbPlace = g.__mbPlace ?? [];
+                    if (g.__mbPlace.length < 24) {
+                        g.__mbPlace.push(`d=${distance.toExponential(3)} pitch=${pitchDeg} tgt=(${targetCoordinates.latitude.toFixed(2)},${targetCoordinates.longitude.toFixed(2)}) out=(${result.x.toFixed(0)},${result.y.toFixed(0)},${result.z.toFixed(0)}) n=${result.length().toFixed(0)}`);
+                    }
+                }
+            } catch {}
 
             const a = EarthConstants.EQUATORIAL_RADIUS + altitude;
             const b = Math.sin(pitchRad) * distance;
