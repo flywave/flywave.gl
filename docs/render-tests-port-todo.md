@@ -8593,3 +8593,7 @@ forceDirectRender 门（MapRenderingManager.render 分支直绘强制）+ 盘专
 **§873c. geoCenter 延迟 + forceDirectRender 双修复落地仍 24,024×2——渲染管线专项终版挂账（2026-09-07 终）**：
 
 两项修复落地复测：①geoCenter setter 延迟（m_mglGlobeCam=true 时记录 m_pendingGeoCenter 不动相机）；②forceDirectRender 门（MapRenderingManager 强制直绘）。with-diff/unset-terrain 仍各 24,024；globe-default/set-style 族/poles 逐位不变（零回归）。已排除清单累计：geoCenter 贴地覆盖、composer 丢弃、材质编译、盘 uniforms/对象状态、注入 quads、瓦挂载抖动的表面现象。**剩余缺陷需 three 相机/渲染列表基础设施**（m_rteCamera 与 m_camera 双轨、渲染列表逐 item 程序 dump、RTE 重基数学审计）——引擎渲染管线专项，非 patcher 层。会话累计 54 次提交 §858-§873c；探针工具链完备入库。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得）。
+
+**§873b2. 探针周期终版收口：盘 uniforms/uGP 数据齐备，24,024×2 维持——three 渲染内部专项终版入档（2026-09-07 终）**：
+
+终版探针数据：盘 in m_discScene ✓ 渲染通道 rgd=249 ✓ uBgDiscColor 探针值 (0)（疑似截断或数值 0——若为数值 0 则 vec3 uniform 上传异常即根因之一）uBgDiscAlpha=1 ✓ uGlobeRadius=R ✓ uGlobePos=(0,0,−R)（相机距心 R，理论上中心像素 normDist=0 应画黑）——但帧全白 → 盘 fragment 的内分支输出未上屏。剩余排查需 three 渲染内部（Uniform 上传类型/程序绑定）专项。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得，需向 mapbox 上游索取或 CI 重生成 expected）。
