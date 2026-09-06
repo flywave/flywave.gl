@@ -8463,3 +8463,7 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 ②**已排除**：①clear 设置——探针实证渲染时 clearColor=0/clearAlpha=0/renderer.getClearAlpha()=0 全部生效；②渲染器 alpha buffer——MapView 支持 alpha 选项且 harness context attrs 加 alpha:true；③引擎背景平面——harness 本已 addBackgroundDatasource:false。三层杠杆下捕获 PNG 的 alpha 仍恒 255 → **捕获/渲染管线在某处强制不透明**（MapView 渲染循环 / MSAA 离屏缓冲 / DomImageUtils 采集链），需引擎级渲染器与采集管线改造（alpha buffer 全链路），超出 patcher 层。
 
 ③**顺带发现**：globe-transition/collision expected 同为透明空间（现残差 3,522 部分即 alpha 域）；show-unsupported-layer expected 为不透明（已 0 PASS）——透明空间夹具家族随引擎 alpha 链路解锁后可一并收敛。实验已回退（含误加的重复属性），零残留。
+
+**§866. alpha 域引擎实验（clear 重申）证伪回退：确认主题管理器时序竞态与所有权问题（2026-09-06 续）**：
+
+§865 的续试：clear 状态改由 AfterRender 每帧重申（globalThis.__mbClear865 桥）。实测：with-diff-and-zoom-out 仍 40,152 分毫不变（竞态——主题管理器异步加载回调可晚于 AfterRender 再次覆盖 clear），且 raster 2,592→8,488 恶化（透明 clear 对 raster 类 expected 的空间区反而引入偏差——其 expected 空间实为不透明雾色）。已回退。**结论**：clear 所有权分散（样式层/主题层/引擎默认三方写入、异步竞态）+ 各夹具 expected 的空间 alpha 期望不一（透明/不透明雾色/白），正确解法在引擎架构层（MapViewThemeManager 与样式 clear 的所有权与时序约定 + 渲染器 alpha buffer 链路），非 patcher 层可安全落地。挂账为引擎级专项；解锁后可一并收敛 with-diff 40k、collision 3.5k 的 alpha 分量。
