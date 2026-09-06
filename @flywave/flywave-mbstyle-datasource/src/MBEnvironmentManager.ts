@@ -1391,6 +1391,7 @@ export class MBEnvironmentManager {
      * spherical.
      */
     public renderGlobeDisc(): void {
+        (globalThis as any).__mbRGD = ((globalThis as any).__mbRGD ?? 0) + 1;
         if (!this.m_discScene || !this.m_globeAtmo || !this.m_mapView) return;
         if ((this.m_mapView as any).projection?.type !== 1) return;
         const r = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
