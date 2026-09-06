@@ -8342,3 +8342,7 @@ discext=1（§829 盘阈值 0.98→1.009，覆盖 normDist 0.98-1.009 带）：p
 **§850d. roundzoom 干净 A/B 终判：零效果（run-to-run 噪声），门保持默认关（2026-09-06）**：
 
 同 HEAD 干净 A/B（def=默认 vs rzfull=roundzoom=1，各 122 夹具）：**除 poles 噪声带（south ±8k、north ±4k，已知 run-to-run 噪声）外全量逐位一致**——pitch 28,382 双侧相同（§846 的 28,046 为 tile 瞬态/测量噪声）。**定论**：roundzoom=1 对 globe 族零效果（z6 overscale 瓦渲染的内容与 z5 父瓦在同等覆盖下逐像素一致），门保持默认关为终态。pitch 缺失带 28,046/28,382 的 ±336 差异确认为噪声。本桶关闭；剩余收敛唯一路径 = mgl globeMatrix 渲染模型复刻（RenderDoc/Spector 级，§848b）。
+
+**§851. 根因打通：pitch 缺失带与 heatmap 228k 同源——globe→mercator 顶点过渡混合缺失（2026-09-06 终）**：
+
+mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)` 在 z5-6 间将瓦片网格顶点从球面 ECEF 位置向 mercator 平面位置插值（`interpolateVec3(globeCorner, mercatorCorner, phase)`，globe_util.ts:182/332）。z5.75 → phase≈0.84：远端瓦的 mercator 位置比球面**伸出更远**（mercator 高纬拉伸），覆盖了球面轮廓以外的区域 → pitch 缺失带 y331-375 与 heatmap/near-transition 的全帧灰底均由此而来。我方引擎在 z5-6 间硬切换（§515 明示），缺少此过渡混合——上述两桶 228k+28k 的根因合一。**实施规格**：在瓦发射/顶点处理路径中，globe 投影下计算每顶点的球面 ECEF 与 mercator 平面双位置，按 `smoothstep(5,6,styleZoom)` 插值；背景盘/辉光环同步调整；tersafe：仅影响 z5-6 夹具（其余 zoom phase=0 或 1 无变化）。工作量 = 特征级（周级），涉及 tile emitter + background disc + atmosphere dome 三处坐标一致性。**此为 globe 专项剩余残差的最终汇聚点**——实施后 pitch 缺失带与 heatmap 228k 同步收敛，且 poles 接缝/NaN 问题亦可能受益（过渡态远瓦的正确投影）。
