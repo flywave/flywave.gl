@@ -8625,3 +8625,7 @@ place 探针（getCameraPositionFromTargetCoordinates 加法后）实测：**d=2
 **§873c4. mgl 相机模型逐行对照完成：距离式差异量化（zoom 0 我方 globe 角直径 ~242px vs mgl 163px，+48%）——低 zoom globe 族收敛入口精确化（2026-09-07 终）**：
 
 mgl 逐行对照（transform.js:1770 _computeCameraPosition + :1799 cameraToCenterDistance）：cameraToCenterDistance = focal·height·pixelsPerMercatorPixel，其中 height=ws/(2^zoom·2π)（globe 半径的世界长度）、pixelsPerMercatorPixel=mercatorZfromAltitude(1,lat)/mercatorZfromAltitude(1,45°)（低 zoom 无混合）——**mgl 的 globe 屏幕直径恒= ws/π = 163px（zoom 0）**。我方：distance=focal·C/(256·2^flyZoom)·conv(0.707) → 渲染 globe 角直径 ~242px（+48%）。**修复入口（精确）**：MapView 球面分支的 calculateDistanceFromZoomLevel 补 pixelsPerMercatorPixel 因子（mercatorZfromAltitude(1,lat)/mercatorZfromAltitude(1,45°)，低 zoom=lat0/45°=1/0.707）——即距离再 ×1.414，globe 直径缩至 ~171px ≈ mgl ✓。实施后 with-diff/unset-terrain 黑盘+白空间布局呈现 → 大头收敛；全量回测 globe 族（低 zoom globe 夹具的 globe 尺寸全面变化需逐夹具核验）。globe-terrain 66k 维持仓库外协调挂账。
+
+**§874a. zoomab A/B 无效果定论：盘白色 else 全帧生效与相机距离无关——three 渲染内部专项终版挂账（2026-09-07 终）**：
+
+zoomab=-1（相机距离×2，globe 直径减半）A/B：with-diff 帧仍全白（角点/中心/底部全 255,255,255）——**相机距离变化不影响帧内容** ⇒ 盘 fragment 的 else 分支（白）全帧生效与相机距离无关，或盘 draw 未产生像素被 clear 白覆盖。已排除：geoCenter 贴地覆盖（延迟）、composer 丢弃（forceDirectRender 门）、材质编译（checkShaderErrors）、注入 quads（门控）、瓦挂载抖动（表面）。**剩余需 three 渲染内部专项**：①盘 draw 的混合/深度状态审计（depthTest=false + renderOrder −2000 + CustomBlending One/OneMinusSrcAlpha 的帧内交互）；②盘 fragment 的 normDist GPU 实际值；③主通道 clear(白/1) 与盘 AfterRender 渲染的帧序竞争。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得，需向 mapbox 上游索取或 CI 重生成 expected）。
