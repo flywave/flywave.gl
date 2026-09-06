@@ -38,7 +38,12 @@ import {
     SRGBColorSpace,
     Skeleton,
     SkinnedMesh,
+    ClampToEdgeWrapping,
+    MirroredRepeatWrapping,
+    NearestFilter,
     Texture,
+    type TextureFilter,
+    type Wrapping,
     Vector2,
     Vector3,
     VectorKeyframeTrack,
@@ -138,15 +143,36 @@ function processTextures(gltf: GLTFPostprocessed): { map: Map<string, Texture>; 
     return { map: textureMap, array: textureArray };
 }
 
+// glTF samplers specify filters and wraps as raw GL enums (9728/9729/9984-9987,
+// 33071/33648/10497) while three textures expect their own constants
+// (1003-1008, 1000-1002). Assigning the raw GL enums makes three's lookup
+// tables miss, and glTexParameteri receives undefined (GL_INVALID_ENUM:
+// "Texture filter not recognized") — so the sampler settings never applied.
+const GL_FILTER_TO_THREE: Record<number, TextureFilter> = {
+    9728: NearestFilter, // NEAREST
+    9729: LinearFilter, // LINEAR
+    9984: NearestMipmapNearestFilter, // NEAREST_MIPMAP_NEAREST
+    9985: LinearMipmapNearestFilter, // LINEAR_MIPMAP_NEAREST
+    9986: NearestMipmapLinearFilter, // NEAREST_MIPMAP_LINEAR
+    9987: LinearMipmapLinearFilter // LINEAR_MIPMAP_LINEAR
+};
+
+const GL_WRAP_TO_THREE: Record<number, Wrapping> = {
+    33071: ClampToEdgeWrapping, // CLAMP_TO_EDGE
+    33648: MirroredRepeatWrapping, // MIRRORED_REPEAT
+    10497: RepeatWrapping // REPEAT
+};
+
 function applySamplerParameters(gltfTexture: any, texture: Texture): void {
     if (!gltfTexture.sampler) return;
 
     const { magFilter, minFilter, wrapS, wrapT } = gltfTexture.sampler;
 
-    texture.magFilter = magFilter || LinearFilter;
-    texture.minFilter = minFilter || LinearMipmapLinearFilter;
-    texture.wrapS = wrapS !== undefined ? wrapS : RepeatWrapping;
-    texture.wrapT = wrapT !== undefined ? wrapT : RepeatWrapping;
+    // glTF defines magFilter as NEAREST (9728) or LINEAR (9729) only.
+    texture.magFilter = magFilter === 9728 ? NearestFilter : LinearFilter;
+    texture.minFilter = GL_FILTER_TO_THREE[minFilter] ?? LinearMipmapLinearFilter;
+    texture.wrapS = GL_WRAP_TO_THREE[wrapS] ?? RepeatWrapping;
+    texture.wrapT = GL_WRAP_TO_THREE[wrapT] ?? RepeatWrapping;
 
     const mipmapFilters = [
         LinearMipmapLinearFilter,
