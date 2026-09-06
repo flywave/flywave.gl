@@ -832,6 +832,10 @@ export class MapView extends EventDispatcher {
 
     /** Default scene for map objects and map anchors */
     private readonly m_scene: THREE.Scene = new THREE.Scene();
+    /** §872j2: pending geo-center recorded by the geoCenter setter in the
+     * mgl-globe camera mode (the setter defers camera placement to
+     * lookAtImpl to avoid stamping the camera at the surface point). */
+    private m_pendingGeoCenter?: GeoCoordinates;
     /** Separate scene for overlay map anchors */
     private readonly m_overlayScene: THREE.Scene = new THREE.Scene();
     /** Root node of [[m_scene]] that gets cleared every frame. */
@@ -1867,6 +1871,19 @@ export class MapView extends EventDispatcher {
      * Longitude values outside of -180 and +180 are acceptable.
      */
     set geoCenter(geoCenter: GeoCoordinates) {
+        // §872j2: in the mgl-globe camera mode, do NOT move the camera here —
+        // this setter stamps the camera at the target's SURFACE point
+        // (projectPoint ignores the view distance/altitude), clobbering the
+        // lookAt placement (the setStyle chain: geoCenter-write then
+        // lookAtImpl re-placement — the surface stamp was the final camera
+        // state, dropping the model altitude; with-diff-and-zoom-out family).
+        // lookAtImpl places the camera consistently for the mode.
+        if ((this as any).__mglGlobeCam === true &&
+            this.projection.type === ProjectionType.Spherical) {
+            // Record only; the next lookAtImpl placement applies it.
+            this.m_pendingGeoCenter = GeoCoordinates.fromObject(geoCenter);
+            return;
+        }
         if (geoCenter.altitude !== undefined) {
             this.projection.projectPoint(geoCenter, this.m_camera.position);
         } else {

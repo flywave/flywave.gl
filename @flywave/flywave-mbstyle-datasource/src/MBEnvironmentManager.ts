@@ -1372,6 +1372,9 @@ export class MBEnvironmentManager {
         // would cover tiles.
         this.m_discScene = this.m_discScene ?? new THREE.Scene();
         this.m_discScene.add(this.m_globeAtmo);
+        // §872j: force the direct render path — the composer drops this
+        // engine-external mesh (bg-only globe styles).
+        (this.m_mapView as any).mapRenderingManager.forceDirectRender = true;
     }
 
     private disposeGlobeAtmosphere(): void {

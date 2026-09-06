@@ -364,11 +364,14 @@ export class MapRenderingManager implements IMapRenderingManager {
 
         this.updateEffects();
 
+        // §872j: style-owned flag — bg-only globe styles render their
+        // background via the §829 disc (an engine-external mesh that the
+        // composer path drops, §598) — force the direct path for them.
         // The postprocessing composer is pure overhead when no effect is
         // enabled — and its render path empirically drops engine-external
         // scene meshes (the mbstyle terrain mesh renders in the direct path
         // but not through the composer). Bypass it when idle.
-        if (this.m_composer && this.m_anyEffectEnabled) {
+        if (this.m_composer && this.m_anyEffectEnabled && !(this as any).forceDirectRender) {
             this.m_composer.render();
         } else {
             // §598 pre-scene hook: datasources may register an underlay draw

@@ -8581,3 +8581,7 @@ camPos 探针（逻辑相机世界坐标）：with-diff（center [−180,0] zoom
 lookCam 历史（6 次 lookAtImpl，时序）：①初始 zoom23 放置（n=3.07e7 mercator 帧模型近距 ✓）②setZoom0 → flyZoom1 → **n=8.26e6 ✓ 模型正确** ③首次 setStyle 投影切换 → **n=R（贴地！）**——投影 setter 的 lookAtImpl 重放置未完成/未带海拔 ④二次 setStyle → **n=2.76e7 ✓ 正确** ⑤... ⑥**最终 = n=R 贴地**——即最后一次 `setCameraGeolocationAndZoom` 的 `this.geoCenter = geoPos`（line 2405，projectPoint 直写 camera.position 到地表）成为最终相机状态，其后该调用的 lookAtImpl 重放置未生效（疑 lookAtImpl 内部 early-return/minZ 钳制/异常）。
 
 **根因（最终）**：`setCameraGeolocationAndZoom` 的 `this.geoCenter = geoPos` 地表直写与 lookAtImpl 模型重放置之间存在时序/失败窗口；且多路径（投影 setter/setupCamera/ds 链）反复交错触发。**修复入口（引擎相机放置链，下轮首项）**：①在 lookAtImpl 内部 dump distance 与 placement 前后 camPos（已具备），定位 ⑥ 的调用方与其 lookAtImpl 提前返回原因；②结构性修复：`set geoCenter` 地表直写仅在无 mgl globe 模型时执行（m_mglGlobeCam=true 时 geoCenter setter 不动相机，由 lookAtImpl 统一放置）。修复后 with-diff/unset-terrain 黑盘呈现 → 收敛。globe-terrain 66k 维持仓库外协调挂账。
+
+**§873. forceDirectRender 门落地后仍 24,024×2——渲染管线级最终挂账（2026-09-07 终）**：
+
+forceDirectRender 门（MapRenderingManager.render 分支直绘强制）+ 盘专用 scene + 显式通道全部落地后复测：with-diff/unset-terrain 仍各 24,024（全白帧）；globe-default/set-style 族/poles 逐位不变（零回归）。已排除：composer 丢弃（直绘门无效=直绘路径本就在用）、geoCenter 贴地覆盖（§872j2 延迟）、材质编译（checkShaderErrors=true 无异常）、uniforms（黑/1/R/(0,0,−R) 全对）。**剩余唯一解释**：盘 mesh 虽被 three 处理（onBeforeRender fired）但其 draw 未产生像素（渲染列表 item 被过滤/程序绑定失败静默/深度混合状态异常）——需 three 渲染列表 opaque 数组逐 item 审计 + 程序绑定 dump（引擎渲染管线基础设施专项，非 patcher 层）。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得）。会话累计 50 次提交 §858-§873。
