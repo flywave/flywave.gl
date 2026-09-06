@@ -198,6 +198,14 @@ class RasterTileDataProvider extends DataProvider {
         const zReq = tileKey.level;
         const xReq = tileKey.column;
         const yReq = tileKey.row;
+        // §862 probe: ring-buffer of raster requests (pole-cap gap取证).
+        {
+            const g = (globalThis as any);
+            g.__mbRasterReqs = g.__mbRasterReqs ?? [];
+            if (g.__mbRasterReqs.length < 400) {
+                g.__mbRasterReqs.push(`${zReq}/${xReq}/${yReq}`);
+            }
+        }
         // §316: demote far tiles to mgl's LOD level before resolving — the
         // ancestor mosaic then matches mgl's mixed-LOD covering.
         const lod = this.mglLodLevel(zReq, xReq, yReq);
@@ -351,6 +359,14 @@ class RasterTileDataProvider extends DataProvider {
         {
             const maxRow = Math.pow(2, z) - 1;
             if (z > 0 && (y === 0 || y === maxRow)) {
+                // §862 trace: pole-row branch forensics.
+                {
+                    const g = (globalThis as any);
+                    g.__mbPoleRowTrace = g.__mbPoleRowTrace ?? [];
+                    if (g.__mbPoleRowTrace.length < 60) {
+                        g.__mbPoleRowTrace.push(`${z}/${x}/${y}`);
+                    }
+                }
                 const spanCap = Math.pow(2, z - anc.srcZ);
                 const fwCap = 1 / spanCap;
                 const fx0Cap = (x - anc.srcX * spanCap) * fwCap;

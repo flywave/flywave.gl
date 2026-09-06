@@ -8429,3 +8429,13 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 与 mgl draw_heatmap.ts 逐项对拍 offscreen 密度 FBO：mgl `resolutionScaling = projection==='globe' ? 0.5 : 0.25`（:37-40）——我方固定 0.25。改为按投影动态（球面 0.5/mercator 0.25，getter 形式）。实测 near-transition 30,728→**29,989**，其余 globe-heatmap 夹具小幅改善或持平（default 15,348→15,203 等），set-mercator ×2 维持 0，mercator heatmap 族（heatmap-radius/intensity 0–39、fog/2d 29,845）逐位不变——0.5x 仅作用于球面，零回归。
 
 **剩余 29,989 的构成**（暖核位置对拍）：5 个 kernel 中心的屏幕投影已基本对齐（暖核 bbox x96-386/y236-305 vs expected x135-376/y239-295），但暖区面积仍 ~3.5×（密度幅度/衰减细节）——单 kernel 峰值公式（w·I·GAUSS_COEF=0.8）与 S 求解已同源，差在密度纹理 8bit/half-float 量化、双线性上采样边缘与 pitch-84 平面倾斜下的局部 Jacobian 高阶项。属屏幕空间近似的收敛边界内细节，收益递减；记录为后续低优先入口。
+
+**§862. poles 极冠扇注册修复（level 清空竞态）：south −52%、raster-elevation-tiled/globe-poles 239k→78k（2026-09-06）**：
+
+①**取证**：globe-poles/north 的橙色楔 = 极冠区暴露的纯 darkorange 背景——卫星纹理扇从未绘制。pole-caps 探针（desc/mesh 键集 + raster 请求环形缓冲）：极行瓦 3/0/0、3/1/0、3/2/0、3/7/0 被请求且极行分支进入，但 desc 仅剩 `4/6/0`（z4 child-fallback 瓦）——**MBGlobePoleCaps.register 的 "level 变更→清空全部" 清空竞态**：z3 与 z4 请求交错，后注册的 level 抹掉先前整组，最终只剩最后一个瓦的扇，帽面其余经度段露出纯背景。
+
+②**修复**：register() 移除 level 清空（保留 MAX 上限）；新增 sync() 时按**多数 level 保留**的 pruneToDominantLevel()（bg/* 恒留）——同一时刻帽面属一个 zoom，但请求交错 level，清空改到绘制时按计数而非注册时按最后所见。
+
+③**实测**（Edge）：north 35,393→31,070、south 28,573→**13,626（−52%）**、north-image 62,719→57,785、south-image 51,963→51,524、north-image-raster-colorization 53,954→53,293；raster-elevation-tiled/globe-poles **239,139→77,748**；无关夹具（globe-default 2,474、circle/near-transition 4,571）逐位不变。tsc 绿。剩余=极行瓦 x3-6（远侧）本地瓦集缺失的覆盖缺口 + 边行纹理细节，属数据/覆盖域。
+
+④**探针入库**：pole-caps 一次性 dump（extdbg 门控，sync #80/#250）+ __mbRasterReqs/__mbPoleRowTrace 环形缓冲。

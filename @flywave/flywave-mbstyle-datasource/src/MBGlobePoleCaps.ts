@@ -89,13 +89,38 @@ export class MBGlobePoleCaps {
 
     /** Called from RasterTileDataProvider.getTile for pole-row tiles. */
     public static register(d: MBPoleCapDescriptor): void {
-        const level = Number(d.key.split('/')[0]);
-        if (level !== this.s_level) {
-            this.s_level = level;
-            this.s_descriptors.clear();
-        }
+        // §862: NO level sweep here — raster requests interleave levels
+        // (z3 pole-row tiles + a z4 child-fallback tile) and the old
+        // "level changed → clear all" wipe let the last-registered level
+        // erase the working set (globe-poles/north kept only the z4 fan;
+        // orange background wedges showed through the rest of the cap).
+        // Stale levels are pruned by sync()'s majority-level keep instead.
         if (this.s_descriptors.size > MAX_DESCRIPTORS) this.s_descriptors.clear();
         this.s_descriptors.set(d.key, d);
+    }
+
+    /**
+     * §862: prune descriptors to the dominant tile level (bg/* fills kept)
+     * — caps live at one zoom level at a time but requests interleave
+     * levels, so the purge runs at draw time on counts, not at register
+     * time on last-seen level.
+     */
+    private static pruneToDominantLevel(): void {
+        const counts = new Map<number, number>();
+        for (const key of this.s_descriptors.keys()) {
+            if (key.startsWith('bg/')) continue;
+            const z = Number(key.split('/')[0]);
+            counts.set(z, (counts.get(z) ?? 0) + 1);
+        }
+        let bestZ = -1;
+        let bestN = 0;
+        for (const [z, n] of counts) {
+            if (n > bestN) { bestZ = z; bestN = n; }
+        }
+        for (const key of [...this.s_descriptors.keys()]) {
+            if (key.startsWith('bg/')) continue;
+            if (Number(key.split('/')[0]) !== bestZ) this.s_descriptors.delete(key);
+        }
     }
 
     public static clear(): void {
@@ -159,6 +184,29 @@ export class MBGlobePoleCaps {
      * datasource (spherical projection only — clears on mercator).
      */
     public static sync(mapView: any, rasterOpacity: number, bgOpacity = 1): void {
+        // §862 one-shot probe: dump at sync #400 (post tile load) — lists
+        // registered descriptors vs drawn meshes to expose missing pole-row
+        // tiles (orange wedge gaps, globe-poles/north).
+        const syncCount = ((globalThis as any).__mbPoleSyncCount =
+            ((globalThis as any).__mbPoleSyncCount ?? 0) + 1);
+        if ((globalThis as any).__mbExtRouteDbg && (syncCount === 80 || syncCount === 250) &&
+            !(globalThis as any).__mbPoleDumped?.has?.(syncCount)) {
+            ((globalThis as any).__mbPoleDumped =
+                (globalThis as any).__mbPoleDumped ?? new Set()).add(syncCount);
+            try {
+                const fbD = (window as any).__karma__?.config?.args
+                    ?.find?.((a: string) => a.startsWith('feedback-url='))
+                    ?.slice('feedback-url='.length);
+                if (fbD) fetch(`${fbD}/mb-probe-dump`, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                        probe: 'pole-caps',
+                        log: [`desc=[${[...this.s_descriptors.keys()].join(',')}] mesh=[${[...this.s_meshes.keys()].join(',')}] reqs=[${((globalThis as any).__mbRasterReqs ?? []).join(',')}] poleRow=[${((globalThis as any).__mbPoleRowTrace ?? []).join(',')}]`],
+                    }),
+                }).catch(() => {});
+            } catch {}
+        }
         const spherical = mapView?.projection?.type === 1;
         if (!spherical || this.s_descriptors.size === 0) {
             for (const [, mesh] of this.s_meshes) mesh.geometry.dispose();
@@ -187,6 +235,7 @@ export class MBGlobePoleCaps {
             this.s_lastBgOpacity = bgOpacity;
         }
 
+        this.pruneToDominantLevel();
         // Rebuild the mesh set whenever the descriptor key set or the
         // opacity changes.
         const wanted = new Set(this.s_descriptors.keys());
