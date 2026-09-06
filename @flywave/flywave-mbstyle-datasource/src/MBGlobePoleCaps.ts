@@ -289,6 +289,10 @@ export class MBGlobePoleCaps {
                     const root870: any = (mapView as any).m_sceneRoot;
                     const rows870: string[] = [];
                     const V3 = THREE.Vector3;
+                    root870?.children?.forEach((tileObj: any) => {
+                        const tc = tileObj.center ?? tileObj.m_worldCenter;
+                        rows870.push(`TILE ${tileObj.tileKey?.mortonCode ?? '?'} ctr=(${tc ? [tc.x, tc.y, tc.z].map((v: number) => v.toFixed(0)).join(',') : '?'}) kids=${tileObj.children?.length ?? 0}`);
+                    });
                     root870?.traverse?.((mesh: any) => {
                         if (!mesh.isMesh && !mesh.geometry) return;
                         const g = mesh.geometry;
