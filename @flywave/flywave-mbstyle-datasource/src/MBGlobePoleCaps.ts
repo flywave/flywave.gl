@@ -202,7 +202,7 @@ export class MBGlobePoleCaps {
                     headers: { 'content-type': 'application/json' },
                     body: JSON.stringify({
                         probe: 'pole-caps',
-                        log: [`desc=[${[...this.s_descriptors.keys()].join(',')}] mesh=[${[...this.s_meshes.keys()].join(',')}] reqs=[${((globalThis as any).__mbRasterReqs ?? []).join(',')}] poleRow=[${((globalThis as any).__mbPoleRowTrace ?? []).join(',')}]`],
+                        log: [`desc=[${[...this.s_descriptors.keys()].join(',')}] mesh=[${[...this.s_meshes.keys()].join(',')}] reqs=[${((globalThis as any).__mbRasterReqs ?? []).join(',')}] poleRow=[${((globalThis as any).__mbPoleRowTrace ?? []).join(',')}] 865=[${((globalThis as any).__mb865 ?? []).join(' | ')}]`],
                     }),
                 }).catch(() => {});
             } catch {}
