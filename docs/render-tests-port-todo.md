@@ -8575,3 +8575,9 @@ lookat 探针（extdbg 已有）实测 with-diff 全流程：setZoom 0 → flyZo
 **§872j. 相机放置链最终实锤：海拔丢失——相机被压回目标地表点（2026-09-07 终）**：
 
 camPos 探针（逻辑相机世界坐标）：with-diff（center [−180,0] zoom 0）实测 **camPos=(−R,0,0)=目标点的地表位置（海拔 0）**；而 lookat 探针证实 lookAtImpl 内部 distance=2.1253e7 ✓（getCameraPositionFromTargetCoordinates 应放 target+up·2.1253e7=海拔 2.76e7）。即：**放置后相机海拔被清零/覆盖**——嫌疑：①updateLookAtSettings（lookAtImpl 尾部调用）重算/重放置；②set geoCenter setter（projectPoint 直写 camera.position 到地表）在 lookAtImpl 之后再次执行；③投影切换（setStyle globe swap）路径的相机重放置未带海拔。**修复入口（引擎相机放置链，下轮首项）**：在 lookAtImpl 的 getCameraPositionFromTargetCoordinates 之后 dump camera.position 到 updateLookAtSettings/update() 之后——定位覆盖者；修复后相机归位 2.76e7 → 盘黑呈现 → with-diff/unset-terrain 各 24,024 收敛（预期大头）。globe-terrain 66k 维持仓库外协调挂账。
+
+**§872j2. 黑帧根因最终实锤：`set geoCenter` 地表直写为最终相机状态——lookAtImpl 重放置被其后调用覆盖（2026-09-07 终）**：
+
+lookCam 历史（6 次 lookAtImpl，时序）：①初始 zoom23 放置（n=3.07e7 mercator 帧模型近距 ✓）②setZoom0 → flyZoom1 → **n=8.26e6 ✓ 模型正确** ③首次 setStyle 投影切换 → **n=R（贴地！）**——投影 setter 的 lookAtImpl 重放置未完成/未带海拔 ④二次 setStyle → **n=2.76e7 ✓ 正确** ⑤... ⑥**最终 = n=R 贴地**——即最后一次 `setCameraGeolocationAndZoom` 的 `this.geoCenter = geoPos`（line 2405，projectPoint 直写 camera.position 到地表）成为最终相机状态，其后该调用的 lookAtImpl 重放置未生效（疑 lookAtImpl 内部 early-return/minZ 钳制/异常）。
+
+**根因（最终）**：`setCameraGeolocationAndZoom` 的 `this.geoCenter = geoPos` 地表直写与 lookAtImpl 模型重放置之间存在时序/失败窗口；且多路径（投影 setter/setupCamera/ds 链）反复交错触发。**修复入口（引擎相机放置链，下轮首项）**：①在 lookAtImpl 内部 dump distance 与 placement 前后 camPos（已具备），定位 ⑥ 的调用方与其 lookAtImpl 提前返回原因；②结构性修复：`set geoCenter` 地表直写仅在无 mgl globe 模型时执行（m_mglGlobeCam=true 时 geoCenter setter 不动相机，由 lookAtImpl 统一放置）。修复后 with-diff/unset-terrain 黑盘呈现 → 收敛。globe-terrain 66k 维持仓库外协调挂账。
