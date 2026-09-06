@@ -8443,3 +8443,15 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 **§863. heatmap kernel 椭圆基混合缩放定标：near-transition 29,989→29,119（2026-09-06 续）**：
 
 密度幅度细节对拍发现 kernel 屏幕椭圆基的**缩放语义**分岔：我方原用几何均值（面积保持）归一，而 mgl 的 kernel 是**地面各向同性圆**（extrude 瓦单位、u_matrix 投影）→ 屏幕椭圆应为"东半轴=half、北半轴=half·(ly/lx)"（pitch 压缩，非面积保持）。A/B 实测定标：**ENU 探针按 tilt>45° 门控；isotropic 缩放仅 phase>0（过渡带）应用**——pitch-84 的 near-transition 用 isotropic 最优（29,989→**29,119**），pitch-70 的 default-zoomed 用面积保持最优（isotropic 17,673 vs 面积保持 13,420），pitch-0/world 轴夹具（horizontal/vertical/near-horizon）保持原公式逐位不变，mercator heatmap 族复测 0–39 零回归。经验分岔的本质：两夹具的 expected 由不同 mgl 缩放路径生成（tile 显示尺度/密度 FBO 分辨率交互），当前以经验定标近似。剩余 29,119 为热力块位置/幅度细节（5 kernel 的屏幕投影与 CI 密度场的残差），收益递减，降为低优先。
+
+**§864. set-style 家族 −95%：reapplyCamera 相机保留合成修复（2026-09-06）**：
+
+①**取证**：globe-set-style/raster 视觉对拍——globe 直径仅为 expected 的 ~60%（太空边距过宽）。mbcam 探针：setStyle 后球面相机 dist=42.5e6=7.7R，expected 需 ~3R——等效 flyZoom 0.5（mapbox zoom 原值）而非 1.5（+1 约定）。夹具结构：初始样式 zoom 0.5（mercator 空层），两次 setStyle 切 globe 且**不带任何相机键**。
+
+②**根因**：§779 的 "mgl setStyle 保留地图相机" 实现为跳过放置；但切投影后必须以保留的 zoom/center 值重新应用**新投影的距离模型**——跳过让球面相机停留在 mercator 平面距离（2× 过远）；而 reapplyCamera 的兜底 "缺 zoom→0" 又把任何重放置压低一个 zoom 档。
+
+③**修复**：applyCameraSettings 记录 m_lastAppliedCamera（样式约定的 zoom/center/bearing/pitch）；reapplyCamera 在样式无相机键时用其合成（替代 0 默认）；reloadStyle 的无相机分支现在也调用 reapplyCamera（投影切换后重应用距离模型）。
+
+④**实测**（Edge）：raster 52,996→**2,590（−95%）**、albers-globe-toggle 52,988→**2,590（−95%）**、default 16,679→**896（−95%）**；symbol 4,395→4,462（噪声级）；unset-terrain 632、with-diff-and-zoom-out 40,152 不变（后者为 zoom-22 背景域）。回归面：change-projection set-style/set-projection 6,099/6,147、globe-default 2,474、globe-transition 全族、models-on-globe-transition 全部逐位不变。tsc 绿。
+
+⑤**剩余**：with-diff-and-zoom-out 40,152（zoom 22 背景域）、change-projection ~6k（圆尺寸细节）、symbol 4.4k。

@@ -4727,6 +4727,14 @@ export class MBStyleDataSource extends TileDataSource {
             this.reapplyCamera();
         } else {
             this.applyProjection(style);
+            // §864: mgl "preserves the map camera" — the zoom/center values
+            // survive the swap and the NEW projection's distance model is
+            // re-applied to them. Placement here must run with the preserved
+            // camera (reapplyCamera synthesizes it from m_lastAppliedCamera);
+            // without it the globe camera stayed at the mercator-plane
+            // distance, ~2× too far (set-style family: globe ~60% of the
+            // expected diameter, orange-free frames otherwise aligned).
+            this.reapplyCamera();
         }
         this.buildClipMask(style);
 
@@ -5239,8 +5247,25 @@ export class MBStyleDataSource extends TileDataSource {
      */
     public reapplyCamera(): void {
         if (!this.mapView) return;
-        const style = this.m_styleManager?.getStyle() ?? this.m_runtime?.style;
+        let style = this.m_styleManager?.getStyle() ?? this.m_runtime?.style;
         if (!style) return;
+        // §864: a style without camera keys preserves the map camera —
+        // synthesize the last applied camera instead of defaulting zoom to 0
+        // (the 0-default re-placed the globe camera a zoom level too low
+        // after setStyle projection swaps: globe ~60% of the expected
+        // diameter, set-style family).
+        const lastCam = (this as any).m_lastAppliedCamera as
+            | { zoom?: number; center?: number[]; bearing?: number; pitch?: number }
+            | undefined;
+        if (style.zoom === undefined && lastCam && lastCam.zoom !== undefined) {
+            style = {
+                ...style,
+                zoom: lastCam.zoom,
+                center: lastCam.center,
+                bearing: lastCam.bearing,
+                pitch: lastCam.pitch,
+            } as any;
+        }
         // Sync the globe-camera flag with the live mapView projection (the
         // test harness swaps the projection directly on the MapView).
         (this.mapView as any).__mglGlobeCam =
@@ -5332,6 +5357,12 @@ export class MBStyleDataSource extends TileDataSource {
             const { GeoCoordinates } = require('@flywave/flywave-geoutils');
             const geoCoord = new GeoCoordinates(center[1], center[0]);
             this.mapView.setCameraGeolocationAndZoom(geoCoord, zoom, bearing, pitchAB);
+            // §864: record the last applied camera (style conventions) — the
+            // setStyle path uses it to synthesize a preserved camera when the
+            // new style carries no camera keys.
+            (this as any).m_lastAppliedCamera = {
+                zoom: style.zoom, center, bearing: style.bearing, pitch: style.pitch,
+            };
             // §806 probe: camera-to-target distance right after placement vs
             // after later frames — who moves the camera?
             if ((globalThis as any).__mbExtRouteDbg) {
