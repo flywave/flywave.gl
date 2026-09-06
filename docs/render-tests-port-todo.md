@@ -8515,3 +8515,7 @@ decode 侧与渲染侧的同瓦对拍（tile 1/1/1 为例）：decodeInfo.center
 **§871c. with-diff/unset-terrain 剩余 24k 定性：§829 背景盘未渲染（黑盘缺失）（2026-09-07 续）**：
 
 注入门控后 with-diff/unset-terrain 帧全白——空间白 ✓（与 reference 白合成一致），剩余 24,024 = **黑盘区域缺失**（expected 的黑色不透明圆盘 ~24k px，即 mgl 画在 globe 上的 background #000）。DOMEDBG=2 帧（盘调试色红/蓝）也全黑 → **§829 背景盘（applyGlobeDiscBackground 的 m_globeAtmo）对 bg-only 无源样式根本未渲染**。注入门控（hasTileSource）本身正确——它暴露了盘未渲染这一既有缺陷（此前注入 quads 的不透明黑恰好覆盖了盘缺失）。**入口（下轮首项）**：trace setGlobeBackground→applyGlobeDiscBackground 对 bg-only 无源样式的调用链（m_globeFogActive/projection 门控时序、m_globeAtmo 所在 scene 的渲染成员资格），让盘正确渲染黑背景 → 两夹具预期同时收敛至 AA 级。globe-terrain 66k 维持仓库外协调挂账。
+
+**§871d. 剩余 24k 终极根因：zoom 0 球面相机距离缺陷（uGlobePos 距离=R 贴地 vs mgl ~4.6R）（2026-09-07 终）**：
+
+盘 uniforms 探针（实时值）：uGlobePos=(0,0,−6378144)=**相机距球心仅 1R（贴地）**、uBgDiscColor=黑 ✓、uBgDiscAlpha=1 ✓、uGlobeRadius=R ✓、uDiscDbg 未达 shader（DOMEDBG=2 帧无红/蓝）。mgl zoom 0 的 globe 直径=ws/π≈163px → 相机距心 ~4.6R；我方 ~1R → globe 在屏上放大 ~4.6×→ 盘 shader normDist 全帧 ≥1.009 → 全白（§870 白 else）→ 黑盘缺失 24,024。**根因=zoom 0（低 zoom）球面相机的距离定标缺陷**：+1 约定（flyZoom=1）在 globe 相机模型（§776 ccd·conv 高度式）下给出贴地距离，而 mgl 同 zoom 的 globe 相机距离 ~4.6R——即 globe 相机高度式对低 zoom 未含 pixelSpaceConversion(GLOBE_SCALE_MATCH_LATITUDE=45°) 因子（mgl globe.ts pixelSpaceConversion 在低 zoom 用固定参考纬度，缩放差 ~cos(45)/cos(lat) 量级，zoom 0 处恰 ~4×量级）。**修复入口（下轮首项，预计 with-diff/unset-terrain/低 zoom globe 族同时大头收敛）**：MapView 球面分支 calculateDistanceFromZoomLevel（或 __mglGlobeCam 高度式）补 GLOBE_SCALE_MATCH_LATITUDE 的 pixelSpaceConversion 因子（mgl globe.ts:78-91 逐行移植），A/B 定标后全量回测。

@@ -309,6 +309,10 @@ export class MBGlobePoleCaps {
                         }
                         rows870.push(`${mesh.name || '?'} type=${mesh.type} n=${pa?.count ?? 0} wmin=(${wmin ? [wmin.x, wmin.y, wmin.z].map(vv => vv.toFixed(0)).join(',') : '?'}) wmax=(${wmax ? [wmax.x, wmax.y, wmax.z].map(vv => vv.toFixed(0)).join(',') : '?'})`);
                     });
+                    try {
+                        const atmo871 = (globalThis as any).__mbAtmo871 ?? null;
+                        rows870.push(`disc inScene=${atmo871 ? (mapView as any).scene.children.includes(atmo871) : 'no-atmo'} vis=${atmo871?.visible} ro=${atmo871?.renderOrder} uBg=(${atmo871 ? JSON.stringify(atmo871.material?.uniforms?.uBgDiscColor?.value) : '-'}) uDbg=${atmo871?.material?.uniforms?.uDiscDbg?.value} uBA=${atmo871?.material?.uniforms?.uBgDiscAlpha?.value} uGR=${atmo871?.material?.uniforms?.uGlobeRadius?.value} uGP=${JSON.stringify(atmo871?.material?.uniforms?.uGlobePos?.value ?? null)} fired=${(globalThis as any).__mbAtmoFired ?? 0} uGR=${atmo871?.material?.uniforms?.uGlobeRadius?.value} calls=${(mapView as any).m_renderingManager ? 'n/a' : 'n/a'}`);
+                    } catch (e871) { rows870.push(`disc=ERR ${e871}`); }
                     (globalThis as any).__mb870rows = `n=${root870?.children?.length ?? 0} ` + rows870.slice(0, 12).join(' ; ');
                 } catch (e870) {
                     (globalThis as any).__mb870rows = `ERR ${e870}`;
