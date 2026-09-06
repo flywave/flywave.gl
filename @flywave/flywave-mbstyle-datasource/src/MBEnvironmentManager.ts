@@ -1395,6 +1395,17 @@ export class MBEnvironmentManager {
      */
     public renderGlobeDisc(): void {
         (globalThis as any).__mbRGD = ((globalThis as any).__mbRGD ?? 0) + 1;
+        // §872i: per-frame state ring (visible/children/masks/pos) — locates
+        // the frame where the disc gets excluded from the render list.
+        try {
+            const g = (globalThis as any);
+            g.__mbDiscRing = g.__mbDiscRing ?? [];
+            if (g.__mbDiscRing.length < 40) {
+                const atmo = this.m_globeAtmo;
+                const mv: any = this.m_mapView;
+                g.__mbDiscRing.push(`#${g.__mbRGD} vis=${atmo?.visible} parent=${atmo?.parent === mv.scene ? 'scene' : atmo?.parent === this.m_discScene ? 'discScene' : atmo?.parent?.type ?? 'null'} kids=${mv.scene?.children?.length} dscKids=${this.m_discScene?.children?.length} camMask=${mv.camera?.layers?.mask} atmoMask=${atmo?.layers?.mask} pos=(${atmo?.position?.x.toFixed(0) ?? '?'},${atmo?.position?.y.toFixed(0) ?? '?'},${atmo?.position?.z.toFixed(0) ?? '?'})`);
+            }
+        } catch {}
         if (!this.m_discScene || !this.m_globeAtmo || !this.m_mapView) return;
         if ((this.m_mapView as any).projection?.type !== 1) return;
         const r = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
