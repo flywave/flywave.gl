@@ -8481,3 +8481,7 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 **§869. with-diff 深挖续：相机/尺寸定标疑点与解码层探针入口（2026-09-07）**：
 
 §868 后的续探（readPixels+逐根隐藏+re-render 二分已固化于 pole-caps 探针，extdbg 门控）新事实：① AfterRender 时 renderer.getClearAlpha()=0、ctxAlpha=true、hideAll+re-render → 缓冲透明——**排除 clear/主题/背景平面**，黑色确为 sceneRoot 内的瓦内容（背景注入 quad）；② mgl expected 的黑盘直径 ~175px ≈ zoom 0 的 globe 直径（163px+AA），而我方黑区铺满全帧——疑点二选一：(a) 我方 globe 直径按 flyZoom=1 渲染成 2×（326px，+1 约定在 globe 直径上的适用性需对拍 globe-default 的实测直径），(b) z0/z1 背景注入 quad 的球面几何越界（§868 判断）。**下一入口**：decode 侧探针——记录 decodeTile 的 tileKey + '__mb_background__' feature 的投影后 bbox（decodedbg 扩展），确认是"globe 直径 2×"还是"quad 越界"，二者修法不同（前者=相机约定，后者=tessellateForSphere 边界）。探针工具已入库（MBGlobePoleCaps bisect/px/state 字段）。
+
+**§869b. with-diff 续探：override 链路已通，bbox 探针待对接 DecodedTile 属性结构（2026-09-07 补）**：
+
+§869 的续探确认：①样式 clear override 已生效（sceneEnvironment.clearOverride={white,1}，br=8 全部走无雾分支）——alpha:true context + 透明空间议题已转为纯"黑 quad 几何"问题；②decode 侧 bbox 探针（injectBackground 后扫描 geometries 的 position bbox）未命中——DecodedTile 的 vertexAttributes 结构与 BufferAttribute 假设不符（getClearColor 也需 THREE.Color target 同源实例），需按真实属性结构（engine custom attribute）对接后重测。**入口不变**：确认背景注入 quad 的投影后 bbox 是否越球缘 → 是则修 tessellateForSphere/§779 边界，否则查 globe 直径定标。探针工具入库（bg869 字段，extdbg 门控）。

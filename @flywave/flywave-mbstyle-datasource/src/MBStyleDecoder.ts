@@ -1305,6 +1305,30 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         } catch {}
         injectBackground();
         const __result = emitter.getDecodedTile();
+        // §869: background-injection quad bbox forensics (with-diff 40k).
+        try {
+            const g869 = (globalThis as any);
+            g869.__mbBgBbox = g869.__mbBgBbox ?? [];
+            if (g869.__mbBgBbox.length < 24) {
+                for (const geo of (__result?.geometries ?? []).filter((g: any) => (g as any)?.technique === 0 || (g as any)?.technique === 'fill')) {
+                    // fill technique = index 0; keep all fills
+                    const pos = geo?.vertexAttributes?.find((a: any) => a.name === 'position');
+                    if (!pos) continue;
+                    const arr = (pos as any).array ?? (pos as any).values ?? (typeof (pos as any).getX === 'function'
+                        ? Array.from({ length: (pos as any).count * 3 }, (_: any, i: number) => (pos as any).getX(i) ?? (pos as any).getY?.(i) ?? 0)
+                        : null) ?? (pos as any);
+                    let minx = Infinity, miny = Infinity, minz = Infinity,
+                        maxx = -Infinity, maxy = -Infinity, maxz = -Infinity;
+                    for (let i = 0; i + 2 < arr.length; i += 3) {
+                        minx = Math.min(minx, arr[i]); maxx = Math.max(maxx, arr[i]);
+                        miny = Math.min(miny, arr[i + 1]); maxy = Math.max(maxy, arr[i + 1]);
+                        minz = Math.min(minz, arr[i + 2]); maxz = Math.max(maxz, arr[i + 2]);
+                    }
+                    g869.__mbBgBbox.push(`z${tileKey.level}/${tileKey.column}/${tileKey.row} x[${minx.toFixed(0)},${maxx.toFixed(0)}] y[${miny.toFixed(0)},${maxy.toFixed(0)}] z[${minz.toFixed(0)},${maxz.toFixed(0)}] n=${arr.length / 3}`);
+                }
+            }
+        } catch {}
+        const __result_unused = undefined;
         if ((globalThis as any).__mbDecodeDbg && (__result?.geometries?.length ?? 0) > 0 && !s_inChildMerge) {
             const g0 = __result.geometries[0];
             const p0 = g0.vertexAttributes?.find(a => a.name === 'position');
