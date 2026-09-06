@@ -8338,3 +8338,7 @@ discext=1（§829 盘阈值 0.98→1.009，覆盖 normDist 0.98-1.009 带）：p
 **§850c. 数据工程路线最终封存：CI 瓦集本地不存在（2026-09-06）**：
 
 全仓+全盘搜索确认：pitch 区域真实 z6 瓢（6/31-32/22-24.mvt）与 globe-terrain 区域 z9-12 DEM（9-358-2xx 等）在本地文件系统与 vendored mgl CI 瓦集（367 瓦，其中区域 8° 内 DEM 仅 z4/11/6 一块）中**均不存在**——expected.png 由 mapbox CI 的完整环境生成，其数据不在开源仓库内。外部公开数据源（AWS terrarium 等）即便获取并转码，也无法逐像素匹配 CI 的 mapbox 专有数据 → 指标收敛仍不可达。**定论**：pitch 缺失带（28,046，roundzoom=1 + overscale 瓦已含于此）与 terrain（66,009/65,880）两桶的进一步收敛被 **CI 专有数据不可得**硬性阻塞；解锁动作 = 向 mapbox 上游索取完整 fixture 瓦集（仓库外协调），或以 CI 环境重生成 expected。globe 专项在开源仓库环境内的全部可执行工作（代码/工具/数据合成/取证）已完成并入档（§827-§850c）。
+
+**§850d. roundzoom 干净 A/B 终判：零效果（run-to-run 噪声），门保持默认关（2026-09-06）**：
+
+同 HEAD 干净 A/B（def=默认 vs rzfull=roundzoom=1，各 122 夹具）：**除 poles 噪声带（south ±8k、north ±4k，已知 run-to-run 噪声）外全量逐位一致**——pitch 28,382 双侧相同（§846 的 28,046 为 tile 瞬态/测量噪声）。**定论**：roundzoom=1 对 globe 族零效果（z6 overscale 瓦渲染的内容与 z5 父瓦在同等覆盖下逐像素一致），门保持默认关为终态。pitch 缺失带 28,046/28,382 的 ±336 差异确认为噪声。本桶关闭；剩余收敛唯一路径 = mgl globeMatrix 渲染模型复刻（RenderDoc/Spector 级，§848b）。
