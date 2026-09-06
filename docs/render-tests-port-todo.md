@@ -8467,3 +8467,7 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 **§866. alpha 域引擎实验（clear 重申）证伪回退：确认主题管理器时序竞态与所有权问题（2026-09-06 续）**：
 
 §865 的续试：clear 状态改由 AfterRender 每帧重申（globalThis.__mbClear865 桥）。实测：with-diff-and-zoom-out 仍 40,152 分毫不变（竞态——主题管理器异步加载回调可晚于 AfterRender 再次覆盖 clear），且 raster 2,592→8,488 恶化（透明 clear 对 raster 类 expected 的空间区反而引入偏差——其 expected 空间实为不透明雾色）。已回退。**结论**：clear 所有权分散（样式层/主题层/引擎默认三方写入、异步竞态）+ 各夹具 expected 的空间 alpha 期望不一（透明/不透明雾色/白），正确解法在引擎架构层（MapViewThemeManager 与样式 clear 的所有权与时序约定 + 渲染器 alpha buffer 链路），非 patcher 层可安全落地。挂账为引擎级专项；解锁后可一并收敛 with-diff 40k、collision 3.5k 的 alpha 分量。
+
+**§867. alpha 域根因再进一步：readPixels 实证缓冲区本身不透明——全屏不透明后写者（引擎级，挂账）（2026-06-06 补）**：
+
+§866 后的续试（clearOverride 引擎字段 + alpha:true context + 透明 clear 全链路）仍无效后，**readPixels(5,5) 探针直接读 GL 缓冲**：RGBA=(0,0,0,255)——透明 clear 生效后仍有**全屏不透明写入者**在渲染后期覆盖缓冲（疑 flywave 默认主题的异步加载黑底或某不透明全屏对象；AtterRender 时点已晚于 clear）。排查中两次构建失配（mapview lib 未重建/test 文件回退卷走 alpha attrs）造成的假阴性已识别并规避（先 grep lib 产物再跑测）。实验回退至 §864 已提交态，readPixels 探针入库（pole-caps 探针扩展 px 字段，extdbg 门控）。**后续入口**：scene-census 逐 draw-call 排除该全屏写者（renderer.info + 逐对象 visible 二分），或 MSAA/离屏 blit 链路审计。解锁后 with-diff 40k 与 collision 的 alpha 分量可一并收敛。

@@ -194,6 +194,17 @@ export class MBGlobePoleCaps {
             ((globalThis as any).__mbPoleDumped =
                 (globalThis as any).__mbPoleDumped ?? new Set()).add(syncCount);
             try {
+                // §867: read back the actual buffer pixel — the frame has been
+                // rendered at this point (AfterRender), so this reveals whether
+                // the space alpha is really 0 in the GL buffer.
+                const gl865 = (mapView as any).renderer?.getContext?.();
+                if (gl865) {
+                    const px865 = new Uint8Array(4);
+                    gl865.readPixels(5, 5, 1, 1, gl865.RGBA, gl865.UNSIGNED_BYTE, px865);
+                    (globalThis as any).__mb865px = Array.from(px865);
+                }
+            } catch {}
+            try {
                 const fbD = (window as any).__karma__?.config?.args
                     ?.find?.((a: string) => a.startsWith('feedback-url='))
                     ?.slice('feedback-url='.length);
@@ -202,7 +213,7 @@ export class MBGlobePoleCaps {
                     headers: { 'content-type': 'application/json' },
                     body: JSON.stringify({
                         probe: 'pole-caps',
-                        log: [`desc=[${[...this.s_descriptors.keys()].join(',')}] mesh=[${[...this.s_meshes.keys()].join(',')}] reqs=[${((globalThis as any).__mbRasterReqs ?? []).join(',')}] poleRow=[${((globalThis as any).__mbPoleRowTrace ?? []).join(',')}] 865=[${((globalThis as any).__mb865 ?? []).join(' | ')}]`],
+                        log: [`desc=[${[...this.s_descriptors.keys()].join(',')}] mesh=[${[...this.s_meshes.keys()].join(',')}] reqs=[${((globalThis as any).__mbRasterReqs ?? []).join(',')}] poleRow=[${((globalThis as any).__mbPoleRowTrace ?? []).join(',')}] 865=[${((globalThis as any).__mb865 ?? []).join(' | ')}] px=[${((globalThis as any).__mb865px ?? []).join(',')}]`],
                     }),
                 }).catch(() => {});
             } catch {}
