@@ -8505,3 +8505,9 @@ decode 侧探针落地（injectBackground 后扫描 geometries bbox）：z1×4 +
 **§869d. with-diff 根因最终实锤：dc≠锚点（同一 tileKey 两个不同中心），修复需 assembler 级锚点统一（2026-09-07）**：
 
 decode 侧与渲染侧的同瓦对拍（tile 1/1/1 为例）：decodeInfo.center dc=(0, +R/2, −R/2)（方向 lng90/lat−45），渲染 mesh 世界位置 anchor=(R, −R/2, +R/2)（方向 lng−26.6/lat+24）；几何局部 bbox x[−R,R]。世界顶点 = anchor + local，local = absolute − dc → world = absolute + (anchor − dc)，偏移 (R, −R, R) ≈ 2R ✓ 与实测渲染顶点 x 达 2R 完全吻合。即：**同一 tileKey 下，解码中心（decoder 的 DecodeInfo/projectBox 链）与引擎放置锚点（Tile.updateBoundingBox 的 projectBox 链）给出不同中心**——两链的 geoBox 行约定/投影对象/OBB 中心定义存在分歧。**修复入口（assembler 级）**：在 tile 装配处以 decodeInfo.center 统一锚点（或在 DecodeInfo 构造处对齐两链的 projectBox 输入），一处对齐即收敛 with-diff 40k（背景 quad 回到球盘内 + 白色空间 + 黑盘 = expected）。探针（dc/anchor/世界顶点 min-max）已全部入库。globe-terrain 66k 维持仓库外协调挂账。
+
+**§871b. 注入门控落地 + 最终根因锁定：注入背景 mesh 的 position 错误（2026-09-07 续）**：
+
+注入门控（`m_emitBackgroundTiles = hasBg && (hasGeo||isGlobe) && hasTileSource`）落地：bg-only 无源样式（with-diff/unset-terrain）不再发射越界 quads。实测：with-diff 40,152→**24,024**（白空间 ✓ 匹配 reference 白合成）；poles south 13,626→**4,600（−66%）**、north 35,393→**13,185（−63%）**；unset-terrain 632→24,024（+23.4k 回归，见下）；globe-default/set-style 族/terrain 逐位不变。净收益约 −25k，保留。
+
+**最终根因锁定**：z0 注入背景 mesh 的 **position=(R,−R/2,R/2)（瓦角方向）而非正确的 dc=(0,0,0)**（z0 瓦解码中心=球心=原点）。mesh 被装配到瓦角方向 + 局部坐标（=绝对 ECEF，因 dc=0）→ 整体平移一个半径量级 → 铺满全帧。unset-terrain 同型（其 dc 亦为原点）→ 门控后白空间 vs 其全黑 expected → 24k。**修复入口（下轮首项）**：查 tile 装配器对注入背景 mesh 的 position 赋值（疑取特征首点/瓦角而非 decodeInfo.center），统一为 decodeInfo.center 后 with-diff/unset-terrain 两夹具预期同时收敛（背景 quad 正确画黑盘，空间白/透明各归其位）。

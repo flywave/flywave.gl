@@ -829,7 +829,12 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             // carrier there (no clearColor+quad alternative on the sphere).
             const isGlobe = (style as any).projection?.name === 'globe'
                 || (style as any).projection?.type === 'globe';
-            this.m_emitBackgroundTiles = hasBg && (hasGeo || isGlobe);
+            // §870b: the per-tile background injection requires a tile-carrying
+            // source — styles with NO sources (bg-only setStyle fixtures) have
+            // no tile anchoring context and their injected quads covered the
+            // whole viewport (the §829 background disc carries them instead).
+            const hasTileSource = Object.values(style.sources ?? {}).length > 0;
+            this.m_emitBackgroundTiles = hasBg && (hasGeo || isGlobe) && hasTileSource;
             // §514: mgl gates HD road-markup lines/symbols on the LIVE
             // terrain state (terrainEnabled populate option). The sampler
             // arrives asynchronously (applyTerrain after first decodes), so
@@ -953,7 +958,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             (src: any) => (src as any)?.type === 'geojson');
         const isGlobe = (style as any).projection?.name === 'globe'
             || (style as any).projection?.type === 'globe';
-        this.m_emitBackgroundTiles = hasBg && (hasGeo || isGlobe);
+        const hasTileSource = Object.values(style.sources ?? {}).length > 0;
+        this.m_emitBackgroundTiles = hasBg && (hasGeo || isGlobe) && hasTileSource;
         this.m_styleHasTerrain = !!(style as any).terrain;
         this.m_crossSourceCollisions =
             (style as any).metadata?.test?.crossSourceCollisions !== false;
