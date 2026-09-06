@@ -319,16 +319,16 @@ export class MBGlobePoleCaps {
                         // §872e: render-list audit — three's own draw list for
                         // the last frame (opaque/translucent arrays).
                         const rlAny: any = (mapView as any).renderer?.renderLists;
-                        const list = rlAny?.get?.((mapView as any).scene, 0);
-                        if (list) {
+                        for (let depth = 0; depth < 3; depth++) {
+                            const list = rlAny?.get?.((mapView as any).scene, depth);
+                            if (!list) { rows870.push(`RL d${depth}=none`); continue; }
                             const op = list.opaque ?? [];
                             const tr = list.translucent ?? [];
                             const discIn = atmo871 !== null &&
                                 (op.some((it: any) => it.object === atmo871) ||
-                                 tr.some((it: any) => it.object === atmo871));
-                            rows870.push(`RL opaque=${op.length} trans=${tr.length} discInList=${discIn} op0mat=${op[0]?.material?.type ?? '-'} op0obj=${op[0]?.object?.type ?? '-'}`);
-                        } else {
-                            rows870.push(`RL no-list-for-scene`);
+                                 tr.some((it: any) => it.object === atmo871) ||
+                                 (list.transmissive ?? []).some((it: any) => it.object === atmo871));
+                            rows870.push(`RL d${depth} opaque=${op.length} trans=${tr.length} discInList=${discIn} types=${[...op, ...tr].slice(0, 6).map((it: any) => it.object?.type ?? '?').join('/')}`);
                         }
                     } catch (e871) { rows870.push(`disc=ERR ${e871}`); }
                     (globalThis as any).__mb870rows = `n=${root870?.children?.length ?? 0} ` + rows870.slice(0, 12).join(' ; ');

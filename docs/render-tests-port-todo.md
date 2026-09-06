@@ -8585,3 +8585,7 @@ lookCam 历史（6 次 lookAtImpl，时序）：①初始 zoom23 放置（n=3.07
 **§873. forceDirectRender 门落地后仍 24,024×2——渲染管线级最终挂账（2026-09-07 终）**：
 
 forceDirectRender 门（MapRenderingManager.render 分支直绘强制）+ 盘专用 scene + 显式通道全部落地后复测：with-diff/unset-terrain 仍各 24,024（全白帧）；globe-default/set-style 族/poles 逐位不变（零回归）。已排除：composer 丢弃（直绘门无效=直绘路径本就在用）、geoCenter 贴地覆盖（§872j2 延迟）、材质编译（checkShaderErrors=true 无异常）、uniforms（黑/1/R/(0,0,−R) 全对）。**剩余唯一解释**：盘 mesh 虽被 three 处理（onBeforeRender fired）但其 draw 未产生像素（渲染列表 item 被过滤/程序绑定失败静默/深度混合状态异常）——需 three 渲染列表 opaque 数组逐 item 审计 + 程序绑定 dump（引擎渲染管线基础设施专项，非 patcher 层）。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得）。会话累计 50 次提交 §858-§873。
+
+**§873b. 探针周期收口：盘渲染状态数据齐备，24,024 挂账渲染管线专项终版（2026-09-07 终）**：
+
+多轮探针终态数据：盘 inScene(m_discScene 専用场景 ✓)/vis=true/uBg=黑/uBA=1/uGR=R/uGP=(0,0,−R)（相机距球心 R=贴地，zoom 0 放置链产物）；注入门控 hasTileSource 生效（ngeo=0，越界 quads 已消除）；renderer.info frame763=3calls/2tri（近空帧）。剩余 24,024×2（with-diff/unset-terrain）与相机贴地放置（§871e2）同源——相机归位 4.2R 后黑盘呈现、空间白 → 收敛。**修复入口（引擎相机放置链，下轮首项）**：trace setCameraGeolocationAndZoom→lookAtImpl→calculateDistanceFromZoomLevel 的实际生效距离（模型 2.1253e7 vs 实际 1R 的丢失环节；§869d 的 lookat 探针已证实 lookAtImpl 内部距离正确，丢失在放置后的帧间漂移或 RTE/逻辑相机双轨）。globe-terrain 66k 维持仓库外协调挂账（DEM fixture 瓦不可得，需向 mapbox 上游索取或 CI 重生成 expected）。
