@@ -8455,3 +8455,11 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 ④**实测**（Edge）：raster 52,996→**2,590（−95%）**、albers-globe-toggle 52,988→**2,590（−95%）**、default 16,679→**896（−95%）**；symbol 4,395→4,462（噪声级）；unset-terrain 632、with-diff-and-zoom-out 40,152 不变（后者为 zoom-22 背景域）。回归面：change-projection set-style/set-projection 6,099/6,147、globe-default 2,474、globe-transition 全族、models-on-globe-transition 全部逐位不变。tsc 绿。
 
 ⑤**剩余**：with-diff-and-zoom-out 40,152（zoom 22 背景域）、change-projection ~6k（圆尺寸细节）、symbol 4.4k。
+
+**§865. with-diff-and-zoom-out 40k 取证：expected 透明空间 + 我方捕获管线强制不透明（引擎级，挂账）（2026-09-06）**：
+
+①**残差本质**：expected = 不透明黑盘（24,056px）+ alpha 渐变 AA 边缘 + **alpha=0 的透明空间**（mgl clear (0,0,0,0)，RGB 黑）；我方 = 全帧不透明黑（alpha 255）。RGB 通道逐位一致（diff=0），全部 40,152 mismatch 来自 **alpha 通道**。
+
+②**已排除**：①clear 设置——探针实证渲染时 clearColor=0/clearAlpha=0/renderer.getClearAlpha()=0 全部生效；②渲染器 alpha buffer——MapView 支持 alpha 选项且 harness context attrs 加 alpha:true；③引擎背景平面——harness 本已 addBackgroundDatasource:false。三层杠杆下捕获 PNG 的 alpha 仍恒 255 → **捕获/渲染管线在某处强制不透明**（MapView 渲染循环 / MSAA 离屏缓冲 / DomImageUtils 采集链），需引擎级渲染器与采集管线改造（alpha buffer 全链路），超出 patcher 层。
+
+③**顺带发现**：globe-transition/collision expected 同为透明空间（现残差 3,522 部分即 alpha 域）；show-unsupported-layer expected 为不透明（已 0 PASS）——透明空间夹具家族随引擎 alpha 链路解锁后可一并收敛。实验已回退（含误加的重复属性），零残留。
