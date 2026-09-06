@@ -8551,3 +8551,7 @@ decode 侧与渲染侧的同瓦对拍（tile 1/1/1 为例）：decodeInfo.center
 **§872e. 渲染图证据：场景内容随时间卸载（frame253=15calls/26tri → frame763=3calls/2tri）——相机放置链专项确认（2026-09-07 终）**：
 
 renderer.info 探针（AfterRender 实时）: frame 253: calls=15/tri=26（有内容帧）；frame 763: **calls=3/tri=2**（近空帧）——瓦对象随帧被卸载（§871e2 的 n=0↔4 抖动同源），且**盘 uniforms 的 uGlobePos=(0,0,−R) 实证逻辑相机距球心仅 1R（贴地）**——mgl zoom 0 需 ~4.2R（globe 直径 163px）。即：**zoom 0 球面相机的放置距离缺陷（贴地）为第一根因**，瓦卸载抖动为第二（两者叠加造成 24,024 全白帧）。**修复入口（引擎相机放置链，下轮首项）**：trace setCameraGeolocationAndZoom→lookAtImpl→calculateDistanceFromZoomLevel 的中间量（flyZoom=1 时模型距离应 ~2.12e7≈3.3R，实际放置 1R——定位丢失环节；疑 lookAtImpl 的球面高度换算未含 pixelSpaceConversion 或被 minDistance/maxDistance 钳制）。修复后 with-diff/unset-terrain（相机归位 → 黑盘+白空间正确呈现）与低 zoom globe 族同时收敛。globe-terrain 维持仓库外协调挂账。
+
+**§872f. 重大勘误+定位收窄：相机放置链无缺陷（lookat 探针 distance=2.1253e7 ✓）——真凶为瓦对象挂载/卸载抖动（2026-09-07 终）**：
+
+lookat 探针（extdbg 已有）实测 with-diff 全流程：setZoom 0 → flyZoom 1 → **distance=2.1253e+7 ✓（=mgl 模型值 3.3R，放置链无缺陷）**；setStyle 投影切换 → distance=2.1253e+7 复用 ✓。此前 §871e2 的"相机贴地 1R"系把 RTE 相机相对坐标误读为绝对位置（物体 position.sub(cameraPosition) 相机相对放置），**勘误**。真凶收窄为：**瓦对象挂载/卸载抖动**——sceneRoot children n=0↔4 帧级翻转（VisibleTileSet/TileObjectsRenderer 生命周期），卸载帧 = 白帧（仅 clear），挂载帧 = 黑 quad 全帧（越球缘的注入 quads 仍在时）或黑盘+白空间（门控后）。**下轮首项（精确）**：①查瓦卸载触发者（VisibleTileSet 的 tile 移除条件/Tile.dispose 路径——为何 zoom 0 的 z0/z1 注入瓦被反复卸载）；②注入 quads 越球缘几何修复（§779 tessellateForSphere z0/z1 边界）。两者落地后 with-diff/unset-terrain 收敛。globe-terrain 维持仓库外协调挂账。
