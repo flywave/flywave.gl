@@ -8511,3 +8511,7 @@ decode 侧与渲染侧的同瓦对拍（tile 1/1/1 为例）：decodeInfo.center
 注入门控（`m_emitBackgroundTiles = hasBg && (hasGeo||isGlobe) && hasTileSource`）落地：bg-only 无源样式（with-diff/unset-terrain）不再发射越界 quads。实测：with-diff 40,152→**24,024**（白空间 ✓ 匹配 reference 白合成）；poles south 13,626→**4,600（−66%）**、north 35,393→**13,185（−63%）**；unset-terrain 632→24,024（+23.4k 回归，见下）；globe-default/set-style 族/terrain 逐位不变。净收益约 −25k，保留。
 
 **最终根因锁定**：z0 注入背景 mesh 的 **position=(R,−R/2,R/2)（瓦角方向）而非正确的 dc=(0,0,0)**（z0 瓦解码中心=球心=原点）。mesh 被装配到瓦角方向 + 局部坐标（=绝对 ECEF，因 dc=0）→ 整体平移一个半径量级 → 铺满全帧。unset-terrain 同型（其 dc 亦为原点）→ 门控后白空间 vs 其全黑 expected → 24k。**修复入口（下轮首项）**：查 tile 装配器对注入背景 mesh 的 position 赋值（疑取特征首点/瓦角而非 decodeInfo.center），统一为 decodeInfo.center 后 with-diff/unset-terrain 两夹具预期同时收敛（背景 quad 正确画黑盘，空间白/透明各归其位）。
+
+**§871c. with-diff/unset-terrain 剩余 24k 定性：§829 背景盘未渲染（黑盘缺失）（2026-09-07 续）**：
+
+注入门控后 with-diff/unset-terrain 帧全白——空间白 ✓（与 reference 白合成一致），剩余 24,024 = **黑盘区域缺失**（expected 的黑色不透明圆盘 ~24k px，即 mgl 画在 globe 上的 background #000）。DOMEDBG=2 帧（盘调试色红/蓝）也全黑 → **§829 背景盘（applyGlobeDiscBackground 的 m_globeAtmo）对 bg-only 无源样式根本未渲染**。注入门控（hasTileSource）本身正确——它暴露了盘未渲染这一既有缺陷（此前注入 quads 的不透明黑恰好覆盖了盘缺失）。**入口（下轮首项）**：trace setGlobeBackground→applyGlobeDiscBackground 对 bg-only 无源样式的调用链（m_globeFogActive/projection 门控时序、m_globeAtmo 所在 scene 的渲染成员资格），让盘正确渲染黑背景 → 两夹具预期同时收敛至 AA 级。globe-terrain 66k 维持仓库外协调挂账。
