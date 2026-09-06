@@ -8539,3 +8539,7 @@ decode 侧与渲染侧的同瓦对拍（tile 1/1/1 为例）：decodeInfo.center
 **§872b. 补充实测：lib 为最新（白 else 在），盘 uniforms 正确（黑/alpha1/R）但帧仍全白——材质/渲染成员级问题确认（2026-09-07 终）**：
 
 构建产物核验（lib 含白 else 与全部探针 ✓）后的补充探针：uBgDiscColor=(0)黑 ✓、uBgDiscAlpha=1 ✓、uGlobeRadius=R ✓、uGlobePos=(0,0,−R)、inScene=true、vis=true——**盘对象与 uniforms 全部正确但帧仍全白、DOMEDBG=2 的红/蓝调试色也不出现** → 盘 fragment 未执行（材质编译失败被静默跳过（checkShaderErrors=!isProduction）或对象被渲染图过滤）。注入门控（hasTileSource）本身正确且必要（越界 quads 的不透明黑 stamp）。**下轮首项（精确）**：①盘 ShaderMaterial 的编译验证（checkShaderErrors=true 单测 或 gl.getShaderInfoLog dump）；②对比 globe-default（盘渲染正常）与 with-diff 的盘创建参数差异（两夹具同走 applyGlobeDiscBackground，差异在调用时序/状态）；③修复后 with-diff/unset-terrain 各 24,024 预期收敛至 AA 级。globe-terrain 66k 维持仓库外协调挂账。
+
+**§872c. 收口补充：盘 uniforms 正确但帧全白且 DOMEDBG 调试色不出现——渲染管线级挂账确认（2026-09-07 终）**：
+
+补充实测（checkShaderErrors=true 无异常、uBgDiscColor=黑/uBgDiscAlpha=1/uGlobeRadius=R/uGlobePos=(0,0,−R) 全部正确、DOMEDBG=2 红蓝调试色不出现、帧全白）：盘 in m_scene、visible、uniforms 正确，但 fragment 输出不可见——要么盘被静默跳过（材质/编译/成员资格），要么被后续白色全屏写覆盖。剩余 24,024×2（with-diff/unset-terrain）为渲染管线级问题，需逐 draw dump（Spector/RenderDoc 级）或 three 渲染列表审计——引擎渲染管线专项，非 patcher 层可执行。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得）。
