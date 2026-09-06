@@ -8501,3 +8501,7 @@ decode 侧探针落地（injectBackground 后扫描 geometries bbox）：z1×4 +
 **§870b. with-diff 根因实锤：渲染网格顶点达 2R——瓦锚点与解码中心错位（2026-09-07）**：
 
 渲染网格（sceneRoot 内 z1×4，n=685 顶点/瓦）的世界顶点 min/max：x ∈ [7, **12,756,281=2R**]，y/z ±6.35e6——**顶点达两倍地球半径**，而 decode 输出的同一批几何 bbox 在球面内（≤R，§869c）。即：解码几何是瓦心相对坐标（绝对=解码中心+局部），但渲染 mesh 的锚点（position）放在了瓦角/非解码中心位置 → 世界坐标 = 锚点 + 以解码中心为原点的局部坐标 → 整体偏移约一个半径 → 背景 quad 被推出球盘铺满全帧（with-diff 黑帧）。**根因=背景注入瓦的锚点与 decodeInfo.center 不一致**（疑 §868 的 DelegatingDataProvider {mb:1} 空标记路径下 tile 对象锚点取 geoBox 中心而注入几何以 decode 中心为原点，或投影切换后锚点未随 decode 中心更新）。**修复入口**：统一注入瓦的锚点=decodeInfo.center（或局部坐标改以锚点为原点），一处对齐即可收敛 with-diff 40k。探针（870rows 世界顶点 min/max）入库。
+
+**§869d. with-diff 根因最终实锤：dc≠锚点（同一 tileKey 两个不同中心），修复需 assembler 级锚点统一（2026-09-07）**：
+
+decode 侧与渲染侧的同瓦对拍（tile 1/1/1 为例）：decodeInfo.center dc=(0, +R/2, −R/2)（方向 lng90/lat−45），渲染 mesh 世界位置 anchor=(R, −R/2, +R/2)（方向 lng−26.6/lat+24）；几何局部 bbox x[−R,R]。世界顶点 = anchor + local，local = absolute − dc → world = absolute + (anchor − dc)，偏移 (R, −R, R) ≈ 2R ✓ 与实测渲染顶点 x 达 2R 完全吻合。即：**同一 tileKey 下，解码中心（decoder 的 DecodeInfo/projectBox 链）与引擎放置锚点（Tile.updateBoundingBox 的 projectBox 链）给出不同中心**——两链的 geoBox 行约定/投影对象/OBB 中心定义存在分歧。**修复入口（assembler 级）**：在 tile 装配处以 decodeInfo.center 统一锚点（或在 DecodeInfo 构造处对齐两链的 projectBox 输入），一处对齐即收敛 with-diff 40k（背景 quad 回到球盘内 + 白色空间 + 黑盘 = expected）。探针（dc/anchor/世界顶点 min-max）已全部入库。globe-terrain 66k 维持仓库外协调挂账。

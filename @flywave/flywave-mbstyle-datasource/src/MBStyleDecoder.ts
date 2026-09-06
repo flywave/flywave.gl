@@ -1325,7 +1325,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                         miny = Math.min(miny, arr[i + 1]); maxy = Math.max(maxy, arr[i + 1]);
                         minz = Math.min(minz, arr[i + 2]); maxz = Math.max(maxz, arr[i + 2]);
                     }
-                    g869.__mbBgBbox.push(`t=${(geo as any).type} z${tileKey.level}/${tileKey.column}/${tileKey.row} x[${minx.toFixed(0)},${maxx.toFixed(0)}] y[${miny.toFixed(0)},${maxy.toFixed(0)}] z[${minz.toFixed(0)},${maxz.toFixed(0)}] n=${arr.length / 3}`);
+                    const c869 = decodeInfo?.center;
+                    g869.__mbBgBbox.push(`t=${(geo as any).type} z${tileKey.level}/${tileKey.column}/${tileKey.row} x[${minx.toFixed(0)},${maxx.toFixed(0)}] y[${miny.toFixed(0)},${maxy.toFixed(0)}] z[${minz.toFixed(0)},${maxz.toFixed(0)}] dc=(${c869 ? [c869.x, c869.y, c869.z].map((v: number) => v.toFixed(0)).join(',') : '?'}) n=${arr.length / 3}`);
                 }
             }
         } catch {}
