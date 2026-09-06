@@ -8617,3 +8617,7 @@ place 探针（getCameraPositionFromTargetCoordinates 加法后）实测：**d=2
 **§872j5. 放置链矛盾终版：place 输出正确但同 lookAtImpl 内 lookCam 读地表——需交互式断点调试器（karma 黑盒不可达）（2026-09-07 终）**：
 
 同帧对拍矛盾终版：place 探针（getCameraPositionFromTargetCoordinates 加法后）读 out=(−27631124,0,0) ✓ 正确；同 lookAtImpl 内稍后的 lookCam 探针（updateMatrixWorld 后）读 camera.position=(−R,0,0)=地表——**两探针之间无任何相机写操作**（仅 updateMatrixWorld+探针自身）但读数不同。可能性：①两探针触达不同的 camera 实例/矩阵状态（matrixWorld vs position 的更新时序）；②place 探针的 result 参数（camera.position 引用）与 lookCam 读取的 camera.position 之间的写时序（three 内部 matrixWorld 传播）；③place 探针记录的是前一次调用的残留（环形缓冲 24 条内多调用交错）。**需交互式断点调试器**（getCameraPositionFromTargetCoordinates 单步入参/中间量核对）——karma 黑盒 harness 无法单步，引擎相机放置链专项挂账（探针三点齐备：place/lookat/lookCam 全部入库）。with-diff/unset-terrain 各 24,024 维持该专项下收敛。globe-terrain 66k 维持仓库外协调挂账。
+
+**§873c3. 探针周期绝对边界确认：盘被渲染（fired ✓/in discScene ✓/uniforms 黑 ✓）但输出全白——three 渲染内部专项终版挂账（2026-09-07 终）**：
+
+多轮探针（render-list 审计/renderGraph dump/盘 uniforms 实时/相机位置）数据闭环：盘 mesh 在 m_discScene ✓ visible ✓ renderGlobeDisc 每帧调用 ✓ onBeforeRender fired ✓ uniforms 黑/alpha1/R ✓ uGlobePos=(0,0,−R)（zoom 0 贴地相机的正确 view-space 中心）——fragment 应全帧内分支（黑）→ 帧全白。所有可远程探针已穷尽；剩余需 three 渲染内部专项（WebGLRenderer renderObject/program 绑定/Uniform 上传的逐帧 dump——karma 黑盒不可达）。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得）。with-diff/unset-terrain 24,024×2 维持渲染管线专项。
