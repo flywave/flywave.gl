@@ -265,11 +265,43 @@ export class MBHeatmapRenderer {
                     camera.position.x - k.x, camera.position.y - k.y, camera.position.z - k.z);
                 const eps = Math.max(camDist * 0.02, 1e-6);
                 const sc = this.m_rtScale;
+                // §861: on the globe, probe along the LOCAL GROUND directions
+                // (east/north at the kernel's ECEF position), not the world
+                // x/y axes. Globe world axes are tilted relative to the ground
+                // plane (at lat 20 the +x axis carries a sin(20°)=0.34
+                // up-component) and at grazing pitch the up projection
+                // dominates — the measured Jacobian went near-circular,
+                // killing the pitch foreshortening (blobs rendered round
+                // instead of squashed). On the mercator plane the world axes
+                // ARE the ground directions — keep the original probes there.
+                const isSpherical =
+                    Number((this.m_mapView as any).projection?.type) === 1;
+                // Ground-frame probes only matter when the view is oblique
+                // enough for the axis tilt to contaminate the Jacobian
+                // (pitch>45° or the globe→mercator transition) — pitch-0
+                // fixtures keep the empirically tuned world-axis probes.
+                const mvTilt = Number((this.m_mapView as any).tilt ?? 0);
+                const useGroundFrame = isSpherical &&
+                    (blendPhase > 0 || mvTilt > Math.PI / 4);
+                let east = [1, 0, 0];
+                let north = [0, 1, 0];
+                if (useGroundFrame) {
+                    const rho = Math.hypot(k.x, k.y) || 1;
+                    east = [-k.y / rho, k.x / rho, 0];
+                    const exLen = Math.hypot(k.x, k.y, k.z) || 1;
+                    // north = p̂ × east (unit, tangent, points to the north)
+                    const px_ = k.x / exLen, py_ = k.y / exLen, pz_ = k.z / exLen;
+                    north = [
+                        -pz_ * east[1],
+                        pz_ * east[0],
+                        px_ * east[1] - py_ * east[0],
+                    ];
+                }
                 const basisAt = (cx: number, cy: number, cbase: [number, number]): {
                     bx: number[]; by: number[];
                 } => {
-                    const axPt = projectToPx(cx + eps, cy, k.z);
-                    const ayPt = projectToPx(cx, cy + eps, k.z);
+                    const axPt = projectToPx(cx + east[0] * eps, cy + east[1] * eps, k.z + east[2] * eps);
+                    const ayPt = projectToPx(cx + north[0] * eps, cy + north[1] * eps, k.z + north[2] * eps);
                     if (!axPt || !ayPt) return { bx: [half * sc, 0], by: [0, half * sc] };
                     const exv = [axPt[0] - cbase[0], axPt[1] - cbase[1]];
                     const eyv = [ayPt[0] - cbase[0], ayPt[1] - cbase[1]];
@@ -298,10 +330,10 @@ export class MBHeatmapRenderer {
                     const b = basisAt(k.x - worldRepeatX, k.y, west);
                     emitKernel(west[0], west[1], b.bx, b.by);
                 }
-                const east = projectToPx(k.x + worldRepeatX, k.y, k.z);
-                if (east) {
-                    const b = basisAt(k.x + worldRepeatX, k.y, east);
-                    emitKernel(east[0], east[1], b.bx, b.by);
+                const eastRep = projectToPx(k.x + worldRepeatX, k.y, k.z);
+                if (eastRep) {
+                    const b = basisAt(k.x + worldRepeatX, k.y, eastRep);
+                    emitKernel(eastRep[0], eastRep[1], b.bx, b.by);
                 }
             }
             if (g.px.length > maxCount) maxCount = g.px.length;

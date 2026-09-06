@@ -8409,3 +8409,17 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 ⑥**回测**：chunked globe+fog+imports 129 例，对 §858 参考仅 fog/disable +5.4k（HEAD 基线 A/B：39,657→41,849→45,036 跨次波动，噪声带内）与 imports/fog-terrain +310（terrain 域噪声），**零真实回归**。
 
 ⑦**剩余**：near-transition 35,639 主体=热力块形态/位置残差（单 pass 屏幕空间 kernel 与 mgl 瓦空间 kernel 的密度场差异 + pitch-84 椭圆近似，heatmap-radius/pitch30 13k 同谱系）与地面浮雕细节；二阶段密度→ramp 管线（design-heatmap-two-pass.md）仍为正解。globe-terrain 66,009/65,880 维持数据受限挂账（§850c/§858①）。
+
+**§861. heatmap 密度场椭圆基修正（局部地面 Jacobian）：near-transition 35,639→30,728，default-zoomed −32%（2026-09-06）**：
+
+§860⑦ 剩余 35,639 的逐像素分析：天区（y<192）与远地（y>352）**已零 mismatch**，全部残差集中在热力块带。定量对拍发现我方 kernel 椭圆**无 pitch 纵向压缩**（块 85px 近圆，expected 同位置块仅数 px 高的横向带——pitch 84 掠射视角下地面纵向压缩 ~10×）。
+
+①**根因**：kernel 屏幕椭圆基的 Jacobian 探针沿 **ECEF 世界 x/y 轴**偏移采样。球面上世界轴相对地面倾斜（lat20 处 +x 轴含 sin20°=0.34 的 up 分量），掠射视角下 up 分量的屏幕投影主导 → 测得 lx≈ly → 椭圆退化近圆。mercator 平面上世界轴=地面轴，故旧实现恰好在 mercator 夹具上正确（全部 0–39 PASS 的调定由此而来）。
+
+②**修复**：球面投影时改沿 kernel 位置的**局部地面方向**（east=ẑ×p̂ 归一、north=p̂×east）做偏移探测；投影门控 `spherical && (blendPhase>0 || tilt>45°)`——pitch-0 球面夹具（horizontal/vertical/near-horizon）保持已调定的世界轴探针（实测 ENU 反而回归 near-horizon +6k，门控后逐位恢复）；mercator 完全不受影响（heatmap-* 20 例 0–39 复测通过）。
+
+③**实测**（Edge）：near-transition 35,639→**30,728**（−14%）、default-zoomed 19,822→**13,543**（−32%）、set-mercator-projection/set-again 维持 **0 PASS**；default/horizontal/near-horizon/vertical 逐位不变（门控外）。globe-circle/near-transition 4,571、at-transition-zoom 0、pitch 28,382、with-symbols 6,282 复测稳定；powerplants-fog-globe-transition 134,378→65,272（其 heatmap 层同步受益）。tsc 绿。
+
+④**globe-terrain 挂账条件复核**：所需 CI 专有 DEM（区域 z9-12）本地 vendored 瓦集与 mapbox-gl-js 公开仓库（raw.githubusercontent 实测 404）均不存在；mapbox 公共 terrain 瓦源（api.mapbox.com，需 token）与 CI fixture 瓦内容不同源，逐像素不可对齐——§850c 结论维持，**解锁动作仍为仓库外协调**（向 mapbox 上游索取完整 fixture 瓦集或以 CI 环境重生成 expected），本环境内无可执行工作。
+
+⑤**剩余**：near-transition 30,728 主体=热力块密度场幅度/位置细节（单 kernel 密度峰值、5 点间距的屏幕投影与 expected 的残余差），已接近屏幕空间两 pass 近似的收敛边界；再向下需逐项与 mgl heatmap FBO 尺寸（0.25x RTT 上采样）对拍。globe-heatmap 其余夹具 0–13.5k。
