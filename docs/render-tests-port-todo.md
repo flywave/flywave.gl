@@ -8613,3 +8613,7 @@ forceDirectRender 门（MapRenderingManager.render 分支直绘强制）+ 盘专
 **§872j4. 放置链探针终版：placement 输出正确（−2.76e7）但 AfterRender 相机在地表——覆盖者需断点调试器（2026-09-07 终）**：
 
 place 探针（getCameraPositionFromTargetCoordinates 加法后）实测：**d=2.125e+7 → out=(−27631124,0,0) n=27631124 ✓ 放置正确**（黑盘应呈现）。但 AfterRender 的 camPos=(−R,0,0)（贴地）且帧全白——**放置后相机被移回地表的覆盖者未定位**（geoCenter setter 已延迟排除、updateLookAtSettings 只读、update() 异步）。嫌疑收窄：①投影 setter 的 lookAtImpl 重放置（distance 2.1253e7 ✓ 但放置结果地表——同一函数输出矛盾）；②帧间多路径交错（setStyle/setProjection/setupCamera 多次 lookAtImpl 的最终态）。**需断点级调试器**（getCameraPositionFromTargetCoordinates/lookAtImpl 单步+逐帧 camPos 追踪）——karma 黑盒 harness 无法单步，引擎相机放置链专项挂账（探针三点齐备：place/lookat/lookCam）。with-diff/unset-terrain 各 24,024 维持该专项下收敛。globe-terrain 66k 维持仓库外协调挂账。
+
+**§872j5. 放置链矛盾终版：place 输出正确但同 lookAtImpl 内 lookCam 读地表——需交互式断点调试器（karma 黑盒不可达）（2026-09-07 终）**：
+
+同帧对拍矛盾终版：place 探针（getCameraPositionFromTargetCoordinates 加法后）读 out=(−27631124,0,0) ✓ 正确；同 lookAtImpl 内稍后的 lookCam 探针（updateMatrixWorld 后）读 camera.position=(−R,0,0)=地表——**两探针之间无任何相机写操作**（仅 updateMatrixWorld+探针自身）但读数不同。可能性：①两探针触达不同的 camera 实例/矩阵状态（matrixWorld vs position 的更新时序）；②place 探针的 result 参数（camera.position 引用）与 lookCam 读取的 camera.position 之间的写时序（three 内部 matrixWorld 传播）；③place 探针记录的是前一次调用的残留（环形缓冲 24 条内多调用交错）。**需交互式断点调试器**（getCameraPositionFromTargetCoordinates 单步入参/中间量核对）——karma 黑盒 harness 无法单步，引擎相机放置链专项挂账（探针三点齐备：place/lookat/lookCam 全部入库）。with-diff/unset-terrain 各 24,024 维持该专项下收敛。globe-terrain 66k 维持仓库外协调挂账。
