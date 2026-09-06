@@ -2419,7 +2419,12 @@ export class MapView extends EventDispatcher {
         yawDeg: number = 0,
         pitchDeg: number = 0
     ): void {
-        this.geoCenter = geoPos;
+        // §872j2: do NOT stamp the camera at the target's surface point here
+        // (the geoCenter setter projects the surface geo). The lookAtImpl
+        // placement below re-places the camera at the model distance — the
+        // intermediate surface stamp raced ahead of it in the setStyle chain
+        // (with-diff-and-zoom-out: the camera was left ON the surface, the
+        // black disc missing, 24k alpha mismatches).
         let limitedPitch = Math.min(MapViewUtils.MAX_TILT_DEG, pitchDeg);
         if (this.projection.type === ProjectionType.Spherical) {
             // §776: in mgl-globe camera mode the curvature clamp must not
