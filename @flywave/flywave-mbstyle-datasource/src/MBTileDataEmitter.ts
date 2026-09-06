@@ -253,6 +253,14 @@ function subdivideInto(
 // §855: globe→mercator transition phase (smoothstep(5,6,styleZoom)).
 // 0 = pure globe, 1 = pure mercator. Set by the datasource per style.
 let g_mercTransition = 0;
+// §859: inverse of the mgl globeMatrix analog — maps mercator world PIXELS
+// (x = (lng/360+0.5)·worldSize, y = mercatorYfromLat·worldSize, z = 0) to
+// UNIT ECEF. Built by setMercTransitionFrame from the style camera, mirroring
+// mgl calculateGlobePosMatrix (translate to the center mercator point, one
+// globe radius below the plane; scale to pixels; Rx(−lat)·Ry(−lng)).
+let g_mercInvGlobe: THREE.Matrix4 | null = null;
+let g_mercWorldSize = 0;
+const tmpMercV3 = new THREE.Vector3();
 export function setMercTransitionPhase(phase: number): void {
     g_mercTransition = Math.min(1, Math.max(0, phase));
     // §858: bridged to the mapview coverage traversal (FrustumIntersection)
@@ -263,6 +271,48 @@ export function setMercTransitionPhase(phase: number): void {
     // direction), so mirror the phase through the harness global (same
     // pattern as __mbYawAB).
     (globalThis as any).__mbMercTransitionPhase = g_mercTransition;
+}
+
+/**
+ * §859: install the mgl-globeMatrix-analog frame used by the transition
+ * vertex blending. Must be called (from the datasource's camera application)
+ * whenever the transition phase is non-zero; without a frame the blend falls
+ * back to the mgl semantics only if __mbMercInvGlobe is set externally.
+ * Also bridged to mapview's FrustumIntersection (coverage AABB blending).
+ */
+export function setMercTransitionFrame(
+    centerLng: number, centerLat: number, styleZoom: number,
+): void {
+    const worldSize = 512 * Math.pow(2, styleZoom);
+    const Rpx = worldSize / (2 * Math.PI);
+    const lngRad = (centerLng * Math.PI) / 180;
+    const latRad = (centerLat * Math.PI) / 180;
+    const mercX = (centerLng / 360 + 0.5) * worldSize;
+    const mercY = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2
+        * worldSize;
+    // mgl semantics (verified numerically against calculateGlobePosMatrix +
+    // csLatLngToECEF): the globeMatrix maps the sphere point at the map
+    // center exactly onto the mercator-plane tangent point (world z = 0) —
+    // the plane grazes the globe at the viewed region, so blended geometry
+    // stays continuous and in view. Our ECEF convention is Z-north (mgl's is
+    // Y-south/Z-meridian), so the rotation is built from the local ENU frame
+    // at the center instead of Rx·Ry: A·(1,0,0)=east, A·(0,1,0)=−north,
+    // A·(0,0,1)=up.
+    const cl = Math.cos(latRad), sl = Math.sin(latRad);
+    const cLo = Math.cos(lngRad), sLo = Math.sin(lngRad);
+    const east = new THREE.Vector3(-sLo, cLo, 0);
+    const north = new THREE.Vector3(-sl * cLo, -sl * sLo, cl);
+    const up = new THREE.Vector3(cl * cLo, cl * sLo, sl);
+    const a = new THREE.Matrix4().makeBasis(east, north.clone().negate(), up);
+    // makeBasis columns map globe-aligned axes → ECEF; G needs ECEF →
+    // globe-aligned, i.e. the (orthonormal) transpose.
+    const g = new THREE.Matrix4().makeTranslation(mercX, mercY, -Rpx)
+        .multiply(new THREE.Matrix4().makeScale(Rpx, Rpx, Rpx))
+        .multiply(a.clone().transpose());
+    g_mercInvGlobe = g.invert();
+    g_mercWorldSize = worldSize;
+    (globalThis as any).__mbMercInvGlobe = g_mercInvGlobe.elements;
+    (globalThis as any).__mbMercWorldSize = worldSize;
 }
 
 function tile2world(
@@ -299,12 +349,45 @@ function tile2world(
         // the flat mercator plane (globe_util.ts interpolateVec3). This makes
         // far tiles extend past the globe limb (pitch 缺失带 y331-375) and
         // the background cover the full viewport (heatmap 228k).
-        if (g_mercTransition > 0) {
-            const mx = ((left + px) / scale) * R;
-            const my = ((top + py) / scale) * R;
-            sx = sx * (1 - g_mercTransition) + mx * g_mercTransition;
-            sy = sy * (1 - g_mercTransition) + my * g_mercTransition;
-            sz = sz * (1 - g_mercTransition);
+        if (g_mercTransition > 0 && g_mercInvGlobe) {
+            // §859: the mercator corner must be expressed in the SAME frame
+            // as the sphere corner before interpolating. mgl maps the
+            // mercator-plane corner through inv(globeMatrix) into ECEF
+            // (transitionTileAABBinECEF / interpolateVec3): the plane cuts
+            // through the globe, so blended geometry stays continuous and in
+            // view. Blending raw mercator meters (§855 first cut) threw the
+            // whole tile ~1.2e7 units off-screen (geojson circles/heatmap
+            // kernels invisible at z5.6 — globe-circle/near-transition).
+            const Rlen = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1;
+            const mxPx = ((left + px) / scale) * g_mercWorldSize;
+            // §779: top+py is the MIRRORED row — use the corrected latitude
+            // (the same one the sphere projection above consumed).
+            const latRad = (lat * Math.PI) / 180;
+            const myPx = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad))
+                / Math.PI) / 2 * g_mercWorldSize;
+            tmpMercV3.set(mxPx, myPx, 0).applyMatrix4(g_mercInvGlobe);
+            sx = (sx / Rlen) * (1 - g_mercTransition) + tmpMercV3.x * g_mercTransition;
+            sy = (sy / Rlen) * (1 - g_mercTransition) + tmpMercV3.y * g_mercTransition;
+            sz = (sz / Rlen) * (1 - g_mercTransition) + tmpMercV3.z * g_mercTransition;
+            sx *= Rlen; sy *= Rlen; sz *= Rlen;
+            // §859 one-shot probe: first blended vertex + decode center.
+            if ((globalThis as any).__mbExtRouteDbg &&
+                !(globalThis as any).__mbBlendDumped) {
+                (globalThis as any).__mbBlendDumped = true;
+                try {
+                    const fbD = (window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith('feedback-url='))
+                        ?.slice('feedback-url='.length);
+                    if (fbD) fetch(`${fbD}/mb-probe-dump`, {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({
+                            probe: 'blend-geom',
+                            log: [`phase=${g_mercTransition} worldSize=${g_mercWorldSize} v=[${sx.toFixed(0)},${sy.toFixed(0)},${sz.toFixed(0)}] mercUnit=[${tmpMercV3.x.toFixed(4)},${tmpMercV3.y.toFixed(4)},${tmpMercV3.z.toFixed(4)}] center=[${decodeInfo.center.x.toFixed(0)},${decodeInfo.center.y.toFixed(0)},${decodeInfo.center.z.toFixed(0)}]`],
+                        }),
+                    }).catch(() => {});
+                } catch {}
+            }
         }
         target.x = sx;
         target.y = sy;

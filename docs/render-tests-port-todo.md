@@ -8391,3 +8391,21 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 ⑤**全量回测**（chunked runner，globe+fog+imports+transition+zero-height+poles+heatmap+camera 族，129+60 例）：仅 globe-fill-extrusion/pattern 41,447→47,666 疑似回归，**stash+重建 lib 的 HEAD 基线 A/B 实测同为 47,664**——环境漂移非本次改动，零回归成立。其余全部改善或持平：zero-height-clipping simple/complex/angle-limit 141,504→19,721 / 105,128→11,693 / 81,444→4,306；fill-extrusion default/opacity/symbol-z-offset-map-aligned(±labeling)/multipolygon-subdivision(×2)/emissive-strength(×2) 75,593→23,841 / 81,448→25,175 / 131,301→51,195 / 130,208→41,625 / 109,250→9,465×2 / 43,816→35,165×2；at-transition-zoom **0（PASS）**、collision 3,522、show-unsupported-layer 0；background-pitch-alignment/viewport-alignment-globe 54,512→1,629、pattern 102,005→92,120；globe-transition/pitch 28,382 持平（§854 最优保持）；globe-terrain 66,009 / imports 65,880 分毫不变。注：lib 为 gitignore 本地产物，重建同时刷新了其它包陈旧 lib，zero-height/fill-extrusion 族的大额收益可能部分来自 src/lib 一致性（§855 顶点混合的全量生效），已在 ④④ 记录归因保留。
 
 ⑥**剩余（下轮入口）**：过渡带 geojson 内容（circle/heatmap kernel）在 z5.6 全部不可见（dome dbg 帧与正常帧均无圆形/热力块，expected 4-5 个），near-transition 剩余 36,417 主体即此+热力块形态。next：过渡带上 geojson 瓦内容管线取证（瓦加载/顶点混合/剔除链）。
+
+**§860. 过渡带顶点混合帧修正（mgl 切点语义）+ heatmap 合成预乘修复：geojson 内容全链路打通（2026-09-06）**：
+
+§858⑥ 立案的"过渡带 z5.6 geojson 内容（circle/heatmap kernel）不可见"取证与修复：
+
+①**根因一：混合帧错误（§855 首版实现）**。mgl 的过渡顶点插值（transitionTileAABBinECEF/interpolateVec3）中 mercator 角点先经 **inv(globeMatrix)** 变回 ECEF 再与球面角点 lerp——数值验证（csLatLngToECEF Y-向南/Z-过子午线约定 + calculateGlobePosMatrix）证实其语义= mercator 平面**切地球于地图中心点**，混合几何保持连续且在视。§855 首版直接在 ECEF 轴上混原始 mercator 米（两帧原点/轴向皆不同）→ 整瓦内容被甩至 ~1.2e7 距离外出屏（mbcam 探针：相机 ECEF(6.25e6,0,1.66e6)，混合瓦 (2.1e6,1.1e7,0.8e6)）。这是 z5.6 全部 geojson 内容（含瓦 background quad）不可见的根因。修：`setMercTransitionFrame(centerLng,centerLat,styleZoom)` 构造我们 ECEF（Z-向北）约定下的等价切点帧 `G'=T(mercX,mercY,−Rpx)·S(Rpx)·[east|−n|u]ᵀ`（makeBasis 列→行变换需转置），tile2world 混合改为单位球空间 lerp 后缩放回米；globalThis.__mbMercInvGlobe 桥给 mapview 覆盖遍历（§858 的混合盒同步换帧）。
+
+②**根因二：§779 镜像行**。tile2world 的 mercator 行 `top+py` 是 y-UP 镜像行（§779 已为球面投影修正过纬度），myPx 用镜像行 → mercator 角点落到南半球对应位置（探针 mercUnit y=−0.017→本应 +0.342）。修：myPx 改用修正后纬度的 mercatorY。修后探针 mercUnit=(0.9397,−0.0174,0.3420) 精确= (lat20,lng−1) 单位球点 ✓。
+
+③**根因三：heatmap 合成 pass 预乘 bug**。ramp 纹理为 straight-alpha（默认 ramp 起点 rgba(33,102,172,0)），而合成混合按预乘 (ONE, ONE_MINUS_SRC_ALPHA) 处理 → 零密度区把 ramp rgb 全量叠加（全帧蓝罩：地面 (128,128,255)）。内容位置修对后该 bug 即暴露。修：shader 输出 `rgb·a·opacity`。
+
+④**过渡相 kernel 瓦尺度**：mgl u_extrude_scale（globe 分支 globePixelsToTileUnits×pixelsPerMercatorPixel）携带 2^(zoom−coveringZoom) 因子（z5.6→0.75）。仅 phase>0 时应用（phase=0 夹具保持经验调定的全 px 尺度，应用全局尺度会使 globe-heatmap/default 等族回归）。
+
+⑤**实测**（Edge）：globe-circle/near-transition 10,751→**4,571**（−57%）；globe-heatmap/near-transition 36,417→**35,639**（热力块从"不可见"变为**可见且 4-5 个分离**，与 expected 形态一致）；with-symbols 16,445→6,282；poles/north 42,392→35,393；**globe-heatmap/set-mercator-projection 与 set-again 12,365→0（PASS）**；default 24,229→15,348、horizontal 21,174→12,313、near-horizon 12,015→5,651、default-zoomed 33,464→19,822、vertical 27,696→19,992。mercator heatmap 族（heatmap-radius/intensity/opacity/color/weight 20 例 0–39）不受影响；combinations 族逐位持平。
+
+⑥**回测**：chunked globe+fog+imports 129 例，对 §858 参考仅 fog/disable +5.4k（HEAD 基线 A/B：39,657→41,849→45,036 跨次波动，噪声带内）与 imports/fog-terrain +310（terrain 域噪声），**零真实回归**。
+
+⑦**剩余**：near-transition 35,639 主体=热力块形态/位置残差（单 pass 屏幕空间 kernel 与 mgl 瓦空间 kernel 的密度场差异 + pitch-84 椭圆近似，heatmap-radius/pitch30 13k 同谱系）与地面浮雕细节；二阶段密度→ramp 管线（design-heatmap-two-pass.md）仍为正解。globe-terrain 66,009/65,880 维持数据受限挂账（§850c/§858①）。

@@ -42,7 +42,7 @@ import { MBBatchedModelDataSource } from './MBBatchedModelDataSource';
 import { batchedDiagEnabled } from './MBBatchedModelDataSource';
 import { MBLayerEvaluator } from './MBLayerEvaluator';
 import { MBExpressionEngine } from './MBExpressionEngine';
-import { MBTileDataEmitter, setMercTransitionPhase } from './MBTileDataEmitter';
+import { MBTileDataEmitter, setMercTransitionPhase, setMercTransitionFrame } from './MBTileDataEmitter';
 import { GeoJSONSourceSpec, StyleSpecification } from './MBStyleSpec';
 import { mbCellTileKeyString, mbPendingChildrenPut, mbPendingSourceTilesClear, mbPendingSourceTilesPut, MBPendingChildTile, MBPendingSourceTile, MBStyleDecoder } from './MBStyleDecoder';
 import { SpriteAtlas } from './materials/MapIconMaterial';
@@ -5268,6 +5268,13 @@ export class MBStyleDataSource extends TileDataSource {
         // MapView's default camera is degenerate (m_targetDistance=0 → extreme
         // zoom), which would push content off-screen for tests without a zoom.
         const center = style.center ?? [0, 0];
+        // §859: the blend needs the mgl globeMatrix analog built from the
+        // style camera (center lng/lat + world size) — without it the
+        // mercator corner stays in the raw mercator-meter frame and the
+        // blended tile lands ~1.2e7 units off-screen.
+        if (typeof style.zoom === 'number' && style.fog !== undefined) {
+            setMercTransitionFrame(center[0] ?? 0, center[1] ?? 0, style.zoom);
+        }
         // flywave's camera zoom convention shows a level-z tile at 256px while
         // mapbox shows it at 512px (calculateDistanceFromZoomLevel /256). To
         // match mapbox's world scale, offset the camera zoom by +1.

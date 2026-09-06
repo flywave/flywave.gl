@@ -569,8 +569,11 @@ export class FrustumIntersection {
         // sphere box also stays a valid conservative bound for the blended
         // geometry) a Box3 over the phase-blended corners into the test.
         const mercPhase = (globalThis as any).__mbMercTransitionPhase ?? 0;
-        if (mercPhase > 0 && this.mapView.projection.type === ProjectionType.Spherical) {
-            const R = EarthConstants.EQUATORIAL_CIRCUMFERENCE;
+        const mercInvGlobe = (globalThis as any).__mbMercInvGlobe as
+            | number[] | undefined;
+        const mercWorldSize = (globalThis as any).__mbMercWorldSize ?? 0;
+        if (mercPhase > 0 && mercInvGlobe &&
+            this.mapView.projection.type === ProjectionType.Spherical) {
             const corners: Array<[number, number]> = [
                 [geoBox.southWest.longitude, geoBox.southWest.latitude],
                 [geoBox.northEast.longitude, geoBox.southWest.latitude],
@@ -579,6 +582,7 @@ export class FrustumIntersection {
             ];
             const blendBox = new THREE.Box3();
             const p = new THREE.Vector3();
+            const invG = new THREE.Matrix4().fromArray(mercInvGlobe);
             for (const [lng, lat] of corners) {
                 // Sphere corner (same frame as projectBox output).
                 this.mapView.projection.projectPoint(
@@ -586,21 +590,20 @@ export class FrustumIntersection {
                     p
                 );
                 let sx = p.x, sy = p.y, sz = p.z;
-                // Mercator-plane corner, mirroring tile2world's blend frame
-                // (mercator meters, origin at equator/prime meridian, z=0).
-                const mx = (lng / 360) * R;
+                const Rlen = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1;
+                // Mercator-plane corner mapped through inv(globeMatrix) into
+                // UNIT ECEF (§859 — same frame as the vertex blend in
+                // MBTileDataEmitter.tile2world), then lerped in unit space.
                 const latRad = (lat * Math.PI) / 180;
-                const my =
-                    ((1 -
-                        Math.log(
-                            Math.tan(latRad) + 1 / Math.cos(latRad)
-                        ) / Math.PI) /
-                        2) *
-                    R;
-                sx = sx * (1 - mercPhase) + mx * mercPhase;
-                sy = sy * (1 - mercPhase) + my * mercPhase;
-                sz = sz * (1 - mercPhase);
-                blendBox.expandByPoint(p.set(sx, sy, sz));
+                const mxPx = (lng / 360 + 0.5) * mercWorldSize;
+                const myPx =
+                    (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) /
+                        Math.PI) / 2 * mercWorldSize;
+                p.set(mxPx, myPx, 0).applyMatrix4(invG);
+                sx = (sx / Rlen) * (1 - mercPhase) + p.x * mercPhase;
+                sy = (sy / Rlen) * (1 - mercPhase) + p.y * mercPhase;
+                sz = (sz / Rlen) * (1 - mercPhase) + p.z * mercPhase;
+                blendBox.expandByPoint(p.set(sx * Rlen, sy * Rlen, sz * Rlen));
             }
             if (cache.tileBounds instanceof OrientedBox3) {
                 const obb = cache.tileBounds;

@@ -203,7 +203,20 @@ export class MBHeatmapRenderer {
                     });
                     if (typeof r === 'number' && isFinite(r)) radiusCssPx = r;
                 }
-                const rPx = Math.max(radiusCssPx * pixelRatio, 1);
+                // §859: during the globe→mercator transition the blended tile
+                // is displayed at the mercator tile scale 2^(zoom−covering) —
+                // mgl's globe branch (globePixelsToTileUnits ×
+                // _pixelsPerMercatorPixel) carries the same factor. Kernels
+                // sized at full CSS px rendered ~1.8× too large and merged
+                // into one blob (heatmap/near-transition). Phase-0 fixtures
+                // keep the empirically tuned full-px sizing.
+                const blendPhase =
+                    Number((globalThis as any).__mbMercTransitionPhase ?? 0);
+                const tileScale = blendPhase > 0
+                    ? Math.pow(2, (this.m_mapView as any).zoomLevel - 1
+                        - Math.round((this.m_mapView as any).zoomLevel - 1))
+                    : 1;
+                const rPx = Math.max(radiusCssPx * pixelRatio * tileScale, 1);
                 const weight = Math.max(k.weight, 0);
                 const ratio = ZERO / (weight * g.intensity * GAUSS_COEF);
                 let S = 0;
@@ -611,8 +624,13 @@ export class MBHeatmapRenderer {
                     // mapbox heatmap composite reads the RED density channel.
                     float d = texture2D(uDensity, vUv).r;
                     vec4 col = texture2D(uRamp, vec2(d, 0.5));
-                    // mapbox: gl_FragColor = color * u_opacity (all channels).
-                    gl_FragColor = vec4(col.rgb * uOpacity, col.a * uOpacity);
+                    // §859: the ramp texture is STRAIGHT-alpha (the default
+                    // ramp starts at rgba(33,102,172,0)) while the blend is
+                    // premultiplied (ONE, ONE_MINUS_SRC_ALPHA) — without
+                    // premultiplying here, zero-density areas ADDED their full
+                    // ramp rgb (blue wash over the whole frame,
+                    // heatmap/near-transition).
+                    gl_FragColor = vec4(col.rgb * col.a * uOpacity, col.a * uOpacity);
                 }
             `,
         });
