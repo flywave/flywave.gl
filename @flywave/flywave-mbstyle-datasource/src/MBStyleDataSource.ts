@@ -3112,7 +3112,11 @@ export class MBStyleDataSource extends TileDataSource {
                         }
                         // §872b: render the §829 background disc explicitly
                         // (bg-only styles have no tile content to cover).
-                        try { (self.m_environment as any)?.renderGlobeDisc?.(); } catch {}
+                        try {
+                            (self.m_environment as any)?.renderGlobeDisc?.();
+                        } catch (e872b) {
+                            (globalThis as any).__mbDiscErr = String(e872b);
+                        }
                     } else {
                         MBGlobePoleCaps.clear();
                     }

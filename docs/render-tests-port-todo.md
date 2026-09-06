@@ -8629,3 +8629,7 @@ mgl 逐行对照（transform.js:1770 _computeCameraPosition + :1799 cameraToCent
 **§874a. zoomab A/B 无效果定论：盘白色 else 全帧生效与相机距离无关——three 渲染内部专项终版挂账（2026-09-07 终）**：
 
 zoomab=-1（相机距离×2，globe 直径减半）A/B：with-diff 帧仍全白（角点/中心/底部全 255,255,255）——**相机距离变化不影响帧内容** ⇒ 盘 fragment 的 else 分支（白）全帧生效与相机距离无关，或盘 draw 未产生像素被 clear 白覆盖。已排除：geoCenter 贴地覆盖（延迟）、composer 丢弃（forceDirectRender 门）、材质编译（checkShaderErrors）、注入 quads（门控）、瓦挂载抖动（表面）。**剩余需 three 渲染内部专项**：①盘 draw 的混合/深度状态审计（depthTest=false + renderOrder −2000 + CustomBlending One/OneMinusSrcAlpha 的帧内交互）；②盘 fragment 的 normDist GPU 实际值；③主通道 clear(白/1) 与盘 AfterRender 渲染的帧序竞争。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得，需向 mapbox 上游索取或 CI 重生成 expected）。
+
+**§872l2. 探针绝对边界终版：renderGlobeDisc 正常执行无异常、盘对象/uniforms 全对，但输出全白——three 渲染内部专项终版挂账（2026-09-07 终）**：
+
+derr 探针（renderGlobeDisc 异常捕获）='-'——渲染无异常；ring 探针：盘稳定在 discScene/visible/pos(0,0,0) 全帧一致；uniforms 全对（黑/1/R/(0,0,−R)）；渲染列表审计（renderLists.get(scene,depth)）就绪。**盘被 three 处理渲染但 fragment 输出不可见的环节无法用 patcher 层探针进一步定位**——需 three 渲染内部专项（WebGLRenderer renderObject/程序绑定/Uniform 上传的逐帧 dump，karma 黑盒不可达）。with-diff/unset-terrain 各 24,024 维持渲染管线专项收敛。globe-terrain 66k 维持仓库外协调挂账（DEM fixture 瓦不可得）。
