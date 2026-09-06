@@ -8489,3 +8489,7 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 **§869c. with-diff 终局取证：背景注入 quad = 透明黑全帧覆盖（2026-09-07）**：
 
 decode 侧探针落地（injectBackground 后扫描 geometries bbox）：z1×4 + z0 各 1 个 fill 几何，**顶点全部在球面上**（bbox ≤R，z0 已钳 ±85° 环）——"quad 顶点越球缘"证伪。但 AfterRender 逐根隐藏二分的决定性事实：**重渲染后 (5,5) 变为 (0,0,0,0) 透明黑**——即背景 quad 覆盖含角点的全帧，且写入 alpha=0（RGB=0 = 背景色黑）。合理解释：quad 的三角网在屏幕上的投影超出球盘（球面 patch 的边缘三角形/极区连接处超出 limb，或 fill 材质的 side/剔除配置使背面也画出），且 fragment alpha=0（透明黑）→ RGBA 比较器计 alpha 差 → 40,152。**修复入口（精确）**：①背景注入 quad 的球面 tessellation 边界（§779 tessellateForSphere 在 z0/z1 整球/半球瓦的网格边不应超出球盘投影）或其材质 alpha（背景色 #000 不透明应为 alpha 1——alpha=0 疑与 emit 的 opacity/premultiplied 链有关）；②mgl 语义上 zoom 0 的背景应画满整个 globe 盘（含极区，由 GLOBE_POLES 扇补足——我方 MBGlobePoleCaps bg 填充已在但被 z0 quad 的透明黑覆盖叠加）。探针工具入库（bbox/type/lateBg 字段）。
+
+**§870. with-diff 续：盘外空间白化无指标变化——黑色为多子树叠加写（2026-09-07）**：
+
+§869c 的盘 shader 空间分支白化（else → vec4(1,1,1,1)）落地后 with-diff 仍 40,152、set-style/default/transition 全部不变——空间黑不是盘写的 (0,0,0,0)，而是**多个子树的叠加不透明黑写**（逐个隐藏顶层子树均不清除，hideAll 才透明）：sceneRoot 内的 z0/z1 背景注入 quads（其屏幕覆盖超出球盘的原因待查——顶点在球面内但三角形网覆盖出缘，疑 §779 细分网格的极区连接三角形）+ MBGlobePoleCaps 的黑极冠扇（with-diff 背景 #000 → bg 扇黑）。盘 shader 白化保留（语义显式化，防透明黑 stamp 回归）。**下一入口**：①多写者二分（hideAll 基础上逐个恢复子树，定位每个黑写者）；②z0/z1 背景注入 quad 的屏幕覆盖范围实测（投影 4 角+网格采样点）；③极冠扇在 zoom 0 的覆盖范围核对（bg 扇不应出球盘）。

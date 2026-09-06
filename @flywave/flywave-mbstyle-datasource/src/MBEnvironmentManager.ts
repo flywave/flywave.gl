@@ -1305,7 +1305,14 @@ export class MBEnvironmentManager {
                         float a = uBgDiscAlpha * (1.0 - smoothstep(discLim - 0.02, discLim, normDist));
                         gl_FragColor = vec4(c * a, a);
                     } else {
-                        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+                        // §870: the space outside the disc must be OPAQUE
+                        // WHITE (= the §829 white clear this disc pairs with).
+                        // Writing (0,0,0,0) here — with three.js disabling
+                        // blending for opaque-list materials — stamped
+                        // transparent black over the whole space region
+                        // (with-diff-and-zoom-out: 40k alpha mismatches vs
+                        // the white-composited reference).
+                        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
                     }
                 }
             `,
