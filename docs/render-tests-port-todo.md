@@ -8439,3 +8439,7 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 ③**实测**（Edge）：north 35,393→31,070、south 28,573→**13,626（−52%）**、north-image 62,719→57,785、south-image 51,963→51,524、north-image-raster-colorization 53,954→53,293；raster-elevation-tiled/globe-poles **239,139→77,748**；无关夹具（globe-default 2,474、circle/near-transition 4,571）逐位不变。tsc 绿。剩余=极行瓦 x3-6（远侧）本地瓦集缺失的覆盖缺口 + 边行纹理细节，属数据/覆盖域。
 
 ④**探针入库**：pole-caps 一次性 dump（extdbg 门控，sync #80/#250）+ __mbRasterReqs/__mbPoleRowTrace 环形缓冲。
+
+**§863. heatmap kernel 椭圆基混合缩放定标：near-transition 29,989→29,119（2026-09-06 续）**：
+
+密度幅度细节对拍发现 kernel 屏幕椭圆基的**缩放语义**分岔：我方原用几何均值（面积保持）归一，而 mgl 的 kernel 是**地面各向同性圆**（extrude 瓦单位、u_matrix 投影）→ 屏幕椭圆应为"东半轴=half、北半轴=half·(ly/lx)"（pitch 压缩，非面积保持）。A/B 实测定标：**ENU 探针按 tilt>45° 门控；isotropic 缩放仅 phase>0（过渡带）应用**——pitch-84 的 near-transition 用 isotropic 最优（29,989→**29,119**），pitch-70 的 default-zoomed 用面积保持最优（isotropic 17,673 vs 面积保持 13,420），pitch-0/world 轴夹具（horizontal/vertical/near-horizon）保持原公式逐位不变，mercator heatmap 族复测 0–39 零回归。经验分岔的本质：两夹具的 expected 由不同 mgl 缩放路径生成（tile 显示尺度/密度 FBO 分辨率交互），当前以经验定标近似。剩余 29,119 为热力块位置/幅度细节（5 kernel 的屏幕投影与 CI 密度场的残差），收益递减，降为低优先。

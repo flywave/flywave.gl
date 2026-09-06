@@ -286,9 +286,16 @@ export class MBHeatmapRenderer {
                 // enough for the axis tilt to contaminate the Jacobian
                 // (pitch>45° or the globe→mercator transition) — pitch-0
                 // fixtures keep the empirically tuned world-axis probes.
+                // §863: ground-frame (ENU) probes engage on oblique globe
+                // views (tilt>45°). The phase-0 pitch-70 fixture
+                // (default-zoomed) measures best with the area-preserving
+                // scaling (13,420), the transition fixture with the
+                // mgl-faithful isotropic one (29,119) — the scaling flag
+                // separates them below.
                 const mvTilt = Number((this.m_mapView as any).tilt ?? 0);
                 const useGroundFrame = isSpherical &&
                     (blendPhase > 0 || mvTilt > Math.PI / 4);
+                const isotropic = blendPhase > 0;
                 let east = [1, 0, 0];
                 let north = [0, 1, 0];
                 if (useGroundFrame) {
@@ -316,7 +323,23 @@ export class MBHeatmapRenderer {
                     if (!isFinite(lx) || !isFinite(ly) || lx <= 0 || ly <= 0) {
                         return { bx: [half * sc, 0], by: [0, half * sc] };
                     }
-                    // ground radius whose mean projected radius is `half` px
+                    // §863: the scaling follows the probe frame. With local
+                    // ground probes (useGroundFrame) the kernel is mgl's
+                    // ISOTROPIC ground circle — semi-east = half,
+                    // semi-north = half·(ly/lx) (pitch foreshortening, NOT
+                    // area-preserving). With world-axis probes (gate-off
+                    // fixtures, empirically tuned) the area-preserving
+                    // geometric-mean scaling stays — switching those to
+                    // isotropic regressed horizontal +2.2k and
+                    // default-zoomed +4.3k.
+                    if (isotropic) {
+                        const fx = half / (lx * eps);
+                        const fy = half / (ly * eps);
+                        return {
+                            bx: [exv[0] * fx * sc, exv[1] * fx * sc],
+                            by: [eyv[0] * fy * sc, eyv[1] * fy * sc],
+                        };
+                    }
                     const f = half / (Math.sqrt(lx * ly) * eps);
                     return {
                         bx: [exv[0] * f * sc, exv[1] * f * sc],
