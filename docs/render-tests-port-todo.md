@@ -8497,3 +8497,7 @@ decode 侧探针落地（injectBackground 后扫描 geometries bbox）：z1×4 +
 **§871. with-diff 收口：帧时序依赖的黑色写入者（探针重绘不复现），引擎渲染图级挂账（2026-09-07）**：
 
 §870 的多写者二分（hideAll 后逐个恢复子树 + readPixels）结果出人意料：恢复**任何**子树（sceneRoot/overlayScene/Mesh/Object3D×2）后 (5,5) 均保持 (0,0,0,0) 透明——探针重绘不复现黑色；且背景注入 quad 的 bbox 证明其顶点在球面内（投影应限于球盘）。而 DOMEDBG=2 帧（真实帧循环内）全黑无盘调试色。两者合并的唯一自洽解释：黑色写入者是**帧时序依赖**的（真实帧循环的某次绘制/状态翻转在 AfterRender 探针重绘时不复现——如 renderOrder 极值对象、pass 间状态泄漏、或 onBeforeRender 副作用），scene-census/renderer.info 级的逐 draw 排除已超出 patcher 层。**挂账为引擎渲染图级专项**；探针工具（bisect/restore/px/state/bg869）全部入库可复用。with-diff 维持 40,152。
+
+**§870b. with-diff 根因实锤：渲染网格顶点达 2R——瓦锚点与解码中心错位（2026-09-07）**：
+
+渲染网格（sceneRoot 内 z1×4，n=685 顶点/瓦）的世界顶点 min/max：x ∈ [7, **12,756,281=2R**]，y/z ±6.35e6——**顶点达两倍地球半径**，而 decode 输出的同一批几何 bbox 在球面内（≤R，§869c）。即：解码几何是瓦心相对坐标（绝对=解码中心+局部），但渲染 mesh 的锚点（position）放在了瓦角/非解码中心位置 → 世界坐标 = 锚点 + 以解码中心为原点的局部坐标 → 整体偏移约一个半径 → 背景 quad 被推出球盘铺满全帧（with-diff 黑帧）。**根因=背景注入瓦的锚点与 decodeInfo.center 不一致**（疑 §868 的 DelegatingDataProvider {mb:1} 空标记路径下 tile 对象锚点取 geoBox 中心而注入几何以 decode 中心为原点，或投影切换后锚点未随 decode 中心更新）。**修复入口**：统一注入瓦的锚点=decodeInfo.center（或局部坐标改以锚点为原点），一处对齐即可收敛 with-diff 40k。探针（870rows 世界顶点 min/max）入库。

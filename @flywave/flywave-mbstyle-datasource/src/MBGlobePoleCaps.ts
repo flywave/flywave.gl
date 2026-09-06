@@ -283,13 +283,43 @@ export class MBGlobePoleCaps {
                     ?.slice('feedback-url='.length);
                 const scene869: any = mapView.scene;
                 const lateBg869 = JSON.stringify(scene869?.background ?? null);
+                // §870b: world bbox of every rendered mesh under sceneRoot —
+                // the frame's opaque black writer is in here (per §869c).
+                try {
+                    const root870: any = (mapView as any).m_sceneRoot;
+                    const rows870: string[] = [];
+                    const V3 = THREE.Vector3;
+                    root870?.traverse?.((mesh: any) => {
+                        if (!mesh.isMesh && !mesh.geometry) return;
+                        const g = mesh.geometry;
+                        if (!g?.computeBoundingSphere || !g.boundingSphere) g?.computeBoundingSphere?.();
+                        const bs = g?.boundingSphere;
+                        if (!bs) return;
+                        const wp = mesh.getWorldPosition(new V3());
+                        // world-space vertex min/max (the real screen coverage)
+                        const pa = g.attributes?.position;
+                        const v870 = new THREE.Vector3();
+                        let wmin: any = null, wmax: any = null;
+                        for (let vi = 0; vi < (pa?.count ?? 0); vi++) {
+                            v870.fromBufferAttribute(pa, vi).applyMatrix4(mesh.matrixWorld);
+                            if (!wmin) wmin = { x: v870.x, y: v870.y, z: v870.z };
+                            wmin.x = Math.min(wmin.x, v870.x); wmin.y = Math.min(wmin.y, v870.y); wmin.z = Math.min(wmin.z, v870.z);
+                            if (!wmax) wmax = { x: v870.x, y: v870.y, z: v870.z };
+                            wmax.x = Math.max(wmax.x, v870.x); wmax.y = Math.max(wmax.y, v870.y); wmax.z = Math.max(wmax.z, v870.z);
+                        }
+                        rows870.push(`${mesh.name || '?'} type=${mesh.type} n=${pa?.count ?? 0} wmin=(${wmin ? [wmin.x, wmin.y, wmin.z].map(vv => vv.toFixed(0)).join(',') : '?'}) wmax=(${wmax ? [wmax.x, wmax.y, wmax.z].map(vv => vv.toFixed(0)).join(',') : '?'})`);
+                    });
+                    (globalThis as any).__mb870rows = `n=${root870?.children?.length ?? 0} ` + rows870.slice(0, 12).join(' ; ');
+                } catch (e870) {
+                    (globalThis as any).__mb870rows = `ERR ${e870}`;
+                }
                 (globalThis as any).__mbLateBg869 = `sync${syncCount} lateBg=${lateBg869}`;
                 if (fbD) fetch(`${fbD}/mb-probe-dump`, {
                     method: 'POST',
                     headers: { 'content-type': 'application/json' },
                     body: JSON.stringify({
                         probe: 'pole-caps',
-                        log: [`desc=[${[...this.s_descriptors.keys()].join(',')}] mesh=[${[...this.s_meshes.keys()].join(',')}] reqs=[${((globalThis as any).__mbRasterReqs ?? []).join(',')}] poleRow=[${((globalThis as any).__mbPoleRowTrace ?? []).join(',')}] bg869=[${((globalThis as any).__mbBgBbox ?? []).join(' ; ')}] late869=[${(globalThis as any).__mbLateBg869 ?? '-'}] 865=[br=${(globalThis as any).__mbBgBr ?? 0}/p${(globalThis as any).__mbBgBrProj ?? '-'} reload=${(globalThis as any).__mbReload ?? 0}/${JSON.stringify((globalThis as any).__mbReloadCam ?? null)} clr=${(globalThis as any).__mbClear865 ? JSON.stringify((globalThis as any).__mbClear865) : '-'} ovr=${JSON.stringify((mapView as any).sceneEnvironment?.clearOverride ?? null)} px=[${((globalThis as any).__mb865px ?? []).join(',')}] bisect=[${((globalThis as any).__mb865bisectRows ?? []).join(' ; ')}]`],
+                        log: [`desc=[${[...this.s_descriptors.keys()].join(',')}] mesh=[${[...this.s_meshes.keys()].join(',')}] reqs=[${((globalThis as any).__mbRasterReqs ?? []).join(',')}] poleRow=[${((globalThis as any).__mbPoleRowTrace ?? []).join(',')}] bg869=[${((globalThis as any).__mbBgBbox ?? []).join(' ; ')}] late869=[${((globalThis as any).__mb870state ?? []).join(' ; ')}] ${(globalThis as any).__mbLateBg869 ?? '-'}] 870=[${(globalThis as any).__mb870rows ?? '-'}] 865=[br=${(globalThis as any).__mbBgBr ?? 0}/p${(globalThis as any).__mbBgBrProj ?? '-'} reload=${(globalThis as any).__mbReload ?? 0}/${JSON.stringify((globalThis as any).__mbReloadCam ?? null)} clr=${(globalThis as any).__mbClear865 ? JSON.stringify((globalThis as any).__mbClear865) : '-'} ovr=${JSON.stringify((mapView as any).sceneEnvironment?.clearOverride ?? null)} px=[${((globalThis as any).__mb865px ?? []).join(',')}] bisect=[${((globalThis as any).__mb865bisectRows ?? []).join(' ; ')}]`],
                     }),
                 }).catch(() => {});
             } catch {}
