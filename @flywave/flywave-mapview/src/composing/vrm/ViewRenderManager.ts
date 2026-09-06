@@ -312,13 +312,23 @@ export class ViewRenderManager implements IViewRenderManager {
         const outlineEnabled = this.config.outline.enabled && this.outlineObjects.size > 0;
         const aerialEnabled = this.config.aerialPerspective.enabled;
         const hasCSM = this.csmShadowNode != null;
+        // God rays (the epipolar shadow-length chain) are skipped on the WebGL
+        // backend: the chain reads its intermediate textures through
+        // .load(screenCoordinate) patterns that resolve to all zeros there,
+        // corrupting the aerial transmittance (dashed slice artifacts and
+        // terrain fading to bare inscatter). Shadow maps themselves are
+        // unaffected — only the god-ray effect is dropped.
+        const webglBackend =
+            (this.renderer as { backend?: { isWebGPUBackend?: boolean } } | undefined)?.backend
+                ?.isWebGPUBackend !== true;
+        const hasGodRays = hasCSM && !webglBackend;
 
         const WORLD_TO_UNIT = 0.001;
 
         const mrtEntries: Record<string, unknown> = { output };
         if (taaEnabled) mrtEntries.velocity = highpVelocity;
         if (bloomEnabled) mrtEntries.bloomIntensity = float(0);
-        if (aerialEnabled && hasCSM) {
+        if (aerialEnabled && hasGodRays) {
             mrtEntries.viewZUnit = positionView.z.mul(WORLD_TO_UNIT);
         }
         if (this.gpuPicking) {
@@ -453,7 +463,7 @@ export class ViewRenderManager implements IViewRenderManager {
 
         if (aerialEnabled) {
             let shadowLengthNode = null;
-            if (hasCSM) {
+            if (hasGodRays) {
                 const viewZUnitTex = this.passNode.getTextureNode("viewZUnit");
                 shadowLengthNode = shadowLength(this.csmShadowNode, viewZUnitTex);
             }
@@ -494,7 +504,10 @@ export class ViewRenderManager implements IViewRenderManager {
         // rewrites the arrays via updateFogLights.
         if (this.config.fogLight.enabled) {
             const u = this.ensureFogLightUniforms();
-            outputNode = outputNode.add(fogLightEffect(depthNode, camera, u));
+            const webglDepthRead =
+                (this.renderer as { backend?: { isWebGPUBackend?: boolean } } | undefined)?.backend
+                    ?.isWebGPUBackend !== true;
+            outputNode = outputNode.add(fogLightEffect(depthNode, camera, u, webglDepthRead));
         }
 
         if (bloomEnabled) {

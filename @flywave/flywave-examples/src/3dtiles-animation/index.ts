@@ -21,6 +21,10 @@ import { PropertiesTable } from "./PropertiesTable.js";
 import { Matrix4 } from "three/webgpu";
 import { GUI } from "dat.gui";
 
+import { installDebugErrorCapture, shouldForceWebGL } from "../common-webgl-debug";
+
+installDebugErrorCapture();
+
 /**
  * Built-in LUT presets served from `resources/lut/**`.
  */
@@ -96,6 +100,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
 
     return new MapView({
         projection: ellipsoidProjection, // Use ellipsoidal projection
+        forceWebGL: shouldForceWebGL(), // ?renderer=webgl forces the WebGL2 fallback backend
         target: initialLocation, // Initial target position
         zoomLevel: 18, // Initial zoom level
         tilt: 70, // Initial tilt angle
@@ -106,9 +111,9 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
             atmosphere: {
                 enabled: true,
                 sunCastShadow: true,
-                // clouds: {
-                //     quality: "high"
-                // },
+                clouds: {
+                    quality: "high"
+                },
                 sunTime: new Date(new Date().setMonth(9)).setHours(12, 30)
             },
             postEffects: {

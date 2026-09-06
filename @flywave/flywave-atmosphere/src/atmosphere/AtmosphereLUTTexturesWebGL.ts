@@ -6,6 +6,7 @@ import {
     type Texture,
     type Vector2,
     type Vector3,
+    LinearFilter,
     NoColorSpace,
     RenderTarget,
     RenderTarget3D,
@@ -53,7 +54,18 @@ function createRenderTarget(name: string): RenderTarget {
     });
     const texture = renderTarget.texture;
     texture.colorSpace = NoColorSpace;
-    texture.name = `AtmosphereLUT [${name}]`;
+    // The texture name MUST equal the mrt() output key of the compute pass:
+    // MRTNode.setup() matches outputs to render-target textures by exact name
+    // (three r185 getTextureIndex) and silently drops unmatched outputs,
+    // which yields an empty fragment shader and an all-zero LUT.
+    texture.name = name;
+    // LUT textures have no mip chain. The default minFilter
+    // (LinearMipmapLinearFilter) marks the texture incomplete in WebGL2 and
+    // every scene-shader sample returns black; WebGPU clamps to level 0
+    // instead, which is why this only broke on the WebGL backend.
+    texture.minFilter = LinearFilter;
+    texture.magFilter = LinearFilter;
+    texture.generateMipmaps = false;
     return renderTarget;
 }
 
@@ -64,7 +76,11 @@ function createRenderTarget3D(name: string): RenderTarget3D {
     });
     const texture = renderTarget.texture as unknown as Data3DTexture;
     texture.colorSpace = NoColorSpace;
-    texture.name = `AtmosphereLUT [${name}]`;
+    // Same MRTNode name-matching constraint as createRenderTarget above.
+    texture.name = name;
+    texture.minFilter = LinearFilter;
+    texture.magFilter = LinearFilter;
+    texture.generateMipmaps = false;
     return renderTarget;
 }
 
@@ -113,12 +129,12 @@ export class AtmosphereLUTTexturesWebGL extends AtmosphereLUTTextures {
         super();
         this.mesh.name = "AtmosphereLUTTexturesWebGL";
 
-        this.transmittanceRT = createRenderTarget("Transmittance");
-        this.multipleScatteringRT = createRenderTarget("MultipleScattering");
-        this.scatteringRT = createRenderTarget3D("Scattering");
-        this.singleMieScatteringRT = createRenderTarget3D("SingleMieScattering");
-        this.higherOrderScatteringRT = createRenderTarget3D("HigherOrderScattering");
-        this.irradianceRT = createRenderTarget("Irradiance");
+        this.transmittanceRT = createRenderTarget("transmittance");
+        this.multipleScatteringRT = createRenderTarget("multipleScattering");
+        this.scatteringRT = createRenderTarget3D("scattering");
+        this.singleMieScatteringRT = createRenderTarget3D("singleMieScattering");
+        this.higherOrderScatteringRT = createRenderTarget3D("higherOrderScattering");
+        this.irradianceRT = createRenderTarget("irradiance");
     }
 
     get(name: AtmosphereLUTTextureName | AtmosphereLUTTexture3DName): Texture {

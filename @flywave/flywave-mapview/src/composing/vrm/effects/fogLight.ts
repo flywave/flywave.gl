@@ -78,12 +78,19 @@ export const createFogLightUniforms = (): IFogLightUniforms => ({
 export const fogLight = (
     depthNode: TextureNode,
     camera: Camera,
-    u: IFogLightUniforms
+    u: IFogLightUniforms,
+    webglDepthRead = false
 ): ReturnType<ReturnType<typeof Fn>> =>
     Fn(() => {
         // Mirror AerialPerspectiveNode's reconstruction exactly (same pass
-        // depth texture, same viewportUV-vs-screenCoordinate combo).
-        const depth = depthNode.load(screenCoordinate).r.toVar();
+        // depth texture). The backend decides the depth read: WebGPU resolves
+        // .load(screenCoordinate) (texelFetch) while the WebGL backend reads
+        // all zeros through it and needs texel-center UV sampling instead.
+        const depthSize = depthNode.size();
+        const depthUv = viewportUV.mul(depthSize).sub(0.5).floor().add(0.5).div(depthSize);
+        const depth = (
+            webglDepthRead ? depthNode.sample(depthUv) : depthNode.load(screenCoordinate)
+        ).r.toVar();
         const viewZ = depthToViewZ(depth, camera).toVar();
         const positionView = screenToPositionView(
             viewportUV,

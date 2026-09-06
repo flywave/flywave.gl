@@ -58,7 +58,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-import { add, bool, cos, exp, float, Loop, mul, sin, sqrt, vec2, vec3 } from "three/tsl";
+import { add, bool, cos, exp, float, Loop, mix, mul, sin, sqrt, vec2, vec3 } from "three/tsl";
 import type { Texture3DNode } from "three/webgpu";
 
 import { FnLayout } from "../tsl/FnLayout";
@@ -119,8 +119,10 @@ const computeOpticalDepthToTopAtmosphereBoundary = /*#__PURE__*/ FnLayout({
         // number).
         const y = getProfileDensity(profile, r.sub(bottomRadius));
 
-        // Sample weight from the trapezoidal rule.
-        const weight = vec2(i).equal(vec2(0, sampleCount)).any().select(0.5, 1).uniformFlow();
+        // Sample weight from the trapezoidal rule. mix() instead of select():
+        // a bare ternary as an operand of '*' is emitted without parentheses
+        // by the WebGL backend and fails GLSL compilation (float * bool).
+        const weight = mix(1, 0.5, float(vec2(i).equal(vec2(0, sampleCount)).any())).uniformFlow();
         opticalDepth.addAssign(y.mul(weight).mul(stepSize));
     });
 

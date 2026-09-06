@@ -25,6 +25,7 @@ import {
 import { inverseProjectionMatrix, projectionMatrix } from "../tsl/accessors";
 import { rayEllipsoidIntersection } from "../tsl/math";
 import type { Node } from "../tsl/node";
+import { isWebGPU } from "../tsl/utils";
 import { depthToViewZ, screenToPositionView } from "../tsl/transformations";
 import { hashValues } from "../tsl/utils";
 import { getAtmosphereContext } from "./AtmosphereContext";
@@ -178,7 +179,17 @@ export class AerialPerspectiveNode extends TempNode {
             skyNode._shadowLengthNode = effectiveShadowLengthNode;
         }
 
-        const depth = depthNode.load(screenCoordinate).r.toConst();
+        // Backend-dependent scene depth read: WebGPU resolves .load()
+        // (texelFetch) on the scene-pass depth texture correctly, while the
+        // WebGL backend returns all zeros through .load() — there the depth
+        // must be read via texel-center UV sampling instead (same pattern as
+        // composing/vrm/effects/outline.ts). A wrong read (depth == 0) takes
+        // the sky branch for every pixel and hides all geometry.
+        const depthSize = depthNode.size();
+        const depthUv = screenUV.mul(depthSize).sub(0.5).floor().add(0.5).div(depthSize);
+        const depth = isWebGPU(builder)
+            ? depthNode.load(screenCoordinate).r.toConst()
+            : depthNode.sample(depthUv).r.toConst();
 
         const getCameraPositionUnit = (): Node<"vec3"> => {
             if (this.scope === BACKDROP) {

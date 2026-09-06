@@ -48,10 +48,51 @@ const getMapCanvas = (): HTMLCanvasElement => {
     return canvas;
 };
 
+// WebGL-debug helper: ring-buffer recent console errors/warnings and uncaught
+// errors into window.__log so remote/headless runs can read them back.
+(window as unknown as { __log: string[] }).__log = [];
+{
+    const log = (window as unknown as { __log: string[] }).__log;
+    const push = (level: string, args: unknown[]) => {
+        const line = `${level}: ${args
+            .map(a => {
+                try {
+                    return a instanceof Error ? `${a.message}\n${a.stack}` : String(a);
+                } catch {
+                    return "[unserializable]";
+                }
+            })
+            .join(" ")}`;
+        log.push(line);
+        if (log.length > 200) {
+            log.shift();
+        }
+    };
+    const origError = console.error.bind(console);
+    console.error = (...args: unknown[]) => {
+        push("error", args);
+        origError(...args);
+    };
+    const origWarn = console.warn.bind(console);
+    console.warn = (...args: unknown[]) => {
+        push("warn", args);
+        origWarn(...args);
+    };
+    window.addEventListener("error", e => push("uncaught", [e.message, e.filename, e.lineno]));
+    window.addEventListener("unhandledrejection", e =>
+        push("rejection", [(e as PromiseRejectionEvent).reason])
+    );
+}
+
 const canvas = getMapCanvas();
+
+// ?renderer=webgl forces the WebGL2 fallback backend for debugging
+// (WebGPURenderer with forceWebGL, see MapViewOptions.forceWebGL).
+const forceWebGL = new URLSearchParams(location.search).get("renderer") === "webgl";
 
 const mapView = new MapView({
     projection: ellipsoidProjection,
+    forceWebGL,
     target: new GeoCoordinates(35.0, 30.0, 300),
     // PARITY POSE: whole-globe nadir view (~19-20M m altitude) matching the
     // takram clouds-basic session (35N/30E, 19,508 km). Read the exact
