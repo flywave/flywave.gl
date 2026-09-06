@@ -1320,7 +1320,9 @@ export class MBEnvironmentManager {
         this.m_globeAtmo = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
         this.m_globeAtmo.frustumCulled = false;
         this.m_globeAtmo.renderOrder = -2000;
+        (globalThis as any).__mbAtmo871 = this.m_globeAtmo;
         this.m_globeAtmo.onBeforeRender = () => {
+            (globalThis as any).__mbAtmoFired = ((globalThis as any).__mbAtmoFired ?? 0) + 1;
             const c = this.m_mapView.camera;
             c.updateMatrixWorld(true);
             const vm = new THREE.Matrix4().copy(c.matrixWorld).invert();
@@ -1603,6 +1605,7 @@ export class MBEnvironmentManager {
         // Refresh the globe geometry uniforms before each draw — the camera
         // settles after connect (fov/aspect/distance all late-bound).
         this.m_globeAtmo.onBeforeRender = () => {
+            (globalThis as any).__mbAtmoFired = ((globalThis as any).__mbAtmoFired ?? 0) + 1;
             const c = this.m_mapView.camera;
             c.updateMatrixWorld(true);
             const vm = new THREE.Matrix4().copy(c.matrixWorld).invert();
