@@ -8543,3 +8543,7 @@ decode 侧与渲染侧的同瓦对拍（tile 1/1/1 为例）：decodeInfo.center
 **§872c. 收口补充：盘 uniforms 正确但帧全白且 DOMEDBG 调试色不出现——渲染管线级挂账确认（2026-09-07 终）**：
 
 补充实测（checkShaderErrors=true 无异常、uBgDiscColor=黑/uBgDiscAlpha=1/uGlobeRadius=R/uGlobePos=(0,0,−R) 全部正确、DOMEDBG=2 红蓝调试色不出现、帧全白）：盘 in m_scene、visible、uniforms 正确，但 fragment 输出不可见——要么盘被静默跳过（材质/编译/成员资格），要么被后续白色全屏写覆盖。剩余 24,024×2（with-diff/unset-terrain）为渲染管线级问题，需逐 draw dump（Spector/RenderDoc 级）或 three 渲染列表审计——引擎渲染管线专项，非 patcher 层可执行。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得）。
+
+**§872d. 渲染管线排查收口：盘 uniforms 全对但 fragment 输出不可见——需引擎渲染图 dump 基础设施（2026-09-07 终）**：
+
+最新捕获（871p）复核：全帧纯白 (255,255,255)（无黑盘、无透明区）。盘 uniforms 实时探针全部正确：uBgDiscColor=黑、uBgDiscAlpha=1、uGlobeRadius=R、uGlobePos=(0,0,−R)（球心在相机前方 R，normDist 中心像素应为 0 → 内分支应画黑）。checkShaderErrors=true 无编译异常。**矛盾无法用现有探针分辨**：fragment 未执行（对象被渲染图跳过）或输出被覆盖（后续白色全屏写）——两者需渲染图级 dump（逐 draw 记录/three 渲染列表审计/Spector 级帧捕获），属引擎渲染管线基础设施专项。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得）。with-diff/unset-terrain 各 24,024 与此同源，随该基础设施解锁一并收敛。
