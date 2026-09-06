@@ -198,10 +198,70 @@ export class MBGlobePoleCaps {
                 // rendered at this point (AfterRender), so this reveals whether
                 // the space alpha is really 0 in the GL buffer.
                 const gl865 = (mapView as any).renderer?.getContext?.();
+                const r865: any = (mapView as any).m_renderer;
                 if (gl865) {
                     const px865 = new Uint8Array(4);
                     gl865.readPixels(5, 5, 1, 1, gl865.RGBA, gl865.UNSIGNED_BYTE, px865);
                     (globalThis as any).__mb865px = Array.from(px865);
+                }
+                // §868: bisect the full-screen opaque writer — hide each
+                // top-level scene child one at a time and re-read the pixel.
+                // Buffer state is preserved in-frame (preserveDrawingBuffer),
+                // but re-rendering is needed to remove a writer's contribution:
+                // instead re-render the whole frame per candidate with that
+                // child hidden, using the engine's own renderer/camera.
+                if (gl865 && (globalThis as any).__mb865bisect !== true) {
+                    (globalThis as any).__mb865bisect = true;
+                    const scene: any = mapView.scene;
+                    const results: string[] = [];
+                    const readPx = () => {
+                        const p = new Uint8Array(4);
+                        gl865.readPixels(5, 5, 1, 1, gl865.RGBA, gl865.UNSIGNED_BYTE, p);
+                        return [...p].join(',');
+                    };
+                    const render = () => (mapView as any).m_renderer?.render?.(scene, mapView.camera);
+                    results.push(`bg=${JSON.stringify(scene.background ?? null)} themeClr=${JSON.stringify({ c: (mapView as any).m_sceneEnvironment?.m_mapView?.m_theme?.clearColor, a: (mapView as any).m_sceneEnvironment?.m_mapView?.m_theme?.clearAlpha })} glca=${(mapView as any).renderer?.getClearAlpha?.()}`);
+                    try {
+                        const r865: any = (mapView as any).m_renderer;
+                        const THREE865 = (globalThis as any).THREEmod ?? (window as any).THREE;
+                        const cc = THREE865 ? r865?.getClearColor?.(new THREE865.Color()) : null;
+                        results.push(`glca=${r865?.getClearAlpha?.()} `);
+                        results.push(`state=cc(${cc?.r?.toFixed(2)},${cc?.g?.toFixed(2)},${cc?.b?.toFixed(2)}) a=${r865?.getClearAlpha?.()} ctxAlpha=${JSON.stringify(gl865.getContextAttributes?.().alpha)}`);
+                    } catch (e865) { results.push(`state=ERR ${e865}`); }
+                    try {
+                        r865.setClearColor(0x000000, 0);
+                        r865.clear();
+                        results.push(`forceClear0=${readPx()}`);
+                    } catch (e) { results.push(`forceClear0=ERR ${e}`); }
+                    results.push(`base=${readPx()}`);
+                    // Re-render once to confirm the writer re-applies.
+                    render();
+                    results.push(`rerender=${readPx()}`);
+                    const tops = scene.children.map((c: any, i: number) => ({ c, i, name: c.name || c.type }));
+                    const overlay: any = (mapView as any).overlayScene;
+                    if (overlay) tops.push({ c: overlay, name: 'overlayScene' });
+                    const sceneRoot: any = (mapView as any).m_sceneRoot;
+                    if (sceneRoot && sceneRoot !== scene) tops.push({ c: sceneRoot, name: 'sceneRoot' });
+                    for (const { c, name } of tops) {
+                        const vis = c.visible;
+                        c.visible = false;
+                        render();
+                        const px = readPx();
+                        c.visible = vis;
+                        results.push(`hide[${name}]=${px}`);
+                    }
+                    // hide ALL top-level children at once
+                    const saves = tops.map(({ c }) => c.visible);
+                    tops.forEach(({ c }) => (c.visible = false));
+                    render();
+                    results.push(`hideAll=${readPx()}`);
+                    const bgSave = scene.background;
+                    scene.background = null;
+                    render();
+                    results.push(`hideAllNoBg=${readPx()}`);
+                    scene.background = bgSave;
+                    tops.forEach(({ c }, i) => (c.visible = saves[i]));
+                    (globalThis as any).__mb865bisectRows = results;
                 }
             } catch {}
             try {
@@ -213,7 +273,7 @@ export class MBGlobePoleCaps {
                     headers: { 'content-type': 'application/json' },
                     body: JSON.stringify({
                         probe: 'pole-caps',
-                        log: [`desc=[${[...this.s_descriptors.keys()].join(',')}] mesh=[${[...this.s_meshes.keys()].join(',')}] reqs=[${((globalThis as any).__mbRasterReqs ?? []).join(',')}] poleRow=[${((globalThis as any).__mbPoleRowTrace ?? []).join(',')}] 865=[${((globalThis as any).__mb865 ?? []).join(' | ')}] px=[${((globalThis as any).__mb865px ?? []).join(',')}]`],
+                        log: [`desc=[${[...this.s_descriptors.keys()].join(',')}] mesh=[${[...this.s_meshes.keys()].join(',')}] reqs=[${((globalThis as any).__mbRasterReqs ?? []).join(',')}] poleRow=[${((globalThis as any).__mbPoleRowTrace ?? []).join(',')}] 865=[br=${(globalThis as any).__mbBgBr ?? 0}/p${(globalThis as any).__mbBgBrProj ?? '-'} reload=${(globalThis as any).__mbReload ?? 0}/${JSON.stringify((globalThis as any).__mbReloadCam ?? null)} clr=${(globalThis as any).__mbClear865 ? JSON.stringify((globalThis as any).__mbClear865) : '-'} ovr=${JSON.stringify((mapView as any).sceneEnvironment?.clearOverride ?? null)} px=[${((globalThis as any).__mb865px ?? []).join(',')}] bisect=[${((globalThis as any).__mb865bisectRows ?? []).join(' ; ')}]`],
                     }),
                 }).catch(() => {});
             } catch {}

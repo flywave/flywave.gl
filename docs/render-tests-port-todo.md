@@ -8471,3 +8471,9 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 **§867. alpha 域根因再进一步：readPixels 实证缓冲区本身不透明——全屏不透明后写者（引擎级，挂账）（2026-06-06 补）**：
 
 §866 后的续试（clearOverride 引擎字段 + alpha:true context + 透明 clear 全链路）仍无效后，**readPixels(5,5) 探针直接读 GL 缓冲**：RGBA=(0,0,0,255)——透明 clear 生效后仍有**全屏不透明写入者**在渲染后期覆盖缓冲（疑 flywave 默认主题的异步加载黑底或某不透明全屏对象；AtterRender 时点已晚于 clear）。排查中两次构建失配（mapview lib 未重建/test 文件回退卷走 alpha attrs）造成的假阴性已识别并规避（先 grep lib 产物再跑测）。实验回退至 §864 已提交态，readPixels 探针入库（pole-caps 探针扩展 px 字段，extdbg 门控）。**后续入口**：scene-census 逐 draw-call 排除该全屏写者（renderer.info + 逐对象 visible 二分），或 MSAA/离屏 blit 链路审计。解锁后 with-diff 40k 与 collision 的 alpha 分量可一并收敛。
+
+**§868. with-diff 40k 根因闭合：z0 背景 quad 越过球缘（black writer = sceneRoot 内容，非 clear/主题）（2026-09-06 终）**：
+
+多轮探针闭环（readPixels + 逐根隐藏 + 二分）：①黑色不在 clear——隐藏 sceneRoot 后 readPixels 即透明（0,0,0,0），逐个隐藏顶层子树定位黑色来自 **sceneRoot 内容 = z0 背景 quad 越过球缘铺满视口**（mgl 语义：z0 瓦在球面上恰好覆盖整个球盘，quad 不出缘）；②主题黑/1 覆盖确证存在（帧首 clear 用了主题黑——样式 clear override 此前写错对象 MBEnvironmentManager，已改挂 MapView.sceneEnvironment.clearOverride，引擎 per-frame 重申落地）；③fog:null 语义修复（mgl falsy 门）——`effectiveFogSpec` 与相机门改 truthy，with-diff 的 `"fog": null` 现正确走无雾分支。④harness alpha:true context 落地。
+
+**净效果**：with-diff-and-zoom-out 维持 40,152（黑 quad 仍在），globe-set-style/default 896、raster 2,592、symbol 4,462、collision 3,522、globe-default 2,474、globe-terrain 66,009 全部与提交态一致（零回归）。**下一入口（精确）**：z0/低 zoom 背景 quad 的球面几何越界——查 §779 tessellateForSphere 在 z0（整球瓦）时的细分/边界，quad 应止于 ±85° 环与球缘；修复后 with-diff 40k 预计大头收敛（黑盘=预期内容，空间=白）。

@@ -4678,6 +4678,11 @@ export class MBStyleDataSource extends TileDataSource {
     async reloadStyle(): Promise<void> {
         const style = this.m_runtime?.style ?? this.m_styleManager?.getStyle();
         if (!style || !this.mapView) return;
+        {
+            const g = (globalThis as any);
+            g.__mbReload = (g.__mbReload ?? 0) + 1;
+            g.__mbReloadCam = { zoom: style.zoom, bg: (style.layers ?? []).some((l: any) => l.type === 'background') };
+        }
 
         // §779 (mgl setStyle semantics): a wholesale style swap replaces the
         // source set too. The decoder consumes the runtime style directly,
@@ -5083,6 +5088,11 @@ export class MBStyleDataSource extends TileDataSource {
                     // color; the flat full-screen mercator clear is not used.
                     try {
                         if (Number((this.mapView as any).projection?.type) === 1) {
+                            {
+                                const g = (globalThis as any);
+                                g.__mbBgBr = (g.__mbBgBr ?? 0) + 1;
+                                g.__mbBgBrProj = (this.mapView as any).projection?.type;
+                            }
                             if (this.effectiveFogSpec(style) !== undefined) {
                                 // Fog style — §570b original behavior: with the
                                 // atmosphere active the space color owns the sky
@@ -5102,8 +5112,19 @@ export class MBStyleDataSource extends TileDataSource {
                                 // the disc color and keep the styled color OFF
                                 // the full-screen clear.
                                 this.m_environment?.setGlobeBackground(new THREE.Color(color), opacity);
+                                // §868: the space must be OPAQUE WHITE —
+                                // compareImages composites the transparent
+                                // reference over white, and the theme manager's
+                                // async load used to clobber this white clear
+                                // to opaque black (the with-diff 40k). The
+                                // engine's per-frame clearOverride re-assert
+                                // now keeps it white.
                                 (this.mapView as any).clearColor = 0xffffff;
                                 (this.mapView as any).clearAlpha = 1;
+                                {
+                                    const e867: any = (this.mapView as any).sceneEnvironment;
+                                    if (e867) e867.clearOverride = { color: 0xffffff, alpha: 1 };
+                                }
                                 // terrain ground shows the background where no
                                 // drape content exists (same as the flat path).
                                 try {
@@ -5144,10 +5165,22 @@ export class MBStyleDataSource extends TileDataSource {
                         const emissive = Number(paint['background-emissive-strength'] ?? 0);
                         if (emissive > 0) lit.lerp(c, Math.min(emissive, 1));
                         (this.mapView as any).clearColor = lit.getHex();
+                        {
+                            const e867: any = (this.mapView as any).sceneEnvironment;
+                            if (e867) e867.clearOverride = { color: lit.getHex() };
+                        }
                     } else {
                         (this.mapView as any).clearColor = c.getHex();
+                        {
+                            const e867: any = (this.mapView as any).sceneEnvironment;
+                            if (e867) e867.clearOverride = { color: c.getHex() };
+                        }
                     }
                     (this.mapView as any).clearAlpha = opacity;
+                    {
+                        const e867: any = (this.mapView as any).sceneEnvironment;
+                        if (e867) e867.clearOverride = { alpha: opacity };
+                    }
                     // The terrain surface shows the (themed, lit) background
                     // color where no drape content exists — mgl renders the
                     // background beneath the whole map, and the terrain mesh
@@ -5285,7 +5318,11 @@ export class MBStyleDataSource extends TileDataSource {
         // expected black skies). The previous "synthesize mgl default fog
         // for no-fog styles carrying a background layer" painted an
         // atmosphere dome where mgl paints nothing.
-        return style.fog;
+        // §868: mgl's fog creation gate is a TRUTHY check (style.ts:1082
+        // `if (stylesheet.fog)`) — a style carrying "fog": null (JSON-explicit
+        // null, e.g. globe-set-style/with-diff-and-zoom-out) has NO fog.
+        // Returning null here made callers treat it as fog-present.
+        return style.fog ?? undefined;
     }
 
     /**
@@ -5297,7 +5334,7 @@ export class MBStyleDataSource extends TileDataSource {
         // Only enable for styles WITH a fog key — the transition interacts
         // with the fog/atmosphere rendering; fog-less styles use the pure
         // globe projection (§829 disc + white clear) which matches better.
-        if (typeof style.zoom === 'number' && style.fog !== undefined) {
+        if (typeof style.zoom === 'number' && style.fog) {
             const t = Math.min(1, Math.max(0, (style.zoom - 5) / 1));
             setMercTransitionPhase(t * t * (3 - 2 * t));
         } else {
@@ -5313,7 +5350,7 @@ export class MBStyleDataSource extends TileDataSource {
         // style camera (center lng/lat + world size) — without it the
         // mercator corner stays in the raw mercator-meter frame and the
         // blended tile lands ~1.2e7 units off-screen.
-        if (typeof style.zoom === 'number' && style.fog !== undefined) {
+        if (typeof style.zoom === 'number' && style.fog) {
             setMercTransitionFrame(center[0] ?? 0, center[1] ?? 0, style.zoom);
         }
         // flywave's camera zoom convention shows a level-z tile at 256px while

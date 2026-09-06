@@ -50,6 +50,13 @@ export class MapViewEnvironment {
     private m_createdLights?: THREE.Light[];
     private m_overlayCreatedLights?: THREE.Light[];
     private readonly m_backgroundDataSource?: BackgroundDataSource;
+    /**
+     * §867: style-owned clear override. When set, the theme's clear
+     * color/alpha no longer clobbers it (the theme manager's async theme
+     * load re-applies the THEME clear after the style applied its own —
+     * mgl parity: the style owns the clear).
+     */
+    clearOverride?: { color?: number; alpha?: number };
 
     constructor(private readonly m_mapView: MapView, options: MapViewEnvironmentOptions) {
         this.m_fog = new MapViewFog(this.m_mapView.scene);
@@ -114,6 +121,14 @@ export class MapViewEnvironment {
     }
 
     updateClearColor(clearColor?: string, clearAlpha?: number) {
+        const ovr = this.clearOverride;
+        if (ovr && (ovr.color !== undefined || ovr.alpha !== undefined)) {
+            this.m_mapView.renderer.setClearColor(
+                new THREE.Color(ovr.color ?? DEFAULT_CLEAR_COLOR),
+                ovr.alpha ?? clearAlpha
+            );
+            return;
+        }
         if (clearColor !== undefined) {
             this.m_mapView.renderer.setClearColor(new THREE.Color(clearColor), clearAlpha);
         } else {

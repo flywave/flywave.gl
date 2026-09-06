@@ -3580,6 +3580,20 @@ export class MapView extends EventDispatcher {
         this.updateCameras();
         this.updateEnv();
 
+        // §867: re-assert the style-owned clear right before the frame clear —
+        // stray setClearColor(color) calls (which reset alpha to 1 in three.js)
+        // must not turn the style's transparent space opaque.
+        {
+            const ovr867 = this.m_sceneEnvironment?.clearOverride;
+            if (ovr867 && (ovr867.color !== undefined || ovr867.alpha !== undefined)) {
+                const cur = this.m_renderer.getClearColor(new THREE.Color());
+                this.m_renderer.setClearColor(
+                    new THREE.Color(ovr867.color !== undefined ? ovr867.color : cur.getHex()),
+                    ovr867.alpha !== undefined ? ovr867.alpha : this.m_renderer.getClearAlpha()
+                );
+            }
+        }
+
         this.m_renderer.clear();
 
         // clear the scenes

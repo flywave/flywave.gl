@@ -2046,8 +2046,8 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 // default context may be created without stencil in some headless
                 // drivers (SwiftShader), which makes all lines invisible.
                 const ctx =
-                    canvas.getContext("webgl2", { stencil: true, antialias: true, preserveDrawingBuffer: true }) as any ??
-                    canvas.getContext("webgl", { stencil: true, antialias: true, preserveDrawingBuffer: true }) as any;
+                    canvas.getContext("webgl2", { stencil: true, antialias: true, preserveDrawingBuffer: true, alpha: true }) as any ??
+                    canvas.getContext("webgl", { stencil: true, antialias: true, preserveDrawingBuffer: true, alpha: true }) as any;
 
                 // Pin the global label fade duration to the test's requested
                 // value so opacity transitions match `expected.png` timing.

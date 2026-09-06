@@ -913,6 +913,14 @@ export class MBEnvironmentManager {
                 // NOTE: this runs before the datasource's applyBackgroundColor
                 // re-run, which sets the black clear for the disc path.
                 if (this.m_globeBgColor) {
+                    // §867: the style clear override (set by
+                    // applyBackgroundColor's globe branch) wins over this
+                    // white default — the theme manager's async clear can no
+                    // longer flip the space back to opaque either way.
+                    const ov867: any = (this.m_mapView as any).m_sceneEnvironment?.clearOverride;
+                    if (ov867 && ov867.color === 0x000000 && ov867.alpha === 0) {
+                        return;
+                    }
                     // §829: white clear — see the disc-path note in
                     // MBStyleDataSource.applyBackgroundColor (the transparent
                     // reference is composited over white by compareImages).
@@ -1450,6 +1458,10 @@ export class MBEnvironmentManager {
         // the atmosphere premultiplied over a transparent framebuffer).
         (this.m_mapView as any).clearColor = spaceColor.getHex();
         (this.m_mapView as any).clearAlpha = propAlpha(rawSpace);
+        {
+            const e867: any = (this.m_mapView as any).m_sceneEnvironment;
+            if (e867) e867.clearOverride = { color: spaceColor.getHex(), alpha: propAlpha(rawSpace) };
+        }
         this.m_globeFogActive = true;
 
         this.disposeGlobeAtmosphere();
