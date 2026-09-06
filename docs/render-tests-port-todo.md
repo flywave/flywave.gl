@@ -8555,3 +8555,7 @@ renderer.info 探针（AfterRender 实时）: frame 253: calls=15/tri=26（有�
 **§872f. 重大勘误+定位收窄：相机放置链无缺陷（lookat 探针 distance=2.1253e7 ✓）——真凶为瓦对象挂载/卸载抖动（2026-09-07 终）**：
 
 lookat 探针（extdbg 已有）实测 with-diff 全流程：setZoom 0 → flyZoom 1 → **distance=2.1253e+7 ✓（=mgl 模型值 3.3R，放置链无缺陷）**；setStyle 投影切换 → distance=2.1253e+7 复用 ✓。此前 §871e2 的"相机贴地 1R"系把 RTE 相机相对坐标误读为绝对位置（物体 position.sub(cameraPosition) 相机相对放置），**勘误**。真凶收窄为：**瓦对象挂载/卸载抖动**——sceneRoot children n=0↔4 帧级翻转（VisibleTileSet/TileObjectsRenderer 生命周期），卸载帧 = 白帧（仅 clear），挂载帧 = 黑 quad 全帧（越球缘的注入 quads 仍在时）或黑盘+白空间（门控后）。**下轮首项（精确）**：①查瓦卸载触发者（VisibleTileSet 的 tile 移除条件/Tile.dispose 路径——为何 zoom 0 的 z0/z1 注入瓦被反复卸载）；②注入 quads 越球缘几何修复（§779 tessellateForSphere z0/z1 边界）。两者落地后 with-diff/unset-terrain 收敛。globe-terrain 维持仓库外协调挂账。
+
+**§872g. 本轮收口：探针数据齐备（fired=262 证盘被渲染、uBA=1/uGR=R/uGP=(0,0,−R)），帧全白的最终分歧留给渲染图 dump 专项（2026-09-07 终）**：
+
+补充探针实测：盘 onBeforeRender fired=92(sync80)/262(sync250)（盘被 three 正常处理渲染 ✓）；uBgDiscColor=黑 ✓ uBgDiscAlpha=1 ✓ uGlobeRadius=R ✓ uGlobePos=(0,0,−R)（zoom 0 相机贴地距离）；frame 全白。矛盾点：按 uniforms，中心像素 normDist=0 应画黑——帧全白。剩余可能性：①渲染时 uniform 状态与 AfterRender 探针读取时点不同（帧间 flip-flop 的另一半）；②uBgDiscColor 的 sRGB 转换链；③m_scene 的 matrixWorldAutoUpdate/层掩码。需渲染图 dump 基础设施（逐 draw/Uniform dump）终裁——引擎渲染管线专项，非 patcher 层可执行。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得）。
