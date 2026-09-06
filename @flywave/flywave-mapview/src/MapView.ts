@@ -3594,6 +3594,17 @@ export class MapView extends EventDispatcher {
             }
         }
 
+        // §870b probe: renderer clear state at frame start (ring buffer).
+        try {
+            if ((globalThis as any).__mbExtRouteDbg) {
+                const g870 = (globalThis as any);
+                g870.__mb870state = g870.__mb870state ?? [];
+                if (g870.__mb870state.length < 8) {
+                    const cc870 = this.m_renderer.getClearColor(new THREE.Color());
+                    g870.__mb870state.push(`f${this.m_frameNumber} cc=(${cc870.r.toFixed(2)},${cc870.g.toFixed(2)},${cc870.b.toFixed(2)}) a=${this.m_renderer.getClearAlpha()} ovr=${JSON.stringify(this.m_sceneEnvironment?.clearOverride ?? null)}`);
+                }
+            }
+        } catch {}
         this.m_renderer.clear();
 
         // clear the scenes
