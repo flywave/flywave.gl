@@ -8531,3 +8531,7 @@ decode 侧与渲染侧的同瓦对拍（tile 1/1/1 为例）：decodeInfo.center
 **§871f. with-diff 白帧机制定论：盘 uniforms 用逻辑相机而实际渲染用 RTE 相机的错位假设 + 下轮实施清单（2026-09-07 终）**：
 
 本会话收口时的最终状态与最高置信假设：盘（m_globeAtmo）的 uGlobePos 在 onBeforeRender 用 **m_mapView.camera（逻辑相机）** 的 matrixWorld 计算，而主通道实际用 **m_rteCamera（重基相机，物体 position.sub(cameraPosition) 相机相对放置）** 渲染——两相机的有效视点不同 → 盘 normDist 全帧 ≥1.009 → 白 else 覆盖全帧（含黑盘区域）→ with-diff/unset-terrain 全白 24,024。**下轮实施清单**：①盘 onBeforeRender 改用与主渲染一致的相机（m_rteCamera.matrixWorld 或等效变换）重算 uGlobePos/uHorizonAngle，验证黑盘出现；②若①成立，同样审计其余 AfterRender 私有场景（pole fans/circle overlay/backgroundFog）的相机一致性；③全量回测 globe 族（with-diff/unset-terrain 预期 → AA 级，globe-default 等已有盘夹具零回归）。globe-terrain 66k 维持仓库外协调挂账（DEM fixture 瓦需向 mapbox 上游索取或 CI 重生成）。
+
+**§872. with-diff/unset-terrain 24k 挂账定性完成：composer 路径丢弃引擎外部网格（§598 已知现象类）——引擎集成层挂账（2026-09-07 终）**：
+
+证据链闭环：①注入门控后 with-diff/unset-terrain 帧全白（黑盘缺失 24,024 = expected 黑盘不透明像素数）；②盘对象在 m_scene 中、visible、uniforms 正确（黑/1）；③DOMEDBG=2 无调试色 → 盘 fragment 未执行；④MapRenderingManager §598 注释自证："composer 渲染路径经验性丢弃引擎外部场景网格（mbstyle terrain mesh 走直绘通道可渲染、经 composer 则不可见）"——§829 盘为 MBStyleDataSource 运行时加挂的引擎外部 mesh，composer 激活（主题 effects 启用）时被同一机制丢弃。**修复入口（引擎 MapRenderingManager/composer 集成层，下轮）**：①将 §829 盘纳入 composer 渲染图（挂接为 RenderPass 层或场景图正规成员）；或②bg-only 样式禁用 effects 强制直绘通道；或③盘改经 preSceneHook/composer 前置通道（注意 composer 输入缓冲会清屏，需 RenderPass 化）。实施后 with-diff/unset-terrain 各 24,024 预期收敛至 AA 级。globe-terrain 66k 维持仓库外协调挂账（DEM fixture 瓦不可得）。
