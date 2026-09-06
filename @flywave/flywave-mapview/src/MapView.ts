@@ -3271,6 +3271,16 @@ export class MapView extends EventDispatcher {
             this.camera.position
         );
         this.camera.updateMatrixWorld(true);
+        // §872j probe: camera world pos right after lookAtImpl placement.
+        try {
+            if ((globalThis as any).__mbExtRouteDbg) {
+                const g872 = (globalThis as any);
+                g872.__mbLookCam = g872.__mbLookCam ?? [];
+                if (g872.__mbLookCam.length < 12) {
+                    g872.__mbLookCam.push(`p=(${this.camera.position.x.toFixed(0)},${this.camera.position.y.toFixed(0)},${this.camera.position.z.toFixed(0)}) n=${this.camera.position.length().toFixed(0)}`);
+                }
+            }
+        } catch {}
 
         // Make sure to update all properties that are accessible via API (e.g. zoomlevel) b/c
         // otherwise they would be updated as recently as in the next animation frame.
