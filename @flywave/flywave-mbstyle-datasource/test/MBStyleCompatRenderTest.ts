@@ -198,6 +198,12 @@ function discoverTests(): TestEntry[] {
     if (hq) {
         (globalThis as any).__mbHideQuad = hq;
     }
+    // §869: zoomab=N → camera zoom A/B offset (globe diameter calibration).
+    const zoomabArg = (window as any).__karma__?.config?.args
+        ?.find?.((a: string) => a.startsWith("zoomab="))?.slice("zoomab=".length);
+    if (zoomabArg !== undefined) {
+        (globalThis as any).__mbZoomAB = Number(zoomabArg);
+    }
     // §807: domedbg=1 → dome shader encodes normDist/θ/t into RGB.
     // §818: domedbg=2 → paint mode: disc/uBgDisc=RED, disc/white-backing=GREEN,
     // glow region=BLUE — reveals which dome branch owns each pixel and

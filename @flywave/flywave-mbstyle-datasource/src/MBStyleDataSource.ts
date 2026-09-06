@@ -5359,7 +5359,8 @@ export class MBStyleDataSource extends TileDataSource {
         // No pitch compensation: setCameraGeolocationAndZoom now orbits the
         // target (lookAt semantics), so the reported zoom is pitch-independent.
         const pitch = style.pitch ?? 0;
-        const zoom = (typeof style.zoom === 'number' ? style.zoom : 0) + 1;
+        const zoom = (typeof style.zoom === 'number' ? style.zoom : 0) + 1
+            + Number((globalThis as any).__mbZoomAB ?? 0);
         // Mapbox `bearing` is clockwise (bearing 90 → up faces east). flywave's
         // setCameraGeolocationAndZoom takes a counter-clockwise yawDeg
         // (MapView.ts:2378/2405 "yaw is counter-clockwise"). Passing bearing

@@ -99,6 +99,7 @@ function main() {
             ...(process.env.MBSTYLE_FOGPROBE ? [`fogprobe=${process.env.MBSTYLE_FOGPROBE}`] : []),
             ...(process.env.MBSTYLE_YAWAB ? [`yawab=${process.env.MBSTYLE_YAWAB}`] : []),
             ...(process.env.MBSTYLE_PITCHAB ? [`pitchab=${process.env.MBSTYLE_PITCHAB}`] : []),
+            ...(process.env.MBSTYLE_ZOOMAB ? [`zoomab=${process.env.MBSTYLE_ZOOMAB}`] : []),
             ...(process.env.MBSTYLE_EXTAZ180 ? ["extaz180=1"] : []),
             ...(process.env.MBSTYLE_FOGT ? ["fogt=1"] : []),
             ...(process.env.MBSTYLE_HIDE ? [`mbhide=${process.env.MBSTYLE_HIDE}`] : []),
