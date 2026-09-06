@@ -8423,3 +8423,9 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 ④**globe-terrain 挂账条件复核**：所需 CI 专有 DEM（区域 z9-12）本地 vendored 瓦集与 mapbox-gl-js 公开仓库（raw.githubusercontent 实测 404）均不存在；mapbox 公共 terrain 瓦源（api.mapbox.com，需 token）与 CI fixture 瓦内容不同源，逐像素不可对齐——§850c 结论维持，**解锁动作仍为仓库外协调**（向 mapbox 上游索取完整 fixture 瓦集或以 CI 环境重生成 expected），本环境内无可执行工作。
 
 ⑤**剩余**：near-transition 30,728 主体=热力块密度场幅度/位置细节（单 kernel 密度峰值、5 点间距的屏幕投影与 expected 的残余差），已接近屏幕空间两 pass 近似的收敛边界；再向下需逐项与 mgl heatmap FBO 尺寸（0.25x RTT 上采样）对拍。globe-heatmap 其余夹具 0–13.5k。
+
+**§861b. mgl heatmap FBO 尺寸对拍：globe 分辨率 0.5x 落地（draw_heatmap.ts:37），near-transition 30,728→29,989（2026-09-06 续）**：
+
+与 mgl draw_heatmap.ts 逐项对拍 offscreen 密度 FBO：mgl `resolutionScaling = projection==='globe' ? 0.5 : 0.25`（:37-40）——我方固定 0.25。改为按投影动态（球面 0.5/mercator 0.25，getter 形式）。实测 near-transition 30,728→**29,989**，其余 globe-heatmap 夹具小幅改善或持平（default 15,348→15,203 等），set-mercator ×2 维持 0，mercator heatmap 族（heatmap-radius/intensity 0–39、fog/2d 29,845）逐位不变——0.5x 仅作用于球面，零回归。
+
+**剩余 29,989 的构成**（暖核位置对拍）：5 个 kernel 中心的屏幕投影已基本对齐（暖核 bbox x96-386/y236-305 vs expected x135-376/y239-295），但暖区面积仍 ~3.5×（密度幅度/衰减细节）——单 kernel 峰值公式（w·I·GAUSS_COEF=0.8）与 S 求解已同源，差在密度纹理 8bit/half-float 量化、双线性上采样边缘与 pitch-84 平面倾斜下的局部 Jacobian 高阶项。属屏幕空间近似的收敛边界内细节，收益递减；记录为后续低优先入口。

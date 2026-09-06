@@ -75,7 +75,13 @@ export class MBHeatmapRenderer {
      * the point-sampled accumulation + upsample shapes the visible density
      * field, so matching it is required for pixel alignment.
      */
-    private readonly m_rtScale = 0.25;
+    // §861b: mgl resolutionScaling (draw_heatmap.ts:37) — 0.25x offscreen on
+    // mercator, 0.5x on globe. The point-sampled accumulation + bilinear
+    // upsample shapes the visible density field, so the factor must match
+    // per projection.
+    private get m_rtScale(): number {
+        return Number((this.m_mapView as any).projection?.type) === 1 ? 0.5 : 0.25;
+    }
     private m_rtHalfFloat = false;
 
     private m_scene: THREE.Scene;
