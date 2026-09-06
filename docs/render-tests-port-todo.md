@@ -8621,3 +8621,7 @@ place 探针（getCameraPositionFromTargetCoordinates 加法后）实测：**d=2
 **§873c3. 探针周期绝对边界确认：盘被渲染（fired ✓/in discScene ✓/uniforms 黑 ✓）但输出全白——three 渲染内部专项终版挂账（2026-09-07 终）**：
 
 多轮探针（render-list 审计/renderGraph dump/盘 uniforms 实时/相机位置）数据闭环：盘 mesh 在 m_discScene ✓ visible ✓ renderGlobeDisc 每帧调用 ✓ onBeforeRender fired ✓ uniforms 黑/alpha1/R ✓ uGlobePos=(0,0,−R)（zoom 0 贴地相机的正确 view-space 中心）——fragment 应全帧内分支（黑）→ 帧全白。所有可远程探针已穷尽；剩余需 three 渲染内部专项（WebGLRenderer renderObject/program 绑定/Uniform 上传的逐帧 dump——karma 黑盒不可达）。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得）。with-diff/unset-terrain 24,024×2 维持渲染管线专项。
+
+**§873c4. mgl 相机模型逐行对照完成：距离式差异量化（zoom 0 我方 globe 角直径 ~242px vs mgl 163px，+48%）——低 zoom globe 族收敛入口精确化（2026-09-07 终）**：
+
+mgl 逐行对照（transform.js:1770 _computeCameraPosition + :1799 cameraToCenterDistance）：cameraToCenterDistance = focal·height·pixelsPerMercatorPixel，其中 height=ws/(2^zoom·2π)（globe 半径的世界长度）、pixelsPerMercatorPixel=mercatorZfromAltitude(1,lat)/mercatorZfromAltitude(1,45°)（低 zoom 无混合）——**mgl 的 globe 屏幕直径恒= ws/π = 163px（zoom 0）**。我方：distance=focal·C/(256·2^flyZoom)·conv(0.707) → 渲染 globe 角直径 ~242px（+48%）。**修复入口（精确）**：MapView 球面分支的 calculateDistanceFromZoomLevel 补 pixelsPerMercatorPixel 因子（mercatorZfromAltitude(1,lat)/mercatorZfromAltitude(1,45°)，低 zoom=lat0/45°=1/0.707）——即距离再 ×1.414，globe 直径缩至 ~171px ≈ mgl ✓。实施后 with-diff/unset-terrain 黑盘+白空间布局呈现 → 大头收敛；全量回测 globe 族（低 zoom globe 夹具的 globe 尺寸全面变化需逐夹具核验）。globe-terrain 66k 维持仓库外协调挂账。
