@@ -8477,3 +8477,7 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 多轮探针闭环（readPixels + 逐根隐藏 + 二分）：①黑色不在 clear——隐藏 sceneRoot 后 readPixels 即透明（0,0,0,0），逐个隐藏顶层子树定位黑色来自 **sceneRoot 内容 = z0 背景 quad 越过球缘铺满视口**（mgl 语义：z0 瓦在球面上恰好覆盖整个球盘，quad 不出缘）；②主题黑/1 覆盖确证存在（帧首 clear 用了主题黑——样式 clear override 此前写错对象 MBEnvironmentManager，已改挂 MapView.sceneEnvironment.clearOverride，引擎 per-frame 重申落地）；③fog:null 语义修复（mgl falsy 门）——`effectiveFogSpec` 与相机门改 truthy，with-diff 的 `"fog": null` 现正确走无雾分支。④harness alpha:true context 落地。
 
 **净效果**：with-diff-and-zoom-out 维持 40,152（黑 quad 仍在），globe-set-style/default 896、raster 2,592、symbol 4,462、collision 3,522、globe-default 2,474、globe-terrain 66,009 全部与提交态一致（零回归）。**下一入口（精确）**：z0/低 zoom 背景 quad 的球面几何越界——查 §779 tessellateForSphere 在 z0（整球瓦）时的细分/边界，quad 应止于 ±85° 环与球缘；修复后 with-diff 40k 预计大头收敛（黑盘=预期内容，空间=白）。
+
+**§869. with-diff 深挖续：相机/尺寸定标疑点与解码层探针入口（2026-09-07）**：
+
+§868 后的续探（readPixels+逐根隐藏+re-render 二分已固化于 pole-caps 探针，extdbg 门控）新事实：① AfterRender 时 renderer.getClearAlpha()=0、ctxAlpha=true、hideAll+re-render → 缓冲透明——**排除 clear/主题/背景平面**，黑色确为 sceneRoot 内的瓦内容（背景注入 quad）；② mgl expected 的黑盘直径 ~175px ≈ zoom 0 的 globe 直径（163px+AA），而我方黑区铺满全帧——疑点二选一：(a) 我方 globe 直径按 flyZoom=1 渲染成 2×（326px，+1 约定在 globe 直径上的适用性需对拍 globe-default 的实测直径），(b) z0/z1 背景注入 quad 的球面几何越界（§868 判断）。**下一入口**：decode 侧探针——记录 decodeTile 的 tileKey + '__mb_background__' feature 的投影后 bbox（decodedbg 扩展），确认是"globe 直径 2×"还是"quad 越界"，二者修法不同（前者=相机约定，后者=tessellateForSphere 边界）。探针工具已入库（MBGlobePoleCaps bisect/px/state 字段）。
