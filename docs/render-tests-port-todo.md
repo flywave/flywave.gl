@@ -8547,3 +8547,7 @@ decode 侧与渲染侧的同瓦对拍（tile 1/1/1 为例）：decodeInfo.center
 **§872d. 渲染管线排查收口：盘 uniforms 全对但 fragment 输出不可见——需引擎渲染图 dump 基础设施（2026-09-07 终）**：
 
 最新捕获（871p）复核：全帧纯白 (255,255,255)（无黑盘、无透明区）。盘 uniforms 实时探针全部正确：uBgDiscColor=黑、uBgDiscAlpha=1、uGlobeRadius=R、uGlobePos=(0,0,−R)（球心在相机前方 R，normDist 中心像素应为 0 → 内分支应画黑）。checkShaderErrors=true 无编译异常。**矛盾无法用现有探针分辨**：fragment 未执行（对象被渲染图跳过）或输出被覆盖（后续白色全屏写）——两者需渲染图级 dump（逐 draw 记录/three 渲染列表审计/Spector 级帧捕获），属引擎渲染管线基础设施专项。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得）。with-diff/unset-terrain 各 24,024 与此同源，随该基础设施解锁一并收敛。
+
+**§872e. 渲染图证据：场景内容随时间卸载（frame253=15calls/26tri → frame763=3calls/2tri）——相机放置链专项确认（2026-09-07 终）**：
+
+renderer.info 探针（AfterRender 实时）: frame 253: calls=15/tri=26（有内容帧）；frame 763: **calls=3/tri=2**（近空帧）——瓦对象随帧被卸载（§871e2 的 n=0↔4 抖动同源），且**盘 uniforms 的 uGlobePos=(0,0,−R) 实证逻辑相机距球心仅 1R（贴地）**——mgl zoom 0 需 ~4.2R（globe 直径 163px）。即：**zoom 0 球面相机的放置距离缺陷（贴地）为第一根因**，瓦卸载抖动为第二（两者叠加造成 24,024 全白帧）。**修复入口（引擎相机放置链，下轮首项）**：trace setCameraGeolocationAndZoom→lookAtImpl→calculateDistanceFromZoomLevel 的中间量（flyZoom=1 时模型距离应 ~2.12e7≈3.3R，实际放置 1R——定位丢失环节；疑 lookAtImpl 的球面高度换算未含 pixelSpaceConversion 或被 minDistance/maxDistance 钳制）。修复后 with-diff/unset-terrain（相机归位 → 黑盘+白空间正确呈现）与低 zoom globe 族同时收敛。globe-terrain 维持仓库外协调挂账。
