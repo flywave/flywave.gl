@@ -8609,3 +8609,7 @@ forceDirectRender 门（MapRenderingManager.render 分支直绘强制）+ 盘专
 **§872j3. 相机放置链矛盾定论：数学产出 2.76e7 与探针读数 (−R,0,0) 矛盾——需断点级调试器（2026-09-07 终）**：
 
 放置链数学复核（getCameraPositionFromTargetCoordinates 球面分支，with-diff 输入 target=[−180,0]/distance=2.1253e7/pitch=0）：result = projectPoint(target)=(−R,0,0) + tangentSpace.y·0（pitch0 groundDistance=0） + tangentSpace.z·height（=up·2.1253e7） = (−2.3e7,0,0) ✓✓ 数学与 mgl 模型一致。但 lookCam 探针（updateMatrixWorld 后）读 camera.position=(−R,0,0)=**目标地表点**——数学与探针读数矛盾。可能性：①该次调用的 distance 参数实为 0/R（lookat 探针记录的是另一次调用的值）；②放置结果被同函数内的后续行覆盖（setLength(cameraHeight) 的 cameraHeight=R ⟺ altitude=0 的上游传参）；③投影对象/geoBox 行约定分歧（§869d）。**需断点级调试器**（getCameraPositionFromTargetCoordinates 入参/中间量单步）——karma 黑盒 harness 无法单步，引擎相机放置链专项挂账（探针已备：lookCam/lookat/place 三点齐备）。with-diff/unset-terrain 各 24,024 维持该专项下收敛。globe-terrain 66k 维持仓库外协调挂账。
+
+**§872j4. 放置链探针终版：placement 输出正确（−2.76e7）但 AfterRender 相机在地表——覆盖者需断点调试器（2026-09-07 终）**：
+
+place 探针（getCameraPositionFromTargetCoordinates 加法后）实测：**d=2.125e+7 → out=(−27631124,0,0) n=27631124 ✓ 放置正确**（黑盘应呈现）。但 AfterRender 的 camPos=(−R,0,0)（贴地）且帧全白——**放置后相机被移回地表的覆盖者未定位**（geoCenter setter 已延迟排除、updateLookAtSettings 只读、update() 异步）。嫌疑收窄：①投影 setter 的 lookAtImpl 重放置（distance 2.1253e7 ✓ 但放置结果地表——同一函数输出矛盾）；②帧间多路径交错（setStyle/setProjection/setupCamera 多次 lookAtImpl 的最终态）。**需断点级调试器**（getCameraPositionFromTargetCoordinates/lookAtImpl 单步+逐帧 camPos 追踪）——karma 黑盒 harness 无法单步，引擎相机放置链专项挂账（探针三点齐备：place/lookat/lookCam）。with-diff/unset-terrain 各 24,024 维持该专项下收敛。globe-terrain 66k 维持仓库外协调挂账。
