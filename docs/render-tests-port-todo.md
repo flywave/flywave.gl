@@ -8346,3 +8346,7 @@ discext=1（§829 盘阈值 0.98→1.009，覆盖 normDist 0.98-1.009 带）：p
 **§851. 根因打通：pitch 缺失带与 heatmap 228k 同源——globe→mercator 顶点过渡混合缺失（2026-09-06 终）**：
 
 mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)` 在 z5-6 间将瓦片网格顶点从球面 ECEF 位置向 mercator 平面位置插值（`interpolateVec3(globeCorner, mercatorCorner, phase)`，globe_util.ts:182/332）。z5.75 → phase≈0.84：远端瓦的 mercator 位置比球面**伸出更远**（mercator 高纬拉伸），覆盖了球面轮廓以外的区域 → pitch 缺失带 y331-375 与 heatmap/near-transition 的全帧灰底均由此而来。我方引擎在 z5-6 间硬切换（§515 明示），缺少此过渡混合——上述两桶 228k+28k 的根因合一。**实施规格**：在瓦发射/顶点处理路径中，globe 投影下计算每顶点的球面 ECEF 与 mercator 平面双位置，按 `smoothstep(5,6,styleZoom)` 插值；背景盘/辉光环同步调整；tersafe：仅影响 z5-6 夹具（其余 zoom phase=0 或 1 无变化）。工作量 = 特征级（周级），涉及 tile emitter + background disc + atmosphere dome 三处坐标一致性。**此为 globe 专项剩余残差的最终汇聚点**——实施后 pitch 缺失带与 heatmap 228k 同步收敛，且 poles 接缝/NaN 问题亦可能受益（过渡态远瓦的正确投影）。
+
+**§852. 过渡混合首次实施：坐标系不一致导致恶化，回退（2026-09-06）**：
+
+在 tile2world 的 Spherical 分支实现球面→mercator 平面顶点插值（gated），pitch 恶化至 221,388。**根因**：球面 ECEF（原点=球心，半径=米）与 mercator 平面（原点=mercator 原点，单位=mercator 米）是**不同坐标系**——直接线性插值产生位于两个坐标系之间的垃圾坐标。mgl 的过渡插值之所以有效，是因为其 globeMatrix 与投影矩阵在**同一像素空间**操作（顶点从瓦片坐标 → 球面 ECEF(px) → globeMatrix → projMatrix，mercator 插值也在该 px 空间内进行）。**正解**：过渡插值必须在**渲染矩阵空间**实施（vertex shader 内 mix(spherePos, mercatorPos, phase) 而非 CPU 端 tile2world），需要在瓦发射管线中传入双坐标 + 过渡相位，由 GPU 在统一的投影空间完成混合。这需要修改 tile 发射器的几何格式（每个顶点额外携带 mercator 坐标 attribute + phase uniform），属特征级实现。回退本实验，规格更新入档。
