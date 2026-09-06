@@ -1253,6 +1253,7 @@ export class MBEnvironmentManager {
                 uBgDiscAlpha: { value: this.m_globeBgAlpha },
                 uBgDiscColor: { value: this.m_globeBgColor ?? new THREE.Color(1, 1, 1) },
                 uDiscDbg: { value: 0 },
+                uDiscLimit: { value: 1.009 },
             },
             vertexShader: `
                 varying vec2 vNdc;
@@ -1286,9 +1287,15 @@ export class MBEnvironmentManager {
                         gl_FragColor = normDist < 0.98 ? vec4(1.0, 0.0, 0.0, 1.0) : vec4(0.0, 0.0, 1.0, 1.0);
                         return;
                     }
-                    if (normDist < 0.98) {
-                        vec3 c = mix(uBgDiscColor, vec3(0.0), smoothstep(0.975, 1.0, normDist));
-                        gl_FragColor = vec4(c * uBgDiscAlpha, uBgDiscAlpha);
+                    // §857: extend the disc threshold when the transition
+                    // blending is active — the mercator plane covers the full
+                    // viewport during the transition, so the background disc
+                    // must also cover past the nominal limb.
+                    const discLim = uDiscLimit;
+                    if (normDist < discLim) {
+                        vec3 c = mix(uBgDiscColor, vec3(0.0), smoothstep(discLim - 0.02, discLim, normDist));
+                        float a = uBgDiscAlpha * (1.0 - smoothstep(discLim - 0.02, discLim, normDist));
+                        gl_FragColor = vec4(c * a, a);
                     } else {
                         gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
                     }
