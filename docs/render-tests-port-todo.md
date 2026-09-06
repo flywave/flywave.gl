@@ -8485,3 +8485,7 @@ mgl globe_util.ts 的 `globeToMercatorTransition(zoom) = smoothstep(5, 6, zoom)`
 **§869b. with-diff 续探：override 链路已通，bbox 探针待对接 DecodedTile 属性结构（2026-09-07 补）**：
 
 §869 的续探确认：①样式 clear override 已生效（sceneEnvironment.clearOverride={white,1}，br=8 全部走无雾分支）——alpha:true context + 透明空间议题已转为纯"黑 quad 几何"问题；②decode 侧 bbox 探针（injectBackground 后扫描 geometries 的 position bbox）未命中——DecodedTile 的 vertexAttributes 结构与 BufferAttribute 假设不符（getClearColor 也需 THREE.Color target 同源实例），需按真实属性结构（engine custom attribute）对接后重测。**入口不变**：确认背景注入 quad 的投影后 bbox 是否越球缘 → 是则修 tessellateForSphere/§779 边界，否则查 globe 直径定标。探针工具入库（bg869 字段，extdbg 门控）。
+
+**§869c. with-diff 终局取证：背景注入 quad = 透明黑全帧覆盖（2026-09-07）**：
+
+decode 侧探针落地（injectBackground 后扫描 geometries bbox）：z1×4 + z0 各 1 个 fill 几何，**顶点全部在球面上**（bbox ≤R，z0 已钳 ±85° 环）——"quad 顶点越球缘"证伪。但 AfterRender 逐根隐藏二分的决定性事实：**重渲染后 (5,5) 变为 (0,0,0,0) 透明黑**——即背景 quad 覆盖含角点的全帧，且写入 alpha=0（RGB=0 = 背景色黑）。合理解释：quad 的三角网在屏幕上的投影超出球盘（球面 patch 的边缘三角形/极区连接处超出 limb，或 fill 材质的 side/剔除配置使背面也画出），且 fragment alpha=0（透明黑）→ RGBA 比较器计 alpha 差 → 40,152。**修复入口（精确）**：①背景注入 quad 的球面 tessellation 边界（§779 tessellateForSphere 在 z0/z1 整球/半球瓦的网格边不应超出球盘投影）或其材质 alpha（背景色 #000 不透明应为 alpha 1——alpha=0 疑与 emit 的 opacity/premultiplied 链有关）；②mgl 语义上 zoom 0 的背景应画满整个 globe 盘（含极区，由 GLOBE_POLES 扇补足——我方 MBGlobePoleCaps bg 填充已在但被 z0 quad 的透明黑覆盖叠加）。探针工具入库（bbox/type/lateBg 字段）。

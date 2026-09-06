@@ -1310,13 +1310,14 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             const g869 = (globalThis as any);
             g869.__mbBgBbox = g869.__mbBgBbox ?? [];
             if (g869.__mbBgBbox.length < 24) {
-                for (const geo of (__result?.geometries ?? []).filter((g: any) => (g as any)?.technique === 0 || (g as any)?.technique === 'fill')) {
+                g869.__mbBgBbox.push(`tile=${tileKey.level}/${tileKey.column}/${tileKey.row} ngeo=${(__result?.geometries ?? []).length} keys=${__result?.geometries?.[0] ? Object.keys(__result.geometries[0]).join('|') : '-'}`);
+                for (const geo of __result?.geometries ?? []) {
                     // fill technique = index 0; keep all fills
                     const pos = geo?.vertexAttributes?.find((a: any) => a.name === 'position');
                     if (!pos) continue;
-                    const arr = (pos as any).array ?? (pos as any).values ?? (typeof (pos as any).getX === 'function'
-                        ? Array.from({ length: (pos as any).count * 3 }, (_: any, i: number) => (pos as any).getX(i) ?? (pos as any).getY?.(i) ?? 0)
-                        : null) ?? (pos as any);
+                    // §869b: BufferAttribute = { name, buffer: ArrayBuffer,
+                    // itemCount: 3, type: 'float' } — read the raw buffer.
+                    const arr = new Float32Array((pos as any).buffer as ArrayBuffer);
                     let minx = Infinity, miny = Infinity, minz = Infinity,
                         maxx = -Infinity, maxy = -Infinity, maxz = -Infinity;
                     for (let i = 0; i + 2 < arr.length; i += 3) {
@@ -1324,7 +1325,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                         miny = Math.min(miny, arr[i + 1]); maxy = Math.max(maxy, arr[i + 1]);
                         minz = Math.min(minz, arr[i + 2]); maxz = Math.max(maxz, arr[i + 2]);
                     }
-                    g869.__mbBgBbox.push(`z${tileKey.level}/${tileKey.column}/${tileKey.row} x[${minx.toFixed(0)},${maxx.toFixed(0)}] y[${miny.toFixed(0)},${maxy.toFixed(0)}] z[${minz.toFixed(0)},${maxz.toFixed(0)}] n=${arr.length / 3}`);
+                    g869.__mbBgBbox.push(`t=${(geo as any).type} z${tileKey.level}/${tileKey.column}/${tileKey.row} x[${minx.toFixed(0)},${maxx.toFixed(0)}] y[${miny.toFixed(0)},${maxy.toFixed(0)}] z[${minz.toFixed(0)},${maxz.toFixed(0)}] n=${arr.length / 3}`);
                 }
             }
         } catch {}

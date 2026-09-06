@@ -223,9 +223,16 @@ export class MBGlobePoleCaps {
                     results.push(`bg=${JSON.stringify(scene.background ?? null)} themeClr=${JSON.stringify({ c: (mapView as any).m_sceneEnvironment?.m_mapView?.m_theme?.clearColor, a: (mapView as any).m_sceneEnvironment?.m_mapView?.m_theme?.clearAlpha })} glca=${(mapView as any).renderer?.getClearAlpha?.()}`);
                     try {
                         const r865: any = (mapView as any).m_renderer;
-                        const THREE865 = (globalThis as any).THREEmod ?? (window as any).THREE;
-                        const cc = THREE865 ? r865?.getClearColor?.(new THREE865.Color()) : null;
+                        const cc = r865?.getClearColor?.(new THREE.Color());
                         results.push(`glca=${r865?.getClearAlpha?.()} `);
+                        // §869b: force transparent clear + re-render the full
+                        // frame — if the pixel turns transparent, the black
+                        // comes from the clear state (theme override); if it
+                        // stays opaque, an opaque object paints it.
+                        r865.setClearColor(0x000000, 0);
+                        r865.clear();
+                        render();
+                        results.push(`forceClearRender=${readPx()}`);
                         results.push(`state=cc(${cc?.r?.toFixed(2)},${cc?.g?.toFixed(2)},${cc?.b?.toFixed(2)}) a=${r865?.getClearAlpha?.()} ctxAlpha=${JSON.stringify(gl865.getContextAttributes?.().alpha)}`);
                     } catch (e865) { results.push(`state=ERR ${e865}`); }
                     try {
@@ -268,12 +275,15 @@ export class MBGlobePoleCaps {
                 const fbD = (window as any).__karma__?.config?.args
                     ?.find?.((a: string) => a.startsWith('feedback-url='))
                     ?.slice('feedback-url='.length);
+                const scene869: any = mapView.scene;
+                const lateBg869 = JSON.stringify(scene869?.background ?? null);
+                (globalThis as any).__mbLateBg869 = `sync${syncCount} lateBg=${lateBg869}`;
                 if (fbD) fetch(`${fbD}/mb-probe-dump`, {
                     method: 'POST',
                     headers: { 'content-type': 'application/json' },
                     body: JSON.stringify({
                         probe: 'pole-caps',
-                        log: [`desc=[${[...this.s_descriptors.keys()].join(',')}] mesh=[${[...this.s_meshes.keys()].join(',')}] reqs=[${((globalThis as any).__mbRasterReqs ?? []).join(',')}] poleRow=[${((globalThis as any).__mbPoleRowTrace ?? []).join(',')}] bg869=[${((globalThis as any).__mbBgBbox ?? []).join(' ; ')}] 865=[br=${(globalThis as any).__mbBgBr ?? 0}/p${(globalThis as any).__mbBgBrProj ?? '-'} reload=${(globalThis as any).__mbReload ?? 0}/${JSON.stringify((globalThis as any).__mbReloadCam ?? null)} clr=${(globalThis as any).__mbClear865 ? JSON.stringify((globalThis as any).__mbClear865) : '-'} ovr=${JSON.stringify((mapView as any).sceneEnvironment?.clearOverride ?? null)} px=[${((globalThis as any).__mb865px ?? []).join(',')}] bisect=[${((globalThis as any).__mb865bisectRows ?? []).join(' ; ')}]`],
+                        log: [`desc=[${[...this.s_descriptors.keys()].join(',')}] mesh=[${[...this.s_meshes.keys()].join(',')}] reqs=[${((globalThis as any).__mbRasterReqs ?? []).join(',')}] poleRow=[${((globalThis as any).__mbPoleRowTrace ?? []).join(',')}] bg869=[${((globalThis as any).__mbBgBbox ?? []).join(' ; ')}] late869=[${(globalThis as any).__mbLateBg869 ?? '-'}] 865=[br=${(globalThis as any).__mbBgBr ?? 0}/p${(globalThis as any).__mbBgBrProj ?? '-'} reload=${(globalThis as any).__mbReload ?? 0}/${JSON.stringify((globalThis as any).__mbReloadCam ?? null)} clr=${(globalThis as any).__mbClear865 ? JSON.stringify((globalThis as any).__mbClear865) : '-'} ovr=${JSON.stringify((mapView as any).sceneEnvironment?.clearOverride ?? null)} px=[${((globalThis as any).__mb865px ?? []).join(',')}] bisect=[${((globalThis as any).__mb865bisectRows ?? []).join(' ; ')}]`],
                     }),
                 }).catch(() => {});
             } catch {}
