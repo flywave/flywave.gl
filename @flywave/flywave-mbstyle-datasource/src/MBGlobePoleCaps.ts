@@ -319,16 +319,14 @@ export class MBGlobePoleCaps {
                         // §872e: render-list audit — three's own draw list for
                         // the last frame (opaque/translucent arrays).
                         const rlAny: any = (mapView as any).renderer?.renderLists;
-                        const listArr = rlAny?.lists?.get?.((mapView as any).scene);
-                        if (listArr && listArr.length > 0) {
-                            for (const list of listArr) {
-                                const op = list.opaque ?? [];
-                                const tr = list.translucent ?? [];
-                                const discIn = atmo871 !== null &&
-                                    (op.some((it: any) => it.object === atmo871) ||
-                                     tr.some((it: any) => it.object === atmo871));
-                                rows870.push(`RL opaque=${op.length} trans=${tr.length} discInList=${discIn} op0mat=${op[0]?.material?.type ?? '-'} op0obj=${op[0]?.object?.type ?? '-'} op0vis=${op[0]?.object?.visible}`);
-                            }
+                        const list = rlAny?.get?.((mapView as any).scene, 0);
+                        if (list) {
+                            const op = list.opaque ?? [];
+                            const tr = list.translucent ?? [];
+                            const discIn = atmo871 !== null &&
+                                (op.some((it: any) => it.object === atmo871) ||
+                                 tr.some((it: any) => it.object === atmo871));
+                            rows870.push(`RL opaque=${op.length} trans=${tr.length} discInList=${discIn} op0mat=${op[0]?.material?.type ?? '-'} op0obj=${op[0]?.object?.type ?? '-'}`);
                         } else {
                             rows870.push(`RL no-list-for-scene`);
                         }

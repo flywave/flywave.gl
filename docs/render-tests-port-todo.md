@@ -8563,3 +8563,7 @@ lookat 探针（extdbg 已有）实测 with-diff 全流程：setZoom 0 → flyZo
 **§872h. 本轮实施收口：disc 专用 scene + AfterRender 显式通道 + 渲染列表审计落地；24,024 维持（2026-09-07 终）**：
 
 已实施并验证：①§829 盘改挂专用 discScene（脱离主 composer/m_scene 通道），dispose 同步清理；②新增 renderGlobeDisc() AfterRender 显式渲染（autoClear=false、setRenderTarget(null)）；③渲染列表审计探针（renderer.renderLists.lists.get(scene) → opaque/translucent 计数 + discInList）入库。复测：with-diff/unset-terrain 各维持 24,024（全白帧）——显式通道渲染后帧仍全白，即盘 fragment 的输出在全帧为白（normDist≥discLim everywhere）或未执行，与 uniforms 实测（黑/alpha1/R/位置正确）矛盾未解。**该问题需 three 渲染列表/逐 draw dump 专项**（renderer.renderLists.lists.get(scene) 的 opaque 数组内容 + 逐 item 的 material/程序 dump——基础设施已具雏形：探针已能触达 renderLists）。globe-terrain 66k 维持仓库外协调挂账。
+
+**§872i. 渲染列表审计结果：with-diff 主通道渲染列表为空（opaque=0/trans=0）——白帧=纯 clear（2026-09-07 终）**：
+
+`renderer.renderLists.get(mapView.scene, 0)`（公开 API）实测：**opaque=0/trans=0**——with-diff 的主通道根本未绘制任何对象（白帧=纯 clear ✓ 与 24,024 一致）。盘对象在场景中（inScene=true/vis=true/黑 uniforms ✓）却不在渲染列表 → three 的 projectObject 在某帧将其排除（visible 翻转/层掩码/matrixWorld NaN 类）。**下轮入口（精确）**：①逐帧 visible 探针（每 AfterRender 记录 atmo.visible + scene.children.length——定位排除发生的帧与触发者）；②three projectObject 排除条件审计（layers/visible/matrixWorld NaN）；③修复后黑盘（mgl background #000 on globe）出现 → with-diff/unset-terrain 收敛至 AA 级。globe-terrain 66k 维持仓库外协调挂账。
