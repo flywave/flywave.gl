@@ -315,7 +315,23 @@ export class MBGlobePoleCaps {
                     });
                     try {
                         const atmo871 = (globalThis as any).__mbAtmo871 ?? null;
-                        rows870.push(`disc inScene=${atmo871 ? (mapView as any).scene.children.includes(atmo871) : 'no-atmo'} vis=${atmo871?.visible} ro=${atmo871?.renderOrder} uBg=(${atmo871 ? JSON.stringify(atmo871.material?.uniforms?.uBgDiscColor?.value) : '-'}) uDbg=${atmo871?.material?.uniforms?.uDiscDbg?.value} uBA=${atmo871?.material?.uniforms?.uBgDiscAlpha?.value} uGR=${atmo871?.material?.uniforms?.uGlobeRadius?.value} uGP=${JSON.stringify(atmo871?.material?.uniforms?.uGlobePos?.value ?? null)} info=${JSON.stringify((mapView as any).renderer?.info?.render ?? null)} fired=${(globalThis as any).__mbAtmoFired ?? 0} fired=${(globalThis as any).__mbAtmoFired ?? 0} uGR=${atmo871?.material?.uniforms?.uGlobeRadius?.value} calls=${(mapView as any).m_renderingManager ? 'n/a' : 'n/a'}`);
+                        rows870.push(`disc inScene=${atmo871 ? (mapView as any).scene.children.includes(atmo871) : 'no-atmo'} vis=${atmo871?.visible} ro=${atmo871?.renderOrder} uBg=(${atmo871 ? JSON.stringify(atmo871.material?.uniforms?.uBgDiscColor?.value) : '-'}) uGP=${JSON.stringify(atmo871?.material?.uniforms?.uGlobePos?.value ?? null)} fired=${(globalThis as any).__mbAtmoFired ?? 0}`);
+                        // §872e: render-list audit — three's own draw list for
+                        // the last frame (opaque/translucent arrays).
+                        const rlAny: any = (mapView as any).renderer?.renderLists;
+                        const listArr = rlAny?.lists?.get?.((mapView as any).scene);
+                        if (listArr && listArr.length > 0) {
+                            for (const list of listArr) {
+                                const op = list.opaque ?? [];
+                                const tr = list.translucent ?? [];
+                                const discIn = atmo871 !== null &&
+                                    (op.some((it: any) => it.object === atmo871) ||
+                                     tr.some((it: any) => it.object === atmo871));
+                                rows870.push(`RL opaque=${op.length} trans=${tr.length} discInList=${discIn} op0mat=${op[0]?.material?.type ?? '-'} op0obj=${op[0]?.object?.type ?? '-'} op0vis=${op[0]?.object?.visible}`);
+                            }
+                        } else {
+                            rows870.push(`RL no-list-for-scene`);
+                        }
                     } catch (e871) { rows870.push(`disc=ERR ${e871}`); }
                     (globalThis as any).__mb870rows = `n=${root870?.children?.length ?? 0} ` + rows870.slice(0, 12).join(' ; ');
                 } catch (e870) {

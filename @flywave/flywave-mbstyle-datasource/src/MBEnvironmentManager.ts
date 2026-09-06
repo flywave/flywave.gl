@@ -342,6 +342,10 @@ export class MBEnvironmentManager {
     private m_skyMesh: THREE.Mesh | null = null;
     private m_stars: THREE.Mesh | null = null;
     private m_scene: THREE.Scene | null = null;
+    /** §872b: dedicated scene for the §829 background disc — rendered in the
+     * AfterRender explicit channel (the main-pass composer drops
+     * engine-external meshes for bg-only globe styles). */
+    private m_discScene: THREE.Scene | null = null;
 
     /** Whether 3D lighting is active (affects vector-layer shading). */
     get hasLighting(): boolean { return this.m_directionalLight !== null; }
@@ -1361,15 +1365,47 @@ export class MBEnvironmentManager {
                 } catch {}
             }
         };
-        this.m_scene?.add(this.m_globeAtmo);
+        // §872b: the disc renders through its OWN dedicated scene in the
+        // AfterRender explicit channel — the main-pass composer drops
+        // engine-external meshes for bg-only globe styles (§598 class), and
+        // the disc must sit UNDER all content, so a plain post-render draw
+        // would cover tiles.
+        this.m_discScene = this.m_discScene ?? new THREE.Scene();
+        this.m_discScene.add(this.m_globeAtmo);
     }
 
     private disposeGlobeAtmosphere(): void {
         if (this.m_globeAtmo) {
             this.m_scene?.remove(this.m_globeAtmo);
+            this.m_discScene?.remove(this.m_globeAtmo);
             (this.m_globeAtmo.geometry as THREE.BufferGeometry).dispose();
             (this.m_globeAtmo.material as THREE.Material).dispose();
             this.m_globeAtmo = null;
+        }
+    }
+
+    /**
+     * §872b: render the §829 background disc through its dedicated scene in
+     * the AfterRender explicit channel (autoClear off — composites over the
+     * frame). No-op when the disc doesn't exist or the projection isn't
+     * spherical.
+     */
+    public renderGlobeDisc(): void {
+        if (!this.m_discScene || !this.m_globeAtmo || !this.m_mapView) return;
+        if ((this.m_mapView as any).projection?.type !== 1) return;
+        const r = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
+        const cam = this.m_mapView.camera;
+        if (!r || !cam) return;
+        const prevAutoClear = r.autoClear;
+        const prevRT = r.getRenderTarget();
+        try {
+            r.autoClear = false;
+            r.setScissorTest(false);
+            r.setRenderTarget(null);
+            r.render(this.m_discScene, cam);
+        } finally {
+            r.setRenderTarget(prevRT);
+            r.autoClear = prevAutoClear;
         }
     }
 

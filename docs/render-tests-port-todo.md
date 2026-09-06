@@ -8559,3 +8559,7 @@ lookat 探针（extdbg 已有）实测 with-diff 全流程：setZoom 0 → flyZo
 **§872g. 本轮收口：探针数据齐备（fired=262 证盘被渲染、uBA=1/uGR=R/uGP=(0,0,−R)），帧全白的最终分歧留给渲染图 dump 专项（2026-09-07 终）**：
 
 补充探针实测：盘 onBeforeRender fired=92(sync80)/262(sync250)（盘被 three 正常处理渲染 ✓）；uBgDiscColor=黑 ✓ uBgDiscAlpha=1 ✓ uGlobeRadius=R ✓ uGlobePos=(0,0,−R)（zoom 0 相机贴地距离）；frame 全白。矛盾点：按 uniforms，中心像素 normDist=0 应画黑——帧全白。剩余可能性：①渲染时 uniform 状态与 AfterRender 探针读取时点不同（帧间 flip-flop 的另一半）；②uBgDiscColor 的 sRGB 转换链；③m_scene 的 matrixWorldAutoUpdate/层掩码。需渲染图 dump 基础设施（逐 draw/Uniform dump）终裁——引擎渲染管线专项，非 patcher 层可执行。**globe-terrain 66k 维持仓库外协调挂账**（DEM fixture 瓦不可得）。
+
+**§872h. 本轮实施收口：disc 专用 scene + AfterRender 显式通道 + 渲染列表审计落地；24,024 维持（2026-09-07 终）**：
+
+已实施并验证：①§829 盘改挂专用 discScene（脱离主 composer/m_scene 通道），dispose 同步清理；②新增 renderGlobeDisc() AfterRender 显式渲染（autoClear=false、setRenderTarget(null)）；③渲染列表审计探针（renderer.renderLists.lists.get(scene) → opaque/translucent 计数 + discInList）入库。复测：with-diff/unset-terrain 各维持 24,024（全白帧）——显式通道渲染后帧仍全白，即盘 fragment 的输出在全帧为白（normDist≥discLim everywhere）或未执行，与 uniforms 实测（黑/alpha1/R/位置正确）矛盾未解。**该问题需 three 渲染列表/逐 draw dump 专项**（renderer.renderLists.lists.get(scene) 的 opaque 数组内容 + 逐 item 的 material/程序 dump——基础设施已具雏形：探针已能触达 renderLists）。globe-terrain 66k 维持仓库外协调挂账。

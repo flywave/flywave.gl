@@ -3110,6 +3110,9 @@ export class MBStyleDataSource extends TileDataSource {
                                 self.mapView,
                                 (self.m_environment as any)?.m_fog ?? null);
                         }
+                        // §872b: render the §829 background disc explicitly
+                        // (bg-only styles have no tile content to cover).
+                        try { (self.m_environment as any)?.renderGlobeDisc?.(); } catch {}
                     } else {
                         MBGlobePoleCaps.clear();
                     }
