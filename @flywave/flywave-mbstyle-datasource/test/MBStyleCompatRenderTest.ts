@@ -2113,6 +2113,8 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         clampHorizontal: false,
                     } as any,
                 });
+                // §872b: surface shader compile/link errors loudly in tests.
+                try { (mapView as any).m_renderer.debug.checkShaderErrors = true; } catch {}
 
                 // render-tests capture a static frame shortly after load; disable
                 // the 800ms text fade-in so glyph opacity matches the baseline.
