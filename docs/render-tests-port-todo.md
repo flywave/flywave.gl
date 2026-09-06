@@ -8535,3 +8535,7 @@ decode 侧与渲染侧的同瓦对拍（tile 1/1/1 为例）：decodeInfo.center
 **§872. with-diff/unset-terrain 24k 挂账定性完成：composer 路径丢弃引擎外部网格（§598 已知现象类）——引擎集成层挂账（2026-09-07 终）**：
 
 证据链闭环：①注入门控后 with-diff/unset-terrain 帧全白（黑盘缺失 24,024 = expected 黑盘不透明像素数）；②盘对象在 m_scene 中、visible、uniforms 正确（黑/1）；③DOMEDBG=2 无调试色 → 盘 fragment 未执行；④MapRenderingManager §598 注释自证："composer 渲染路径经验性丢弃引擎外部场景网格（mbstyle terrain mesh 走直绘通道可渲染、经 composer 则不可见）"——§829 盘为 MBStyleDataSource 运行时加挂的引擎外部 mesh，composer 激活（主题 effects 启用）时被同一机制丢弃。**修复入口（引擎 MapRenderingManager/composer 集成层，下轮）**：①将 §829 盘纳入 composer 渲染图（挂接为 RenderPass 层或场景图正规成员）；或②bg-only 样式禁用 effects 强制直绘通道；或③盘改经 preSceneHook/composer 前置通道（注意 composer 输入缓冲会清屏，需 RenderPass 化）。实施后 with-diff/unset-terrain 各 24,024 预期收敛至 AA 级。globe-terrain 66k 维持仓库外协调挂账（DEM fixture 瓦不可得）。
+
+**§872b. 补充实测：lib 为最新（白 else 在），盘 uniforms 正确（黑/alpha1/R）但帧仍全白——材质/渲染成员级问题确认（2026-09-07 终）**：
+
+构建产物核验（lib 含白 else 与全部探针 ✓）后的补充探针：uBgDiscColor=(0)黑 ✓、uBgDiscAlpha=1 ✓、uGlobeRadius=R ✓、uGlobePos=(0,0,−R)、inScene=true、vis=true——**盘对象与 uniforms 全部正确但帧仍全白、DOMEDBG=2 的红/蓝调试色也不出现** → 盘 fragment 未执行（材质编译失败被静默跳过（checkShaderErrors=!isProduction）或对象被渲染图过滤）。注入门控（hasTileSource）本身正确且必要（越界 quads 的不透明黑 stamp）。**下轮首项（精确）**：①盘 ShaderMaterial 的编译验证（checkShaderErrors=true 单测 或 gl.getShaderInfoLog dump）；②对比 globe-default（盘渲染正常）与 with-diff 的盘创建参数差异（两夹具同走 applyGlobeDiscBackground，差异在调用时序/状态）；③修复后 with-diff/unset-terrain 各 24,024 预期收敛至 AA 级。globe-terrain 66k 维持仓库外协调挂账。
