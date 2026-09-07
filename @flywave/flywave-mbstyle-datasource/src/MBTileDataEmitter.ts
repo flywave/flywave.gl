@@ -840,9 +840,19 @@ export class MBTileDataEmitter {
 
     private project(p: THREE.Vector2 | THREE.Vector3): THREE.Vector3 {
         tile2world(this.m_extents, this.m_decodeInfo, p.x, p.y, tmpV3);
-        // Apply line-z-offset if set (for elevated lines)
+        // Apply line-z-offset if set (for elevated lines). §880: the offset
+        // must ride the globe RADIAL (up = normalize(absolute position)) —
+        // adding it to the raw z component vanishes for tiles away from the
+        // equator/prime meridian (radial ⊥ z ⇒ zero lift ⇒ the elevated
+        // line sinks into the sphere and disappears, join-types blank).
         if (this.m_currentZOffset !== 0) {
-            tmpV3.z += this.m_currentZOffset;
+            const c = this.m_decodeInfo.center;
+            const ax = tmpV3.x + c.x, ay = tmpV3.y + c.y, az = tmpV3.z + c.z;
+            const len = Math.hypot(ax, ay, az) || 1;
+            const k = this.m_currentZOffset / len;
+            tmpV3.x += ax * k;
+            tmpV3.y += ay * k;
+            tmpV3.z += az * k;
         }
         return tmpV3.clone();
     }
@@ -3066,7 +3076,17 @@ export class MBTileDataEmitter {
                         const g = this.m_terrainSampler(w.x + cwLine.x, w.y + cwLine.y);
                         if (Number.isFinite(g)) baseZ = g;
                     }
-                    worldPts.push(w.x, w.y, baseZ + h);
+                    // §880: per-vertex heights ride the radial too.
+                    let outX = w.x, outY = w.y, outZ = baseZ;
+                    if (h !== 0) {
+                        const ax = w.x + cwLine.x, ay = w.y + cwLine.y, az = baseZ + cwLine.z;
+                        const len = Math.hypot(ax, ay, az) || 1;
+                        const k = h / len;
+                        outX = w.x + ax * k;
+                        outY = w.y + ay * k;
+                        outZ = baseZ + az * k;
+                    }
+                    worldPts.push(outX, outY, outZ);
                 }
                 if (pathMaxH > 0) this.noteGeometryHeight(pathMaxH);
 
