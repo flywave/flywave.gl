@@ -99,9 +99,54 @@ export class LineTypesetter implements Typesetter {
             }
         } catch { /* probe only */ }
 
+        // §882: sanitize partially-loaded glyphs. A glyph whose SDF page /
+        // metrics did not load (catalog coverage gaps) carries non-finite
+        // advance or missing quad data; placing it poisons the whole text
+        // geometry with NaN vertices (computeBoundingSphere NaN warning,
+        // nothing rasterizes — CJK label families rendered blank). mgl
+        // degrades by rendering a blank instead of dropping the label, so
+        // replace such glyphs with zero-area blanks and keep the rest.
+        const glyphs = (globalThis as any).__mbNoSanitize ? this.m_currentParams.glyphs : this.m_currentParams.glyphs;
+        let sanitized: any[] | undefined;
+        for (let i = 0; i < glyphs.length; ++i) {
+            const g: any = glyphs[i];
+            const bad =
+                !g.isInCache ||
+                !Number.isFinite(g.advanceX) ||
+                !g.positions ||
+                g.positions.length < 4 ||
+                g.positions.some((p: any) => !Number.isFinite(p?.x) || !Number.isFinite(p?.y));
+            if (bad) {
+                sanitized = sanitized ?? Array.from(glyphs);
+                sanitized[i] = {
+                    ...g,
+                    isInCache: true,
+                    advanceX: Number.isFinite(g.advanceX) ? g.advanceX : 0,
+                    positions: [
+                        { x: 0, y: 0, z: 0 },
+                        { x: 0, y: 0, z: 0 },
+                        { x: 0, y: 0, z: 0 },
+                        { x: 0, y: 0, z: 0 },
+                    ],
+                    dynamicTextureCoordinates: [
+                        { x: 0, y: 0 },
+                        { x: 0, y: 0 },
+                        { x: 0, y: 0 },
+                        { x: 0, y: 0 },
+                    ],
+                };
+            }
+        }
+        if (sanitized !== undefined) {
+            this.m_currentParams.glyphs = sanitized;
+        }
+
+        // §882: font metrics of the first glyph may be absent for partially
+        // loaded fonts — fall back to 0 instead of poisoning y with NaN.
+        const metrics0: any = this.m_currentParams.glyphs[0].font.metrics ?? {};
         this.m_currentParams.position.y +=
             this.m_currentParams.textLayoutStyle.verticalAlignment *
-            this.m_currentParams.glyphs[0].font.metrics.capHeight *
+            (Number.isFinite(metrics0.capHeight) ? metrics0.capHeight : 0) *
             this.m_tempScale;
 
         const isOnlyMeasured =
@@ -111,8 +156,10 @@ export class LineTypesetter implements Typesetter {
         // Compute line origin and height.
         const origin = this.m_currentParams.position.x;
         const lineHeight =
-            this.m_currentParams.glyphs[0].font.metrics.lineHeight +
-            this.m_currentParams.textLayoutStyle.leading;
+            (Number.isFinite(metrics0.lineHeight) ? metrics0.lineHeight : 0) +
+            (Number.isFinite(this.m_currentParams.textLayoutStyle.leading)
+                ? this.m_currentParams.textLayoutStyle.leading
+                : 0);
 
         // Initialize line-breaking and wrapping variables.
         let lineStartIdx = 0;
@@ -492,9 +539,12 @@ export class LineTypesetter implements Typesetter {
                 UnicodeUtils.isRtlMirrored(glyphData.codePoint) &&
                 direction === UnicodeUtils.Direction.RTL;
             const verticalOffset =
-                glyphFontMetrics.lineHeight -
-                glyphFontMetrics.base -
-                glyphFontMetrics.distanceRange * 0.5;
+                (Number.isFinite(glyphFontMetrics?.lineHeight) ? glyphFontMetrics!.lineHeight : 0) -
+                (Number.isFinite(glyphFontMetrics?.base) ? glyphFontMetrics!.base : 0) -
+                (Number.isFinite(glyphFontMetrics?.distanceRange)
+                    ? glyphFontMetrics!.distanceRange
+                    : 0) *
+                    0.5;
 
             // Compute the glyphs transformation matrix and apply to all corners of a glyph.
             TypesettingUtils.computeGlyphTransform(

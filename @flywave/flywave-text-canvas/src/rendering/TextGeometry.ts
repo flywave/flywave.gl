@@ -388,19 +388,28 @@ export class TextGeometry {
 
             const glyph = textBufferObject.glyphs[i];
             if (!glyph.isInCache) {
-                // §882: which codepoint missed the cache — one missing glyph
-                // silently drops the WHOLE label here. Gated by the
-                // `glyphdbg=1` karma arg (sets __mbGlyphDbg).
+                // §882: degrade instead of dropping the WHOLE label — write a
+                // zero-area quad (invisible) and keep the remaining glyphs,
+                // matching mgl's missing-glyph behaviour. The old early
+                // `return false` silenced entire CJK labels when a single
+                // glyph missed the font cache.
+                for (let j = 0; j < VERTICES_PER_QUAD; ++j) {
+                    const o = targetOffset + i * VERTICES_PER_QUAD + j;
+                    this.m_positionAttribute.setXYZW(o, 0, 0, 0, 1);
+                    this.m_uvAttribute.setXYZW(o, 0, 0, 0, 1);
+                    this.m_colorAttribute.setXYZW(o, red, green, blue, 0);
+                    this.m_bgColorAttribute.setXYZW(o, bgRed, bgGreen, bgBlue, 0);
+                }
                 const gMiss = (globalThis as any).__mbGlyphDbg;
                 if (gMiss) {
                     gMiss.miss = (gMiss.miss ?? 0) + 1;
-                    const cp = (textBufferObject as any).text?.charCodeAt?.(i);
+                    const cp = (glyph as any)?.codePoint;
                     if (gMiss.miss <= 8) {
                         // eslint-disable-next-line no-console
-                        console.log(`[MBGlyph] miss idx=${i} cp=${cp !== undefined ? cp.toString(16) : '?'} total=${textBufferObject.glyphs.length} label=${(textBufferObject as any).text?.slice?.(0, 20) ?? '?'}`);
+                        console.log(`[MBGlyph] blanked idx=${i} cp=${cp !== undefined ? cp.toString(16) : '?'} total=${textBufferObject.glyphs.length} label=${(textBufferObject as any).text?.slice?.(0, 20) ?? '?'}`);
                     }
                 }
-                return false;
+                continue;
             }
 
             const mirrored = buffer[srcOffset + 4] > buffer[srcOffset + VERTEX_BUFFER_STRIDE + 4];
@@ -408,23 +417,46 @@ export class TextGeometry {
             const bw = buffer[srcOffset + 7];
 
             for (let j = 0; j < VERTICES_PER_QUAD; ++j) {
-                const x = buffer[srcOffset + j * VERTEX_BUFFER_STRIDE];
-                const y = buffer[srcOffset + j * VERTEX_BUFFER_STRIDE + 1];
+                // §882: NaN guard — a single non-finite vertex poisons the
+                // whole text mesh (computeBoundingSphere NaN ⇒ nothing
+                // rasterizes). Blank the quad instead.
+                const nx = (v: number): number => (Number.isFinite(v) ? v : 0);
+                const x = nx(buffer[srcOffset + j * VERTEX_BUFFER_STRIDE]);
+                const y = nx(buffer[srcOffset + j * VERTEX_BUFFER_STRIDE + 1]);
+                const vx = nx(x * s * cosR + y * s * -sinR + offsetX);
+                const vy = nx(x * s * sinR + y * s * cosR + offsetY);
+                const vz = nx(buffer[srcOffset + j * VERTEX_BUFFER_STRIDE + 2] + offsetZ);
+                const hasNaN = x !== buffer[srcOffset + j * VERTEX_BUFFER_STRIDE] ||
+                    y !== buffer[srcOffset + j * VERTEX_BUFFER_STRIDE + 1] ||
+                    vx !== x * s * cosR + y * s * -sinR + offsetX ||
+                    vy !== x * s * sinR + y * s * cosR + offsetY;
+                if (hasNaN) {
+                    this.m_positionAttribute.setXYZW(
+                        targetOffset + i * VERTICES_PER_QUAD + j, 0, 0, 0, 1);
+                    this.m_uvAttribute.setXYZW(
+                        targetOffset + i * VERTICES_PER_QUAD + j, 0, 0, 0, 1);
+                    this.m_colorAttribute.setXYZW(
+                        targetOffset + i * VERTICES_PER_QUAD + j, red, green, blue, 0);
+                    this.m_bgColorAttribute.setXYZW(
+                        targetOffset + i * VERTICES_PER_QUAD + j, bgRed, bgGreen, bgBlue, 0);
+                    continue;
+                }
                 this.m_positionAttribute.setXYZW(
                     targetOffset + i * VERTICES_PER_QUAD + j,
-                    x * s * cosR + y * s * -sinR + offsetX,
-                    x * s * sinR + y * s * cosR + offsetY,
-                    buffer[srcOffset + j * VERTEX_BUFFER_STRIDE + 2] + offsetZ,
-                    buffer[srcOffset + j * VERTEX_BUFFER_STRIDE + 3] + rotSign * r
+                    vx,
+                    vy,
+                    vz,
+                    nx(buffer[srcOffset + j * VERTEX_BUFFER_STRIDE + 3] + rotSign * r)
                 );
                 const mirroredUVIdx = mirrored ? ((j + 1) % 2) + Math.floor(j / 2) * 2 : j;
+                const uvCoord = glyph.dynamicTextureCoordinates[mirroredUVIdx];
                 this.m_uvAttribute.setXYZW(
                     targetOffset + i * VERTICES_PER_QUAD + j,
-                    glyph.dynamicTextureCoordinates[mirroredUVIdx].x,
-                    glyph.dynamicTextureCoordinates[mirroredUVIdx].y,
-                    w,
+                    nx(uvCoord?.x ?? 0),
+                    nx(uvCoord?.y ?? 0),
+                    nx(w),
                     // mgl gamma mode: uv.w is fontScale (pass through).
-                    MglGammaMode.enabled ? bw : (bw - w) / s + w
+                    MglGammaMode.enabled ? nx(bw) : nx((bw - w) / s + w)
                 );
                 this.m_colorAttribute.setXYZW(
                     targetOffset + i * VERTICES_PER_QUAD + j,

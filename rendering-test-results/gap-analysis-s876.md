@@ -338,3 +338,27 @@ ml0901（§691 时代）仅 43 个逐例数值+家族级估值，且早于 §822
 ### ①④ 状态
 - ① join-types/overlap 校准（join-types 布局偏移、overlap 瓦片格透明差）未动，排下轮；
 - ④ T1 meshopt 专项未动，排期不变。
+
+---
+
+## 九、§883：文字族三项修复落地（2026-09-07 续）
+
+### 修复 1：字形图集容量（根因确认）
+`buildFontCatalogFromPBF` 传给 `FontCatalog.fromData` 的 `maxCodePointCount`（GPU 图集容量）固定 **1024**，而合并后的 PBF 字形有 2579+ 个——**插入序第 ~5 个 unicode range 之后的字形永远无法缓存**（`getGlyphs` 返回 `isInCache=false`），表现为随机但确定的「半数字符空白」。改为 `Math.max(1024, glyphs.size)` 后 `getGlyphs miss=[]`。
+
+### 修复 2：缺字降级（对齐 mgl）
+- `TextGeometry.addTextBufferObject`：`!glyph.isInCache` 由 `return false`（丢弃整标签）改为**写零面积 quad**（该字空白、其余字形存活），mgl 同语义；
+- 写入循环加 NaN 终极防护：非有限坐标/UV 的字形 quad 置空，防止单字形毒化整段文本几何（消除 `computeBoundingSphere NaN`）。
+
+### 修复 3：CJK 表意断行
+`MBTileDataEmitter` 文本 layout：`text-max-width` 存在时 wrappingMode 由固定 `'Word'` 改为**含 CJK 字符 → `'Character'`**（mgl symbol/shaping 的 ideographic breaking）——`text-max-width/ideographic-breaking` 从整标签空白/单行 → **按 5 字断行多行布局**。
+
+### 效果
+- `text-max-width/ideographic-breaking`：整标签空白（基线 6229，修后部分渲染 6481）→ **全字符渲染+多行断行**（8504，mismatch 上升为口径效应：渲染 ink 增多）。`ideographic-punctuation-breaking` 同步好转（全字符渲染）。
+- 回归验证：text-field/text-halo-color/text-letter-spacing 拉丁夹具逐位一致（43→43 等），`letter-spacing/zoom-and-property-function` 反而 −826。
+- 文字族 A/B（max-width/writing-mode/anchor/keep-upright/pitch-alignment 57 例）数值 +11,121，主要为「原先被容量压掉的标签现在渲染出来」的口径效应（如 text-keep-upright line-placement 族的 `{class} {class}` 标签此前后半空白）；keep-upright 翻转/重复间距等标定差依旧挂账。
+
+### 下一轮入口
+1. 断行宽度标定：ours 每行 5 字 vs mgl 4 字（mgl 有效宽度略小于 text-max-width，需查其 SHAPING padding/epsilon）；
+2. text-keep-upright 翻转/沿线重复间距标定（§879 遗留）；
+3. ①join-types/overlap 定位校准；④T1 meshopt 专项（排期不变）。

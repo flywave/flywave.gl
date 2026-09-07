@@ -254,7 +254,7 @@ function addTextBufferToCanvas(
         } catch (err) {
             // §882: capture the placement exception (gated).
             const gE2 = globalThis as any;
-            if (gE2.__mbPL) {
+            if (gE2.__mbGlyphDbg) {
                 gE2.__mbPL.createErr = (gE2.__mbPL.createErr ?? 0) + 1;
                 if (gE2.__mbPL.createErr <= 4) {
                     // eslint-disable-next-line no-console
@@ -278,16 +278,38 @@ function addTextBufferToCanvas(
     // §882: pre-call probe — is canvas the real TextCanvas?
     try {
         const gP2 = globalThis as any;
-        if (gP2.__mbPL && textElement.text && /[\u4e00-\u9fff]/.test(textElement.text)) {
+        if (gP2.__mbGlyphDbg && textElement.text && /[\u4e00-\u9fff]/.test(textElement.text)) {
             // eslint-disable-next-line no-console
-            console.log(`[MBPre] tbo=${textElement.textBufferObject !== undefined} glyphs=${textElement.glyphs?.length} ctor=${textElement.textBufferObject?.constructor?.name ?? '-'} canvasCtor=${canvas?.constructor?.name} fn=${(canvas as any)?.addTextBufferObject?.name?.slice?.(0, 30) ?? '?'} srcHasProbe=${String((canvas as any)?.addTextBufferObject).includes('MBEntry')} m0lh=${(textElement.glyphs as any)?.[0]?.font?.metrics?.lineHeight} m0ch=${(textElement.glyphs as any)?.[0]?.font?.metrics?.capHeight} lead=${textElement.layoutStyle?.leading} lw=${textElement.layoutStyle?.lineWidth} vm=${textElement.layoutStyle?.verticalAlignment}`);
+            let glyphMiss = '';
+            try {
+                const fc: any = (canvas as any).fontCatalog ?? (canvas as any).m_fontCatalog;
+                const gs: any[] | undefined = fc?.getGlyphs?.(textElement.text, textElement.renderStyle);
+                if (gs === undefined) glyphMiss = 'getGlyphs=undefined';
+                else glyphMiss = gs.map((g, i) => (g?.isInCache ? '' : `${textElement.text.charCodeAt(i).toString(16)}`)).filter(Boolean).join(',');
+            } catch (e) { glyphMiss = 'probeErr:' + e; }
+            console.log(`[MBPre] tbo=${textElement.textBufferObject !== undefined} glyphs=${textElement.glyphs?.length} fcMiss=[${glyphMiss}] m0lh=${(textElement.glyphs as any)?.[0]?.font?.metrics?.lineHeight} lead=${textElement.layoutStyle?.leading} lw=${textElement.layoutStyle?.lineWidth} vm=${textElement.layoutStyle?.verticalAlignment}`);
         }
     } catch { /* probe only */ }
-    const addResult = canvas.addTextBufferObject(textElement.textBufferObject!, tmpBufferAdditionParams);
+    let addResult: boolean;
+    try {
+        addResult = canvas.addTextBufferObject(textElement.textBufferObject!, tmpBufferAdditionParams);
+    } catch (err) {
+        // §882: an exception here silently breaks the render loop (no more
+        // frames → mocha timeout). Log and degrade to label-not-drawn.
+        const gC = globalThis as any;
+        if (gC.__mbGlyphDbg) {
+            gC.__mbPL.addErr = (gC.__mbPL.addErr ?? 0) + 1;
+            if (gC.__mbPL.addErr <= 4) {
+                // eslint-disable-next-line no-console
+                console.log(`[MBAddErr] THREW text=${textElement.text?.slice?.(0, 12)} err=${err}`);
+            }
+        }
+        return false;
+    }
     // §882: canvas-level add result for CJK labels.
     try {
         const gR = globalThis as any;
-        if (gR.__mbPL && textElement.text && /[\u4e00-\u9fff]/.test(textElement.text)) {
+        if (gR.__mbGlyphDbg && textElement.text && /[\u4e00-\u9fff]/.test(textElement.text)) {
             gR.__mbPL.cjkAdd = gR.__mbPL.cjkAdd ?? [];
             if (gR.__mbPL.cjkAdd.length < 6) {
                 // eslint-disable-next-line no-console

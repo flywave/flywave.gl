@@ -242,9 +242,10 @@ function discoverTests(): TestEntry[] {
         (globalThis as any).__mbHsDbg = Number(hsdbgArg);
     }
     // §882: glyphdbg=1 → log glyphs missing the font cache in
-    // TextGeometry.addTextBufferObject (whole-label silent drop).
+    // TextGeometry.addTextBufferObject (whole-label silent drop). An OBJECT
+    // so probes can attach counters to it.
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "glyphdbg=1")) {
-        (globalThis as any).__mbGlyphDbg = true;
+        (globalThis as any).__mbGlyphDbg = { enabled: true } as any;
     }
     // §791c: extnolight=1 → skip legacy Lambert for zero-height extrusions.
     const enl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
@@ -2530,14 +2531,31 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                     .replace('{fontstack}', encodeURIComponent(fontName))
                                     .replace('{range}', `${start}-${end}`)
                                     .replace(/^local:\/\//, '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/');
-                                try {
-                                    const resp = await fetch(url);
-                                    if (!resp.ok) continue;
-                                    const fontstack = parseGlyphPBF(await resp.arrayBuffer());
-                                    if (!fontstack) continue;
-                                    for (const [id, g] of fontstack.glyphs) glyphs.set(id, g);
-                                } catch { continue; }
-                            }
+                                // §882: retry — under parallel fixtures the
+                                // karma static server intermittently drops
+                                // range fetches, which blanked random glyphs.
+                                let fontstack: any = null;
+                                for (let attempt = 0; attempt < 3 && !fontstack; attempt++) {
+                                    try {
+                                        const resp = await fetch(url);
+                                        if (!resp.ok) {
+                                            // eslint-disable-next-line no-console
+                                            console.log(`[MBRange] HTTP ${resp.status} range=${range} url=${url}`);
+                                            continue;
+                                        }
+                                        fontstack = parseGlyphPBF(await resp.arrayBuffer());
+                                        if (!fontstack) {
+                                            // eslint-disable-next-line no-console
+                                            console.log(`[MBRange] PARSE NULL range=${range} url=${url}`);
+                                        }
+                                    } catch (e) {
+                                        // eslint-disable-next-line no-console
+                                        console.log(`[MBRange] FETCH ERR range=${range} ${e}`);
+                                        await new Promise((r) => setTimeout(r, 50 * (attempt + 1)));
+                                    }
+                                }
+                                if (!fontstack) continue;
+                                for (const [id, g] of fontstack.glyphs) glyphs.set(id, g);
                         }
                         if (glyphs.size > 0) {
                             // TextStyleCache selects the canvas via
@@ -2546,6 +2564,22 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                             // "default". Register under that name so the PBF
                             // catalog is actually used.
                             const catalog = buildFontCatalogFromPBF(catalogFontName, glyphs);
+                            // §882: catalog self-check — which glyphs of the
+                            // CJK probe string does the catalog resolve?
+                            try {
+                                const probe = "技指計代式灣文人觀觀人之之易";
+                                const fc: any = catalog;
+                                const testStyle: any = { fontStyle: 0 };
+                                const gs: any[] | undefined = fc.getGlyphs?.(probe, testStyle);
+                                const miss = gs === undefined
+                                    ? "undefined"
+                                    : gs.map((g, i) => (g?.isInCache ? "" : probe.charCodeAt(i).toString(16))).filter(Boolean).join(",");
+                                // eslint-disable-next-line no-console
+                                console.log(`[MBCatalog] glyphs=${glyphs.size} getGlyphs n=${gs?.length ?? '?'} miss=[${miss}]`);
+                            } catch (e) {
+                                // eslint-disable-next-line no-console
+                                console.log(`[MBCatalog] self-check err ${e}`);
+                            }
                             // mgl semantics: a label whose char is missing
                             // from the loaded pages renders that char blank —
                             // the label survives. The native pipeline drops

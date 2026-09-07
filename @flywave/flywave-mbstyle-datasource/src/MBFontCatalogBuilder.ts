@@ -103,7 +103,11 @@ export function buildFontCatalogFromPBF(
         distanceRange,
         [font],
         unicodeBlocks,
-        1024,
+        // §882: the atlas must hold EVERY merged PBF glyph — the former
+        // 1024 capacity silently dropped whole unicode pages (only code
+        // points in the first ~4 fetched ranges cached; the rest rendered
+        // blank and, pre-§882, silenced the entire label).
+        Math.max(1024, glyphs.size),
         // Minimal replacement glyph (a 1×1 transparent texture).
         buildReplacementGlyph(font),
     );

@@ -1461,7 +1461,14 @@ export class MBTileDataEmitter {
                         // ((advanceX + tracking) * textSize/catalogSize), so the
                         // wrap width must be screen pixels too.
                         props.lineWidth = maxWidth * fontSize;
-                        props.wrappingMode = 'Word';
+                        // §882: mgl breaks CJK text between ANY two ideographic
+                        // glyphs (symbol/shaping ideographic breaking) — Word
+                        // wrapping never fires on space-less CJK and the label
+                        // stays single-line (text-max-width/ideographic-breaking).
+                        props.wrappingMode = /[\u1100-\u11ff\u2e80-\u9fff\uac00-\ud7af\uff00-\uffef]/.test(
+                            transformedText)
+                            ? 'Character'
+                            : 'Word';
                     }
                     props.rotation = ((l['text-rotate'] as number) ?? 0) * Math.PI / 180;
                     const anchor = (l['text-anchor'] as string) ?? 'center';
