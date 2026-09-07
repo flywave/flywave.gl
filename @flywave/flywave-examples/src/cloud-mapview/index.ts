@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 import {
     MapView,
     GeoCoordinates,
@@ -86,13 +87,9 @@ const getMapCanvas = (): HTMLCanvasElement => {
 
 const canvas = getMapCanvas();
 
-// ?renderer=webgl forces the WebGL2 fallback backend for debugging
-// (WebGPURenderer with forceWebGL, see MapViewOptions.forceWebGL).
-const forceWebGL = new URLSearchParams(location.search).get("renderer") === "webgl";
-
 const mapView = new MapView({
+    forceWebGL: shouldForceWebGL(),
     projection: ellipsoidProjection,
-    forceWebGL,
     target: new GeoCoordinates(35.0, 30.0, 300),
     // PARITY POSE: whole-globe nadir view (~19-20M m altitude) matching the
     // takram clouds-basic session (35N/30E, 19,508 km). Read the exact

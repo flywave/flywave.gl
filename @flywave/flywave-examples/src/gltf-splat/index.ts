@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
@@ -60,6 +61,7 @@ class GLTFSplatController {
 
         // Initialize map view
         const mapView = new MapView({
+            forceWebGL: shouldForceWebGL(),
             projection: ellipsoidProjection,
             target: new GeoCoordinates(40.721603666587, -73.96000108689394, 0),
             zoomLevel: 18,

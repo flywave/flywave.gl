@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 /*
  * Copyright (C) 2020-2021 HERE Europe B.V.
  * Licensed under Apache 2.0, see full license in LICENSE
@@ -31,6 +32,7 @@ const createBaseMap = (): MapView => {
     const canvas = getMapCanvas();
 
     const mapView = new MapView({
+        forceWebGL: shouldForceWebGL(),
         projection: ellipsoidProjection, // Use spherical projection
         target: new GeoCoordinates(36.6512, 117.12), // Initial position set to Jinan
         zoomLevel: 10,

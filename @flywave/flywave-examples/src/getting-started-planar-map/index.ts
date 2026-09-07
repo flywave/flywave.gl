@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 import {
     MapView,
     GeoCoordinates,
@@ -13,14 +14,20 @@ import { NodeBuilder } from "three/webgpu";
 // graphBuilds = NodeBuilder.build() calls (node graph recompute, one per
 // NodeBuilderState cache miss); compiles = backend.createProgram calls (WGSL
 // stage compiled to a GPU module); pipelines = backend.createRenderPipeline.
-const fwStats: any = ((window as any).__fwStats = { graphBuilds: 0, compiles: 0, pipelines: 0, byMaterial: {} });
+const fwStats: any = ((window as any).__fwStats = {
+    graphBuilds: 0,
+    compiles: 0,
+    pipelines: 0,
+    byMaterial: {}
+});
 {
     const proto: any = (NodeBuilder as any).prototype;
     const origBuild = proto.build;
     proto.build = function (...args: unknown[]) {
         fwStats.graphBuilds++;
         const key =
-            (this.material && this.material.constructor && this.material.constructor.name) || "unknown";
+            (this.material && this.material.constructor && this.material.constructor.name) ||
+            "unknown";
         fwStats.byMaterial[key] = (fwStats.byMaterial[key] || 0) + 1;
         return origBuild.apply(this, args);
     };
@@ -50,6 +57,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     const initialLocation = new GeoCoordinates(36, 118);
 
     return new MapView({
+        forceWebGL: shouldForceWebGL(),
         projection: mercatorProjection, // Use Mercator projection
         target: initialLocation, // Initial target position
         zoomLevel: 6, // Initial zoom level

@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 import {
     MapView,
     GeoCoordinates,
@@ -28,6 +29,7 @@ const CONFIG = {
 const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
 
 const mapView = new MapView({
+    forceWebGL: shouldForceWebGL(),
     projection: sphereProjection,
     target: CONFIG.INITIAL_COORDS,
     tilt: CONFIG.TILT,

@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 /* Copyright (C) 2025 flywave.gl contributors */
 
 // @ts-ignore
@@ -128,6 +129,7 @@ class HeightmapPainterExample {
         this.mapContainer.appendChild(canvas);
 
         const map = new MapView({
+            forceWebGL: shouldForceWebGL(),
             target: new GeoCoordinates(36.4, 118.1, 1000),
             zoomLevel: 17,
             projection: ellipsoidProjection,

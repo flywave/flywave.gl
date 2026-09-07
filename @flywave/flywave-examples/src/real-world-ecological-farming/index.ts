@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 import {
     MapView,
     GeoCoordinates,
@@ -51,6 +52,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     const initialLocation = new GeoCoordinates(34.7702, 117.0509);
 
     return new MapView({
+        forceWebGL: shouldForceWebGL(),
         projection: sphereProjection, // Use spherical projection
         target: initialLocation, // Initial target position
         zoomLevel: 16, // Initial zoom level

@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 import {
     MapView,
     GeoCoordinates,
@@ -33,6 +34,7 @@ const getMapCanvas = (): HTMLCanvasElement => {
 
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     return new MapView({
+        forceWebGL: shouldForceWebGL(),
         target: CENTER,
         zoomLevel: 16,
         tilt: 40,

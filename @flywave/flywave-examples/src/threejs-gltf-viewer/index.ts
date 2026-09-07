@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 import {
     MapView,
     GeoCoordinates,
@@ -22,6 +23,7 @@ const ANCHOR_RIGHT = new GeoCoordinates(40.721603666587, -73.95950108689394, 0);
 const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
 
 const mapView = new MapView({
+    forceWebGL: shouldForceWebGL(),
     projection: ellipsoidProjection,
     target: new GeoCoordinates(40.721603666587, -73.96000108689394, 0),
     distance: 100,

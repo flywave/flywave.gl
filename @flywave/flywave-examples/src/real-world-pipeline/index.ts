@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 import {
     MapView,
     GeoCoordinates,
@@ -49,6 +50,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     const initialLocation = new GeoCoordinates(36.8335, 117.8541, 112);
 
     return new MapView({
+        forceWebGL: shouldForceWebGL(),
         projection: sphereProjection, // Use spherical projection
         target: initialLocation, // Initial target position
         tilt: 64, // Initial tilt angle

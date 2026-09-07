@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 import {
     MapView,
     MapViewEventNames,
@@ -44,6 +45,7 @@ async function main() {
     const initialLocation = new GeoCoordinates(36.48619699228674, 118.17270928364879);
 
     const mapView = new MapView({
+        forceWebGL: shouldForceWebGL(),
         projection: ellipsoidProjection,
         target: initialLocation,
         enablePolarDataSource: false,

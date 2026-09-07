@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 import {
     MapView,
     GeoCoordinates,
@@ -52,6 +53,7 @@ const initializeMapView = (
     useLogarithmicDepth: boolean = true
 ): MapView => {
     return new MapView({
+        forceWebGL: shouldForceWebGL(),
         projection: sphereProjection,
         target: CONFIG.INITIAL_COORDINATES,
         enablePolarDataSource: false,

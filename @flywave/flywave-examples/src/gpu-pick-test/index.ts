@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 import {
     MapView,
     GeoCoordinates,
@@ -41,6 +42,7 @@ class GpuPickTest {
         if (!canvas) throw new Error("Canvas not found");
 
         this.mapView = new MapView({
+            forceWebGL: shouldForceWebGL(),
             projection: ellipsoidProjection,
             target: new GeoCoordinates(40.714, -74.0165), // Manhattan
             zoomLevel: 16,

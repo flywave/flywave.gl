@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 /*
  * Copyright (C) 2025 flywave.gl contributors.
  * SPDX-License-Identifier: Apache-2.0
@@ -38,6 +39,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     const initialLocation = new GeoCoordinates(22.404942179523914, 109.02507529895595);
 
     return new MapView({
+        forceWebGL: shouldForceWebGL(),
         projection: ellipsoidProjection,
         canvas: canvas,
         target: initialLocation,

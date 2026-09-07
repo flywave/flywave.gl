@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 import {
     MapView,
     GeoCoordinates,
@@ -47,6 +48,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     const initialLocation = new GeoCoordinates(36.4902, 118.1742, 900);
 
     return new MapView({
+        forceWebGL: shouldForceWebGL(),
         target: initialLocation, // Initial target position
         zoomLevel: 17, // Initial zoom level
         tilt: 45, // Initial tilt angle

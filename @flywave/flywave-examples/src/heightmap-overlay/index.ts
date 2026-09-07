@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
@@ -36,6 +37,7 @@ const getMapCanvas = (id: string): HTMLCanvasElement => {
  */
 const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     const map = new MapView({
+        forceWebGL: shouldForceWebGL(),
         target: CONFIG.INITIAL_COORDINATES,
         zoomLevel: CONFIG.ZOOM_LEVEL,
         projection: ellipsoidProjection,

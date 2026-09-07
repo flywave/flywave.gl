@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
@@ -35,6 +36,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): [MapView, MapControls] =>
     const initialLocation = new GeoCoordinates(40.00269243085496, -75.29281581060715, 10);
 
     const map = new MapView({
+        forceWebGL: shouldForceWebGL(),
         projection: ellipsoidProjection, // Use ellipsoid projection
         target: initialLocation, // Initial target position
         zoomLevel: 19, // Initial zoom level

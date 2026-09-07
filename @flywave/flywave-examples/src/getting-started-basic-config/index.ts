@@ -1,3 +1,4 @@
+import { shouldForceWebGL } from "../common-webgl-debug";
 import {
     MapView,
     GeoCoordinates,
@@ -14,14 +15,20 @@ import { NodeBuilder } from "three/webgpu";
 // graphBuilds = NodeBuilder.build() calls (node graph recompute, one per
 // NodeBuilderState cache miss); compiles = backend.createProgram calls (WGSL
 // stage compiled to a GPU module); pipelines = backend.createRenderPipeline.
-const fwStats: any = ((window as any).__fwStats = { graphBuilds: 0, compiles: 0, pipelines: 0, byMaterial: {} });
+const fwStats: any = ((window as any).__fwStats = {
+    graphBuilds: 0,
+    compiles: 0,
+    pipelines: 0,
+    byMaterial: {}
+});
 {
     const proto: any = (NodeBuilder as any).prototype;
     const origBuild = proto.build;
     proto.build = function (...args: unknown[]) {
         fwStats.graphBuilds++;
         const key =
-            (this.material && this.material.constructor && this.material.constructor.name) || "unknown";
+            (this.material && this.material.constructor && this.material.constructor.name) ||
+            "unknown";
         fwStats.byMaterial[key] = (fwStats.byMaterial[key] || 0) + 1;
         return origBuild.apply(this, args);
     };
@@ -51,6 +58,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     const initialLocation = new GeoCoordinates(36.4393, 118.188);
 
     return new MapView({
+        forceWebGL: shouldForceWebGL(),
         projection: sphereProjection, // Use spherical projection
         target: initialLocation, // Initial target position
         zoomLevel: 19, // Initial zoom level
@@ -127,10 +135,12 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
         arr.push(line);
         if (arr.length > 80) arr.splice(0, arr.length - 80);
     };
-    window.addEventListener("error", (e) =>
-        cap(P.errors, "ERR: " + (e.message || e.type) + " @" + (e.lineno || "")));
-    window.addEventListener("unhandledrejection", (e) =>
-        cap(P.errors, "REJ: " + String((e as PromiseRejectionEvent).reason).slice(0, 160)));
+    window.addEventListener("error", e =>
+        cap(P.errors, "ERR: " + (e.message || e.type) + " @" + (e.lineno || ""))
+    );
+    window.addEventListener("unhandledrejection", e =>
+        cap(P.errors, "REJ: " + String((e as PromiseRejectionEvent).reason).slice(0, 160))
+    );
     const arm = () => {
         const mv = w.__mapView;
         if (!mv || !mv.renderer || !mv.renderer._bindings) {
@@ -141,7 +151,11 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
         const dev = r.backend && r.backend.device;
         if (dev && dev.addEventListener) {
             dev.addEventListener("uncapturederror", (e: any) =>
-                cap(P.errors, "GPU: " + ((e.error && e.error.message) || String(e.error)).slice(0, 160)));
+                cap(
+                    P.errors,
+                    "GPU: " + ((e.error && e.error.message) || String(e.error)).slice(0, 160)
+                )
+            );
         }
         const bindings = r._bindings;
         const origUFR = bindings.updateForRender.bind(bindings);
@@ -151,13 +165,23 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
             const out = origUFR(renderObject);
             try {
                 const obj = renderObject.object;
-                if (obj && obj.isMesh && obj.material && obj.material.constructor.name === "DEMTileBaseMaterial") {
+                if (
+                    obj &&
+                    obj.isMesh &&
+                    obj.material &&
+                    obj.material.constructor.name === "DEMTileBaseMaterial"
+                ) {
                     let node = P.imageryNode;
                     if (!node) {
                         for (const bg of renderObject.getBindings()) {
                             for (const b of bg.bindings) {
-                                if (b.isSampledTexture && b.textureNode && b.textureNode.isTextureNode &&
-                                    !b.textureNode.referenceNode && b.textureNode.updateType === "object") {
+                                if (
+                                    b.isSampledTexture &&
+                                    b.textureNode &&
+                                    b.textureNode.isTextureNode &&
+                                    !b.textureNode.referenceNode &&
+                                    b.textureNode.updateType === "object"
+                                ) {
                                     node = b.textureNode;
                                     P.imageryNode = node;
                                 }
@@ -174,7 +198,9 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
                             for (const b of bg.bindings) {
                                 if (b.isSampledTexture && b.textureNode === node) {
                                     bound = b.texture
-                                        ? (b.texture.image && b.texture.image.width === 1 ? "DUMMY" : b.texture.uuid.slice(0, 8))
+                                        ? b.texture.image && b.texture.image.width === 1
+                                            ? "DUMMY"
+                                            : b.texture.uuid.slice(0, 8)
                                         : "none";
                                 }
                             }
@@ -185,12 +211,15 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
                             roLast.set(renderObject.id, { bound, frames: framesWrong });
                             if (framesWrong >= 2) {
                                 const tileKey = obj.userData && obj.userData.tileKey;
-                                const keyStr = tileKey && typeof tileKey === "object"
-                                    ? JSON.stringify(tileKey).slice(0, 60)
-                                    : String(tileKey);
-                                cap(P.mismatches,
+                                const keyStr =
+                                    tileKey && typeof tileKey === "object"
+                                        ? JSON.stringify(tileKey).slice(0, 60)
+                                        : String(tileKey);
+                                cap(
+                                    P.mismatches,
                                     `PERSIST frame:${r.info.frame} ro:${renderObject.id} tile:${keyStr} ` +
-                                    `expect:${expect} bound:${bound} wrongFrames:${framesWrong}`);
+                                        `expect:${expect} bound:${bound} wrongFrames:${framesWrong}`
+                                );
                             }
                         } else {
                             roLast.delete(renderObject.id);
