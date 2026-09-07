@@ -4590,7 +4590,12 @@ export class MBTileDataEmitter {
                             return new THREE.Vector2(w.x, w.y);
                         });
                         const metersPerPx = this.worldPerLinUnit() * ((this.m_extents || 4096) / 512);
-                        const labelWpx = Math.max(Number(tech._textWidth ?? 0), 0);
+                        // §878: `_textWidth` is shaped width in EM units
+                        // (shapeText works in em; "five" ≈ 1.66em). Convert to
+                        // px at the layer's text-size — the former raw use
+                        // under-measured labels ~16× and every line-placed
+                        // label died in the too-small screen test.
+                        const labelWpx = Math.max(Number(tech._textWidth ?? 0) * fontSize, 0);
                         const labelLenM = labelWpx * metersPerPx;
                         const maxAngleRad = Number(layer.layout['text-max-angle'] ?? 45) * Math.PI / 180;
                         let anchors: LineAnchorT[];

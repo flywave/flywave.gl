@@ -510,7 +510,15 @@ export class TileGeometryCreator {
                         textPath.objInfos,
                         textPath.pathLengthSqr
                     );
-
+                // §878: verify the built element's type/points survive.
+                try {
+                    const gT = globalThis as any;
+                    gT.__mbTEBuilt = (gT.__mbTEBuilt ?? 0) + 1;
+                    if (gT.__mbTEBuilt <= 4) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBTE] type=${textElement.type} pts=${Array.isArray(textElement.points) ? textElement.points.length : 'vec'} p0=(${textElement.points[0]?.x?.toFixed(0) ?? '?'},${textElement.points[0]?.y?.toFixed(0) ?? '?'}) lenSqr=${textElement.pathLengthSqr ?? '?'}`);
+                    }
+                } catch { /* probe only */ }
                 tile.addTextElement(textElement);
             }
         }
