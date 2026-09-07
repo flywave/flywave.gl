@@ -749,6 +749,7 @@ export function applyMglModelLighting(
                                      mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
+                                     if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.x, mbShUv.y, 0.5); return; }
@@ -793,6 +794,7 @@ export function applyMglModelLighting(
                                      mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
+                                     if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.x, mbShUv.y, 0.5); return; }

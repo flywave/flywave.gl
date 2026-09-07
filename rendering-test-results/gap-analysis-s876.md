@@ -432,3 +432,8 @@ shdbg=7 直绘接收端 worldPos（148k 采样，对照 casterBox boxC=(−356,�
 - 接收端 fragment worldPos z 却是 **+159..390**——高于场景中任何 mesh（≤0）240-390；
 - 且 casters=1 vs 场景 meshes=8（withL1=5）：**渲染的场景里有 3 个 mesh 没开 layer-1**（未进深度 pass），且 caster 集合只含 1 个根对象；
 - 下轮入口：①查 batched-model placement 对 outer/inner 的 z 平移（相对 eye.z 的 394 偏移从何而来——候选：`position.z = altitude−eye.z` 公式里 altitude 用了绝对高程或二次叠加）；②为 placement 完成后的 mesh 补 `layers.enable(1)`（放到 placement 完成回调而非 build 时）；③用 `shadowCasters` 集合代替 layer mask 做 depth pass 过滤（根治 layer 遗漏类问题）。
+
+### §885 终六：双副本实锤（2026-09-08）
+shdbg=7 worldPos 直绘（87k 采样，探针顺序修正后）：渲染可见建筑 worldPos = x[−953,+600] y[−843,+576] **z[+41,+406]**，而 shadowCasters 的 casterBox = x[−663,−49] y[−363,223] **z[−82,+63]**——**渲染副本与深度投射副本是两组不同实例，z 相差 ~+123..343**。接收采样落空 = 渲染副本不在深度图内。
+- 已落地修复：run() 每帧对 shadowCasters traverse `layers.enable(1)`（build 后异步实例化的 mesh 此前永远缺席深度 pass，实测 8 mesh 仅 5 个开 L1）；
+- 下轮精确入口：核对 MBBatchedModelDataSource 的 `shadowCasters.add(outer)` 对象与实际 add 进场景的实例是否同一（placement 包装/rebuild 后旧对象残留 caster 集——prune 只删 parentless，重建后新旧两组可能并存，深度图画的是旧组、画面渲染的是新组）。

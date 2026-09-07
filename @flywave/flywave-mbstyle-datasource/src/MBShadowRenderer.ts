@@ -326,6 +326,13 @@ export class MBShadowRenderer {
             if (!obj.parent) shadowCasters.delete(obj);
         }
         if (shadowCasters.size === 0) return;
+        // §885 终五: meshes instantiated AFTER the group registered (async
+        // placement clones) miss the layer-1 enable done at build time and
+        // silently drop out of the depth pass (3 of 8 landmark meshes).
+        // Refresh every frame — enable is idempotent and cheap.
+        for (const obj of shadowCasters) {
+            obj.traverse((o: any) => o.layers.enable(1));
+        }
 
         // §530: independent WebGL CONTEXT for the depth pass. Rendering into
         // an RT of the main context — even just bind+clear — deterministically
