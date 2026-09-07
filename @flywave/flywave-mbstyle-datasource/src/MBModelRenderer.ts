@@ -596,6 +596,14 @@ export function applyMglModelLighting(
                     '#include <project_vertex>\n' +
                     'vMbWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;'
                 );
+                // §885: was the project_vertex anchor actually present? A
+                // missed replace leaves vMbWorldPos at (0,0,0) and silences
+                // the whole model-shadow reception.
+                if ((globalThis as any).__mbShadowDbg4
+                    && !shader.vertexShader.includes('vMbWorldPos = (modelMatrix')) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBShVert] project_vertex anchor MISSING for mat=', mat.name ?? '?');
+                }
                 // Capture the glTF albedo AFTER the base-color texture —
                 // that is the `albedo` mgl's getBaseColor feeds apply_lighting.
                 shader.fragmentShader = shader.fragmentShader.replace(
@@ -719,6 +727,7 @@ export function applyMglModelLighting(
                                      mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
+                                     if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
                                      if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.z, mbShDepth, 0.5); return; }
                                      mbNdotL *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
                                  }
@@ -761,6 +770,7 @@ export function applyMglModelLighting(
                                      mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
+                                     if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
                                      if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.z, mbShDepth, 0.5); return; }
                                      mbLF *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
                                  }

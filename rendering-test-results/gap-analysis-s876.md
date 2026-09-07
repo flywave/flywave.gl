@@ -396,3 +396,9 @@ mgl 的 text-max-width 断行是**最优断行**（symbol/shaping determineLineB
 - 对照实验定性：`quantization-shadows`（同模型、方向光**无** cast-shadows，按设计无影）基线 2332 近通过——即模型渲染/颜色/光照标定本身好；`shadows-normal-offset`（cast-shadows=true + direction[190,50] + shadow-intensity 1）171k 全程无影 → **接收采样在真实光源下不触发或深度比较恒 lit**；
 - 已就位（gate=shadowdbg=4）：模型采样点调试输出 `gl_FragColor = vec3(mbShUv.z, mbShDepth, 0.5)`——下轮首跑直接读墙面 uv.z/采样深度，一锤定音区分「uv 出界/matrix 系不一致」vs「深度编码/比较错」；
 - 环境警告：model-layer 长夹具（4 分钟级）的结果回传约 50% 概率丢失（assert 前异常/POST 失败），调试图形类夹具需在脚本层加重试。
+
+### §885 终：shadowdbg=4 首跑读数（根因闭环）
+- 墙面调试输出量化（107k 绿像素）：`uv.z ∈ [0,0.3]`（均值 0.07）、采样深度恒 1.0（空）——**朝阳面墙本就应被照亮**（日光方向无遮挡），采样几何逻辑自洽；无洋红 → `vMbWorldPos` varying 正常写入，vertex 注入无缺失（[MBShVert] 零告警）；
+- 真正缺失的两组阴影：**① 地面投影**——阴影由 MBShadowRenderer 的 ground quad 承载，绘制于 preSceneHook underlay（§643），在这些夹具中被不透明 background('land': lightgray) 层覆盖；mgl 中阴影直接画在 background 之上。**② 背阳面直射光**——expected 的深色立面是 NdotL≤0 的直射项缺失，ours 把背阳面也照白（模型直射光分支标定问题，与阴影无关）；
+- 修复入口：①ground quad 提升绘制阶段（background 之上、建筑之下——需 A/B §572c 已校准的 extrusion/terrain 阴影家族防回归）或让 background 参与接收；②模型直射光按 world-space 法线重算 NdotL（当前 view-space 转换疑似符号/基准错）；
+- 环境注意：mo10-d1 首次尝试即成功（重试脚本有效）。
