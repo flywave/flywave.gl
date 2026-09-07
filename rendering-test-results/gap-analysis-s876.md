@@ -465,3 +465,7 @@ shdbg=7 worldPos 直绘（87k 采样，探针顺序修正后）：渲染可见�
 ### §885 终十二：场景遍历刷新仍未收敛（2026-09-08）
 场景遍历直刷 `__mbShU`（绕过注册集合）后输出仍 171,310 逐位一致——渲染实例的 uniform 更新本身无效，或被刷新的材质不含可见建筑面片。结合全部实测（fragment z +159..390 vs casterBox z[−82,63]、caster 集合=数据源组、[MBMesh] 采样 z[−82,40]），当前最强假设收束为：**可见建筑面片属于另一批未注册、也未带 `__mbShU` 的放置实例**（放置流程存在两条实例化路径），其材质在 onBeforeCompile 时被 patch 但 handle 注册在了被替换掉的早期实例上。
 下轮入口：在 MBMaterialPatchManager 的 drawlog 钩子内对 `__mbMglLit` 材质打印 `userData.__mbShU` 有无 + uuid，即可锁定可见面片是否带 handle；带则问题在 uniform 上传时序，不带则在 placement 双路径。
+
+### §885 终十三：drawlog shu 探针锁定（2026-09-08）
+drawlog（DRAWLOG=1+SHADOW=6）实测：被渲染的大网格（MeshStandardMaterial, vn=29148, ro=0）**`userData.__mbShU` 缺失**——场景遍历刷新（`if (!u) continue`）因此跳过它，其 uMBShMatrix 停留在初始值 → 采样恒空 → 无影。即：**该 mesh 被 mgl-lighting patcher 打过 `__mbMglLit`（或有顶点色渲染路径），但 shadow uniform 句柄从未注册到这个实例**（材质共享/克隆链中 handle 注册在另一实例，或双实例化路径中只有一批被 applyMglModelLighting 注册）。
+下轮修复（确定性）：在 applyMglModelLighting 的 material 遍历中，**clone 之后/共享材质场景下**将 handle 注册改为写入 `mat.userData.__mbShU` 的同时，也把 uniform 对象引用挂到几何/组级别；或在场景遍历刷新里对 `__mbMglLit && !__mbShU` 的材质**重新触发一次 applyMglModelLighting 的 shadow 注册段**（把 onBeforeCompile 的 uniforms 提取到材质级 map）。

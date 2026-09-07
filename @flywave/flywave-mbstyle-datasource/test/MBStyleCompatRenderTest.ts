@@ -2312,6 +2312,9 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                         bl: material?.blending,
                                         fov2: object?.frustumCulled,
                                         cam: (() => { try { return camera?.position?.toArray?.().map((n: number) => Number(n.toExponential(2))).join(','); } catch { return '?'; } })(),
+                                        // §885 终十二: does the RENDERED material
+                                        // carry the shadow-refresh handle?
+                                        shu: (() => { try { const u: any = material?.userData?.__mbShU; return u ? (u.eyeOn ? 'Y5' : 'Y') : 'N'; } catch { return '?'; } })(),
                                         sc: (() => { try { const r: any = (mapView as any).renderer; return `${r.getContext().getParameter(r.getContext().SCISSOR_TEST)}`; } catch { return '?'; } })(),
                                     } : {}),
                                     tr: material?.transparent === true ? 1 : 0,
