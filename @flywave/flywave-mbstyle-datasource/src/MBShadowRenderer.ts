@@ -629,6 +629,29 @@ export class MBShadowRenderer {
                     const cs = worldBox.getSize(new THREE.Vector3());
                     // eslint-disable-next-line no-console
                     console.log(`[MBShadowScene] meshes=${n} withL1=${nL1} sampledZ=[${zb.min.z.toFixed(0)},${zb.max.z.toFixed(0)}] allWorldZ=[${worldBox.min.z.toFixed(0)},${worldBox.max.z.toFixed(0)}] c=(${cc.x.toFixed(0)},${cc.y.toFixed(0)},${cc.z.toFixed(0)}) s=(${cs.x.toFixed(0)},${cs.y.toFixed(0)},${cs.z.toFixed(0)}) casterBoxZ=[${casterBox.min.z.toFixed(0)},${casterBox.max.z.toFixed(0)}]`);
+                    // §885 终九: per-mesh listing — find duplicate model
+                    // copies (shared patched materials used by non-caster
+                    // objects at z +159..390).
+                    scene2?.traverse?.((o: any) => {
+                        if (!o.isMesh) return;
+                        const pa = o.geometry?.attributes?.position;
+                        if (!pa) return;
+                        o.updateWorldMatrix?.(true, false);
+                        const t3 = new THREE.Vector3();
+                        const mb = new THREE.Box3();
+                        for (let vi = 0; vi < pa.count; vi += Math.max(1, Math.floor(pa.count / 24))) {
+                            t3.set(pa.getX(vi), pa.getY(vi), pa.getZ(vi)).applyMatrix4(o.matrixWorld);
+                            mb.expandByPoint(t3);
+                        }
+                        const m0: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                        const l1 = (o.layers.mask & 2) ? 1 : 0;
+                        let inCasters = false;
+                        for (const c of shadowCasters) {
+                            if (c === o || c === o.parent) { inCasters = true; break; }
+                        }
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBMesh] z=[${mb.min.z.toFixed(0)},${mb.max.z.toFixed(0)}] x=[${mb.min.x.toFixed(0)},${mb.max.x.toFixed(0)}] L1=${l1} caster=${inCasters ? 1 : 0} mat=${m0?.uuid?.slice?.(0, 8) ?? '?'} vis=${o.visible}`);
+                    });
                     // §885 终七: per-caster identity — is each registered
                     // caster actually attached to the rendered scene, and
                     // where does it sit in world Z?
