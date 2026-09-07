@@ -421,3 +421,6 @@ shdbg=7 直绘接收端 worldPos（148k 采样，对照 casterBox boxC=(−356,�
 - 结论：画面中的模型片段（或其放置实例）**不在帧 60 的 casterBox / 深度 pass 覆盖内**——`shadowCasters` 在帧 60 仅 1 组，后续 tile 组/实例要么未注册、要么带 z 抬升（z-offset）使接收位置系统性高于深度投射位置 → 深度采样全部落空 → 全场景无影；
 - 下轮入口（精确）：①`shadowCasters.size` 打点到帧 300/捕获帧（确认注册完整性）；②核对 batched-model 多 tile 组的放置矩阵与 z-offset（`model-z-offset`）在 depth pass 与接收端的一致性；③若 caster 注册滞后，把注册提前到 placement 完成回调（modelsPending）。
 - 注意：run() 每帧重算 casterBox ✓，故 box 应随注册增长；实测帧 60 box 仍只有单组——注册时机/裁剪（`!obj.parent` prune）为首要嫌疑。
+
+### §885 终四补：z 直读精化
+像素解码精化：模型面片 B 通道落在 81-199（z ≈ **312-390** 的一个 ~86 单位厚带），而非 casterBox 的 z [−82,63]——接收端模型整体悬浮在深度投射位置上方 ~394 单位（恒定、非比例）。~394 ≈ eye.z(82)×4.8 无明显对应；候选：batched-model 组放置矩阵的 z 分量在 depth pass（setFromObject 时刻）与渲染（placement 完成后）之间被二次抬升，或 inner/outer 双层 transform 中一层未参与 box 计算。下轮：`console.log(box)` 于 run() 内逐帧对比同一对象 setFromObject 结果与 fragment worldPos（同帧探针已具备）。
