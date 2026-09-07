@@ -3051,6 +3051,32 @@ export class MBStyleDataSource extends TileDataSource {
                     // direct lighting term (mgl shadowed_light_factor_normal).
                     try {
                         syncModelShadowUniforms(self.m_shadowRenderer.getShadowUniforms());
+                        // §885 终十一: the registered-handle refresh misses
+                        // material clones created after their prototype was
+                        // patched (their shader.uniforms are new objects) —
+                        // those rendered copies kept a STALE uMBShMatrix and
+                        // the whole landmark shadow family sampled empty.
+                        // Refresh every __mbMglLit material found in the
+                        // scene directly.
+                        const su2 = self.m_shadowRenderer.getShadowUniforms();
+                        if (su2) {
+                            const st2 = self.mapView?.m_scene;
+                            st2?.traverse((o: any) => {
+                                const mats = Array.isArray(o.material)
+                                    ? o.material
+                                    : (o.material ? [o.material] : []);
+                                for (const m of mats as any[]) {
+                                    const u = m?.userData?.__mbShU;
+                                    if (!u) continue;
+                                    u.map.value = su2.map;
+                                    u.matrix.value.copy(su2.matrix);
+                                    u.intensity.value = su2.intensity;
+                                    if (u.eye && su2.eye) u.eye.value.copy(su2.eye);
+                                    if (u.eyeOn) u.eyeOn.value =
+                                        (globalThis as any).__mbShadowEyeOn ? 1 : 0;
+                                }
+                            });
+                        }
                     } catch { /* best-effort */ }
                 }
                 if (self.m_atmosphereRenderer) {

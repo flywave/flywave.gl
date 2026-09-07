@@ -461,3 +461,7 @@ shdbg=7 worldPos 直绘（87k 采样，探针顺序修正后）：渲染可见�
 接收端 light-space uv 中心 **(−0.63,−0.57)**、跨度 **2.1**（两轴）；深度内容中心 (0.49,0.49)、跨度 **0.32**。
 → 接收端采样用到的 uMBShMatrix 相对深度 pass 的相机呈 **~6.6× 缩放 + 中心偏移**（691/105 ≈ 6.6——与"帧 1 模型半载时 casterBox 极小、radius≈105"的早期矩阵完全吻合）——**uMBShMatrix 是陈旧矩阵**：sync 虽每帧 copy m_matrix，但渲染所用材质实例的 uniform 未被刷新（handle 注册的材质实例与实际渲染实例不同，或 uniform 对象在 three 内部被克隆分离）。
 下轮修复入口：在 **渲染材质上直接验证**（log material.userData.__mbShU 与 material.uniforms.uMBShMap 的引用一致性），并改为**每帧直接遍历 scene 中带 __mbMglLit 的 mesh** 刷新 uniform（不依赖注册集合），一次消除实例分离问题。
+
+### §885 终十二：场景遍历刷新仍未收敛（2026-09-08）
+场景遍历直刷 `__mbShU`（绕过注册集合）后输出仍 171,310 逐位一致——渲染实例的 uniform 更新本身无效，或被刷新的材质不含可见建筑面片。结合全部实测（fragment z +159..390 vs casterBox z[−82,63]、caster 集合=数据源组、[MBMesh] 采样 z[−82,40]），当前最强假设收束为：**可见建筑面片属于另一批未注册、也未带 `__mbShU` 的放置实例**（放置流程存在两条实例化路径），其材质在 onBeforeCompile 时被 patch 但 handle 注册在了被替换掉的早期实例上。
+下轮入口：在 MBMaterialPatchManager 的 drawlog 钩子内对 `__mbMglLit` 材质打印 `userData.__mbShU` 有无 + uuid，即可锁定可见面片是否带 handle；带则问题在 uniform 上传时序，不带则在 placement 双路径。
