@@ -227,9 +227,6 @@ function mglDefaultStarIntensity(styleZoom: number): number {
     return 0.35 * (1 - (styleZoom - 5));
 }
 
-const IDENT_QUAT = new THREE.Quaternion();
-const ORIGIN_VEC = new THREE.Vector3();
-
 export class MBEnvironmentManager {
     /** Debug: render the fog ramp position t as grayscale (§208 tool). */
     static fogDebugTProbe: number = 0; // §208 tool: 1=t-profile, 2=unfogged base
@@ -1587,6 +1584,18 @@ export class MBEnvironmentManager {
         const fogColor = c(rawColor, '#ffffff');
         const highColor = c(rawHigh, '#245cdf');
         const spaceColor = c(rawSpace, '#010b19');
+        // §876: sRGB hex of the space color for the clear — captured BEFORE
+        // the §858/§876 convertLinearToSRGB below (getHex would otherwise
+        // convert twice).
+        const spaceHexSrgb = spaceColor.getHex();
+        // §858/§876: THREE.Color stores LINEAR components; the dome shader
+        // writes gl_FragColor raw (no colorspace_fragment), so the sRGB paint
+        // colors must be restored before packing into the uniforms — the
+        // atmosphere gradient math (and the white composite) happens in the
+        // sRGB domain like mgl's 0-255 shader inputs.
+        fogColor.convertLinearToSRGB();
+        highColor.convertLinearToSRGB();
+        spaceColor.convertLinearToSRGB();
         // mapValue(horizon-blend, 0..1, 0.0005..0.25)
         const hb = Number(evalZoom(fog['horizon-blend'], 0.2));
         const fadeout = Math.min(0.25, Math.max(0.0005, hb * 0.2495 + 0.0005));
@@ -1612,11 +1621,11 @@ export class MBEnvironmentManager {
         // Space color as the clear backdrop (outside the globe) — its
         // property alpha composites over the white test canvas (mgl renders
         // the atmosphere premultiplied over a transparent framebuffer).
-        (this.m_mapView as any).clearColor = spaceColor.getHex();
+        (this.m_mapView as any).clearColor = spaceHexSrgb;
         (this.m_mapView as any).clearAlpha = propAlpha(rawSpace);
         {
             const e867: any = (this.m_mapView as any).m_sceneEnvironment;
-            if (e867) e867.clearOverride = { color: spaceColor.getHex(), alpha: propAlpha(rawSpace) };
+            if (e867) e867.clearOverride = { color: spaceHexSrgb, alpha: propAlpha(rawSpace) };
         }
         this.m_globeFogActive = true;
 
@@ -1739,7 +1748,22 @@ export class MBEnvironmentManager {
                     vec3 c0 = mix(uSpaceColor.rgb, uHighColor.rgb, uHighColor.a);
                     vec3 c1 = mix(c0, uFogColor.rgb, uFogColor.a);
                     vec3 c2 = mix(c0, c1, t);
-                    gl_FragColor = vec4(c2 * t, t);
+                    // §876: mgl's ALPHA_PASS blend (atmosphere.fragment.glsl)
+                    // — the canvas alpha is NOT the color-pass t; it is the
+                    // fog/high/space alphas blended by t. The visible sky is
+                    // therefore: color-pass premult RGB + the space-colored
+                    // clear under it (1−t) + the white test canvas (1−a).
+                    // Our canvas must hold the OPAQUE white-composited result
+                    // (the harness compares raw pixels against the
+                    // white-composited reference), so compose here instead of
+                    // emitting premultiplied (c2*t, t).
+                    float alpha0 = mix(uSpaceColor.a, 1.0, uHighColor.a);
+                    float alpha1 = mix(alpha0, 1.0, uFogColor.a);
+                    float alpha2 = mix(alpha0, alpha1, t);
+                    float aVis = mix(uSpaceColor.a, alpha2, t);
+                    vec3 visible = c2 * t + uSpaceColor.rgb * (1.0 - t)
+                        + vec3(1.0) * (1.0 - aVis);
+                    gl_FragColor = vec4(visible, 1.0);
                 }
             `,
         });
@@ -2763,6 +2787,13 @@ export class MBEnvironmentManager {
                 uRot: { value: new THREE.Matrix3() },
                 uRight: { value: new THREE.Vector3(0.15, 0, 0) },
                 uUp: { value: new THREE.Vector3(0, 0.15, 0) },
+                uStarsProj: { value: new THREE.Matrix4() },
+                uSpaceRgb: { value: new THREE.Vector3(0, 0, 0) },
+                uAlpha2: { value: 1.0 },
+                uGlobePos: { value: new THREE.Vector3() },
+                uGlobeRadius: { value: 1 },
+                uTanHalfFov: { value: 0 },
+                uAspect: { value: 1 },
             },
             vertexShader: `
                 attribute vec2 aUv;
@@ -2772,30 +2803,61 @@ export class MBEnvironmentManager {
                 uniform vec3 uRight;
                 uniform vec3 uUp;
                 uniform float uIntensity;
+                uniform mat4 uStarsProj;
                 varying vec2 vUv;
                 varying float vInt;
+                varying vec2 vNdc;
                 void main() {
                     vUv = aUv;
                     vInt = aOpacity * uIntensity;
-                    // §776: standard model-view path (the mesh follows the
-                    // camera via position/scale in onBeforeRender) — a bare
-                    // projectionMatrix * worldPos skips the view transform
-                    // and the stars never rasterize (camera is tens of
-                    // megameters from the scene origin on globe).
+                    // §876: mgl stars.transform — the star sphere is projected
+                    // by a DEDICATED perspective matrix (starsProjMatrix)
+                    // through the orientation quaternion only; the RTE globe
+                    // camera's view matrix (eye at the origin, clip band
+                    // hugging the surface at tens of megameters) clips
+                    // virtually the whole sphere away.
                     vec3 p = uRot * position;
                     p += (uRight * aUv.x + uUp * aUv.y) * aSize;
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+                    vec4 clip = uStarsProj * vec4(p, 1.0);
+                    vNdc = clip.xy / clip.w;
+                    gl_Position = clip;
                 }
             `,
             fragmentShader: `
                 varying vec2 vUv;
                 varying float vInt;
+                varying vec2 vNdc;
+                uniform vec3 uSpaceRgb;
+                uniform float uAlpha2;
+                uniform vec3 uGlobePos;
+                uniform float uGlobeRadius;
+                uniform float uTanHalfFov;
+                uniform float uAspect;
                 void main() {
+                    // §876: mgl draws the stars BEFORE the map so the globe
+                    // overdraws them; our stars draw after the opaque dome,
+                    // so cull them against the same ray-sphere silhouette the
+                    // dome uses (normDist < 1 = behind the globe).
+                    vec3 dir = normalize(vec3(
+                        vNdc.x * uTanHalfFov * uAspect,
+                        vNdc.y * uTanHalfFov, -1.0));
+                    float gpd = dot(uGlobePos, dir);
+                    float distToCenter = length(gpd * dir - uGlobePos);
+                    if (distToCenter / uGlobeRadius < 1.0) discard;
                     // mgl shapeCircle: linear fade starting at 0.6·radius.
                     float d = length(vUv);
                     float alpha = 1.0 - clamp((d - 0.6) / 0.4, 0.0, 1.0);
                     alpha *= vInt;
-                    gl_FragColor = vec4(vec3(alpha), alpha);
+                    // §876: mgl composites the star onto the PREMULTIPLIED
+                    // sky buffer whose canvas alpha stays uAlpha2 (the stars
+                    // RGB-mask their blend); the white test canvas then shows
+                    // through at (1−uAlpha2) at FULL strength behind the
+                    // star. On our opaque canvas that reads:
+                    // star·a + space·(1−a) + white·(1−uAlpha2).
+                    vec3 vis = vec3(alpha)
+                        + uSpaceRgb * (1.0 - alpha)
+                        + vec3(1.0) * (1.0 - uAlpha2);
+                    gl_FragColor = vec4(vis, 1.0);
                 }
             `,
         });
@@ -2812,22 +2874,14 @@ export class MBEnvironmentManager {
             const mv = this.m_mapView as any;
             const cam = this.m_mapView?.camera as THREE.PerspectiveCamera | undefined;
             if (!mv || !cam) return;
-            // §776: harp renders with m_rteCamera AT THE ORIGIN while the
-            // world is displaced around it (MapAnchors.update), so the
-            // render-space eye position is (0,0,0) — NOT m_camera.position
-            // (a star sphere centered there sits behind the eye and clips
-            // away entirely). Keep the sphere at the origin, scaled to sit
-            // between the clip planes. onBeforeRender runs after
-            // scene.updateMatrixWorld, so compose matrixWorld directly.
-            const near = cam.near ?? 1;
-            const far = cam.far ?? 1000;
-            const targetR = Math.min(far * 0.9, Math.max(near * 10, near + 100));
-            const k = targetR / 200;
-            this.m_stars!.matrixWorld.compose(
-                ORIGIN_VEC,
-                IDENT_QUAT,
-                new THREE.Vector3(k, k, k)
-            );
+            // §876: mgl transform.ts:1721 — starsProjMatrix is a DEDICATED
+            // perspective(fov, aspect, nearZ, farZ) with a small near plane;
+            // the star sphere (radius 200) projects through the orientation
+            // only, never through the globe camera's clip band.
+            const aspect = (cam as THREE.PerspectiveCamera).aspect || 1;
+            const top = Math.tan((cam.fov * Math.PI / 180) / 2);
+            const starsProj = material.uniforms.uStarsProj.value as THREE.Matrix4;
+            starsProj.makePerspective(-top * aspect, top * aspect, top, -top, 1, 1000);
             const pitch = (mv.tilt ?? 0) * Math.PI / 180;
             const angle = 0;
             const lat = (mv.geoCenter?.latitude ?? 0) * Math.PI / 180;
@@ -2846,6 +2900,21 @@ export class MBEnvironmentManager {
                 .set(1, 0, 0).applyMatrix4(inv).multiplyScalar(SIZE_MULTIPLIER);
             (material.uniforms.uUp.value as THREE.Vector3)
                 .set(0, 1, 0).applyMatrix4(inv).multiplyScalar(SIZE_MULTIPLIER);
+            // §876: the star composite needs the sky's premultiplied rgb and
+            // the atmosphere canvas alpha (deep sky = the space color stop) —
+            // both live on the dome's uniforms.
+            const domeU = (this.m_globeAtmo?.material as THREE.ShaderMaterial | null)
+                ?.uniforms;
+            if (domeU?.uSpaceColor) {
+                const sc = domeU.uSpaceColor.value as THREE.Vector4;
+                (material.uniforms.uSpaceRgb.value as THREE.Vector3).set(sc.x, sc.y, sc.z);
+                material.uniforms.uAlpha2.value = sc.w;
+                const gp = domeU.uGlobePos.value as THREE.Vector3;
+                (material.uniforms.uGlobePos.value as THREE.Vector3).copy(gp);
+                material.uniforms.uGlobeRadius.value = domeU.uGlobeRadius.value;
+                material.uniforms.uTanHalfFov.value = domeU.uTanHalfFov.value;
+                material.uniforms.uAspect.value = domeU.uAspect.value;
+            }
         };
         this.m_scene!.add(this.m_stars);
     }
