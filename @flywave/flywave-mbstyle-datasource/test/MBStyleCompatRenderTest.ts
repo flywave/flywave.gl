@@ -2435,13 +2435,18 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         let catalogFontName = "";
                         for (const fontName of fontStacks) {
                             if (catalogFontName === "") catalogFontName = fontName;
-                            // mgl loads glyph ranges on demand at placement
-                            // time; the static harness pre-fetches pages
-                            // 0..7 (Basic/Supplemental Latin, Greek, Cyrillic)
-                            // so fixture labels don't fall into the
-                            // replacement-glyph path. Missing pages are
-                            // skipped silently by the fetch guard below.
-                            for (let range = 0; range < 8; range++) {
+                            // §876: mgl loads glyph ranges on demand at
+                            // placement time; the static harness instead
+                            // DISCOVERS the ranges the fixture needs (style
+                            // literals + local tile strings). The former
+                            // fixed pages 0..7 left every CJK codepoint on
+                            // the transparent replacement glyph (whole
+                            // text-writing-mode family blank). Missing
+                            // pages are skipped silently by the fetch guard.
+                            const { discoverGlyphRanges } = await import("../src/MBGlyphLoader");
+                            const discovered = await discoverGlyphRanges(style, [fontName], glyphsUrl);
+                            const ranges = discovered.get(fontName) ?? [0, 1];
+                            for (const range of ranges) {
                                 const start = range * 256;
                                 const end = start + 255;
                                 const url = glyphsUrl

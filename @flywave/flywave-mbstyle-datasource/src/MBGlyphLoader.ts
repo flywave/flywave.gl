@@ -69,6 +69,106 @@ export async function loadGlyphMetrics(
 const ATLAS_SIZE = 1024;
 const GLYPH_PADDING = 1;
 
+/**
+ * §876: discover the glyph ranges a fixture actually needs.
+ *
+ * The former fixed ranges (0-7) covered only Latin/Greek/Cyrillic, so EVERY
+ * CJK codepoint fell to the replacement glyph and the whole label rendered
+ * blank (text-writing-mode / text-max-width / text-font-metrics families).
+ * mgl loads glyph ranges on demand at placement time; a static harness
+ * cannot, so instead collect the codepoints that can appear:
+ *   1. every non-ASCII codepoint in the style JSON (text-field literals,
+ *      formatted strings, geojson inline data),
+ *   2. every valid UTF-8 sequence found in the style's LOCAL vector tiles
+ *      covering the initial view (feature properties behind `{name}`).
+ * plus the Latin baseline ranges 0-1. Ranges that don't exist for a font
+ * are skipped by the fetch guard in loadGlyphMetrics.
+ */
+export async function discoverGlyphRanges(
+    style: any,
+    fontStacks: Iterable<string>,
+    glyphUrlTemplate: string,
+): Promise<Map<string, number[]>> {
+    const chars = new Set<number>();
+    const collectString = (s: string): void => {
+        for (let i = 0; i < s.length; i++) {
+            const cp = s.codePointAt(i)!;
+            if (cp >= 0x80) chars.add(cp);
+            if (cp > 0xffff) i++;
+        }
+    };
+    // 1. Style JSON literals (includes inline geojson data).
+    try {
+        collectString(JSON.stringify(style));
+    } catch { /* defensive */ }
+
+    // 2. Local vector tiles covering the initial view — crude UTF-8 scan.
+    //    MVT string values are raw UTF-8 in the protobuf payload; geometry
+    //    bytes rarely form valid multi-byte sequences, and false positives
+    //    only cost a 404-skipped range fetch.
+    try {
+        const integrationBase = '/base/@flywave/flywave-mbstyle-datasource/test/rendering/integration/';
+        const center = style.center ?? [0, 0];
+        const zoom = Math.max(0, Math.round(style.zoom ?? 0));
+        const n = Math.pow(2, zoom);
+        const lng = center[0] ?? 0, lat = center[1] ?? 0;
+        const cx = Math.floor((lng / 360 + 0.5) * n);
+        const latR = lat * Math.PI / 180;
+        const cy = Math.floor((1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2 * n);
+        for (const src of Object.values(style.sources ?? {}) as any[]) {
+            if (src?.type !== 'vector') continue;
+            const tiles: string[] = src.tiles ?? [];
+            for (const tpl of tiles) {
+                if (!tpl.startsWith('local://')) continue;
+                const urlBase = tpl.replace(/^local:\/\//, integrationBase);
+                for (let dz = 0; dz <= 1; dz++) {
+                    const z = zoom + dz, m = Math.pow(2, z);
+                    if (z > 14) continue;
+                    const xs = [cx * m / n | 0, Math.min(m - 1, (cx * m / n | 0) + 1)];
+                    const ys = [cy * m / n | 0, Math.min(m - 1, (cy * m / n | 0) + 1)];
+                    for (const x of xs) for (const y of ys) {
+                        const url = integrationBase + urlBase
+                            .replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y))
+                            .replace(/\{z\}|\{x\}|\{y\}/g, '0');
+                        try {
+                            const resp = await fetch(url);
+                            if (!resp.ok) continue;
+                            const bytes = new Uint8Array(await resp.arrayBuffer());
+                            for (let i = 0; i < bytes.length;) {
+                                const b = bytes[i];
+                                if (b < 0x80) { i++; continue; }
+                                const len = b >= 0xf0 ? 4 : b >= 0xe0 ? 3 : b >= 0xc0 ? 2 : 0;
+                                if (len === 0 || i + len > bytes.length) { i++; continue; }
+                                let ok = true;
+                                for (let j = 1; j < len; j++) {
+                                    if ((bytes[i + j] & 0xc0) !== 0x80) { ok = false; break; }
+                                }
+                                if (!ok) { i++; continue; }
+                                // Decode the sequence to a codepoint.
+                                let cp = b;
+                                if (len === 2) cp = b & 0x1f;
+                                else if (len === 3) cp = b & 0x0f;
+                                else cp = b & 0x07;
+                                for (let j = 1; j < len; j++) cp = (cp << 6) | (bytes[i + j] & 0x3f);
+                                if (cp >= 0x80) chars.add(cp);
+                                i += len;
+                            }
+                        } catch { /* skip tile */ }
+                    }
+                }
+            }
+        }
+    } catch { /* defensive */ }
+
+    const ranges = [...new Set([...chars].map(cp => cp >> 8))].sort((a, b) => a - b);
+    const full = [0, 1, ...ranges];
+    const out = new Map<string, number[]>();
+    for (const stack of fontStacks) {
+        out.set(stack.split(',')[0], full);
+    }
+    return out;
+}
+
 export class MBGlyphLoader {
     private m_atlasCanvas: HTMLCanvasElement | null = null;
     private m_atlasCtx: CanvasRenderingContext2D | null = null;

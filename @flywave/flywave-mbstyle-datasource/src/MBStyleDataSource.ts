@@ -4659,14 +4659,17 @@ export class MBStyleDataSource extends TileDataSource {
         }
         if (fontStacks.size === 0) return;
 
-        const { loadGlyphMetrics } = await import('./MBGlyphLoader');
-        // Basic Latin range covers most labels; load 0 (chars 0-255).
-        const RANGES = [0, 1]; // 0-255 + 256-511 (Latin-1 supplement + Extended-A)
+        const { loadGlyphMetrics, discoverGlyphRanges } = await import('./MBGlyphLoader');
+        // §876: discover the ranges the fixture actually needs (style
+        // literals + local tile strings) — the former fixed [0,1] left every
+        // CJK label without metrics (unshapeable → dropped whole label).
+        const discovered = await discoverGlyphRanges(style, fontStacks, glyphsUrl);
         for (const stack of fontStacks) {
             // The mapbox URL template uses {fontstack}; PBF fontstack names
             // are comma-separated. Pass the first font of the stack — PBF
             // ranges are typically keyed by primary font.
             const primaryFont = stack.split(',')[0];
+            const RANGES = discovered.get(primaryFont) ?? [0, 1];
             await loadGlyphMetrics(primaryFont, RANGES, glyphsUrl, this.m_glyphMetrics);
         }
 
