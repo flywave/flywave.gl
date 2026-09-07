@@ -225,6 +225,20 @@ function addTextBufferToCanvas(
     const textElement = textElementState.element;
     const textRenderState = textElementState.textRenderState;
     const opacity = textRenderState!.opacity * fadeFactor * textElement.renderStyle!.opacity;
+    // §879: CJK draw-stage probe — is the silent return hit, and why?
+    try {
+        const gA = globalThis as any;
+        if (gA.__mbPL && textElement.text && /[\u4e00-\u9fff]/.test(textElement.text)) {
+            gA.__mbPL.draw = gA.__mbPL.draw ?? { n: 0, zeroOp: 0, drawn: 0 };
+            gA.__mbPL.draw.n++;
+            if (opacity === 0) gA.__mbPL.draw.zeroOp++;
+            else gA.__mbPL.draw.drawn++;
+            if (gA.__mbPL.draw.n <= 4) {
+                // eslint-disable-next-line no-console
+                console.log(`[MBDraw] opacity=${opacity.toFixed(3)} rsOp=${textElement.renderStyle!.opacity} fadeFactor=${fadeFactor.toFixed(3)} fadeNear=${textElement.fadeNear} fadeFar=${textElement.fadeFar} glyphs=${textElement.glyphs?.length ?? '?'}`);
+            }
+        }
+    } catch { /* probe only */ }
     if (opacity === 0) {
         return false;
     }

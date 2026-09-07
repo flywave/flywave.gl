@@ -1397,6 +1397,13 @@ export class MBTileDataEmitter {
                     props._shaped = shaped;
                     props._textWidth = shaped.right - shaped.left;
                     props._textHeight = shaped.bottom - shaped.top;
+                    // §879: shaped lines (text-max-width broken) — delivering
+                    // these as \n-joined props.text REGRESSED the whole
+                    // text-max-width family (+820 on force-newline): the
+                    // worker's wrap runs on fallback glyph widths, so break
+                    // positions drift from mgl's. Proper fix = engine-side
+                    // max-width in TextLayoutStyle (next project); kept
+                    // `_unwrappedText` so the line-placement branch is ready.
                     props._textOffset = l['text-offset'];
                     props._textTranslate = p['text-translate'] ?? [0, 0];
                     props._textTranslateAnchor = p['text-translate-anchor'] ?? 'map';
@@ -4661,7 +4668,10 @@ export class MBTileDataEmitter {
                             this.m_textPathGeometries.push({
                                 path,
                                 pathLengthSqr: lenSqr * lenSqr,
-                                text: tech.text as string,
+                                // §879: line-placed labels ignore text-max-width
+                                // (mgl) — use the unwrapped text so a point-style
+                                // \n wrap never leaks into the path label.
+                                text: ((tech as any)._unwrappedText ?? tech.text) as string,
                                 technique: techniqueIdx,
                                 objInfos: { ...properties, $id: featureId ?? properties.$id ?? null },
                             });
