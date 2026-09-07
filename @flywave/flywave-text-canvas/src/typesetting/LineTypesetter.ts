@@ -83,6 +83,22 @@ export class LineTypesetter implements Typesetter {
         );
         this.m_tempSmallCaps = this.m_currentParams!.smallCapsArray !== undefined;
 
+        // §882: NaN source probe — CJK font metrics reachability (gated).
+        try {
+            const gN = (globalThis as any).__mbGlyphDbg;
+            if (gN) {
+                const g0 = this.m_currentParams.glyphs[0];
+                const m: any = g0?.font?.metrics;
+                const cjk = this.m_currentParams.glyphs.some?.((g: any) =>
+                    g?.codePoint >= 0x4e00 && g?.codePoint <= 0x9fff);
+                if (cjk && gN.meta !== JSON.stringify([m?.lineHeight, m?.capHeight])) {
+                    gN.meta = JSON.stringify([m?.lineHeight, m?.capHeight]);
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBMeta] cjk=${cjk} metrics.lineHeight=${m?.lineHeight} capHeight=${m?.capHeight} leading=${this.m_currentParams.textLayoutStyle.leading} vAlign=${this.m_currentParams.textLayoutStyle.verticalAlignment} font=${g0?.font?.name ?? '?'}`);
+                }
+            }
+        } catch { /* probe only */ }
+
         this.m_currentParams.position.y +=
             this.m_currentParams.textLayoutStyle.verticalAlignment *
             this.m_currentParams.glyphs[0].font.metrics.capHeight *

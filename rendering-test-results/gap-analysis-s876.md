@@ -312,3 +312,29 @@ ml0901（§691 时代）仅 43 个逐例数值+家族级估值，且早于 §822
 2. line-progress-expression 的垂直定位（地面副本与抬升副本疑似同时绘制）；
 3. 文字族收尾（addTextBufferToCanvas opacity/fadeFactor 探针，§879 入口不变）；
 4. T1 模型域 meshopt 专项（排期表不变）。
+
+---
+
+## 八、§882：入口②③结论（2026-09-07 续）
+
+### ② line-progress-expression 垂直定位：「双绘」假设否定
+场景普查证实每条线只有一份网格（蓝 z=1500、紫 z=2229/2289，progress 逐顶点值正确）；画面上的多条纹带是同一闭合环在 pitch 71° 下的远近两侧。像素对齐扫描：actual = expected 整体上移 22px（dx=0, dy=−22 残差 24.8 vs 基线 40.6）→ 属**全局投影/相机标定差**（§869 globe 直径/相机高度标定域），非本特性缺陷。
+
+### ③ 文字族 addTextBufferToCanvas：opacity/fade 假设否定，真丢弃点 = 文本几何 NaN 顶点
+- 探针实测 `opacity=1.000 fadeFactor=1.000`（fadeNear/fadeFar undefined，距离淡出不参与）→ §879 的「opacity===0 静默返回」假设**排除**；
+- 运行时出现 `THREE.BufferGeometry.computeBoundingSphere(): Computed radius is NaN` → **文本网格顶点含 NaN** → 整段文字不光栅化（白屏真凶）；
+- 缺字形链：3 个标签 `initializeGlyphs FALSE glyphs=undef`（catalog 覆盖缺口），已画标签 glyphs=14/13（个别字形缺失但 isInCache 通过）→ NaN 疑来自缺失字形的 metrics/advance 进 LineTypesetter 累加（`glyphs[0].font.metrics.lineHeight` 实测正常 24/17，故 NaN 更可能来自个别 glyph 的 advance/quad 数据）；
+- `TextGeometry.addTextBufferObject` 的 `!glyph.isInCache → return false` 是**整标签静默丢弃点**（一个字形缺失即全丢，mgl 语义应为缺字跳过/替换）。
+- **注意**：text-canvas 为预编译 lib，src 探针需 `npx tsc --build` 重建 lib 后生效（karma-webpack 缓存可能进一步延迟）；mapview 侧探针直接生效。
+
+### 新增调试入口
+- `MBSTYLE_GLYPHDBG=1` → `glyphdbg=1`：`[MBGlyphAdd]`（Canvas 层 add 结果/四边形数）/`[MBGlyph]`（isInCache 缺字）/`[MBMeta]`（CJK 字体 metrics）；mapview 侧常开 `[MBDraw]/[MBPre]/[MBAdd]/[MBCreate]`（CJK 绘制链路逐环）。
+
+### 文字专项修复入口（合并 §879/§882）
+1. **engine TextLayoutStyle max-width/CJK 断行支持**（§879 专项）——NaN 顶点大概率在此链（wrapping 与缺字 metrics 相互作用）；
+2. `TextGeometry.addTextBufferObject` 缺字降级（跳过该字形而非丢弃整标签，对齐 mgl）；
+3. worker glyphLookup 键对齐 + catalog 覆盖（3 个标签 glyphs=undef 的根因）。
+
+### ①④ 状态
+- ① join-types/overlap 校准（join-types 布局偏移、overlap 瓦片格透明差）未动，排下轮；
+- ④ T1 meshopt 专项未动，排期不变。

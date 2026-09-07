@@ -95,6 +95,7 @@ function main() {
             ...(process.env.MBSTYLE_DECODEDBG ? ["decodedbg=1"] : []),
             ...(process.env.MBSTYLE_NOLIFT ? ["nolift=1"] : []),
             ...(process.env.MBSTYLE_FIXRED ? ["fixred=1"] : []),
+            ...(process.env.MBSTYLE_GLYPHDBG ? ["glyphdbg=1"] : []),
             ...(process.env.MBSTYLE_RTDUMP ? ["rtdump=1"] : []),
             ...(process.env.MBSTYLE_RTDISABLE ? ["rtdisable=1"] : []),
             ...(process.env.MBSTYLE_UVTDBG ? ["uvtdbg=1"] : []),

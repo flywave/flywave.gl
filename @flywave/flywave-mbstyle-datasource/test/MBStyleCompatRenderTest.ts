@@ -241,6 +241,11 @@ function discoverTests(): TestEntry[] {
     if (hsdbgArg) {
         (globalThis as any).__mbHsDbg = Number(hsdbgArg);
     }
+    // §882: glyphdbg=1 → log glyphs missing the font cache in
+    // TextGeometry.addTextBufferObject (whole-label silent drop).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "glyphdbg=1")) {
+        (globalThis as any).__mbGlyphDbg = true;
+    }
     // §791c: extnolight=1 → skip legacy Lambert for zero-height extrusions.
     const enl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("extnolight="))?.slice("extnolight=".length);

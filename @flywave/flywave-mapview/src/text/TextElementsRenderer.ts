@@ -235,7 +235,7 @@ function addTextBufferToCanvas(
             else gA.__mbPL.draw.drawn++;
             if (gA.__mbPL.draw.n <= 4) {
                 // eslint-disable-next-line no-console
-                console.log(`[MBDraw] opacity=${opacity.toFixed(3)} rsOp=${textElement.renderStyle!.opacity} fadeFactor=${fadeFactor.toFixed(3)} fadeNear=${textElement.fadeNear} fadeFar=${textElement.fadeFar} glyphs=${textElement.glyphs?.length ?? '?'}`);
+                console.log(`[MBDraw] opacity=${opacity.toFixed(3)} rsOp=${textElement.renderStyle!.opacity} fadeFactor=${fadeFactor.toFixed(3)} fadeNear=${textElement.fadeNear} fadeFar=${textElement.fadeFar} glyphs=${textElement.glyphs?.length ?? '?'} glyphDbg=${!!gA.__mbGlyphDbg}`);
             }
         }
     } catch { /* probe only */ }
@@ -246,10 +246,22 @@ function addTextBufferToCanvas(
     // Compute the TextBufferObject when we know we're gonna render this label.
     tmpTextBufferCreationParams.letterCaseArray = textElement.glyphCaseArray;
     if (textElement.textBufferObject === undefined) {
-        textElement.textBufferObject = canvas.createTextBufferObject(
-            textElement.glyphs!,
-            tmpTextBufferCreationParams
-        );
+        try {
+            textElement.textBufferObject = canvas.createTextBufferObject(
+                textElement.glyphs!,
+                tmpTextBufferCreationParams
+            );
+        } catch (err) {
+            // §882: capture the placement exception (gated).
+            const gE2 = globalThis as any;
+            if (gE2.__mbPL) {
+                gE2.__mbPL.createErr = (gE2.__mbPL.createErr ?? 0) + 1;
+                if (gE2.__mbPL.createErr <= 4) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBCreate] THREW text=${textElement.text?.slice?.(0, 12)} err=${err}`);
+                }
+            }
+        }
     }
     const backgroundIsVisible =
         textElement.renderStyle!.backgroundOpacity > 0 &&
@@ -263,7 +275,26 @@ function addTextBufferToCanvas(
         ? tmpBufferAdditionParams.opacity * textElement.renderStyle!.backgroundOpacity
         : 0.0;
     tmpBufferAdditionParams.pickingData = textElement.userData ? textElement : undefined;
-    canvas.addTextBufferObject(textElement.textBufferObject!, tmpBufferAdditionParams);
+    // §882: pre-call probe — is canvas the real TextCanvas?
+    try {
+        const gP2 = globalThis as any;
+        if (gP2.__mbPL && textElement.text && /[\u4e00-\u9fff]/.test(textElement.text)) {
+            // eslint-disable-next-line no-console
+            console.log(`[MBPre] tbo=${textElement.textBufferObject !== undefined} glyphs=${textElement.glyphs?.length} ctor=${textElement.textBufferObject?.constructor?.name ?? '-'} canvasCtor=${canvas?.constructor?.name} fn=${(canvas as any)?.addTextBufferObject?.name?.slice?.(0, 30) ?? '?'} srcHasProbe=${String((canvas as any)?.addTextBufferObject).includes('MBEntry')} m0lh=${(textElement.glyphs as any)?.[0]?.font?.metrics?.lineHeight} m0ch=${(textElement.glyphs as any)?.[0]?.font?.metrics?.capHeight} lead=${textElement.layoutStyle?.leading} lw=${textElement.layoutStyle?.lineWidth} vm=${textElement.layoutStyle?.verticalAlignment}`);
+        }
+    } catch { /* probe only */ }
+    const addResult = canvas.addTextBufferObject(textElement.textBufferObject!, tmpBufferAdditionParams);
+    // §882: canvas-level add result for CJK labels.
+    try {
+        const gR = globalThis as any;
+        if (gR.__mbPL && textElement.text && /[\u4e00-\u9fff]/.test(textElement.text)) {
+            gR.__mbPL.cjkAdd = gR.__mbPL.cjkAdd ?? [];
+            if (gR.__mbPL.cjkAdd.length < 6) {
+                // eslint-disable-next-line no-console
+                console.log(`[MBAdd] result=${addResult} text=${textElement.text.slice(0, 12)} pos=(${screenPosition.x.toFixed(1)},${screenPosition.y.toFixed(1)},${screenPosition.z.toFixed(1)}) scale=${scaleFactor.toFixed(3)}`);
+            }
+        }
+    } catch { /* probe only */ }
     return true;
 }
 

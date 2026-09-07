@@ -742,6 +742,8 @@ export class TextCanvas {
         textBufferObject: TextBufferObject,
         params?: TextBufferAdditionParameters
     ): boolean {
+        // §882 ungated entry counter (probe).
+        try { const gE = (globalThis as any).__mbGlyphDbg; if (gE) { gE.entries = (gE.entries ?? 0) + 1; if (gE.entries <= 5) console.log('[MBEntry] addTextBufferObject entered', gE.entries, textBufferObject?.glyphs?.length); } } catch {}
         let targetLayer = this.m_defaultLayer;
         let position;
         let scale;
@@ -779,6 +781,22 @@ export class TextCanvas {
             bgColor,
             bgOpacity
         );
+        // §882: result + geometry bounds for CJK labels (gated glyphdbg=1).
+        try {
+            const gD = (globalThis as any).__mbGlyphDbg;
+            if (gD) {
+                gD.add = (gD.add ?? 0) + 1;
+                const tbo: any = textBufferObject;
+                let cp0 = '?';
+                if (tbo.text && tbo.text.length) cp0 = tbo.text.charCodeAt(0).toString(16);
+                const isCjk = tbo.text && /[\u4e00-\u9fff]/.test(tbo.text);
+                if (isCjk || gD.add <= 3) {
+                    const dCount = targetLayer.storage.drawCount - prevDrawCount;
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBGlyphAdd] cjk=${isCjk ? 1 : 0} result=${result} dQuads=${dCount / 4} glyphs=${tbo.glyphs?.length ?? '?'} cp0=${cp0} pos=(${position?.x?.toFixed?.(1)},${position?.y?.toFixed?.(1)}) scale=${scale} layer=${params?.layer} text=${tbo.text?.slice?.(0, 12) ?? '?'}`);
+                }
+            }
+        } catch { /* probe only */ }
         if (result && params !== undefined) {
             if (params.pickingData !== undefined) {
                 targetLayer.storage.addPickingData(

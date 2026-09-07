@@ -388,6 +388,18 @@ export class TextGeometry {
 
             const glyph = textBufferObject.glyphs[i];
             if (!glyph.isInCache) {
+                // §882: which codepoint missed the cache — one missing glyph
+                // silently drops the WHOLE label here. Gated by the
+                // `glyphdbg=1` karma arg (sets __mbGlyphDbg).
+                const gMiss = (globalThis as any).__mbGlyphDbg;
+                if (gMiss) {
+                    gMiss.miss = (gMiss.miss ?? 0) + 1;
+                    const cp = (textBufferObject as any).text?.charCodeAt?.(i);
+                    if (gMiss.miss <= 8) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBGlyph] miss idx=${i} cp=${cp !== undefined ? cp.toString(16) : '?'} total=${textBufferObject.glyphs.length} label=${(textBufferObject as any).text?.slice?.(0, 20) ?? '?'}`);
+                    }
+                }
                 return false;
             }
 
