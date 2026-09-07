@@ -536,6 +536,42 @@ export class MBShadowRenderer {
                     // eslint-disable-next-line no-console
                     console.log('[MBShadowGrid] ' + JSON.stringify(grid));
                 }
+                // §884: coarse dark-pixel bounding box + caster corners in
+                // shadow NDC — is the model rendered but tiny/misplaced, or
+                // absent from the depth canvas entirely?
+                try {
+                    const N = 64;
+                    const px3 = new Uint8Array(4);
+                    let minX = N, maxX = -1, minY = N, maxY = -1;
+                    for (let gy = 0; gy < N; gy++) {
+                        for (let gx = 0; gx < N; gx++) {
+                            const x = Math.min(1023, gx * 16 + 8);
+                            const y = Math.min(1023, (N - 1 - gy) * 16 + 8);
+                            gl2.readPixels(x, y, 1, 1, gl2.RGBA, gl2.UNSIGNED_BYTE, px3);
+                            if (px3[0] < 250) {
+                                if (gx < minX) minX = gx;
+                                if (gx > maxX) maxX = gx;
+                                if (gy < minY) minY = gy;
+                                if (gy > maxY) maxY = gy;
+                            }
+                        }
+                    }
+                    const v = new THREE.Vector3();
+                    const ndcs: string[] = [];
+                    for (let i = 0; i < 8; i++) {
+                        v.set(
+                            i & 1 ? casterBox.max.x : casterBox.min.x,
+                            i & 2 ? casterBox.max.y : casterBox.min.y,
+                            i & 4 ? casterBox.max.z : casterBox.min.z,
+                        ).project(this.m_shadowCamera);
+                        ndcs.push(`(${v.x.toFixed(2)},${v.y.toFixed(2)},${v.z.toFixed(2)})`);
+                    }
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBShadowFit] darkBox=(${minX},${minY})..(${maxX},${maxY})/64 ndc=[${ndcs.join(' ')}]`);
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBShadowFit] err ' + e);
+                }
                 // §533: the census dump signature now includes the grid, so
                 // the (proven-reachable) census POST carries it.
             } catch (e) {

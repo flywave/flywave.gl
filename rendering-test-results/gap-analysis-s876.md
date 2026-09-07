@@ -381,3 +381,11 @@ mgl 的 text-max-width 断行是**最优断行**（symbol/shaping determineLineB
 
 ### 其它
 - 修复 §883 retry 补丁引入的语法错误（for-fontName 闭合括号），并确认 karma webpack 缓存会掩盖编译失败（陈旧 bundle 现象的根因）。
+
+### §885：landmark 阴影诊断（深度 pass 正常，缺口在模型材质接收采样）
+本轮新增 [MBShadowFit] 探针（64×64 暗像素包围盒 + caster 八角 NDC）实测：
+- 深度画布 1024²，模型在**深度 pass 中居中渲染、覆盖 ~12%**（darkBox (18,23)..(45,42)/64），八角 NDC 全部在视锥内（|x|,|y|≤0.76, z≤0.76）——**§522 depth pass 与阴影相机 fit 本身健康**；
+- §884 的「2/64 暗点」是第 1 帧陈旧快照（模型未加载完，`__mbShadowGridLogged` 只记一次），误导了上一轮判断；
+- 最终画面仍无阴影：`[MBShadowAnchor] MeshStandardMaterial|opaque_fragment block=in`（uMBShadowMatrix anchor 已注入 GLTF 材质），但模型材质由 **MBModelRenderer 的 mgl-lighting patcher（__mbMglLit）** 打补丁，**不含 MBShadowRenderer 的接收采样块**（`mbShUv = uMBShadowMatrix * (vMBWorldPos - uMBEye)` + 深度比较）——两条补丁链未合流。
+- **下轮精确入口**：把 MBShadowRenderer 的接收采样块（varying vMBWorldPos + shadow uv 深度比较 + light intensity 混合）注入 __mbMglLit patcher 的 onBeforeCompile（vertex 传 varying，fragment 采样 m_shTex）；用 shadowdbg=3 的 [MBShadowFit] 验证。
+- 环境注意：该夹具单跑 ~4.5-5 分钟，shadowdbg=3 调试需 timeout ≥560s。
