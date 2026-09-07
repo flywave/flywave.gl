@@ -360,6 +360,12 @@ export class MBShadowRenderer {
             this.m_shTex.minFilter = THREE.NearestFilter;
             this.m_shTex.magFilter = THREE.NearestFilter;
             this.m_shTex.generateMipmaps = false;
+            // §885 终七: the depth canvas is rendered in GL orientation and
+            // uMBShadowMatrix maps world→uv in the SAME convention — the
+            // default flipY=true upload mirrors it vertically, so every
+            // receiver sampled a vertically-mirrored (mostly empty) texel
+            // and the entire model-layer shadow family rendered shadowless.
+            this.m_shTex.flipY = false;
         }
 
         // Frame the ortho shadow camera around the eye-relative scene (see the
@@ -514,7 +520,7 @@ export class MBShadowRenderer {
             // (few casters registered yet) and the early snapshot misled the
             // shadow investigation once already.
             const __rc = ((this as any).__mbRunCount = ((this as any).__mbRunCount ?? 0) + 1);
-            if (__rc === 1 || __rc === 60) {
+            if (__rc === 1 || __rc === 60 || __rc === 1800 || __rc === 5400) {
               try {
                 const c2: HTMLCanvasElement = (this as any).__mbDbg2d ??
                     ((this as any).__mbDbg2d = document.createElement('canvas'));
@@ -623,6 +629,20 @@ export class MBShadowRenderer {
                     const cs = worldBox.getSize(new THREE.Vector3());
                     // eslint-disable-next-line no-console
                     console.log(`[MBShadowScene] meshes=${n} withL1=${nL1} sampledZ=[${zb.min.z.toFixed(0)},${zb.max.z.toFixed(0)}] allWorldZ=[${worldBox.min.z.toFixed(0)},${worldBox.max.z.toFixed(0)}] c=(${cc.x.toFixed(0)},${cc.y.toFixed(0)},${cc.z.toFixed(0)}) s=(${cs.x.toFixed(0)},${cs.y.toFixed(0)},${cs.z.toFixed(0)}) casterBoxZ=[${casterBox.min.z.toFixed(0)},${casterBox.max.z.toFixed(0)}]`);
+                    // §885 终七: per-caster identity — is each registered
+                    // caster actually attached to the rendered scene, and
+                    // where does it sit in world Z?
+                    let ci = 0;
+                    for (const cobj of shadowCasters) {
+                        if (ci++ >= 4) break;
+                        let attached = false;
+                        let p: any = cobj;
+                        while (p) { if (p === scene2) { attached = true; break; } p = p.parent; }
+                        const cb = new THREE.Box3().setFromObject(cobj);
+                        const cz = cb.isEmpty() ? 'empty' : `[${cb.min.z.toFixed(0)},${cb.max.z.toFixed(0)}]`;
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBCaster] i=${ci - 1} attached=${attached} inSceneRoot=${cobj.parent === scene2} z=${cz} name=${cobj.name ?? '?'}`);
+                    }
                 } catch (e) {
                     // eslint-disable-next-line no-console
                     console.log('[MBShadowScene] err ' + e);
@@ -651,7 +671,7 @@ export class MBShadowRenderer {
         // identity at draw time. Log the actual matrix + framing once.
         if (!(this as any).__mbMatFrames) (this as any).__mbMatFrames = 0;
         const __rc = ++(this as any).__mbMatFrames;
-        if (__rc === 1 || __rc === 60) {
+        if (__rc === 1 || __rc === 60 || __rc === 1800 || __rc === 5400) {
             (this as any).__mbMatLogged = true;
             try {
                 const p = this.m_shadowCamera.position;

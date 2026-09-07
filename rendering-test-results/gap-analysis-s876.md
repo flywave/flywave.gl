@@ -437,3 +437,9 @@ shdbg=7 直绘接收端 worldPos（148k 采样，对照 casterBox boxC=(−356,�
 shdbg=7 worldPos 直绘（87k 采样，探针顺序修正后）：渲染可见建筑 worldPos = x[−953,+600] y[−843,+576] **z[+41,+406]**，而 shadowCasters 的 casterBox = x[−663,−49] y[−363,223] **z[−82,+63]**——**渲染副本与深度投射副本是两组不同实例，z 相差 ~+123..343**。接收采样落空 = 渲染副本不在深度图内。
 - 已落地修复：run() 每帧对 shadowCasters traverse `layers.enable(1)`（build 后异步实例化的 mesh 此前永远缺席深度 pass，实测 8 mesh 仅 5 个开 L1）；
 - 下轮精确入口：核对 MBBatchedModelDataSource 的 `shadowCasters.add(outer)` 对象与实际 add 进场景的实例是否同一（placement 包装/rebuild 后旧对象残留 caster 集——prune 只删 parentless，重建后新旧两组可能并存，深度图画的是旧组、画面渲染的是新组）。
+
+### §885 终七：flipY 修复与收敛尝试（2026-09-08）
+- 落地：`m_shTex.flipY = false`（深度画布 GL 方向直采，消除默认翻转导致的镜像采样）+ MBBatchedModelRenderer 将渲染副本注册为 caster（carrier 路径此前完全不在深度 pass 内）；
+- 结果：shadows-normal-offset 输出仍 171,310（逐位一致）——接收采样在最终帧**整体惰性**（所有采样结果恒 lit，或 uv 出界走 skip 分支）；shadowdbg=4 下采样深度恒 1.0（纯白 clear）表明采样点系统性落在足迹外的空白区；
+- **下轮精确入口**：在 ground quad / 模型 fragment 里直绘 `uMBShadowMatrix * vec4(worldPos−uMBEye,1)` 的完整 uv（含越界时的原值，不做 bounds 跳过），并与深度画布足迹 (0.28-0.72, 0.33-0.65) 直接比对——一次运行即可分辨「矩阵系错位」vs「纹理方向」；同时用 `uMBShIntensity` 直绘确认接收链在最终帧的活性（排除 AfterRender 同步时序）。
+- 环境注意：mo24/mo25/mo26 三轮 171,310 逐位相同（含 carrier 注册/layer 刷新/flipY 三个独立变更），加深了 karma webpack 缓存返回陈旧 bundle 的疑点——下轮调试前先 `rm -rf /tmp/_karma_webpack_*` 或更换 karma 端口。

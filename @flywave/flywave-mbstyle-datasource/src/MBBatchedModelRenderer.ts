@@ -26,6 +26,7 @@ import { TileKey, webMercatorTilingScheme } from '@flywave/flywave-geoutils';
 import { applyMglModelLighting } from './MBModelRenderer';
 import { decodeGlbTile, TileMaterialData, TilePrimitiveData } from './MBDracoDecoder';
 import { applyMeshFeatures } from './MBMeshFeatures';
+import { shadowCasters } from './MBShadowRenderer';
 
 interface BatchedSource {
     sourceId: string;
@@ -125,6 +126,14 @@ export class MBBatchedModelRenderer {
             const gx = ((e.x + 0.5) / gn) * R;
             const gy = ((e.y + 0.5) / gn) * R;
             e.model.position.set(gx - ccx, gy - ccy, 0);
+            // §885 终七: the CARRIER copies are the actually-rendered models —
+            // register them as shadow casters (the datasource tile groups
+            // registered at build time sit at a different transform and their
+            // depth projection never matches what the receivers sample).
+            if (!shadowCasters.has(e.model)) {
+                e.model.traverse((o: any) => o.layers.enable(1));
+                shadowCasters.add(e.model);
+            }
         }
         // §549 CRITICAL: the engine clears the root via
         // `m_sceneRoot.children.length = 0`, which does NOT reset
