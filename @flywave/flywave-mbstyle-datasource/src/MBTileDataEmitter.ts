@@ -1469,6 +1469,14 @@ export class MBTileDataEmitter {
                             transformedText)
                             ? 'Character'
                             : 'Word';
+                        // §883 pending: mgl additionally BALANCES lines via
+                        // optimal line breaking (determineAverageLineWidth:
+                        // lineCount = ceil(total/max), target = total/lineCount).
+                        // Greedy wrapping here yields 5 glyphs/line where mgl
+                        // shows 4 — reproducing it needs per-feature layout
+                        // widths (shapeText's _textWidth is unreliable for CJK
+                        // and the technique props are layer-cached), so it
+                        // stays in the engine max-width 专项.
                     }
                     props.rotation = ((l['text-rotate'] as number) ?? 0) * Math.PI / 180;
                     const anchor = (l['text-anchor'] as string) ?? 'center';

@@ -362,3 +362,6 @@ ml0901（§691 时代）仅 43 个逐例数值+家族级估值，且早于 §822
 1. 断行宽度标定：ours 每行 5 字 vs mgl 4 字（mgl 有效宽度略小于 text-max-width，需查其 SHAPING padding/epsilon）；
 2. text-keep-upright 翻转/沿线重复间距标定（§879 遗留）；
 3. ①join-types/overlap 定位校准；④T1 meshopt 专项（排期不变）。
+
+### §883 补充：断行宽度标定结论
+mgl 的 text-max-width 断行是**最优断行**（symbol/shaping determineLineBreaks：lineCount = ceil(total/maxWidth)，再以 targetWidth = total/lineCount 均衡 + 罚分模型），不是贪心。本引擎 LineTypesetter 只支持贪心（超宽即换行），呈现 5 字/行 vs mgl 4 字/行。实测 `shapeText` 的 `_textWidth` 对 CJK 不可靠（10 字测得 5.0）且 technique props 按 layer 缓存（无法逐要素），均衡断行需要 per-feature 布局宽度，归入 engine max-width 专项（§879 立项不变）。
