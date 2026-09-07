@@ -389,3 +389,10 @@ mgl 的 text-max-width 断行是**最优断行**（symbol/shaping determineLineB
 - 最终画面仍无阴影：`[MBShadowAnchor] MeshStandardMaterial|opaque_fragment block=in`（uMBShadowMatrix anchor 已注入 GLTF 材质），但模型材质由 **MBModelRenderer 的 mgl-lighting patcher（__mbMglLit）** 打补丁，**不含 MBShadowRenderer 的接收采样块**（`mbShUv = uMBShadowMatrix * (vMBWorldPos - uMBEye)` + 深度比较）——两条补丁链未合流。
 - **下轮精确入口**：把 MBShadowRenderer 的接收采样块（varying vMBWorldPos + shadow uv 深度比较 + light intensity 混合）注入 __mbMglLit patcher 的 onBeforeCompile（vertex 传 varying，fragment 采样 m_shTex）；用 shadowdbg=3 的 [MBShadowFit] 验证。
 - 环境注意：该夹具单跑 ~4.5-5 分钟，shadowdbg=3 调试需 timeout ≥560s。
+
+### §885 续二：接收链逐环核实（2026-09-08）
+- `[SHST]` 帧 60/300：`getShadowUniforms` **实际有效**（map=m_shTex、intensity=1）——此前 `no-su` 是探针误读（`su.map.value` 把纹理对象当 uniform 包裹）；同步链 `syncModelShadowUniforms` → `uMBShMap/Matrix/Intensity` → `mbShadowLitUniforms` 完整；
+- 模型 fragment 两个光照分支（§557 hemisphere / §655 PBR）的阴影采样块**已存在**（uv 边界检查 + r+g/255 深度解码 + 0.002 bias）；
+- 对照实验定性：`quantization-shadows`（同模型、方向光**无** cast-shadows，按设计无影）基线 2332 近通过——即模型渲染/颜色/光照标定本身好；`shadows-normal-offset`（cast-shadows=true + direction[190,50] + shadow-intensity 1）171k 全程无影 → **接收采样在真实光源下不触发或深度比较恒 lit**；
+- 已就位（gate=shadowdbg=4）：模型采样点调试输出 `gl_FragColor = vec3(mbShUv.z, mbShDepth, 0.5)`——下轮首跑直接读墙面 uv.z/采样深度，一锤定音区分「uv 出界/matrix 系不一致」vs「深度编码/比较错」；
+- 环境警告：model-layer 长夹具（4 分钟级）的结果回传约 50% 概率丢失（assert 前异常/POST 失败），调试图形类夹具需在脚本层加重试。

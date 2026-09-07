@@ -439,6 +439,7 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBShMap = { value: null as any };
                 shader.uniforms.uMBShMatrix = { value: new THREE.Matrix4() };
                 shader.uniforms.uMBShIntensity = { value: 0 };
+                shader.uniforms.uMBShDbg = { value: (globalThis as any).__mbShadowDbg4 ? 1 : 0 };
                 if (receiveShadows !== false) {
                     mbShadowLitUniforms.add(mat.userData.__mbShU = {
                         map: shader.uniforms.uMBShMap,
@@ -472,6 +473,7 @@ export function applyMglModelLighting(
                      uniform sampler2D uMBShMap;
                      uniform mat4 uMBShMatrix;
                      uniform float uMBShIntensity;
+                     uniform float uMBShDbg;
                      uniform float uMB3DMetal; uniform float uMB3DRough;
                      uniform vec3 uMB3DLegacyPos; uniform vec3 uMB3DLegacyColor; uniform float uMB3DLegacyInt;
                      uniform float uMBHas3DLights;
@@ -717,6 +719,7 @@ export function applyMglModelLighting(
                                      mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
+                                     if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.z, mbShDepth, 0.5); return; }
                                      mbNdotL *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
                                  }
                              }
@@ -758,6 +761,7 @@ export function applyMglModelLighting(
                                      mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
+                                     if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.z, mbShDepth, 0.5); return; }
                                      mbLF *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
                                  }
                              }
