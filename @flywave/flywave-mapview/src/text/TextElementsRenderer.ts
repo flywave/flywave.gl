@@ -929,10 +929,14 @@ export class TextElementsRenderer {
             const elementType = textElement.type;
             const isPathLabel = elementType === TextElementType.PathLabel;
             // §878: path-label drop-point probe.
-            if (isPathLabel) {
+            {
                 const gP = globalThis as any;
                 gP.__mbPL = gP.__mbPL ?? { arrived: 0, tooSmall: 0, glyphFail: 0, ok: 0 };
                 gP.__mbPL.arrived++;
+                if (gP.__mbPL.arrived <= 4 && textElement.text && /[\u4e00-\u9fff]/.test(textElement.text)) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBPL] CJK label arrived, text=', textElement.text?.slice?.(0, 16), 'renderStyle=', (textElement.renderStyle as any)?.name ?? '?', 'layoutStyle=', (textElement.layoutStyle as any)?.name ?? '?', 'type=', elementType);
+                }
             }
 
             // For paths, check if the label may fit.
@@ -961,17 +965,25 @@ export class TextElementsRenderer {
                 // This ensures that textElement.renderStyle and textElement.layoutStyle are
                 // already instantiated and initialized with theme style values.
                 if (!this.initializeGlyphs(textElement, textElementStyle, forceNewPassOnLoaded)) {
-                    if (isPathLabel) {
-                        const gP2 = (globalThis as any).__mbPL;
-                        if (gP2) {
-                            gP2.glyphFail++;
-                            if (gP2.glyphFail <= 3) {
-                                // eslint-disable-next-line no-console
-                                console.log('[MBPL] initializeGlyphs false, text=', textElement.text?.slice?.(0, 20), 'renderStyle=', textElement.renderStyle?.name ?? '?');
-                            }
+                    const gGF = globalThis as any;
+                    if (gGF.__mbPL && textElement.text && /[\u4e00-\u9fff]/.test(textElement.text)) {
+                        gGF.__mbPL.glyphFail = (gGF.__mbPL.glyphFail ?? 0) + 1;
+                        if (gGF.__mbPL.glyphFail <= 3) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBPL] CJK initializeGlyphs FALSE, glyphs=', textElement.glyphs?.length ?? 'undef');
                         }
                     }
                     continue;
+                }
+                {
+                    const gOK = globalThis as any;
+                    if (gOK.__mbPL && textElement.text && /[\u4e00-\u9fff]/.test(textElement.text)) {
+                        gOK.__mbPL.cjkOk = (gOK.__mbPL.cjkOk ?? 0) + 1;
+                        if (gOK.__mbPL.cjkOk <= 2) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBPL] CJK glyphs OK, count=', textElement.glyphs?.length ?? '?');
+                        }
+                    }
                 }
                 if (isPathLabel) {
                     const gP3 = (globalThis as any).__mbPL;
