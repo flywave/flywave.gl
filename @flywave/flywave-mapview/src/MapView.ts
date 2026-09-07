@@ -3635,7 +3635,15 @@ export class MapView extends EventDispatcher {
         this.m_rteCamera.copy(this.m_camera);
         this.m_rteCamera.position.setScalar(0);
         this.m_rteCamera.updateMatrixWorld(true);
-        this.m_rteCamera.projectionMatrix.copy(this.m_camera.projectionMatrix);
+        // Rebuild the projection natively instead of copying m_camera's: the
+        // geo camera is never passed to the renderer, so the backend never
+        // flags it for reversed depth, and copying its matrix yields a
+        // NON-reversed projection — with the reversed depth buffer every
+        // fragment then fails the depth test and the frame renders black
+        // (WebGL backend). The RTE camera carries the backend-set
+        // _reversedDepth flag, so its own updateProjectionMatrix produces the
+        // correct reversed matrix on both backends.
+        this.m_rteCamera.updateProjectionMatrix();
 
         this.m_textElementsRenderer?.updateCamera();
 
