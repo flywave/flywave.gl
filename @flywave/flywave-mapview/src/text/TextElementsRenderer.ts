@@ -1848,6 +1848,20 @@ export class TextElementsRenderer {
                           tempPosition,
                           !isLineMarker
                       );
+            // §879: CJK placement-result probe.
+            try {
+                const gPr = globalThis as any;
+                if (gPr.__mbPL && pointLabel.text && /[\u4e00-\u9fff]/.test(pointLabel.text)) {
+                    gPr.__mbPL.place = gPr.__mbPL.place ?? {};
+                    const rn = String(placeResult).replace('PlacementResult.', '');
+                    gPr.__mbPL.place[rn] = (gPr.__mbPL.place[rn] ?? 0) + 1;
+                    if ((gPr.__mbPL.place.__logged ?? 0) < 4) {
+                        gPr.__mbPL.place.__logged = (gPr.__mbPL.place.__logged ?? 0) + 1;
+                        // eslint-disable-next-line no-console
+                        console.log('[MBPL] placeResult=', rn, 'text=', pointLabel.text.slice(0, 12), 'screen=', tempScreenPosition.x.toFixed(0) + ',' + tempScreenPosition.y.toFixed(0));
+                    }
+                }
+            } catch { /* probe only */ }
             const textInvisible = placeResult === PlacementResult.Invisible;
             if (textInvisible) {
                 if (placementStats) {
