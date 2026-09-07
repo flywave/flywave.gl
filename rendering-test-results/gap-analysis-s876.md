@@ -284,3 +284,31 @@ ml0901（§691 时代）仅 43 个逐例数值+家族级估值，且早于 §822
 4. **文字族收尾**：放置/绘制层丢弃点（§879 已定位到 addTextBufferToCanvas）+ engine max-width 专项。
 5. **309 个近通过速赢池**：逐夹具亚像素校准。
 6. **资源/上游挂账**：real-world MVT、hd/dem webp、mapbox-gl-styles、pbf-sprite（需上游或加载器支持）。
+
+---
+
+## 七、§881：elevated-line 整族空白双根因修复（2026-09-07）
+
+**成果**：`elevated-line/join-types`（48,620 全白）、`overlap`（63,065 全白）、`join-no-tile-borders`（17,321 全白）从「特性缺失级空白」修复为**全部渲染**（含 join/chevron 结构、z 抬升、颜色），转入定位校准缺口。相关 z-offset 家族 A/B 净收益约 **−4.6 万 px**（terrain/lines-elevated −1.4 万、symbol-elevation/depth-occlusion 多例小幅改善），无实质回归。
+
+### 根因 1：§513 边框裁剪的 y 坐标系错误（几何发射为空）
+`clipLinePathsToTile` 假设线坐标为瓦片局部 `[0,extents]`，但解码端交付的 y 处于 **y 镜像 geojson 帧**（`py = scale − 2·top − local_y`，cf. `mvtTransform`）——x 局部、y 是千万级帧值 → 所有线段被判越界 → **solid-line 几何 positions 为 0**（探针 `[MBDecode] tile=… geos=1 verts=4 techs=[solid-line:red,fill:white]`：仅剩背景 quad）。3d-intersections（MVT+sea）能渲染而 geojson+sea 全灭的差异亦由此解释（MVT 路径 clip 前有 `transformLineGeometry`/mvtFlip 一致的帧处理，边界样本恰好不同）。
+**修复**：裁剪前按 `geojsonYFrameConstant = scale − 2·lat2tile(geoBox.north)` 归一到真局部 y，裁完映射回原帧（`MBTileDataEmitter.processLineFeature`）。裁剪→发射的往返是仿射恒等，不引入位移。
+
+### 根因 2：§880 径向抬升在平面帧退化为 ~3km 水平平移
+§880 的 "沿 globe 径向抬升" 在 **mercator 平面帧**（`decodeInfo.center.z = 0`）下，`normalize(绝对位置)` 退化为地图平面中心向量——`h=3000` 被加成 `+~(870,2860)` 的**水平位移**（探针实测 `worldPts0=842.6,3851.7` vs 投影值 `(−32.8,982.3)`），整条线推出屏幕。§880 当时判 "无害" 是因为几何发射端为空（根因 1），两种病并存。
+**修复**：仅 `targetProjection.type === 1 (Spherical)` 走径向抬升；平面帧改为 `z += h`（`project()` + 逐顶点循环两处）。
+
+### A/B 数值（vs ml260907 基线）
+- elevated-line 家族：join-types 48,620→53,415（全白→渲染，mismatch 口径从"期望红全错"变为"渲染位置校准差"）、overlap 63,065→63,069（渲染、接近一致）、join-no-tile-borders 17,321→19,736（渲染）、line-progress-expression 12,612→22,412（渲染、垂直定位差）；其余 58 例净 −2,793。
+- fill-z-offset / symbol-elevation / terrain lines-elevated / depth-occlusion / line-width：47 例净 **−46,428**（terrain/lines-elevated-horizontal −13,864 等）；最大回归 terrain/lines-elevated-ground-scale-2 +5,366（基线已 74,924 坏例）。
+
+### 新增调试入口（全部 debug-gated）
+- `MBSTYLE_DECODEDBG=1`：`[MBDecode]`（Tile.decodedTile 到达量）/`[MBLineProbe]`（tile geoBox/C）/`[MBProj]`（px→world 首点）/`[MBLineGeom]`（worldPts vs 交错顶点）/`[MBTileInfo]`（tileMaxH/geoBox altitude）。
+- `MBSTYLE_NOLIFT=1`（A/B geoBox 抬升）、`MBSTYLE_FIXRED=1`（原始材质替换二分）、`MBSTYLE_PXFROM`（pxTrace 起始 draw）。
+
+### 下一步入口
+1. join-types/overlap 的**定位校准**（join-types 布局偏移/粗细；overlap 瓦片网格状透明度差）；
+2. line-progress-expression 的垂直定位（地面副本与抬升副本疑似同时绘制）；
+3. 文字族收尾（addTextBufferToCanvas opacity/fadeFactor 探针，§879 入口不变）；
+4. T1 模型域 meshopt 专项（排期表不变）。

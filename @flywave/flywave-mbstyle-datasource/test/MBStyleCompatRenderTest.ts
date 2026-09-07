@@ -215,6 +215,16 @@ function discoverTests(): TestEntry[] {
     } else if (ddbg === "2") {
         (globalThis as any).__mbDomeDbg = 2;
     }
+    // §881: nolift=1 → skip noteGeometryHeight on the offset-line path
+    // (A/B for the geoBox-lift white-frame hypothesis).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "nolift=1")) {
+        (globalThis as any).__mbNoLift = true;
+    }
+    // §881: fixred=1 → replace red mesh materials with pristine MeshBasic
+    // (bisect: broken patched material vs broken geometry).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "fixred=1")) {
+        (globalThis as any).__mbFixRed = true;
+    }
     // §818: drawlog=1 → log every WebGL draw call (object/material/renderOrder)
     // in submission order — render-level identification of the white-band
     // painter (scene traversals between frames see no tile objects:
@@ -496,6 +506,26 @@ async function renderUntilSettled(
             const mv0 = (window as any).__mbTestMapView;
             mv0?.addEventListener?.("WillRender", () => hideQuadFrame((window as any).__mbTestMapView));
         }
+        // §881 fixred: pristine-material swap on red meshes (WillRender, the
+        // engine re-adds tile objects between frames).
+        if ((globalThis as any).__mbFixRed) {
+            const mvF = (window as any).__mbTestMapView;
+            mvF?.addEventListener?.("WillRender", () => {
+                try {
+                    mvF?.scene?.traverse?.((o: any) => {
+                        if (!o.isMesh) return;
+                        if (Array.isArray(o.material)) {
+                            o.material = o.material.map((m: any) =>
+                                m?.color?.getHexString?.() === 'ff0000'
+                                    ? new THREE.MeshBasicMaterial({ color: 0xff0000, depthTest: false })
+                                    : m);
+                        } else if (o.material?.color?.getHexString?.() === 'ff0000') {
+                            o.material = new THREE.MeshBasicMaterial({ color: 0xff0000, depthTest: false });
+                        }
+                    });
+                } catch { /* probe only */ }
+            });
+        }
         (mapView as any).scene?.traverse?.((o: any) => {
             if (!o.isMesh) return;
             count++;
@@ -625,6 +655,25 @@ async function renderFrames(
                                 o.updateWorldMatrix?.(true, false);
                                 const e = o.matrixWorld?.elements ?? [0, 0, 0];
                                 const pos = o.position;
+                                // §881: red meshes — project first vertex with
+                                // the render camera to see where it lands.
+                                let vtx = '';
+                                const mat0v: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                                if (mat0v?.color?.getHexString?.() === 'ff0000' && o.geometry?.attributes?.position) {
+                                    try {
+                                        const pa2 = o.geometry.attributes.position;
+                                        const V = new THREE.Vector3();
+                                        const n2 = Math.min(3, pa2.count);
+                                        const parts2: string[] = [];
+                                        const cam2 = (mapView as any).camera;
+                                        for (let vi = 0; vi < n2; vi++) {
+                                            V.set(pa2.getX(vi), pa2.getY(vi), pa2.getZ(vi)).applyMatrix4(o.matrixWorld);
+                                            const pm = V.clone().project(cam2);
+                                            parts2.push(`(${V.x.toFixed(0)},${V.y.toFixed(0)},${V.z.toFixed(0)}→ndc${pm.x.toFixed(2)},${pm.y.toFixed(2)})`);
+                                        }
+                                        vtx = ` vndc=${parts2.join('')}`;
+                                    } catch { vtx = ' vndc=err'; }
+                                }
                                 // §782: first vertices + index count — tile-
                                 // partition forensics (are the per-tile pieces
                                 // clipped or full-quad duplicates?).
@@ -638,18 +687,29 @@ async function renderFrames(
                                     }
                                     vdump = ` v[0..${pa.count}]=${parts.join('')} idx=${o.geometry?.index?.count ?? '?'}`;
                                 }
-                                samples.push(`${key} local=(${pos.x?.toFixed?.(1)},${pos.y?.toFixed?.(1)},${pos.z?.toFixed?.(1)}) world=(${e[12]?.toFixed?.(1)},${e[13]?.toFixed?.(1)},${e[14]?.toFixed?.(1)}) nvert=${o.geometry?.attributes?.position?.count ?? '?'}${vdump}`);
+                                samples.push(`${key} local=(${pos.x?.toFixed?.(1)},${pos.y?.toFixed?.(1)},${pos.z?.toFixed?.(1)}) world=(${e[12]?.toFixed?.(1)},${e[13]?.toFixed?.(1)},${e[14]?.toFixed?.(1)}) nvert=${o.geometry?.attributes?.position?.count ?? '?'}${vdump}${vtx}`);
                             }
                         });
                     };
                     try { const ri = (mapView as any).renderer?.info?.render;
                         if (ri) console.log('[RIDRAW] calls=' + ri.calls + ' tris=' + ri.triangles + ' frames=' + ri.frame); } catch {}
-                    const tiles = (dataSource as any).getDecodedTiles?.() ?? [];
+                    const tiles: any[] = [];
+                    try {
+                        const cache = (mapView as any).m_visibleTiles?.m_dataSourceCache;
+                        cache?.m_tileCache?.forEach?.((t: any) => tiles.push(t));
+                    } catch { /* noop */ }
                     for (const t of tiles) {
                         const tk = t.tileKey ? `${t.tileKey.level}/${t.tileKey.column}/${t.tileKey.row}` : '?';
                         const dt: any = (t as any).decodedTile ?? {};
                         // eslint-disable-next-line no-console
-                        console.log(`[MBTileInfo] ${tk} storage=${(t as any).storageLevel} objects=${(t.objects ?? []).length} geos=${dt.geometries?.length ?? '?'} techs=${dt.techniques?.length ?? '?'} poi=${dt.poiGeometries?.length ?? '?'} textPath=${dt.textPathGeometries?.length ?? '?'}`);
+                        // §881: elevated-line z-offset chain — per-tile
+                        // maxGeometryHeight on both the decoded tile and the
+                        // engine Tile, plus the effective geoBox altitude.
+                        const tileMgh = (t as any).m_maxGeometryHeight;
+                        const gb = (t as any).geoBox;
+                        const alt = gb ? `altN=${gb.southWest?.altitude} altNE=${gb.northEast?.altitude}` : 'noGeoBox';
+                        const rawDt = (t as any).decodedTile ?? (t as any).m_decodedTile;
+                        console.log(`[MBTileInfo] ${tk} storage=${(t as any).storageLevel} objects=${(t.objects ?? []).length} hasDt=${rawDt !== undefined} geos=${rawDt?.geometries?.length ?? '?'} techs=${rawDt?.techniques?.length ?? '?'} poi=${rawDt?.poiGeometries?.length ?? '?'} textPath=${rawDt?.textPathGeometries?.length ?? '?'} dtMaxH=${rawDt?.maxGeometryHeight} tileMaxH=${tileMgh} ${alt} keys=${Object.keys(t).length}`);
                         const objs = (t as any).objects ?? [];
                         for (const o of objs) walk(o, `tile${tk}`);
                     }
@@ -2219,6 +2279,18 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                     ro: object?.renderOrder,
                                     mat: material?.type,
                                     col: material?.color?.getHexString?.(),
+                                    // §881: material state for non-white draws —
+                                    // why drawn red geometry writes no pixels.
+                                    ...((material?.color?.getHexString?.() !== 'ffffff') ? {
+                                        dt: material?.depthTest,
+                                        dw: material?.depthWrite,
+                                        cw: material?.colorWrite,
+                                        op: material?.opacity,
+                                        bl: material?.blending,
+                                        fov2: object?.frustumCulled,
+                                        cam: (() => { try { return camera?.position?.toArray?.().map((n: number) => Number(n.toExponential(2))).join(','); } catch { return '?'; } })(),
+                                        sc: (() => { try { const r: any = (mapView as any).renderer; return `${r.getContext().getParameter(r.getContext().SCISSOR_TEST)}`; } catch { return '?'; } })(),
+                                    } : {}),
                                     tr: material?.transparent === true ? 1 : 0,
                                     vn: geometry?.attributes?.position?.count,
                                     wp,
@@ -2232,7 +2304,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                     const isWhiteTile = object?.renderOrder === 0 &&
                                         material?.type === "MeshBasicMaterial" &&
                                         material?.color?.getHexString?.() === "ffffff";
-                                    if (isWhiteTile && geometry?.boundingSphere) {
+                                    if ((isWhiteTile || (material as any)?.color?.getHexString?.() !== 'ffffff') && geometry?.boundingSphere) {
                                         // §818h: paint white tile quads BLUE in
                                         // paint-id mode (material mutation is
                                         // persistent across remounts).

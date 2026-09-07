@@ -720,6 +720,15 @@ export class Tile implements CachedResource {
         this.m_decodedTile = decodedTile;
         this.invalidateResourceInfo();
 
+        if (decodedTile !== undefined && (globalThis as any).__mbDecodeDbg) {
+            // §881 elevated-line probe: what actually arrives on the main
+            // thread — geometry counts, per-geometry type/vertex counts and
+            // the elevation metadata chain.
+            const gs = decodedTile.geometries ?? [];
+            // eslint-disable-next-line no-console
+            console.log(`[MBDecode] ${this.tileKey?.level}/${this.tileKey?.column}/${this.tileKey?.row} geos=${gs.length} techs=${decodedTile.techniques?.length ?? '?'} maxH=${decodedTile.maxGeometryHeight} minH=${decodedTile.minGeometryHeight} bb=${decodedTile.boundingBox ? 1 : 0} types=${JSON.stringify(gs.map((g: any) => `t${g.type}/v${g.vertexAttributes?.[0]?.count ?? '?'}${g.index ? `i${g.index.count ?? '?'}` : ''}`))}`);
+        }
+
         if (decodedTile === undefined) {
             return;
         }

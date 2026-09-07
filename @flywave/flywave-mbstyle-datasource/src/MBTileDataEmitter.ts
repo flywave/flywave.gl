@@ -840,19 +840,28 @@ export class MBTileDataEmitter {
 
     private project(p: THREE.Vector2 | THREE.Vector3): THREE.Vector3 {
         tile2world(this.m_extents, this.m_decodeInfo, p.x, p.y, tmpV3);
-        // Apply line-z-offset if set (for elevated lines). §880: the offset
-        // must ride the globe RADIAL (up = normalize(absolute position)) —
-        // adding it to the raw z component vanishes for tiles away from the
-        // equator/prime meridian (radial ⊥ z ⇒ zero lift ⇒ the elevated
-        // line sinks into the sphere and disappears, join-types blank).
+        // Apply line-z-offset if set (for elevated lines). §881: on the
+        // SPHERE projection the offset must ride the globe radial
+        // (up = normalize(absolute position)) — adding it to the raw z
+        // component vanishes for tiles away from the equator/prime meridian
+        // (radial ⊥ z ⇒ zero lift). On the mercator/planar frame the
+        // absolute-position "radial" degenerates to the map-plane center
+        // vector (center.z = 0) and the lift becomes a ~3 km HORIZONTAL
+        // translation that throws the line off-screen — there the offset is
+        // a plain +z altitude.
         if (this.m_currentZOffset !== 0) {
-            const c = this.m_decodeInfo.center;
-            const ax = tmpV3.x + c.x, ay = tmpV3.y + c.y, az = tmpV3.z + c.z;
-            const len = Math.hypot(ax, ay, az) || 1;
-            const k = this.m_currentZOffset / len;
-            tmpV3.x += ax * k;
-            tmpV3.y += ay * k;
-            tmpV3.z += az * k;
+            const proj = this.m_decodeInfo.targetProjection as any;
+            if (proj?.type === 1 /* Spherical */) {
+                const c = this.m_decodeInfo.center;
+                const ax = tmpV3.x + c.x, ay = tmpV3.y + c.y, az = tmpV3.z + c.z;
+                const len = Math.hypot(ax, ay, az) || 1;
+                const k = this.m_currentZOffset / len;
+                tmpV3.x += ax * k;
+                tmpV3.y += ay * k;
+                tmpV3.z += az * k;
+            } else {
+                tmpV3.z += this.m_currentZOffset;
+            }
         }
         return tmpV3.clone();
     }
@@ -868,6 +877,19 @@ export class MBTileDataEmitter {
     }
 
     private m_currentZOffset: number = 0;
+
+    /**
+     * §881: the y value of the tile's NORTH edge in the decoder's
+     * y-mirrored geojson frame (the same constant as MBStyleDataProcessor
+     * .mvtFlipOffset: scale − 2·top). Subtracting a frame y from it yields
+     * true tile-local y (0 at the north edge, extents at the south edge).
+     */
+    private geojsonYFrameConstant(extents: number): number {
+        const N = Math.log2(extents);
+        const scale = Math.pow(2, this.m_decodeInfo.tileKey.level + N);
+        const top = lat2tile(this.m_decodeInfo.geoBox.north, this.m_decodeInfo.tileKey.level + N);
+        return scale - 2 * top;
+    }
 
     /**
      * Maximum geometry z (meters) emitted for this tile. Reported as
@@ -2932,9 +2954,36 @@ export class MBTileDataEmitter {
             return r === 'sea' || r === 'ground';
         });
         interface ClippedLinePath { positions: THREE.Vector2[]; startArc: number; totalArc: number; }
+        // §881: the decoder delivers line positions in the y-MIRRORED
+        // geojson frame (world2tile flip: py = scale − 2·top − local_y, cf.
+        // mvtTransform) — x is tile-local but y is a huge frame value. The
+        // §513 border clip needs true tile-local coordinates, so normalize
+        // y before clipping and map the clipped pieces back afterwards.
+        const clipFrameC = anyOffsetLayer && !needsResample
+            ? this.geojsonYFrameConstant(extents)
+            : null;
+        const toLocalY = (p: THREE.Vector2): THREE.Vector2 =>
+            clipFrameC === null ? p : new THREE.Vector2(p.x, clipFrameC - p.y);
+        const fromLocalY = (p: THREE.Vector2): THREE.Vector2 =>
+            clipFrameC === null ? p : new THREE.Vector2(p.x, clipFrameC - p.y);
         const linePaths: ClippedLinePath[] | null = anyOffsetLayer && !needsResample
-            ? geometry.flatMap(g => this.clipLinePathsToTile(g.positions, extents))
+            ? geometry
+                .flatMap(g => this.clipLinePathsToTile(
+                    g.positions.map(toLocalY), extents))
+                .map(p => ({
+                    positions: p.positions.map(fromLocalY),
+                    startArc: p.startArc,
+                    totalArc: p.totalArc,
+                }))
             : geometry.map(g => ({ positions: g.positions, startArc: 0, totalArc: 0 }));
+        if ((globalThis as any).__mbDecodeDbg) {
+            // §881 elevated-line probe: which stage empties the line —
+            // raw geometry in, clip output, per-path point counts.
+            const tkey = this.m_decodeInfo.tileKey;
+            const gb = this.m_decodeInfo.geoBox;
+            // eslint-disable-next-line no-console
+            console.log(`[MBLineProbe] tile=${tkey.level}/${tkey.column}/${tkey.row} north=${gb.north} south=${gb.south} west=${gb.west} C=${clipFrameC}`);
+        }
         for (const layer of matchedLayers) {
             // A dasharray whose DASH elements are all zero renders nothing
             // (mgl collapses the zero-length dash ranges in the line atlas,
@@ -3069,6 +3118,11 @@ export class MBTileDataEmitter {
                 for (let pi = 0; pi < pts.length; pi++) {
                     const pt = pts[pi];
                     const w = this.project(pt);
+                    if ((globalThis as any).__mbDecodeDbg && pi === 0 && useZOffsetMode) {
+                        // §881: raw tile px → projected world for offset lines.
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBProj] px=(${pt.x.toFixed(1)},${pt.y.toFixed(1)}) w=(${w.x.toFixed(1)},${w.y.toFixed(1)},${w.z.toFixed(1)}) center=(${cwLine.x.toFixed(1)},${cwLine.y.toFixed(1)},${cwLine.z.toFixed(1)})`);
+                    }
                     const h = ptHeights ? ptHeights[pi] : 0;
                     if (h > pathMaxH) pathMaxH = h;
                     let baseZ = w.z;
@@ -3076,19 +3130,26 @@ export class MBTileDataEmitter {
                         const g = this.m_terrainSampler(w.x + cwLine.x, w.y + cwLine.y);
                         if (Number.isFinite(g)) baseZ = g;
                     }
-                    // §880: per-vertex heights ride the radial too.
+                    // §881: per-vertex heights ride the globe radial on the
+                    // sphere projection; on the planar frame the "radial"
+                    // degenerates to the map-plane center vector (a ~3 km
+                    // horizontal shift) — there the height is plain +z.
                     let outX = w.x, outY = w.y, outZ = baseZ;
                     if (h !== 0) {
-                        const ax = w.x + cwLine.x, ay = w.y + cwLine.y, az = baseZ + cwLine.z;
-                        const len = Math.hypot(ax, ay, az) || 1;
-                        const k = h / len;
-                        outX = w.x + ax * k;
-                        outY = w.y + ay * k;
-                        outZ = baseZ + az * k;
+                        if ((this.m_decodeInfo.targetProjection as any)?.type === 1 /* Spherical */) {
+                            const ax = w.x + cwLine.x, ay = w.y + cwLine.y, az = baseZ + cwLine.z;
+                            const len = Math.hypot(ax, ay, az) || 1;
+                            const k = h / len;
+                            outX = w.x + ax * k;
+                            outY = w.y + ay * k;
+                            outZ = baseZ + az * k;
+                        } else {
+                            outZ = baseZ + h;
+                        }
                     }
                     worldPts.push(outX, outY, outZ);
                 }
-                if (pathMaxH > 0) this.noteGeometryHeight(pathMaxH);
+                if (pathMaxH > 0 && !(globalThis as any).__mbNoLift) this.noteGeometryHeight(pathMaxH);
 
                 // `line-translate` [x east, y north] px: displace the
                 // centerline in the map plane (baked geometrically — the
@@ -3149,6 +3210,11 @@ export class MBTileDataEmitter {
                     : 0;
 
                 const lineGeom = createLineGeometry(center, worldPts, webMercatorProjection);
+                if ((globalThis as any).__mbDecodeDbg) {
+                    // §881: worldPts vs baked interleaved vertex units.
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBLineGeom] path=${__pathIdx} worldPts0=${worldPts.slice(0, 6).map(n => n.toFixed(1)).join(',')} n=${worldPts.length / 3} verts0=${Array.from(lineGeom.vertices.slice(0, 13)).map(n => Number(n.toFixed(1))).join(',')} center=${center.x.toFixed(1)},${center.y.toFixed(1)},${center.z.toFixed(1)}`);
+                }
 
                 // Pre-extrude the centerline ribbon in JS so the renderer does not
                 // depend on the SolidLineMaterial's GLSL extrusion (which fails to
