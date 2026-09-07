@@ -1389,6 +1389,14 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         if (baseAny.heatmapPoints) outAny.heatmapPoints = [...baseAny.heatmapPoints];
         let maxH = base.maxGeometryHeight ?? 0;
         let minH = base.minGeometryHeight ?? 0;
+        // §878: worker probe — text paths present in the themed decode?
+        try {
+            const tpc = (base as any)?.textPathGeometries?.length ?? -1;
+            if (tpc > 0) {
+                // eslint-disable-next-line no-console
+                console.log(`[MBTPCell] tile=${tileKey.mortonCode} textPath=${tpc} geos=${(cell as any)?.geometries?.length ?? '?'}`);
+            }
+        } catch { /* probe only */ }
         const cellInfo = new DecodeInfo(projection, tileKey, this.m_storageLevelOffset);
         const savedSourceId = this.m_currentSourceId;
         try {

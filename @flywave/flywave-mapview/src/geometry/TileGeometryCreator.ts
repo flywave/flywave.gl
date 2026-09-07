@@ -467,6 +467,15 @@ export class TileGeometryCreator {
                 decodedTile,
                 textFilter
             );
+            // §878: main-thread probe — do line-label text paths reach the
+            // geometry creator, and how many survive the text filter?
+            if (textPathGeometries.length > 0) {
+                (globalThis as any).__mbTGP = ((globalThis as any).__mbTGP ?? 0) + 1;
+                if ((globalThis as any).__mbTGP <= 5) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBTGP] in=${decodedTile.textPathGeometries.length} out=${textPathGeometries.length} texts=${textPathGeometries.map(p => p.text?.slice(0, 10)).join(',')}`);
+                }
+            }
 
             for (const textPath of textPathGeometries) {
                 const technique = decodedTile.techniques[textPath.technique];

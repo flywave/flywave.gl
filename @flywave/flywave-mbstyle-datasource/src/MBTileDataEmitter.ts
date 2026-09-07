@@ -4559,6 +4559,26 @@ export class MBTileDataEmitter {
                 const placement = layer.layout['symbol-placement'] ?? 'point';
                 if (tech.name === 'text' && (placement === 'line' || placement === 'line-center')) {
                     const linePath = properties?._linePath;
+                    // §878: one-shot line-label pipeline probe — which stage
+                    // drops line-placed labels (path missing? width 0?
+                    // anchors empty? geometry pushed?).
+                    try {
+                        const gL = (globalThis as any);
+                        gL.__mbLineLabelProbe = gL.__mbLineLabelProbe ?? { seen: 0, withPath: 0, pushed: 0, zeroW: 0, noAnchor: 0 };
+                        const pr = gL.__mbLineLabelProbe;
+                        pr.seen++;
+                        if (Array.isArray(linePath) && linePath.length >= 2) pr.withPath++;
+                        const wpx = Number(tech._textWidth ?? 0);
+                        if (!wpx) pr.zeroW++;
+                        if (pr.seen <= 3 && Array.isArray(linePath) && linePath.length >= 2) {
+                            // eslint-disable-next-line no-console
+                            console.log(`[MBLineLabel] layer=${layer.id} text=${String(tech.text).slice(0, 20)} labelWpx=${wpx} pathLen=${linePath.length} spacing=${layer.layout['symbol-spacing']} allowOverlap=${layer.layout['text-allow-overlap']}`);
+                        }
+                        if (pr.seen === 120) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBLineLabel] totals', JSON.stringify(pr));
+                        }
+                    } catch { /* probe only */ }
                     if (Array.isArray(linePath) && linePath.length >= 2) {
                         const fontSize = Number(layer.layout['text-size'] ?? 16);
                         // Anchor math on the PROJECTED world polyline (the
@@ -4607,6 +4627,17 @@ export class MBTileDataEmitter {
                             // Crop the world path to the label span and emit
                             // one short curved-path geometry per repetition.
                             const totalLen = polyLength(worldPts);
+                            try {
+                                const gL2 = (globalThis as any);
+                                const pr2 = gL2.__mbLineLabelProbe;
+                                if (pr2) {
+                                    pr2.anchorsTotal = (pr2.anchorsTotal ?? 0) + anchors.length;
+                                    if (pr2.seen <= 3) {
+                                        // eslint-disable-next-line no-console
+                                        console.log(`[MBLineLabel2] anchors=${anchors.length} labelLenM=${labelLenM.toFixed(1)} lineLenM=${polyLength(worldPts).toFixed(1)} mPerPx=${metersPerPx.toFixed(4)} maxAngle=${maxAngleRad.toFixed(3)}`);
+                                    }
+                                }
+                            } catch { /* probe only */ }
                             let d0 = (a.x !== a.x) ? 0 : Math.max(0, a.t * totalLen - labelLenM / 2);
                             let d1 = (a.x !== a.x) ? totalLen : Math.min(totalLen, a.t * totalLen + labelLenM / 2);
                             const sub = cropPolyline(worldPts, d0, d1);

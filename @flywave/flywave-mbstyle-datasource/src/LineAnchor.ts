@@ -86,6 +86,7 @@ function getLineLength(line: ReadonlyArray<Pt>): number {
  */
 function checkMaxAngle(
     line: ReadonlyArray<Pt>,
+    anchor: { x: number; y: number },
     anchorSegment: number,
     labelLength: number,
     windowSize: number,
@@ -93,6 +94,10 @@ function checkMaxAngle(
 ): boolean {
     if (anchorSegment === undefined || anchorSegment < 0) return true;
 
+    // §878: mirror upstream check_max_angle.ts — walk back from the ANCHOR
+    // position (not the segment start); measuring from the segment start
+    // overshoots short lines and rejected every 2-point line outright.
+    let p: Pt = { x: anchor.x, y: anchor.y };
     let index = anchorSegment + 1;
     let anchorDistance = 0;
 
@@ -100,7 +105,8 @@ function checkMaxAngle(
     while (anchorDistance > -labelLength / 2) {
         index--;
         if (index < 0) return false; // not enough room after the line start
-        anchorDistance -= ptDist(line[index], line[index + 1]);
+        anchorDistance -= ptDist(line[index], p);
+        p = { x: line[index].x, y: line[index].y };
     }
 
     anchorDistance += ptDist(line[index], line[index + 1]);
@@ -226,7 +232,7 @@ function resample(
                 markedDistance + halfLabelLength <= lineLength) {
                 const segIdx = i;
                 if (!angleWindowSize ||
-                    checkMaxAngle(line, segIdx, labelLength, angleWindowSize, maxAngle)) {
+                    checkMaxAngle(line, { x, y }, segIdx, labelLength, angleWindowSize, maxAngle)) {
                     anchors.push({
                         t: lineLength > 0 ? markedDistance / lineLength : 0,
                         x, y, angle, segmentIndex: segIdx,
@@ -281,7 +287,7 @@ export function getLineCenterAnchor(
             const y = a.y + (b.y - a.y) * t;
             const fits =
                 (!angleWindowSize ||
-                    checkMaxAngle(points, i, labelLength, angleWindowSize, maxAngle));
+                    checkMaxAngle(points, { x, y }, i, labelLength, angleWindowSize, maxAngle));
             if (!fits) return undefined;
             return { t: 0.5, x, y, angle: angleTo(a, b), segmentIndex: i };
         }
