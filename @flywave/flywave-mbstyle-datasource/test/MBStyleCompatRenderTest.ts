@@ -2556,6 +2556,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                 }
                                 if (!fontstack) continue;
                                 for (const [id, g] of fontstack.glyphs) glyphs.set(id, g);
+                            }
                         }
                         if (glyphs.size > 0) {
                             // TextStyleCache selects the canvas via
