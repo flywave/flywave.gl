@@ -119,6 +119,9 @@ function fixtureHasResult(cat, fx) {
 function runKarmaSession(filters, port, timeoutMs, label) {
     return new Promise((resolve) => {
         const isPosix = process.platform !== "win32";
+        // §876: MBSTYLE_KARMA_PORT lets parallel chunked runners (disjoint
+        // category sets) coexist — karma.options hardcodes 9876 otherwise.
+        const karmaPort = process.env.MBSTYLE_KARMA_PORT || "9876";
         const karmaClientArgs = [
             ...extraArgs,
             ...filters.map((f) => `filter=${f}`),
@@ -126,7 +129,8 @@ function runKarmaSession(filters, port, timeoutMs, label) {
         ];
         const child = spawn(
             "npx",
-            ["karma", "start", "--browsers", "ChromeHeadlessNoSandbox", "--single-run"],
+            ["karma", "start", "--browsers", "ChromeHeadlessNoSandbox", "--single-run",
+                "--port", karmaPort],
             {
                 cwd: root,
                 env: {
