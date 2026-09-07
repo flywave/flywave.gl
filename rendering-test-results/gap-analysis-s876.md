@@ -424,3 +424,11 @@ shdbg=7 直绘接收端 worldPos（148k 采样，对照 casterBox boxC=(−356,�
 
 ### §885 终四补：z 直读精化
 像素解码精化：模型面片 B 通道落在 81-199（z ≈ **312-390** 的一个 ~86 单位厚带），而非 casterBox 的 z [−82,63]——接收端模型整体悬浮在深度投射位置上方 ~394 单位（恒定、非比例）。~394 ≈ eye.z(82)×4.8 无明显对应；候选：batched-model 组放置矩阵的 z 分量在 depth pass（setFromObject 时刻）与渲染（placement 完成后）之间被二次抬升，或 inner/outer 双层 transform 中一层未参与 box 计算。下轮：`console.log(box)` 于 run() 内逐帧对比同一对象 setFromObject 结果与 fragment worldPos（同帧探针已具备）。
+
+### §885 终五：同帧场景普查（2026-09-08）
+`[MBShadowScene]`（帧 60，与 [MBShadowFit] 同帧）实测：`meshes=8 withL1=5 sampledZ=[-82,0] allWorldZ=[-82,0] c=(-10718492,-13767924,-41) s=(21436985,27535848,82) casterBoxZ=[-82,62]`。
+- 模型 mesh 的**水平世界坐标是 ECEF 绝对量级（±21M）**，z（高程轴）∈[−82,0]；
+- casterBox（run() 内 setFromObject）z=[−82,62] 与场景 mesh z 一致——深度 pass 与场景同系 ✓；
+- 接收端 fragment worldPos z 却是 **+159..390**——高于场景中任何 mesh（≤0）240-390；
+- 且 casters=1 vs 场景 meshes=8（withL1=5）：**渲染的场景里有 3 个 mesh 没开 layer-1**（未进深度 pass），且 caster 集合只含 1 个根对象；
+- 下轮入口：①查 batched-model placement 对 outer/inner 的 z 平移（相对 eye.z 的 394 偏移从何而来——候选：`position.z = altitude−eye.z` 公式里 altitude 用了绝对高程或二次叠加）；②为 placement 完成后的 mesh 补 `layers.enable(1)`（放到 placement 完成回调而非 build 时）；③用 `shadowCasters` 集合代替 layer mask 做 depth pass 过滤（根治 layer 遗漏类问题）。

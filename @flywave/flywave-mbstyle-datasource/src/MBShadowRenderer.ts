@@ -584,6 +584,42 @@ export class MBShadowRenderer {
                     // eslint-disable-next-line no-console
                     console.log('[MBShadowFit] err ' + e);
                 }
+                // §885 终五: same-frame scene mesh census — are the RENDERED
+                // model meshes the same objects as the shadowCasters set?
+                // (receiver fragments sat +240..390 above the caster box.)
+                try {
+                    const scene2: any = this.m_mapView?.m_scene;
+                    let n = 0, nL1 = 0;
+                    const zb = new THREE.Box3();
+                    const tmp2 = new THREE.Vector3();
+                    const worldBox = new THREE.Box3();
+                    let have = false;
+                    scene2?.traverse?.((o: any) => {
+                        if (!o.isMesh) return;
+                        n++;
+                        if (o.layers.mask & 2) nL1++;
+                        o.updateWorldMatrix?.(true, false);
+                        const g = o.geometry;
+                        const pa = g?.attributes?.position;
+                        if (!pa) return;
+                        for (let vi = 0; vi < Math.min(4, pa.count); vi++) {
+                            tmp2.set(pa.getX(vi), pa.getY(vi), pa.getZ(vi))
+                                .applyMatrix4(o.matrixWorld);
+                            zb.expandByPoint(tmp2);
+                            worldBox.expandByPoint(tmp2);
+                            have = true;
+                        }
+                    });
+                    const zc = zb.getCenter(new THREE.Vector3());
+                    const zs = zb.getSize(new THREE.Vector3());
+                    const cc = worldBox.getCenter(new THREE.Vector3());
+                    const cs = worldBox.getSize(new THREE.Vector3());
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBShadowScene] meshes=${n} withL1=${nL1} sampledZ=[${zb.min.z.toFixed(0)},${zb.max.z.toFixed(0)}] allWorldZ=[${worldBox.min.z.toFixed(0)},${worldBox.max.z.toFixed(0)}] c=(${cc.x.toFixed(0)},${cc.y.toFixed(0)},${cc.z.toFixed(0)}) s=(${cs.x.toFixed(0)},${cs.y.toFixed(0)},${cs.z.toFixed(0)}) casterBoxZ=[${casterBox.min.z.toFixed(0)},${casterBox.max.z.toFixed(0)}]`);
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBShadowScene] err ' + e);
+                }
                 // §533: the census dump signature now includes the grid, so
                 // the (proven-reachable) census POST carries it.
             } catch (e) {
