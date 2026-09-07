@@ -365,3 +365,19 @@ ml0901（§691 时代）仅 43 个逐例数值+家族级估值，且早于 §822
 
 ### §883 补充：断行宽度标定结论
 mgl 的 text-max-width 断行是**最优断行**（symbol/shaping determineLineBreaks：lineCount = ceil(total/maxWidth)，再以 targetWidth = total/lineCount 均衡 + 罚分模型），不是贪心。本引擎 LineTypesetter 只支持贪心（超宽即换行），呈现 5 字/行 vs mgl 4 字/行。实测 `shapeText` 的 `_textWidth` 对 CJK 不可靠（10 字测得 5.0）且 technique props 按 layer 缓存（无法逐要素），均衡断行需要 per-feature 布局宽度，归入 engine max-width 专项（§879 立项不变）。
+
+---
+
+## 十、§884：①④ 调查结论（2026-09-08）
+
+### ① join-types 定位校准：属相机/投影标定域
+像素分析：ours 红色 ink 25,711 px vs expected 49,628，且 ±40px 平移 XOR 无改善（48,863 恒定）——差异是**尺度/透视差**（折线在屏幕上的横向跨度与位置整体不同），与 line-progress-expression 的全局 22px 位移同域（§869 相机标定）。非逐像素校准可解，挂账相机标定专项。
+
+### ④ T1 model-layer：meshopt 解码完好，真缺口 = landmark 模型的阴影投影
+- `shadows-normal-offset`（512²）实测：模型几何/贴图/part 颜色**全部正确渲染**（meshopt 量化解码、quantization 均正常）；
+- 缺失的是 expected 的成片投影阴影。shadowdbg=3 探针：`[MBShadowMat] casters=1`（整个 landmark 只 1 个 caster 组）、`[MBShadowGrid]` 8×8 采样仅 2 个暗点（135/164/121）——阴影 map 在跑但**覆盖面积极小**，相机拟合（boxS=(614,586,145)、nrfr=973/1790）与 normal-offset 参数面向地形/挤出体标定，未适配大尺度 landmark 模型。
+- **下轮入口**：landmark 模型阴影相机 fit（正交阴影相机 box 覆盖 caster 包围盒 + 接收面）与 casters 分组/合并绘制；参考 §522 shadow depth pass（layer 1 mask 已工作）。
+- 环境限制：1024×1024 的 landmark 夹具在 headless SwiftShader 下 ~4 分钟稳定 DISCONNECTED（Chrome 崩溃），本轮无法取数；512² 夹具可跑（单夹具 ~4.5 分钟）。
+
+### 其它
+- 修复 §883 retry 补丁引入的语法错误（for-fontName 闭合括号），并确认 karma webpack 缓存会掩盖编译失败（陈旧 bundle 现象的根因）。
