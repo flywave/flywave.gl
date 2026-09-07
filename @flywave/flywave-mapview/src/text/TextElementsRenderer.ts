@@ -928,10 +928,21 @@ export class TextElementsRenderer {
             }
             const elementType = textElement.type;
             const isPathLabel = elementType === TextElementType.PathLabel;
+            // §878: path-label drop-point probe.
+            if (isPathLabel) {
+                const gP = globalThis as any;
+                gP.__mbPL = gP.__mbPL ?? { arrived: 0, tooSmall: 0, glyphFail: 0, ok: 0 };
+                gP.__mbPL.arrived++;
+            }
 
             // For paths, check if the label may fit.
             if (isPathLabel) {
                 if (isPathLabelTooSmall(textElement, this.m_screenProjector, tempScreenPoints)) {
+                    if ((globalThis as any).__mbPL) (globalThis as any).__mbPL.tooSmall++;
+                    if ((globalThis as any).__mbPL && (globalThis as any).__mbPL.tooSmall <= 3) {
+                        // eslint-disable-next-line no-console
+                        console.log('[MBPL] tooSmall drop, points=', JSON.stringify(textElement.points?.slice?.(0, 2)?.map?.((p: any) => [Number(p.x.toFixed(0)), Number(p.y.toFixed(0))])), 'lenSqr=', textElement.pathLengthSqr);
+                    }
                     if (placementStats) {
                         placementStats.numNotVisible++;
                     }
@@ -950,7 +961,31 @@ export class TextElementsRenderer {
                 // This ensures that textElement.renderStyle and textElement.layoutStyle are
                 // already instantiated and initialized with theme style values.
                 if (!this.initializeGlyphs(textElement, textElementStyle, forceNewPassOnLoaded)) {
+                    if (isPathLabel) {
+                        const gP2 = (globalThis as any).__mbPL;
+                        if (gP2) {
+                            gP2.glyphFail++;
+                            if (gP2.glyphFail <= 3) {
+                                // eslint-disable-next-line no-console
+                                console.log('[MBPL] initializeGlyphs false, text=', textElement.text?.slice?.(0, 20), 'renderStyle=', textElement.renderStyle?.name ?? '?');
+                            }
+                        }
+                    }
                     continue;
+                }
+                if (isPathLabel) {
+                    const gP3 = (globalThis as any).__mbPL;
+                    if (gP3) {
+                        gP3.ok++;
+                        if (gP3.ok <= 2) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBPL] path label OK, glyphs=', textElement.glyphs?.length ?? '?', 'text=', textElement.text?.slice?.(0, 20));
+                        }
+                        if (gP3.arrived % 25 === 0) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBPL] totals', JSON.stringify(gP3));
+                        }
+                    }
                 }
 
                 const layer = textCanvas.getLayer(
