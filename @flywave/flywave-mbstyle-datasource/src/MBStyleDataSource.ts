@@ -3032,9 +3032,10 @@ export class MBStyleDataSource extends TileDataSource {
                 if (self.m_shadowRenderer) {
                     const sl = self.m_environment?.shadowLightState;
                     { const g: any = (globalThis as any); g.__shN = (g.__shN ?? 0) + 1;
-                      if (g.__shN <= 2) { const su: any = self.m_shadowRenderer.getShadowUniforms?.();
+                      if (g.__shN <= 2 || g.__shN === 60 || g.__shN === 300) { const su: any = self.m_shadowRenderer.getShadowUniforms?.();
                         console.log('[SHST] n=' + g.__shN + ' sl=' + (sl ? 'Y(int=' + sl.intensity + ')' : 'null') +
-                            ' map=' + (su?.map?.value ? 'Y' : (su ? 'null' : 'no-su'))); } }
+                            ' map=' + (su?.map?.value ? 'Y' : (su ? 'null' : 'no-su')) +
+                            ' int=' + (su?.intensity ?? '?')); } }
                     // mgl test styles normalize the root camera-projection
                     // into a `camera` object — honor both shapes.
                     const camSpec: any = (style as any).camera ?? style;
