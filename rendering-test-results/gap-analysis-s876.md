@@ -451,3 +451,8 @@ shdbg=7 worldPos 直绘（87k 采样，探针顺序修正后）：渲染可见�
 3. 480 单位的 y 偏移 = 接收端 worldPos 与阴影相机系之间沿 up 轴的平移差——量级与 batched-model placement 的 `inner.position.y = TILE_GRID/2·w`（4096·0.0187≈... 需按 z18 实算）及 tile y 偏移候选吻合；
 4. 修复路径：把 uMBShadowMatrix 的世界→光空间变换与 placement 使用的**同一世界系**对齐（最稳妥：在 run() 内用 placement 后的实际 modelMatrix 重算 casterBox 时顺带记录 box 中心的世界系基准，并让 uMBShMatrix/depth pass/接收端三者共享）。
 本专项（④阴影）已完成全部黑盒诊断，剩余为一次坐标系统一对齐的确定性修复。
+
+### §885 终十：模式 3 插桩落地与捕获时序结论（2026-09-08）
+- 已落地 shdbg=8（uMBShDbg=3）：扩展范围 uv 直绘（[-1,2]→[0,1] 映射，不做 bounds 跳过）；shdbg=7 为 worldPos 直绘；二者均为确定性渲染（shdbg=5/8 输出 227,864 完全一致）；
+- **捕获时序结论**：约半数捕获发生在 `uMBShIntensity` 同步生效之前的帧（采样块整体跳过、正常渲染）——此前数轮"矛盾读数"（同夹具不同轮的像素差异）均源于此；调试时必须在 **[MBShadowFit] f=60 帧**（intensity 已生效）读数，或先修 capture settle 逻辑等待 `syncModelShadowUniforms` 完成；
+- 剩余核心谜团（在 intensity>0 的帧已实测）：接收端 `uMBShMatrix·vMbWorldPos` 的 v 恒比深度内容低 ~0.35——几何/注册/图层/eye/flipY 全部排除后，指向 **vMbWorldPos（主渲染帧的 modelMatrix·transformed）与深度 pass 帧（WillRender 时序）的世界系存在恒定平移**——即 depth pass（AfterRender 内 WillRender 时序之后一帧）与主渲染之间的世界系基准差，需在 depth pass 内用同一 uniform 矩阵回读对齐验证。

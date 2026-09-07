@@ -751,6 +751,16 @@ export function applyMglModelLighting(
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
+                                     if (uMBShDbg > 2.5) {
+                                         // §885 终十: extended-range uv — uv.y/uv.x
+                                         // mapped from [-1,2] → [0,1] so
+                                         // out-of-bounds values stay readable.
+                                         gl_FragColor.rgb = vec3(
+                                             clamp((mbShUv.x + 1.0) / 3.0, 0.0, 1.0),
+                                             clamp((mbShUv.y + 1.0) / 3.0, 0.0, 1.0),
+                                             clamp(mbShUv.z, 0.0, 1.0));
+                                         return;
+                                     }
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.x, mbShUv.y, 0.5); return; }
                                      mbNdotL *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
@@ -796,6 +806,16 @@ export function applyMglModelLighting(
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
+                                     if (uMBShDbg > 2.5) {
+                                         // §885 终十: extended-range uv — uv.y/uv.x
+                                         // mapped from [-1,2] → [0,1] so
+                                         // out-of-bounds values stay readable.
+                                         gl_FragColor.rgb = vec3(
+                                             clamp((mbShUv.x + 1.0) / 3.0, 0.0, 1.0),
+                                             clamp((mbShUv.y + 1.0) / 3.0, 0.0, 1.0),
+                                             clamp(mbShUv.z, 0.0, 1.0));
+                                         return;
+                                     }
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.x, mbShUv.y, 0.5); return; }
                                      mbLF *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;

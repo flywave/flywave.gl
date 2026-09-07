@@ -381,6 +381,8 @@ function discoverTests(): TestEntry[] {
     }
     // §885: shdbg=7 → paint raw receiver worldPos (numeric mode 2).
     if (Number(dbg) === 7) (globalThis as any).__mbShadowDbg4 = 2;
+    // §885 终十: shdbg=8 → extended-range uv visualization (numeric mode 3).
+    if (Number(dbg) === 8) (globalThis as any).__mbShadowDbg4 = 3;
     // §525 A/B: shadowdbg=2 opens the gate but SKIPS the depth pass —
     // discriminates depth-pass side effects from the patcher/lighting path.
     if (dbg === "2") (globalThis as any).__mbShadowSkipPass = true;
