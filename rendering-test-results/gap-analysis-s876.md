@@ -456,3 +456,8 @@ shdbg=7 worldPos 直绘（87k 采样，探针顺序修正后）：渲染可见�
 - 已落地 shdbg=8（uMBShDbg=3）：扩展范围 uv 直绘（[-1,2]→[0,1] 映射，不做 bounds 跳过）；shdbg=7 为 worldPos 直绘；二者均为确定性渲染（shdbg=5/8 输出 227,864 完全一致）；
 - **捕获时序结论**：约半数捕获发生在 `uMBShIntensity` 同步生效之前的帧（采样块整体跳过、正常渲染）——此前数轮"矛盾读数"（同夹具不同轮的像素差异）均源于此；调试时必须在 **[MBShadowFit] f=60 帧**（intensity 已生效）读数，或先修 capture settle 逻辑等待 `syncModelShadowUniforms` 完成；
 - 剩余核心谜团（在 intensity>0 的帧已实测）：接收端 `uMBShMatrix·vMbWorldPos` 的 v 恒比深度内容低 ~0.35——几何/注册/图层/eye/flipY 全部排除后，指向 **vMbWorldPos（主渲染帧的 modelMatrix·transformed）与深度 pass 帧（WillRender 时序）的世界系存在恒定平移**——即 depth pass（AfterRender 内 WillRender 时序之后一帧）与主渲染之间的世界系基准差，需在 depth pass 内用同一 uniform 矩阵回读对齐验证。
+
+### §885 终十一定量（2026-09-08 稳态捕获，86875 采样）
+接收端 light-space uv 中心 **(−0.63,−0.57)**、跨度 **2.1**（两轴）；深度内容中心 (0.49,0.49)、跨度 **0.32**。
+→ 接收端采样用到的 uMBShMatrix 相对深度 pass 的相机呈 **~6.6× 缩放 + 中心偏移**（691/105 ≈ 6.6——与"帧 1 模型半载时 casterBox 极小、radius≈105"的早期矩阵完全吻合）——**uMBShMatrix 是陈旧矩阵**：sync 虽每帧 copy m_matrix，但渲染所用材质实例的 uniform 未被刷新（handle 注册的材质实例与实际渲染实例不同，或 uniform 对象在 three 内部被克隆分离）。
+下轮修复入口：在 **渲染材质上直接验证**（log material.userData.__mbShU 与 material.uniforms.uMBShMap 的引用一致性），并改为**每帧直接遍历 scene 中带 __mbMglLit 的 mesh** 刷新 uniform（不依赖注册集合），一次消除实例分离问题。
