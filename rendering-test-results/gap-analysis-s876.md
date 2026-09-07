@@ -409,3 +409,8 @@ mgl 的 text-max-width 断行是**最优断行**（symbol/shaping determineLineB
 - 第二次捕获为早期帧（uMBShIntensity 未同步 → 采样块跳过、正常渲染），**捕获时机不确定**使逐帧调试不可靠；`[MBShadowFit]/[MBShadowGrid]` 稳态门控已修（f=1 与 f=60 对照：两者一致）；
 - 下轮精确入口：①把调试改为**无条件**在 uMBShDbg 时绘制（把 sample 挪出 bounds 判断，先绘 uv.xy 再判界），锁定 uv.xy 是否落入足迹 bbox；②若 uv 正确则查 CanvasTexture 上传通道（flipY/premultiply）与 depth canvas 内容的 texel 对应。
 - 附：mgl 深度图应为灰度 packed；本深度图出现绿/黄红彩色渐变 = r+g 双通道 packed 编码的可视化 ✓（r=低位,g=高位）。
+
+### §885 终三：uv.xy 读数 + eye 重基 A/B（否定 eye 假设）
+- uv.xy 直绘（mo15-d1，95k 采样）：`uv.x ∈ [0.32,0.66]` **与足迹 x [0.28,0.72] 精确一致**；`uv.y ∈ [0,0.47]`、均值 0.022（大量 ≤0 被 clamp）——**y 方向系统性偏低 ~0.33**（≈456 单位，沿 light-up 轴）；
+- eye 重基 A/B：shdbg=6（仅 eye 修正）与基线**像素完全一致**（171,310）——`uMBEye` 在该场景接近零向量，排除 eye 偏移假设；shdbg=5（eye+调试同开）handles=8 全部同步、stateEye=Y，管道通畅；
+- 剩余唯一疑点：接收端 worldPos 与深度 pass 世界系之间沿 light-up 轴的 ~456 单位恒定差（疑似 batched-model tile 放置偏移或 grid 本地 z 的帧间基准差）。下轮入口：**直接直绘接收端 vMbWorldPos**（R/G = worldPos.xy 缩到 [0,1]、B = worldPos.z 符号），与 casterBox (boxC=(−356,−70,−10) boxS=(614,586,145)) 目测比对，一次定位变换差。

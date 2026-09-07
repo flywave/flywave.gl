@@ -369,6 +369,16 @@ function discoverTests(): TestEntry[] {
     // §692: raw-uv field readout (shadowdbg=4) — receivers paint their raw
     // shadow uv (R=x,G=y,B=z) with the output color-space transform bypassed.
     if (Number(dbg) >= 4) (globalThis as any).__mbShadowDbg4 = true;
+    // §885: shdbg=5 → model receivers rebase worldPos by the shadow eye.
+    if (Number(dbg) >= 5) {
+        (globalThis as any).__mbShadowDbg4 = true;
+        (globalThis as any).__mbShadowEyeOn = true;
+    }
+    // §885: shdbg=6 → eye-rebase WITHOUT the debug paint (clean A/B).
+    if (Number(dbg) === 6) {
+        (globalThis as any).__mbShadowEyeOn = true;
+        (globalThis as any).__mbShadowDbg4 = false;
+    }
     // §525 A/B: shadowdbg=2 opens the gate but SKIPS the depth pass —
     // discriminates depth-pass side effects from the patcher/lighting path.
     if (dbg === "2") (globalThis as any).__mbShadowSkipPass = true;

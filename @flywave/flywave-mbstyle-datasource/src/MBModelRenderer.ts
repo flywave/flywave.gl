@@ -165,12 +165,24 @@ export function syncMglModelLighting(model: THREE.Object3D, dataSource: any): vo
 const mbShadowLitUniforms = new Set<any>();
 
 export function syncModelShadowUniforms(shadowState: {
-    map: any; matrix: any; intensity: number;
+    map: any; matrix: any; intensity: number; eye?: any; eyeOn?: any;
 } | null): void {
+    { const g: any = (globalThis as any); g.__shSyncN = (g.__shSyncN ?? 0) + 1;
+      if (g.__shSyncN === 60) {
+        let on = 0, hasEye = 0;
+        for (const u of mbShadowLitUniforms) { if ((u as any).eyeOn?.value) on++; if ((u as any).eye) hasEye++; }
+        // eslint-disable-next-line no-console
+        console.log(`[MBShSync] handles=${mbShadowLitUniforms.size} eyeOnOn=${on} hasEye=${hasEye} stateInt=${shadowState?.intensity ?? '?'} stateEye=${shadowState?.eye ? 'Y' : 'N'}`);
+      } }
     for (const u of mbShadowLitUniforms) {
         u.map.value = shadowState?.map ?? null;
         if (shadowState) u.matrix.value.copy(shadowState.matrix);
         u.intensity.value = shadowState?.intensity ?? 0;
+        // §885: shdbg=5 receiver eye-rebase A/B — sync the eye vector and
+        // the gate when the material registered them.
+        if ((u as any).eye && shadowState?.eye) (u as any).eye.value.copy(shadowState.eye);
+        if ((u as any).eyeOn) (u as any).eyeOn.value =
+            (globalThis as any).__mbShadowEyeOn ? 1 : 0;
     }
 }
 
@@ -440,11 +452,19 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBShMatrix = { value: new THREE.Matrix4() };
                 shader.uniforms.uMBShIntensity = { value: 0 };
                 shader.uniforms.uMBShDbg = { value: (globalThis as any).__mbShadowDbg4 ? 1 : 0 };
+                // §885: shdbg=5 → receiver rebases worldPos by the shadow eye
+                // (ground-quad convention) — A/B for the light-space y offset.
+                shader.uniforms.uMBShEyeOn = {
+                    value: (globalThis as any).__mbShadowEyeOn ? 1 : 0,
+                };
+                shader.uniforms.uMBShEye = { value: new THREE.Vector3() };
                 if (receiveShadows !== false) {
                     mbShadowLitUniforms.add(mat.userData.__mbShU = {
                         map: shader.uniforms.uMBShMap,
                         matrix: shader.uniforms.uMBShMatrix,
                         intensity: shader.uniforms.uMBShIntensity,
+                        eye: shader.uniforms.uMBShEye,
+                        eyeOn: shader.uniforms.uMBShEyeOn,
                     });
                 }
                 // Runtime `setLights`: keep the uniform OBJECTS so a per-frame
@@ -474,6 +494,8 @@ export function applyMglModelLighting(
                      uniform mat4 uMBShMatrix;
                      uniform float uMBShIntensity;
                      uniform float uMBShDbg;
+                     uniform vec3 uMBShEye;
+                     uniform float uMBShEyeOn;
                      uniform float uMB3DMetal; uniform float uMB3DRough;
                      uniform vec3 uMB3DLegacyPos; uniform vec3 uMB3DLegacyColor; uniform float uMB3DLegacyInt;
                      uniform float uMBHas3DLights;
@@ -722,7 +744,7 @@ export function applyMglModelLighting(
                              vec3 mbUpView = normalize((viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
                              float mbNdotL = clamp(dot(mbN0, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
-                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos, 1.0);
+                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - uMBShEye * uMBShEyeOn, 1.0);
                                  if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
                                      mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
@@ -765,7 +787,7 @@ export function applyMglModelLighting(
                              vec3 mbDiffTerm = (1.0 - mbF) * mbDiffC;
                              float mbLF = clamp(dot(mbN, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
-                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos, 1.0);
+                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - uMBShEye * uMBShEyeOn, 1.0);
                                  if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
                                      mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
