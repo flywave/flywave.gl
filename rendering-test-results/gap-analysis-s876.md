@@ -443,3 +443,11 @@ shdbg=7 worldPos 直绘（87k 采样，探针顺序修正后）：渲染可见�
 - 结果：shadows-normal-offset 输出仍 171,310（逐位一致）——接收采样在最终帧**整体惰性**（所有采样结果恒 lit，或 uv 出界走 skip 分支）；shadowdbg=4 下采样深度恒 1.0（纯白 clear）表明采样点系统性落在足迹外的空白区；
 - **下轮精确入口**：在 ground quad / 模型 fragment 里直绘 `uMBShadowMatrix * vec4(worldPos−uMBEye,1)` 的完整 uv（含越界时的原值，不做 bounds 跳过），并与深度画布足迹 (0.28-0.72, 0.33-0.65) 直接比对——一次运行即可分辨「矩阵系错位」vs「纹理方向」；同时用 `uMBShIntensity` 直绘确认接收链在最终帧的活性（排除 AfterRender 同步时序）。
 - 环境注意：mo24/mo25/mo26 三轮 171,310 逐位相同（含 carrier 注册/layer 刷新/flipY 三个独立变更），加深了 karma webpack 缓存返回陈旧 bundle 的疑点——下轮调试前先 `rm -rf /tmp/_karma_webpack_*` 或更换 karma 端口。
+
+### §885 终八：缓存排除与偏移定性（2026-09-08）
+清空 /tmp/_karma_webpack_* 后重跑：仍 171,310 逐位一致——**排除缓存因素**，确认：
+1. 接收端（模型+地面 quad）uv.y 恒定偏低 ~0.35（≈480 单位，light-up 轴），使全部采样落入深度图空白区（深度=1.0）→ 全部判 lit → 无影；
+2. flipY=false 修复方向正确但不是根因（翻转前后采样均落空白带——模型足迹 v[0.33,0.65] 与采样带 [0,0.33] 不相交）；
+3. 480 单位的 y 偏移 = 接收端 worldPos 与阴影相机系之间沿 up 轴的平移差——量级与 batched-model placement 的 `inner.position.y = TILE_GRID/2·w`（4096·0.0187≈... 需按 z18 实算）及 tile y 偏移候选吻合；
+4. 修复路径：把 uMBShadowMatrix 的世界→光空间变换与 placement 使用的**同一世界系**对齐（最稳妥：在 run() 内用 placement 后的实际 modelMatrix 重算 casterBox 时顺带记录 box 中心的世界系基准，并让 uMBShMatrix/depth pass/接收端三者共享）。
+本专项（④阴影）已完成全部黑盒诊断，剩余为一次坐标系统一对齐的确定性修复。
