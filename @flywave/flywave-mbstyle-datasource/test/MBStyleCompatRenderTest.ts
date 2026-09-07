@@ -379,6 +379,8 @@ function discoverTests(): TestEntry[] {
         (globalThis as any).__mbShadowEyeOn = true;
         (globalThis as any).__mbShadowDbg4 = false;
     }
+    // §885: shdbg=7 → paint raw receiver worldPos (numeric mode 2).
+    if (Number(dbg) === 7) (globalThis as any).__mbShadowDbg4 = 2;
     // §525 A/B: shadowdbg=2 opens the gate but SKIPS the depth pass —
     // discriminates depth-pass side effects from the patcher/lighting path.
     if (dbg === "2") (globalThis as any).__mbShadowSkipPass = true;

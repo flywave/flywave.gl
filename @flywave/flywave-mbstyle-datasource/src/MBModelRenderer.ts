@@ -451,7 +451,7 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBShMap = { value: null as any };
                 shader.uniforms.uMBShMatrix = { value: new THREE.Matrix4() };
                 shader.uniforms.uMBShIntensity = { value: 0 };
-                shader.uniforms.uMBShDbg = { value: (globalThis as any).__mbShadowDbg4 ? 1 : 0 };
+                shader.uniforms.uMBShDbg = { value: Number((globalThis as any).__mbShadowDbg4) || 0 };
                 // §885: shdbg=5 → receiver rebases worldPos by the shadow eye
                 // (ground-quad convention) — A/B for the light-space y offset.
                 shader.uniforms.uMBShEyeOn = {
@@ -750,6 +750,7 @@ export function applyMglModelLighting(
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
+                                     if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.x, mbShUv.y, 0.5); return; }
                                      mbNdotL *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
                                  }
@@ -793,6 +794,7 @@ export function applyMglModelLighting(
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
+                                     if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.x, mbShUv.y, 0.5); return; }
                                      mbLF *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
                                  }

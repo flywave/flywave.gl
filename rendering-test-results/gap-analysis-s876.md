@@ -414,3 +414,10 @@ mgl 的 text-max-width 断行是**最优断行**（symbol/shaping determineLineB
 - uv.xy 直绘（mo15-d1，95k 采样）：`uv.x ∈ [0.32,0.66]` **与足迹 x [0.28,0.72] 精确一致**；`uv.y ∈ [0,0.47]`、均值 0.022（大量 ≤0 被 clamp）——**y 方向系统性偏低 ~0.33**（≈456 单位，沿 light-up 轴）；
 - eye 重基 A/B：shdbg=6（仅 eye 修正）与基线**像素完全一致**（171,310）——`uMBEye` 在该场景接近零向量，排除 eye 偏移假设；shdbg=5（eye+调试同开）handles=8 全部同步、stateEye=Y，管道通畅；
 - 剩余唯一疑点：接收端 worldPos 与深度 pass 世界系之间沿 light-up 轴的 ~456 单位恒定差（疑似 batched-model tile 放置偏移或 grid 本地 z 的帧间基准差）。下轮入口：**直接直绘接收端 vMbWorldPos**（R/G = worldPos.xy 缩到 [0,1]、B = worldPos.z 符号），与 casterBox (boxC=(−356,−70,−10) boxS=(614,586,145)) 目测比对，一次定位变换差。
+
+### §885 终四：worldPos 直绘实测（2026-09-08）
+shdbg=7 直绘接收端 worldPos（148k 采样，对照 casterBox boxC=(−356,−70,−10) boxS=(614,586,145) → x[−663,−49] y[−363,223] z[−82,63]）：
+- 接收片段 x[−663,+569]、y[−373,+561]、**z[+159,+390]**——x/y 超出 box 正向边界（+618/+338），**z 整体高出 box 240-330**；
+- 结论：画面中的模型片段（或其放置实例）**不在帧 60 的 casterBox / 深度 pass 覆盖内**——`shadowCasters` 在帧 60 仅 1 组，后续 tile 组/实例要么未注册、要么带 z 抬升（z-offset）使接收位置系统性高于深度投射位置 → 深度采样全部落空 → 全场景无影；
+- 下轮入口（精确）：①`shadowCasters.size` 打点到帧 300/捕获帧（确认注册完整性）；②核对 batched-model 多 tile 组的放置矩阵与 z-offset（`model-z-offset`）在 depth pass 与接收端的一致性；③若 caster 注册滞后，把注册提前到 placement 完成回调（modelsPending）。
+- 注意：run() 每帧重算 casterBox ✓，故 box 应随注册增长；实测帧 60 box 仍只有单组——注册时机/裁剪（`!obj.parent` prune）为首要嫌疑。
