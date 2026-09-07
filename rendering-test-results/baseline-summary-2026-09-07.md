@@ -1,13 +1,13 @@
 # MBStyle render-test 全量基线（2026-09-07）
 
-- 夹具总数: 2709（PASS 599 / FAIL 2110，通过率 22.1%）
+- 夹具总数: 2721（PASS 599 / FAIL 2122，通过率 22.0%）
 - 快照: rendering-test-results/ml260907-baseline-snapshot.json
 
 ## 家族汇总（按总 mismatch 排序，Top 25）
 
 | 家族 | 夹具 | PASS | 总 mismatch |
 |---|---:|---:|---:|
-| model-layer | 175 | 0 | 25836598 |
+| model-layer | 187 | 0 | 29082174 |
 | lighting-3d-mode | 114 | 12 | 9091261 |
 | 3d-intersections | 66 | 1 | 4832233 |
 | terrain | 67 | 2 | 4532454 |
@@ -39,6 +39,8 @@
 |---|---:|
 | model-layer/landmark-mbx-meshopt-quantization/high-zoom-model-quantization | 1016979 |
 | model-layer/landmark-mbx-meshopt-quantization-lod/high-zoom-model-quantization | 1016408 |
+| model-layer/trees-puck-extrusions-terrain-shadows-zoomin | 856015 |
+| model-layer/trees-puck-extrusions-terrain-shadows-partial | 835875 |
 | lighting-3d-mode/emissive-strength/background-pattern/draped | 625430 |
 | lighting-3d-mode/emissive-strength-draped-mrt/background-pattern | 625430 |
 | occlusion/symbol-occlusion-no-occlusion-before-3d | 624891 |
@@ -57,6 +59,7 @@
 | front-cutoff/nyc-buildings | 491134 |
 | model-layer/landmark-mbx-meshopt-quantization/z-offset-v2-port | 466315 |
 | wireframe/instanced-rendering | 464641 |
+| model-layer/trees-shadows-terrain-high-altitude | 460665 |
 | model-layer/landmark-part-styling-indirect-doors-no-shadows-lod | 455418 |
 | model-layer/landmark-mbx-meshopt-colors | 437403 |
 | wireframe/globe-high-exaggeration | 432364 |
@@ -74,7 +77,4 @@
 | model-layer/landmark-z-offset-munich-museum-terrain-lod | 295886 |
 | model-layer/landmark-part-styling-indirect-update-lod | 283557 |
 | front-cutoff/nyc-terrain-buildings | 281652 |
-| extent/1024-symbol | 265340 |
-| regressions/mapbox-gl-js#2787 | 262144 |
-| symbol-opacity/hide-transparent | 260704 |
 

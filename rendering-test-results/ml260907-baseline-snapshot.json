@@ -1,11 +1,11 @@
 {
  "_comment": "全量基线快照（2026-09-07，ChromeHeadless 131 MacOS，逐 fixture mismatchedPixels + pass/fail），供下一轮对齐计划对比。",
  "meta": {
-  "capturedAt": "2026-09-07T10:16:16.213Z",
+  "capturedAt": "2026-09-07T10:29:29.339Z",
   "reportDir": "rendering-test-results/mbstyle-s876-baseline",
-  "fixtures": 2709,
+  "fixtures": 2721,
   "passed": 599,
-  "failed": 2110
+  "failed": 2122
  },
  "values": {
   "3d-intersections/bridge-to-tunnel-transition": 79730,
@@ -1846,6 +1846,18 @@
   "model-layer/trees-light-aligned-fog": 151007,
   "model-layer/trees-light-aligned-update-data-driven-fade": 147672,
   "model-layer/trees-light-aligned-update-data-driven": 157755,
+  "model-layer/trees-light-aligned-update-non-data-driven": 161907,
+  "model-layer/trees-lod-expression": 60417,
+  "model-layer/trees-opacity-expression": 20981,
+  "model-layer/trees-puck-extrusions-terrain-shadows-partial": 835875,
+  "model-layer/trees-puck-extrusions-terrain-shadows-zoomin": 856015,
+  "model-layer/trees-shadow-scaled": 94164,
+  "model-layer/trees-shadows-terrain-high-altitude": 460665,
+  "model-layer/trees-transition-update": 56547,
+  "model-layer/trees-use-theme": 171465,
+  "model-layer/trees-zoom-based-scale": 229838,
+  "model-layer/vector-layer-external-models-import": 148851,
+  "model-layer/vector-layer-external-models": 148851,
   "occlusion/symbol-occlusion-data-driven": 612099,
   "occlusion/symbol-occlusion-no-occlusion-after-3d": 591079,
   "occlusion/symbol-occlusion-no-occlusion-before-3d": 624891,
