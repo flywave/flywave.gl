@@ -402,3 +402,10 @@ mgl 的 text-max-width 断行是**最优断行**（symbol/shaping determineLineB
 - 真正缺失的两组阴影：**① 地面投影**——阴影由 MBShadowRenderer 的 ground quad 承载，绘制于 preSceneHook underlay（§643），在这些夹具中被不透明 background('land': lightgray) 层覆盖；mgl 中阴影直接画在 background 之上。**② 背阳面直射光**——expected 的深色立面是 NdotL≤0 的直射项缺失，ours 把背阳面也照白（模型直射光分支标定问题，与阴影无关）；
 - 修复入口：①ground quad 提升绘制阶段（background 之上、建筑之下——需 A/B §572c 已校准的 extrusion/terrain 阴影家族防回归）或让 background 参与接收；②模型直射光按 world-space 法线重算 NdotL（当前 view-space 转换疑似符号/基准错）；
 - 环境注意：mo10-d1 首次尝试即成功（重试脚本有效）。
+
+### §885 终二：shadowdbg=4 首跑读数 + 深度图实证（2026-09-08）
+- **深度图完美**（已存 `rendering-test-results/shadow-depth-canvas-evidence.png`）：建筑群从太阳视角完整投影，近→远梯度正确，footprint bbox (285-734, 341-664)/1024 居中，暗像素 57k——**深度 pass 无任何缺陷**；
+- 墙面采样读数（mo10-d1）：`uv.z ∈ [0,0.3]`（朝阳面合理）、但采样深度恒 1.0（空白 texel）——采样点落在足迹内的墙面上本应命中自身/邻楼深度；
+- 第二次捕获为早期帧（uMBShIntensity 未同步 → 采样块跳过、正常渲染），**捕获时机不确定**使逐帧调试不可靠；`[MBShadowFit]/[MBShadowGrid]` 稳态门控已修（f=1 与 f=60 对照：两者一致）；
+- 下轮精确入口：①把调试改为**无条件**在 uMBShDbg 时绘制（把 sample 挪出 bounds 判断，先绘 uv.xy 再判界），锁定 uv.xy 是否落入足迹 bbox；②若 uv 正确则查 CanvasTexture 上传通道（flipY/premultiply）与 depth canvas 内容的 texel 对应。
+- 附：mgl 深度图应为灰度 packed；本深度图出现绿/黄红彩色渐变 = r+g 双通道 packed 编码的可视化 ✓（r=低位,g=高位）。

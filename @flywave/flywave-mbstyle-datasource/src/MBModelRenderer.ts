@@ -728,7 +728,7 @@ export function applyMglModelLighting(
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
-                                     if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.z, mbShDepth, 0.5); return; }
+                                     if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.x, mbShUv.y, 0.5); return; }
                                      mbNdotL *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
                                  }
                              }
@@ -771,7 +771,7 @@ export function applyMglModelLighting(
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
-                                     if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.z, mbShDepth, 0.5); return; }
+                                     if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.x, mbShUv.y, 0.5); return; }
                                      mbLF *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
                                  }
                              }

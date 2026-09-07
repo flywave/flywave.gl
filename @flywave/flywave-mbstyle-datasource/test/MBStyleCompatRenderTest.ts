@@ -360,6 +360,9 @@ function discoverTests(): TestEntry[] {
     // background, ortho guard, content receivers) — DEFAULT ON. shadowdbg=0
     // disables for A/B; shadowdbg>=3 adds the receiver debug readout.
     if (dbg !== "0") (globalThis as any).__mbShadowEnable = true;
+    // §885: shadow-depth-canvas dump target (result server).
+    (globalThis as any).__mbShadowFeedbackUrl = (window as any).__karma__?.config?.args
+        ?.find?.((a: string) => a.startsWith("feedback-url="))?.slice("feedback-url=".length);
     // Debug readout (receiver color = intensity/depth/uv.z) is a SEPARATE
     // gate — enabling shadows must not corrupt the pixel comparison.
     if (Number(dbg) >= 3) (globalThis as any).__mbShadowDbg = true;

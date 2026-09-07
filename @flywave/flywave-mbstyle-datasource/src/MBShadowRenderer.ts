@@ -531,11 +531,10 @@ export class MBShadowRenderer {
                     grid.push(row);
                 }
                 (globalThis as any).__mbShadowGrid = grid;
-                if (!((globalThis as any).__mbShadowGridLogged)) {
-                    (globalThis as any).__mbShadowGridLogged = true;
-                    // eslint-disable-next-line no-console
-                    console.log('[MBShadowGrid] ' + JSON.stringify(grid));
-                }
+                // §885: log EVERY probed frame (the once-guard hid the
+                // steady-state depth coverage and misled §884).
+                // eslint-disable-next-line no-console
+                console.log(`[MBShadowGrid] f=${__rc} ` + JSON.stringify(grid));
                 // §884: coarse dark-pixel bounding box + caster corners in
                 // shadow NDC — is the model rendered but tiny/misplaced, or
                 // absent from the depth canvas entirely?
@@ -567,7 +566,20 @@ export class MBShadowRenderer {
                         ndcs.push(`(${v.x.toFixed(2)},${v.y.toFixed(2)},${v.z.toFixed(2)})`);
                     }
                     // eslint-disable-next-line no-console
-                    console.log(`[MBShadowFit] darkBox=(${minX},${minY})..(${maxX},${maxY})/64 ndc=[${ndcs.join(' ')}]`);
+                    console.log(`[MBShadowFit] f=${__rc} darkBox=(${minX},${minY})..(${maxX},${maxY})/64 ndc=[${ndcs.join(' ')}]`);
+                    // §885: full depth-canvas dump (visual) — POST dataURL to
+                    // the result server via the harness feedback channel.
+                    try {
+                        const fb = (globalThis as any).__mbShadowFeedbackUrl;
+                        if (fb && __rc === 60) {
+                            const url2 = (this.m_shRenderer.domElement as HTMLCanvasElement).toDataURL('image/png');
+                            fetch(`${fb}/mb-probe-dump`, {
+                                method: 'POST',
+                                headers: { 'content-type': 'application/json' },
+                                body: JSON.stringify({ probe: 'shadow-depth-canvas', dataUrl: url2 }),
+                            }).catch(() => { });
+                        }
+                    } catch { /* probe only */ }
                 } catch (e) {
                     // eslint-disable-next-line no-console
                     console.log('[MBShadowFit] err ' + e);
