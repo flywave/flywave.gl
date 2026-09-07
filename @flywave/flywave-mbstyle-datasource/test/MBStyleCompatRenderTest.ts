@@ -2633,6 +2633,22 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     }
                     console.log('[GUARD] exit after ' + gIter + ' iters, calls=' + g762.__mbLastFrameCalls);
                 } catch { /* guard is best-effort */ }
+                // §875: capture-point correlation — the last disc-draw frame's
+                // end-state vs the buffer right here (after GUARD, before the
+                // IBCT capture). Splits "cleared after the disc" vs "last
+                // disc frame was already white".
+                try {
+                    const glF = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+                    const pF = new Uint8Array(4);
+                    if (glF) {
+                        glF.readPixels(Math.floor(glF.drawingBufferWidth / 2),
+                            Math.floor(glF.drawingBufferHeight / 2), 1, 1,
+                            glF.RGBA, glF.UNSIGNED_BYTE, pF);
+                    }
+                    console.log('[MBCapFinal] px=' + pF.join(',')
+                        + ' discLast=' + JSON.stringify((globalThis as any).__mbDiscLast ?? null)
+                        + ' frameN=' + ((globalThis as any).__mbFrameN ?? 0));
+                } catch { /* probe only */ }
 
                 // §818: POST the draw-call log (whole session; the captured
                 // frame is the tail) before the IBCT comparison.

@@ -49,6 +49,16 @@ import { SpriteAtlas } from './materials/MapIconMaterial';
 import { MBStyleRuntime } from './MBStyleRuntime';
 import { MBEnvironmentManager } from './MBEnvironmentManager';
 import { MBMaterialPatchManager } from './MBMaterialPatchManager';
+import { MBGlobePoleCaps } from './MBGlobePoleCaps';
+// §875: static bindings for the AfterRender listener — the listener used
+// `await import(...)` mid-frame, and the microtask continuation ran AFTER
+// the harness's capture (import() resolves generations later than a plain
+// await), so the captured frame showed the bare white clear with the disc
+// draw still pending. Everything the listener touches before the disc draw
+// must be synchronous. (No import cycles: MBModelRenderer is already in the
+// static graph via MBBatchedModelDataSource; MBGlobePoleCaps imports only
+// three/geoutils.)
+import { syncModelFogUniforms, syncModelShadowUniforms } from './MBModelRenderer';
 import { openPMTilesUrl, openPMTilesBlobIndex, PMTilesBlobIndex } from './PMTiles';
 
 export interface MBStyleDataSourceParameters {
@@ -2512,6 +2522,8 @@ export class MBStyleDataSource extends TileDataSource {
 
             const placement = this.m_symbolPlacement;
             this.mapView.addEventListener(MapViewEventNames.WillRender, () => {
+                // §875: frame counter — correlates __mbDiscLast with captures.
+                (globalThis as any).__mbFrameN = ((globalThis as any).__mbFrameN ?? 0) + 1;
                 try {
                     (globalThis as any).__mbRootKidsWill =
                         ((self.mapView as any).m_sceneRoot?.children ?? []).map((c: any) => ({
@@ -3037,7 +3049,6 @@ export class MBStyleDataSource extends TileDataSource {
                     // §562: model materials sample the shadow map in their
                     // direct lighting term (mgl shadowed_light_factor_normal).
                     try {
-                        const { syncModelShadowUniforms } = await import('./MBModelRenderer');
                         syncModelShadowUniforms(self.m_shadowRenderer.getShadowUniforms());
                     } catch { /* best-effort */ }
                 }
@@ -3049,8 +3060,9 @@ export class MBStyleDataSource extends TileDataSource {
                 }
                 // §780: globe pole caps (mgl GLOBE_POLES) — sync the fan
                 // meshes registered by the raster provider into the scene.
+                // §875: static import — the `await import` here yielded the
+                // async listener mid-frame (see the import note at top).
                 try {
-                    const { MBGlobePoleCaps } = await import('./MBGlobePoleCaps');
                     if (self.mapView?.projection?.type === 1) {
                         let capOpacity = 0;
                         const layers780: any[] = self.m_runtime?.style?.layers ?? [];
@@ -3159,8 +3171,8 @@ export class MBStyleDataSource extends TileDataSource {
                 // §775: model-tail self-drawn mgl fog — refresh the per-frame
                 // fog uniforms (fogAlpha/horizon/camHeight/range + themed
                 // env fog color + zoom-dependent distCam).
+                // §875: static binding — keep the listener sync (see top).
                 try {
-                    const { syncModelFogUniforms } = await import('./MBModelRenderer');
                     syncModelFogUniforms(self.mapView, self.m_environment);
                 } catch { /* best-effort */ }
 
@@ -5287,7 +5299,16 @@ export class MBStyleDataSource extends TileDataSource {
      */
     public reapplyCamera(): void {
         if (!this.mapView) return;
-        let style = this.m_styleManager?.getStyle() ?? this.m_runtime?.style;
+        // §875: the RUNTIME style is the live truth — the styleManager is
+        // only re-loaded when the source set changes (reloadStyle's sig
+        // gate), so after a camera-carrying setStyle whose sources are
+        // unchanged it still serves the PREVIOUS style: reapplyCamera then
+        // re-applied the OLD zoom and yanked the freshly-placed camera back
+        // (with-diff-and-zoom-out: setStyle zoom 0 → re-place zoom 22 →
+        // camera 7.2 units above the target surface → globe fills the
+        // screen). Prefer the runtime style; styleManager is only the
+        // pre-runtime fallback.
+        let style = this.m_runtime?.style ?? this.m_styleManager?.getStyle();
         if (!style) return;
         // §864: a style without camera keys preserves the map camera —
         // synthesize the last applied camera instead of defaulting zoom to 0
@@ -5337,6 +5358,27 @@ export class MBStyleDataSource extends TileDataSource {
      */
     private applyCameraSettings(style: StyleSpecification): void {
         if (!this.mapView) return;
+        // §875: one-shot probe — full caller stack + which style zoom each
+        // apply sees (locates the re-place that yanks the camera back to the
+        // base-style zoom after a setStyle op).
+        {
+            const gA = (globalThis as any);
+            gA.__mbCamApplyN = (gA.__mbCamApplyN ?? 0) + 1;
+            if ((globalThis as any).__mbExtRouteDbg && gA.__mbCamApplyN <= 8) {
+                try {
+                    const fbA = (window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith('feedback-url='))
+                        ?.slice('feedback-url='.length);
+                    if (fbA) fetch(`${fbA}/mb-probe-dump`, {
+                        method: 'POST', headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({
+                            probe: 'camapply',
+                            log: [`#${gA.__mbCamApplyN} styleZoom=${style.zoom} smZoom=${(this.m_styleManager as any)?.getStyle?.()?.zoom} rtZoom=${(this as any).m_runtime?.style?.zoom} stack=${new Error().stack?.split('\n').slice(2, 9).join(' | ')}`],
+                        }),
+                    }).catch(() => {});
+                } catch {}
+            }
+        }
         // §855: globe→mercator transition phase from style zoom.
         // Only enable for styles WITH a fog key — the transition interacts
         // with the fog/atmosphere rendering; fog-less styles use the pure

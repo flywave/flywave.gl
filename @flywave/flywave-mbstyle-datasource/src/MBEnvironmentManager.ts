@@ -5,6 +5,7 @@ import { FogSpec, SkySpec, Light3DProperties } from './MBStyleSpec';
 import { MapTerrainMaterial, createTerrainGrid } from './materials/MapTerrainMaterial';
 import { SpriteAtlas } from './materials/MapIconMaterial';
 import { TerrainController } from './TerrainController';
+import { getMercTransitionPhase } from './MBTileDataEmitter';
 
 // Mapbox fog uses an exponential opacity ramp (`_prelude_fog.fragment.glsl`):
 //   fog_range(depth) = (depth - range[0]) / (range[1] - range[0])   [km]
@@ -619,6 +620,15 @@ export class MBEnvironmentManager {
     setStyleHasBackground(has: boolean, hasContent?: boolean): void {
         this.m_styleHasBackground = has;
         this.m_styleHasContentLayers = hasContent ?? false;
+        // §875: re-evaluate the §829 disc when the content-layer state
+        // arrives. The disc draws in AfterRender (opaque, over everything),
+        // so it may only back BG-ONLY styles; styles with content layers own
+        // their background via tile geometry, and a live disc would paint
+        // opaque background color OVER the content (globe-transition/bearing
+        // family: whole-frame ocean-blue over the land fills).
+        if (this.m_discScene && this.m_styleHasContentLayers) {
+            this.disposeGlobeAtmosphere();
+        }
     }
     private m_styleHasBackground = false;
     private m_styleHasContentLayers = false;
@@ -1283,6 +1293,7 @@ export class MBEnvironmentManager {
                 uniform float uBgDiscAlpha;
                 uniform vec3 uBgDiscColor;
                 uniform float uDiscDbg;
+                uniform float uDiscLimit;
                 varying vec2 vNdc;
                 void main() {
                     vec3 dir = normalize(vec3(vNdc.x * uTanHalfFov * uAspect, vNdc.y * uTanHalfFov, -1.0));
@@ -1303,10 +1314,21 @@ export class MBEnvironmentManager {
                     // blending is active — the mercator plane covers the full
                     // viewport during the transition, so the background disc
                     // must also cover past the nominal limb.
-                    const discLim = uDiscLimit;
+                    // §875: GLSL ES forbids const initializers that are not
+                    // constant expressions — the §857 "const discLim =
+                    // uDiscLimit" failed fragment compilation and silently
+                    // killed the whole disc draw (three logs console.error
+                    // and skips the program; the frame kept the bare white
+                    // clear).
+                    // §875: mgl limb profile — mirrors the §570b dome branch
+                    // (fog fixtures pass with it): opaque color mix into the
+                    // space color ending AT the limb. The previous
+                    // black-tinted alpha ramp extending to 1.009 left a ~1px
+                    // mismatched ring (with-diff 867 px vs threshold 52).
+                    float discLim = uDiscLimit;
                     if (normDist < discLim) {
-                        vec3 c = mix(uBgDiscColor, vec3(0.0), smoothstep(discLim - 0.02, discLim, normDist));
-                        float a = uBgDiscAlpha * (1.0 - smoothstep(discLim - 0.02, discLim, normDist));
+                        vec3 c = mix(uBgDiscColor, vec3(1.0), smoothstep(discLim - 0.025, discLim, normDist));
+                        float a = uBgDiscAlpha;
                         gl_FragColor = vec4(c * a, a);
                     } else {
                         // §870: the space outside the disc must be OPAQUE
@@ -1338,6 +1360,12 @@ export class MBEnvironmentManager {
             material.uniforms.uTanHalfFov.value = Math.tan((c.fov * Math.PI / 180) / 2);
             material.uniforms.uAspect.value = (c as THREE.PerspectiveCamera).aspect ?? 1;
             material.uniforms.uBgDiscAlpha.value = this.m_globeBgAlpha;
+            // §857/§875: extend the limb past the geometric edge ONLY while
+            // the mercator transition blend is active (the transition plane
+            // covers the full viewport); at phase 0 the limb sits at
+            // normDist 1.0 (mgl).
+            material.uniforms.uDiscLimit.value =
+                getMercTransitionPhase() > 0 ? 1.009 : 1.0;
             // §858: THREE.Color stores LINEAR components (ColorManagement);
             // the custom disc ShaderMaterial writes gl_FragColor raw (no
             // colorspace_fragment), so the sRGB paint color must be restored
@@ -1408,16 +1436,84 @@ export class MBEnvironmentManager {
         } catch {}
         if (!this.m_discScene || !this.m_globeAtmo || !this.m_mapView) return;
         if ((this.m_mapView as any).projection?.type !== 1) return;
+        // §875: content styles own their background via tile geometry — the
+        // AfterRender disc is opaque and would paint OVER the content.
+        if (this.m_styleHasContentLayers) return;
         const r = (this.m_mapView as any).renderer as THREE.WebGLRenderer | undefined;
         const cam = this.m_mapView.camera;
         if (!r || !cam) return;
         const prevAutoClear = r.autoClear;
         const prevRT = r.getRenderTarget();
+        // §875: discriminating probe — read the canvas the moment before and
+        // the moment after the disc draw. Center pixel must be BLACK if the
+        // draw produces fragments (normDist=0 at NDC 0,0 for ANY camera
+        // distance); white-after-draw ⇒ the draw itself is a pixel no-op.
+        const pxN = ((globalThis as any).__mbDiscPxN =
+            ((globalThis as any).__mbDiscPxN ?? 0) + 1);
+        let glPx: any = null;
+        const readPx = (x: number, y: number): string => {
+            const p = new Uint8Array(4);
+            try { glPx.readPixels(x, y, 1, 1, glPx.RGBA, glPx.UNSIGNED_BYTE, p); } catch { return 'ERR'; }
+            return `${p[0]},${p[1]},${p[2]},${p[3]}`;
+        };
+        const dumpState = (tag: string): void => {
+            try {
+                if (!glPx) glPx = r.getContext();
+                const w = glPx.drawingBufferWidth, h = glPx.drawingBufferHeight;
+                const cx = Math.floor(w / 2), cy = Math.floor(h / 2);
+                const vp = glPx.getParameter(glPx.VIEWPORT);
+                const sb = glPx.getParameter(glPx.SCISSOR_BOX);
+                console.log(`[MBDiscPx] #${pxN} ${tag} buf=${w}x${h} center=(${readPx(cx, cy)}) corner5=${readPx(5, 5)}`
+                    + ` vp=[${vp.join(',')}] scissorTest=${glPx.getParameter(glPx.SCISSOR_TEST)} scBox=[${sb.join(',')}]`
+                    + ` colorMask=[${glPx.getParameter(glPx.COLOR_WRITEMASK).join(',')}] blend=${glPx.getParameter(glPx.BLEND)}`
+                    + ` fb=${glPx.getParameter(glPx.FRAMEBUFFER_BINDING) === null ? 'default' : 'RT'}`
+                    + ` cam=${cam === (this.m_mapView as any).m_rteCamera ? 'rte' : cam === (this.m_mapView as any).m_camera ? 'abs' : '?'}`
+                    + ` camPos=(${cam.position.x.toFixed(0)},${cam.position.y.toFixed(0)},${cam.position.z.toFixed(0)})`);
+            } catch (e) { console.log(`[MBDiscPx] #${pxN} ${tag} ERR ${e}`); }
+        };
+        if (pxN <= 4 || pxN === 40 || pxN === 80 || pxN === 120 || pxN === 160 || pxN === 200) {
+            dumpState('before');
+            setTimeout(() => dumpState('after+80ms'), 80);
+        }
         try {
             r.autoClear = false;
             r.setScissorTest(false);
             r.setRenderTarget(null);
             r.render(this.m_discScene, cam);
+            // §875: per-frame end-state (post-draw center pixel + camera) —
+            // compared against the test harness's capture-time read to split
+            // "last disc-drawing frame was white" vs "cleared after the disc".
+            try {
+                if (!glPx) glPx = r.getContext();
+                const pL = new Uint8Array(4);
+                const wL = Math.floor(glPx.drawingBufferWidth / 2);
+                const hL = Math.floor(glPx.drawingBufferHeight / 2);
+                glPx.readPixels(wL, hL, 1, 1, glPx.RGBA, glPx.UNSIGNED_BYTE, pL);
+                (globalThis as any).__mbDiscLast = {
+                    n: pxN, f: (globalThis as any).__mbFrameN ?? 0,
+                    t: Date.now(),
+                    cam: Math.round(cam.position.length()),
+                    px: `${pL[0]},${pL[1]},${pL[2]},${pL[3]}`,
+                };
+            } catch {}
+            if (pxN <= 4 || pxN === 40 || pxN === 80 || pxN === 120 || pxN === 160 || pxN === 200) {
+                r.flush?.();
+                dumpState('after');
+                const fbD = (window as any).__karma__?.config?.args
+                    ?.find?.((a: string) => a.startsWith('feedback-url='))
+                    ?.slice('feedback-url='.length);
+                if (fbD) setTimeout(() => {
+                    try {
+                        fetch(`${fbD}/mb-probe-dump`, {
+                            method: 'POST', headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({
+                                probe: 'discpx',
+                                log: [`#${pxN} fired=${(globalThis as any).__mbAtmoFired ?? 0}`],
+                            }),
+                        }).catch(() => {});
+                    } catch {}
+                }, 100);
+            }
         } finally {
             r.setRenderTarget(prevRT);
             r.autoClear = prevAutoClear;

@@ -8633,3 +8633,19 @@ zoomab=-1（相机距离×2，globe 直径减半）A/B：with-diff 帧仍全白�
 **§872l2. 探针绝对边界终版：renderGlobeDisc 正常执行无异常、盘对象/uniforms 全对，但输出全白——three 渲染内部专项终版挂账（2026-09-07 终）**：
 
 derr 探针（renderGlobeDisc 异常捕获）='-'——渲染无异常；ring 探针：盘稳定在 discScene/visible/pos(0,0,0) 全帧一致；uniforms 全对（黑/1/R/(0,0,−R)）；渲染列表审计（renderLists.get(scene,depth)）就绪。**盘被 three 处理渲染但 fragment 输出不可见的环节无法用 patcher 层探针进一步定位**——需 three 渲染内部专项（WebGLRenderer renderObject/程序绑定/Uniform 上传的逐帧 dump，karma 黑盒不可达）。with-diff/unset-terrain 各 24,024 维持渲染管线专项收敛。globe-terrain 66k 维持仓库外协调挂账（DEM fixture 瓦不可得）。
+
+**§875. 终局三连根因击穿：盘 GLSL 编译失败 + setStyle 相机回拉 + AfterRender 监听微任务时序——with-diff/unset-terrain 24,024×2 → 576×2（−97.6%），三项修复全部落地（2026-09-07 终）**：
+
+"three 渲染内部专项（karma 黑盒不可达）"的前提被推翻——**无需断点调试器，三类根因都在仓库层，且互相叠加掩盖**（每轮只修一个都会被其余两个遮蔽为"仍 24,024"）。判别手法：`renderGlobeDisc` 前后 readPixels + GL 状态 dump（[MBDiscPx]，`gl.getParameter` VIEWPORT/SCISSOR/COLOR_WRITEMASK/FRAMEBUFFER_BINDING）+ shader 错误走 `console.error`（karma stderr）——此前探针只走 feedback POST 通道，three 的 `THREE.WebGLProgram: Shader Error` 从未进入任何一轮排查视野。
+
+**根因①（§857 引入，盘从未渲染过）**：`applyGlobeDiscBackground` 的 fragment shader 两处致命——`const discLim = uDiscLimit`（GLSL ES 禁止 const 以非常量表达式初始化 → `0:85 syntax error`）+ `uDiscLimit` **从未在 GLSL 声明**（JS uniforms 加了，shader 体没加 uniform 声明；被前者的语法错误遮住）。fragment 编译失败 → 程序无效 → three 跳过 draw（onBeforeRender 照常触发、渲染列表照常含盘、renderer.info 照常计数——全部此前"盘被渲染"的证据都是编译失败下的假象）。修复：`float discLim` + 补 `uniform float uDiscLimit;` 声明。盘即刻呈现（中心 readPixels=0,0,0,255）。
+
+**根因②（§872j 矛盾的真相：相机被旧样式回拉）**：camapply 探针（applyCameraSettings 全栈 dump，三次运行逐帧一致）实锤：setStyle op → reloadStyle 用新样式 zoom 0 放置 2.1253e7 ✓ → 随即 reapplyCamera 读 `m_styleManager.getStyle()` **仍是旧样式 zoom 22**（connect 在 2319 行把 m_wiredSourceSig 记为 "{}"，reloadStyle 的 sources 签名门判定"未变"跳过 loadStyle → styleManager 停在旧样式）→ setCameraGeolocationAndZoom(zoom 22+1=23) 把相机拉回 distance=7.166（贴地）。§872j3-j5 的"place 输出正确但 lookCam 读地表"矛盾=两次探针读的是**不同调用**（环形缓冲多调用交错），非同帧矛盾。修复：reapplyCamera 改为优先 `m_runtime.style`（运行时真值，styleManager 仅 pre-runtime 兜底）；t+3000/t+8000 稳定 2.1253e7。
+
+**根因③（捕获全白的最后一块拼图：帧中 await 让出）**：修复①②后晚帧 AfterRender 时像素全对（#40-#200 探针：cam=(−27631124) 中心黑/角白）但捕获仍白。[MBCapFinal] 对拍实锤：discLast.n=954/frameN=955——最后一帧（955）的盘绘**根本没执行**。机制：AfterRender 监听为 async，在 `await import('./MBGlobePoleCaps'/'./MBModelRenderer')` 处让出；`import()` 对已缓存模块仍需多代微任务解析，而 harness 的 GUARD→捕获是单微任务快速路径，**先于监听续体执行** → 捕获读到该帧纯白 clear，盘绘迟到。修复：监听内帧中 `await import` 全部改静态绑定（MBGlobePoleCaps 静态 import；syncModelShadowUniforms/syncModelFogUniforms 静态 import——MBModelRenderer 已在静态依赖图内，无环）。[MBCapCtx] 捕获时中心=0,0,0 ✓。
+
+**limb 剖面收敛（867 → 576）**：§857 的黑染 alpha 渐变 + 无条件 1.009 外扩 vs mgl 的干净颜色混合止于几何 limb——改为镜像 §570b dome 分支（fog 族全过的已验证剖面）`mix(bg, 白, smoothstep(discLim−0.025, discLim, normDist))`，uDiscLimit 仅当 `getMercTransitionPhase()>0`（新增 getter）时 1.009，phase 0 时 1.0。剩余 576=盘半径 +1px 的亚像素差（半强点 37.9 vs 38.8，AA 过渡剖面已一致 227/55 vs 216/67）——**低 zoom globe 相机距离的亚像素标定遗留**（§873c4 的 +48% 量化在该修复链后失效，实测仅 ~1%），非结构性缺陷。
+
+**根因④（修复①的次生回归与终局门控）**：盘复活后 globe-transition 族 6 夹具灾难回归（bearing 9,751→174,008）——二分定位（stash 单文件→逐点恢复 await）后 [MBDiscPx] 实锤：这些样式（无 fog 键+背景层+内容层）本就走盘路径，复活的不透明盘在 AfterRender 盖住全部内容瓦片（中心+角点全蓝 122,198,255）。基线的"9,751 良好"实为死盘假象（背景蓝色由瓦片几何自带）。修复：`setStyleHasBackground` 到达内容层状态时 dispose 盘 + `renderGlobeDisc` 渲染时 `m_styleHasContentLayers` 门控——盘只服务 bg-only 样式。注：监听同步化并非回归元凶（await 恢复版 A/B 相同回归），静态导入亦无责（MBModelRenderer 已在静态依赖图）。
+
+**回归终验（30 夹具 stash A/B，同浏览器同批）**：24 逐位不变（globe-default/poles 族/transition 族全部 SAME）、0 回归、4 改善：with-diff-and-zoom-out 24,024→576、unset-terrain 24,024→576（−97.6%）、globe-set-style/default 877→764、globe-set-style/symbol 4,462→4,453（相机修复贡献）。剩余 576=盘半径 +1px 的亚像素差（半强点 37.9 vs 38.8，AA 过渡剖面已一致 227/55 vs 216/67）——低 zoom globe 相机距离的亚像素标定遗留（§873c4 的 +48% 量化在该修复链后失效，实测仅 ~1%），非结构性缺陷。探针入库：[MBDiscPx]/discLast（盘前后像素+GL 状态）、camapply（applyCameraSettings 全栈）、[MBCapFinal]（捕获点对拍）。globe-terrain 66k 维持仓库外协调挂账。

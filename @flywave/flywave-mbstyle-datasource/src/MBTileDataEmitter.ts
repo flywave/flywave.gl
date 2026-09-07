@@ -273,6 +273,15 @@ export function setMercTransitionPhase(phase: number): void {
     (globalThis as any).__mbMercTransitionPhase = g_mercTransition;
 }
 
+/** §875: live transition phase (0 = pure globe) — the §829 background disc
+ * extends its limb past normDist 1.0 only while the mercator blend is
+ * active; at phase 0 the limb sits at the geometric edge (with-diff family:
+ * the unconditional +0.009 extension drew a ~1px ring of mismatched
+ * pixels). */
+export function getMercTransitionPhase(): number {
+    return g_mercTransition;
+}
+
 /**
  * §859: install the mgl-globeMatrix-analog frame used by the transition
  * vertex blending. Must be called (from the datasource's camera application)
