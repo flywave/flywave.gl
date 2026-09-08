@@ -178,7 +178,9 @@ export class MBShadowRenderer {
                 : '';
             if (hwDef) shader.fragmentShader = hwDef + shader.fragmentShader;
             shader.uniforms.uMBShadowMap = { value: this.m_shTex };
-            shader.uniforms.uMBShadowMatrix = { value: new THREE.Matrix4() };
+            shader.uniforms.uMBShadowMatrix = { value: this.m_matrix.clone() };
+            shader.uniforms.uMBShadowMap1 = { value: this.m_shTex1 };
+            shader.uniforms.uMBShadowMatrix1 = { value: this.m_matrix1.clone() };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3() };
             shader.uniforms.uMBShadowIntensity = { value: 0 };
             shader.uniforms.uMBShadowDbg = { value: (globalThis as any).__mbShadowDbg ? ((globalThis as any).__mbQuadDbg ? 2 : 1) : 0 };
@@ -208,18 +210,29 @@ export class MBShadowRenderer {
                     if (dir.z < -1e-6 && uMBShadowIntensity > 0.5) {
                         vec3 mbWP = dir * (uMBGroundZ / dir.z);
                         vec4 uv4 = uMBShadowMatrix * vec4(mbWP, 1.0);
+                        vec4 uv4b = uMBShadowMatrix1 * vec4(mbWP, 1.0);
                         float lit = 0.0;
                         float sampD = 1.004;
-                        if (uv4.x >= 0.0 && uv4.x <= 1.0 &&
-                            uv4.y >= 0.0 && uv4.y <= 1.0 && uv4.z <= 1.0) {
+                        bool inC0 = uv4.x >= 0.0 && uv4.x <= 1.0 &&
+                            uv4.y >= 0.0 && uv4.y <= 1.0 && uv4.z >= 0.0 && uv4.z <= 1.0;
+                        bool inC1 = !inC0 && uv4b.x >= 0.0 && uv4b.x <= 1.0 &&
+                            uv4b.y >= 0.0 && uv4b.y <= 1.0 && uv4b.z >= 0.0 && uv4b.z <= 1.0;
+                        if (inC0) {
                             vec4 pk = texture2D(uMBShadowMap, uv4.xy);
                             #ifdef MB_SH_HW
                             sampD = pk.r;
-                            lit = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sampD - uv4.z);
                             #else
                             sampD = pk.r + pk.g / 255.0;
-                            lit = smoothstep(-0.0002, 0.0002, sampD - uv4.z);
                             #endif
+                            lit = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sampD - uv4.z);
+                        } else if (inC1) {
+                            vec4 pk1 = texture2D(uMBShadowMap1, uv4b.xy);
+                            #ifdef MB_SH_HW
+                            sampD = pk1.r;
+                            #else
+                            sampD = pk1.r + pk1.g / 255.0;
+                            #endif
+                            lit = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sampD - uv4b.z);
                         }
                         // 终五十七: shadowdbg=6 quad uv readout — R=uv4.z
                         // (clamped), G=depth-overflow flag (uv4.z>1),
@@ -390,6 +403,9 @@ export class MBShadowRenderer {
         this.m_groundUniforms.uMBShadowMap.value = this.m_shTex;
         this.m_groundUniforms.uMBShadowMatrix.value.copy(this.m_matrix);
         this.m_groundUniforms.uMBShadowIntensity.value = this.m_intensity;
+        // §885 终一百三十: cascade-1 uniforms — refreshed per frame.
+        this.m_groundUniforms.uMBShadowMap1 = { value: this.m_shTex1 };
+        this.m_groundUniforms.uMBShadowMatrix1 = { value: this.m_matrix1.clone() };
 
         // mgl calculateGroundShadowFactor: shadow = ambient/(ambient+dir·NdotL)
         // per channel, sRGB-encoded (shadow_utils.ts) — NOT 1 − shadow-intensity.
