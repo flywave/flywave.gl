@@ -882,3 +882,9 @@ run58 日志 110 个 404，含 `models/vector/15-5241-12665.vector.pbf`、`14-26
 ### §885 终八十九：树消失最终定案——vendor 数据缺口（models/vector x∈{2618,2619}），非渲染回归（2026-09-09）
 
 404 全量普查（run58，110 条）：缺失全部为 `models/vector/` 下 13-1308-31xx / 14-2618..2619-633x / 15-5240..5242-126xx 瓦——**buildings-trees 场景 x∈{2618,2619} 列的矢量瓦从未 vendor**（已存在的 14-2620/2621、15-5241-12664 等属相邻列）。modellightport=0 判别：树区仍 0 绿、分数恒 427,316——渲染管线无关。**树消失 = 树所在瓦的数据缺口（仓库外，与 landmark 瓦同类）**；分派给 mgl CI 数据索取或本地补瓦。fetch 父瓦回退保留（部分覆盖区域受益）。buildings-trees 暗区 224k 缺口中的树冠部分（expected 72k 深绿 px）随数据到位自然恢复，剩余为墙面/阴影色调差。
+
+### §885 终九十：像素级标定的结构性前置——相机视角对齐（2026-09-09）
+
+墙面/屋顶采样对比暴露：expected 与 ours 的色调逐像素错乱（同点位 expected 199/103/57 vs ours 51/106/78 交替反转）——两图有效视角不同（pitch/距离/方位的复合差），逐像素对应不成立。**结构性结论：任何像素级色调/暗化值标定都必须以相机视角对齐为前置**；此前的 band 直方图对比只能给量级、不能给点位映射。
+
+相机对齐工作流（下会话起的新主线）：①以 ground-shadow-fog 的 pitch 70 样式为基准，核对我方 pitch/bearing/eye-height 三元组的应用链（style → MapView options → camera placement）；②用 [MBCamDump] 类读数与 mgl 数值解（ctcd/fog matrix 推导）逐项对齐；③对齐后再回归阴影暗化值与色调标定。仓库外数据缺口（landmark 瓦、models/vector 瓦、globe-terrain DEM）继续挂账。
