@@ -143,80 +143,71 @@ export class MBShadowRenderer {
     private ensureGroundQuad(): void {
         if (this.m_groundQuad) return;
         const geo = new THREE.PlaneGeometry(2, 2);
-        const mat = new THREE.ShaderMaterial({
-            uniforms: {
-                uMBInvProj: { value: new THREE.Matrix4() },
-                uMBCamWorld: { value: new THREE.Matrix4() },
-                uMBGroundZ: { value: 0 },
-                uMBShadowMap: { value: null },
-                uMBShadowMatrix: { value: new THREE.Matrix4() },
-                uMBGroundShadowFactor: { value: new THREE.Vector3(0, 0, 0) },
-                uMBGroundColor: { value: new THREE.Color(0xffffff) },
-                uMBShadowIntensity: { value: 0 },
-                uMBShadowDbg: { value: (globalThis as any).__mbShadowDbg ? 1 : 0 },
-            },
-            // §885 终三十: analytic ground-plane intersection — a full-screen
-            // NDC quad whose fragment unprojects its own NDC through the
-            // inverse projection + the camera rotation and intersects the
-            // z = uMBGroundZ ground plane. Replaces the uMBGC corner bilinear
-            // (the corners only spanned the near ground; the rest extrapolated
-            // and sampled outside the shadow map).
-            vertexShader: `
-                varying vec2 vNdc;
-                void main() {
-                    vNdc = position.xy;
-                    gl_Position = vec4(position.xy, 0.9999, 1.0);
-                }`,
-            fragmentShader: `
-                varying vec2 vNdc;
-                uniform mat4 uMBInvProj;
-                uniform mat4 uMBCamWorld;
-                uniform float uMBGroundZ;
-                uniform sampler2D uMBShadowMap;
-                uniform mat4 uMBShadowMatrix;
-                uniform vec3 uMBGroundShadowFactor;
-                uniform vec3 uMBGroundColor;
-                uniform float uMBShadowIntensity;
-                uniform float uMBShadowDbg;
-                void main() {
+        // §885 终三十二: MeshBasicMaterial+onBeforeCompile — isomorphic with
+        // the fill receivers (whose shadow sampling demonstrably works). The
+        // previous ShaderMaterial's uMBShadowMatrix upload persisted IDENTITY
+        // on the GPU while the CPU value was sane (终三十四), silencing the
+        // entire ground quad.
+        const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        // the scene sweep must not inject the ground receiver into the quad
+        (mat as any).__mbShadowSkipped = true;
+        (mat as any).__mbMglLit = true;
+        mat.onBeforeCompile = (shader: any) => {
+            shader.uniforms.uMBShadowMap = { value: this.m_shTex };
+            shader.uniforms.uMBShadowMatrix = { value: new THREE.Matrix4() };
+            shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3() };
+            shader.uniforms.uMBShadowIntensity = { value: 0 };
+            shader.uniforms.uMBShadowDbg = { value: (globalThis as any).__mbShadowDbg ? 1 : 0 };
+            shader.uniforms.uMBInvProj = { value: new THREE.Matrix4() };
+            shader.uniforms.uMBCamWorld = { value: new THREE.Matrix4() };
+            shader.uniforms.uMBGroundZ = { value: -80 };
+            // the full-screen NDC rasterization (the plane IS the NDC quad)
+            shader.vertexShader = ('varying vec2 vNdc;\n' + shader.vertexShader).replace(
+                '#include <project_vertex>',
+                'gl_Position = vec4(position.xy, 0.9999, 1.0);\n    vNdc = position.xy;');
+            // prepend the uniforms; replace the color write with the ground
+            // shadow composite (the LINEAR-domain modulation, encoded by the
+            // trailing colorspace_fragment like every other material)
+            shader.fragmentShader = ('uniform sampler2D uMBShadowMap;\n' +
+                'uniform mat4 uMBShadowMatrix;\n' +
+                'uniform vec3 uMBGroundShadowFactor;\n' +
+                'uniform float uMBShadowIntensity;\n' +
+                'uniform float uMBShadowDbg;\n' +
+                'uniform mat4 uMBInvProj;\n' +
+                'uniform mat4 uMBCamWorld;\n' +
+                'uniform float uMBGroundZ;\n' + shader.fragmentShader).replace(
+                '#include <opaque_fragment>',
+                `#include <opaque_fragment>
+                {
                     vec4 v4 = uMBInvProj * vec4(vNdc, -1.0, 0.0);
-                    vec3 dir = normalize((uMBCamWorld * vec4(v4.xyz, 0.0)).xyz);
-                    if (dir.z >= -1e-6) discard; // the ray points up — sky
-                    float t = uMBGroundZ / dir.z;
-                    vec3 mbWP = dir * t; // scene-frame ground point
-                    vec4 mbShadowUv = uMBShadowMatrix * vec4(mbWP, 1.0);
-                    float mbLit = 1.0;
-                    float mbDbgDepth = 1.0;
-                    if (mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
-                        mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
-                        vec4 mbPk = texture2D(uMBShadowMap, mbShadowUv.xy);
-                        float mbShadowDepth = mbPk.r + mbPk.g / 255.0;
-                        mbDbgDepth = mbShadowDepth;
-                        mbLit = smoothstep(-0.0002, 0.0002, mbShadowDepth - mbShadowUv.z);
+                    vec3 dir = normalize(mat3(uMBCamWorld) * v4.xyz);
+                    if (dir.z < -1e-6 && uMBShadowIntensity > 0.5) {
+                        vec3 mbWP = dir * (uMBGroundZ / dir.z);
+                        vec4 uv4 = uMBShadowMatrix * vec4(mbWP, 1.0);
+                        float lit = 0.0;
+                        float sampD = 1.004;
+                        if (uv4.x >= 0.0 && uv4.x <= 1.0 &&
+                            uv4.y >= 0.0 && uv4.y <= 1.0 && uv4.z <= 1.0) {
+                            vec4 pk = texture2D(uMBShadowMap, uv4.xy);
+                            sampD = pk.r + pk.g / 255.0;
+                            lit = smoothstep(-0.0002, 0.0002, sampD - uv4.z);
+                        }
+                        gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(2.2)), vec3(1.0), lit);
                     }
-                    vec3 mbOut = uMBGroundColor * mix(uMBGroundShadowFactor, vec3(1.0), mbLit);
-                    gl_FragColor = vec4(pow(mbOut, vec3(1.0 / 2.2)), 1.0);
-                    if (uMBShadowDbg > 0.5) {
-                        gl_FragColor = vec4(mbShadowUv.x, mbShadowUv.y, mbDbgDepth, 1.0);
-                    }
-                }`,
-            depthTest: false,
-            depthWrite: false,
-        });
+                }`);
+            this.m_groundUniforms = shader.uniforms;
+            (mat as any).customProgramCacheKey = () => 'mbgroundquad-v2';
+        };
         const quad = new THREE.Mesh(geo, mat);
         quad.name = 'MBShadowGroundQuad';
         quad.frustumCulled = false;
-        this.m_groundQuad = quad;
-        this.m_groundScene.add(quad);
-        // §885 终二十五: ALSO ride the scene at the lowest render order —
-        // the preSceneHook underlay is wiped by the scene render (shadowless
-        // ground measured bit-identical with shadowdisable=1), and the
-        // composer path never calls the hook at all. Drawing twice (underlay
-        // + first scene object) paints the same pixels twice — idempotent
-        // for a color-writing quad.
+        // §885 终三十二: the underlay channel (m_groundScene) is wiped by the
+        // scene render — the quad ALSO rides m_scene at the lowest render
+        // order (drawn before all models, after the background ground).
         quad.renderOrder = -2000;
+        this.m_groundScene.add(quad);
         (this.m_mapView as any)?.m_scene?.add?.(quad);
-        this.m_groundUniforms = mat.uniforms;
+        this.m_groundUniforms = (mat as any).uniforms || null;
     }
 
     /** Unproject one NDC corner onto the ground plane (far clamp on sky). */
@@ -265,6 +256,12 @@ export class MBShadowRenderer {
 
     private prepGroundQuad(center: THREE.Vector3, radius: number, eye: THREE.Vector3): void {
         this.ensureGroundQuad();
+        // §885 终三十二: the uniform map exists only after the quad's first
+        // compile (the onBeforeCompile stash) — skip until then.
+        if (!this.m_groundUniforms) return;
+        // §885 终三十二: the uniform map exists only after the quad's first
+        // compile (the onBeforeCompile stash) — skip until then.
+        if (!this.m_groundUniforms) return;
         const renderer = this.m_mapView?.renderer as THREE.WebGLRenderer | undefined;
         // §885 终二十七: compute the corners IN THE SCENE (RTE) frame — the
         // frame the casters, the depth pass, the shadow-camera fit, and the
@@ -316,6 +313,7 @@ export class MBShadowRenderer {
         this.m_groundUniforms.uMBShadowMap.value = this.m_shTex;
         this.m_groundUniforms.uMBShadowMatrix.value.copy(this.m_matrix);
         this.m_groundUniforms.uMBShadowIntensity.value = this.m_intensity;
+
         // mgl calculateGroundShadowFactor: shadow = ambient/(ambient+dir·NdotL)
         // per channel, sRGB-encoded (shadow_utils.ts) — NOT 1 − shadow-intensity.
         {
@@ -333,7 +331,14 @@ export class MBShadowRenderer {
         // The clear color already carries color × groundRadiance (mgl
         // background semantics — MBStyleDataSource.applyBackgroundColor).
         const clear = (this.m_mapView as any).clearColor;
-        if (clear !== undefined) this.m_groundUniforms.uMBGroundColor.value.setHex(clear);
+        if (clear !== undefined) {
+            this.m_groundUniforms.uMBGroundColor.value.setHex(clear);
+            // §885 终三十二: the MeshBasic quad's material color = the map
+            // background; the injected shadow composite modulates it.
+            if (this.m_groundQuad) {
+                (this.m_groundQuad.material as THREE.MeshBasicMaterial).color.setHex(clear);
+            }
+        }
         // §692: drawing-buffer size for the screen-space receivers
         // (gl_FragCoord.xy is in device px).
         const cv2 = this.m_mapView?.canvas as HTMLCanvasElement | undefined;

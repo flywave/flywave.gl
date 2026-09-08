@@ -588,3 +588,8 @@ plain 渲染（115,949）实测地面无阴影——quad 的 uv 采样在阴影�
 ### §885 终三十四：copy 钉扎仍 identity——上传断点需 three 内部件级调试（2026-09-08）
 uMBShadowMatrix.value 改为 copy(m_matrix)（解除引用别名）后 GPU 回读仍为单位阵——**该程序的此 uniform 上传链路存在断点**（CPU 值正确、copy 钉扎无效、getUniform 恒读 identity）。已排除：引用别名、缓存跳过、值对象替换、程序读取错误。该断点需下会话以 three 上传路径仪表化（setValueM4fv 断点）或直接换用 MeshBasicMaterial+onBeforeCompile（与 fill 接收器同构——extrusion 夹具的 fill 接收器采样正常）定位。
 本会话最终状态（全部提交）：shadows-normal-offset 171,310→115,949（−32%）；buildings-trees-shadows-casting 583,410→428,064（−27%）；守卫 2,332 零回归（每步复验）。quad 侧剩余为该上传断点 + 阴影范围标定；模型侧剩余为 PBR ambient/direct 配比。
+
+### §885 终三十五：MeshBasic+onBeforeCompile 同构改造完成（2026-09-08）
+ground quad 材质从 ShaderMaterial 换为 **MeshBasicMaterial+onBeforeCompile**（与采样正常的 fill 接收器同构）：uniform 经 three 标准路径上传（修复 ShaderMaterial 时代 uMBShadowMatrix 恒 identity 的上传断点——[MBShGPU3] 实测 GPU 上仍是单位阵而 CPU 值正确）；顶点 NDC 直通光栅化；fragment 注入解析地面求交 + 阴影调制（linear 域 ×pow(factor,2.2)，colorspace 编码）；强度门控（intensity≤0 不调制，守卫零回归）。
+实测：目标 115,175（quad 阴影调制贡献接近零——**smoothstep 边界自采样问题仍在**：地面片段的 uv.z 与采样深度在阴影区几乎相等，lit≈0.5 而非 0）；守卫 2,332 零回归 ✓。
+根因收束：模型接收端（场景系 uMBShWorldMatrix ✓）与地面 quad（解析求交 ✓）的帧系与采样均已对齐，**阴影未显现的最后疑点收敛为「深度图内容与地面采样点的光照空间覆盖关系」**——深度图暗区 uv[0.28-0.72]×[0.38-0.66] 与地面采样 uv(0.5,0.5) 相邻但光源仰角 40° 下阴影长度 ~1.19h(h=145→172 单位)可能远小于地面可见跨度，即 expected 的地面暗区并非全部为 cast-shadow（含 mgl 的 ambient-directional 地面变暗成分，该成分在 mgl 由 ground_shadow_factor 与 shadowed_light_factor 合成）。下会话按此方向做 mgl 地面合成公式对齐。
