@@ -1032,3 +1032,14 @@ shrad=0.7/1.5/2 全部逐位不变 + 像素归属分析定案：可见灰色"地
 
 shoff 双向扫描：(−150,−100)→544,106、(+150,+100)→588,343，均劣于 shoff=0 的 537,993——**当前阴影相机 fit 位置已是局部最优**，残余与 expected 的差距非平移可修，而来自：①树 caster 数据缺失（models/vector 404——树影整体缺失）；②挤出墙深度在斜射阳光下的编码质量；③阴影图案细节。数据补齐后重验。
 保持状态：buildings-trees 537,993（新相机过渡态）、fog 族 167,069/165,774、守卫 10,138/10,260 逐位零回归。
+
+### §885 终一百一十七：双 cascade 移植实施方案（下会话主任务）（2026-09-09）
+
+架构设计（基于本轮全部诊断）：
+1. **第二 RT**：m_shRT1（cascade-1）与现有 m_hwRT/m_shRenderer 路径并存——cascade-0 = 现 frustum-sphere fit（r=470，近场高精度）；cascade-1 = 同方向 4× extent（far = shadowCutoutDist = 4.5×ctcd），补远场覆盖。
+2. **双矩阵/双纹理 uniforms**：uMBShadowMatrix1/uMBShadowMap1 经 getShadowUniforms 分发至 fill/quad/extrusion 接收体。
+3. **GLSL cascade 选择**（shadow_occlusion 等价）：`if (|uv0.xy|<1) sample cascade0 else sample cascade1`，cascade-1 采样带 fade_range=[0.75·far1, far1] 淡出。
+4. **Extrusion/模型接收体**：保持 cascade-0-only（其可见范围在近场），避免 GLSL 膨胀。
+5. **验证序**：shoff=0 基线 → 双 cascade 落地 → buildings-trees 暗区覆盖对照 expected（目标:右半区阴影浮现）→ fog 族暗化值 → 守卫逐位。
+前置依赖：无（全部基建已入库：shadowhw/shrad/shoff/shbias 参数链、MBRf/MBRf2/MBShadowMat 探针、fetch 通道）。
+风险：SwiftShader 对双 RT+深度纹理的兼容性（已验证单 RT 深度纹理可渲染——shadowhw 路径 904k 时深度采样值正常 0.65-0.8）。
