@@ -563,3 +563,7 @@ vec4 构造修复后 shdbg=3 readout 实测（13,068 个 (255,255,0) 像素 = in
 ground quad 全面重写为**解析地面求交**：全屏 NDC quad，fragment 内 invProj×NDC → 相机旋转 → 与 z=uMBGroundZ（=−eye.z）平面求交，逐像素精确场景系地面点（替换 uMBGC 角点插值——角点跨度仅 ±136，远端全外插）。uMBEye/角点/uMBProjView(uMBGC 路径) 退役（uMBGC 保留供 fill 接收器）。
 实测：**quad 阴影首次落入 expected 阴影区**——our dark 4,204 px（质心 (343,323)）⊂ expected 13,170（质心 (385,351)），覆盖 32%、方向正确；阴影颜色 130 vs expected 112（接近）。mismatch 115,949（vs 无阴影基线 115,177：+772——阴影区域与 expected 的阴影渐变仍有标定差，但已非零贡献）。守卫 2,332 零回归复验 ✓。
 下轮入口：①阴影长度/渐变标定（光源仰角语义、smoothstep 带宽、深度图覆盖范围 ±691 vs 阴影延伸）；②墙面 PBR 反照率/环境光配比（过曝纯白+深 navy vs 暖白/灰蓝——逐项像素探针迭代）；③mismatch 大头在模型表面着色（diff 热图：全部模型表面为红）。
+
+### §885 终三十一：readout 可靠化 + 采样定量闭环（2026-09-08）
+主画布经 probe 通道（mainCanvas POST）可靠回传（IBCT current.png 的 reporter POST 一直 404，此前多轮画布判读混用陈旧帧）。shdbg=3 readout 实测：**quad 采样 uv≈(0.50,0.50)、sampled depth≈0.502——落在深度图内容区内、自洽**（uv.z==depth 的边界自采样 = smoothstep 0.5 灰）；另有 uv≈(0.94,0.94) 区域（图外→lit wash 234）与 uv=(0.94,0) 小块。结论：解析地面求交 + 场景帧统一后，quad 的采样坐标与深度图内容已对齐，地面阴影半色调（smoothstep 边界）已在渲染。
+剩余 mismatch（115,811 with readout / 115,949 plain）主导项：模型表面着色（PBR 分支 ambient/direct 配比+反照率）与 quad 阴影色调微调（130 vs 112）。下轮：①以 readout 灰度图与 expected 阴影区做逐像素对齐（平移/缩放拟合）；②模型 PBR ambient/direct 拆分标定（255 过曝与 navy 暗部的双向收敛）；③每步双夹具验证不变。
