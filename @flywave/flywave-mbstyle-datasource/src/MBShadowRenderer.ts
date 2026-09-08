@@ -163,7 +163,10 @@ export class MBShadowRenderer {
         (mat as any).__mbShadowSkipped = true;
         (mat as any).__mbMglLit = true;
         mat.onBeforeCompile = (shader: any) => {
-            const hwDef = (globalThis as any).__mbShadowHW ? '#define MB_SH_HW 1\n' : '';
+            const biasV = Number((globalThis as any).__mbShadowBias ?? 0.0002);
+            const hwDef = (globalThis as any).__mbShadowHW
+                ? `#define MB_SH_HW 1\n#define MB_SH_BIAS ${biasV}\n`
+                : '';
             if (hwDef) shader.fragmentShader = hwDef + shader.fragmentShader;
             shader.uniforms.uMBShadowMap = { value: this.m_shTex };
             shader.uniforms.uMBShadowMatrix = { value: new THREE.Matrix4() };
@@ -203,10 +206,11 @@ export class MBShadowRenderer {
                             vec4 pk = texture2D(uMBShadowMap, uv4.xy);
                             #ifdef MB_SH_HW
                             sampD = pk.r;
+                            lit = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sampD - uv4.z);
                             #else
                             sampD = pk.r + pk.g / 255.0;
-                            #endif
                             lit = smoothstep(-0.0002, 0.0002, sampD - uv4.z);
+                            #endif
                         }
                         // 终五十七: shadowdbg=6 quad uv readout — R=uv4.z
                         // (clamped), G=depth-overflow flag (uv4.z>1),
