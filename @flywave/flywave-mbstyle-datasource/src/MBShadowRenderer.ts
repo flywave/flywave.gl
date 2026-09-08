@@ -220,6 +220,14 @@ export class MBShadowRenderer {
             .normalize();
         const t = dir.z < -1e-6 ? -camPos.z / dir.z : far;
         out.copy(camPos).addScaledVector(dir, Math.min(Math.abs(t), far));
+        // §885 终二十: one-shot per-corner dump — dir/t/out vs camPos, to
+        // locate the 2.00× ground-intersection offset (far clamp vs ray
+        // direction vs unproject origin).
+        if (!(globalThis as any).__mbCgDumped) {
+            (globalThis as any).__mbCgDumped = true;
+            // eslint-disable-next-line no-console
+            console.log(`[MBCG] ndc=(${ndcX},${ndcY}) camPos=(${camPos.x.toFixed(1)},${camPos.y.toFixed(1)},${camPos.z.toFixed(1)}) dir=(${dir.x.toFixed(4)},${dir.y.toFixed(4)},${dir.z.toFixed(4)}) t=${t.toFixed(0)} clamp=${Math.min(Math.abs(t), far).toFixed(0)} far=${far.toFixed(0)} out=(${out.x.toFixed(1)},${out.y.toFixed(1)},${out.z.toFixed(1)})`);
+        }
     }
 
     /** §643: underlay draw — the engine calls this from preSceneHook, before

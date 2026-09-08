@@ -510,3 +510,7 @@ drawlog（DRAWLOG=1+SHADOW=6）实测：被渲染的大网格（MeshStandardMate
 uMBEye 从 projectPoint(geoCenter) 改为 camPos（相机绝对位置）后输出与 uMBEye=eye 完全一致（163,324）→ 实测 eye 与 camPos 数值相同，2.00× 比例并非相机帧与 projectPoint 之间的尺度差，而是 cornerOnGround 交点本身的 xy 落在 2× 处（候选：far 钳制方向的 dir 归一、或 NDC 角 unproject 在该投影下的 xy 半程翻转/偏移）。地面直方图：expected 阴影区 (112) ≈12.5k 采样 vs current ~3.1k（quad 已绘制但阴影范围不足/部分错位）。
 守卫 2,332 复验零回归（intensity=0 时 drawGroundQuad 在任何改动前即 early-return，quad 不参与）。
 下轮入口：①直接在 cornerOnGround 里 dump 四角的 dir/t/out 与 projectPoint 原点对照（一次运行定位 2× 的来源——far 钳制 vs ray 方向 vs 原点）；②阴影范围对齐后重测 shadows-normal-offset（预期大幅下降）与 buildings-trees 家族；③守卫复验。
+
+### §885 终二十：cornerOnGround dump 证伪 2× 遗留（2026-09-08）
+[MBCG] 探针（一次性打印四角 camPos/dir/t/clamp/out）实测：camPos=(21436884.9, 27535748.2, 82.2)，ndc=(-1,-1) → dir=(-0.7271,-0.3232,-0.6056)、t=136、out=(21436786.2, 27535704.4, -0.0)——**角点即绝对系地面点（z=0），数值合理无 2×**；终十八 gq 快照里的 2× 值是 add(eye) 双加痕迹（corners_absolute + eye），已随移除消失。quad 现全屏光栅化、采样帧与深度 pass 一致（场景系）。剩余 mismatch（163,324）主导项转为标定域：①阴影范围/强度标定（expected 阴影区 ~12.5k vs current ~3.1k 采样——光源方向转换 §560 的 mgl-exact 形式与 quad 的 uMBShadowMatrix 采样精度）；②墙面着色（expected 暖白受光面/冷灰背光面 vs current 平白）——model 直射光分支按世界系法线的 NdotL 标定（§885 终 ②）；③模型自阴影 bias 对齐（§692 smoothstep 形式）。
+探针保留：[MBCG]（decodedbg 门控一次性）。
