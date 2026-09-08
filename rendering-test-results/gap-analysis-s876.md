@@ -756,3 +756,9 @@ ribbon dbg4 插锚落地后复测（buildings-trees 692,122 逐帧稳定）：uv
 shdiag=2（dbg4 改涂重建输入 mbSUV+Res）与 shdiag=0（涂 shadowUv）输出**逐位相同**——可变着色体不影响地面像素，即"地面 uv 场"解读作废：**land fill 的可见像素不携带任何注入代码**。此前 [MBShadowAnchor] ribbon:4 的归属判断有误（该 flavor 属于其他图层）。真正的可见投影带（终五十九）来源待重验——可能来自 quad（终五十八修活的 underlay，在 land fill 未覆盖处露出）或部分 MeshBasic 地块。
 
 **归零重验入口（下会话首项，逐层排除法）**：①drawlog pxTrace / paintId 定位地面中心像素的 mesh+material（材质类型/uuid/来源：tile.objects 还是引擎工厂）；②对该材质直接注入（绕过类型与锚点猜测）；③确认注入程序渲染后，再走 uv 直绘→矩阵/方向/长度标定→fog 暗化值标定的既有路径。本轮全部基建（shdiag/shdiralt/shadowcast/frame 扩展/直绘探针）已入库可用。
+
+### §885 终六十六：地面归属修正——RawShader mesh=文本渲染；可见地面=quad 露出的假设成立（2026-09-08 终）
+
+修正终六十五：drawlog 里覆盖中心的两条 renderOrder=MAX_SAFE_INTEGER(−1) 的 RawShaderMaterial mesh 是 **TextGeometry 的文本 glyph+背景**（text-canvas 包），不是地面。结合 getMaterialConstructor：fill 技法在 shadowsEnabled 时用 MapMeshStandardMaterial、否则 MapMeshBasicMaterial——两者都在 sweep 白名单内、都被注入（[MBShadowAnchor] 两行即它们）。因此终六十五的"land fill 未注入"结论作废；**可见的"地面"很可能主要是 quad**（land fill=水系多边形、road=线，它们未阴影化但占比小）。这与终五十九图案呈现、SHDIAG 判别（地面灰=quad 的 modulate 输出而非 fill uv——两版直绘不改 quad 像素，逐位相同完全自洽）全部吻合。
+
+**收敛后的剩余缺口（下会话）**：①确认地面像素=quad（把 quad 材质底色临时改成洋红跑一帧即证）；②若成立，图案覆盖=quad 可见域 × 深度图对齐——长度 1/3 截断的标定回到深度图内容 vs quad 采样的逐 texel 对比（depth-canvas dump 与 [MBDiscPx] 式读数已备）；③quad 之上的 fill/road 层是否需要接收阴影按 mgl 语义核对（mgl 中 fill/line 层同样被 ground shadow 调制）。
