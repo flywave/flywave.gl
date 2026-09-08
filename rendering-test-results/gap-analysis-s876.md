@@ -567,3 +567,10 @@ ground quad 全面重写为**解析地面求交**：全屏 NDC quad，fragment �
 ### §885 终三十一：readout 可靠化 + 采样定量闭环（2026-09-08）
 主画布经 probe 通道（mainCanvas POST）可靠回传（IBCT current.png 的 reporter POST 一直 404，此前多轮画布判读混用陈旧帧）。shdbg=3 readout 实测：**quad 采样 uv≈(0.50,0.50)、sampled depth≈0.502——落在深度图内容区内、自洽**（uv.z==depth 的边界自采样 = smoothstep 0.5 灰）；另有 uv≈(0.94,0.94) 区域（图外→lit wash 234）与 uv=(0.94,0) 小块。结论：解析地面求交 + 场景帧统一后，quad 的采样坐标与深度图内容已对齐，地面阴影半色调（smoothstep 边界）已在渲染。
 剩余 mismatch（115,811 with readout / 115,949 plain）主导项：模型表面着色（PBR 分支 ambient/direct 配比+反照率）与 quad 阴影色调微调（130 vs 112）。下轮：①以 readout 灰度图与 expected 阴影区做逐像素对齐（平移/缩放拟合）；②模型 PBR ambient/direct 拆分标定（255 过曝与 navy 暗部的双向收敛）；③每步双夹具验证不变。
+
+### §885 终三十二：本会话收尾状态（2026-09-08）
+plain 渲染（115,949）实测地面无阴影——quad 的 uv 采样在阴影区仍落空 texel。已实证/已修复清单（全部提交）：
+- 结构：uMBShWorldMatrix 帧对齐（模型自深度命中 0.894 实证）、解析地面求交 quad（场景系逐像素精确）、光源方向全链统一（cast-shadows 门控 §683）、smoothstep bias、quad 场景内挂载+underlay、漏网自愈、两链合一、钥匙串修复、2D 快照源。
+- 探针：[MBShGPU]/[MBShGPU2]/[MBShGPU3]/[MBShFp]/[MBCG]/__mbGQState/drawlog(shu·lit·lp·mx·mainCanvas)/shadowdbg 全系。
+- 定量：模型接收自深度命中 0.894 ✓；quad 采样 uv(0.50,0.50) depth 0.502 居中在界 ✓（readout 模式）但 plain 模式地面仍无暗区——readout（255,255,0 簇）与 plain（无暗区）的矛盾指向 **readout 模式与 plain 模式的渲染状态差异**（uMBShadowDbg>0.5 时 quad 片元的 smaple 走到不同分支？——plain 模式 quad 输出=clear×mix(factor,1,mbLit) 且与禁用逐位一致 → mbLit≡1 或 quad 未光栅化）。
+下轮首项：**plain 模式下用 [MBShGPU3] 读 quad 的 uMBShadowMatrix/uMBEye GPU 值 + shadowdbg=4 邻界探针**，分离「quad 未光栅化」vs「光栅化但全 lit」；随后按终二十九②③继续。 Extrusion 家族 428,064 与目标 115,949 的剩余差距均为标定域（光源仰角/反照率）。
