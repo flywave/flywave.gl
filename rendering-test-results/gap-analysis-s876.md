@@ -823,3 +823,9 @@ ground-shadow-fog 图像级对比：expected = 近地街景（pitch 70、zoom 16
 ### §885 终七十六：雾 zoom−1 假设 A/B 定案——否定并回退（2026-09-08 终）
 
 假设"flywave zoomLevel = mgl zoom + 1 泄漏进雾归一化（uMbDistCam/uMbMetersPerUnit 的 2^zoomLevel 应为 2^(zoomLevel−1)）"——A/B 结果：ground-shadow-fog 109,221→126,333（+15.6%）、buildings-trees 427,316→499,938（+17%），**双双恶化，假设否定**，已回退。zoomLevel=17.2 vs 样式 16.2 的 +1 关系不是简单的约定偏移（或这两个夹具的历史调参已在 +1 语义下拟合）。雾白化成因需另查（候选：fogMglShift、uMbDistCam 的 focalLength 项、雾混合公式本身）。
+
+### §885 终七十七：ground-shadow-fog 白化根因定位——3D 光照注入未生效（非雾、非阴影值）（2026-09-08 终）
+
+图像与代码综合判读：ground-shadow-fog 样式 ambient=黑·0.0、directional=白·1.0（无色键默认白）。expected：背光墙纯黑（apply_lighting 公式下 amb=0 → 背光面 0）、地面阴影纯黑。ours：**全帧无一处黑色**——包括所有挤出墙背光面。这排除了雾过度（白雾假设作废）与阴影暗化值：真正的缺口是 **LIGHTING_3D_MODE 挤出光照注入在该夹具未生效**（画面=未注入状态：场景白 π AmbientLight 直出 + 白雾混合）。旁证：早前 [MBShadowAnchor] 只见 MeshBasic/ribbon 两种 flavor——该夹具的挤出材质（MapMeshStandardMaterial）未被 injectExtrusion3DLighting 触达（疑似 tile.objects 路径的 technique 分派或引擎直建材质实例不匹配）。
+
+**下会话首项（精确）**：查 ground-shadow-fog 的挤出 mesh 材质实例归属（drawlog mat/uuid ↔ tile.objects/scene sweep），确定 injectExtrusion3DLighting 为何未命中；修复后背光墙变黑、地面阴影与暗化值标定才有意义。fog 白化假设正式作废。
