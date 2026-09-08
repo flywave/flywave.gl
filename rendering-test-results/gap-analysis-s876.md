@@ -750,3 +750,9 @@ ribbon dbg4 插锚落地后复测（buildings-trees 692,122 逐帧稳定）：uv
 - **方向 A/B（shdiralt=1，raw mgl 球面式无 y 镜像）：598,987 vs 427,316——显著恶化，当前 §686 y 镜像方向定案为正确**。方向不再是缺口。
 - 新基建：shdiralt karma arg（runner+harness）、shadowcast=0 退出门。
 - 剩余缺口收敛为单一问题：**阴影长度/覆盖约为 expected 的 1/3**（方向正确、深度图内容在、地面采样在）。头号嫌疑=挤出墙深度编码在斜射阳光下的噪声（§720 原判）或 ortho 盒 xy 裁剪掉边缘建筑剪影（caster NDC x 达 ±1.76，darkBox 满宽=已裁）。下会话首项：shadow-depth-canvas 与地面 uv 场同屏叠加（终五十四入口①，现全部前提已就绪），逐 texel 对齐后定裁剪/噪声。
+
+### §885 终六十五：SHDIAG 判别——地面灰不是注入代码画的，land fill 渲染材质仍未识别（2026-09-08 终）
+
+shdiag=2（dbg4 改涂重建输入 mbSUV+Res）与 shdiag=0（涂 shadowUv）输出**逐位相同**——可变着色体不影响地面像素，即"地面 uv 场"解读作废：**land fill 的可见像素不携带任何注入代码**。此前 [MBShadowAnchor] ribbon:4 的归属判断有误（该 flavor 属于其他图层）。真正的可见投影带（终五十九）来源待重验——可能来自 quad（终五十八修活的 underlay，在 land fill 未覆盖处露出）或部分 MeshBasic 地块。
+
+**归零重验入口（下会话首项，逐层排除法）**：①drawlog pxTrace / paintId 定位地面中心像素的 mesh+material（材质类型/uuid/来源：tile.objects 还是引擎工厂）；②对该材质直接注入（绕过类型与锚点猜测）；③确认注入程序渲染后，再走 uv 直绘→矩阵/方向/长度标定→fog 暗化值标定的既有路径。本轮全部基建（shdiag/shdiralt/shadowcast/frame 扩展/直绘探针）已入库可用。

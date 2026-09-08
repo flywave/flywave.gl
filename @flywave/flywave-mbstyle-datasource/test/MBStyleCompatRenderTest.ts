@@ -164,6 +164,11 @@ function discoverTests(): TestEntry[] {
     const sda = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shdiralt="))?.slice("shdiralt=".length);
     if (sda === "1") (globalThis as any).__mbShadowDirAlt = true;
+    // §885 终六十五: shdiag=2 → receiver dbg4 paints reconstruction inputs
+    // (mbSUV + Res) instead of the shadow uv.
+    const sdg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shdiag="))?.slice("shdiag=".length);
+    if (sdg) (globalThis as any).__mbShadowDiag = sdg;
     const port = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modellightport="))?.slice("modellightport=".length);
     if (port === "1") (globalThis as any).__mbModelLightPort = true;

@@ -3079,14 +3079,23 @@ export class MBMaterialPatchManager {
                 shader.fragmentShader = 'uniform float uMBShadowDbg4;\n' + shader.fragmentShader;
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <colorspace_fragment>', '');
+                // 终六十二: paint regardless of intensity — decouples the
+                // "does this program render" question from the uniform
+                // refresh chain. 终六十五: SHDIAG=2 variant paints the
+                // reconstruction INPUTS (R=mbSUV.x, G=mbSUV.y, B=uMBRes.x
+                // clamped) to locate the degenerate field.
+                const shdiag = String((globalThis as any).__mbShadowDiag ?? '0');
+                const dbg4Body = shdiag === '2'
+                    ? `\nif (uMBShadowDbg4 > 0.5) {
+                            vec2 mbSUV2 = gl_FragCoord.xy / max(uMBRes, vec2(1.0));
+                            gl_FragColor = vec4(mbSUV2.x, mbSUV2.y, clamp(uMBRes.x / 4096.0, 0.0, 1.0), 1.0);
+                        }`
+                    : `\nif (uMBShadowDbg4 > 0.5) {
+                            gl_FragColor = vec4(mbShadowUv.xyz, 1.0);
+                        }`;
                 shader.fragmentShader = tryInsert(
                     shader.fragmentShader, '#include <opaque_fragment>',
-                    // 终六十一: paint regardless of intensity — decouples the
-                    // "does this program render" question from the uniform
-                    // refresh chain.
-                    `\nif (uMBShadowDbg4 > 0.5) {
-                            gl_FragColor = vec4(mbShadowUv.xyz, 1.0);
-                        }`);
+                    dbg4Body);
             }
             if (!mbShadowInserted) {
                 // Chunk-less ribbon shaders: inject right after their final
@@ -3099,10 +3108,14 @@ export class MBMaterialPatchManager {
                 ]) {
                     // 终六十二: intensity-independent dbg4 uv paint also on
                     // the ribbon anchors — the land fill's int/uv state was
-                    // invisible (probe blind spot) without it.
-                    const dbg4Paint = (globalThis as any).__mbShadowDbg4
-                        ? `\nif (uMBShadowDbg4 > 0.5) { gl_FragColor = vec4(mbShadowUv.xyz, 1.0); }`
-                        : '';
+                    // invisible (probe blind spot) without it. 终六十五:
+                    // SHDIAG=2 paints the reconstruction inputs instead.
+                    const shdiag2 = String((globalThis as any).__mbShadowDiag ?? '0');
+                    const dbg4Paint = !(globalThis as any).__mbShadowDbg4
+                        ? ''
+                        : (shdiag2 === '2'
+                            ? `\nif (uMBShadowDbg4 > 0.5) { vec2 mbSUV2 = gl_FragCoord.xy / max(uMBRes, vec2(1.0)); gl_FragColor = vec4(mbSUV2.x, mbSUV2.y, clamp(uMBRes.x / 4096.0, 0.0, 1.0), 1.0); }`
+                            : `\nif (uMBShadowDbg4 > 0.5) { gl_FragColor = vec4(mbShadowUv.xyz, 1.0); }`);
                     shader.fragmentShader = tryInsert(
                         shader.fragmentShader, anchor,
                         `\nif (uMBShadowIntensity > 0.0) {${mbShadowSample}\n                    }${dbg4Paint}`);
