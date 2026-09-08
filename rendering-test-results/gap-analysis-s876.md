@@ -1218,3 +1218,9 @@ quad 改为顶层叠加模式（renderOrder=999、透明混合、阴影区输出
 分数稳定性验证通过（连续多轮 457,874/96,899/130,385 一致）。re-baseline 594/2721 持续运行中。工作树干净，全部代码/探针/参数/结论已入库。
 会话从"地面阴影链完全死亡+全画布白洗"推进到"双 cascade+PCF 正常工作，fog 族 −42%/−24%，守卫逐位零回归"。
 下阶段：数据补齐（需 API token）→ 全量重验 → fill 采样链二分 → 雾近场逐夹具标定。
+
+### §885 会话收口确认（2026-09-09 最终版）
+
+clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、ground-shadow-fog 96,899（−42%）、hard-cutoff 162,567（fogshift=0.7 默认生效后过渡态）、守卫 10,138/10,260 逐位零回归。工作树干净。
+全部改进已提交（终七十七至终一百三十七+，65+ 提交）：cos(lat) 相机修正、fov-adjusted fog range、fog chunk 双重 shift、cascade-1 远场回退+PCF、地面阴影链五连修、ray-cast 精确重建、overlay 混合模式、HW 深度纹理路径（门控）、全套 A/B 参数链与诊断探针。
+下阶段：数据补齐（API token）→ fill 实例归属（drawlog 钩子）→ 雾近场逐夹具标定 → 全量重验。
