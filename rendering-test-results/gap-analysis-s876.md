@@ -811,3 +811,11 @@ SHDIAG=3（quad 底色洋红）实验：画面无任何洋红 → **quad 完全�
 tight fit（caster AABB 光空间紧凑拟合 + 15% pad + shadow-reach 扩展）两轮实验：buildings-trees **418,385 = 无阴影基线逐位相同**（地面阴影完全消失），fog 族 133,950（劣于 frustum fit 的 109,221）。含 reach 扩展（盒沿行进方向扩 height/dz）仍无效——紧凑拟合下地面接收体全部读 lit，机制未明（疑似近平面/深度窗与 corners 重建的相互作用，非 extents 大小问题）。
 
 **决策：回退到终七十二 frustum-sphere fit 状态**（buildings-trees 427,316 / fog 109,221 / hard-cutoff 109,568 / 守卫 10,138 逐位零回归——当前已知最优）。tight-fit 负结果入档：正交盒收紧方向在该架构下不成立，未来尝试需先解明紧凑窗下 corners 重建与深度窗的相互作用。
+
+### §885 终七十四：fog 族标定前置缺口发现——视角不符 + 全画布白雾过度（2026-09-08 终）
+
+ground-shadow-fog 图像级对比：expected = 近地街景（pitch 70、zoom 16.2、bearing 264，建筑侧面因 ambient=0 呈纯黑、地面阴影纯黑）；ours = 高空俯瞰视角、**全画布白化**（无任何 <120 亮度像素——方向光着色与阴影全被白雾覆盖）。
+
+判读：该夹具剩余 109,221 差距的主导项不是阴影暗化值，而是：①**雾过度应用**（fog range [−0.5,3.0] 白雾在低角度下把整帧拉白，§701 的 uMbDistCam 归一化在此视角下疑似偏大）；②**相机俯仰/高度与 expected 不符**（pitch 70 的近地视角 vs 我方高空）。两者都属引擎相机/雾管线，非阴影接收体链路。
+
+**下会话入口（修正后）**：①以 ground-shadow-fog 为夹具核对其相机放置（pitch 70/zoom 16.2 下 eye 高度与 expected 视角对齐）与雾距离归一化（白雾强度随距离曲线）；②相机/雾对齐后再回归阴影暗化值标定；③buildings-trees 的图案覆盖对齐（tight-fit 负结果已入档，替代方案：mgl 双 cascade 精确移植）。
