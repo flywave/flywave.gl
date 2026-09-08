@@ -1186,3 +1186,29 @@ fogshift 扫描曲线定案（0/0.3/0.5/0.7/0.9）：
 ### §885 终一百四十一：overlay 模式落地——暗区覆盖与 fog 族收敛保持（2026-09-09）
 
 quad 改为顶层叠加模式（renderOrder=999、透明混合、阴影区输出黑色半透明遮罩）：buildings-trees 457,874 / fog 96,899 / hard-cutoff 127,427、守卫 10,138/10,260 逐位零回归——最优状态保持，overlay 模式与原 multiply 模式等效（因 quad 的 uv 场在可见区域内仅部分命中阴影图）。当前阴影覆盖差距主要受限于：①models/vector x∈{2618,2619} 瓦 404 缺失（右侧建筑+树 caster 不存在）→ 数据补齐为唯一解；②fog 近场强度（fogshift 已标定至 0.7）。
+
+### §885 会话总结（终七十七至终一百四十一，65+ 提交）（2026-09-09 最终版）
+
+**已修复落地**：
+1. cos(lat) 相机距离修正——近地街景与 expected 构图一致（视觉确证）
+2. fov-adjusted fog range + fog chunk 双重 shift 修复——雾公式按 mgl fog.ts 语义对齐
+3. cascade-1 远场回退 + 4-tap PCF——远场阴影覆盖扩展
+4. 地面阴影链五连修——真阴影首次呈现
+5. overlay 混合模式——quad 顶层叠加
+6. HW 深度纹理路径（shadowhw=1 门控）——24-bit 无 pack 架构
+7. ray-cast 精确重建——invViewProj 替代 corners 线性插值
+
+**实测收益**：
+- ground-shadow-fog：167,010 → **96,899（−42%）**
+- hard-cutoff：165,719 → **126,781（−23.5%）**
+- buildings-trees：428,064 → **457,874**（过渡态，待数据补齐）
+- 守卫 quantization-shadows：10,138/10,260 **全程逐位零回归**
+
+**A/B 定案否定**（全部入档）：雾 zoom−1、camdist=0.79、tight fit、shoff 平移、HW bias 放宽、正交盒缩放、fogmul 全局、clearprob 归属判别
+
+**仓库外挂账**（Mapbox 专有数据需 API token）：
+- landmark 瓦：8764-5126-14.glb、2630-6353-14.glb（shadows-normal-offset 夹具阻塞）
+- models/vector 瓦：x∈{2618,2619} 列（buildings-trees 右侧建筑+树冠 72k px 阻塞）
+- globe-terrain DEM（globe-terrain 夹具阻塞）
+
+**下会话队列**：①数据补齐后全量重验；②cascade-1 PCF 参数精调；③fog 近场逐夹具标定；④LIGHTING_3D_MODE 色调一致性验证。
