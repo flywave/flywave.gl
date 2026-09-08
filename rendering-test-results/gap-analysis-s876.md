@@ -1127,3 +1127,8 @@ clearprob=1（洋红清屏）实测全帧纯洋红——连道路/建筑也不�
 drawlog 钩子（renderer.renderBufferDirect 包装）在 run83c 未记录的谜团未解（three r178 内部经 _this.renderBufferDirect 调用、实例包装应生效；run11 同代码曾记录 40k 条）。已排除：参数门（drawlog=1 ✓）、mapView.renderer 可用性（run11 同代码 ✓）。
 mu 对照的替代路径（不依赖 drawlog）：**渲染帧 readPixels + SHDIAG=2 涂装的空间变化已证明 fills 的 uv 场随屏幕位置变化**（77-104 灰度分布）——即渲染实例确实携带注入程序且 corners/matrix 活跃——"渲染实例未注入"的判读需要修正：注入在、uv 在、但 compare 结果恒 lit。剩余可疑收敛为：①uMBShadowMap 纹理绑定在 fill 程序上的实际单元（texture unit 冲突）；②sampler 数组绑定。下会话：以 SWDIAG 读 mbShadowDepth（采样值）的空域分布——若 depth 恒 1.0 → 纹理绑定问题；若 depth 有内容但 uv.z 偏小 → 比较域问题。
 保持状态：buildings-trees 457,874（新相机过渡态）、fog 族 161,252/125,686、守卫 10,138/10,260 逐位零回归。
+
+### §885 终一百三十七：shrad 0.7 A/B 定案——正交盒缩放投影不变性确认（2026-09-09）
+
+shrad=0.7（半径收缩）逐位不变 562,664——与 shrad=1.5/2 的不变性合并定案：**正交盒缩放对世界空间阴影图案是投影不变的**（同点 uv 与 sampD 同比缩放，比较符号不变）——阴影图案覆盖差异的正交盒调整路线正式关闭。剩余阴影长度截断（bands ~300 单位 vs 理论 2.75×height≈1260）的根因需从深度图内容/接收体采样值域入手（SHDIAG 读 mbShadowDepth 空域分布，终一百三十五方案）。
+保持状态：buildings-trees 457,874（新相机过渡态）、fog 族 161,252/125,686、守卫 10,138/10,260 逐位零回归。
