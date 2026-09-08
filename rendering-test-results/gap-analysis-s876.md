@@ -544,3 +544,7 @@ bottom-left/bottom-right 象限并排对比：①地面 quad 在两象限均已�
 ### §885 终二十五：2D 快照源仍逐位不变——采样空 texel 根因未解（2026-09-08）
 中间 2D canvas 快照（drawImage 持久位图）替换 WebGL canvas 直源后，shadow-disable 与 shadow-enable 仍逐位一致（115,177）——纹理上传时序假设排除。shdbg=3 readout（quad 着色器修复 vec4 构造缺 alpha 的编译错误后）实测：quad 采样到的 packed depth **全部 1.0（空 texel）**，而模型材质采样同一纹理有真实内容（0.894 自深度命中）——**同一纹理、不同绘制阶段（underlay/场景首对象 vs 主渲染）采样结果不同**。候选：①underlay 阶段的纹理绑定上传失败（SwiftShader 跨上下文）；②quad 的 uv 系与深度图存在残余偏移（camPos 相对 vs tile 相对，~180-500 单位）；③depth-pass 渲染器与主渲染器的 texture 对象实例不同（两个 CanvasTexture?）。
 下轮入口：①把 readout 探针同样加到 fill 材质的 injectGroundShadow（extrusion 夹具里 fill 接收器采样有内容——对比同夹具两接收器的 uMBShadowMap.value.uuid 是否同一纹理对象）；②或直接让 quad 在场景渲染内绘制（已在场景，renderOrder -2000 ✓）但把 m_shTex 的 needsUpdate 移到 quad 渲染之后的首次 bind（用 texture.version 强制）；③预算许可时用 gl.readPixels 在 quad 绘制后直接回读帧缓冲验证 quad 自身输出。
+
+### §885 终二十六：三联对比定案——quad 阴影画在屏外/错位（2026-09-08）
+三联对比（expected / shadowdisable / quad 启用，地面区 y[300,511]）：with-quad 与 noshadow 的地面**完全一致（无阴影）**——quad 有光栅化（readout 像素实证）但其暗区落在可见地面之外（屏外/错位）。阴影方向（§683 后）已与 expected 的暗区方位一致（子集关系实测），差距全在：①**阴影相机 fit 的世界系**——quad 的 mbWP（camPos 相对/eye 相对）与深度图（casters 的 tile 相对系）之间的残余平移（~数百单位，相机-目标距量级）使暗区整体平移出屏；②光源仰角（阴影长度 2.6× 差）。
+下轮精确入口（几何闭环，无需再探针）：在 run() 内把 shadow camera 的 fit 基准从 casterBox 中心改为「casters 的 matrixWorld 平移分量」（即 tile.center 渲染帧值，已可从 shadowCasters 任意 mesh 的 matrixWorld 直接读出），使深度相机/ground quad corners/model 接收器三者共享同一定义的原点。当前代码（方向统一+bias+quad 场景内挂载+2D 快照）全部保留。
