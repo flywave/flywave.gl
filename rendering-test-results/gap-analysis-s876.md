@@ -949,3 +949,9 @@ SHDIAG=2 + DECODEDBG 联合运行（新相机基准）：道路（MeshBasic drap
 ①shrad=1.5（正交半径 ×1.5，r 470→706 读数确认）：分数 537,993 逐位不变——正交盒覆盖大小不影响可见阴影图案（lxjk 最小球已含视锥；视锥外 caster 裁剪只影响屏外阴影）。②m_sceneRoot census：m_scene 外无逃逸 mesh（outside=0）——sweep 遍历根无问题。③land fill 的注入状态需逐实例 mu 对照（终九十七遗留）。
 
 **当前认知图**：地面阴影图案的compare 链路（corners→matrix→采样）各环节读数均"正常"但合成结果无阴影；剩余可疑点收敛为采样纹理绑定（uMBShadowMap 在 fill 程序里的实际绑定 — 终三十二 era 曾有 DataTexture 绑定问题的历史）与 depth 值域（16-bit pack 在新窗口的 hi/lo 比例）。下会话：直接 readPixels 验证 fill 程序采样到的 texel 值（SHDIAG 变体输出 sampD），或换 sampler2DShadow 硬件比较（mgl 同款）绕过软件比较域。
+
+### §885 终一百零四：sampler2DShadow/HW 深度纹理路径实现——904,250 待调（默认关闭）（2026-09-09）
+
+实现 `shadowhw=1` HW 路径：阴影 pass 经主上下文 WebGLRenderTarget 的 DepthTexture（DEPTH_COMPONENT24，无 16-bit pack），接收体解码按 MB_SH_HW define 切换。实测 buildings-trees 904,250（较软件路径 537,993 恶化，两次一致）——深度值域/比较语义在 HW 纹理下系统性偏移，候选：program cacheKey 未含 HW 状态（define 未到达实际 program）、DEPTH_COMPONENT24 采样值域、GREATER/LESS 语义。该路径默认关闭（shadowhw 未设 = 软件路径），主分支状态安全。
+- 保持状态：buildings-trees 427,316→537,993（新相机过渡态）、fog 族 167,069/165,774、守卫 10,138/10,260 逐位零回归。
+- 下会话：①HW 路径调试（cacheKey 加 HW 状态 + SHDIAG 读 sampD 值域）；②调通后以 24-bit 精度重做地面图案/暗化值标定。

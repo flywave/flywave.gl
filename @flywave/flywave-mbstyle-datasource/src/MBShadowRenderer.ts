@@ -40,6 +40,7 @@ export interface ShadowUniformState {
 export class MBShadowRenderer {
     // §530: independent-context depth pass renderer + CanvasTexture回流.
     private m_shRenderer: THREE.WebGLRenderer | null = null;
+    private m_hwRT: THREE.WebGLRenderTarget | null = null;
     private m_shTex: THREE.Texture | null = null;
     private m_depthPixels: Uint8Array | null = null;
     private m_shadowCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 4000);
@@ -162,6 +163,8 @@ export class MBShadowRenderer {
         (mat as any).__mbShadowSkipped = true;
         (mat as any).__mbMglLit = true;
         mat.onBeforeCompile = (shader: any) => {
+            const hwDef = (globalThis as any).__mbShadowHW ? '#define MB_SH_HW 1\n' : '';
+            if (hwDef) shader.fragmentShader = hwDef + shader.fragmentShader;
             shader.uniforms.uMBShadowMap = { value: this.m_shTex };
             shader.uniforms.uMBShadowMatrix = { value: new THREE.Matrix4() };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3() };
@@ -198,7 +201,11 @@ export class MBShadowRenderer {
                         if (uv4.x >= 0.0 && uv4.x <= 1.0 &&
                             uv4.y >= 0.0 && uv4.y <= 1.0 && uv4.z <= 1.0) {
                             vec4 pk = texture2D(uMBShadowMap, uv4.xy);
+                            #ifdef MB_SH_HW
+                            sampD = pk.r;
+                            #else
                             sampD = pk.r + pk.g / 255.0;
+                            #endif
                             lit = smoothstep(-0.0002, 0.0002, sampD - uv4.z);
                         }
                         // 终五十七: shadowdbg=6 quad uv readout — R=uv4.z
@@ -675,6 +682,12 @@ export class MBShadowRenderer {
 
         // Depth-only pass over the casters (layer mask + override material)
         // in the INDEPENDENT context — the main renderer/canvas untouched.
+        // §885 终一百零三: shadowhw=1 → HW depth-texture path: render into a
+        // WebGLRenderTarget depth texture on the MAIN context (cross-context
+        // textures can't be shared), giving receivers a 24-bit hardware depth
+        // (no 16-bit pack) sampled as .r.
+        const mainRenderer: THREE.WebGLRenderer | undefined = (globalThis as any).__mbShadowHW
+            ? (this.m_mapView as any)?.renderer : undefined;
         const prevOverride = scene.overrideMaterial;
         const prevLayers = this.m_shadowCamera.layers.mask;
         // §532: layer 1 filter REQUIRED — it also excludes the atmosphere
@@ -684,9 +697,30 @@ export class MBShadowRenderer {
         this.m_shadowCamera.layers.set(1);
         scene.overrideMaterial = this.m_depthMaterial;
         try {
-            this.m_shRenderer.setRenderTarget(null);
-            this.m_shRenderer.clear();
-            this.m_shRenderer.render(scene, this.m_shadowCamera);
+            if (mainRenderer) {
+                if (!this.m_hwRT) {
+                    const dt = new THREE.DepthTexture(1024, 1024);
+                    dt.type = THREE.UnsignedIntType;
+                    dt.format = THREE.DepthFormat;
+                    this.m_hwRT = new THREE.WebGLRenderTarget(1024, 1024, {
+                        depthTexture: dt, depthBuffer: true, stencilBuffer: false,
+                        minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+                        generateMipmaps: false,
+                    });
+                }
+                const prevRT2 = mainRenderer.getRenderTarget();
+                mainRenderer.setRenderTarget(this.m_hwRT);
+                mainRenderer.setClearColor(0xffffff, 1);
+                mainRenderer.clear(true, true);
+                mainRenderer.render(scene, this.m_shadowCamera);
+                mainRenderer.setRenderTarget(prevRT2);
+                this.m_shTex = this.m_hwRT.depthTexture;
+                (this as any).__mbShHWTex = true;
+            } else {
+                this.m_shRenderer.setRenderTarget(null);
+                this.m_shRenderer.clear();
+                this.m_shRenderer.render(scene, this.m_shadowCamera);
+            }
         } catch (e) {
             (globalThis as any).__mbShadowPassErr = String(e);
         } finally {

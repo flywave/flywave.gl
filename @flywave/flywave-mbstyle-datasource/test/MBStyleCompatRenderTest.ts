@@ -179,6 +179,11 @@ function discoverTests(): TestEntry[] {
     const sho = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shoff="))?.slice("shoff=".length);
     if (sho) (globalThis as any).__mbShadowOff = sho;
+    // §885 终一百零三: shadowhw=1 → the depth pass renders into a
+    // main-context RT depth texture (24-bit, no pack).
+    const shw = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shadowhw="))?.slice("shadowhw=".length);
+    if (shw === "1") (globalThis as any).__mbShadowHW = true;
     // §885 终八十: fogmul → distCam multiplier (single-variable fog A/B).
     const fmul = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogmul="))?.slice("fogmul=".length);

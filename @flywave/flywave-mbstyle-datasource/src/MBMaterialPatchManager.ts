@@ -230,6 +230,33 @@ export class MBMaterialPatchManager {
                         if (o.isMesh && !seen.has(o)) { seen.add(o); refreshTargets.push(o); }
                     });
                 }
+                // §885 终一百零二: m_sceneRoot census — meshes living OUTSIDE
+                // m_scene never reach the refresh/injection sweeps (the land
+                // fill escape path).
+                const sceneRoot: any = (this.m_dataSource as any).mapView?.m_sceneRoot;
+                if (sceneRoot && sceneRoot !== scene) {
+                    let outside = 0, outsideInj = 0;
+                    const names: any = {};
+                    sceneRoot.traverse((o: any) => {
+                        if (!o.isMesh) return;
+                        if (seen.has(o)) return;
+                        outside++;
+                        const raw: any = o.material;
+                        const mats: any[] = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+                        for (const m of mats) {
+                            if (m?.__mbShadowInjected) outsideInj++;
+                            const t = String(m?.type ?? '?');
+                            names[t] = (names[t] ?? 0) + 1;
+                        }
+                    });
+                    const gO = (globalThis as any);
+                    gO.__mbOutsideCensus = { outside, outsideInj, names };
+                    if (!gO.__mbOutsideLogged) {
+                        gO.__mbOutsideLogged = true;
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBOutside] meshes outside m_scene: ${outside} injected: ${outsideInj} types=${JSON.stringify(names)}`);
+                    }
+                }
             }
             for (const obj of refreshTargets) {
                 {
@@ -1158,6 +1185,7 @@ export class MBMaterialPatchManager {
                  uniform float uMbDistCam;
                  varying float vMbWallH;
                  varying vec3 vMbWorldPos;
+                 ${(globalThis as any).__mbShadowHW ? '#define MB_SH_HW 1' : ''}
                  ${shader.fragmentShader.includes('uMBShadowMap') ? '' :
                  `uniform sampler2D uMBShadowMap;
                  uniform mat4 uMBShadowMatrix;
@@ -1248,7 +1276,11 @@ export class MBMaterialPatchManager {
                          vec4 mbShUv = uMBShadowMatrix * vec4(mbShPos, 1.0);                         if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
                              mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                              vec4 mbShPk = texture2D(uMBShadowMap, mbShUv.xy);
+                             #ifdef MB_SH_HW
+                             float mbShD = mbShPk.r;
+                             #else
                              float mbShD = mbShPk.r + mbShPk.g / 255.0;
+                             #endif
                              // §696/§702: smoothstep edge + (1−intensity·occ)
                              // factor. §713 A/B: mgl's slope-scaled bias
                              // constants ([0.00036,0.0012,0.012] NDC) do NOT
@@ -3043,7 +3075,11 @@ export class MBMaterialPatchManager {
                             mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
                             vec4 mbPk = texture2D(uMBShadowMap, mbShadowUv.xy);
                             // §527: 16-bit packed window depth (R=hi, G=lo)
+                            #ifdef MB_SH_HW
+                            mbShadowDepth = mbPk.r;
+                            #else
                             mbShadowDepth = mbPk.r + mbPk.g / 255.0;
+                            #endif
                             // §692: the tight §692 shadow frustum makes one
                             // 16-bit depth quantum tiny — the old 0.002 bias
                             // (≈6-60m of scene depth) ATE the entire building
@@ -3089,6 +3125,9 @@ export class MBMaterialPatchManager {
                 if (!shader.fragmentShader.includes(name)) mbShadowOwn.push(decl);
             }
             shader.fragmentShader = mbShadowOwn.join('') + shader.fragmentShader;
+            if ((globalThis as any).__mbShadowHW) {
+                shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;
+            }
             const mbShadowDbg4 = !!(globalThis as any).__mbShadowDbg4;
             shader.fragmentShader = tryInsert(
                 shader.fragmentShader, '#include <opaque_fragment>',
