@@ -147,6 +147,8 @@ export class MBShadowRenderer {
                 uMBGC: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
                 uMBProjView: { value: new THREE.Matrix4() },
                 uMBEye: { value: new THREE.Vector3() },
+                uMBShadowIntensity: { value: 0 },
+                uMBShadowDbg: { value: (globalThis as any).__mbShadowDbg ? 1 : 0 },
                 uMBShadowMap: { value: null },
                 uMBShadowMatrix: { value: new THREE.Matrix4() },
                 uMBGroundShadowFactor: { value: new THREE.Vector3(0, 0, 0) },
@@ -173,6 +175,8 @@ export class MBShadowRenderer {
                 uniform vec3 uMBGroundShadowFactor;
                 uniform vec3 uMBGroundColor;
                 uniform vec3 uMBEye;
+                uniform float uMBShadowIntensity;
+                uniform float uMBShadowDbg;
                 void main() {
                     // §643 underlay channel: corners whose view ray never
                     // hits the z=0 ground plane are clamped at the far
@@ -182,6 +186,7 @@ export class MBShadowRenderer {
                     if (vMBWorldPos.z > 1.0) discard;
                     vec4 mbShadowUv = uMBShadowMatrix * vec4(vMBWorldPos - uMBEye, 1.0);
                     float mbLit = 1.0;
+                    float mbDbgDepth = 1.0;
                     if (mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
                         mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
                         vec4 mbPk = texture2D(uMBShadowMap, mbShadowUv.xy);
@@ -192,8 +197,14 @@ export class MBShadowRenderer {
                     // raw ShaderMaterial output must be encoded to match
                     // (mgl blends the factor in sRGB space — we compose in
                     // linear and encode once, so the factor stays linear).
+                    // §885 终二十五: raw readout — R=uMBShadowIntensity,
+                    // G=the sampled packed depth, B=uv.z (the sky-gate
+                    // discard keeps sky unpainted).
                     vec3 mbOut = uMBGroundColor * mix(uMBGroundShadowFactor, vec3(1.0), mbLit);
                     gl_FragColor = vec4(pow(mbOut, vec3(1.0 / 2.2)), 1.0);
+                    if (uMBShadowDbg > 0.5) {
+                        gl_FragColor = vec4(uMBShadowIntensity, mbDbgDepth, mbShadowUv.z, 1.0);
+                    }
                 }`,
             depthTest: false,
             depthWrite: false,
@@ -203,6 +214,14 @@ export class MBShadowRenderer {
         quad.frustumCulled = false;
         this.m_groundQuad = quad;
         this.m_groundScene.add(quad);
+        // §885 终二十五: ALSO ride the scene at the lowest render order —
+        // the preSceneHook underlay is wiped by the scene render (shadowless
+        // ground measured bit-identical with shadowdisable=1), and the
+        // composer path never calls the hook at all. Drawing twice (underlay
+        // + first scene object) paints the same pixels twice — idempotent
+        // for a color-writing quad.
+        quad.renderOrder = -2000;
+        (this.m_mapView as any)?.m_scene?.add?.(quad);
         this.m_groundUniforms = mat.uniforms;
     }
 
@@ -293,6 +312,7 @@ export class MBShadowRenderer {
         this.m_groundUniforms.uMBEye.value.copy(camPos);
         this.m_groundUniforms.uMBShadowMap.value = this.m_shTex;
         this.m_groundUniforms.uMBShadowMatrix.value = this.m_matrix;
+        this.m_groundUniforms.uMBShadowIntensity.value = this.m_intensity;
         // mgl calculateGroundShadowFactor: shadow = ambient/(ambient+dir·NdotL)
         // per channel, sRGB-encoded (shadow_utils.ts) — NOT 1 − shadow-intensity.
         {
@@ -384,6 +404,15 @@ export class MBShadowRenderer {
             const canvas = document.createElement('canvas');
             canvas.width = size;
             canvas.height = size;
+            // §885 终二十五: intermediate 2D copy — the receivers sample a
+            // CanvasTexture over THIS canvas; a WebGL canvas source reads
+            // back EMPTY at the receivers' upload time under SwiftShader
+            // headless (the quad sampled 1.0 everywhere while the depth
+            // canvas itself had the buildings dead-center), while a 2D
+            // canvas bitmap persists.
+            (this as any).__mbDepth2d = document.createElement('canvas');
+            (this as any).__mbDepth2d.width = size;
+            (this as any).__mbDepth2d.height = size;
             this.m_shRenderer = new THREE.WebGLRenderer({
                 canvas,
                 antialias: false,
@@ -395,7 +424,7 @@ export class MBShadowRenderer {
             // (depth 1 = far) — a black clear reads as depth 0 (nearest) and
             // shadows the ENTIRE ground (the frozen "uniform darkening").
             this.m_shRenderer.setClearColor(0xffffff, 1);
-            this.m_shTex = new THREE.CanvasTexture(canvas);
+            this.m_shTex = new THREE.CanvasTexture((this as any).__mbDepth2d);
             this.m_shTex.minFilter = THREE.NearestFilter;
             this.m_shTex.magFilter = THREE.NearestFilter;
             this.m_shTex.generateMipmaps = false;
@@ -540,6 +569,13 @@ export class MBShadowRenderer {
             scene.overrideMaterial = prevOverride;
             this.m_shadowCamera.layers.mask = prevLayers;
         }
+        // §885 终二十五: snapshot the WebGL depth canvas into the persistent
+        // 2D bitmap the CanvasTexture samples — the direct WebGL-canvas
+        // source read back EMPTY at upload time under SwiftShader.
+        try {
+            const c2d: HTMLCanvasElement = (this as any).__mbDepth2d;
+            c2d.getContext('2d')?.drawImage(this.m_shRenderer.domElement, 0, 0);
+        } catch { /* probe-safe */ }
         this.m_shTex.needsUpdate = true;
 
         // §531 probe: renderer.info quantifies whether ctx2 drew anything.

@@ -2881,6 +2881,39 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     }
                 } catch { /* probe only */ }
 
+                // §885 终二十五: the GROUND QUAD's GPU uniform state.
+                try {
+                    const rd3 = (mapView as any)?.renderer;
+                    const glq3 = rd3?.getContext?.();
+                    const quad3 = (mapView as any).scene?.children?.find?.(
+                        (o: any) => o.name === 'MBShadowGroundQuad');
+                    if (rd3 && glq3 && quad3) {
+                        const mp3 = rd3.properties?.get?.(quad3.material as any);
+                        const cp3 = mp3?.currentProgram;
+                        if (cp3?.program) {
+                            const u3 = (name: string) => {
+                                const loc = glq3.getUniformLocation(cp3.program, name);
+                                return loc ? JSON.stringify(glq3.getUniform(cp3.program, loc)) : 'absent';
+                            };
+                            // eslint-disable-next-line no-console
+                            console.log('[MBShGPU3] quad dbg=' + u3('uMBShadowDbg')
+                                + ' int=' + u3('uMBShadowIntensity')
+                                + ' eye=' + u3('uMBEye')
+                                + ' inScene=' + (quad3.parent === (mapView as any).scene ? 1 : 0)
+                                + ' visible=' + quad3.visible);
+                        } else {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBShGPU3] quad found, NO currentProgram');
+                        }
+                    } else {
+                        // eslint-disable-next-line no-console
+                        console.log('[MBShGPU3] quad NOT found in scene');
+                    }
+                } catch (e: any) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBShGPU3] err ' + String(e).slice(0, 120));
+                }
+
                 // §818: POST the draw-call log (whole session; the captured
                 // frame is the tail) before the IBCT comparison.
                 if ((globalThis as any).__mbDrawLog?.length) {
@@ -2897,6 +2930,11 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                     fixture: entry.name,
                                     calls: (globalThis as any).__mbDrawLog,
                                     pxTrace: (globalThis as any).__mbPxTraceArr,
+                                    // §885 终二十五: the IBCT current.png POST
+                                    // 404s (reporter route) — carry the final
+                                    // canvas through the probe channel so the
+                                    // debug readouts can be decoded offline.
+                                    mainCanvas: canvas ? canvas.toDataURL('image/png') : null,
                                     fs: (globalThis as any).__mbFsDump,
                                     vs: (globalThis as any).__mbVsDump,
                                     gq: (globalThis as any).__mbGQState,
