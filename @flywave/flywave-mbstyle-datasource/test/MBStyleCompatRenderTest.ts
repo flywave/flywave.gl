@@ -387,6 +387,10 @@ function discoverTests(): TestEntry[] {
     // never clamped, so stripes ⇒ the varying works (values merely offset);
     // flat black ⇒ the varying is constant/NaN per draw.
     if (Number(dbg) === 9) (globalThis as any).__mbShadowDbg4 = 4;
+    // §885 终十七: shdbg=10 → fixed-center-texel depth probe (R=center depth,
+    // G=fragment sampled depth, B=uv.z) — distinguishes an empty map at
+    // sample time from a coordinate mismatch.
+    if (Number(dbg) === 10) (globalThis as any).__mbShadowDbg4 = 5;
     // §525 A/B: shadowdbg=2 opens the gate but SKIPS the depth pass —
     // discriminates depth-pass side effects from the patcher/lighting path.
     if (dbg === "2") (globalThis as any).__mbShadowSkipPass = true;
@@ -2822,14 +2826,25 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                 return loc ? JSON.stringify(glq.getUniform(gp, loc)) : 'absent';
                             };
                             // eslint-disable-next-line no-console
+                            let gpuM = 'absent';
+                            try {
+                                const locM = glq.getUniformLocation(gp, 'uMBShMatrix');
+                                if (locM) {
+                                    const v: any = glq.getUniform(gp, locM);
+                                    gpuM = `${v[0].toExponential(1)},${v[12].toFixed(2)},${v[13].toFixed(2)},${v[14].toFixed(2)}`;
+                                }
+                            } catch { /* probe */ }
+                            // eslint-disable-next-line no-console
                             console.log('[MBShGPU] mat=' + mm.uuid.slice(0, 8)
                                 + ' intensity=' + u('uMBShIntensity')
                                 + ' dbg=' + u('uMBShDbg')
                                 + ' map=' + u('uMBShMap')
                                 + ' has3D=' + u('uMBHas3DLights')
                                 + ' port=' + u('uMBPortMode')
+                                + ' gpuM=' + gpuM
                                 + ' handleInt=' + mm.userData.__mbShU?.intensity?.value
-                                + ' handleM0=' + mm.userData.__mbShU?.matrix?.value?.elements?.[0]);
+                                + ' handleM0=' + mm.userData.__mbShU?.matrix?.value?.elements?.[0]
+                                + ' handleW=' + (() => { try { const e: any = mm.userData.__mbShU?.world?.value?.elements; return e ? `${e[0].toExponential(1)},${e[12].toFixed(1)},${e[13].toFixed(1)},${e[14].toFixed(1)}` : 'no-world'; } catch { return '?'; } })());
                             done = true;
                         });
                     }

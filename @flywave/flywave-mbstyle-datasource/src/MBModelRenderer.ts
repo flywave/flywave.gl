@@ -479,6 +479,17 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBShMap = { value: null as any };
                 shader.uniforms.uMBShMatrix = { value: new THREE.Matrix4() };
                 shader.uniforms.uMBShIntensity = { value: 0 };
+                // §885 终十七: world matrix in the DEPTH-PASS frame. The
+                // main-render modelMatrix for the batched tile meshes has been
+                // measured in an ABSOLUTE (±10k+) basis while the depth pass
+                // frames the very same meshes in the RTE-local frame
+                // (casterBox z[-82,63]) — a modelMatrix-varying receiver
+                // therefore samples miles outside the map (the §689
+                // zero-pixel failure, 终十六's ≥+10000 paint). The per-frame
+                // refresh copies each mesh's matrixWorld (left there by the
+                // depth render's own updateMatrixWorld) into this uniform so
+                // vMbWorldPos lands in the depth-pass frame by construction.
+                shader.uniforms.uMBShWorldMatrix = { value: new THREE.Matrix4() };
                 shader.uniforms.uMBShDbg = { value: Number((globalThis as any).__mbShadowDbg4) || 0 };
                 // §885: shdbg=5 → receiver rebases worldPos by the shadow eye
                 // (ground-quad convention) — A/B for the light-space y offset.
@@ -493,6 +504,7 @@ export function applyMglModelLighting(
                         intensity: shader.uniforms.uMBShIntensity,
                         eye: shader.uniforms.uMBShEye,
                         eyeOn: shader.uniforms.uMBShEyeOn,
+                        world: shader.uniforms.uMBShWorldMatrix,
                     });
                 }
                 // Runtime `setLights`: keep the uniform OBJECTS so a per-frame
@@ -636,7 +648,8 @@ export function applyMglModelLighting(
                 // varying from the un-transformed attribute.
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
-                    `varying float vMbLocalZ;
+                    `uniform mat4 uMBShWorldMatrix;
+                     varying float vMbLocalZ;
                      varying vec3 vMbWorldPos;
                      void main() {
                          vMbLocalZ = position.z;`
@@ -644,7 +657,11 @@ export function applyMglModelLighting(
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <project_vertex>',
                     '#include <project_vertex>\n' +
-                    'vMbWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;'
+                    // §885 终十七: depth-pass-frame world position (see the
+                    // uMBShWorldMatrix uniform note — the main-render
+                    // modelMatrix has been measured in a different basis than
+                    // the depth pass frames the same meshes in).
+                    'vMbWorldPos = (uMBShWorldMatrix * vec4(transformed, 1.0)).xyz;'
                 );
                 // Capture the glTF albedo AFTER the base-color texture —
                 // that is the `albedo` mgl's getBaseColor feeds apply_lighting.
@@ -804,6 +821,19 @@ export function applyMglModelLighting(
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.x, mbShUv.y, 0.5); return; }
+                                     if (uMBShDbg > 4.5) {
+                                         // §885 终十七: fixed-center-texel
+                                         // probe — R = packed depth at the
+                                         // map CENTER (content?), G = the
+                                         // fragment's own sampled depth,
+                                         // B = uv.z.
+                                         vec4 pkC = texture2D(uMBShMap, vec2(0.5, 0.5));
+                                         gl_FragColor.rgb = vec3(
+                                             pkC.r + pkC.g / 255.0,
+                                             mbShDepth,
+                                             clamp(mbShUv.z, 0.0, 1.0));
+                                         return;
+                                     }
                                      mbNdotL *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
                                  }
                              }
@@ -881,6 +911,27 @@ export function applyMglModelLighting(
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.x, mbShUv.y, 0.5); return; }
+                                     if (uMBShDbg > 4.5) {
+                                         // §885 终十七: fixed-center-texel
+                                         // probe — R = packed depth at the
+                                         // map CENTER (content?), G = the
+                                         // fragment's own sampled depth,
+                                         // B = uv.z.
+                                         vec4 pkC = texture2D(uMBShMap, vec2(0.5, 0.5));
+                                         gl_FragColor.rgb = vec3(
+                                             pkC.r + pkC.g / 255.0,
+                                             mbShDepth,
+                                             clamp(mbShUv.z, 0.0, 1.0));
+                                         return;
+                                     }
+                                     if (uMBShDbg > 4.5) {
+                                         vec4 pkC = texture2D(uMBShMap, vec2(0.5, 0.5));
+                                         gl_FragColor.rgb = vec3(
+                                             pkC.r + pkC.g / 255.0,
+                                             mbShDepth,
+                                             clamp(mbShUv.z, 0.0, 1.0));
+                                         return;
+                                     }
                                      mbLF *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
                                  }
                              }
@@ -976,22 +1027,22 @@ export function applyMglModelLighting(
                          }
                      }`
                 );
-            };
-            // §885 终十六: shader-structure fingerprint — captured at the
-            // END of the closure so the dump reflects the FINAL shader text
-            // (a mid-closure stash predates the #include-anchored replaces
-            // and reads as missing blocks that are actually present).
-            if ((globalThis as any).__mbDecodeDbg
-                && ((globalThis as any).__mbShFpCnt = ((globalThis as any).__mbShFpCnt ?? 0) + 1) <= 4) {
-                const vs = shader.vertexShader as string;
-                const fs = shader.fragmentShader as string;
-                if (!(globalThis as any).__mbFsDump) {
-                    (globalThis as any).__mbFsDump = fs;
-                    (globalThis as any).__mbVsDump = vs;
+                // §885 终十六: shader-structure fingerprint — captured at the
+                // END of the closure so the dump reflects the FINAL shader text
+                // (a mid-closure stash predates the #include-anchored replaces
+                // and reads as missing blocks that are actually present).
+                if ((globalThis as any).__mbDecodeDbg
+                    && ((globalThis as any).__mbShFpCnt = ((globalThis as any).__mbShFpCnt ?? 0) + 1) <= 4) {
+                    const vs = shader.vertexShader as string;
+                    const fs = shader.fragmentShader as string;
+                    if (!(globalThis as any).__mbFsDump) {
+                        (globalThis as any).__mbFsDump = fs;
+                        (globalThis as any).__mbVsDump = vs;
+                    }
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBShFp] vs_decl=${(vs.match(/varying vec3 vMbWorldPos/g) ?? []).length} vs_assign=${(vs.match(/vMbWorldPos = \(uMBShWorldMatrix/g) ?? []).length} fs_decl=${(fs.match(/varying vec3 vMbWorldPos/g) ?? []).length} fs_dbgsample=${(fs.match(/uMBShMap, mbShUv\.xy/g) ?? []).length} fs_mbShPk=${(fs.match(/mbShPk/g) ?? []).length} fs_mbNdotL=${(fs.match(/mbNdotL/g) ?? []).length} fs_port=${(fs.match(/uMBPortMode/g) ?? []).length} vs_len=${vs.length} fs_len=${fs.length}`);
                 }
-                // eslint-disable-next-line no-console
-                console.log(`[MBShFp] vs_decl=${(vs.match(/varying vec3 vMbWorldPos/g) ?? []).length} vs_assign=${(vs.match(/vMbWorldPos = \(modelMatrix/g) ?? []).length} fs_decl=${(fs.match(/varying vec3 vMbWorldPos/g) ?? []).length} fs_dbgsample=${(fs.match(/uMBShMap, mbShUv\.xy/g) ?? []).length} fs_mbShPk=${(fs.match(/mbShPk/g) ?? []).length} fs_mbNdotL=${(fs.match(/mbNdotL/g) ?? []).length} fs_port=${(fs.match(/uMBPortMode/g) ?? []).length} vs_len=${vs.length} fs_len=${fs.length}`);
-            }
+            };
             (mbWrapper as any).__mbMglOrig = origOnCompile;
             (mbWrapper as any).__mbMglWrapper = true;
             mat.onBeforeCompile = mbWrapper;
@@ -1038,6 +1089,13 @@ export function refreshModelShadowUniforms(
                 u.intensity.value = shadowState?.intensity ?? 0;
                 if (u.eye && shadowState?.eye) u.eye.value.copy(shadowState.eye);
                 if (u.eyeOn) u.eyeOn.value = (globalThis as any).__mbShadowEyeOn ? 1 : 0;
+                // §885 终十七: per-mesh world matrix in the DEPTH-PASS frame —
+                // copied WITHOUT updateWorldMatrix so it is exactly the value
+                // the depth render's own updateMatrixWorld left behind this
+                // frame (depth-pass 同源). This runs in the datasource's
+                // WillRender, after the batched carrier attach and the shadow
+                // depth pass, before the main render.
+                if (u.world) u.world.value.copy(mesh.matrixWorld);
                 continue;
             }
             // Only materials carrying our stored patch params are ours to

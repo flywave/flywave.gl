@@ -171,6 +171,14 @@ export class MBMaterialPatchManager {
                             // receiver (injectExtrusion3DLighting, with fade) —
                             // a second ground injection double-shadows walls.
                             if (m.__mbExtrusion3DLit) { m.__mbShadowSkipped = true; continue; }
+                            // §885 终十七: mgl-lit MODEL materials carry their
+                            // own receiver (uMBShMatrix + per-mesh
+                            // uMBShWorldMatrix, true 3D position). The ground
+                            // injection reconstructs the GROUND-PLANE point of
+                            // the pixel's screen position — for wall fragments
+                            // that is the building's ground footprint, which
+                            // double-shadows/mottles the walls.
+                            if (m.__mbMglLit) { m.__mbShadowSkipped = true; continue; }
                             const t = String(m.type ?? '');
                             if (t !== 'MeshStandardMaterial' && t !== 'MeshBasicMaterial') {
                                 m.__mbShadowSkipped = true; continue;
