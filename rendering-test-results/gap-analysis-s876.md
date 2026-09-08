@@ -1016,3 +1016,9 @@ shrad=2（正交半径翻倍，[MBShadowMat] 可证 r 生效）后 buildings-tre
 injectGroundShadow 全文复核：seeding（shSeed 终八十二）、corners+eye（终五十八）、调制块（MB_SH_BIAS/MB_SH_HW 门控、mix(pow(factor,2.2),1,mbLight)）结构完整正确。[MBExtU] 探针重复块无害（?. 守卫）。
 当前保持状态：buildings-trees 562,664（cos(lat)+fov-adjusted fog 过渡态）、ground-shadow-fog 167,069 / hard-cutoff 165,774、守卫 quantization-shadows 10,138/10,260 逐位零回归；re-baseline 后台运行（同命令重跑补缺失）；仓库外挂账（landmark 瓦/models/vector 瓦/globe-terrain DEM）。
 下会话标定队列（新相机基准）：①阴影图案微标定（shrad/fogmul/shbias 参数已备，逐 texel 对照 expected）；②fog 近场强度；③LIGHTING_3D_MODE 色调（三类接收体一致性）；④树冠随数据补齐恢复。
+
+### §885 终一百一十三：微标定数据三件套入库（2026-09-09）
+
+已捕获并存入 rendering-test-results/：①depth-canvas-coslat.png（新相机下深度图：内容 uv.x∈[0,1]、uv.y∈[0.12,0.71]，深度 0.04–0.55）；②uv-field-coslat.png（SHDIAG=2 地面 uv 场：fills 的 uv 群聚 (0.30–0.45) 落在内容区内 ✓ 采样链健康）；③暗区带状分布（expected 224k 全带 vs ours 27k 集中左上）。
+判读：地面阴影图案链路端到端工作、方向正确、位置大体重合；剩余差距 = 覆盖幅度（右侧建筑阴影缺失——其所在 uv 区深度图内容较薄）+ 树冠缺失（数据）+ 墙面色调（opacity 合成）。微标定入口：shrad/fogmul/shbias 参数链 A/B（已入库）。
+仓库外挂账：landmark 瓦 8764-5126-14.glb/2630-6353-14.glb、models/vector x∈{2618,2619} 瓦、globe-terrain DEM——向 mgl CI 索取或本地补瓦。
