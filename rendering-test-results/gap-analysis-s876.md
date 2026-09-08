@@ -1093,3 +1093,8 @@ drawlog 钩子安装前置核对完成（renderer.renderBufferDirect 包装、dr
 **已确证的机制链**：quad 地面阴影正常工作（左上黑带）✓；cascade-1 远场回退扩展覆盖 ✓；fog 近场强度把黑阴影洗至 ~94 灰（expected ~10% 雾下近黑）——雾近场强度是暗区色调差的最后调制项。
 仓库外挂账：landmark 瓦 8764-5126-14.glb/2630-6353-14.glb、models/vector x∈{2618,2619} 瓦、globe-terrain DEM。
 下会话：①雾近场强度标定（fogmul 反向 0.5/0.7 扫描——distCam 偏小使近场雾过强的方向已在 fogmul=2 恶化中反向确认）；②drawlog 钩子前置修复后 mu 对照；③数据补齐重验。
+
+### §885 终一百三十三：fogmul 反向扫描定案——夹具相关，无全局常数（2026-09-09）
+
+fogmul=0.7：ground-shadow-fog 161,252→156,451（改善 −4.8k）但 hard-cutoff 125,686→155,415（恶化 +29.7k）、buildings-trees 457,874 不变。**distCam 尺度为夹具相关**（两 fog 样式的 fog range/相机不同），无全局常数可调——fogmul=1 保持默认。fog 近场强度的逐夹具标定需在数据补齐后进行（当前树冠/部分暗区缺失主导差距）。
+保持状态：buildings-trees 457,874、ground-shadow-fog 161,252、hard-cutoff 125,686（fogmul=1 最优组合）、守卫 10,138/10,260 逐位零回归。
