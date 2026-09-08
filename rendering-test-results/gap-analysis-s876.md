@@ -593,3 +593,6 @@ uMBShadowMatrix.value 改为 copy(m_matrix)（解除引用别名）后 GPU 回�
 ground quad 材质从 ShaderMaterial 换为 **MeshBasicMaterial+onBeforeCompile**（与采样正常的 fill 接收器同构）：uniform 经 three 标准路径上传（修复 ShaderMaterial 时代 uMBShadowMatrix 恒 identity 的上传断点——[MBShGPU3] 实测 GPU 上仍是单位阵而 CPU 值正确）；顶点 NDC 直通光栅化；fragment 注入解析地面求交 + 阴影调制（linear 域 ×pow(factor,2.2)，colorspace 编码）；强度门控（intensity≤0 不调制，守卫零回归）。
 实测：目标 115,175（quad 阴影调制贡献接近零——**smoothstep 边界自采样问题仍在**：地面片段的 uv.z 与采样深度在阴影区几乎相等，lit≈0.5 而非 0）；守卫 2,332 零回归 ✓。
 根因收束：模型接收端（场景系 uMBShWorldMatrix ✓）与地面 quad（解析求交 ✓）的帧系与采样均已对齐，**阴影未显现的最后疑点收敛为「深度图内容与地面采样点的光照空间覆盖关系」**——深度图暗区 uv[0.28-0.72]×[0.38-0.66] 与地面采样 uv(0.5,0.5) 相邻但光源仰角 40° 下阴影长度 ~1.19h(h=145→172 单位)可能远小于地面可见跨度，即 expected 的地面暗区并非全部为 cast-shadow（含 mgl 的 ambient-directional 地面变暗成分，该成分在 mgl 由 ground_shadow_factor 与 shadowed_light_factor 合成）。下会话按此方向做 mgl 地面合成公式对齐。
+
+### §885 终三十六：quad 色调核实 + 模型标定入口（2026-09-08）
+②核实：MeshBasic quad 的调制管线（linear 域 ×pow(factor,2.2) → colorspace 编码）数学上已正确——阴影色 = clear×factor^0.4545 ≈ 118 vs expected 112（Δ6，小项）。①剩余主导项确认为**模型 PBR 分支的 metal/env 标定**：expected 窗户(metalness=1 part)灰蓝(96-150) vs current 深 navy(7-50)——metal 部件的 EnvBRDF/spec 项过弱或顶点色反照率读取偏差；墙面 255 过曝为直射项 NdotL·albedo 饱和。下轮：①在 PBR 分支加 per-term 像素探针（direct/indirect/spec 分值直绘）定位 metal 窗户的暗源；②ambient 配比 A/B（uMB3DAmb 强度扫描）；③shadow 正常后重测 walls。
