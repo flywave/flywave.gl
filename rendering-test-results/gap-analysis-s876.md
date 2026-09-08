@@ -829,3 +829,10 @@ ground-shadow-fog 图像级对比：expected = 近地街景（pitch 70、zoom 16
 图像与代码综合判读：ground-shadow-fog 样式 ambient=黑·0.0、directional=白·1.0（无色键默认白）。expected：背光墙纯黑（apply_lighting 公式下 amb=0 → 背光面 0）、地面阴影纯黑。ours：**全帧无一处黑色**——包括所有挤出墙背光面。这排除了雾过度（白雾假设作废）与阴影暗化值：真正的缺口是 **LIGHTING_3D_MODE 挤出光照注入在该夹具未生效**（画面=未注入状态：场景白 π AmbientLight 直出 + 白雾混合）。旁证：早前 [MBShadowAnchor] 只见 MeshBasic/ribbon 两种 flavor——该夹具的挤出材质（MapMeshStandardMaterial）未被 injectExtrusion3DLighting 触达（疑似 tile.objects 路径的 technique 分派或引擎直建材质实例不匹配）。
 
 **下会话首项（精确）**：查 ground-shadow-fog 的挤出 mesh 材质实例归属（drawlog mat/uuid ↔ tile.objects/scene sweep），确定 injectExtrusion3DLighting 为何未命中；修复后背光墙变黑、地面阴影与暗化值标定才有意义。fog 白化假设正式作废。
+
+### §885 终七十八：雾白化定量定位——t 归一化重复除以 distCam（2026-09-08 终）
+
+- drawlog 材质普查（ground-shadow-fog）：5× MeshStandardMaterial（car2/whell 模型，ro=10）+ 数百个 ro=4 的挤出建筑材质（全部独立 uuid）+ 文本 RawShader。`shu=N` 是模型接收体标记（__mbShU），不适用于挤出注入状态——注入状态需查 __mbExtrusion3DLit。
+- mgl 雾公式精确读取（_prelude_fog）：`t = (depth − range.x)/(range.y − range.x)`，depth = length(u_fog_matrix·pos)，**u_fog_matrix 是把目标点距离归一化为 1 的矩阵**（mercatorFogMatrix）；opacity = α·min(1,1.0075·(1−exp(−6t))³)。
+- 我方白化定量：若 depth 先以米计再除以 distCam（重复归一化），画面中心 t≈(1+0.5)/3.5≈0.43 → opacity ≈ 0.79 → **全帧 ~80% 白洗 ✓ 与观测吻合**（expected 中心应 t≈1 → 中心其实也接近全雾，但近景 t≈0.1 → 清晰）。修正方向：接收体雾深度应以「目标点距离=1」为尺度（fogMglShift/distCam 的组合式中删去多余的一次 distCam 除法，或等价地把 uMbDistCam 提升到 t 分子侧），逐符号对照 mgl mercatorFogMatrix 的缩放实现后修。
+- 另：挤出注入状态需查 __mbExtrusion3DLit（drawlog shu 是模型接收体标记，不适用）。
