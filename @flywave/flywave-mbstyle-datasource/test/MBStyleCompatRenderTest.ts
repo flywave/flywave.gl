@@ -174,6 +174,11 @@ function discoverTests(): TestEntry[] {
         // requiring SHADOW>=4 — clean-gate attribution experiments.
         if (sdg === "2") (globalThis as any).__mbShadowDbg4 = true;
     }
+    // §885 终七十二: shoff=<x>,<y> → world-XY offset of the shadow sphere
+    // center (dark-centroid calibration against expected).
+    const sho = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shoff="))?.slice("shoff=".length);
+    if (sho) (globalThis as any).__mbShadowOff = sho;
     const port = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modellightport="))?.slice("modellightport=".length);
     if (port === "1") (globalThis as any).__mbModelLightPort = true;

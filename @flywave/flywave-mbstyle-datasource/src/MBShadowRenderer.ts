@@ -631,6 +631,26 @@ export class MBShadowRenderer {
         this.m_shadowCamera.bottom = -radius;
         this.m_shadowCamera.near = -2 * radius;
         this.m_shadowCamera.far = radius / Math.max(lightDir.z, 0.1);
+        // §885 终七十二: shoff=<x>,<y> — world-XY calibration offset of the
+        // shadow sphere center (dark-centroid A/B against expected).
+        {
+            const off = String((globalThis as any).__mbShadowOff ?? '');
+            if (off) {
+                const parts = off.split(',').map(Number);
+                if (parts.length === 2 && parts.every(Number.isFinite)) {
+                    const right = new THREE.Vector3(1, 0, 0)
+                        .applyQuaternion(rcam.getWorldQuaternion(new THREE.Quaternion()));
+                    right.z = 0;
+                    right.normalize();
+                    const fwd = new THREE.Vector3(0, 1, 0)
+                        .applyQuaternion(rcam.getWorldQuaternion(new THREE.Quaternion()));
+                    fwd.z = 0;
+                    fwd.normalize();
+                    sphereCenter.addScaledVector(right, parts[0]);
+                    sphereCenter.addScaledVector(fwd, parts[1]);
+                }
+            }
+        }
         this.m_shadowCamera.position.copy(sphereCenter);
         this.m_shadowCamera.up.set(0, 0, 1);
         this.m_shadowCamera.lookAt(sphereCenter.clone().sub(lightDir));

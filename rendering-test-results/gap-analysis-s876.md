@@ -798,3 +798,10 @@ SHDIAG=3（quad 底色洋红）实验：画面无任何洋红 → **quad 完全�
 - **FreeCamera 约定推导**（free_camera.ts:22 orientationFromPitchBearing + :237 radian 版 setPitchBearing + forward()/up() + getWorldToCamera y 行翻转）：mgl 光相机 forward=(dx,dy,−dz)（水平分量不翻转），x_cam=(−dy,dx,0)/sp、y_cam=(−cp·dx/sp,−cp·dy/sp,−sp)、z_cam=(−dx,−dy,dz)；我方（three lookAt up=(0,0,1)，forward=−dir）：x_cam 相同、z_cam=dir=(dx,dy,dz) 相同、y_cam=(−dz·dx/sp,−dz·dy/sp,+sp)=**mgl y_cam 的取反**。即两约定仅差相机 y 轴镜像 + 180° 方位——正交盒与深度窗在两者下覆盖**完全相同的世界区域**，深度值（z_cam）相同；y 镜像被 getWorldToCamera 的 y 行翻转抵消（mgl view=flip∘Rᵀ）。**结论：世界空间阴影图案与我方实现等价，坐标约定不再是缺口。**
 - **493,017 判明为 SHADOW=3 调试涂装伪影**（§525 readout 给全部接收体涂 (int,depth,uv.z)，黄路=(1,depth,uv.z)）；干净稳态（无 debug 门）= **427,316**，与帧扩展无关。后续对比一律不加 SHADOW≥3。
 - 阴影相机读数与深度图 dump（终六十九/七十）在等价性证明下依然有效；剩余偏移（我方图案偏左上、expected 中心左）需新假说：①expected 相机俯仰/方位与我方场景的细微差（±几度）导致的 uv 场平移；②land fill 之外的第二地面层（background 清屏色 vs quad）参与；③挤出深度噪声的系统性偏置。下会话：以 expected/ours 的暗区质心差做向量标定（单参数平移 A/B：sphereCenter ± 水平偏移），量化收敛。
+
+### §885 终七十二：暗质心测量 + shoff 标定参数 + factor=0 洞见（2026-09-08 终）
+
+- **暗区量化**（阈值<60）：expected 暗区 224,286 px、质心 (553,532)；ours 27,048 px、质心 (369,427)——覆盖差 8×、偏移 (−185,−105) px。
+- **shoff=<x>,<y> 标定参数落地**（球心世界 XY 偏移，runner+harness）：(+300,200)→447,942 恶化；(−300,−200)→418,865；(−600,−400)→418,385（=图案完全移出，等价无阴影基线）——平移只能"移走"错位图案，不能对齐：**图案形状/暗度本身仍不对**。
+- **factor=0 洞见（暗化值标定的钥匙）**：buildings-trees 样式 ambient=rgba(0,0,0,1)·0.4 → mgl calculateGroundShadowFactor = 0/(0+dir·NdotL) = **0** → 阴影区应为纯黑（expected ✓）。我方阴影区 ~94 灰 ≈ land×0.53 → 我方 factor≈0.53，疑似用到了非零 ambient（样式解析/默认值路径待查）。若 factor 修为 0，阴影区将变纯黑、暗区计数大幅上升。
+- 下会话首项：①核对该样式下 lighting3DState.ambientColorLinear 是否为 [0,0,0]（styles 的 lights 解析路径）；②factor=0 后复测三夹具（期望暗区大增、分数大降）；③随后回到图案位置/长度对齐。
