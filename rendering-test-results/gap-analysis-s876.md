@@ -866,3 +866,7 @@ ground-shadow-fog 实测：fov-adjusted range（[−0.5,3.0]+shift1.5 → [1.0,4
 camdist 参数（calculateDistanceFromZoomLevel 乘子）落地后 A/B：camdist=0.79（1/cos(lat) 假设）三夹具全线恶化——buildings-trees 537,935、ground-shadow-fog 167,021（≈阴影链诞生前基线，相机过近使阴影消失）、hard-cutoff 165,769。**假设否定：引擎的赤道周长距离约定对当前渲染管线是自洽的**，1/cos(lat) 修正不成立。参数保留（默认无操作）。
 
 当前诚实基线（camdist=1、fov-adjusted fog range、帧扩展稳态）：buildings-trees 427,316、ground-shadow-fog 154,337、hard-cutoff 153,111。fog 族较 109,221 的 +45k 是 fov-adjusted range（mgl 正确语义）下真阴影可见但位置未对齐的过渡态——白洗状态的 109k 是错位白雾与 expected 白区的巧合匹配。
+
+### §885 终八十六：buildings-trees 暗区差距分解——全帧色调差而非单一对齐（2026-09-09）
+
+暗像素（亮度<60）带状分解：expected 224,286 px **全 8 个纵向带均有大量分布**（9.5k/7.2k/7.5k/8.4k/13.3k/23.5k/22.4k/13.7k），均值 RGB (20,28,20) 深绿黑（暗树+黑墙+阴影）；ours 27,048 px 集中于顶部带（中段几乎为零），均值 (40,40,40) 中性灰。结论：差距不是单一几何对齐——是**全帧色调/光照差**（我方的暗树、黑墙、阴影整体偏亮），与前述 extrusion/地面接收体状态一致。双 cascade 移植或几何对齐都无法单独消除色调差，优先级应转向 LIGHTING_3D_MODE 全帧色调管线核对（buildings-trees 的 ambient/directional 配比在挤出/模型/地面三类接收体上的一致性）。
