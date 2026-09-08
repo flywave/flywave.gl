@@ -229,7 +229,8 @@ export class MBShadowRenderer {
                     }
                 }`);
             this.m_groundUniforms = shader.uniforms;
-            (mat as any).customProgramCacheKey = () => 'mbgroundquad-v3';
+            (mat as any).customProgramCacheKey = () =>
+                'mbgroundquad-v3' + ((globalThis as any).__mbShadowHW ? '-hw' : '');
         };
         const quad = new THREE.Mesh(geo, mat);
         // §885 终五十八: assignment was MISSING — the quad was built, added

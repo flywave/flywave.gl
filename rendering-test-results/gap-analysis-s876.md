@@ -955,3 +955,8 @@ SHDIAG=2 + DECODEDBG 联合运行（新相机基准）：道路（MeshBasic drap
 实现 `shadowhw=1` HW 路径：阴影 pass 经主上下文 WebGLRenderTarget 的 DepthTexture（DEPTH_COMPONENT24，无 16-bit pack），接收体解码按 MB_SH_HW define 切换。实测 buildings-trees 904,250（较软件路径 537,993 恶化，两次一致）——深度值域/比较语义在 HW 纹理下系统性偏移，候选：program cacheKey 未含 HW 状态（define 未到达实际 program）、DEPTH_COMPONENT24 采样值域、GREATER/LESS 语义。该路径默认关闭（shadowhw 未设 = 软件路径），主分支状态安全。
 - 保持状态：buildings-trees 427,316→537,993（新相机过渡态）、fog 族 167,069/165,774、守卫 10,138/10,260 逐位零回归。
 - 下会话：①HW 路径调试（cacheKey 加 HW 状态 + SHDIAG 读 sampD 值域）；②调通后以 24-bit 精度重做地面图案/暗化值标定。
+
+### §885 终一百零五：HW 路径调试——cacheKey 修复 + sampD 值域确认（2026-09-09）
+
+①cacheKey 修复落地：ground '-mbshadow-hw' / extrusion '-mbext3d-hw' / quad 'v3-hw'——HW 状态进入 program 缓存键。②SHADOW=3 读出（R=int, G=sampD, B=uv.z）实测：fill 接收体采样值 G≈0.65–0.8——**HW 深度纹理采样链工作正常**（24-bit 真深度、窗口中部值域），排除"采样损坏"假说。904k/920k 的高分是 HW 值域（真 24-bit 深度）与 16-bit pack 时代的 bias/比较参数不匹配所致——需按 24-bit 值域重新标定比较偏置与 band 位置，而非回退。
+下会话：①以 [MBShadowFit]/深度图对照重标 compare bias（软件路径同受益）；②bias 对齐后 fog 近场强度与色调标定。

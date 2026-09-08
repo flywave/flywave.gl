@@ -1086,7 +1086,7 @@ export class MBMaterialPatchManager {
         // ambient intensity 0 (ground-shadow-fog family).
         const origKey = material.customProgramCacheKey?.bind(material);
         material.customProgramCacheKey = (): string =>
-            (origKey ? origKey() : 'mb') + '-mbext3d';
+            (origKey ? origKey() : 'mb') + '-mbext3d' + ((globalThis as any).__mbShadowHW ? '-hw' : '');
         material.needsUpdate = true;
 
         const origOnCompile = material.onBeforeCompile;
@@ -3034,7 +3034,8 @@ export class MBMaterialPatchManager {
         // could resolve to a sibling's unpatched program.
         const origKey = material.customProgramCacheKey?.bind(material);
         material.customProgramCacheKey = (): string =>
-            (origKey ? origKey() : 'mb') + '-mbshadow';
+            (origKey ? origKey() : 'mb') + '-mbshadow' +
+            ((globalThis as any).__mbShadowHW ? '-hw' : '');
         material.needsUpdate = true;
         const orig = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
