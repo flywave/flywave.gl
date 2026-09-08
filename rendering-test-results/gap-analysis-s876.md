@@ -896,3 +896,10 @@ run58 日志 110 个 404，含 `models/vector/15-5241-12665.vector.pbf`、`14-26
 - **视觉确证**：修正后 ground-shadow-fog 呈现与 expected 一致的近地街景（黑背光墙、街道层理、透视构图）。
 - **分数过渡态**：buildings-trees 427,316→537,993、fog 154,337→167,069、hard-cutoff 153,111→165,774——修正后的相机暴露出雾/阴影/色调的剩余错位（错误相机曾把场景推远从而巧合掩盖）。守卫 quantization-shadows 在 0.79 下已验证逐位不变（该夹具相机不经此路径或对距离不敏感）。
 - **全局影响**：所有 lat≠0 夹具的取景变化 → 需全量 re-baseline；这是 mgl 对齐的必要前提而非可选优化。
+
+### §885 终九十二：cos(lat) 新基准全量 re-baseline 启动（2026-09-09）
+
+全量 chunked re-baseline 已后台启动：`MBSTYLE_REPORT=rendering-test-results/mbstyle-coslat-rebaseline MBSTYLE_BATCH=6 node scripts/run-mbstyle-render-tests-chunked.js`（nohup 脱离会话，速率 ~120 夹具/小时，全量 2,721 约 22 小时）。**续跑规程**：同命令重跑即自动补齐缺失结果（runner 内建 resumeMissing sweep）；建议先 `kill` 残留进程并换端口（MBSTYLE_PORT/MBSTYLE_KARMA_PORT）避免冲突。
+- 新基准下已复核：守卫 quantization-shadows 10,138/10,260 逐位不变；fog 族/buildings-trees 分数为修正相机暴露错位的过渡态（167,069/537,993），待逐项标定回落。
+- 标定队列（新相机基准）：①阴影图案位置/长度（阴影相机随 cos(lat) 相机已同步平移，需复核 fit 读数）；②雾 t 曲线（新相机高度下 distCam/fogMglRange 联合校准）；③LIGHTING_3D_MODE 色调（三类接收体）。
+- 仓库外挂账不变：landmark 瓦 8764-5126-14.glb/2630-6353-14.glb、models/vector x∈{2618,2619} 瓦、globe-terrain DEM。
