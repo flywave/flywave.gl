@@ -600,3 +600,7 @@ ground quad 材质从 ShaderMaterial 换为 **MeshBasicMaterial+onBeforeCompile*
 ### §885 终三十七：PBR per-term 探针实测——direct/indirect 双双 ~1.5 超强（2026-09-08）
 pbrterm=1 探针（R=direct.r/2, G=indirect.r/2, B=LF）解码模型区域：**direct ≈ 1.5、indirect ≈ 1.5、LF ≈ 0.75**——两项均比 mgl 预期（总 ~0.7-1.0）强 2-3×，墙面 255 饱和与窗户暗部同源。原因候选：①GGX D 项在低粗糙度（mbx bake 的 smooth 墙）+掠射角的尖峰；②EnvBRDF 近似的 F 项在掠射角 → 1；③ambient 尺度（uMB3DAmb=0.25 线性 vs mgl 的 lights 语义）。mgl 的 model PBR 参考着色器未随 mapbox-gl-js vendor（shaders/ 无 model.fragment），精确对齐需逐项数值迭代。
 下轮入口：①PBR 分支加 spec/diff 拆分直绘（分离 D 项尖峰 vs diffuse 过强）；②direct 项 clamp/A/B（mgl 的 specular 可能有 cap——逐项数值对比 mapbox 官方渲染文档）；③ambient 系数 A/B（uMB3DAmb ×2 后墙面暗部应上浮至 expected 的灰蓝域）；④每步 shadows-normal-offset + quantization-shadows 双验证。
+
+### §885 终三十八：spec/diff 拆分探针 + spec 移除 A/B 定案（2026-09-08）
+pbrterm=2 拆分探针实测：墙面 spec ≈ diff ≈ 0.75（LF 归一）——**GGX spec 项为墙面亮度的必要成分**（spec 移除 A/B：mismatch 115,949 → 179,062 恶化 +63k，已回退）。结论修正：墙面过曝（255 vs 240）非 spec 移除可解，而是 spec 强度/粗糙度读取的 ~6% 标定差（阈值内难分）；窗户深 navy 为 metal 部件（metalness=1）env/spec 项过弱——两项均需 mgl model PBR 参考逐项数值迭代（参考未 vendor）。
+阴影家族当前：shadows-normal-offset 115,949（−32%）；buildings-trees-shadows-casting 428,064（−27%）；守卫 2,332 零回归。剩余标定域：①墙面 spec ~6% 微调；②窗户 metal env 提亮；③quad 阴影范围 32%→100%。模型接收链/帧系/方向/解析求交全部实证打通。

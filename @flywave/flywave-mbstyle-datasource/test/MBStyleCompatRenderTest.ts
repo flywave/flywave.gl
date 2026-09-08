@@ -129,6 +129,7 @@ function discoverTests(): TestEntry[] {
     const pterm = (window as any).__karma__?.config?.args?.find?.(
         (a: string) => a.startsWith("pbrterm="))?.slice("pbrterm=".length);
     if (pterm === "1") (globalThis as any).__mbPbrTermDbg = 1;
+    if (pterm === "2") (globalThis as any).__mbPbrTermDbg = 2;
 }
 {
     // §744: unlit-clamp restore A/B (emission-strength regression candidate ②).

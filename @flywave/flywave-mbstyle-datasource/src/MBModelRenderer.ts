@@ -969,6 +969,14 @@ export function applyMglModelLighting(
                              mbCol = clamp(mbDirect, 0.0, 1.0) + mbIndirect;
                              // §885 终三十七: per-term readout — R=direct.r/2,
                              // G=indirect.r/2, B=the light factor.
+                             if (uMBPbrTermDbg > 1.5) {
+                                 // §885 终三十八: the spec/diff split —
+                                 // R=spec·LF, G=diff·LF (the direct red).
+                                 gl_FragColor = vec4(
+                                     mbSpecTerm.r * mbLF,
+                                     mbDiffTerm.r * mbLF, 0.5, 1.0);
+                                 return;
+                             }
                              if (uMBPbrTermDbg > 0.5) {
                                  gl_FragColor = vec4(mbDirect.r / 2.0, mbIndirect.r / 2.0, mbLF, 1.0);
                                  return;
