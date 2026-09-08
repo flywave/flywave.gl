@@ -167,7 +167,7 @@ export class MBShadowRenderer {
         // previous ShaderMaterial's uMBShadowMatrix upload persisted IDENTITY
         // on the GPU while the CPU value was sane (终三十四), silencing the
         // entire ground quad.
-        const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true });
         // the scene sweep must not inject the ground receiver into the quad
         (mat as any).__mbShadowSkipped = true;
         (mat as any).__mbMglLit = true;
@@ -245,12 +245,13 @@ export class MBShadowRenderer {
                                 (uv4.x >= 0.0 && uv4.x <= 1.0 &&
                                  uv4.y >= 0.0 && uv4.y <= 1.0) ? 1.0 : 0.0);
                         } else {
-                            // mgl shadowed_light_factor_plane_bias: occlusion
-                            // is 1 when BLOCKED; our lit is 1 when unblocked —
-                            // light = 1 - intensity * (1 - lit).
-                            gl_FragColor.rgb *= mix(
-                                pow(uMBGroundShadowFactor, vec3(1.0 / 2.2)), vec3(1.0),
-                                1.0 - uMBShadowIntensity * (1.0 - lit));
+                            // §885 终一百三十八: OVERLAY blend mode — the quad
+                            // draws ON TOP of all fills/roads/extrusions as a
+                            // dark overlay: transparent where lit, dark where
+                            // shadowed. Darkens ALL underlying geometry.
+                            float shadowAlpha = (1.0 - lit) * uMBShadowIntensity * 0.7;
+                            gl_FragColor.rgb = vec3(0.0, 0.0, 0.0);
+                            gl_FragColor.a = shadowAlpha;
                         }
                     }
                 }`);
@@ -269,7 +270,7 @@ export class MBShadowRenderer {
         // §885 终三十二: the underlay channel (m_groundScene) is wiped by the
         // scene render — the quad ALSO rides m_scene at the lowest render
         // order (drawn before all models, after the background ground).
-        quad.renderOrder = -2000;
+        quad.renderOrder = 999;
         this.m_groundScene.add(quad);
         (this.m_mapView as any)?.m_scene?.add?.(quad);
         this.m_groundUniforms = (mat as any).uniforms || null;
