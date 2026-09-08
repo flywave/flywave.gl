@@ -1052,3 +1052,9 @@ cascade-1 远场回退（4× extents 第二深度 pass + fills cascade 选择 + 
 - **守卫 quantization-shadows：10,138/10,260 逐位零回归**。
 - 累计较原始基线：buildings-trees 428,064→457,874 过渡、fog 族 167,010→161,252（−3.4%）/165,719→125,686（−24.1%）。
 下会话：①cascade-1 值域/bias 微标定（24-bit 窗口更大，比较窗可再放宽）；②树冠/右半区细节随数据补齐；③fog 暗化值微调。
+
+### §885 终一百二十二：HW bias 放宽 A/B 定案——HW 路径维持关闭（2026-09-09）
+
+shadowhw=1 + shadowbias=0.002：buildings-trees 943,293（HW 基线 904,250，软件路径 457,874）——放宽 bias 放大 HW 值域偏差，**HW 路径维持默认关闭**。软件 16-bit pack 路径在当前架构下仍为最优。
+保持状态：buildings-trees 457,874（cascade-1 回退后最优）、fog 族 161,252/125,686、守卫 10,138/10,260 逐位零回归。
+下会话队列：①cascade-1 采样质量微调（PCF/软比较）；②fog 暗化值微调；③仓库外数据补齐（landmark 瓦/models/vector 瓦/globe-terrain DEM——向 mgl CI 索取）；④re-baseline 续跑补齐全量快照。
