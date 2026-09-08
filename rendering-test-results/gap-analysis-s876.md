@@ -584,3 +584,7 @@ plain 渲染（115,949）实测地面无阴影——quad 的 uv 采样在阴影�
 - 结构修复：uMBShWorldMatrix 帧对齐（模型自深度命中实证）、smoothstep bias、光源方向全链统一（cast-shadows 门控 §683）、解析地面求交 quad、RTE invProj 修复、两链合一、漏网自愈、钥匙串修复
 - 探针基建：[MBShGPU]/[MBShGPU2]/[MBShGPU3]/[MBShFp]/[MBCG]/__mbGQState/drawlog 扩展/mainCanvas probe 通道
 下会话首项：①ground quad 的 uv 采样仍与 expected 阴影区错位 ~1.5-2×——在 readout 模式下对「同屏坐标」直接比对 quad 采样 uv 与 expected 阴影暗区位置（无需新探针，已有数据链路）；②模型 PBR ambient/direct 配比（255 过曝与 navy 暗部）逐项像素迭代；③extrusion 家族 428,064 继续收敛。
+
+### §885 终三十四：copy 钉扎仍 identity——上传断点需 three 内部件级调试（2026-09-08）
+uMBShadowMatrix.value 改为 copy(m_matrix)（解除引用别名）后 GPU 回读仍为单位阵——**该程序的此 uniform 上传链路存在断点**（CPU 值正确、copy 钉扎无效、getUniform 恒读 identity）。已排除：引用别名、缓存跳过、值对象替换、程序读取错误。该断点需下会话以 three 上传路径仪表化（setValueM4fv 断点）或直接换用 MeshBasicMaterial+onBeforeCompile（与 fill 接收器同构——extrusion 夹具的 fill 接收器采样正常）定位。
+本会话最终状态（全部提交）：shadows-normal-offset 171,310→115,949（−32%）；buildings-trees-shadows-casting 583,410→428,064（−27%）；守卫 2,332 零回归（每步复验）。quad 侧剩余为该上传断点 + 阴影范围标定；模型侧剩余为 PBR ambient/direct 配比。

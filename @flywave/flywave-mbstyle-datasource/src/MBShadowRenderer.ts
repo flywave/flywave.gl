@@ -314,7 +314,7 @@ export class MBShadowRenderer {
         // also carries −eye.z, so the ground plane here is z = −eye.z).
         // Corners stay ABSOLUTE — the fragment shader rebases by uMBEye.
         this.m_groundUniforms.uMBShadowMap.value = this.m_shTex;
-        this.m_groundUniforms.uMBShadowMatrix.value = this.m_matrix;
+        this.m_groundUniforms.uMBShadowMatrix.value.copy(this.m_matrix);
         this.m_groundUniforms.uMBShadowIntensity.value = this.m_intensity;
         // mgl calculateGroundShadowFactor: shadow = ambient/(ambient+dir·NdotL)
         // per channel, sRGB-encoded (shadow_utils.ts) — NOT 1 − shadow-intensity.
@@ -507,7 +507,12 @@ export class MBShadowRenderer {
             // folding added nothing but resolution loss.
             frameCenter = casterBox.getCenter(new THREE.Vector3());
             const sz = casterBox.getSize(new THREE.Vector3());
-            radius = Math.max(50, Math.max(sz.x, sz.y, 1) * 0.75 * 1.5);
+            // §885 终三十一: the ±384-unit margin clipped the ground shadow
+            // beyond the casters (the measured dark region was 32% of
+            // expected's — the far-side shadow extended past the map). A 2.5×
+            // half-span keeps the casters at ~40% of the depth canvas while
+            // covering the full cast-shadow extent.
+            radius = Math.max(50, Math.max(sz.x, sz.y, 1) * 2.5);
         }
         this.m_shadowCamera.left = -radius;
         this.m_shadowCamera.right = radius;
