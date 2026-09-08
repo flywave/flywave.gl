@@ -919,3 +919,12 @@ buildings-trees 挤出涂层 = fill-extrusion-color white + **opacity 0.4**。�
 shrad=1.5（正交半径 ×1.5，r 470→706 读数确认生效）后 buildings-trees **537,993 逐位不变**——地面接收体的采样 uv 与正交盒完全无关，即 uv 场退化为常值（run44 直绘实测恒 (0.37,0.37,0.37)）。唯一能产生恒定 uv 的机制：cornerOnGround 的 4 个角点坍缩——其反投影用 `cam.projectionMatrixInverse`，而 rteCam 的投影矩阵是拷贝的（终三十一已知其 inverse 不更新），identity/stale 的 inverse 使 4 条角射线坍缩/平行 → 角点重合 → uv 恒定 → 恒采样同一 texel → 恒 lit。**地面阴影图案从未工作过；可见暗带全部为建筑自身暗面。**（此前"五连修后图案呈现"的判读有误——那是建筑暗面。）
 
 下会话首项（单点修复）：在 cornerOnGround/ prepGroundQuad 中显式 `cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert()`（终三十一只修了 quad 的 uMBInvProj，未修 cornerOnGround 用的 cam.projectionMatrixInverse），复测地面阴影是否全域正确呈现。
+
+### §885 终九十七：MBRf 判别——refresh 触达两种 flavor，但可见地面像素不属于被 refresh 的实例（2026-09-09）
+
+新增 [MBRf] 注入风味探针（refresh 循环首个命中即打印 uniform 键完整性）：
+- `rgS`（有 Map/Matrix/Far/Fac、无 GC/Eye/Res）= 挤出 flavor，守卫式写入正确；
+- `RGS`（全键）= 地面注入 flavor，**refresh 已触达且 shadowState 非空**（int=1 已写）。
+但 SHADOW=3 的 §525 读出涂装（R=int 恒 1）只出现在道路（line/ribbon），**可见的平坦灰地无涂装** → 可见地面像素既非被 refresh 的 fill 实例、也非背景清屏色（灰度随空间变化 77-104，是带雾的渲染内容）。结论：地面上渲染的材质实例与被 refresh 的实例不是同一个——材质实例在注入后被替换（引擎 tile 重建/材质克隆），或存在双重材质路径。fill 的 uv 场退化（恒 0.37）与替换假说自洽。
+
+**下会话首项（收敢单点）**：以 [MBRf] 键扩展为逐实例打印（mu uuid + __mbShadowInjected + int 值），并对照 drawlog 地面像素的 mu——确认渲染实例 ↔ refresh 实例的错位点；修复后地面阴影图案应立即呈现（此前所有几何标定结论在新相机下依然有效）。

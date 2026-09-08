@@ -239,6 +239,19 @@ export class MBMaterialPatchManager {
                         : (raw?.__mbShadowUniforms ? [raw.__mbShadowUniforms] : []);
                     if (uList.length === 0) continue;
                     for (const u of uList) {
+                        // §885 终九十八: per-flavor refresh probe — which
+                        // material flavors actually receive the refresh, and
+                        // whether their corners/res are live.
+                        if (!(MBMaterialPatchManager as any).__mbRfP) {
+                            (MBMaterialPatchManager as any).__mbRfP = {};
+                        }
+                        const rfP = (MBMaterialPatchManager as any).__mbRfP;
+                        const rfKey = `${u.uMBRes ? 'R' : 'r'}${u.uMBGC ? 'G' : 'g'}${shadowState ? 'S' : 's'}`;
+                        if (!rfP[rfKey]) {
+                            rfP[rfKey] = 1;
+                            // eslint-disable-next-line no-console
+                            console.log(`[MBRf] flavor=${rfKey} hasMap=${!!u.uMBShadowMap} hasMat=${!!u.uMBShadowMatrix} hasGC=${!!u.uMBGC} hasEye=${!!u.uMBEye} hasRes=${!!u.uMBRes} hasFar=${!!u.uMBShadowFar} hasFac=${!!u.uMBGroundShadowFactor}`);
+                        }
                         u.uMBShadowMap.value = shadowState?.map ?? null;
                         if (shadowState) {
                             // §692: share the renderer's LIVE uniform objects —
