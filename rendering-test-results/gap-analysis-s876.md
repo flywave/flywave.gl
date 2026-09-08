@@ -655,3 +655,8 @@ lightxflip=1（lightDir.x 翻转）：237,288 vs 115,949（恶化 +121k）——
 - 证伪三个历史错误假设（终三/终十一/终十三）
 - 六项 A/B 定案（spec 必要/PBR 最优/ambient 充足/metal env 无效/lightxflip 无效/x 翻转无效）
 下会话入口：①bias 斜率自适应 + fade_range 淡出（终四十九语义对齐）；②PBR ambient/direct 逐参数 A/B；③按 baseline-summary 清单继续其余失败项。
+
+### §885 终五十一：mgl 地面渲染语义最终定位（2026-09-08）
+vendor 参考 shadow_utils.ts 的 calculateGroundShadowFactor 完整读取：factor = amb_lin/(amb_lin + dir_lin·NdotL_ground) 逐通道，**linearVec3TosRGB 编码后使用**（sRGB 域混合）。expected 地面 112 = clear(211) × 0.53 ≈ the sRGB factor ✓✓。
+关键结论：**mgl 的 model-layer 地面 = 背景 × 环境比因子（均匀，无投射阴影图案）**——expected 的暗色地面即此均匀暗化，非 cast-shadow 图案。当前恢复的 f0aa9ea1 状态（cast-shadow 注入版）地面=201 lit——与 expected 的 112 均匀暗化差一个环境比因子。
+下会话首项（明确）：ground quad 改为**均匀环境比暗化**：`gl_FragColor.rgb *= mix(vec3(1), pow(groundShadowFactor, 1/2.2), uMBShadowIntensity)`（去掉 cast-shadow 采样）——mgl 的 model 阴影 = shadowed_light_factor 只作用于模型表面（墙自阴影），地面不接收 cast shadow。预期 shadows-normal-offset 地面区（112 vs 201）大幅收敛。
