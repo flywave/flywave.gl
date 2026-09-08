@@ -543,6 +543,20 @@ export class MBShadowRenderer {
             lightDir = new THREE.Vector3(0, 0, 1);
         }
         if (!Number.isFinite(lightDir.x)) return;
+        // §885 终六十四: shadow-direction A/B — shdiralt=1 uses the raw mgl
+        // spherical conversion (az+90, no §686 render-frame y mirror) for the
+        // shadow CAMERA only, to calibrate the ground projection against
+        // expected.
+        if ((globalThis as any).__mbShadowDirAlt) {
+            const dirProp2 = (this.m_dataSource as any).m_environment
+                ?.m_3DDirectional?.direction as [number, number] | undefined;
+            if (dirProp2) {
+                const a2 = (dirProp2[0] + 90) * Math.PI / 180;
+                const p2 = dirProp2[1] * Math.PI / 180;
+                lightDir = new THREE.Vector3(
+                    Math.cos(a2) * Math.sin(p2), Math.sin(a2) * Math.sin(p2), Math.cos(p2));
+            }
+        }
 
         // §560: frame the ortho around the CASTERS' union AABB (worldCenter
         // sits at the camera target, but tiles can be a km+ away — a

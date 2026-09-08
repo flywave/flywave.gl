@@ -743,3 +743,10 @@ ribbon dbg4 插锚落地后复测（buildings-trees 692,122 逐帧稳定）：uv
 - scene sweep 路径：类型白名单只有 MeshStandardMaterial/MeshBasicMaterial，ShaderMaterial/RawShaderMaterial 被标记 __mbShadowSkipped 跳过。
 
 **下会话首项（精确、小步）**：scene sweep 放开 ShaderMaterial/RawShaderMaterial（或按 technique 名单），对引擎直建 fill 材质走 ribbon 锚点注入 + 复测 buildings-trees 的地面图案覆盖；随后按终六十二入口②③标定（长度约 expected 的 1/3——疑 far 深度窗或 uv.z 比较；fog 族 109k 暗化值）。
+
+### §885 终六十四：方向 A/B 定案 + sweep 放开（2026-09-08 终）
+
+- **scene sweep 白名单放开**（ShaderMaterial/RawShaderMaterial + sky/atmosphere/star/pole/dome 排除）：buildings-trees/fog 族分数逐位不变——land fill 此前已经由 tile.objects ribbon 路径注入（可见图案即它画的），sweep 放开对本夹具是无害的覆盖加固（保留，其他夹具受益）。
+- **方向 A/B（shdiralt=1，raw mgl 球面式无 y 镜像）：598,987 vs 427,316——显著恶化，当前 §686 y 镜像方向定案为正确**。方向不再是缺口。
+- 新基建：shdiralt karma arg（runner+harness）、shadowcast=0 退出门。
+- 剩余缺口收敛为单一问题：**阴影长度/覆盖约为 expected 的 1/3**（方向正确、深度图内容在、地面采样在）。头号嫌疑=挤出墙深度编码在斜射阳光下的噪声（§720 原判）或 ortho 盒 xy 裁剪掉边缘建筑剪影（caster NDC x 达 ±1.76，darkBox 满宽=已裁）。下会话首项：shadow-depth-canvas 与地面 uv 场同屏叠加（终五十四入口①，现全部前提已就绪），逐 texel 对齐后定裁剪/噪声。

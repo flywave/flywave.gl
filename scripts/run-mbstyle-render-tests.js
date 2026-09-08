@@ -114,6 +114,7 @@ function main() {
             ...(process.env.MBSTYLE_PROBEPIX ? [`pix=${process.env.MBSTYLE_PROBEPIX}`] : []),
             ...(process.env.MBSTYLE_SHDBG ? [`shdbg=${process.env.MBSTYLE_SHDBG}`] : []),
             ...(process.env.MBSTYLE_SHADOWCAST ? [`shadowcast=${process.env.MBSTYLE_SHADOWCAST}`] : []),
+            ...(process.env.MBSTYLE_SHDIRALT ? ["shdiralt=1"] : []),
             ...(process.env.MBSTYLE_MODELDIRALT ? ["modeldiralt=1"] : []),
             ...(process.env.MBSTYLE_SPHDEG ? [`sphdeg=${process.env.MBSTYLE_SPHDEG}`] : []),
             ...(process.env.MBSTYLE_SPHDS ? ["sphds=1"] : []),

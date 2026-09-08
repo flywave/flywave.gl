@@ -180,7 +180,19 @@ export class MBMaterialPatchManager {
                             // double-shadows/mottles the walls.
                             if (m.__mbMglLit) { m.__mbShadowSkipped = true; continue; }
                             const t = String(m.type ?? '');
-                            if (t !== 'MeshStandardMaterial' && t !== 'MeshBasicMaterial') {
+                            // §885 终六十四: engine-built fill materials are
+                            // ShaderMaterial/RawShaderMaterial — the ground
+                            // land fill never received shadows (the visible
+                            // cast-shadow pattern came from other flavors
+                            // only). Allow them through the ribbon-anchor
+                            // injection; skip sky/atmosphere geometry (their
+                            // pixels would reconstruct bogus ground points
+                            // and darken the sky).
+                            if (t !== 'MeshStandardMaterial' && t !== 'MeshBasicMaterial' &&
+                                t !== 'ShaderMaterial' && t !== 'RawShaderMaterial') {
+                                m.__mbShadowSkipped = true; continue;
+                            }
+                            if (/sky|atmosphere|star|pole|dome/i.test(String(o.name ?? '') + ' ' + String(m.name ?? ''))) {
                                 m.__mbShadowSkipped = true; continue;
                             }
                             this.injectGroundShadow(m);

@@ -158,6 +158,12 @@ function discoverTests(): TestEntry[] {
     const sc = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shadowcast="))?.slice("shadowcast=".length);
     if (sc === "1") (globalThis as any).__mbShadowCast = true;
+    if (sc === "0") (globalThis as any).__mbShadowCast = false;
+    // §885 终六十四: shdiralt=1 → shadow camera uses the raw mgl spherical
+    // direction (az+90, no §686 y mirror) for the ground-projection A/B.
+    const sda = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shdiralt="))?.slice("shdiralt=".length);
+    if (sda === "1") (globalThis as any).__mbShadowDirAlt = true;
     const port = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modellightport="))?.slice("modellightport=".length);
     if (port === "1") (globalThis as any).__mbModelLightPort = true;
