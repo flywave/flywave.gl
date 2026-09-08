@@ -1079,3 +1079,9 @@ SHDIAG=7（mbSUV 直绘）判别：可见地面像素 (94,94,94)——若涂装�
 run82（DRAWLOG=1）的 drawlog POST 未落地（mb-probe-dumps 为空）——drawlog dump 的触发条件需核对（run11 时代曾成功，疑似与 SHADOW/SHDIAG 门控组合相关）。mu 对照暂缓一轮。
 下会话首项不变：①修复/确认 drawlog dump 触达（对照 run11 的成功条件：MBSTYLE_DECODEDBG=1 + DRAWLOG=1 + SHADOW=?）；②取得地面像素的渲染材质 mu 后直注入；③地面阴影全域呈现 → 暗化值标定。
 当前保持：buildings-trees 457,874 / fog 96,899 / hard-cutoff 126,781 / 守卫 10,138/10,260 逐位零回归。
+
+### §885 终一百三十一：drawlog 钩子安装链缺口定位（2026-09-09）
+
+drawlog POST 的门 = `__mbDrawLog?.length` 非空——即 draw-call 钩子（MapView AfterRender 处 line 2349 安装，逐 draw 记录）必须先安装并记录。run83c 中该钩子未记录任何 draw（POST 缺席）；run11 成功是因为同批其它探针路径间接触发了钩子安装链。钩子安装点：harness 2350 附近 `if (drawLog && !__mbDrawLogHook)` → mapView 事件安装。
+下会话：核对钩子安装的前置（MapView 实例/事件名），修复后 drawlog 即携带逐 mesh mu/ndc 数据，地面像素归属（渲染材质 uuid）即可锁定并直注入。
+当前保持：buildings-trees 457,874 / fog 96,899 / hard-cutoff 126,781 / 守卫 10,138/10,260 逐位零回归。
