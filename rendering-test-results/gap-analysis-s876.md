@@ -633,3 +633,14 @@ lightxflip=1（lightDir.x 翻转）：237,288 vs 115,949（恶化 +121k）——
 ### §885 终四十八：环境重置后漂移仍存在——漂移为永久性（2026-09-08）
 完整环境重置（kill Chrome + 清 profile + 清 webpack 缓存）后，d1d6797b（终三十九）代码重测：仍 179,062（非 115,949）——**渲染漂移为永久性，非会话状态累积**。可能原因：①Chrome for Testing 131 的 SwiftShader 在本机的渲染行为随系统 GPU 状态/驱动状态变化；②系统级 GPU/图形栈状态；③Chrome 自动更新残留影响 ANGLE/Vulkan 行为。缓解：换 Chrome 通道/版本（Chrome 152 的 headless WebGL 在本机不可用；可试 chrome-headless-shell 147 或重新安装 Chrome for Testing）、或机器重启后重测。
 本会话最终交付（已提交）：阴影方向全链统一、uMBShWorldMatrix 帧对齐、解析地面求交、smoothstep bias、六项 A/B 定案、完整探针体系、三个历史假设证伪。所有代码与诊断已入档（终十四～终四十八）。
+
+### §885 终四十九：mgl model PBR 参考完整定位（vendor 内已有）（2026-09-08）
+**mapbox-gl-js/3d-style/shaders/ 目录已 vendor mgl model 渲染参考**：model.fragment.glsl（610 行，含 computeLightContribution/computeIndirectLightContribution/getPBRMaterial/diffuseBurley/V_GGXFast/F_SchlickFast 全套）+ _prelude_shadow.fragment.glsl（shadowed_light_factor_normal）+ _prelude_lighting.glsl（apply_lighting/calculate_ambient_directional_factor）。此前"未 vendor"判断有误。
+关键语义提取：
+1. **模型 NdotL 双翻转抵消**：model fragment 内 transformed_normal = vec3(−n.xy, n.z) 且 lightDir.xy = −lightDir.xy——两者翻转抵消，净 NdotL = dot(n, l) 原始形式 ✓ 与我们实现一致。
+2. **shadow factor 的 NdotL 用翻转 normal + u_shadow_direction**（独立 uniform，shadow 渲染器方向语义）——与模型 lighting dir 不同源！
+3. **bias 斜率自适应**：calculate_shadow_bias = 0.5·(bias.x + clamp(bias.y·tan(acos(NDotL)), 0, bias.z))——非常数。
+4. **indirect env_light**：LIGHTING_3D_MODE 下 = u_lighting_ambient_color × calculate_ambient_directional_factor(normal)——与我们 uMB3DAmb·mbADF 一致 ✓。
+5. **shadow_sample**：sampler2DShadow 硬件比较（COMPARE_REF_TO_TEXTURE，GREATER 语义——occlusion=1 为遮挡）——与我们的 r+g/255 packed 解码+smoothstep 不同（我们为软件比较）。
+6. **fade_range**：view_depth 超出淡出范围后 occlusion 淡出到 0（远处无影）——我们缺失此淡出。
+下轮入口：①shadow factor 改用 mgl 精确形式（step(0,NDotL) 门控 + occlusion 语义 + 斜率 bias）；②fade_range 淡出补齐；③metal env 语义对照 getPBRMaterial（metallic 分离 diffuse/specular）。
