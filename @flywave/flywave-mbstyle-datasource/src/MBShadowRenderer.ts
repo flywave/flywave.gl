@@ -225,10 +225,10 @@ export class MBShadowRenderer {
         this.m_groundUniforms = mat.uniforms;
     }
 
-    /** Unproject one NDC corner onto the z=0 ground plane (far clamp on sky). */
+    /** Unproject one NDC corner onto the ground plane (far clamp on sky). */
     private cornerOnGround(
         cam: THREE.PerspectiveCamera, camPos: THREE.Vector3,
-        ndcX: number, ndcY: number, far: number, out: THREE.Vector3,
+        ndcX: number, ndcY: number, far: number, planeZ: number, out: THREE.Vector3,
     ): void {
         // Standard unproject: NDC (z=-1, near plane) → view → world.
         const v = new THREE.Vector4(ndcX, ndcY, -1, 1)
@@ -237,7 +237,7 @@ export class MBShadowRenderer {
             .applyMatrix4(cam.matrixWorld)
             .sub(camPos)
             .normalize();
-        const t = dir.z < -1e-6 ? -camPos.z / dir.z : far;
+        const t = dir.z < -1e-6 ? (planeZ - camPos.z) / dir.z : far;
         out.copy(camPos).addScaledVector(dir, Math.min(Math.abs(t), far));
         // §885 终二十: one-shot per-corner dump — dir/t/out vs camPos, to
         // locate the 2.00× ground-intersection offset (far clamp vs ray
@@ -272,20 +272,27 @@ export class MBShadowRenderer {
     private prepGroundQuad(center: THREE.Vector3, radius: number, eye: THREE.Vector3): void {
         this.ensureGroundQuad();
         const renderer = this.m_mapView?.renderer as THREE.WebGLRenderer | undefined;
-        // The RTE render camera keeps an IDENTITY world matrix (rebase lives
-        // in the projection) — useless for unprojection. The logical camera
-        // carries the real view; the quad itself is screen-space so the
-        // render camera is our own ortho anyway.
-        const cam = this.m_mapView?.camera as THREE.PerspectiveCamera | undefined;
+        // §885 终二十七: compute the corners IN THE SCENE (RTE) frame — the
+        // frame the casters, the depth pass, the shadow-camera fit, and the
+        // model receivers (uMBShWorldMatrix) all share. The rteCamera sits at
+        // that frame's origin with the logical camera's rotation, so the
+        // rays originate at (0,0,0) and the ground plane sits at z = −eye.z
+        // (the casters' ground z carries −eye.z). The previous version
+        // unprojected with the ABSOLUTE-frame logical camera: its ground
+        // points then differed from the depth map's frame by the whole
+        // pivot-to-camera offset and the quad's shadow landed off-screen.
+        const rteCam = (this.m_mapView as any).getRteCamera?.() as THREE.PerspectiveCamera | undefined;
+        const cam = rteCam ?? (this.m_mapView?.camera as THREE.PerspectiveCamera | undefined);
         if (!renderer || !cam) return;
         cam.updateMatrixWorld();
         const camPos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
         const far = radius * 8;
+        const groundZ = -eye.z;
         const corners = this.m_groundUniforms.uMBGC.value as THREE.Vector3[];
-        this.cornerOnGround(cam, camPos, -1, -1, far, corners[0]);
-        this.cornerOnGround(cam, camPos, 1, -1, far, corners[1]);
-        this.cornerOnGround(cam, camPos, 1, 1, far, corners[2]);
-        this.cornerOnGround(cam, camPos, -1, 1, far, corners[3]);
+        this.cornerOnGround(cam, camPos, -1, -1, far, groundZ, corners[0]);
+        this.cornerOnGround(cam, camPos, 1, -1, far, groundZ, corners[1]);
+        this.cornerOnGround(cam, camPos, 1, 1, far, groundZ, corners[2]);
+        this.cornerOnGround(cam, camPos, -1, 1, far, groundZ, corners[3]);
         // §692: RTE render camera sits at origin (identity world matrix),
         // so cornerOnGround computes RTE-relative ground intersections
         // (all ≈ 0,0,0). The receiver needs ABSOLUTE world positions for
@@ -303,13 +310,10 @@ export class MBShadowRenderer {
         // Corners stay ABSOLUTE — the fragment shader rebases by uMBEye.
         this.m_groundUniforms.uMBProjView.value
             .multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-        // §885 终十九: the frame anchor must be the CAMERA'S absolute
-        // position (the frame the corners were unprojected in and the frame
-        // the scene content's matrixWorld lives in) — projectPoint(geoCenter)
-        // returns xy at a 2× scale of the camera matrix frame (measured
-        // exactly 2.004× on two fixtures), which threw every ground sample
-        // off the map.
-        this.m_groundUniforms.uMBEye.value.copy(camPos);
+        // §885 终二十七: mbWP is scene-frame — no rebase (uMBEye = 0); the
+        // quad's rasterization uses the RTE camera's proj·view so the
+        // scene-frame corners land exactly on the visible ground.
+        this.m_groundUniforms.uMBEye.value.set(0, 0, 0);
         this.m_groundUniforms.uMBShadowMap.value = this.m_shTex;
         this.m_groundUniforms.uMBShadowMatrix.value = this.m_matrix;
         this.m_groundUniforms.uMBShadowIntensity.value = this.m_intensity;

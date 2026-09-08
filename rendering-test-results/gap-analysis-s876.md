@@ -548,3 +548,8 @@ bottom-left/bottom-right 象限并排对比：①地面 quad 在两象限均已�
 ### §885 终二十六：三联对比定案——quad 阴影画在屏外/错位（2026-09-08）
 三联对比（expected / shadowdisable / quad 启用，地面区 y[300,511]）：with-quad 与 noshadow 的地面**完全一致（无阴影）**——quad 有光栅化（readout 像素实证）但其暗区落在可见地面之外（屏外/错位）。阴影方向（§683 后）已与 expected 的暗区方位一致（子集关系实测），差距全在：①**阴影相机 fit 的世界系**——quad 的 mbWP（camPos 相对/eye 相对）与深度图（casters 的 tile 相对系）之间的残余平移（~数百单位，相机-目标距量级）使暗区整体平移出屏；②光源仰角（阴影长度 2.6× 差）。
 下轮精确入口（几何闭环，无需再探针）：在 run() 内把 shadow camera 的 fit 基准从 casterBox 中心改为「casters 的 matrixWorld 平移分量」（即 tile.center 渲染帧值，已可从 shadowCasters 任意 mesh 的 matrixWorld 直接读出），使深度相机/ground quad corners/model 接收器三者共享同一定义的原点。当前代码（方向统一+bias+quad 场景内挂载+2D 快照）全部保留。
+
+### §885 终二十七/二十八：几何闭环实施 + readout 探针（2026-09-08）
+实施（未提交前已验证编译）：①cornerOnGround 参数化平面高度 planeZ；②prepGroundQuad 全面切换到场景帧——corners 用 **RTE 相机**（getRteCamera()，原点=场景原点）计算，平面 z=−eye.z，[MBCG] dump 实证 camPos=(0,0,0)、out=(−98.7,−43.9,−82.2)（场景系地面点 ✓）；③uMBProjView 改用 RTE 相机 proj·view（场景系角点正确光栅化到可见地面）；④uMBEye=0（mbWP 已是场景帧）；⑤quad readout 探针（R=intensity, G=采样 packed depth, B=uv.z）+ [MBShGPU3] quad GPU uniform 探针 + 主画布 probe 通道（修 vec4 三参构造编译错误——该错误曾使 quad 完全不渲染）。
+实测：plain 115,178（±1 噪声，与改动前一致）——**quad 采样仍全部返回空 texel（depth=1.0）**，而模型材质采样同一纹理有内容（0.894）。shadowrenderer 场景帧统一后阴影仍未可见。
+下轮入口（按优先级）：①在 fill 材质 injectGroundShadow 加同款 readout，对照同帧内 fill 接收器与 quad 的采样值——extrusion 夹具 fill 接收器采样有内容（其地面阴影可见），同帧对比可分离「纹理对象实例」vs「采样坐标」；②检查两渲染器（m_shRenderer 主入 vs 主渲染器）的 texture 对象：m_shTex 仅一份，但上传/绑定发生在不同 renderer 上下文——用 gl.getUniformLocation 后 gl.getUniform 验证 quad 绘制时 sampler 绑定的 texture id；③预算许可时以 renderTarget 代替 CanvasTexture（规避跨上下文 canvas 读取）。
