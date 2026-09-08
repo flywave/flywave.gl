@@ -192,7 +192,7 @@ export class MBShadowRenderer {
                             sampD = pk.r + pk.g / 255.0;
                             lit = smoothstep(-0.0002, 0.0002, sampD - uv4.z);
                         }
-                        gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(2.2)), vec3(1.0), lit);
+                        gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(1.0 / 2.2)), vec3(1.0), lit);
                     }
                 }`);
             this.m_groundUniforms = shader.uniforms;

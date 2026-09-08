@@ -664,3 +664,7 @@ vendor 参考 shadow_utils.ts 的 calculateGroundShadowFactor 完整读取：fac
 ### §885 终五十三：SwiftShader 上下文耗尽——环境重置无效，需机器重启（2026-09-08）
 完整环境重置（kill Chrome + 清 profile + 清 webpack 缓存）后，d1d6797b（终三十九）代码重测：**渲染完全空白（全画布 uniform gray，模型/地面/quad 全部消失）**——此前同代码为 115,949。SwiftShader（软件渲染器）在大量 WebGL 上下文创建/销毁后资源耗尽，**机器重启才能恢复**。缓解：①每次 karma 会话限制 WebGL 上下文数量（m_shRenderer 复用/池化）；②机器重启后重测。
 本会话最终交付（已提交，终十四～终五十二）：shadows-normal-offset 171,310→115,949（−32%）；buildings-trees-shadows-casting 583,410→428,064（−27%）；守卫 2,332 零回归；mgl 参考定位+语义提取；PBR per-term 探针；六项 A/B 定案；三个历史假设证伪。
+
+### §885 终五十四：解析 quad 暗化区域与 expected 阴影不重合（2026-09-08）
+解析 quad（cast-shadow 采样恢复版）mismatch 179,062 vs 无阴影 115,177（+63k 恶化）——暗化区域与 expected 阴影区不重合。暗化区域位置：readout 显示 uv≈(0.5,0.5) 的暗化（自深度边界半色调）——即 quad 暗化的区域为「深度图内容区」而非「expected 的阴影区」——**深度图的 uv 覆盖与 expected 的地面阴影投影方向/范围不一致**（阴影相机 fit 的世界系或方向仍有偏差，或 expected 的暗区并非全部为 cast shadow）。
+下会话入口：①以 readout 的 uv 直绘与 expected 阴影区做同屏叠加，可视化 quad 暗化 vs expected 阴影的位置/形状差异；②按差异调整阴影相机 fit（方向/原点/范围）；③预算许可时获取 mgl shadow_renderer.ts 渲染参考（vendor 内 3d-style/render/shadow_renderer.ts）对照实现。
