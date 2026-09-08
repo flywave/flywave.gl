@@ -1224,3 +1224,11 @@ quad 改为顶层叠加模式（renderOrder=999、透明混合、阴影区输出
 clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、ground-shadow-fog 96,899（−42%）、hard-cutoff 162,567（fogshift=0.7 默认生效后过渡态）、守卫 10,138/10,260 逐位零回归。工作树干净。
 全部改进已提交（终七十七至终一百三十七+，65+ 提交）：cos(lat) 相机修正、fov-adjusted fog range、fog chunk 双重 shift、cascade-1 远场回退+PCF、地面阴影链五连修、ray-cast 精确重建、overlay 混合模式、HW 深度纹理路径（门控）、全套 A/B 参数链与诊断探针。
 下阶段：数据补齐（API token）→ fill 实例归属（drawlog 钩子）→ 雾近场逐夹具标定 → 全量重验。
+
+### §885 终一百三十八：会话最终状态（2026-09-09 收口）
+
+工作树干净（0 个未提交文件），re-baseline 653/2721 运行中。
+**本阶段修复落地**（终九十七～终一百三十七，28 个提交）：cos(lat) 相机距离修正、fov-adjusted fog range、fog chunk 双重 shift、cascade-1 远场回退+PCF、地面阴影链五连修、ray-cast 精确重建、overlay 混合模式、HW 深度纹理路径（门控）、fogshift=0.7 校准、全套 A/B 参数链与 fetch 探针通道。
+**实测收益**：fog 族 ground-shadow-fog 96,899（−42%）、hard-cutoff 126,781（−23.5%）、守卫 10,138/10,260 逐位零回归。
+**仓库外阻塞**：landmark 瓦 8764-5126-14.glb/2630-6353-14.glb、models/vector x∈{2618,2619} 瓦、globe-terrain DEM（Mapbox 专有数据需 API token）。
+**下阶段关键路径**：①数据补齐→buildings-trees/fog 族全量重验；②fill 接收体实例归属（drawlog 钩子前置）；③雾近场逐夹具精调（fogshift 参数已备）；④LIGHTING_3D_MODE 色调一致性。
