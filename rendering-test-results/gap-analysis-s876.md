@@ -805,3 +805,9 @@ SHDIAG=3（quad 底色洋红）实验：画面无任何洋红 → **quad 完全�
 - **shoff=<x>,<y> 标定参数落地**（球心世界 XY 偏移，runner+harness）：(+300,200)→447,942 恶化；(−300,−200)→418,865；(−600,−400)→418,385（=图案完全移出，等价无阴影基线）——平移只能"移走"错位图案，不能对齐：**图案形状/暗度本身仍不对**。
 - **factor=0 洞见（暗化值标定的钥匙）**：buildings-trees 样式 ambient=rgba(0,0,0,1)·0.4 → mgl calculateGroundShadowFactor = 0/(0+dir·NdotL) = **0** → 阴影区应为纯黑（expected ✓）。我方阴影区 ~94 灰 ≈ land×0.53 → 我方 factor≈0.53，疑似用到了非零 ambient（样式解析/默认值路径待查）。若 factor 修为 0，阴影区将变纯黑、暗区计数大幅上升。
 - 下会话首项：①核对该样式下 lighting3DState.ambientColorLinear 是否为 [0,0,0]（styles 的 lights 解析路径）；②factor=0 后复测三夹具（期望暗区大增、分数大降）；③随后回到图案位置/长度对齐。
+
+### §885 终七十三：tight light-space fit 负结果——回退 frustum-sphere fit（2026-09-08 终）
+
+tight fit（caster AABB 光空间紧凑拟合 + 15% pad + shadow-reach 扩展）两轮实验：buildings-trees **418,385 = 无阴影基线逐位相同**（地面阴影完全消失），fog 族 133,950（劣于 frustum fit 的 109,221）。含 reach 扩展（盒沿行进方向扩 height/dz）仍无效——紧凑拟合下地面接收体全部读 lit，机制未明（疑似近平面/深度窗与 corners 重建的相互作用，非 extents 大小问题）。
+
+**决策：回退到终七十二 frustum-sphere fit 状态**（buildings-trees 427,316 / fog 109,221 / hard-cutoff 109,568 / 守卫 10,138 逐位零回归——当前已知最优）。tight-fit 负结果入档：正交盒收紧方向在该架构下不成立，未来尝试需先解明紧凑窗下 corners 重建与深度窗的相互作用。
