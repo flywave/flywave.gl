@@ -144,66 +144,59 @@ export class MBShadowRenderer {
         const geo = new THREE.PlaneGeometry(2, 2);
         const mat = new THREE.ShaderMaterial({
             uniforms: {
-                uMBGC: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
-                uMBProjView: { value: new THREE.Matrix4() },
-                uMBEye: { value: new THREE.Vector3() },
-                uMBShadowIntensity: { value: 0 },
-                uMBShadowDbg: { value: (globalThis as any).__mbShadowDbg ? 1 : 0 },
+                uMBInvProj: { value: new THREE.Matrix4() },
+                uMBCamWorld: { value: new THREE.Matrix4() },
+                uMBGroundZ: { value: 0 },
                 uMBShadowMap: { value: null },
                 uMBShadowMatrix: { value: new THREE.Matrix4() },
                 uMBGroundShadowFactor: { value: new THREE.Vector3(0, 0, 0) },
                 uMBGroundColor: { value: new THREE.Color(0xffffff) },
+                uMBShadowIntensity: { value: 0 },
+                uMBShadowDbg: { value: (globalThis as any).__mbShadowDbg ? 1 : 0 },
             },
+            // §885 终三十: analytic ground-plane intersection — a full-screen
+            // NDC quad whose fragment unprojects its own NDC through the
+            // inverse projection + the camera rotation and intersects the
+            // z = uMBGroundZ ground plane. Replaces the uMBGC corner bilinear
+            // (the corners only spanned the near ground; the rest extrapolated
+            // and sampled outside the shadow map).
             vertexShader: `
-                varying vec3 vMBWorldPos;
-                uniform vec3 uMBGC[4];
-                uniform mat4 uMBProjView;
+                varying vec2 vNdc;
                 void main() {
-                    vMBWorldPos = mix(mix(uMBGC[0], uMBGC[1], uv.x),
-                                      mix(uMBGC[3], uMBGC[2], uv.x), uv.y);
-                    // Route through the REAL camera so the varying gets
-                    // perspective-correct interpolation (an NDC quad with
-                    // w=1 interpolates world pos affinely — wrong), while
-                    // forcing depth ~1 (behind all content).
-                    vec4 cp = uMBProjView * vec4(vMBWorldPos, 1.0);
-                    gl_Position = vec4(cp.xy, 0.9999 * cp.w, cp.w);
+                    vNdc = position.xy;
+                    gl_Position = vec4(position.xy, 0.9999, 1.0);
                 }`,
             fragmentShader: `
-                varying vec3 vMBWorldPos;
+                varying vec2 vNdc;
+                uniform mat4 uMBInvProj;
+                uniform mat4 uMBCamWorld;
+                uniform float uMBGroundZ;
                 uniform sampler2D uMBShadowMap;
                 uniform mat4 uMBShadowMatrix;
                 uniform vec3 uMBGroundShadowFactor;
                 uniform vec3 uMBGroundColor;
-                uniform vec3 uMBEye;
                 uniform float uMBShadowIntensity;
                 uniform float uMBShadowDbg;
                 void main() {
-                    // §643 underlay channel: corners whose view ray never
-                    // hits the z=0 ground plane are clamped at the far
-                    // distance and sit ABOVE it — those interpolate to sky,
-                    // where the quad must not paint (the depth-gate of the
-                    // old overlay channel used to exclude sky for free).
-                    if (vMBWorldPos.z > 1.0) discard;
-                    vec4 mbShadowUv = uMBShadowMatrix * vec4(vMBWorldPos - uMBEye, 1.0);
+                    vec4 v4 = uMBInvProj * vec4(vNdc, -1.0, 0.0);
+                    vec3 dir = normalize((uMBCamWorld * vec4(v4.xyz, 0.0)).xyz);
+                    if (dir.z >= -1e-6) discard; // the ray points up — sky
+                    float t = uMBGroundZ / dir.z;
+                    vec3 mbWP = dir * t; // scene-frame ground point
+                    vec4 mbShadowUv = uMBShadowMatrix * vec4(mbWP, 1.0);
                     float mbLit = 1.0;
                     float mbDbgDepth = 1.0;
                     if (mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
                         mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
                         vec4 mbPk = texture2D(uMBShadowMap, mbShadowUv.xy);
                         float mbShadowDepth = mbPk.r + mbPk.g / 255.0;
+                        mbDbgDepth = mbShadowDepth;
                         mbLit = smoothstep(-0.0002, 0.0002, mbShadowUv.z - mbShadowDepth);
                     }
-                    // The engine clear color reaches the canvas in sRGB; our
-                    // raw ShaderMaterial output must be encoded to match
-                    // (mgl blends the factor in sRGB space — we compose in
-                    // linear and encode once, so the factor stays linear).
-                    // §885 终二十五: raw readout — R=uMBShadowIntensity,
-                    // G=the sampled packed depth, B=uv.z (the sky-gate
-                    // discard keeps sky unpainted).
                     vec3 mbOut = uMBGroundColor * mix(uMBGroundShadowFactor, vec3(1.0), mbLit);
                     gl_FragColor = vec4(pow(mbOut, vec3(1.0 / 2.2)), 1.0);
                     if (uMBShadowDbg > 0.5) {
-                        gl_FragColor = vec4(uMBShadowIntensity, mbDbgDepth, mbShadowUv.z, 1.0);
+                        gl_FragColor = vec4(mbShadowUv.x, mbShadowUv.y, mbDbgDepth, 1.0);
                     }
                 }`,
             depthTest: false,
@@ -281,14 +274,20 @@ export class MBShadowRenderer {
         // unprojected with the ABSOLUTE-frame logical camera: its ground
         // points then differed from the depth map's frame by the whole
         // pivot-to-camera offset and the quad's shadow landed off-screen.
+        // §885 终三十: the analytic quad needs the RTE camera's projection
+        // inverse and world matrix (rotation) — the corners/uMBGC remain for
+        // the fill receivers' screen-space reconstruction.
         const rteCam = (this.m_mapView as any).getRteCamera?.() as THREE.PerspectiveCamera | undefined;
         const cam = rteCam ?? (this.m_mapView?.camera as THREE.PerspectiveCamera | undefined);
         if (!renderer || !cam) return;
         cam.updateMatrixWorld();
-        const camPos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
-        const far = radius * 8;
         const groundZ = -eye.z;
+        this.m_groundUniforms.uMBInvProj.value.copy(cam.projectionMatrixInverse);
+        this.m_groundUniforms.uMBCamWorld.value.copy(cam.matrixWorld);
+        this.m_groundUniforms.uMBGroundZ.value = groundZ;
         const corners = this.m_groundUniforms.uMBGC.value as THREE.Vector3[];
+        const far = radius * 8;
+        const camPos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
         this.cornerOnGround(cam, camPos, -1, -1, far, groundZ, corners[0]);
         this.cornerOnGround(cam, camPos, 1, -1, far, groundZ, corners[1]);
         this.cornerOnGround(cam, camPos, 1, 1, far, groundZ, corners[2]);
@@ -308,12 +307,6 @@ export class MBShadowRenderer {
         // absolute-world corners into the SAME frame (casters' worldPos z
         // also carries −eye.z, so the ground plane here is z = −eye.z).
         // Corners stay ABSOLUTE — the fragment shader rebases by uMBEye.
-        this.m_groundUniforms.uMBProjView.value
-            .multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-        // §885 终二十七: mbWP is scene-frame — no rebase (uMBEye = 0); the
-        // quad's rasterization uses the RTE camera's proj·view so the
-        // scene-frame corners land exactly on the visible ground.
-        this.m_groundUniforms.uMBEye.value.set(0, 0, 0);
         this.m_groundUniforms.uMBShadowMap.value = this.m_shTex;
         this.m_groundUniforms.uMBShadowMatrix.value = this.m_matrix;
         this.m_groundUniforms.uMBShadowIntensity.value = this.m_intensity;

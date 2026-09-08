@@ -558,3 +558,8 @@ bottom-left/bottom-right 象限并排对比：①地面 quad 在两象限均已�
 vec4 构造修复后 shdbg=3 readout 实测（13,068 个 (255,255,0) 像素 = intensity 1.0 + 采样深度 1.0（空）+ uv.z ≤ 0；另一簇 (128,128,128) 0.5 = smoothstep 边界自采样）：**quad 的地面采样全部落在光源相机近平面之后/空 texel 上**。uMBGC 角点（场景系，z=−82.2）仅覆盖屏内近地 ±136 单位（[MBCG] t=136），远端地面为外插；uv.z≤0 指示这些点在 light view 的 near=973 之前——即 ground corners−eye 的差值系与深度图 fit 系（casterBox 中心系）之间存在 ~数百单位的残余平移，使阴影区采样系统性落到图外。
 模型侧（uMBShWorldMatrix 场景帧）自深度命中已实证 ✓ 不受影响。
 下轮入口（预算外，下会话首项）：①ground quad 弃用 uMBGC 屏幕空间重建（角点跨度不足），改为**场景系解析地面点**：mbWP = uMBEye_scene + (屏幕射线与 z=−eye.z 平面的精确交点)——用 RTE 相机的 rotation-only 矩阵在着色器内逐像素求交（4 个 uniform 即可，无需角点插值）；②或恢复 mgl 的 shadow camera 全屏 fit（放弃紧凑 fit）使角点跨度覆盖全部可见地面；③每步 shadows-normal-offset + quantization-shadows 2,332 双验证。
+
+### §885 终三十：解析地面求交落地——quad 阴影首次落入 expected 区域（2026-09-08）
+ground quad 全面重写为**解析地面求交**：全屏 NDC quad，fragment 内 invProj×NDC → 相机旋转 → 与 z=uMBGroundZ（=−eye.z）平面求交，逐像素精确场景系地面点（替换 uMBGC 角点插值——角点跨度仅 ±136，远端全外插）。uMBEye/角点/uMBProjView(uMBGC 路径) 退役（uMBGC 保留供 fill 接收器）。
+实测：**quad 阴影首次落入 expected 阴影区**——our dark 4,204 px（质心 (343,323)）⊂ expected 13,170（质心 (385,351)），覆盖 32%、方向正确；阴影颜色 130 vs expected 112（接近）。mismatch 115,949（vs 无阴影基线 115,177：+772——阴影区域与 expected 的阴影渐变仍有标定差，但已非零贡献）。守卫 2,332 零回归复验 ✓。
+下轮入口：①阴影长度/渐变标定（光源仰角语义、smoothstep 带宽、深度图覆盖范围 ±691 vs 阴影延伸）；②墙面 PBR 反照率/环境光配比（过曝纯白+深 navy vs 暖白/灰蓝——逐项像素探针迭代）；③mismatch 大头在模型表面着色（diff 热图：全部模型表面为红）。
