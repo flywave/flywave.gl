@@ -903,3 +903,9 @@ run58 日志 110 个 404，含 `models/vector/15-5241-12665.vector.pbf`、`14-26
 - 新基准下已复核：守卫 quantization-shadows 10,138/10,260 逐位不变；fog 族/buildings-trees 分数为修正相机暴露错位的过渡态（167,069/537,993），待逐项标定回落。
 - 标定队列（新相机基准）：①阴影图案位置/长度（阴影相机随 cos(lat) 相机已同步平移，需复核 fit 读数）；②雾 t 曲线（新相机高度下 distCam/fogMglRange 联合校准）；③LIGHTING_3D_MODE 色调（三类接收体）。
 - 仓库外挂账不变：landmark 瓦 8764-5126-14.glb/2630-6353-14.glb、models/vector x∈{2618,2619} 瓦、globe-terrain DEM。
+
+### §885 终九十三：新相机基准下阴影 fit 读数与图案状态（2026-09-09）
+
+cos(lat) 修正后 buildings-trees 读数：eyeZ=362（=459×cos(37.78°) ✓ 修正精确传导）、阴影相机 cam=(−330,−35,−332)、r=470、窗口 [−941,1375]、casterBox 中心 (−525,−145,−261) 尺寸 (1242,1242,202)。地面阴影带呈现于左上（与 expected 阴影方向一致），caster NDC x∈[−1.39,2.21] 部分超出正交盒属视锥外正常裁剪（mgl 同语义）。分数 537,993（含新相机下暴露的雾/墙面错位）。
+- 全量 re-baseline 后台运行中（rendering-test-results/mbstyle-coslat-rebaseline，速率 ~120/小时，~22h，同命令续跑补齐）。
+- 下会话：①re-baseline 完成后生成新快照对照表；②墙面色调（extrusion lighting 配比）与雾曲线标定；③树冠部分待数据补齐自然恢复。
