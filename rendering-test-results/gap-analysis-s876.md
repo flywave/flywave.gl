@@ -1073,3 +1073,9 @@ cascade-1 4-tap PCF（uMBShadowTexel1 = 8r/1024）落地：
 SHDIAG=7（mbSUV 直绘）判别：可见地面像素 (94,94,94)——若涂装生效 B 应为 127（常数 0.5）→ **可见地面材质未携带 ground 注入程序**。[MBRf] RGS 证明 refresh 触达的"某个"实例与渲染实例不同——注入命中了非渲染实例（§586 双实例问题的地面版本：tile.objects 材质被注入，引擎工厂创建的渲染实例未被触达或被晚于注入的替换洗掉）。
 下会话首项（收口）：drawlog mu（地面像素的渲染材质 uuid）↔ 注入时的 uuid 对照——找到渲染实例后直接对其 injectGroundShadow（scene sweep 已覆盖 m_scene 全部 mesh，需检查该实例的 __mbShadowSkipped/注入时序）。
 保持：buildings-trees 457,874 / fog 96,899 / hard-cutoff 126,781 / 守卫 10,138/10,260 逐位零回归。
+
+### §885 终一百三十：drawlog mu 对照的前置缺口（2026-09-09）
+
+run82（DRAWLOG=1）的 drawlog POST 未落地（mb-probe-dumps 为空）——drawlog dump 的触发条件需核对（run11 时代曾成功，疑似与 SHADOW/SHDIAG 门控组合相关）。mu 对照暂缓一轮。
+下会话首项不变：①修复/确认 drawlog dump 触达（对照 run11 的成功条件：MBSTYLE_DECODEDBG=1 + DRAWLOG=1 + SHADOW=?）；②取得地面像素的渲染材质 mu 后直注入；③地面阴影全域呈现 → 暗化值标定。
+当前保持：buildings-trees 457,874 / fog 96,899 / hard-cutoff 126,781 / 守卫 10,138/10,260 逐位零回归。
