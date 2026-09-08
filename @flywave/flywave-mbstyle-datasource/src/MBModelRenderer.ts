@@ -129,6 +129,16 @@ export function modelLightDir(dataSource: any): [number, number, number] {
     if ((globalThis as any).__mbModelDirAlt) {
         return ls.dir;  // old y-mirrored §683 convention (reverted via arg)
     }
+    // §885 终二十二: CAST-SHADOWS styles get the lighting3DState dir (§683
+    // scene-frame convention) — A/B measured −35.8k px on
+    // shadows-normal-offset (the raw spherical form casts the ground/wall
+    // shadows mirrored from expected). Non-casting styles keep the raw form
+    // (quantization-shadows 2,332 calibration base; the flip regressed them
+    // to 88,238).
+    const sl = dataSource?.m_environment?.shadowLightState;
+    if (sl && dirProp !== undefined && ls.dir) {
+        return ls.dir;
+    }
     return [
         Math.cos(az) * Math.sin(pl),
         Math.sin(az) * Math.sin(pl),
@@ -834,7 +844,13 @@ export function applyMglModelLighting(
                                              clamp(mbShUv.z, 0.0, 1.0));
                                          return;
                                      }
-                                     mbNdotL *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
+                                     // §885 终二十二: self-shadow bias aligned
+                                     // to the §692 ground form (smoothstep
+                                     // instead of the hard 0.002 compare —
+                                     // 0.002 ≈ 1.6 depth units in the tight
+                                     // frustum, enough to light wall strips).
+                                     float mbLitS = smoothstep(-0.0002, 0.0002, mbShUv.z - mbShDepth);
+                                     mbNdotL *= mix(1.0 - uMBShIntensity, 1.0, mbLitS);
                                  }
                              }
                              float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
@@ -932,7 +948,13 @@ export function applyMglModelLighting(
                                              clamp(mbShUv.z, 0.0, 1.0));
                                          return;
                                      }
-                                     mbLF *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
+                                     // §885 终二十二: self-shadow bias aligned
+                                     // to the §692 ground form (smoothstep
+                                     // instead of the hard 0.002 compare —
+                                     // 0.002 ≈ 1.6 depth units in the tight
+                                     // frustum, enough to light wall strips).
+                                     float mbLitS = smoothstep(-0.0002, 0.0002, mbShUv.z - mbShDepth);
+                                     mbLF *= mix(1.0 - uMBShIntensity, 1.0, mbLitS);
                                  }
                              }
                              vec3 mbDirect = (mbSpecTerm + mbDiffTerm) * mbLF * uMB3DDirColor;

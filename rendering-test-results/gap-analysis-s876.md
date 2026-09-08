@@ -521,3 +521,10 @@ shdbg=4（界内 uv 直绘）实测：**8,765 个界内涂块片段，uv.x [0.20
 
 ### §885 终二十一附：视觉对比定标（2026-09-08）
 expected vs current 逐区域视觉对比：①墙面——expected 受光面暖白(240,235,225)、背光面冷灰蓝(200,205,210)，current 受光面纯白(255) 过曝、暗部深蓝灰对比过强——PBR 分支的直射项强度/环境光配比或顶点色反照率读取需要标定（uMBPortMode=1 分支，mbAlbedo 顶点色路径）；②窗户/线脚——expected 灰蓝(96,128,150) vs current 深navy(7,24,42)——暗部过暗，同属反照率/环境光标定；③屋顶——expected 浅暖棕 vs current 深棕——同上；④地面阴影——expected (112) 大范围 vs current (201) 底色+部分阴影，quad 已绘制但范围/位置仍待标定（终十九 2× 后续）。§560 光源方向转换与 mgl 参考实现（util.ts sphericalPositionToCartesian, a=azimuth+90）逐项一致，光源方向正确。
+
+### §885 终二十二：光源方向翻转（cast-shadows 门控）+ smoothstep bias——97,644（2026-09-08）
+两项标定落地：
+①**自阴影 bias 对齐 §692**：模型两分支的硬比较 `uv.z <= depth + 0.002` 改为 `smoothstep(-0.0002, 0.0002, uv.z - depth)` + `mix(1-intensity, 1, lit)`（与 ground 路径一致）——单步 163,324 → **133,444（−29,880）**。
+②**光源方向按 cast-shadows 门控翻转**：差异分析发现明暗模式镜像（我们亮 103k 处 expected 要暗 ~116；我们暗 74k 处 expected 要亮 ~197）。modelLightDir 的 mgl-raw 球面公式（az+90）在渲染帧（§643 y 镜像）里把影子投到了镜像侧。`shadows-normal-offset` 用 modeldiralt=1（§683 场景帧 ls.dir）实测 **133,444 → 97,644（−35,800）**；但同一翻转使 quantization-shadows 2,332 → 88,238 灾难回归（其方向光未声明 direction，环境默认物化后同样被翻转）。
+最终规则：`shadowLightState` 非空（cast-shadows 生效）且声明了方向的样式用 ls.dir（§683 场景帧），其余保持 mgl-raw——**两夹具同时达到各自最优：97,644 / 2,332**。
+累计：shadows-normal-offset 171,310 → **97,644（−43%）**；守卫零回归。剩余：①阴影范围（quad 侧光源方向同为 mgl-raw，地面投影应同步改用 ls.dir 验证）；②墙面反照率/环境光配比（expected 暖白/灰蓝 vs current 过曝/navy）；③[MBCG]/[MBShGPU] 探针保留。
