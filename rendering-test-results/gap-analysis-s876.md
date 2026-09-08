@@ -537,3 +537,6 @@ MBShadowRenderer 的光源方向从 §560 mgl-raw 球面公式改为优先 light
 ### §885 终二十三附：范围差距测量与剩余工作（2026-09-08）
 统一方向后实测：expected 阴影暗区 ~13.2k px（bottom-right 采样区）vs ours ~3.4k（agree 3,580——我们的暗区是 expected 的子集，方向正确但范围 ~26%）。阴影颜色已对齐（quad factor 0.28 → ~117 vs expected 112）。范围差距候选：①光源仰角——dir.z=0.648（仰角 40°，polar 50 from zenith）与 mgl 实际渲染的阴影长度（约 2.6×）不符——需 mgl 侧参考（polar 语义或阴影相机 fit 差异）；②阴影相机 §643 紧凑 fit 的 ±691 覆盖是否截断远端阴影（几何上 173 单位影子在界内，存疑）；③depth map 的 16-bit packed 解码在 quad 路径的精度。
 模型墙面：expected 暖白(240) vs current 过曝(255)，暗部 expected 灰蓝(96-150) vs current 深navy(7-50)——PBR 分支 ambient/direct 配比与反照率读取标定。
+
+### §885 终二十四：地面区域对比——剩余差距在 PBR 环境光配比（2026-09-08）
+bottom-left/bottom-right 象限并排对比：①地面 quad 在两象限均已渲染（底色/受光面匹配 expected），阴影暗区范围仍偏小（终二十三附）；②**屋顶——current 深棕 vs expected 浅暖灰；③墙面对比度过高——current 纯白(255)+深navy(7,24,42) vs expected 柔和暖灰(240,235,225)+灰蓝(96,128,150)**。高对比特征指向 PBR 分支的 ambient 值域：uMB3DAmb=ambientColorLinear 若按 sRGB→linear 转换（0.25^2.2≈0.048）而 mgl 直接用 0.25 线性值（prelude 注释"all color values expected linear"，lights 的 color×intensity 不做二次转换），ambient 直射比被压低 ~5× → 高对比。下轮入口：①核查 MBEnvironmentManager lighting3DState.ambientColorLinear/directionalColorLinear 的转换（对齐 mgl lights 的 linear 语义：color × intensity 直接线性使用）；②model PBR 参考着色器未随 mapbox-gl-js vendor（shaders/ 无 model.fragment），精确对齐需闭式迭代或上游参考；③每步 shadows-normal-offset + quantization-shadows 2,332 双验证。
