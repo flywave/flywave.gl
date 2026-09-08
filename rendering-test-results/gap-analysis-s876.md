@@ -616,3 +616,7 @@ ambmul=2/3 A/B（uMB3DAmb×2/×3）：均为 179,062（比基线 115,949 恶化 
 ### §885 终四十二：PBR per-term 定量闭环（2026-09-08）
 pbrterm=2（R=spec·LF, G=diff·LF）解码：最大区域 (0,0,0.5) n=20,304 = **背光面 direct=0（NdotL≤0 clamp，物理正确）+ 仅间接光（albedo·amb·adf ≈ 0.17 线性 → sRGB ~115）**；受光面 direct≈1.0+（255 饱和）；窗户（metal=1）= spec-only 深部 ✓ 物理一致。与 expected 的差距定性：①背光面 expected ~200-210（0.6 线性）vs ours ~115（0.17 线性）——**mgl 的背光面含 ~0.5 的 direct 残留或更强的 ambient**（shadowed_light_factor 的半色调语义：背光面经 shadow map 自采样边界 → factor≈0.5 → direct×0.5）；②窗户 metal env 组成 3-4×。
 下轮入口：①direct 项对背光面给 0.5 残留（mgl shadowed_light_factor 的 shadow-map 自采样语义：背光面不在深度图中 → map=1.0 → lit=1 → full direct——即**移除 LF 的 NdotL clamp 对背光面的归零**，改用 shadow map 的 lit 因子调制）；②metal env 提亮（EnvBRDF 的 specC 用 albedo 而非 0.04 对 metal）；③每步双夹具验证。
+
+### §885 终四十四：metal env 提亮 A/B 定案——否定（2026-09-08）
+metenv=1（metal 部件 envLight ×4）：237,288 vs 115,949（+121k 恶化）——**metal env 提亮假设否定**。metal 窗户的深 navy 并非 env 强度不足，而是 mgl 的 model PBR 对 metal 部件的组成与我们不同（mgl 的窗户灰蓝含 diffuse 成分——mgl 的 model 材质可能不做 metalness 分离，或 metalness 语义不同）。
+metenv 基建保留（默认关闭，无参数不影响跑分）。剩余标定需 mgl model PBR 参考（未 vendor）。

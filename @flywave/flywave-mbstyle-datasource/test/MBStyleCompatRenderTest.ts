@@ -130,6 +130,10 @@ function discoverTests(): TestEntry[] {
         (a: string) => a.startsWith("pbrterm="))?.slice("pbrterm=".length);
     if (pterm === "1") (globalThis as any).__mbPbrTermDbg = 1;
     if (pterm === "2") (globalThis as any).__mbPbrTermDbg = 2;
+    // §885 终四十三: metenv=1 → the metal env boost A/B.
+    const metenv = (window as any).__karma__?.config?.args?.find?.(
+        (a: string) => a.startsWith("metenv="))?.slice("metenv=".length);
+    if (metenv === "1") (globalThis as any).__mbMetalEnv = 1;
     // §885 终四十: ambmul=N → the model ambient multiplier A/B.
     const ambmul = (window as any).__karma__?.config?.args?.find?.(
         (a: string) => a.startsWith("ambmul="))?.slice("ambmul=".length);

@@ -967,6 +967,10 @@ export function applyMglModelLighting(
                              float mbADF = mix(mbDirMin, 1.0, min(mbNdotLDir + 1.0, 1.0))
                                  * mix(0.92, 1.0, mbN0.z * 0.5 + 0.5);
                              vec3 mbEnvLight = uMB3DAmb * mbADF;
+                             // §885 终四十三: metal env boost A/B (metenv=1)
+                             if ((globalThis as any).__mbMetalEnv === 1) {
+                                 mbEnvLight *= 4.0;
+                             }
                              vec3 mbIndirect = EnvBRDFApproxMb(mbSpecC, mbR, mbNdotV) * mbEnvLight
                                  + mbDiffC * mbEnvLight;
                              mbCol = clamp(mbDirect, 0.0, 1.0) + mbIndirect;
