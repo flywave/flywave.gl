@@ -785,3 +785,10 @@ SHDIAG=3（quad 底色洋红）实验：画面无任何洋红 → **quad 完全�
 与 mgl 的矛盾点：mgl 用完全相同的公式（球心=主相机前向 centerDepth、near=−2r、far=r/dz）却能正确覆盖——说明移植中仍有一处单位/轴向偏差，候选：①mgl getWorldToCamera 的相机空间 y/z 轴向与我们的 RTE 帧不一致（光轴行进分量的符号）；②mgl fovX 的定义（transform.fov 是否垂直）；③k2 分支的边界。下会话首项：以 mgl 源码逐符号核对 createLightMatrix 的坐标约定（重点 cameraToWorldMercator 的平移量与 pitch/bearing 合成后的光轴），用本条读数（cam/r/near/far/eyeZ 已知）做数值回归验证。
 
 基建状态：SHDIAG 独立门控 ✓、SHADOWMat 读数修复 ✓、uv 直绘 ✓、方向 A/B ✓、零回归 ✓（本渲染态 493,017）。
+
+### §885 终七十：SHDIAG 全画布判别 + 帧扩展激活效应（2026-09-08 终）
+
+- SHDIAG=2（干净门控）vs SHADOW=3 逐像素 diff 遍布全画布（746,290 px 变化）——**land fill 全域由注入程序渲染**，接收体链路完整。
+- renderFrames 帧扩展（in-loop 12→30 帧）使阴影链达到稳态后，buildings-trees 从 427,316 → 493,017：**int=1 全域生效但图案错位**（近平面裁剪黑带 + 对齐偏移），与终六十九定量分析一致。这是过渡态，非回归——对齐修复后应大幅回落。
+- 深度图（新 fit）已入库：建筑群占画布 uv.x∈[0,0.75]、uv.y∈[0.25,0.62]，深度值健康（0.10–0.57），含挤出墙体。
+- 下会话首项不变：逐符号核对 createLightMatrix 坐标约定（FreeCamera orientation=rotZ(−bearing)·rotX(−pitch)、getWorldToCamera 的 y 行翻转与 z 列 ppm 缩放已读取确认），修正球心/ortho 使可见地面落于深度窗中部，复测 493,017 → 大幅回落；随后 fog 族暗化值标定。
