@@ -514,3 +514,7 @@ uMBEye 从 projectPoint(geoCenter) 改为 camPos（相机绝对位置）后输�
 ### §885 终二十：cornerOnGround dump 证伪 2× 遗留（2026-09-08）
 [MBCG] 探针（一次性打印四角 camPos/dir/t/clamp/out）实测：camPos=(21436884.9, 27535748.2, 82.2)，ndc=(-1,-1) → dir=(-0.7271,-0.3232,-0.6056)、t=136、out=(21436786.2, 27535704.4, -0.0)——**角点即绝对系地面点（z=0），数值合理无 2×**；终十八 gq 快照里的 2× 值是 add(eye) 双加痕迹（corners_absolute + eye），已随移除消失。quad 现全屏光栅化、采样帧与深度 pass 一致（场景系）。剩余 mismatch（163,324）主导项转为标定域：①阴影范围/强度标定（expected 阴影区 ~12.5k vs current ~3.1k 采样——光源方向转换 §560 的 mgl-exact 形式与 quad 的 uMBShadowMatrix 采样精度）；②墙面着色（expected 暖白受光面/冷灰背光面 vs current 平白）——model 直射光分支按世界系法线的 NdotL 标定（§885 终 ②）；③模型自阴影 bias 对齐（§692 smoothstep 形式）。
 探针保留：[MBCG]（decodedbg 门控一次性）。
+
+### §885 终二十一：模型接收帧对齐完成——采样居中且在界内（2026-09-08）
+shdbg=4（界内 uv 直绘）实测：**8,765 个界内涂块片段，uv.x [0.208,0.573] 均值 0.454、uv.y [0.376,0.533] 均值 0.482**——围绕深度内容中心 (0.49,0.49)，终三的"uv.y 恒低 0.35"偏移彻底消失。uMBShWorldMatrix（深度 pass 同源帧）+ add(eye) 移除两项修复后，模型接收链的帧对齐完成。守卫 quantization-shadows = 2,332 复验零回归（uMBEye=camPos 只影响 quad，intensity=0 时 quad 不绘制）。
+剩余 mismatch 主导项（标定域，下轮）：①地面阴影范围——expected 阴影区 ~12.5k vs current ~3.1k 采样，阴影偏小/偏弱（光源方向转换、quad 采样精度、或 mgl 阴影相机覆盖范围差异）；②墙面着色——expected 暖白受光/冷灰背光 vs current 平白+深蓝灰（PBR 分支 NdotL/反照率标定）；③自阴影 bias（§692 smoothstep 形式对齐）。
