@@ -845,3 +845,9 @@ ground-shadow-fog 图像级对比：expected = 近地街景（pitch 70、zoom 16
 - 结论：**我方雾曲线对比度不足（近景过白 + 远景不足白的形状错误），非单一尺度缩放可修**。mgl 的 u_fog_range 并非直接取样式值——style/fog.ts 的 state getter 会给 range 加上 `0.5/tan(fov/2)` 的 shift（§701 注释自证），且 fog depth 的归一化基准（mercatorFogMatrix 的 1/ctcd 缩放）需逐符号核对。
 - 下会话首项：逐符号移植 mgl style/fog.ts 的 getFogRange/state getter 与 transform 的 mercatorFogMatrix 缩放（把 fogMglRange/fogMglShift 的来源链彻底对齐），替代 blind 尺度 A/B。
 - fogmul 参数保留（默认 1 = 零行为变化）。
+
+### §885 终八十三：fov-adjusted fog range 落地——真阴影首次浮现，分数过渡态（2026-09-08 终）
+
+ground-shadow-fog 实测：fov-adjusted range（[−0.5,3.0]+shift1.5 → [1.0,4.5]，mgl fog.ts:87 state getter 语义）下**真阴影首次浮现**（画面出现 (0,0,0) 纯黑墙面/地面阴影），分数 109,221→154,337 过渡态——新增的黑块位置未对齐 expected，属相机/放置对齐未完成所致；白洗状态的高分是错位白雾与 expected 白区的巧合匹配。以 mgl 正确语义为准保留本修正。
+- 同步核对：dome 大气 shader 的 (fogMglRange.x + fogMglShift) 与新 range 数值恒等（旧 −0.5+1.5 = 新 1.0），无需改动。
+- 下会话：①ground-shadow-fog 相机放置对齐（eye 高度 273 vs expected 视角的 ~185 估算，pitch 应用核对）；②对齐后阴影暗化值标定；③buildings-trees 图案覆盖。

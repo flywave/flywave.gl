@@ -1170,7 +1170,7 @@ export class MBEnvironmentManager {
             if (!lib2.fogMglShift) {
                 lib2.fogMglShift = { value: shift };
                 lib2.fogMglDistCam = { value: distCamM };
-                lib2.fogMglRange = { value: new THREE.Vector2(rawRange[0], rawRange[1]) };
+                lib2.fogMglRange = { value: new THREE.Vector2(rawRange[0] + shift, rawRange[1] + shift) };
                 for (const lib of Object.values(THREE.ShaderLib)) {
                     const u = (lib as any).uniforms;
                     if (u && typeof u === 'object' && !u.fogMglShift) {
@@ -1182,7 +1182,14 @@ export class MBEnvironmentManager {
             }
             lib2.fogMglShift.value = shift;
             lib2.fogMglDistCam.value = distCamM;
-            (lib2.fogMglRange.value as THREE.Vector2).set(rawRange[0], rawRange[1]);
+            // §885 终八十二: mgl fog.ts state getter feeds the FOV-ADJUSTED
+            // range (fovAdjustedRange = [r0+shift, r1+shift], fog.ts:87). The
+            // raw style range shifted the fog window 1.5 units low. With the
+            // adjusted range the ground shadow pattern becomes VISIBLE (real
+            // black shadows) — score temporarily worsens until the camera/
+            // placement alignment lands (终八十三).
+            (lib2.fogMglRange.value as THREE.Vector2).set(
+                rawRange[0] + shift, rawRange[1] + shift);
         }
         // Mapbox renders the atmosphere glow (space→high→fog gradient) in the
         // sky region whenever fog is enabled and the horizon is visible — even
