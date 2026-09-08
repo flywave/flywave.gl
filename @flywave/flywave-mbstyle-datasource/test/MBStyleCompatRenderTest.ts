@@ -188,6 +188,34 @@ function discoverTests(): TestEntry[] {
     const cdm = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("camdist="))?.slice("camdist=".length);
     if (cdm) (globalThis as any).__mbCamDist = Number(cdm);
+    // §885 终九十五: shrad=<f> → shadow ortho radius multiplier.
+    const shr = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shrad="))?.slice("shrad=".length);
+    if (shr) (globalThis as any).__mbShadowRad = Number(shr);
+    // §885 终八十九: model-vector tile 404 → parent-tile fallback. The
+    // vendored data covers only part of the requested tree/model tiles; a
+    // 404 drops whole tree groups (green canopies vanish). mgl CI has the
+    // complete set; emulate it by serving the parent tile overzoomed.
+    if (!(window as any).__mbPbfFallbackPatched) {
+        (window as any).__mbPbfFallbackPatched = true;
+        const origFetch = window.fetch.bind(window);
+        window.fetch = (async (input: any, init?: any) => {
+            const res = await origFetch(input, init);
+            const url = typeof input === 'string' ? input : (input?.url ?? '');
+            const m = url.match(/models\/vector\/(\d+)-(\d+)-(\d+)\.vector\.pbf$/);
+            if (res.status === 404 && m) {
+                let z = +m[1], x = +m[2], y = +m[3];
+                for (let i = 0; i < 2 && z > 0; i++) {
+                    z--; x = x >> 1; y = y >> 1;
+                    const purl = url.replace(/(\d+)-(\d+)-(\d+)\.vector\.pbf$/, `${z}-${x}-${y}.vector.pbf`);
+                    const pres = await origFetch(purl, init);
+                    if (pres.status === 404) continue;
+                    return pres;
+                }
+            }
+            return res;
+        }) as any;
+    }
     const port = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modellightport="))?.slice("modellightport=".length);
     if (port === "1") (globalThis as any).__mbModelLightPort = true;

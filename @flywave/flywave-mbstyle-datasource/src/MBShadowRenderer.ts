@@ -346,6 +346,11 @@ export class MBShadowRenderer {
         this.m_groundUniforms.uMBGroundZ.value = groundZ;
         this.m_eye.copy(eye);
         const corners = this.m_corners;
+        // §885 终九十七: the rteCam's projectionMatrixInverse is stale (its
+        // projection matrix is copied from the logical camera without
+        // recomputing the inverse) — recompute so cornerOnGround's unproject
+        // produces 4 DISTINCT ground corners.
+        cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
         const far = radius * 8;
         const camPos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
         this.cornerOnGround(cam, camPos, -1, -1, far, groundZ, corners[0]);
@@ -617,6 +622,13 @@ export class MBShadowRenderer {
         // roundingMarginFactor (resolution / (resolution − 1)) — sub-texel
         // padding against edge clipping; shadow map is 1024 here.
         radius *= 1024 / 1023;
+        // §885 终九十五: frustum-sphere fit under-covers the caster extents —
+        // on a square viewport (aspect 1) k shrinks and casters clip at the
+        // ortho edge (truncated ground shadows). A/B gate: shrad=<f>.
+        {
+            const rf = Number((globalThis as any).__mbShadowRad ?? 1);
+            radius *= rf;
+        }
         const rteCam2 = (this.m_mapView as any).getRteCamera?.() as THREE.PerspectiveCamera | undefined;
         const rcam = (rteCam2 ?? camera);
         rcam.updateMatrixWorld();
