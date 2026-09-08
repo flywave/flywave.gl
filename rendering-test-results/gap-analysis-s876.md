@@ -913,3 +913,9 @@ cos(lat) 修正后 buildings-trees 读数：eyeZ=362（=459×cos(37.78°) ✓ �
 ### §885 终九十四：墙面色调差归因——opacity 0.4 半透明合成（2026-09-09）
 
 buildings-trees 挤出涂层 = fill-extrusion-color white + **opacity 0.4**。墙面最终色调 = 0.4×(白×光照 k) + 0.6×背景（其后的地面/阴影/其他建筑）。样式灯光 ambient=黑·0.4 → k_unlit=0（黑墙）✓ 我方光照公式一致；我方墙面偏亮（51-106）的原因 = **其背后的地面未被阴影图案覆盖**（图案错位的连带效应）——expected 黑墙 = 黑墙 + 背后黑地面的合成。结论：墙面色调差与地面图案错位同源，修复地面图案对齐后墙面自动收敛；标定顺序应为 地面图案 → 墙面自然收敛 → 暗化值微调。
+
+### §885 终九十六：地面接收体 uv 退化实锤——正交盒不变性（2026-09-09）
+
+shrad=1.5（正交半径 ×1.5，r 470→706 读数确认生效）后 buildings-trees **537,993 逐位不变**——地面接收体的采样 uv 与正交盒完全无关，即 uv 场退化为常值（run44 直绘实测恒 (0.37,0.37,0.37)）。唯一能产生恒定 uv 的机制：cornerOnGround 的 4 个角点坍缩——其反投影用 `cam.projectionMatrixInverse`，而 rteCam 的投影矩阵是拷贝的（终三十一已知其 inverse 不更新），identity/stale 的 inverse 使 4 条角射线坍缩/平行 → 角点重合 → uv 恒定 → 恒采样同一 texel → 恒 lit。**地面阴影图案从未工作过；可见暗带全部为建筑自身暗面。**（此前"五连修后图案呈现"的判读有误——那是建筑暗面。）
+
+下会话首项（单点修复）：在 cornerOnGround/ prepGroundQuad 中显式 `cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert()`（终三十一只修了 quad 的 uMBInvProj，未修 cornerOnGround 用的 cam.projectionMatrixInverse），复测地面阴影是否全域正确呈现。
