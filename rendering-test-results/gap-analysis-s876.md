@@ -660,3 +660,7 @@ lightxflip=1（lightDir.x 翻转）：237,288 vs 115,949（恶化 +121k）——
 vendor 参考 shadow_utils.ts 的 calculateGroundShadowFactor 完整读取：factor = amb_lin/(amb_lin + dir_lin·NdotL_ground) 逐通道，**linearVec3TosRGB 编码后使用**（sRGB 域混合）。expected 地面 112 = clear(211) × 0.53 ≈ the sRGB factor ✓✓。
 关键结论：**mgl 的 model-layer 地面 = 背景 × 环境比因子（均匀，无投射阴影图案）**——expected 的暗色地面即此均匀暗化，非 cast-shadow 图案。当前恢复的 f0aa9ea1 状态（cast-shadow 注入版）地面=201 lit——与 expected 的 112 均匀暗化差一个环境比因子。
 下会话首项（明确）：ground quad 改为**均匀环境比暗化**：`gl_FragColor.rgb *= mix(vec3(1), pow(groundShadowFactor, 1/2.2), uMBShadowIntensity)`（去掉 cast-shadow 采样）——mgl 的 model 阴影 = shadowed_light_factor 只作用于模型表面（墙自阴影），地面不接收 cast shadow。预期 shadows-normal-offset 地面区（112 vs 201）大幅收敛。
+
+### §885 终五十三：SwiftShader 上下文耗尽——环境重置无效，需机器重启（2026-09-08）
+完整环境重置（kill Chrome + 清 profile + 清 webpack 缓存）后，d1d6797b（终三十九）代码重测：**渲染完全空白（全画布 uniform gray，模型/地面/quad 全部消失）**——此前同代码为 115,949。SwiftShader（软件渲染器）在大量 WebGL 上下文创建/销毁后资源耗尽，**机器重启才能恢复**。缓解：①每次 karma 会话限制 WebGL 上下文数量（m_shRenderer 复用/池化）；②机器重启后重测。
+本会话最终交付（已提交，终十四～终五十二）：shadows-normal-offset 171,310→115,949（−32%）；buildings-trees-shadows-casting 583,410→428,064（−27%）；守卫 2,332 零回归；mgl 参考定位+语义提取；PBR per-term 探针；六项 A/B 定案；三个历史假设证伪。
