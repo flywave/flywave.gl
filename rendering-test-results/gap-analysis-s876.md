@@ -836,3 +836,12 @@ ground-shadow-fog 图像级对比：expected = 近地街景（pitch 70、zoom 16
 - mgl 雾公式精确读取（_prelude_fog）：`t = (depth − range.x)/(range.y − range.x)`，depth = length(u_fog_matrix·pos)，**u_fog_matrix 是把目标点距离归一化为 1 的矩阵**（mercatorFogMatrix）；opacity = α·min(1,1.0075·(1−exp(−6t))³)。
 - 我方白化定量：若 depth 先以米计再除以 distCam（重复归一化），画面中心 t≈(1+0.5)/3.5≈0.43 → opacity ≈ 0.79 → **全帧 ~80% 白洗 ✓ 与观测吻合**（expected 中心应 t≈1 → 中心其实也接近全雾，但近景 t≈0.1 → 清晰）。修正方向：接收体雾深度应以「目标点距离=1」为尺度（fogMglShift/distCam 的组合式中删去多余的一次 distCam 除法，或等价地把 uMbDistCam 提升到 t 分子侧），逐符号对照 mgl mercatorFogMatrix 的缩放实现后修。
 - 另：挤出注入状态需查 __mbExtrusion3DLit（drawlog shu 是模型接收体标记，不适用）。
+
+### §885 终八十一：fogmul 单变量 A/B——曲线形状错误定案（2026-09-08 终）
+
+新增 fogmul=<N> 单变量参数（仅缩放 uMbDistCam，不动 metersPerUnit/vertical-limit）。fogmul=2：ground-shadow-fog 109,221→126,333（+17k 恶化）。结合终七十六的 zoom−1（等价于 distCam×2 + metersPerUnit×2 复合）：
+
+- distCam×2 → 近景雾变淡（趋向正确）但远景白雾同步变淡（偏离 expected 的全白远场）→ 净恶化；
+- 结论：**我方雾曲线对比度不足（近景过白 + 远景不足白的形状错误），非单一尺度缩放可修**。mgl 的 u_fog_range 并非直接取样式值——style/fog.ts 的 state getter 会给 range 加上 `0.5/tan(fov/2)` 的 shift（§701 注释自证），且 fog depth 的归一化基准（mercatorFogMatrix 的 1/ctcd 缩放）需逐符号核对。
+- 下会话首项：逐符号移植 mgl style/fog.ts 的 getFogRange/state getter 与 transform 的 mercatorFogMatrix 缩放（把 fogMglRange/fogMglShift 的来源链彻底对齐），替代 blind 尺度 A/B。
+- fogmul 参数保留（默认 1 = 零行为变化）。

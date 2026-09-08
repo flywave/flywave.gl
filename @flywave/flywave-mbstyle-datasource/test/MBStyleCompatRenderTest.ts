@@ -179,6 +179,10 @@ function discoverTests(): TestEntry[] {
     const sho = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shoff="))?.slice("shoff=".length);
     if (sho) (globalThis as any).__mbShadowOff = sho;
+    // §885 终八十: fogmul → distCam multiplier (single-variable fog A/B).
+    const fmul = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("fogmul="))?.slice("fogmul=".length);
+    if (fmul) (globalThis as any).__mbFogMul = Number(fmul);
     const port = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modellightport="))?.slice("modellightport=".length);
     if (port === "1") (globalThis as any).__mbModelLightPort = true;

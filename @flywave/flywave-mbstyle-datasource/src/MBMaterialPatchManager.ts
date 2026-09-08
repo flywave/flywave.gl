@@ -328,9 +328,13 @@ export class MBMaterialPatchManager {
                         (512 * Math.pow(2, mvz?.zoomLevel ?? 16));
                     // §701: mgl fog depth normalization — camera-to-center
                     // metres (calculateDistanceFromZoomLevel semantics).
+                    // §885 终八十: fogmul — single-variable distCam A/B (the
+                    // zoom−1 attempt also doubled metersPerUnit, compounding
+                    // the vertical-limit path).
+                    const fogMul = Number((globalThis as any).__mbFogMul ?? 1);
                     fu.uMbDistCam.value = ((mvz as any)?.focalLength ?? 768) *
                         EarthConstants.EQUATORIAL_CIRCUMFERENCE /
-                        (256 * Math.pow(2, mvz?.zoomLevel ?? 16));
+                        (256 * Math.pow(2, mvz?.zoomLevel ?? 16)) * fogMul;
                     const lib2 = (THREE.UniformsLib as any).fog;
                     fu.fogMglShift.value = lib2.fogMglShift.value;
                     fu.fogMglDistCam.value = lib2.fogMglDistCam.value;
