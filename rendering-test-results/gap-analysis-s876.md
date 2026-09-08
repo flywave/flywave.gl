@@ -943,3 +943,9 @@ shrad=1.5（正交半径 ×1.5，r 470→706 读数确认生效）后 buildings-
 ### §885 终一百零一：联合诊断——roads 已注入，land fill 未注入（2026-09-09）
 
 SHDIAG=2 + DECODEDBG 联合运行（新相机基准）：道路（MeshBasic draped）涂出 uv 场且被 refresh ✓；**可见的 land fill 地面（灰色）无任何注入涂装**——即 land fill 材质从未被 injectGroundShadow 触达。候选：①land mesh 位于 m_sceneRoot 而 scene sweep 只遍历 m_scene；②land 材质被早前 pass 标记 __mbShadowSkipped；③引擎工厂 fill 材质创建时机晚于 sweep 的覆盖窗口（§586 双实例问题的变体）。下会话首项：在 sweep 中对 land fill 的材质实例打印 uuid/type/skip 标记（一次性），确认逃逸路径；修复后地面阴影图案应立即呈现（新相机下方向/长度已验证正确）。
+
+### §885 终一百零二：正交盒大小排除 + m_scene 外无逃逸 mesh（2026-09-09）
+
+①shrad=1.5（正交半径 ×1.5，r 470→706 读数确认）：分数 537,993 逐位不变——正交盒覆盖大小不影响可见阴影图案（lxjk 最小球已含视锥；视锥外 caster 裁剪只影响屏外阴影）。②m_sceneRoot census：m_scene 外无逃逸 mesh（outside=0）——sweep 遍历根无问题。③land fill 的注入状态需逐实例 mu 对照（终九十七遗留）。
+
+**当前认知图**：地面阴影图案的compare 链路（corners→matrix→采样）各环节读数均"正常"但合成结果无阴影；剩余可疑点收敛为采样纹理绑定（uMBShadowMap 在 fill 程序里的实际绑定 — 终三十二 era 曾有 DataTexture 绑定问题的历史）与 depth 值域（16-bit pack 在新窗口的 hi/lo 比例）。下会话：直接 readPixels 验证 fill 程序采样到的 texel 值（SHDIAG 变体输出 sampD），或换 sampler2DShadow 硬件比较（mgl 同款）绕过软件比较域。
