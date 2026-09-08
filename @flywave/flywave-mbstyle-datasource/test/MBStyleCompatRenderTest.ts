@@ -124,6 +124,11 @@ function discoverTests(): TestEntry[] {
     const alt = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modeldiralt="))?.slice("modeldiralt=".length);
     if (alt === "1") (globalThis as any).__mbModelDirAlt = true;
+    // §885 终三十七: pbrterm=1 → the model PBR branch paints its per-term
+    // values (R=direct.r/2, G=indirect.r/2, B=mbLF) for offline decode.
+    const pterm = (window as any).__karma__?.config?.args?.find?.(
+        (a: string) => a.startsWith("pbrterm="))?.slice("pbrterm=".length);
+    if (pterm === "1") (globalThis as any).__mbPbrTermDbg = 1;
 }
 {
     // §744: unlit-clamp restore A/B (emission-strength regression candidate ②).

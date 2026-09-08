@@ -596,3 +596,7 @@ ground quad 材质从 ShaderMaterial 换为 **MeshBasicMaterial+onBeforeCompile*
 
 ### §885 终三十六：quad 色调核实 + 模型标定入口（2026-09-08）
 ②核实：MeshBasic quad 的调制管线（linear 域 ×pow(factor,2.2) → colorspace 编码）数学上已正确——阴影色 = clear×factor^0.4545 ≈ 118 vs expected 112（Δ6，小项）。①剩余主导项确认为**模型 PBR 分支的 metal/env 标定**：expected 窗户(metalness=1 part)灰蓝(96-150) vs current 深 navy(7-50)——metal 部件的 EnvBRDF/spec 项过弱或顶点色反照率读取偏差；墙面 255 过曝为直射项 NdotL·albedo 饱和。下轮：①在 PBR 分支加 per-term 像素探针（direct/indirect/spec 分值直绘）定位 metal 窗户的暗源；②ambient 配比 A/B（uMB3DAmb 强度扫描）；③shadow 正常后重测 walls。
+
+### §885 终三十七：PBR per-term 探针实测——direct/indirect 双双 ~1.5 超强（2026-09-08）
+pbrterm=1 探针（R=direct.r/2, G=indirect.r/2, B=LF）解码模型区域：**direct ≈ 1.5、indirect ≈ 1.5、LF ≈ 0.75**——两项均比 mgl 预期（总 ~0.7-1.0）强 2-3×，墙面 255 饱和与窗户暗部同源。原因候选：①GGX D 项在低粗糙度（mbx bake 的 smooth 墙）+掠射角的尖峰；②EnvBRDF 近似的 F 项在掠射角 → 1；③ambient 尺度（uMB3DAmb=0.25 线性 vs mgl 的 lights 语义）。mgl 的 model PBR 参考着色器未随 mapbox-gl-js vendor（shaders/ 无 model.fragment），精确对齐需逐项数值迭代。
+下轮入口：①PBR 分支加 spec/diff 拆分直绘（分离 D 项尖峰 vs diffuse 过强）；②direct 项 clamp/A/B（mgl 的 specular 可能有 cap——逐项数值对比 mapbox 官方渲染文档）；③ambient 系数 A/B（uMB3DAmb ×2 后墙面暗部应上浮至 expected 的灰蓝域）；④每步 shadows-normal-offset + quantization-shadows 双验证。
