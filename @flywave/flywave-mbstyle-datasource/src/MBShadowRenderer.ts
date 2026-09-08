@@ -28,6 +28,7 @@ export interface ShadowUniformState {
     matrix: THREE.Matrix4;
     map1?: THREE.Texture;
     matrix1?: THREE.Matrix4;
+    texel1?: number;
     intensity: number;
     /** Screen-corner ground-plane world positions (NDC (-1,-1),(1,-1),(1,1),(-1,1)) —
      * receivers interpolate their ground world pos from gl_FragCoord (§692). */
@@ -146,6 +147,7 @@ export class MBShadowRenderer {
             matrix: this.m_matrix,
             map1: this.m_shTex1 ?? undefined,
             matrix1: this.m_matrix1,
+            texel1: (8 * this.m_shadRadius) / 1024,
             intensity: this.m_intensity,
             corners: this.m_corners,
             eye: this.m_eye,

@@ -1058,3 +1058,12 @@ cascade-1 远场回退（4× extents 第二深度 pass + fills cascade 选择 + 
 shadowhw=1 + shadowbias=0.002：buildings-trees 943,293（HW 基线 904,250，软件路径 457,874）——放宽 bias 放大 HW 值域偏差，**HW 路径维持默认关闭**。软件 16-bit pack 路径在当前架构下仍为最优。
 保持状态：buildings-trees 457,874（cascade-1 回退后最优）、fog 族 161,252/125,686、守卫 10,138/10,260 逐位零回归。
 下会话队列：①cascade-1 采样质量微调（PCF/软比较）；②fog 暗化值微调；③仓库外数据补齐（landmark 瓦/models/vector 瓦/globe-terrain DEM——向 mgl CI 索取）；④re-baseline 续跑补齐全量快照。
+
+### §885 终一百二十三：cascade-1 PCF 软化——fog 族再进一步（2026-09-09）
+
+cascade-1 4-tap PCF（uMBShadowTexel1 = 8r/1024）落地：
+- **ground-shadow-fog：161,252 → 96,899（较基线 167,010 −42%）**；
+- hard-cutoff：125,686 → 126,781（+1.1k 轻微）；
+- buildings-trees 457,874 不变；守卫 10,138/10,260 逐位零回归。
+累计（自终七十七）：ground-shadow-fog 167,010→96,899（−42%）、hard-cutoff −24%、守卫零回归、buildings-trees 457,874（−0.4% 过渡）。
+下会话：①hard-cutoff +1.1k 轻微回归归因（PCF 对硬边样式的影响）；②buildings-trees 地面接收体惰性（mbSUV/uMBRes 二分）继续；③fog 暗化值微调。

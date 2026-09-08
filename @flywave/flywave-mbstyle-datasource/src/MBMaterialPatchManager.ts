@@ -305,6 +305,7 @@ export class MBMaterialPatchManager {
                             // listener (patchTileMaterials + shadow pass).
                             if (u.uMBShadowMatrix) u.uMBShadowMatrix.value = shadowState.matrix;
                             if (u.uMBShadowMap1) u.uMBShadowMap1.value = shadowState.map1 ?? null;
+                            if (u.uMBShadowTexel1) u.uMBShadowTexel1.value = (shadowState as any)?.texel1 ?? u.uMBShadowTexel1.value;
                             if (u.uMBShadowMatrix1) u.uMBShadowMatrix1.value = shadowState.matrix1 ?? null;
                             if (u.uMBGC) u.uMBGC.value = shadowState.corners;
                             if (u.uMBEye) u.uMBEye.value = shadowState.eye;
@@ -3095,6 +3096,7 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBShadowMatrix = { value: shSeed ? shSeed.matrix.clone() : new THREE.Matrix4() };
             // §885 终一百一十九: cascade-1 far-field uniforms.
             shader.uniforms.uMBShadowMap1 = { value: shSeed?.map1 ?? null };
+            shader.uniforms.uMBShadowTexel1 = { value: (2.0 * (shSeed ? 470 : 470)) / 1024.0 };
             shader.uniforms.uMBShadowMatrix1 = { value: shSeed ? (shSeed.matrix1 ? shSeed.matrix1.clone() : new THREE.Matrix4()) : new THREE.Matrix4() };
             shader.uniforms.uMBShadowIntensity = { value: shSeed ? 1 : 0 };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
@@ -3134,6 +3136,18 @@ export class MBMaterialPatchManager {
                             mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
                             mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
                             vec4 mbPk = texture2D(mbUse1 ? uMBShadowMap1 : uMBShadowMap, mbShadowUv.xy);
+                            // §885 终一百二十三: cascade-1 4-tap PCF — the 4×
+                            // window has ~4× coarser texels; averaging softens
+                            // the band edges toward mgl's smooth shadows.
+                            if (mbUse1) {
+                                vec2 t1 = vec2(uMBShadowTexel1);
+                                float dsum = mbPk.r
+                                    + texture2D(uMBShadowMap1, mbShadowUv.xy + vec2(t1, 0.0)).r
+                                    + texture2D(uMBShadowMap1, mbShadowUv.xy + vec2(-t1, 0.0)).r
+                                    + texture2D(uMBShadowMap1, mbShadowUv.xy + vec2(0.0, t1)).r
+                                    + texture2D(uMBShadowMap1, mbShadowUv.xy + vec2(0.0, -t1)).r;
+                                mbPk.r = dsum / 5.0;
+                            }
                             // §527: 16-bit packed window depth (R=hi, G=lo)
                             #ifdef MB_SH_HW
                             mbShadowDepth = mbPk.r;
@@ -3181,6 +3195,7 @@ export class MBMaterialPatchManager {
                 'uniform sampler2D uMBShadowMap;\n',
                 'uniform sampler2D uMBShadowMap1;\n',
                 'uniform mat4 uMBShadowMatrix1;\n',
+                'uniform float uMBShadowTexel1;\n',
                 'uniform mat4 uMBShadowMatrix;\n',
                 'uniform float uMBShadowIntensity;\n',
                 'uniform vec3 uMBGroundShadowFactor;\n',
