@@ -629,3 +629,7 @@ lightxflip=1（lightDir.x 翻转）：237,288 vs 115,949（恶化 +121k）——
 ### §885 终四十七：会话终结与环境状态劣化发现（2026-09-08）
 连续 ~30 次 karma 运行后：**相同代码（d1d6797b 终三十九）的 plain 计分从 115,949 漂移到 179,062（+63k）**——且与 spec 移除/modellightport=0/ambmul 等无关（那些 A/B 在早期运行均为各自的稳定值）。结论：**SwiftShader/Chrome 长会话状态累积导致渲染结果漂移**——跨运行的 mismatch 对比需在环境重置后进行。本轮已完成的实质工作：①DataTexture 深度源（readPixels 字节精确，替代 CanvasTexture 链路）；②主画布 probe POST 与 drawlog 解耦；③[MBShGPU3] 扩展（quad GPU matrix/groundZ/invProj 回读）。
 下会话首项：**机器/浏览器环境重置后重测基线**（d1d6797b 代码预期回到 ~115,949），随后按终四十二入档继续（背光面 direct 残留 0.5 标定 + metal env）。
+
+### §885 终四十八：环境重置后漂移仍存在——漂移为永久性（2026-09-08）
+完整环境重置（kill Chrome + 清 profile + 清 webpack 缓存）后，d1d6797b（终三十九）代码重测：仍 179,062（非 115,949）——**渲染漂移为永久性，非会话状态累积**。可能原因：①Chrome for Testing 131 的 SwiftShader 在本机的渲染行为随系统 GPU 状态/驱动状态变化；②系统级 GPU/图形栈状态；③Chrome 自动更新残留影响 ANGLE/Vulkan 行为。缓解：换 Chrome 通道/版本（Chrome 152 的 headless WebGL 在本机不可用；可试 chrome-headless-shell 147 或重新安装 Chrome for Testing）、或机器重启后重测。
+本会话最终交付（已提交）：阴影方向全链统一、uMBShWorldMatrix 帧对齐、解析地面求交、smoothstep bias、六项 A/B 定案、完整探针体系、三个历史假设证伪。所有代码与诊断已入档（终十四～终四十八）。
