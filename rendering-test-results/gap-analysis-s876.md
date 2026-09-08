@@ -705,3 +705,12 @@ vendor 参考 shadow_utils.ts 的 calculateGroundShadowFactor 完整读取：fac
 **附带修复/基建**：drawGroundQuad 移除 m_groundUniforms 前置门（初始化死锁）；shadowdbg≥12 quad uv4 直绘探针；shadowdbg=4 接收体直绘证实注入生效；refresh 首次 0→1 激活时同步 poke mapView.update()（静态夹具 3 帧后 idle，补丁材质需要下一帧）；注入时以当前 shadowState 种子化 uniform；[MBGQInvoke]/[MBArN]/[MBRmBranch] 探针入库；修复 [MBShadowMat] 探针引用已删除的 frameCenter。
 
 **实测**：地面 cast-shadow 图案首次呈现（左上黑色投影带）——但**位置/范围与 expected 仍有明显偏移**（expected 中心区大片投影；ours 偏左上、覆盖不足），buildings-trees 427,316（基线 428,064，本轮 +9k 代价换来图案呈现）。下会话首项（明确的标定问题）：①核对 uMBShadowMatrix（m_matrix，RTE 系）与 fill 接收体重建点（绝对−eye=RTE）的帧一致性；②阴影方向/bearing 与 expected 投影方向的 A/B（mgl bearing=atan2(−dx,−dy)）；③ortho extent 与 corners far 钳制校准。
+
+### §885 终六十：链路复活的全夹具收益——fog 族 −34%（2026-09-08 终）
+
+终五十九修复的回归面复测：
+- **ground-shadow-fog：167,010 → 109,221（−34.6%）**
+- **ground-shadow-fog-hard-cutoff：165,719 → 109,568（−33.9%）**
+- 守卫 quantization-shadows：10,138 **逐位不变**（零回归；该夹具无 cast-shadows，链路不激活）
+
+地面阴影链路自终三十二起死亡的事实意味着：此前"fill 接收体已工作" Era（§560-§717）的所有地面阴影调参结论是在死链路上取得的，其参数（bias/衰减/factor 配比）需在活链路上重新标定。当前剩余缺口：①buildings-trees 投影位置/覆盖与 expected 的偏移（终五十九入档的标定入口）；②fog 族剩余 109k（图案已现、暗化值/边界待标）。
