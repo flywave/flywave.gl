@@ -792,3 +792,9 @@ SHDIAG=3（quad 底色洋红）实验：画面无任何洋红 → **quad 完全�
 - renderFrames 帧扩展（in-loop 12→30 帧）使阴影链达到稳态后，buildings-trees 从 427,316 → 493,017：**int=1 全域生效但图案错位**（近平面裁剪黑带 + 对齐偏移），与终六十九定量分析一致。这是过渡态，非回归——对齐修复后应大幅回落。
 - 深度图（新 fit）已入库：建筑群占画布 uv.x∈[0,0.75]、uv.y∈[0.25,0.62]，深度值健康（0.10–0.57），含挤出墙体。
 - 下会话首项不变：逐符号核对 createLightMatrix 坐标约定（FreeCamera orientation=rotZ(−bearing)·rotX(−pitch)、getWorldToCamera 的 y 行翻转与 z 列 ppm 缩放已读取确认），修正球心/ortho 使可见地面落于深度窗中部，复测 493,017 → 大幅回落；随后 fog 族暗化值标定。
+
+### §885 终七十一：createLightMatrix 逐符号核对完成——约定等价性证明 + 493,017 判明为涂装伪影（2026-09-08 终）
+
+- **FreeCamera 约定推导**（free_camera.ts:22 orientationFromPitchBearing + :237 radian 版 setPitchBearing + forward()/up() + getWorldToCamera y 行翻转）：mgl 光相机 forward=(dx,dy,−dz)（水平分量不翻转），x_cam=(−dy,dx,0)/sp、y_cam=(−cp·dx/sp,−cp·dy/sp,−sp)、z_cam=(−dx,−dy,dz)；我方（three lookAt up=(0,0,1)，forward=−dir）：x_cam 相同、z_cam=dir=(dx,dy,dz) 相同、y_cam=(−dz·dx/sp,−dz·dy/sp,+sp)=**mgl y_cam 的取反**。即两约定仅差相机 y 轴镜像 + 180° 方位——正交盒与深度窗在两者下覆盖**完全相同的世界区域**，深度值（z_cam）相同；y 镜像被 getWorldToCamera 的 y 行翻转抵消（mgl view=flip∘Rᵀ）。**结论：世界空间阴影图案与我方实现等价，坐标约定不再是缺口。**
+- **493,017 判明为 SHADOW=3 调试涂装伪影**（§525 readout 给全部接收体涂 (int,depth,uv.z)，黄路=(1,depth,uv.z)）；干净稳态（无 debug 门）= **427,316**，与帧扩展无关。后续对比一律不加 SHADOW≥3。
+- 阴影相机读数与深度图 dump（终六十九/七十）在等价性证明下依然有效；剩余偏移（我方图案偏左上、expected 中心左）需新假说：①expected 相机俯仰/方位与我方场景的细微差（±几度）导致的 uv 场平移；②land fill 之外的第二地面层（background 清屏色 vs quad）参与；③挤出深度噪声的系统性偏置。下会话：以 expected/ours 的暗区质心差做向量标定（单参数平移 A/B：sphereCenter ± 水平偏移），量化收敛。
