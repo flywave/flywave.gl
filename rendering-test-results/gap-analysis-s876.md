@@ -973,3 +973,9 @@ SHDIAG=5（R=0.5+10×(depth−uvz), G=uvz, B=depth）落地并实测：
 - 中心区阴影在正常渲染下呈 ~94 灰而非纯黑——雾近场强度偏大（~30% vs expected ~10%）把黑阴影洗灰，与终九十八的雾-阴影合成结论一致；
 - fogMglRange 的 fov-adjusted 修正（range.x=1.0）已使近场 t<0 → 雾应为 0——与观测 94 灰仍差一档，需核对 mbLen 的单位（vViewPosition 是否真的等于米——RTE 场景缩放系数 kFog 的折算，终八十一/§216/§249 曾有 kFog 折算）。
 - 下会话首项：核对 vFogDepth/vViewPosition 的单位折算链（kFog/fog matrix 缩放），使 d̂ 在 expected 采样点的反解值与雾曲线一致。
+
+### §885 终一百零九：fog chunk 双重 shift 修复（2026-09-09）
+
+终八十三将 shift 并入 fogMglRange 后，全局 fog_fragment chunk 的公式仍减 (fogMglRange.x + fogMglShift)——双重计数使近场多 +1.5/3.5≈+0.43 的 t（白洗量）。已修正为减 fogMglRange.x。实测：ground-shadow-fog 167,069 不变（其雾走注入路径）、buildings-trees 537,993→562,664（其场景雾经 chunk 路径，修正后雾减少暴露更多真实色调差——正确方向的过渡态）。
+保持：fog 族 167,069/165,774、守卫 10,138/10,260 逐位零回归。
+下会话：新相机+新雾基准下按 expected 采样点继续色调/暗化值标定；树冠与部分暗区待仓库外数据补齐。

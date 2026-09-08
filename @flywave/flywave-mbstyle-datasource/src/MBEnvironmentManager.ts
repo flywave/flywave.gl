@@ -60,7 +60,7 @@ THREE.ShaderChunk.fog_fragment = `
 	// world units, not mgl mercator meters (§248: the kFog fold IS the unit
 	// conversion) — fold it so depth lands in the mgl fog-unit band.
 	fogT = (fogMglShift * (vFogDepth * 0.15) / max(fogMglDistCam, 1.0)
-		- (fogMglRange.x + fogMglShift))
+		- fogMglRange.x)
 		/ max(fogMglRange.y - fogMglRange.x, 0.001);
 #endif
 	if (fogGlobeMode > 0.5) {
