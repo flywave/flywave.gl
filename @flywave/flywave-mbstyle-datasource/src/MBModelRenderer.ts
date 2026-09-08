@@ -646,14 +646,6 @@ export function applyMglModelLighting(
                     '#include <project_vertex>\n' +
                     'vMbWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;'
                 );
-                // §885: was the project_vertex anchor actually present? A
-                // missed replace leaves vMbWorldPos at (0,0,0) and silences
-                // the whole model-shadow reception.
-                if ((globalThis as any).__mbShadowDbg4
-                    && !shader.vertexShader.includes('vMbWorldPos = (modelMatrix')) {
-                    // eslint-disable-next-line no-console
-                    console.log('[MBShVert] project_vertex anchor MISSING for mat=', mat.name ?? '?');
-                }
                 // Capture the glTF albedo AFTER the base-color texture —
                 // that is the `albedo` mgl's getBaseColor feeds apply_lighting.
                 shader.fragmentShader = shader.fragmentShader.replace(
@@ -773,22 +765,43 @@ export function applyMglModelLighting(
                              float mbNdotL = clamp(dot(mbN0, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
                                  vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - uMBShEye * uMBShEyeOn, 1.0);
+                                 if (uMBShDbg > 2.5 && uMBShDbg < 3.5) {
+                                     // §885 终十六: extended-range uv painted for
+                                     // EVERY receiver fragment (moved out of the
+                                     // bounds check — see the hemisphere branch).
+                                     gl_FragColor.rgb = vec3(
+                                         clamp((mbShUv.x + 1.0) / 3.0, 0.0, 1.0),
+                                         clamp((mbShUv.y + 1.0) / 3.0, 0.0, 1.0),
+                                         clamp(mbShUv.z, 0.0, 1.0));
+                                     return;
+                                 }
+                                 if (uMBShDbg > 3.5) {
+                                     // §885 终十六: fract stripe field — never
+                                     // clamped: stripes ⇒ vMbWorldPos varies;
+                                     // flat ⇒ constant/NaN varying.
+                                     gl_FragColor.rgb = vec3(
+                                         fract(vMbWorldPos.x / 512.0),
+                                         fract(vMbWorldPos.y / 512.0),
+                                         fract(vMbWorldPos.z / 512.0));
+                                     return;
+                                 }
+                                 if (uMBShDbg > 1.5 && uMBShDbg < 2.5) {
+                                     // §885 终十六: unbounded worldPos paint —
+                                     // mode2 must not sit behind the bounds
+                                     // check (out-of-bounds fragments were
+                                     // invisible to it).
+                                     gl_FragColor.rgb = vec3(
+                                         clamp(vMbWorldPos.x / 20000.0 + 0.5, 0.0, 1.0),
+                                         clamp(vMbWorldPos.y / 20000.0 + 0.5, 0.0, 1.0),
+                                         clamp(vMbWorldPos.z / 20000.0 + 0.5, 0.0, 1.0));
+                                     return;
+                                 }
                                  if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
                                      mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
-                                     if (uMBShDbg > 2.5) {
-                                         // §885 终十: extended-range uv — uv.y/uv.x
-                                         // mapped from [-1,2] → [0,1] so
-                                         // out-of-bounds values stay readable.
-                                         gl_FragColor.rgb = vec3(
-                                             clamp((mbShUv.x + 1.0) / 3.0, 0.0, 1.0),
-                                             clamp((mbShUv.y + 1.0) / 3.0, 0.0, 1.0),
-                                             clamp(mbShUv.z, 0.0, 1.0));
-                                         return;
-                                     }
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.x, mbShUv.y, 0.5); return; }
                                      mbNdotL *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
@@ -828,22 +841,44 @@ export function applyMglModelLighting(
                              float mbLF = clamp(dot(mbN, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
                                  vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - uMBShEye * uMBShEyeOn, 1.0);
+                                 if (uMBShDbg > 2.5 && uMBShDbg < 3.5) {
+                                     // §885 终十六: extended-range uv painted for
+                                     // EVERY receiver fragment — the paint sat
+                                     // INSIDE the bounds check, so exactly the
+                                     // out-of-bounds fragments (the diagnostic
+                                     // target) rendered normally instead.
+                                     gl_FragColor.rgb = vec3(
+                                         clamp((mbShUv.x + 1.0) / 3.0, 0.0, 1.0),
+                                         clamp((mbShUv.y + 1.0) / 3.0, 0.0, 1.0),
+                                         clamp(mbShUv.z, 0.0, 1.0));
+                                     return;
+                                 }
+                                 if (uMBShDbg > 3.5) {
+                                     // §885 终十六: fract stripe field (see the
+                                     // hemisphere branch).
+                                     gl_FragColor.rgb = vec3(
+                                         fract(vMbWorldPos.x / 512.0),
+                                         fract(vMbWorldPos.y / 512.0),
+                                         fract(vMbWorldPos.z / 512.0));
+                                     return;
+                                 }
+                                 if (uMBShDbg > 1.5 && uMBShDbg < 2.5) {
+                                     // §885 终十六: unbounded worldPos paint —
+                                     // mode2 must not sit behind the bounds
+                                     // check (out-of-bounds fragments were
+                                     // invisible to it).
+                                     gl_FragColor.rgb = vec3(
+                                         clamp(vMbWorldPos.x / 20000.0 + 0.5, 0.0, 1.0),
+                                         clamp(vMbWorldPos.y / 20000.0 + 0.5, 0.0, 1.0),
+                                         clamp(vMbWorldPos.z / 20000.0 + 0.5, 0.0, 1.0));
+                                     return;
+                                 }
                                  if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
                                      mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
                                      vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
-                                     if (uMBShDbg > 2.5) {
-                                         // §885 终十: extended-range uv — uv.y/uv.x
-                                         // mapped from [-1,2] → [0,1] so
-                                         // out-of-bounds values stay readable.
-                                         gl_FragColor.rgb = vec3(
-                                             clamp((mbShUv.x + 1.0) / 3.0, 0.0, 1.0),
-                                             clamp((mbShUv.y + 1.0) / 3.0, 0.0, 1.0),
-                                             clamp(mbShUv.z, 0.0, 1.0));
-                                         return;
-                                     }
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5) { gl_FragColor.rgb = vec3(mbShUv.x, mbShUv.y, 0.5); return; }
                                      mbLF *= mbShUv.z <= mbShDepth + 0.002 ? 1.0 : 0.0;
@@ -942,6 +977,21 @@ export function applyMglModelLighting(
                      }`
                 );
             };
+            // §885 终十六: shader-structure fingerprint — captured at the
+            // END of the closure so the dump reflects the FINAL shader text
+            // (a mid-closure stash predates the #include-anchored replaces
+            // and reads as missing blocks that are actually present).
+            if ((globalThis as any).__mbDecodeDbg
+                && ((globalThis as any).__mbShFpCnt = ((globalThis as any).__mbShFpCnt ?? 0) + 1) <= 4) {
+                const vs = shader.vertexShader as string;
+                const fs = shader.fragmentShader as string;
+                if (!(globalThis as any).__mbFsDump) {
+                    (globalThis as any).__mbFsDump = fs;
+                    (globalThis as any).__mbVsDump = vs;
+                }
+                // eslint-disable-next-line no-console
+                console.log(`[MBShFp] vs_decl=${(vs.match(/varying vec3 vMbWorldPos/g) ?? []).length} vs_assign=${(vs.match(/vMbWorldPos = \(modelMatrix/g) ?? []).length} fs_decl=${(fs.match(/varying vec3 vMbWorldPos/g) ?? []).length} fs_dbgsample=${(fs.match(/uMBShMap, mbShUv\.xy/g) ?? []).length} fs_mbShPk=${(fs.match(/mbShPk/g) ?? []).length} fs_mbNdotL=${(fs.match(/mbNdotL/g) ?? []).length} fs_port=${(fs.match(/uMBPortMode/g) ?? []).length} vs_len=${vs.length} fs_len=${fs.length}`);
+            }
             (mbWrapper as any).__mbMglOrig = origOnCompile;
             (mbWrapper as any).__mbMglWrapper = true;
             mat.onBeforeCompile = mbWrapper;

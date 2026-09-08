@@ -383,6 +383,10 @@ function discoverTests(): TestEntry[] {
     if (Number(dbg) === 7) (globalThis as any).__mbShadowDbg4 = 2;
     // §885 终十: shdbg=8 → extended-range uv visualization (numeric mode 3).
     if (Number(dbg) === 8) (globalThis as any).__mbShadowDbg4 = 3;
+    // §885 终十六: shdbg=9 → fract(vMbWorldPos/512) stripe field — fract is
+    // never clamped, so stripes ⇒ the varying works (values merely offset);
+    // flat black ⇒ the varying is constant/NaN per draw.
+    if (Number(dbg) === 9) (globalThis as any).__mbShadowDbg4 = 4;
     // §525 A/B: shadowdbg=2 opens the gate but SKIPS the depth pass —
     // discriminates depth-pass side effects from the patcher/lighting path.
     if (dbg === "2") (globalThis as any).__mbShadowSkipPass = true;
@@ -2302,8 +2306,19 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                     ro: object?.renderOrder,
                                     mat: material?.type,
                                     col: material?.color?.getHexString?.(),
-                                    // §881: material state for non-white draws —
-                                    // why drawn red geometry writes no pixels.
+                                    // §885 终十五: shu/lit/lp/mu must record for
+                                    // EVERY material — the white gate made the
+                                    // vertex-color model meshes (mat.color is
+                                    // forced white) look handle-less (终十三's
+                                    // "shu=N" was this omission artifact).
+                                    shu: (() => { try { const u: any = material?.userData?.__mbShU; return u ? (typeof u.matrix?.value?.copy === 'function' ? (u.eyeOn?.value ? 'Y5' : 'Y') : 'M!') : 'N'; } catch { return '?'; } })(),
+                                    // §885 终十六: the ACTUAL matrix the rendered
+                                    // material would upload — [0] scale, [12..14]
+                                    // translation — vs [MBShadowMat]'s framing.
+                                    mx: (() => { try { const e: any = material?.userData?.__mbShU?.matrix?.value?.elements; return e ? `${e[0].toExponential(1)},${e[12].toFixed(2)},${e[13].toFixed(2)},${e[14].toFixed(2)}` : '-'; } catch { return '?'; } })(),
+                                    lit: (() => { try { return material?.__mbMglLit ? 1 : 0; } catch { return '?'; } })(),
+                                    lp: (() => { try { return material?.userData?.__mbLightParams ? 1 : 0; } catch { return '?'; } })(),
+                                    mu: (() => { try { return String(material?.uuid ?? '').slice(0, 8); } catch { return '?'; } })(),
                                     ...((material?.color?.getHexString?.() !== 'ffffff') ? {
                                         dt: material?.depthTest,
                                         dw: material?.depthWrite,
@@ -2312,9 +2327,6 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                         bl: material?.blending,
                                         fov2: object?.frustumCulled,
                                         cam: (() => { try { return camera?.position?.toArray?.().map((n: number) => Number(n.toExponential(2))).join(','); } catch { return '?'; } })(),
-                                        // §885 终十二: does the RENDERED material
-                                        // carry the shadow-refresh handle?
-                                        shu: (() => { try { const u: any = material?.userData?.__mbShU; return u ? (u.eyeOn ? 'Y5' : 'Y') : 'N'; } catch { return '?'; } })(),
                                         sc: (() => { try { const r: any = (mapView as any).renderer; return `${r.getContext().getParameter(r.getContext().SCISSOR_TEST)}`; } catch { return '?'; } })(),
                                     } : {}),
                                     tr: material?.transparent === true ? 1 : 0,
@@ -2787,6 +2799,42 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         + ' frameN=' + ((globalThis as any).__mbFrameN ?? 0));
                 } catch { /* probe only */ }
 
+                // §885 终十六: read the LIVE program uniforms back from the GL
+                // context for the first shadow-registered model material —
+                // what the GPU ACTUALLY has for uMBShIntensity/uMBShMatrix/
+                // uMBShMap/uMBShDbg at capture time (the JS-side handles may
+                // diverge from the uploaded program state).
+                try {
+                    const rd = (mapView as any)?.renderer;
+                    const glq = rd?.getContext?.();
+                    if (rd && glq) {
+                        let done = false;
+                        (mapView as any).scene?.traverse?.((o: any) => {
+                            if (done || !o.isMesh) return;
+                            const mm = Array.isArray(o.material) ? o.material[0] : o.material;
+                            if (!mm?.userData?.__mbShU) return;
+                            const mp = rd.properties?.get?.(mm);
+                            const cp = mp?.currentProgram;
+                            if (!cp?.program) return;
+                            const gp = cp.program;
+                            const u = (name: string) => {
+                                const loc = glq.getUniformLocation(gp, name);
+                                return loc ? JSON.stringify(glq.getUniform(gp, loc)) : 'absent';
+                            };
+                            // eslint-disable-next-line no-console
+                            console.log('[MBShGPU] mat=' + mm.uuid.slice(0, 8)
+                                + ' intensity=' + u('uMBShIntensity')
+                                + ' dbg=' + u('uMBShDbg')
+                                + ' map=' + u('uMBShMap')
+                                + ' has3D=' + u('uMBHas3DLights')
+                                + ' port=' + u('uMBPortMode')
+                                + ' handleInt=' + mm.userData.__mbShU?.intensity?.value
+                                + ' handleM0=' + mm.userData.__mbShU?.matrix?.value?.elements?.[0]);
+                            done = true;
+                        });
+                    }
+                } catch { /* probe only */ }
+
                 // §818: POST the draw-call log (whole session; the captured
                 // frame is the tail) before the IBCT comparison.
                 if ((globalThis as any).__mbDrawLog?.length) {
@@ -2803,6 +2851,8 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                     fixture: entry.name,
                                     calls: (globalThis as any).__mbDrawLog,
                                     pxTrace: (globalThis as any).__mbPxTraceArr,
+                                    fs: (globalThis as any).__mbFsDump,
+                                    vs: (globalThis as any).__mbVsDump,
                                     wvSamples: Array.from(
                                         (globalThis as any).__mbWvSamples?.values?.() ?? []),
                                 }),
