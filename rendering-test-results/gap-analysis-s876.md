@@ -1067,3 +1067,9 @@ cascade-1 4-tap PCF（uMBShadowTexel1 = 8r/1024）落地：
 - buildings-trees 457,874 不变；守卫 10,138/10,260 逐位零回归。
 累计（自终七十七）：ground-shadow-fog 167,010→96,899（−42%）、hard-cutoff −24%、守卫零回归、buildings-trees 457,874（−0.4% 过渡）。
 下会话：①hard-cutoff +1.1k 轻微回归归因（PCF 对硬边样式的影响）；②buildings-trees 地面接收体惰性（mbSUV/uMBRes 二分）继续；③fog 暗化值微调。
+
+### §885 终一百二十九：最终定位——可见地面材质未携带 ground 注入程序（2026-09-09）
+
+SHDIAG=7（mbSUV 直绘）判别：可见地面像素 (94,94,94)——若涂装生效 B 应为 127（常数 0.5）→ **可见地面材质未携带 ground 注入程序**。[MBRf] RGS 证明 refresh 触达的"某个"实例与渲染实例不同——注入命中了非渲染实例（§586 双实例问题的地面版本：tile.objects 材质被注入，引擎工厂创建的渲染实例未被触达或被晚于注入的替换洗掉）。
+下会话首项（收口）：drawlog mu（地面像素的渲染材质 uuid）↔ 注入时的 uuid 对照——找到渲染实例后直接对其 injectGroundShadow（scene sweep 已覆盖 m_scene 全部 mesh，需检查该实例的 __mbShadowSkipped/注入时序）。
+保持：buildings-trees 457,874 / fog 96,899 / hard-cutoff 126,781 / 守卫 10,138/10,260 逐位零回归。
