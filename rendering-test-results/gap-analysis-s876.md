@@ -518,3 +518,6 @@ uMBEye 从 projectPoint(geoCenter) 改为 camPos（相机绝对位置）后输�
 ### §885 终二十一：模型接收帧对齐完成——采样居中且在界内（2026-09-08）
 shdbg=4（界内 uv 直绘）实测：**8,765 个界内涂块片段，uv.x [0.208,0.573] 均值 0.454、uv.y [0.376,0.533] 均值 0.482**——围绕深度内容中心 (0.49,0.49)，终三的"uv.y 恒低 0.35"偏移彻底消失。uMBShWorldMatrix（深度 pass 同源帧）+ add(eye) 移除两项修复后，模型接收链的帧对齐完成。守卫 quantization-shadows = 2,332 复验零回归（uMBEye=camPos 只影响 quad，intensity=0 时 quad 不绘制）。
 剩余 mismatch 主导项（标定域，下轮）：①地面阴影范围——expected 阴影区 ~12.5k vs current ~3.1k 采样，阴影偏小/偏弱（光源方向转换、quad 采样精度、或 mgl 阴影相机覆盖范围差异）；②墙面着色——expected 暖白受光/冷灰背光 vs current 平白+深蓝灰（PBR 分支 NdotL/反照率标定）；③自阴影 bias（§692 smoothstep 形式对齐）。
+
+### §885 终二十一附：视觉对比定标（2026-09-08）
+expected vs current 逐区域视觉对比：①墙面——expected 受光面暖白(240,235,225)、背光面冷灰蓝(200,205,210)，current 受光面纯白(255) 过曝、暗部深蓝灰对比过强——PBR 分支的直射项强度/环境光配比或顶点色反照率读取需要标定（uMBPortMode=1 分支，mbAlbedo 顶点色路径）；②窗户/线脚——expected 灰蓝(96,128,150) vs current 深navy(7,24,42)——暗部过暗，同属反照率/环境光标定；③屋顶——expected 浅暖棕 vs current 深棕——同上；④地面阴影——expected (112) 大范围 vs current (201) 底色+部分阴影，quad 已绘制但范围/位置仍待标定（终十九 2× 后续）。§560 光源方向转换与 mgl 参考实现（util.ts sphericalPositionToCartesian, a=azimuth+90）逐项一致，光源方向正确。
