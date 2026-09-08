@@ -26,6 +26,8 @@ export const shadowCasters = new Set<THREE.Object3D>();
 export interface ShadowUniformState {
     map: THREE.Texture;
     matrix: THREE.Matrix4;
+    map1?: THREE.Texture;
+    matrix1?: THREE.Matrix4;
     intensity: number;
     /** Screen-corner ground-plane world positions (NDC (-1,-1),(1,-1),(1,1),(-1,1)) —
      * receivers interpolate their ground world pos from gl_FragCoord (§692). */
@@ -42,6 +44,9 @@ export class MBShadowRenderer {
     private m_shRenderer: THREE.WebGLRenderer | null = null;
     private m_hwRT: THREE.WebGLRenderTarget | null = null;
     private m_shTex: THREE.Texture | null = null;
+    private m_shTex1: THREE.DataTexture | null = null;
+    private m_depthPixels1: Uint8Array | null = null;
+    private m_matrix1 = new THREE.Matrix4();
     private m_depthPixels: Uint8Array | null = null;
     private m_shadowCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 4000);
     // §532 bisect: ShaderMaterial vs Basic — is the ctx2 blank a silent
@@ -139,6 +144,8 @@ export class MBShadowRenderer {
         return {
             map: this.m_shTex,
             matrix: this.m_matrix,
+            map1: this.m_shTex1 ?? undefined,
+            matrix1: this.m_matrix1,
             intensity: this.m_intensity,
             corners: this.m_corners,
             eye: this.m_eye,
@@ -946,6 +953,62 @@ export class MBShadowRenderer {
                 0, 0, 0.5, 0.5,
                 0, 0, 0, 1,
             ));
+
+        // §885 终一百一十八: cascade-1 far-field pass — 4× extents, same
+        // (skipped when the HW path is active — cascade-1 uses the
+        // independent-context renderer).
+        if (this.m_shRenderer) {
+        // §885 终一百一十八: cascade-1 far-field pass — 4× extents, same
+        // sphere center/direction. Ground receivers outside cascade-0 fall
+        // back to this map (mgl shadow_occlusion cascade fallback).
+        this.m_shadowCamera.left = -radius * 4;
+        this.m_shadowCamera.right = radius * 4;
+        this.m_shadowCamera.top = radius * 4;
+        this.m_shadowCamera.bottom = -radius * 4;
+        this.m_shadowCamera.near = -2 * radius * 4;
+        this.m_shadowCamera.far = radius * 4 / Math.max(lightDir.z, 0.1);
+        this.m_shadowCamera.updateProjectionMatrix();
+        this.m_shadowCamera.updateMatrixWorld();
+        this.m_matrix1
+            .multiplyMatrices(this.m_shadowCamera.projectionMatrix, this.m_shadowCamera.matrixWorldInverse)
+            .multiply(new THREE.Matrix4().set(
+                0.5, 0, 0, 0.5,
+                0, 0.5, 0, 0.5,
+                0, 0, 0.5, 0.5,
+                0, 0, 0, 1,
+            ));
+        scene.overrideMaterial = this.m_depthMaterial;
+        const prevLayers1 = this.m_shadowCamera.layers.mask;
+        this.m_shadowCamera.layers.set(1);
+        try {
+            this.m_shRenderer.setRenderTarget(null);
+            this.m_shRenderer.clear();
+            this.m_shRenderer.render(scene, this.m_shadowCamera);
+        } catch (e) {
+            (globalThis as any).__mbShadowPass1Err = String(e);
+        } finally {
+            scene.overrideMaterial = prevOverride;
+            this.m_shadowCamera.layers.mask = prevLayers1;
+        }
+        {
+            const gl1: any = this.m_shRenderer.getContext();
+            const px1 = 1024 * 1024 * 4;
+            if (!this.m_depthPixels1 || this.m_depthPixels1.length !== px1) {
+                this.m_depthPixels1 = new Uint8Array(px1);
+            }
+            try {
+                gl1.readPixels(0, 0, 1024, 1024, gl1.RGBA, gl1.UNSIGNED_BYTE, this.m_depthPixels1);
+            } catch (e) { /* probe only */ }
+            if (!this.m_shTex1 || !(this.m_shTex1 as any).isDataTexture) {
+                this.m_shTex1 = new THREE.DataTexture(this.m_depthPixels1, 1024, 1024, THREE.RGBAFormat);
+                this.m_shTex1.magFilter = THREE.NearestFilter;
+                this.m_shTex1.minFilter = THREE.NearestFilter;
+                this.m_shTex1.generateMipmaps = false;
+                this.m_shTex1.flipY = false;
+            }
+            this.m_shTex1.needsUpdate = true;
+        }
+        }
 
         // §692 one-shot matrix probe: the receiver debug readout showed
         // intensity=1 (refresh chain ✓) but the depth sample stuck at its

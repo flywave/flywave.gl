@@ -304,6 +304,8 @@ export class MBMaterialPatchManager {
                             // every frame ≥3, aborting the whole AfterRender
                             // listener (patchTileMaterials + shadow pass).
                             if (u.uMBShadowMatrix) u.uMBShadowMatrix.value = shadowState.matrix;
+                            if (u.uMBShadowMap1) u.uMBShadowMap1.value = shadowState.map1 ?? null;
+                            if (u.uMBShadowMatrix1) u.uMBShadowMatrix1.value = shadowState.matrix1 ?? null;
                             if (u.uMBGC) u.uMBGC.value = shadowState.corners;
                             if (u.uMBEye) u.uMBEye.value = shadowState.eye;
                             if (u.uMBRes) u.uMBRes.value = shadowState.res;
@@ -3091,6 +3093,9 @@ export class MBMaterialPatchManager {
                 ?.getShadowUniforms?.() ?? null;
             shader.uniforms.uMBShadowMap = { value: shSeed?.map ?? null };
             shader.uniforms.uMBShadowMatrix = { value: shSeed ? shSeed.matrix.clone() : new THREE.Matrix4() };
+            // §885 终一百一十九: cascade-1 far-field uniforms.
+            shader.uniforms.uMBShadowMap1 = { value: shSeed?.map1 ?? null };
+            shader.uniforms.uMBShadowMatrix1 = { value: shSeed ? (shSeed.matrix1 ? shSeed.matrix1.clone() : new THREE.Matrix4()) : new THREE.Matrix4() };
             shader.uniforms.uMBShadowIntensity = { value: shSeed ? 1 : 0 };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
             // vec3[4] MUST never hold null at first compile/upload — three's
@@ -3120,12 +3125,15 @@ export class MBMaterialPatchManager {
                         vec2 mbSUV = gl_FragCoord.xy / max(uMBRes, vec2(1.0));
                         vec3 mbWP = mix(mix(uMBGC[0], uMBGC[1], mbSUV.x),
                                         mix(uMBGC[3], uMBGC[2], mbSUV.x), mbSUV.y);
-                        vec4 mbShadowUv = uMBShadowMatrix * vec4(mbWP - uMBEye, 1.0);
+                        vec4 mbShadowUv0 = uMBShadowMatrix * vec4(mbWP - uMBEye, 1.0);
+                        vec4 mbShadowUv1 = uMBShadowMatrix1 * vec4(mbWP - uMBEye, 1.0);
+                        bool mbUse1 = !(abs(mbShadowUv0.x) <= 1.0 && abs(mbShadowUv0.y) <= 1.0 && mbShadowUv0.z <= 1.0);
+                        vec4 mbShadowUv = mbUse1 ? mbShadowUv1 : mbShadowUv0;
                         float mbShadowDepth = 1.0;
                         if (mbWP.z <= 1.0 &&
                             mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
                             mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
-                            vec4 mbPk = texture2D(uMBShadowMap, mbShadowUv.xy);
+                            vec4 mbPk = texture2D(mbUse1 ? uMBShadowMap1 : uMBShadowMap, mbShadowUv.xy);
                             // §527: 16-bit packed window depth (R=hi, G=lo)
                             #ifdef MB_SH_HW
                             mbShadowDepth = mbPk.r;
@@ -3171,6 +3179,8 @@ export class MBMaterialPatchManager {
             const mbShadowOwn: string[] = [];
             for (const decl of [
                 'uniform sampler2D uMBShadowMap;\n',
+                'uniform sampler2D uMBShadowMap1;\n',
+                'uniform mat4 uMBShadowMatrix1;\n',
                 'uniform mat4 uMBShadowMatrix;\n',
                 'uniform float uMBShadowIntensity;\n',
                 'uniform vec3 uMBGroundShadowFactor;\n',

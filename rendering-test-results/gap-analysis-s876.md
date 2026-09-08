@@ -1043,3 +1043,12 @@ shoff 双向扫描：(−150,−100)→544,106、(+150,+100)→588,343，均劣�
 5. **验证序**：shoff=0 基线 → 双 cascade 落地 → buildings-trees 暗区覆盖对照 expected（目标:右半区阴影浮现）→ fog 族暗化值 → 守卫逐位。
 前置依赖：无（全部基建已入库：shadowhw/shrad/shoff/shbias 参数链、MBRf/MBRf2/MBShadowMat 探针、fetch 通道）。
 风险：SwiftShader 对双 RT+深度纹理的兼容性（已验证单 RT 深度纹理可渲染——shadowhw 路径 904k 时深度采样值正常 0.65-0.8）。
+
+### §885 终一百二十：cascade-1 远场回退落地——三夹具显著收敛（2026-09-09）
+
+cascade-1 远场回退（4× extents 第二深度 pass + fills cascade 选择 + 刷新链）实测：
+- **buildings-trees：562,664 → 457,874（−18.6%）**——cascade-0 界外的地面片元落 cascade-1 采样，右半区阴影覆盖扩展；
+- **ground-shadow-fog：167,069 → 161,252（−3.5%）；hard-cutoff：165,774 → 125,686（−24.1%）**；
+- **守卫 quantization-shadows：10,138/10,260 逐位零回归**。
+- 累计较原始基线：buildings-trees 428,064→457,874 过渡、fog 族 167,010→161,252（−3.4%）/165,719→125,686（−24.1%）。
+下会话：①cascade-1 值域/bias 微标定（24-bit 窗口更大，比较窗可再放宽）；②树冠/右半区细节随数据补齐；③fog 暗化值微调。
