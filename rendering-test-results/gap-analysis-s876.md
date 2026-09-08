@@ -553,3 +553,8 @@ bottom-left/bottom-right 象限并排对比：①地面 quad 在两象限均已�
 实施（未提交前已验证编译）：①cornerOnGround 参数化平面高度 planeZ；②prepGroundQuad 全面切换到场景帧——corners 用 **RTE 相机**（getRteCamera()，原点=场景原点）计算，平面 z=−eye.z，[MBCG] dump 实证 camPos=(0,0,0)、out=(−98.7,−43.9,−82.2)（场景系地面点 ✓）；③uMBProjView 改用 RTE 相机 proj·view（场景系角点正确光栅化到可见地面）；④uMBEye=0（mbWP 已是场景帧）；⑤quad readout 探针（R=intensity, G=采样 packed depth, B=uv.z）+ [MBShGPU3] quad GPU uniform 探针 + 主画布 probe 通道（修 vec4 三参构造编译错误——该错误曾使 quad 完全不渲染）。
 实测：plain 115,178（±1 噪声，与改动前一致）——**quad 采样仍全部返回空 texel（depth=1.0）**，而模型材质采样同一纹理有内容（0.894）。shadowrenderer 场景帧统一后阴影仍未可见。
 下轮入口（按优先级）：①在 fill 材质 injectGroundShadow 加同款 readout，对照同帧内 fill 接收器与 quad 的采样值——extrusion 夹具 fill 接收器采样有内容（其地面阴影可见），同帧对比可分离「纹理对象实例」vs「采样坐标」；②检查两渲染器（m_shRenderer 主入 vs 主渲染器）的 texture 对象：m_shTex 仅一份，但上传/绑定发生在不同 renderer 上下文——用 gl.getUniformLocation 后 gl.getUniform 验证 quad 绘制时 sampler 绑定的 texture id；③预算许可时以 renderTarget 代替 CanvasTexture（规避跨上下文 canvas 读取）。
+
+### §885 终二十九：quad readout 定量——采样恒空 texel + uv.z≤0（2026-09-08）
+vec4 构造修复后 shdbg=3 readout 实测（13,068 个 (255,255,0) 像素 = intensity 1.0 + 采样深度 1.0（空）+ uv.z ≤ 0；另一簇 (128,128,128) 0.5 = smoothstep 边界自采样）：**quad 的地面采样全部落在光源相机近平面之后/空 texel 上**。uMBGC 角点（场景系，z=−82.2）仅覆盖屏内近地 ±136 单位（[MBCG] t=136），远端地面为外插；uv.z≤0 指示这些点在 light view 的 near=973 之前——即 ground corners−eye 的差值系与深度图 fit 系（casterBox 中心系）之间存在 ~数百单位的残余平移，使阴影区采样系统性落到图外。
+模型侧（uMBShWorldMatrix 场景帧）自深度命中已实证 ✓ 不受影响。
+下轮入口（预算外，下会话首项）：①ground quad 弃用 uMBGC 屏幕空间重建（角点跨度不足），改为**场景系解析地面点**：mbWP = uMBEye_scene + (屏幕射线与 z=−eye.z 平面的精确交点)——用 RTE 相机的 rotation-only 矩阵在着色器内逐像素求交（4 个 uniform 即可，无需角点插值）；②或恢复 mgl 的 shadow camera 全屏 fit（放弃紧凑 fit）使角点跨度覆盖全部可见地面；③每步 shadows-normal-offset + quantization-shadows 2,332 双验证。
