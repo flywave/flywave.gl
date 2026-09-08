@@ -870,3 +870,7 @@ camdist 参数（calculateDistanceFromZoomLevel 乘子）落地后 A/B：camdist
 ### §885 终八十六：buildings-trees 暗区差距分解——全帧色调差而非单一对齐（2026-09-09）
 
 暗像素（亮度<60）带状分解：expected 224,286 px **全 8 个纵向带均有大量分布**（9.5k/7.2k/7.5k/8.4k/13.3k/23.5k/22.4k/13.7k），均值 RGB (20,28,20) 深绿黑（暗树+黑墙+阴影）；ours 27,048 px 集中于顶部带（中段几乎为零），均值 (40,40,40) 中性灰。结论：差距不是单一几何对齐——是**全帧色调/光照差**（我方的暗树、黑墙、阴影整体偏亮），与前述 extrusion/地面接收体状态一致。双 cascade 移植或几何对齐都无法单独消除色调差，优先级应转向 LIGHTING_3D_MODE 全帧色调管线核对（buildings-trees 的 ambient/directional 配比在挤出/模型/地面三类接收体上的一致性）。
+
+### §885 终八十七：树模型绿色丢失回归窗口锁定（2026-09-09）
+
+树冠绿色像素计数历史：run1（五连修前）= 30,658；run12（五连修后首个成功运行）及之后全部 = **0**。即树模型在终五十九五连修/公式修正 era 丢失了颜色渲染（白色）。嫌疑收敛到该窗口内的模型接收体链路变化：模型接收体 int=1 首次真正传导（m_groundQuad/getShadowUniforms 修复后）→ 树材质经 model receiver 调制后异常变白（纹理/光照链干扰），或 [MBShadowMat] 触及的 fit 变化间接影响模型采样。下会话首项：以 SHDIAG/drawlog 定位树 mesh 材质的 __mbShU 状态与纹理绑定，修复树颜色回归——它同时是 buildings-trees 暗区 224k 缺口的最大构成（expected 树冠 72,124 深绿 px，ours 0）。
