@@ -179,13 +179,21 @@ export class MBShadowRenderer {
                 '#include <opaque_fragment>',
                 `#include <opaque_fragment>
                 {
-                    // §885 终四十一: the ground = the background × the
-                    // ambient-ratio factor, UNIFORM — mgl's model-layer ground
-                    // carries the ambient-directional darkening only (the
-                    // expected dark ground is uniform 112, no directional
-                    // cast pattern). The cast-shadow sampling is removed.
-                    gl_FragColor.rgb *= mix(vec3(1.0),
-                        pow(uMBGroundShadowFactor, vec3(1.0 / 2.2)), uMBShadowIntensity);
+                    vec4 v4 = uMBInvProj * vec4(vNdc, -1.0, 0.0);
+                    vec3 dir = normalize(mat3(uMBCamWorld) * v4.xyz);
+                    if (dir.z < -1e-6 && uMBShadowIntensity > 0.5) {
+                        vec3 mbWP = dir * (uMBGroundZ / dir.z);
+                        vec4 uv4 = uMBShadowMatrix * vec4(mbWP, 1.0);
+                        float lit = 0.0;
+                        float sampD = 1.004;
+                        if (uv4.x >= 0.0 && uv4.x <= 1.0 &&
+                            uv4.y >= 0.0 && uv4.y <= 1.0 && uv4.z <= 1.0) {
+                            vec4 pk = texture2D(uMBShadowMap, uv4.xy);
+                            sampD = pk.r + pk.g / 255.0;
+                            lit = smoothstep(-0.0002, 0.0002, sampD - uv4.z);
+                        }
+                        gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(2.2)), vec3(1.0), lit);
+                    }
                 }`);
             this.m_groundUniforms = shader.uniforms;
             (mat as any).customProgramCacheKey = () => 'mbgroundquad-v2';
@@ -222,7 +230,7 @@ export class MBShadowRenderer {
         if (!(globalThis as any).__mbCgDumped) {
             (globalThis as any).__mbCgDumped = true;
             // eslint-disable-next-line no-console
-            console.log('[MBCG] ndc=(' + ndcX + ',' + ndcY + ') camPos=(' + camPos.x.toFixed(1) + ',' + camPos.y.toFixed(1) + ',' + camPos.z.toFixed(1) + ') dir=(' + dir.x.toFixed(4) + ',' + dir.y.toFixed(4) + ',' + dir.z.toFixed(4) + ') t=' + t.toFixed(0) + ' clamp=' + Math.min(Math.abs(t), far).toFixed(0) + ' far=' + far.toFixed(0) + ' out=(' + out.x.toFixed(1) + ',' + out.y.toFixed(1) + ',' + out.z.toFixed(1) + ')');
+            console.log(`[MBCG] ndc=(${ndcX},${ndcY}) camPos=(${camPos.x.toFixed(1)},${camPos.y.toFixed(1)},${camPos.z.toFixed(1)}) dir=(${dir.x.toFixed(4)},${dir.y.toFixed(4)},${dir.z.toFixed(4)}) t=${t.toFixed(0)} clamp=${Math.min(Math.abs(t), far).toFixed(0)} far=${far.toFixed(0)} out=(${out.x.toFixed(1)},${out.y.toFixed(1)},${out.z.toFixed(1)})`);
         }
     }
 
@@ -472,8 +480,7 @@ export class MBShadowRenderer {
         // casts the ground shadow mirrored from expected (the quad's dark
         // region landed offset from expected's projection).
         if (dirArr) {
-            const xflip = (globalThis as any).__mbLightXFlip ? -1 : 1;
-            lightDir = new THREE.Vector3(dirArr[0] * xflip, dirArr[1], dirArr[2]).normalize();
+            lightDir = new THREE.Vector3(dirArr[0], dirArr[1], dirArr[2]).normalize();
         } else if (dirProp) {
             const a = (dirProp[0] + 90) * Math.PI / 180;
             const pl = dirProp[1] * Math.PI / 180;
@@ -681,7 +688,7 @@ export class MBShadowRenderer {
                         ndcs.push(`(${v.x.toFixed(2)},${v.y.toFixed(2)},${v.z.toFixed(2)})`);
                     }
                     // eslint-disable-next-line no-console
-                    console.log('[MBShadowFit] f=' + __rc + ' darkBox=(' + minX + ',' + minY + ')..(' + maxX + ',' + maxY + ')/64 ndc=[' + ndcs.join(' ') + ']');
+                    console.log(`[MBShadowFit] f=${__rc} darkBox=(${minX},${minY})..(${maxX},${maxY})/64 ndc=[${ndcs.join(' ')}]`);
                     // §885: full depth-canvas dump (visual) — POST dataURL to
                     // the result server via the harness feedback channel.
                     try {

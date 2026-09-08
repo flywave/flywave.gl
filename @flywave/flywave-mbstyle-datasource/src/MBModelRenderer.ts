@@ -137,15 +137,7 @@ export function modelLightDir(dataSource: any): [number, number, number] {
     // to 88,238).
     const sl = dataSource?.m_environment?.shadowLightState;
     if (sl && dirProp !== undefined && ls.dir) {
-        // §885 终四十五: the mgl model shader negates lightDir.xy INSIDE
-        // (lightDir.xy = -lightDir.xy) — our raw spherical form is the
-        // PRE-flip engine vector; apply the shader's xy negation for the
-        // net light direction (A/B: lightxflip=1).
-        const d = ls.dir as [number, number, number];
-        if ((globalThis as any).__mbLightXFlip) {
-            return [-d[0], d[1], d[2]];
-        }
-        return d;
+        return ls.dir;
     }
     return [
         Math.cos(az) * Math.sin(pl),
@@ -171,8 +163,7 @@ export function syncMglModelLighting(model: THREE.Object3D, dataSource: any): vo
         for (const mat of mats as any[]) {
             const u = mat?.userData?.__mbLightU;
             if (!u) continue;
-            const mul = (globalThis as any).__mbAmbMul || 1;
-            u.amb.value = [ls.ambientColorLinear[0] * mul, ls.ambientColorLinear[1] * mul, ls.ambientColorLinear[2] * mul];
+            u.amb.value = ls.ambientColorLinear;
             u.dirColor.value = ls.directionalColorLinear;
             u.dir.value = dir;
         }
@@ -510,7 +501,6 @@ export function applyMglModelLighting(
                 // vMbWorldPos lands in the depth-pass frame by construction.
                 shader.uniforms.uMBShWorldMatrix = { value: new THREE.Matrix4() };
                 shader.uniforms.uMBShDbg = { value: Number((globalThis as any).__mbShadowDbg4) || 0 };
-                shader.uniforms.uMBPbrTermDbg = { value: Number((globalThis as any).__mbPbrTermDbg) || 0 };
                 // §885: shdbg=5 → receiver rebases worldPos by the shadow eye
                 // (ground-quad convention) — A/B for the light-space y offset.
                 shader.uniforms.uMBShEyeOn = {
@@ -554,7 +544,6 @@ export function applyMglModelLighting(
                      uniform mat4 uMBShMatrix;
                      uniform float uMBShIntensity;
                      uniform float uMBShDbg;
-                     uniform float uMBPbrTermDbg;
                      uniform vec3 uMBShEye;
                      uniform float uMBShEyeOn;
                      uniform float uMB3DMetal; uniform float uMB3DRough;
@@ -975,10 +964,6 @@ export function applyMglModelLighting(
                              float mbADF = mix(mbDirMin, 1.0, min(mbNdotLDir + 1.0, 1.0))
                                  * mix(0.92, 1.0, mbN0.z * 0.5 + 0.5);
                              vec3 mbEnvLight = uMB3DAmb * mbADF;
-                             // §885 终四十三: metal env boost A/B (metenv=1)
-                             if ((globalThis as any).__mbMetalEnv === 1) {
-                                 mbEnvLight *= 4.0;
-                             }
                              vec3 mbIndirect = EnvBRDFApproxMb(mbSpecC, mbR, mbNdotV) * mbEnvLight
                                  + mbDiffC * mbEnvLight;
                              mbCol = clamp(mbDirect, 0.0, 1.0) + mbIndirect;

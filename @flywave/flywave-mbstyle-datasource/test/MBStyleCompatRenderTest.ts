@@ -130,18 +130,6 @@ function discoverTests(): TestEntry[] {
         (a: string) => a.startsWith("pbrterm="))?.slice("pbrterm=".length);
     if (pterm === "1") (globalThis as any).__mbPbrTermDbg = 1;
     if (pterm === "2") (globalThis as any).__mbPbrTermDbg = 2;
-    // §885 终四十三: metenv=1 → the metal env boost A/B.
-    const metenv = (window as any).__karma__?.config?.args?.find?.(
-        (a: string) => a.startsWith("metenv="))?.slice("metenv=".length);
-    if (metenv === "1") (globalThis as any).__mbMetalEnv = 1;
-    // §885 终四十五: lightxflip=1 → the mgl model-shader lightDir.xy negation.
-    const lxf = (window as any).__karma__?.config?.args?.find?.(
-        (a: string) => a.startsWith("lightxflip="))?.slice("lightxflip=".length);
-    if (lxf === "1") (globalThis as any).__mbLightXFlip = true;
-    // §885 终四十: ambmul=N → the model ambient multiplier A/B.
-    const ambmul = (window as any).__karma__?.config?.args?.find?.(
-        (a: string) => a.startsWith("ambmul="))?.slice("ambmul=".length);
-    if (ambmul) (globalThis as any).__mbAmbMul = Number(ambmul) || 1;
 }
 {
     // §744: unlit-clamp restore A/B (emission-strength regression candidate ②).
@@ -2819,6 +2807,23 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     console.log('[MBCapFinal] px=' + pF.join(',')
                         + ' discLast=' + JSON.stringify((globalThis as any).__mbDiscLast ?? null)
                         + ' frameN=' + ((globalThis as any).__mbFrameN ?? 0));
+                } catch { /* probe only */ }
+
+                // §885 终四十六: the final canvas POST via the probe channel —
+                // decoupled from drawlog (the drawlog hook forces
+                // updateWorldMatrix per draw, changing the rendered state).
+                try {
+                    const fbC = (window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith("feedback-url="))
+                        ?.slice("feedback-url=".length);
+                    if (fbC && canvas) {
+                        await fetch(`${fbC}/mb-probe-dump`, {
+                            method: "POST",
+                            headers: { "content-type": "application/json" },
+                            body: JSON.stringify({ probe: "main-canvas",
+                                dataUrl: canvas.toDataURL('image/png') }),
+                        });
+                    }
                 } catch { /* probe only */ }
 
                 // §885 终十六: read the LIVE program uniforms back from the GL

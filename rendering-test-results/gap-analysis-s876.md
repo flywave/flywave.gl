@@ -625,3 +625,7 @@ metenv 基建保留（默认关闭，无参数不影响跑分）。剩余标定�
 lightxflip=1（lightDir.x 翻转）：237,288 vs 115,949（恶化 +121k）——**x 翻转否定，当前光源方向（§683 场景帧）确认为正确**（翻转使阴影镜像到错误侧）。infra 保留（默认关）。
 本会话最终状态：shadows-normal-offset 171,310→115,949（−32%）；buildings-trees-shadows-casting 583,410→428,064（−27%）；守卫 2,332 逐位零回归。剩余标定：①quad 阴影范围 32%（阴影相机覆盖/仰角语义——需 mgl 渲染参考）；②模型 PBR metal env 组成（mgl model 语义——需 mgl 参考）；③墙面直射 ~6%。
 全部修复/探针/数据已提交（终十四～终四十六），下会话按入档入口继续。
+
+### §885 终四十七：会话终结与环境状态劣化发现（2026-09-08）
+连续 ~30 次 karma 运行后：**相同代码（d1d6797b 终三十九）的 plain 计分从 115,949 漂移到 179,062（+63k）**——且与 spec 移除/modellightport=0/ambmul 等无关（那些 A/B 在早期运行均为各自的稳定值）。结论：**SwiftShader/Chrome 长会话状态累积导致渲染结果漂移**——跨运行的 mismatch 对比需在环境重置后进行。本轮已完成的实质工作：①DataTexture 深度源（readPixels 字节精确，替代 CanvasTexture 链路）；②主画布 probe POST 与 drawlog 解耦；③[MBShGPU3] 扩展（quad GPU matrix/groundZ/invProj 回读）。
+下会话首项：**机器/浏览器环境重置后重测基线**（d1d6797b 代码预期回到 ~115,949），随后按终四十二入档继续（背光面 direct 残留 0.5 标定 + metal env）。
