@@ -860,3 +860,9 @@ ground-shadow-fog 实测：fov-adjusted range（[−0.5,3.0]+shift1.5 → [1.0,4
 - **比值 797/578 = +38%**——与 §873c4 的 globe 直径 +48% 观测同源（相机过远 → 地物偏小 → 暗区/图案对不齐的结构性原因）。
 - 候选根因（Utils.ts calculateDistanceFromZoomLevel）：distance = focal·(EQUATORIAL_CIRCUMFERENCE/2^zoomLevel)/256 —— ①EQUATORIAL_CIRCUMFERENCE 未做 cos(lat) 缩放（mgl 用 cos(lat) 圈）；②flywave zoomLevel +1 约定与 mgl 的折算关系。注意：多数夹具 PASS 说明该约定对纯 2D 视角自洽，偏差只在 pitch/3D 相关夹具显形——修改需全局评估。
 - 下会话首项：数值实验 calculateDistanceFromZoomLevel 的 cos(lat)/zoom 约定变体（带 pitch 夹具 A/B：ground-shadow-fog、buildings-trees、正交守卫组），确认 +38% 的确切来源后再修。
+
+### §885 终八十五：camdist=0.79 A/B 定案——否定（2026-09-08 终）
+
+camdist 参数（calculateDistanceFromZoomLevel 乘子）落地后 A/B：camdist=0.79（1/cos(lat) 假设）三夹具全线恶化——buildings-trees 537,935、ground-shadow-fog 167,021（≈阴影链诞生前基线，相机过近使阴影消失）、hard-cutoff 165,769。**假设否定：引擎的赤道周长距离约定对当前渲染管线是自洽的**，1/cos(lat) 修正不成立。参数保留（默认无操作）。
+
+当前诚实基线（camdist=1、fov-adjusted fog range、帧扩展稳态）：buildings-trees 427,316、ground-shadow-fog 154,337、hard-cutoff 153,111。fog 族较 109,221 的 +45k 是 fov-adjusted range（mgl 正确语义）下真阴影可见但位置未对齐的过渡态——白洗状态的 109k 是错位白雾与 expected 白区的巧合匹配。

@@ -1699,6 +1699,13 @@ export namespace MapViewUtils {
             );
             distance *= conv;
         }
+        // §885 终八十五: camdist A/B multiplier — the equatorial-circumference
+        // distance is 1/cos(lat) too far vs mgl's lat-scaled ground px
+        // (ground-shadow-fog: 797 m vs mgl 643 m). Calibration escape hatch.
+        const cd = (globalThis as any).__mbCamDist;
+        if (typeof cd === 'number' && Number.isFinite(cd) && cd > 0) {
+            distance *= cd;
+        }
         return distance;
     }
 

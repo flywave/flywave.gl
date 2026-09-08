@@ -183,6 +183,11 @@ function discoverTests(): TestEntry[] {
     const fmul = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogmul="))?.slice("fogmul=".length);
     if (fmul) (globalThis as any).__mbFogMul = Number(fmul);
+    // §885 终八十五: camdist=<N> → calculateDistanceFromZoomLevel multiplier
+    // (1/cos(lat) ≈ 0.79 @ lat37.78 tests the camera-distance hypothesis).
+    const cdm = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("camdist="))?.slice("camdist=".length);
+    if (cdm) (globalThis as any).__mbCamDist = Number(cdm);
     const port = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modellightport="))?.slice("modellightport=".length);
     if (port === "1") (globalThis as any).__mbModelLightPort = true;
