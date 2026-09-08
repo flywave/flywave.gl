@@ -1189,7 +1189,8 @@ export class MBEnvironmentManager {
             // black shadows) — score temporarily worsens until the camera/
             // placement alignment lands (终八十三).
             (lib2.fogMglRange.value as THREE.Vector2).set(
-                rawRange[0] + shift, rawRange[1] + shift);
+                rawRange[0] + shift + ((globalThis as any).__mbFogShiftAdj ?? 0),
+                rawRange[1] + shift + ((globalThis as any).__mbFogShiftAdj2 ?? 0));
         }
         // Mapbox renders the atmosphere glow (space→high→fog gradient) in the
         // sky region whenever fog is enabled and the horizon is visible — even

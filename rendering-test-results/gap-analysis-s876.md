@@ -1147,3 +1147,12 @@ mgl 上游可用矢量瓦已拷贝补充（13-1311-3166/14-2620-6332 等 ~10 个
 
 地面区域（y>300）量化：expected 87.8% 暗像素（<60，均值 90）vs ours 7.5%（均值 101）——均值差仅 11 灰阶，但暗像素比例差 8× 的根源是**阈值跨越效应**：我方阴影区亮度 ~94（雾洗后），expected ~30-50（近无雾），60 阈值恰在两者之间。雾近场减半（近场 t 减半 → 雾 31%→15%）即可使我方阴影降至 ~47 < 60 ✓。
 这需要雾曲线的近场形状校准（fogMglRange.x 提高 → 近场 t 更负 → 更清亮），而非全局 distCam 缩放。具体：fogMglRange.x 从 1.0 提高至 ~1.3（在 fov-adjusted 基础上再 +0.3）即可使近场 t 从 0.2 降至 0.1。
+
+### §885 终一百三十七：fogshift=+0.3 A/B——fog 族暗化值大幅收敛（2026-09-09）
+
+fogshift=+0.3（fogMglRange.x/y 各加 0.3 校准偏移）实测：
+- **ground-shadow-fog：161,252 → 126,903（−21.3%）**——近场雾减轻使阴影变暗 ✓ 方向正确；
+- ground-shadow-fog-hard-cutoff：162,025（较 165,774 −2.3%）——同样改善；
+- buildings-trees：457,874 不变（其地面走 quad 路径，非 chunk fog）。
+fogshift 参数已入库（fogshift=<x>,<y>），fogMglRange.x/y 各加 0.3 后阴影更暗、更接近 expected。
+下会话：①fogshift 值精调（0.3 方向正确，可试 0.5/0.7 进一步）；②buildings-trees 墙面色调（LIGHTING_3D_MODE）；③仓库外数据补齐重验。

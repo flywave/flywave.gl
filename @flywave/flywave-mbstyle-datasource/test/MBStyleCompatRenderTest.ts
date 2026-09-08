@@ -188,6 +188,14 @@ function discoverTests(): TestEntry[] {
     const shb = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shadowbias="))?.slice("shadowbias=".length);
     if (shb) (globalThis as any).__mbShadowBias = Number(shb);
+    // §885 终一百三十六: fogshift=<x>,<y> → fogMglRange.x/y calibration offsets.
+    const fs = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("fogshift="))?.slice("fogshift=".length);
+    if (fs) {
+        const parts = fs.split(',').map(Number);
+        (globalThis as any).__mbFogShiftAdj = parts[0] ?? 0;
+        (globalThis as any).__mbFogShiftAdj2 = parts[1] ?? 0;
+    }
     // §885 终八十: fogmul → distCam multiplier (single-variable fog A/B).
     const fmul = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogmul="))?.slice("fogmul=".length);

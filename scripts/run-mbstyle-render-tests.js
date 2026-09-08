@@ -119,6 +119,7 @@ function main() {
             ...(process.env.MBSTYLE_SHOFF ? [`shoff=${process.env.MBSTYLE_SHOFF}`] : []),
             ...(process.env.MBSTYLE_FOGMUL ? [`fogmul=${process.env.MBSTYLE_FOGMUL}`] : []),
             ...(process.env.MBSTYLE_CAMDIST ? [`camdist=${process.env.MBSTYLE_CAMDIST}`] : []),
+            ...(process.env.MBSTYLE_FOGSHIFT ? [`fogshift=${process.env.MBSTYLE_FOGSHIFT}`] : []),
             ...(process.env.MBSTYLE_SHRAD ? [`shrad=${process.env.MBSTYLE_SHRAD}`] : []),
             ...(process.env.MBSTYLE_SHADOWHW ? ["shadowhw=1"] : []),
             ...(process.env.MBSTYLE_SHADOWBIAS ? [`shadowbias=${process.env.MBSTYLE_SHADOWBIAS}`] : []),
