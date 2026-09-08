@@ -1000,3 +1000,7 @@ SHDIAG=5（R=0.5+10×(depth−uvz), G=uvz, B=depth）落地并实测：
 
 ext-uniforms-end 延迟 dump（回调完成后终态）：fsLen=16211（注入已应用）、fsHasUmb3D=true、fsHasShadowHW=true、amb=[0,0,0] ✓、dirColor=[0.5×3] ✓、int=1 ✓、hasShadowU=true ✓——**LIGHTING_3D_MODE 挤出注入链端到端完全正确**。墙体呈中灰的机理定案：fill-extrusion-opacity 0.4 的半透明白墙叠在"未覆盖阴影的亮地面"上的合成（0.4×黑墙 + 0.6×亮地面 = 中灰）——与终九十四的归因闭环。剩余唯一缺口：**地面阴影图案的覆盖范围**（阴影相机 fit/深度窗与 expected 的对齐）。
 下会话：以已入库的 depth-canvas + SHDIAG uv 场 + 暗区带状分布三份数据做逐 texel 对齐，微调 fit（shrad/球心高度 A/B 参数已备）；数据到位后树冠自然恢复。
+
+### §885 终一百一十（二）：quad 解码修复复测——状态稳定（2026-09-09）
+
+quad 解码修复（HW 分支 bias 生效 + 非 HW 分支恢复 packed 解码）后复测：buildings-trees 562,664、ground-shadow-fog 167,069——与修复前一致（无回归，软件路径稳定）。全部修复/参数/探针已入库。
