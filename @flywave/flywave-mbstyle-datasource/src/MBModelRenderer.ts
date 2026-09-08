@@ -175,6 +175,10 @@ export function syncModelShadowUniforms(shadowState: {
         console.log(`[MBShSync] handles=${mbShadowLitUniforms.size} eyeOnOn=${on} hasEye=${hasEye} stateInt=${shadowState?.intensity ?? '?'} stateEye=${shadowState?.eye ? 'Y' : 'N'}`);
       } }
     for (const u of mbShadowLitUniforms) {
+        // §885 终十四: handles captured through a Material.clone() chain may
+        // be JSON-mangled plain objects (userData deep copy) — skip instead
+        // of throwing (a throw here aborts the whole per-frame sync).
+        if (typeof (u as any)?.matrix?.value?.copy !== 'function') continue;
         u.map.value = shadowState?.map ?? null;
         if (shadowState) u.matrix.value.copy(shadowState.matrix);
         u.intensity.value = shadowState?.intensity ?? 0;
@@ -184,6 +188,17 @@ export function syncModelShadowUniforms(shadowState: {
         if ((u as any).eyeOn) (u as any).eyeOn.value =
             (globalThis as any).__mbShadowEyeOn ? 1 : 0;
     }
+}
+
+/** §885 终十四: a shadow-refresh handle is only usable when the JSON-clone
+ * disease (Material.copy's JSON userData deep copy strips Matrix4/Vector3
+ * methods) has not mangled it. */
+export function isValidShadowHandle(u: any): boolean {
+    return !!u
+        && typeof u.matrix?.value?.copy === 'function'
+        && !!u.map
+        && typeof u.intensity?.value === 'number'
+        && (!u.eye || typeof u.eye.value?.copy === 'function');
 }
 
 // §775: per-material mgl model-fog uniform handles. mgl fogs EVERY model
@@ -307,6 +322,15 @@ export function applyMglModelLighting(
             // handles both the 3D-lights and the legacy-light paths (styles
             // without lights rendered native black: no scene lights).
             mat.__mbMglLit = true;
+            // §885 终十四: store the patch params JSON-safe in userData —
+            // Material.clone() deep-copies userData, so clones inherit them
+            // and refreshModelShadowUniforms can rebuild the full patch on
+            // the clone instance (whose onBeforeCompile/handle were lost in
+            // the copy).
+            mat.userData.__mbLightParams = {
+                emissiveStrength, tint, heightRamp,
+                unlitMix, pbrEligible, lutOff, receiveShadows,
+            };
             // §775: legacy-light model materials self-draw the mgl fog in the
             // shader tail — compile out three's fog chunk (§673 pattern) so it
             // cannot double-wash. Set OUTSIDE onBeforeCompile: material.fog is
@@ -318,7 +342,11 @@ export function applyMglModelLighting(
                 console.log(`[MBLight] patch mat=${mat.name ?? '?'} type=${mat.type} metal=${mat.metalness} has3D=${ls ? 1 : 0} fogOn=${(!ls && (globalThis as any).__mbModelFog !== false) ? 1 : 0} noMat=${mat.userData?.__mbNoMaterial ? 1 : 0} fog=${(mat as any).fog}`);
             }
             const origOnCompile = mat.onBeforeCompile;
-            mat.onBeforeCompile = (shader: any) => {
+            // §885 终十四: mark the wrapper so refreshModelShadowUniforms can
+            // unwrap it before a re-patch (wrapping a wrapper would run both
+            // injections at compile → duplicate uniform declarations → GLSL
+            // compile failure).
+            const mbWrapper = (shader: any) => {
                 if (origOnCompile) origOnCompile.call(mat, shader);
                 const hr = heightRamp ?? { b0: 0, b1: 1, power: 1, start: 1, range: 0 };
                 const ls2 = dataSource?.m_environment?.lighting3DState;
@@ -914,9 +942,78 @@ export function applyMglModelLighting(
                      }`
                 );
             };
+            (mbWrapper as any).__mbMglOrig = origOnCompile;
+            (mbWrapper as any).__mbMglWrapper = true;
+            mat.onBeforeCompile = mbWrapper;
             mat.needsUpdate = true;
         }
     });
+}
+
+/** §885 终十四: per-frame single-scene-traversal shadow refresh with
+ * self-healing — the deterministic fix for 终十三's finding. Two failure
+ * modes kept the landmark shadow family sampling an empty map while the
+ * depth pass itself was healthy:
+ * 1. Materials cloned AFTER patching (MBBatchedModelRenderer tint,
+ *    applyModelSourcePartStyling) lose the onBeforeCompile closure and
+ *    inherit a JSON-MANGLED `__mbShU` (Material.copy JSON-deep-copies
+ *    userData — Matrix4/Vector3 methods stripped): they compile as NATIVE
+ *    MeshStandardMaterials (no mgl lighting, no shadow sampling) and their
+ *    mangled handle THREW (`u.matrix.value.copy is not a function`) inside
+ *    the previous traversal refresh, aborting the whole per-frame sync
+ *    mid-scene (why 终十一/十二's direct refresh changed nothing).
+ * 2. Materials patched after their first compile silently kept the native
+ *    program (no version bump).
+ * Heal: any scene material carrying our stored patch params but no VALID
+ * handle is re-patched on ITS OWN instance from the stored params and
+ * force-recompiled; valid handles are refreshed from the renderer's shadow
+ * uniforms (the 终十一 direct-scene refresh, now shape-guarded). */
+export function refreshModelShadowUniforms(
+    dataSource: any,
+    scene: THREE.Object3D | undefined | null,
+    shadowState: { map: any; matrix: any; intensity: number; eye?: any; eyeOn?: any } | null,
+): void {
+    if (!scene) return;
+    let healed = 0;
+    scene.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const mat of mats as any[]) {
+            if (!mat) continue;
+            const u = mat.userData?.__mbShU;
+            if (isValidShadowHandle(u)) {
+                u.map.value = shadowState?.map ?? null;
+                if (shadowState) u.matrix.value.copy(shadowState.matrix);
+                u.intensity.value = shadowState?.intensity ?? 0;
+                if (u.eye && shadowState?.eye) u.eye.value.copy(shadowState.eye);
+                if (u.eyeOn) u.eyeOn.value = (globalThis as any).__mbShadowEyeOn ? 1 : 0;
+                continue;
+            }
+            // Only materials carrying our stored patch params are ours to
+            // rebuild — unmarked MeshStandardMaterials belong to other
+            // pipelines (env/terrain) and must stay native.
+            const p = mat.userData?.__mbLightParams;
+            if (!p) continue;
+            const w = mat.onBeforeCompile as any;
+            if (w && w.__mbMglWrapper) mat.onBeforeCompile = w.__mbMglOrig;
+            delete mat.__mbMglLit;
+            delete mat.userData.__mbShU;
+            try {
+                // Re-patch exactly this material (stored params are
+                // per-material — part-split sub-meshes differ).
+                applyMglModelLighting(dataSource, {
+                    traverse: (cb: (o: any) => void) => cb(mesh),
+                } as any, p.emissiveStrength, p.tint, p.heightRamp,
+                    p.unlitMix, p.pbrEligible, p.lutOff, p.receiveShadows);
+                healed++;
+            } catch { /* best-effort — must never break the frame */ }
+        }
+    });
+    if (healed && (globalThis as any).__mbDecodeDbg) {
+        // eslint-disable-next-line no-console
+        console.log(`[MBShHeal] re-patched materials=${healed}`);
+    }
 }
 
 export async function getSharedGLTFLoader(): Promise<GLTFLoaderType> {

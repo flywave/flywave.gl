@@ -407,8 +407,12 @@ export class MBBatchedModelRenderer {
     /** Apply layer paint styling to a tile model (whole-tile, §539 phase 1). */
     applyLayerPaint(model: THREE.Group, paint: any): void {
         try {
-            applyMglModelLighting(this.m_dataSource, model,
-                Number(paint?.['model-emissive-strength'] ?? 0));
+            // §885 终十四: the data-driven model-color clone MUST run BEFORE
+            // applyMglModelLighting — cloning AFTER the patch replaces the
+            // materials with native clones (Material.copy drops the
+            // onBeforeCompile closure and JSON-mangles userData.__mbShU):
+            // those tiles rendered without mgl lighting and never sampled
+            // the shadow map.
             const mixI = Number(paint?.['model-color-mix-intensity'] ?? 0);
             const color = paint?.['model-color'];
             if (mixI > 0 && color) {
@@ -426,6 +430,8 @@ export class MBBatchedModelRenderer {
                     mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0];
                 });
             }
+            applyMglModelLighting(this.m_dataSource, model,
+                Number(paint?.['model-emissive-strength'] ?? 0));
             const op = Number(paint?.['model-opacity'] ?? 1);
             if (op < 1) {
                 model.traverse((o: any) => {

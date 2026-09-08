@@ -58,7 +58,7 @@ import { MBGlobePoleCaps } from './MBGlobePoleCaps';
 // must be synchronous. (No import cycles: MBModelRenderer is already in the
 // static graph via MBBatchedModelDataSource; MBGlobePoleCaps imports only
 // three/geoutils.)
-import { syncModelFogUniforms, syncModelShadowUniforms } from './MBModelRenderer';
+import { syncModelFogUniforms, syncModelShadowUniforms, refreshModelShadowUniforms } from './MBModelRenderer';
 import { openPMTilesUrl, openPMTilesBlobIndex, PMTilesBlobIndex } from './PMTiles';
 
 export interface MBStyleDataSourceParameters {
@@ -3051,32 +3051,16 @@ export class MBStyleDataSource extends TileDataSource {
                     // direct lighting term (mgl shadowed_light_factor_normal).
                     try {
                         syncModelShadowUniforms(self.m_shadowRenderer.getShadowUniforms());
-                        // §885 终十一: the registered-handle refresh misses
-                        // material clones created after their prototype was
-                        // patched (their shader.uniforms are new objects) —
-                        // those rendered copies kept a STALE uMBShMatrix and
-                        // the whole landmark shadow family sampled empty.
-                        // Refresh every __mbMglLit material found in the
-                        // scene directly.
-                        const su2 = self.m_shadowRenderer.getShadowUniforms();
-                        if (su2) {
-                            const st2 = self.mapView?.m_scene;
-                            st2?.traverse((o: any) => {
-                                const mats = Array.isArray(o.material)
-                                    ? o.material
-                                    : (o.material ? [o.material] : []);
-                                for (const m of mats as any[]) {
-                                    const u = m?.userData?.__mbShU;
-                                    if (!u) continue;
-                                    u.map.value = su2.map;
-                                    u.matrix.value.copy(su2.matrix);
-                                    u.intensity.value = su2.intensity;
-                                    if (u.eye && su2.eye) u.eye.value.copy(su2.eye);
-                                    if (u.eyeOn) u.eyeOn.value =
-                                        (globalThis as any).__mbShadowEyeOn ? 1 : 0;
-                                }
-                            });
-                        }
+                        // §885 终十四: single-traversal heal + refresh —
+                        // replaces the 终十一 raw traversal, which skipped
+                        // handle-less materials AND aborted on JSON-mangled
+                        // handles (clone-of-patched userData): materials with
+                        // stored patch params but no valid handle are
+                        // re-patched in place (needsUpdate forces the
+                        // recompile), valid handles are refreshed from the
+                        // renderer's uniforms.
+                        refreshModelShadowUniforms(self, self.mapView?.m_scene,
+                            self.m_shadowRenderer.getShadowUniforms());
                     } catch { /* best-effort */ }
                 }
                 if (self.m_atmosphereRenderer) {

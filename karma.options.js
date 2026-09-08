@@ -56,7 +56,12 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
                     "--use-angle=swiftshader",
                     "--enable-unsafe-swiftshader",
                     "--enable-webgl",
-                    "--ignore-gpu-blocklist"
+                    "--ignore-gpu-blocklist",
+                    // macOS: use an in-memory mock keychain — otherwise
+                    // Chrome touches the real "Chrome Safe Storage" item at
+                    // startup and macOS pops a password dialog (which also
+                    // blocks the launch until answered, karma "not captured").
+                    "--use-mock-keychain"
                 ]
             },
             ChromeDebug: {
