@@ -891,7 +891,7 @@ export class MBShadowRenderer {
                 const bc = casterBox.getCenter(new THREE.Vector3());
                 const bs = casterBox.getSize(new THREE.Vector3());
                 // eslint-disable-next-line no-console
-                console.log(`[MBShadowMat] f=${__rc} casters=${shadowCasters.size} cam=(${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}) r=${radius.toFixed(0)} nrfr=${this.m_shadowCamera.near.toFixed(0)}/${this.m_shadowCamera.far.toFixed(0)} p00=${pj[0].toExponential(2)} boxC=(${bc.x.toFixed(0)},${bc.y.toFixed(0)},${bc.z.toFixed(0)}) boxS=(${bs.x.toFixed(0)},${bs.y.toFixed(0)},${bs.z.toFixed(0)}) fc=(${frameCenter.x.toFixed(0)},${frameCenter.y.toFixed(0)},${frameCenter.z.toFixed(0)})`);
+                console.log(`[MBShadowMat] f=${__rc} casters=${shadowCasters.size} cam=(${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}) r=${radius.toFixed(0)} nrfr=${this.m_shadowCamera.near.toFixed(0)}/${this.m_shadowCamera.far.toFixed(0)} p00=${pj[0].toExponential(2)} boxC=(${bc.x.toFixed(0)},${bc.y.toFixed(0)},${bc.z.toFixed(0)}) boxS=(${bs.x.toFixed(0)},${bs.y.toFixed(0)},${bs.z.toFixed(0)}) sc=(${sphereCenter.x.toFixed(0)},${sphereCenter.y.toFixed(0)},${sphereCenter.z.toFixed(0)}) eyeZ=${eye.z.toFixed(0)}`);
             } catch (e) {
                 // eslint-disable-next-line no-console
                 console.log('[MBShadowMat] probe error ' + String(e));

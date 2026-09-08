@@ -168,7 +168,12 @@ function discoverTests(): TestEntry[] {
     // (mbSUV + Res) instead of the shadow uv.
     const sdg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shdiag="))?.slice("shdiag=".length);
-    if (sdg) (globalThis as any).__mbShadowDiag = sdg;
+    if (sdg) {
+        (globalThis as any).__mbShadowDiag = sdg;
+        // §885 终六十八: SHDIAG=2 needs the dbg4 pipeline (uv paint) WITHOUT
+        // requiring SHADOW>=4 — clean-gate attribution experiments.
+        if (sdg === "2") (globalThis as any).__mbShadowDbg4 = true;
+    }
     const port = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modellightport="))?.slice("modellightport=".length);
     if (port === "1") (globalThis as any).__mbModelLightPort = true;

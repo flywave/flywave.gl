@@ -768,3 +768,10 @@ shdiag=2（dbg4 改涂重建输入 mbSUV+Res）与 shdiag=0（涂 shadowUv）输
 SHDIAG=3（quad 底色洋红）实验：画面无任何洋红 → **quad 完全被 land fill 覆盖，"地面=quad 露出"假设否定**；可见地面确为 land fill（MapMeshBasic/Standard，均在 sweep 白名单内、已注入）。但本实验与 SHADOW=3/4 门控存在混淆（SHADOW=3 帧中出现 dbg4 黄路），SHDIAG 两版直绘逐位同的异常也与之相关——归因实验需在干净门控下重做（建议：SHDIAG 独立于 SHADOW 生效，或单用 paintId 逐层隐藏）。基础设施新增：SHDIAG=3 洋红开关、shdiag/shdiralt/shadowcast 参数链。
 
 **标定工作当前状态汇总**：方向已定案（§686 y 镜像正确，shdiralt=1 恶化 +171k）；extrusion caster 已默认启用（零回归）；帧扩展已就位；quad 链路全通但被覆盖。剩余单点问题：**land fill 接收体的 int=1 是否到达 GPU**（干净门控下的 uv 直绘一测即知），随后为长度 1/3 截断标定与 fog 族 109k 暗化值。
+
+### §885 终六十八：干净门控判别 + 阴影相机读数入档（2026-09-08 终）
+
+- **SHDIAG=2 独立于 SHADOW 生效**（shdiag=2 自动启用 dbg4）后判别成功：地面 fill 的 uv 直绘可见——**左上"阴影带"涂为 uv≈(0,0,0)**（=光视锥近平面之前/原点角，片元被裁），其余地面 uv≈0.37 灰。即部分接收片元的世界点投影到阴影相机视锥之外/之后——非"链路死"也非"int=0"。
+- **[MBShadowMat] 修复并产出读数**：casters=80、cam=(−418,−44,−420)、r=595、near/far=−1190/1740、casterBox 中心 (−620,−155,−357) 尺寸 (1242,1242,202)、eyeZ=459。MBCG：NDC(−1,−1) 角的地面交点 (−211,−185,−458)——corners 幅值正确。
+- 初步几何判断（下会话验证）：阴影相机球心在 z=−420（接近地面 −459），光轴行进方向向下；部分地面/墙片元落在光视锥 xy 之外（caster NDC 达 ±1.76）或近平面之后 → uv 裁到 (0,0,0) 黑带。与 expected 的"大面积阴影"对照，需把 ortho 盒/球心相对可见地面重新对齐（mgl 的球心=相机前向 centerDepth 处，但 mgl 的相机空间单位/轴向转换需再核对——尤其 getWorldToCamera 的 y 向）。
+- 本轮零回归（493,017 为 SHADOW=3 正常渲染态）。
