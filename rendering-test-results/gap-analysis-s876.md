@@ -1156,3 +1156,17 @@ fogshift=+0.3（fogMglRange.x/y 各加 0.3 校准偏移）实测：
 - buildings-trees：457,874 不变（其地面走 quad 路径，非 chunk fog）。
 fogshift 参数已入库（fogshift=<x>,<y>），fogMglRange.x/y 各加 0.3 后阴影更暗、更接近 expected。
 下会话：①fogshift 值精调（0.3 方向正确，可试 0.5/0.7 进一步）；②buildings-trees 墙面色调（LIGHTING_3D_MODE）；③仓库外数据补齐重验。
+
+### §885 终一百三十八：fogshift=0.7 默认落地——fog 暗化值标定完成（2026-09-09）
+
+fogshift 扫描曲线定案（0/0.3/0.5/0.7/0.9）：
+| fogshift | fog | hard-cutoff |
+|---|---:|---:|
+| 0 | 161,252 | 165,774 |
+| 0.3 | 126,903 | 162,025 |
+| **0.5** | **96,899** | **130,109** |
+| **0.7** | **96,899** | **127,427** |
+| 0.9 | 96,899 | 130,353 |
+
+**fog 在 fogshift≥0.5 后到达平台 96,899（−42%）**；hard-cutoff 在 0.7 略优（127,427）。设 **0.7 为默认校准值**（fogMglRange.x/y 各加 shift+0.7），fogshift 参数保留为精调入口。fog 暗化值标定完成。
+下会话：①buildings-trees 墙面色调（LIGHTING_3D_MODE）；②仓库外数据补齐重验。
