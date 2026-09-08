@@ -644,3 +644,14 @@ lightxflip=1（lightDir.x 翻转）：237,288 vs 115,949（恶化 +121k）——
 5. **shadow_sample**：sampler2DShadow 硬件比较（COMPARE_REF_TO_TEXTURE，GREATER 语义——occlusion=1 为遮挡）——与我们的 r+g/255 packed 解码+smoothstep 不同（我们为软件比较）。
 6. **fade_range**：view_depth 超出淡出范围后 occlusion 淡出到 0（远处无影）——我们缺失此淡出。
 下轮入口：①shadow factor 改用 mgl 精确形式（step(0,NDotL) 门控 + occlusion 语义 + 斜率 bias）；②fade_range 淡出补齐；③metal env 语义对照 getPBRMaterial（metallic 分离 diffuse/specular）。
+
+### §885 终五十：会话最终收尾（2026-09-08）
+经逐项对照 mgl vendor 参考（3d-style/shaders/model.fragment.glsl + _prelude_shadow + _prelude_lighting）：模型 shadow factor 语义（NdotL clamp + shadow 调制方向 + 双翻转抵消）与我们的实现**一致** ✓——剩余差异仅为：①bias 斜率自适应 vs 固定（边缘质量微调）；②fade_range 淡出缺失（远处阴影淡出）；③PBR ambient/direct 配比（255 过曝与 navy 暗部——需逐参数 A/B）。
+会话最终提交状态（22,000+ 秒，27 个提交：567f1cbf→终五十）：
+- shadows-normal-offset：171,310→115,949（−32%）
+- buildings-trees-shadows-casting：583,410→428,064（−27%）
+- quantization-shadows 守卫：2,332 逐位零回归（每步复验）
+- 基础设施：钥匙串修复、主画布 probe 通道、DataTexture 深度源、quad readout、PBR per-term 探针×2、ambmul/lightxflip/metenv A/B 基建
+- 证伪三个历史错误假设（终三/终十一/终十三）
+- 六项 A/B 定案（spec 必要/PBR 最优/ambient 充足/metal env 无效/lightxflip 无效/x 翻转无效）
+下会话入口：①bias 斜率自适应 + fade_range 淡出（终四十九语义对齐）；②PBR ambient/direct 逐参数 A/B；③按 baseline-summary 清单继续其余失败项。
