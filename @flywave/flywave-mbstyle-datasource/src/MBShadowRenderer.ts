@@ -437,14 +437,20 @@ export class MBShadowRenderer {
             ?.lighting3DState?.dir as number[] | undefined;
         if (!dirProp && !dirArr) return;
         let lightDir: THREE.Vector3;
-        if (dirProp) {
+        // §885 终二十二: prefer the lighting3DState dir (§683 scene-frame
+        // convention) — it is what the model receivers' wall NdotL uses
+        // (modelLightDir, cast-shadows gated), and the raw spherical form
+        // casts the ground shadow mirrored from expected (the quad's dark
+        // region landed offset from expected's projection).
+        if (dirArr) {
+            lightDir = new THREE.Vector3(dirArr[0], dirArr[1], dirArr[2]).normalize();
+        } else if (dirProp) {
             const a = (dirProp[0] + 90) * Math.PI / 180;
             const pl = dirProp[1] * Math.PI / 180;
             lightDir = new THREE.Vector3(
                 Math.cos(a) * Math.sin(pl), Math.sin(a) * Math.sin(pl), Math.cos(pl));
         } else {
-            const d = dirArr!;
-            lightDir = new THREE.Vector3(d[0], d[1], d[2]);
+            lightDir = new THREE.Vector3(0, 0, 1);
         }
         if (!Number.isFinite(lightDir.x)) return;
 

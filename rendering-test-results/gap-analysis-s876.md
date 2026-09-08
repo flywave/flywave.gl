@@ -528,3 +528,8 @@ expected vs current 逐区域视觉对比：①墙面——expected 受光面暖
 ②**光源方向按 cast-shadows 门控翻转**：差异分析发现明暗模式镜像（我们亮 103k 处 expected 要暗 ~116；我们暗 74k 处 expected 要亮 ~197）。modelLightDir 的 mgl-raw 球面公式（az+90）在渲染帧（§643 y 镜像）里把影子投到了镜像侧。`shadows-normal-offset` 用 modeldiralt=1（§683 场景帧 ls.dir）实测 **133,444 → 97,644（−35,800）**；但同一翻转使 quantization-shadows 2,332 → 88,238 灾难回归（其方向光未声明 direction，环境默认物化后同样被翻转）。
 最终规则：`shadowLightState` 非空（cast-shadows 生效）且声明了方向的样式用 ls.dir（§683 场景帧），其余保持 mgl-raw——**两夹具同时达到各自最优：97,644 / 2,332**。
 累计：shadows-normal-offset 171,310 → **97,644（−43%）**；守卫零回归。剩余：①阴影范围（quad 侧光源方向同为 mgl-raw，地面投影应同步改用 ls.dir 验证）；②墙面反照率/环境光配比（expected 暖白/灰蓝 vs current 过曝/navy）；③[MBCG]/[MBShGPU] 探针保留。
+
+### §885 终二十三：阴影方向全链统一——目标夹具 115,177，extrusion 家族同步改善（2026-09-08）
+MBShadowRenderer 的光源方向从 §560 mgl-raw 球面公式改为优先 lighting3DState.dir（§683 场景帧，normalize 后）——深度相机、深度图、ground quad、模型墙 NdotL 四处统一到同一方向向量。实测：shadows-normal-offset **163,324 → 115,177（−48,147）**（quad 的地面投影落到 expected 位置）；buildings-trees-shadows-casting **583,410 → 428,064（−27%）**（extrusion 家族同步改善——此前其地面阴影同样镜像）；守卫 quantization-shadows **2,332 零回归**。
+累计：shadows-normal-offset 171,310 → **115,177（−33%）**；buildings-trees-shadows-casting 583,410 → 428,064。
+剩余标定：①阴影范围仍小于 expected（quad 暗区 ~3.1k vs ~12.5k 采样——光源仰角/方位的剩余偏差或深度图覆盖）；②墙面反照率/环境光配比（过曝纯白+深 navy vs 暖白/灰蓝）；③自阴影 bias 已对齐 §692。
