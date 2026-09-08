@@ -965,3 +965,11 @@ SHDIAG=2 + DECODEDBG 联合运行（新相机基准）：道路（MeshBasic drap
 
 shadowbias=0.002 vs 0.0002：HW 路径 904,250 逐位不变——bias 窗口十倍变化不影响结果 ⇒ 采样值远离比较边界（sampD−uv.z 为大的同号值），图案位置系统性偏移而非精度/边界问题。头号候选：**深度域转换**——HW RT 的深度纹理存 GL z_ndc∈[−1,1] 经 depth range 映射到 [0,1]（= ndc·0.5+0.5），与接收体 uv4.z（m_matrix 内含同一 [0,1] remap）应同域；若主渲染器在 RT 上使用了不同的深度语义（如 REVERSED_Z/WebGL2 clip 控制），域即错位。下会话：SHDIAG 读 (sampD−uv.z) 的符号分布图（正=lit/负=shadowed 的空间分布）即可一次定位域差方向；修正后再标定暗化值。
 保持：软件路径（默认）537,993/167,069/165,774、守卫逐位零回归；shadowhw/shbias 参数与 HW RT 实现已入库。
+
+### §885 终一百零八：SHDIAG=5 符号分布判读——剩余差异聚焦雾近场强度（2026-09-09）
+
+SHDIAG=5（R=0.5+10×(depth−uvz), G=uvz, B=depth）落地并实测：
+- 地面 Δ=depth−uvz ≈ −0.01（中心区，边缘判定为阴影）到 +0.05（左上，lit）——符号分布与阴影机制自洽，采样/比较链健康；
+- 中心区阴影在正常渲染下呈 ~94 灰而非纯黑——雾近场强度偏大（~30% vs expected ~10%）把黑阴影洗灰，与终九十八的雾-阴影合成结论一致；
+- fogMglRange 的 fov-adjusted 修正（range.x=1.0）已使近场 t<0 → 雾应为 0——与观测 94 灰仍差一档，需核对 mbLen 的单位（vViewPosition 是否真的等于米——RTE 场景缩放系数 kFog 的折算，终八十一/§216/§249 曾有 kFog 折算）。
+- 下会话首项：核对 vFogDepth/vViewPosition 的单位折算链（kFog/fog matrix 缩放），使 d̂ 在 expected 采样点的反解值与雾曲线一致。
