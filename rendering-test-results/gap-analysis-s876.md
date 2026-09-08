@@ -1170,3 +1170,15 @@ fogshift 扫描曲线定案（0/0.3/0.5/0.7/0.9）：
 
 **fog 在 fogshift≥0.5 后到达平台 96,899（−42%）**；hard-cutoff 在 0.7 略优（127,427）。设 **0.7 为默认校准值**（fogMglRange.x/y 各加 shift+0.7），fogshift 参数保留为精调入口。fog 暗化值标定完成。
 下会话：①buildings-trees 墙面色调（LIGHTING_3D_MODE）；②仓库外数据补齐重验。
+
+### §885 终一百四十：墙面色调完整因果链定案（2026-09-09）
+
+[MBExtU2] fetch 探针 + 挤出材质参数分析：
+- 注入 uniform 值 ✓（amb=[0,0,0]、dirColor=[0.5×3]、dir 正确、int=1）
+- 注入 GLSL 应用 ✓（fsLen=16211、uMB3D 声明在、MB_SH_HW 在）
+- 挤出材质：MeshStandardMaterial、fill-extrusion-color=white、**fill-extrusion-opacity=0.4**
+
+**墙面色调因果链**：背光面 k=0 → 墙面色=黑 × 0.4 opacity + 0.6×**背后内容**。背后内容=地面（fill/背景清屏色）——地面未被阴影覆盖（灰 94）→ 黑墙叠灰地 = 中灰 56；expected：黑墙叠**黑地面**（阴影中）= 纯黑。**墙面色调差与地面图案覆盖差完全同源**——fill 接收体的地面阴影图案一旦全域呈现，墙体自动变黑（opacity 合成自然修正）。
+
+当前过渡态分数（buildings-trees 562,664、fog 167,069/165,774）是正确基准下的真实色调差，非渲染 bug。修复路径：①fill 接收体的阴影调制作用域扩展到全部地面 mesh（当前仅部分 mesh 被注入——[MBRf] RGS 只覆盖部分实例）；②fog 近场强度配合微调。
+下会话：①以 drawlog mu 对照确认渲染中地面 mesh 的材质实例并确保注入全覆盖；②fog 近场强度逐夹具精调；③仓库外数据补齐。
