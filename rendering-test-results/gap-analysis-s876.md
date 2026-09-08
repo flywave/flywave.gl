@@ -851,3 +851,12 @@ ground-shadow-fog 图像级对比：expected = 近地街景（pitch 70、zoom 16
 ground-shadow-fog 实测：fov-adjusted range（[−0.5,3.0]+shift1.5 → [1.0,4.5]，mgl fog.ts:87 state getter 语义）下**真阴影首次浮现**（画面出现 (0,0,0) 纯黑墙面/地面阴影），分数 109,221→154,337 过渡态——新增的黑块位置未对齐 expected，属相机/放置对齐未完成所致；白洗状态的高分是错位白雾与 expected 白区的巧合匹配。以 mgl 正确语义为准保留本修正。
 - 同步核对：dome 大气 shader 的 (fogMglRange.x + fogMglShift) 与新 range 数值恒等（旧 −0.5+1.5 = 新 1.0），无需改动。
 - 下会话：①ground-shadow-fog 相机放置对齐（eye 高度 273 vs expected 视角的 ~185 估算，pitch 应用核对）；②对齐后阴影暗化值标定；③buildings-trees 图案覆盖。
+
+### §885 终八十四：全局相机距离 +38% 定量发现（2026-09-08 终）
+
+以 ground-shadow-fog（zoom 16.2、pitch 70、lat 37.78）数值回归：
+- 我方：[MBCamDump] cameraZ=273（eye 高度），camera distance = 273/cos70° = 797 m；
+- mgl 推导：ctcd_px = 0.5/tan(fov/2)·512·pixelsPerMercatorPixel(=mercZ(1,lat)/mercZ(1,45)=0.897) = 690 px；ctcd_m = 690×mpp(0.838) = 578 m；eye = 578×cos70° = 198 m；
+- **比值 797/578 = +38%**——与 §873c4 的 globe 直径 +48% 观测同源（相机过远 → 地物偏小 → 暗区/图案对不齐的结构性原因）。
+- 候选根因（Utils.ts calculateDistanceFromZoomLevel）：distance = focal·(EQUATORIAL_CIRCUMFERENCE/2^zoomLevel)/256 —— ①EQUATORIAL_CIRCUMFERENCE 未做 cos(lat) 缩放（mgl 用 cos(lat) 圈）；②flywave zoomLevel +1 约定与 mgl 的折算关系。注意：多数夹具 PASS 说明该约定对纯 2D 视角自洽，偏差只在 pitch/3D 相关夹具显形——修改需全局评估。
+- 下会话首项：数值实验 calculateDistanceFromZoomLevel 的 cos(lat)/zoom 约定变体（带 pitch 夹具 A/B：ground-shadow-fog、buildings-trees、正交守卫组），确认 +38% 的确切来源后再修。
