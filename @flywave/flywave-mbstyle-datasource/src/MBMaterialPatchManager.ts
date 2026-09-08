@@ -3085,9 +3085,15 @@ export class MBMaterialPatchManager {
                     'gl_FragColor = vec4(mix(outputDiffuse * uMBGroundRad, outputDiffuse, uMBEmissive), alpha);',
                     'gl_FragColor = vec4(mix(outputDiffuse * vColor * uMBGroundRad, outputDiffuse * vColor, uMBEmissive), alpha);',
                 ]) {
+                    // 终六十二: intensity-independent dbg4 uv paint also on
+                    // the ribbon anchors — the land fill's int/uv state was
+                    // invisible (probe blind spot) without it.
+                    const dbg4Paint = (globalThis as any).__mbShadowDbg4
+                        ? `\nif (uMBShadowDbg4 > 0.5) { gl_FragColor = vec4(mbShadowUv.xyz, 1.0); }`
+                        : '';
                     shader.fragmentShader = tryInsert(
                         shader.fragmentShader, anchor,
-                        `\nif (uMBShadowIntensity > 0.0) {${mbShadowSample}\n                    }`);
+                        `\nif (uMBShadowIntensity > 0.0) {${mbShadowSample}\n                    }${dbg4Paint}`);
                     if (mbShadowInserted) {
                         material.__mbShadowAnchor = 'ribbon:' + anchor.slice(18, 60);
                         break;

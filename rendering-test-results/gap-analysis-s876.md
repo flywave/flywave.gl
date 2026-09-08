@@ -735,3 +735,11 @@ vendor 参考 shadow_utils.ts 的 calculateGroundShadowFactor 完整读取：fac
 - 回归面：buildings-trees 427,316、fog 族 109,221/109,568、守卫 10,138 全部与终六十一致（本轮改动零回归）。
 
 **下会话首项（精确）**：①给 ribbon flavor 补 dbg4 插锚（用其 ribbon anchor），确认 land fill 的 int/uv 状态；②以 [MBShadowFit]/[MBShadowGrid] + expected 对照做 bearing/长度标定（投影方向已同向、长度约 1/3，疑 far 钳制或 uv.z 深度窗）；③fog 族 109k 的暗化值标定。
+
+### §885 终六十三：地面覆盖缺口的最终定位——land fill 由引擎 RawShaderMaterial/ShaderMaterial 渲染，两条注入路径均未覆盖（2026-09-08 终）
+
+ribbon dbg4 插锚落地后复测（buildings-trees 692,122 逐帧稳定）：uv 直绘仍只有 roads（MeshBasic draped）涂色——**地面 land fill 不由注入程序渲染**。drawlog 材质普查：MeshStandard 20,320 / MeshBasic 14,928 / ShaderMaterial 513 / RawShaderMaterial 504。结论：引擎 DecodedTileHelpers 自建的 fill/land 材质是 ShaderMaterial/RawShaderMaterial 族——
+- tile.objects 注入路径：fill ShaderMaterial 会走 ribbon 锚点（此前已确认 ribbon:4 混合式渲染出可见投影带——部分 fill 确实被注入），但引擎直建实例不在 tile.objects 里；
+- scene sweep 路径：类型白名单只有 MeshStandardMaterial/MeshBasicMaterial，ShaderMaterial/RawShaderMaterial 被标记 __mbShadowSkipped 跳过。
+
+**下会话首项（精确、小步）**：scene sweep 放开 ShaderMaterial/RawShaderMaterial（或按 technique 名单），对引擎直建 fill 材质走 ribbon 锚点注入 + 复测 buildings-trees 的地面图案覆盖；随后按终六十二入口②③标定（长度约 expected 的 1/3——疑 far 深度窗或 uv.z 比较；fog 族 109k 暗化值）。
