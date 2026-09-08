@@ -2899,6 +2899,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                     pxTrace: (globalThis as any).__mbPxTraceArr,
                                     fs: (globalThis as any).__mbFsDump,
                                     vs: (globalThis as any).__mbVsDump,
+                                    gq: (globalThis as any).__mbGQState,
                                     wvSamples: Array.from(
                                         (globalThis as any).__mbWvSamples?.values?.() ?? []),
                                 }),

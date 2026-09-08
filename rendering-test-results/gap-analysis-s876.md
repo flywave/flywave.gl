@@ -498,3 +498,10 @@ drawlog（DRAWLOG=1+SHADOW=6）实测：被渲染的大网格（MeshStandardMate
 实验（全部逐位 171,271，未收敛）：ground quad 帧修正两个方案（carrier 偏移 setFrameOffset / corners−camPos）均未改变输出——quad 输出恒等于 clear color（采样恒 lit 或全 discard），且对 extrusion 家族存在回归风险（其地面阴影依赖现有 corners/uMBEye 配对），两方案已回退。
 [MBShGPU2] 关键发现：本夹具场景中**不存在任何非模型的 ground 接收器**（无 fill/line 图层，background 是 clearColor 而非网格）——expected 的地面投影只能由 ground quad 承载，而 quad 采样恒 lit 的原因仍未定位（候选：CanvasTexture 跨上下文上传在 SwiftShader headless 读空、uMBEye/corners 帧配对在 batched 帧系下系统性错位、或 z=0 平面常数需随帧系平移）。extrusion 家族地面阴影可见（同一代码）与本夹具不可见的差异点为下轮首要对照实验。
 下轮入口：①对照实验——在 buildings-trees-shadows-casting（extrusion 地面阴影可见）与 shadows-normal-offset 两夹具同时打印 quad 的 uMBShadowMatrix/uMBEye/corners 与实际采样值，锁定差异变量；②竞速态（lit=0 上屏）确认已被自愈补丁消除（drawlog lit 全 1 验证）；③墙面 bias/smoothstep 标定（模型自深度 0.894 边界全 lit，需对齐 ground 路径 §692 形式）。
+
+### §885 终十九：quad 首次光栅化（z-gate 修复）+ 2× 帧异常发现（2026-09-08）
+对照实验（[MBShGPU]/__mbGQState 探针，buildings-trees-shadows-casting vs shadows-normal-offset）结论：
+- quad 在两夹具都在绘制（drawn 22/566，preSceneHook 直路径生效，composer 未启用 anyEffect=False）；uMBEye = projectPoint(geoCenter) = **绝对量级**（21.4M, 27.5M, 82.2），非终三推测的 ≈0。
+- **quad 从未渲染过任何像素的根因**：prepGroundQuad 的 `corners.add(eye)` 把绝对 eye.z（82/458）泄进顶点 z，fragment 的 `vMBWorldPos.z > 1.0` 天空门因此 **discard 全部片段**（eye 在 `mbWP − uMBEye` 差值中本会精确抵消，add(eye) 只破坏 z-gate）。移除 add(eye) 后 quad 首次光栅化：shadows-normal-offset 171,271 → **163,324（−7,947）**。
+- 新发现的独立缺陷：cornerOnGround 的交点与 projectPoint(geoCenter) 输出呈**精确 2.00× 比例**（两夹具一致：corners≈(42.9M,55.1M) vs eye≈(21.4M,27.5M)）——逻辑相机 matrixWorld 与 projection.projectPoint 的 xy 坐标系相差一个尺度（z 一致），地面交点不在 expected 阴影位置 → quad 虽光栅化但暗区错位（mismatch 仅 −7,947 而非大幅下降）。extrusion 家族的地面阴影由 fill 材质接收器承载，同样受此 2× 影响（buildings-trees-shadows-casting 583,410 仍失败）。
+下轮入口：①对齐 cornerOnGround 与 projectPoint 的坐标系（优先怀疑 flywave projection 的 projectPoint 输出与相机世界矩阵的 xy 尺度差一倍——在 cornerOnGround 里改用与 projectPoint 同源的投影原点/尺度，或给 uMBGC 乘 0.5 做 A/B）；②修复后 quad 暗区应落到 expected 的右下阴影区，shadows-normal-offset 应大幅下降；③守卫 quantization-shadows 2,332 已复验零回归（quad 对 intensity=0 夹具不绘制）。

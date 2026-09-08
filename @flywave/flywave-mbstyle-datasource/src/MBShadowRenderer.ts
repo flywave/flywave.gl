@@ -234,6 +234,9 @@ export class MBShadowRenderer {
         try {
             renderer.setRenderTarget(null);
             renderer.render(this.m_groundScene, this.m_groundCamera);
+            // §885 终十九: did the underlay channel actually fire? (the
+            // composer render path never calls preSceneHook.)
+            (globalThis as any).__mbGQDraws = ((globalThis as any).__mbGQDraws ?? 0) + 1;
         } finally {
             renderer.setRenderTarget(prevRT);
         }
@@ -260,7 +263,13 @@ export class MBShadowRenderer {
         // so cornerOnGround computes RTE-relative ground intersections
         // (all ≈ 0,0,0). The receiver needs ABSOLUTE world positions for
         // `mbWP - uMBEye` to yield the correct RTE offset. Add eye back.
-        for (const c of corners) c.add(eye);
+        // §885 终十九: the add(eye) was REMOVED — it cancels exactly in the
+        // shader's `mbWP - uMBEye` (linear), but it leaked eye.z (82 here,
+        // 458 on buildings-trees) into vMBWorldPos.z, whose `> 1.0` sky-gate
+        // then DISCARDED EVERY fragment — the quad never rasterized a single
+        // pixel (bit-identical ground across every receiver change). The
+        // corners stay ABSOLUTE; uMBEye subtraction yields the eye-relative
+        // frame the depth pass frames the casters in.
         // The shadow camera lives in the eye-rebased scene frame — bring the
         // absolute-world corners into the SAME frame (casters' worldPos z
         // also carries −eye.z, so the ground plane here is z = −eye.z).
@@ -294,6 +303,22 @@ export class MBShadowRenderer {
         if (cv2) this.m_res.set(cv2.width, cv2.height);
         // §643: the quad itself is drawn by the engine's preSceneHook —
         // see drawGroundQuad.
+        // §885 终十九: cross-fixture ground-quad state snapshot (POSTed via
+        // the harness probe channel) — matrix/eye/corners/draw-count plus the
+        // composer routing flags, to isolate why the same quad code shows
+        // the ground shadow in one style and samples lit in another.
+        try {
+            const mrm: any = (this.m_mapView as any)?.mapRenderingManager;
+            (globalThis as any).__mbGQState = {
+                matrix: this.m_matrix.elements.slice(0, 16),
+                eye: eye.toArray(),
+                corners: corners.map((c: any) => c.toArray()),
+                drawn: (globalThis as any).__mbGQDraws ?? 0,
+                anyEffect: !!(mrm?.m_anyEffectEnabled),
+                composer: !!mrm?.m_composer,
+                res: [this.m_res.x, this.m_res.y],
+            };
+        } catch { /* probe only */ }
     }
 
     /** Per-frame entry point (AfterRender; one-frame uniform lag like heatmap). */
