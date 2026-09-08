@@ -533,3 +533,7 @@ expected vs current 逐区域视觉对比：①墙面——expected 受光面暖
 MBShadowRenderer 的光源方向从 §560 mgl-raw 球面公式改为优先 lighting3DState.dir（§683 场景帧，normalize 后）——深度相机、深度图、ground quad、模型墙 NdotL 四处统一到同一方向向量。实测：shadows-normal-offset **163,324 → 115,177（−48,147）**（quad 的地面投影落到 expected 位置）；buildings-trees-shadows-casting **583,410 → 428,064（−27%）**（extrusion 家族同步改善——此前其地面阴影同样镜像）；守卫 quantization-shadows **2,332 零回归**。
 累计：shadows-normal-offset 171,310 → **115,177（−33%）**；buildings-trees-shadows-casting 583,410 → 428,064。
 剩余标定：①阴影范围仍小于 expected（quad 暗区 ~3.1k vs ~12.5k 采样——光源仰角/方位的剩余偏差或深度图覆盖）；②墙面反照率/环境光配比（过曝纯白+深 navy vs 暖白/灰蓝）；③自阴影 bias 已对齐 §692。
+
+### §885 终二十三附：范围差距测量与剩余工作（2026-09-08）
+统一方向后实测：expected 阴影暗区 ~13.2k px（bottom-right 采样区）vs ours ~3.4k（agree 3,580——我们的暗区是 expected 的子集，方向正确但范围 ~26%）。阴影颜色已对齐（quad factor 0.28 → ~117 vs expected 112）。范围差距候选：①光源仰角——dir.z=0.648（仰角 40°，polar 50 from zenith）与 mgl 实际渲染的阴影长度（约 2.6×）不符——需 mgl 侧参考（polar 语义或阴影相机 fit 差异）；②阴影相机 §643 紧凑 fit 的 ±691 覆盖是否截断远端阴影（几何上 173 单位影子在界内，存疑）；③depth map 的 16-bit packed 解码在 quad 路径的精度。
+模型墙面：expected 暖白(240) vs current 过曝(255)，暗部 expected 灰蓝(96-150) vs current 深navy(7-50)——PBR 分支 ambient/direct 配比与反照率读取标定。
