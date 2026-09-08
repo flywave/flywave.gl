@@ -888,3 +888,11 @@ run58 日志 110 个 404，含 `models/vector/15-5241-12665.vector.pbf`、`14-26
 墙面/屋顶采样对比暴露：expected 与 ours 的色调逐像素错乱（同点位 expected 199/103/57 vs ours 51/106/78 交替反转）——两图有效视角不同（pitch/距离/方位的复合差），逐像素对应不成立。**结构性结论：任何像素级色调/暗化值标定都必须以相机视角对齐为前置**；此前的 band 直方图对比只能给量级、不能给点位映射。
 
 相机对齐工作流（下会话起的新主线）：①以 ground-shadow-fog 的 pitch 70 样式为基准，核对我方 pitch/bearing/eye-height 三元组的应用链（style → MapView options → camera placement）；②用 [MBCamDump] 类读数与 mgl 数值解（ctcd/fog matrix 推导）逐项对齐；③对齐后再回归阴影暗化值与色调标定。仓库外数据缺口（landmark 瓦、models/vector 瓦、globe-terrain DEM）继续挂账。
+
+### §885 终九十一：cos(lat) 相机距离修正正式落地（2026-09-09）
+
+ Utils.calculateDistanceFromZoomLevel 的 mercator 分支默认乘 cos(target.lat)（globe 分支已有自身换算不受影响；camdist 参数保留为 A/B 逃逸口）：
+- **数值依据**：ground-shadow-fog 下我方 798 m vs mgl 精确解 632 m，比值 = 1/cos(37.78°) 精确；mercator 投影的 pixelSpaceConversion=1.0（早前 0.897 推导有误）。
+- **视觉确证**：修正后 ground-shadow-fog 呈现与 expected 一致的近地街景（黑背光墙、街道层理、透视构图）。
+- **分数过渡态**：buildings-trees 427,316→537,993、fog 154,337→167,069、hard-cutoff 153,111→165,774——修正后的相机暴露出雾/阴影/色调的剩余错位（错误相机曾把场景推远从而巧合掩盖）。守卫 quantization-shadows 在 0.79 下已验证逐位不变（该夹具相机不经此路径或对距离不敏感）。
+- **全局影响**：所有 lat≠0 夹具的取景变化 → 需全量 re-baseline；这是 mgl 对齐的必要前提而非可选优化。

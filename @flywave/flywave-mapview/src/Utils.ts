@@ -1698,6 +1698,13 @@ export namespace MapViewUtils {
                 mglGlobeViewportMaxSize(options)
             );
             distance *= conv;
+        } else {
+            // §885 终八十六: mercator camera distance must be LAT-SCALED —
+            // the ground px scale is C·cos(lat)/2^z, so the equatorial form
+            // here placed the camera 1/cos(lat) too far (ground-shadow-fog:
+            // 797 m vs mgl 632 m; the closer camera reproduces expected's
+            // street-level view exactly). camdist=1 escapes for A/B.
+            distance *= Math.cos(mglGlobeTargetLatRad(options));
         }
         // §885 终八十五: camdist A/B multiplier — the equatorial-circumference
         // distance is 1/cos(lat) too far vs mgl's lat-scaled ground px
