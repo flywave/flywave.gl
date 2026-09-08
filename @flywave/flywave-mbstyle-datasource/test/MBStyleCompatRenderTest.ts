@@ -2896,9 +2896,21 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                 return loc ? JSON.stringify(glq3.getUniform(cp3.program, loc)) : 'absent';
                             };
                             // eslint-disable-next-line no-console
+                            let gpuM3 = 'absent';
+                            try {
+                                const locM3 = glq3.getUniformLocation(cp3.program, 'uMBShadowMatrix');
+                                if (locM3) {
+                                    const v3: any = glq3.getUniform(cp3.program, locM3);
+                                    gpuM3 = `s0=${v3[0].toExponential(1)},tx=${v3[12].toFixed(2)},ty=${v3[13].toFixed(2)},tz=${v3[14].toFixed(2)}`;
+                                }
+                            } catch { /* probe */ }
+                            // eslint-disable-next-line no-console
                             console.log('[MBShGPU3] quad dbg=' + u3('uMBShadowDbg')
                                 + ' int=' + u3('uMBShadowIntensity')
                                 + ' eye=' + u3('uMBEye')
+                                + ' gpuM=' + gpuM3
+                                + ' groundZ=' + u3('uMBGroundZ')
+                                + ' invProj=' + u3('uMBInvProj[0]')
                                 + ' inScene=' + (quad3.parent === (mapView as any).scene ? 1 : 0)
                                 + ' visible=' + quad3.visible);
                         } else {

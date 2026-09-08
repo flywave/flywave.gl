@@ -40,7 +40,8 @@ export interface ShadowUniformState {
 export class MBShadowRenderer {
     // §530: independent-context depth pass renderer + CanvasTexture回流.
     private m_shRenderer: THREE.WebGLRenderer | null = null;
-    private m_shTex: THREE.CanvasTexture | null = null;
+    private m_shTex: THREE.Texture | null = null;
+    private m_depthPixels: Uint8Array | null = null;
     private m_shadowCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 4000);
     // §532 bisect: ShaderMaterial vs Basic — is the ctx2 blank a silent
     // shader-compile failure or something else? (Basic draws white geometry.)
@@ -191,7 +192,7 @@ export class MBShadowRenderer {
                         vec4 mbPk = texture2D(uMBShadowMap, mbShadowUv.xy);
                         float mbShadowDepth = mbPk.r + mbPk.g / 255.0;
                         mbDbgDepth = mbShadowDepth;
-                        mbLit = smoothstep(-0.0002, 0.0002, mbShadowUv.z - mbShadowDepth);
+                        mbLit = smoothstep(-0.0002, 0.0002, mbShadowDepth - mbShadowUv.z);
                     }
                     vec3 mbOut = uMBGroundColor * mix(uMBGroundShadowFactor, vec3(1.0), mbLit);
                     gl_FragColor = vec4(pow(mbOut, vec3(1.0 / 2.2)), 1.0);
@@ -282,7 +283,12 @@ export class MBShadowRenderer {
         if (!renderer || !cam) return;
         cam.updateMatrixWorld();
         const groundZ = -eye.z;
-        this.m_groundUniforms.uMBInvProj.value.copy(cam.projectionMatrixInverse);
+        // §885 终三十一: the rteCamera's projectionMatrix is COPIED from the
+        // logical camera (MapView.update), but its projectionMatrixInverse is
+        // never recomputed — it stays IDENTITY, collapsing every ground ray
+        // to the origin (±136 units) and pushing all shadow samples outside
+        // the map. Derive the inverse from the projection matrix here.
+        this.m_groundUniforms.uMBInvProj.value.copy(cam.projectionMatrix).invert();
         this.m_groundUniforms.uMBCamWorld.value.copy(cam.matrixWorld);
         this.m_groundUniforms.uMBGroundZ.value = groundZ;
         const corners = this.m_groundUniforms.uMBGC.value as THREE.Vector3[];
@@ -566,13 +572,28 @@ export class MBShadowRenderer {
             scene.overrideMaterial = prevOverride;
             this.m_shadowCamera.layers.mask = prevLayers;
         }
-        // §885 终二十五: snapshot the WebGL depth canvas into the persistent
-        // 2D bitmap the CanvasTexture samples — the direct WebGL-canvas
-        // source read back EMPTY at upload time under SwiftShader.
+        // §885 终三十一: read the depth render into a DataTexture — a
+        // byte-exact copy of the shadow framebuffer. The CanvasTexture paths
+        // (WebGL canvas direct, and the 2D drawImage snapshot) both sampled
+        // EMPTY in the quad while the model materials read content — the
+        // DataTexture removes the canvas-read variable entirely.
+        const gl2: any = this.m_shRenderer.getContext();
+        const px = size * size * 4;
+        if (!this.m_depthPixels || this.m_depthPixels.length !== px) {
+            this.m_depthPixels = new Uint8Array(px);
+        }
         try {
-            const c2d: HTMLCanvasElement = (this as any).__mbDepth2d;
-            c2d.getContext('2d')?.drawImage(this.m_shRenderer.domElement, 0, 0);
-        } catch { /* probe-safe */ }
+            gl2.readPixels(0, 0, size, size, gl2.RGBA, gl2.UNSIGNED_BYTE, this.m_depthPixels);
+        } catch (e) {
+            (globalThis as any).__mbDepthReadErr = String(e).slice(0, 120);
+        }
+        if (!this.m_shTex || !(this.m_shTex as any).isDataTexture) {
+            this.m_shTex = new THREE.DataTexture(this.m_depthPixels, size, size, THREE.RGBAFormat);
+            this.m_shTex.magFilter = THREE.NearestFilter;
+            this.m_shTex.minFilter = THREE.NearestFilter;
+            this.m_shTex.generateMipmaps = false;
+            this.m_shTex.flipY = false;
+        }
         this.m_shTex.needsUpdate = true;
 
         // §531 probe: renderer.info quantifies whether ctx2 drew anything.

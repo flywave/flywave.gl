@@ -574,3 +574,13 @@ plain 渲染（115,949）实测地面无阴影——quad 的 uv 采样在阴影�
 - 探针：[MBShGPU]/[MBShGPU2]/[MBShGPU3]/[MBShFp]/[MBCG]/__mbGQState/drawlog(shu·lit·lp·mx·mainCanvas)/shadowdbg 全系。
 - 定量：模型接收自深度命中 0.894 ✓；quad 采样 uv(0.50,0.50) depth 0.502 居中在界 ✓（readout 模式）但 plain 模式地面仍无暗区——readout（255,255,0 簇）与 plain（无暗区）的矛盾指向 **readout 模式与 plain 模式的渲染状态差异**（uMBShadowDbg>0.5 时 quad 片元的 smaple 走到不同分支？——plain 模式 quad 输出=clear×mix(factor,1,mbLit) 且与禁用逐位一致 → mbLit≡1 或 quad 未光栅化）。
 下轮首项：**plain 模式下用 [MBShGPU3] 读 quad 的 uMBShadowMatrix/uMBEye GPU 值 + shadowdbg=4 邻界探针**，分离「quad 未光栅化」vs「光栅化但全 lit」；随后按终二十九②③继续。 Extrusion 家族 428,064 与目标 115,949 的剩余差距均为标定域（光源仰角/反照率）。
+
+### §885 终三十三：invProj 修复 + 会话收尾（2026-09-08）
+修复 rteCam.projectionMatrixInverse 恒为单位阵的问题（MapView 只 copy projectionMatrix，inverse 从未重算）——prepGroundQuad 改为 projection.copy().invert() 自行求逆。mismatch 115,949（与修复前一致）——解析地面求交后 quad 光栅化正常（readout 像素实证）但地面阴影的**范围/位置**与 expected 仍有差距（ours 暗区 4.2k vs expected 13.2k，方向已对）。
+**本会话（终十四～终三十三）最终状态**：
+- shadows-normal-offset：171,310 → 115,949（−32%）
+- buildings-trees-shadows-casting：583,410 → 428,064（−27%）
+- quantization-shadows 守卫：2,332 逐位零回归（每步复验）
+- 结构修复：uMBShWorldMatrix 帧对齐（模型自深度命中实证）、smoothstep bias、光源方向全链统一（cast-shadows 门控 §683）、解析地面求交 quad、RTE invProj 修复、两链合一、漏网自愈、钥匙串修复
+- 探针基建：[MBShGPU]/[MBShGPU2]/[MBShGPU3]/[MBShFp]/[MBCG]/__mbGQState/drawlog 扩展/mainCanvas probe 通道
+下会话首项：①ground quad 的 uv 采样仍与 expected 阴影区错位 ~1.5-2×——在 readout 模式下对「同屏坐标」直接比对 quad 采样 uv 与 expected 阴影暗区位置（无需新探针，已有数据链路）；②模型 PBR ambient/direct 配比（255 过曝与 navy 暗部）逐项像素迭代；③extrusion 家族 428,064 继续收敛。

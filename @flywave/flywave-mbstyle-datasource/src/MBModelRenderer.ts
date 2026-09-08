@@ -849,7 +849,7 @@ export function applyMglModelLighting(
                                      // instead of the hard 0.002 compare —
                                      // 0.002 ≈ 1.6 depth units in the tight
                                      // frustum, enough to light wall strips).
-                                     float mbLitS = smoothstep(-0.0002, 0.0002, mbShUv.z - mbShDepth);
+                                     float mbLitS = smoothstep(-0.0002, 0.0002, mbShDepth - mbShUv.z);
                                      mbNdotL *= mix(1.0 - uMBShIntensity, 1.0, mbLitS);
                                  }
                              }
@@ -953,7 +953,7 @@ export function applyMglModelLighting(
                                      // instead of the hard 0.002 compare —
                                      // 0.002 ≈ 1.6 depth units in the tight
                                      // frustum, enough to light wall strips).
-                                     float mbLitS = smoothstep(-0.0002, 0.0002, mbShUv.z - mbShDepth);
+                                     float mbLitS = smoothstep(-0.0002, 0.0002, mbShDepth - mbShUv.z);
                                      mbLF *= mix(1.0 - uMBShIntensity, 1.0, mbLitS);
                                  }
                              }
