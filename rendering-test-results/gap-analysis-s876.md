@@ -939,3 +939,7 @@ shrad=1.5（正交半径 ×1.5，r 470→706 读数确认生效）后 buildings-
 符号级核验：mbLen = length(vViewPosition)（three 视图空间 = 场景米）；uMbDistCam = 相机到目标米数（§701 已验证）→ d̂ = mbLen/distCam 在目标点 = 1.0 ✓，与 mgl fog matrix 的"目标点距离=1.0"归一化**等价**——终七十八怀疑的"重复 distCam 除法/缺失 ctcd 常数"不成立，雾公式单位层面正确，无需修改。
 当前诚实状态（cos(lat) 相机修正后的正确基准）：buildings-trees 537,993、ground-shadow-fog 167,069、hard-cutoff 165,774、守卫 10,138/10,260 逐位零回归。旧状态（427,316/109,221）为错误相机下的巧合低分，不应作为回归目标。
 剩余标定（新基准下按序）：①地面阴影图案的微对齐（阴影相机 fit 参数 vs expected 阴影带位置的逐 texel 对照）；②fog 近场强度微调（若仍偏白）；③LIGHTING_3D_MODE 色调（树冠待数据补齐）。
+
+### §885 终一百零一：联合诊断——roads 已注入，land fill 未注入（2026-09-09）
+
+SHDIAG=2 + DECODEDBG 联合运行（新相机基准）：道路（MeshBasic draped）涂出 uv 场且被 refresh ✓；**可见的 land fill 地面（灰色）无任何注入涂装**——即 land fill 材质从未被 injectGroundShadow 触达。候选：①land mesh 位于 m_sceneRoot 而 scene sweep 只遍历 m_scene；②land 材质被早前 pass 标记 __mbShadowSkipped；③引擎工厂 fill 材质创建时机晚于 sweep 的覆盖窗口（§586 双实例问题的变体）。下会话首项：在 sweep 中对 land fill 的材质实例打印 uuid/type/skip 标记（一次性），确认逃逸路径；修复后地面阴影图案应立即呈现（新相机下方向/长度已验证正确）。
