@@ -608,3 +608,7 @@ pbrterm=2 拆分探针实测：墙面 spec ≈ diff ≈ 0.75（LF 归一）—�
 ### §885 终三十九：modellightport A/B 定案——PBR 分支确认为最优（2026-09-08）
 modellightport=0（§557 hemisphere/Lambert 分支）A/B：179,062 vs PBR 分支 115,949——**Lambert 分支更差 +63k，PBR 分支确认为本家族最优光照路径**（与 spec 移除 A/B 的 179,062 一致——两者同为去 spec 的 Lambert 形式）。剩余差距（115,949 vs 阈值 134）为 PBR 分支内的逐项数值标定：①metal 窗户 env 项（expected 3-4× 更亮——mgl 的 env 组成或 metal 语义差异）；②墙面直射 ~6% 饱和。**mgl 的 model PBR 参考着色器未随 mapbox-gl-js vendor**——精确数值对齐需逐项探针迭代或获取 mgl 渲染参考。
 本会话最终提交状态：shadows-normal-offset 171,310→115,949（−32%）；buildings-trees-shadows-casting 583,410→428,064（−27%）；守卫 2,332 逐位零回归；18 个提交（终十四～终三十九）全部验证。
+
+### §885 终四十：ambient 倍率 A/B 定案——ambient 增强使结果恶化（2026-09-08）
+ambmul=2/3 A/B（uMB3DAmb×2/×3）：均为 179,062（比基线 115,949 恶化 +63k）——**ambient 不足假设被否定**：当前 ambient（0.25 线性）不是暗部/窗户差的原因，增强反而过曝。剩余标定域最终确认：①metal 窗户的 env/spec 组成（mgl 的 model PBR env 语义——需 mgl 参考）；②quad 阴影范围 32%；③smoothstep 边界自采样（地面/墙面 uv.z==depth 的半色调带）。
+本会话最终提交状态：shadows-normal-offset 171,310→115,949（−32%）；buildings-trees-shadows-casting 583,410→428,064（−27%）；守卫 2,332 逐位零回归；20 个提交（终十四～终四十）全部验证。剩余标定需 mgl model PBR 参考（未 vendor）或逐参数 A/B（每步双夹具验证）。

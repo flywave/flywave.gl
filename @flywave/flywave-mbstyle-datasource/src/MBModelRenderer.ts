@@ -163,7 +163,8 @@ export function syncMglModelLighting(model: THREE.Object3D, dataSource: any): vo
         for (const mat of mats as any[]) {
             const u = mat?.userData?.__mbLightU;
             if (!u) continue;
-            u.amb.value = ls.ambientColorLinear;
+            const mul = (globalThis as any).__mbAmbMul || 1;
+            u.amb.value = [ls.ambientColorLinear[0] * mul, ls.ambientColorLinear[1] * mul, ls.ambientColorLinear[2] * mul];
             u.dirColor.value = ls.directionalColorLinear;
             u.dir.value = dir;
         }

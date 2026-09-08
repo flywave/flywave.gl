@@ -130,6 +130,10 @@ function discoverTests(): TestEntry[] {
         (a: string) => a.startsWith("pbrterm="))?.slice("pbrterm=".length);
     if (pterm === "1") (globalThis as any).__mbPbrTermDbg = 1;
     if (pterm === "2") (globalThis as any).__mbPbrTermDbg = 2;
+    // §885 终四十: ambmul=N → the model ambient multiplier A/B.
+    const ambmul = (window as any).__karma__?.config?.args?.find?.(
+        (a: string) => a.startsWith("ambmul="))?.slice("ambmul=".length);
+    if (ambmul) (globalThis as any).__mbAmbMul = Number(ambmul) || 1;
 }
 {
     // §744: unlit-clamp restore A/B (emission-strength regression candidate ②).
