@@ -1004,3 +1004,9 @@ ext-uniforms-end 延迟 dump（回调完成后终态）：fsLen=16211（注入�
 ### §885 终一百一十（二）：quad 解码修复复测——状态稳定（2026-09-09）
 
 quad 解码修复（HW 分支 bias 生效 + 非 HW 分支恢复 packed 解码）后复测：buildings-trees 562,664、ground-shadow-fog 167,069——与修复前一致（无回归，软件路径稳定）。全部修复/参数/探针已入库。
+
+### §885 终一百一十一：shrad=2 不变性定案——地面 fill 接收体采样链惰性（2026-09-09）
+
+shrad=2（正交半径翻倍，[MBShadowMat] 可证 r 生效）后 buildings-trees **562,664 逐位不变**——地面 fill 接收体的输出对阴影相机 fit 完全不敏感。结合 SHDIAG 实测的恒定 uv（0.37,0.37,0.37）：fill 的 uv 场退化恒定，采样恒命中同一 texel。可见暗带为建筑自身暗面（非地面阴影）。
+根因收窄至 fill 接收体的 corners→mbSUV→mbWP 重建链在 GPU 端退化（CPU 侧 corners 值已确认正确——[MBRf2] gc0 绝对坐标）。候选：①uMBGC 数组上传问题（vec3 数组 uniform 绑定）；②uMBEye/uMBRes 与 uMBGC 的实例不一致；③注入的 GLSL 变量名冲突。
+下会话首项：SHDIAG=2 直绘读 fill 的 mbSUV 与 uMBRes（而非 uv）——若 mbSUV 正常变化而 uv 恒定 → 矩阵/眼点问题；若 mbSUV 恒定 → uMBRes 问题。二分定位后修复。
