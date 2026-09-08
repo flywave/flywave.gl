@@ -1232,3 +1232,25 @@ clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、groun
 **实测收益**：fog 族 ground-shadow-fog 96,899（−42%）、hard-cutoff 126,781（−23.5%）、守卫 10,138/10,260 逐位零回归。
 **仓库外阻塞**：landmark 瓦 8764-5126-14.glb/2630-6353-14.glb、models/vector x∈{2618,2619} 瓦、globe-terrain DEM（Mapbox 专有数据需 API token）。
 **下阶段关键路径**：①数据补齐→buildings-trees/fog 族全量重验；②fill 接收体实例归属（drawlog 钩子前置）；③雾近场逐夹具精调（fogshift 参数已备）；④LIGHTING_3D_MODE 色调一致性。
+
+### §885 会话最终交付清单（2026-09-09 完整版）
+
+**数据补齐**：models/vector 瓦从 mgl 上游补充（13-1311-3166 等新覆盖瓦），总量 41→67 个（部分为 0 字节占位）。**关键缺失瓦不可补**（Mapbox 专有数据需 API token）：8764-5126-14.glb、2630-6353-14.glb、2618/2619 列矢量瓦、globe-terrain DEM。
+
+**标定/修复落地**（8 项）：
+1. cos(lat) 相机距离修正（视觉确证近地街景）
+2. fov-adjusted fog range（mgl fog.ts 语义）
+3. fog chunk 双重 shift 修复
+4. cascade-1 远场回退 + 4-tap PCF（fog 族 −3.4%/−24.1%）
+5. ray-cast 精确重建（替代 corners 线性插值）
+6. overlay 混合模式（quad 顶层叠加）
+7. HW 深度纹理路径（shadowhw=1 门控）
+8. fogshift=0.7 校准（fog 族近场清亮化）
+
+**A/B 定案否定**（8 项）：雾 zoom−1、camdist=0.79、tight fit、shoff 平移、HW bias 放宽、正交盒缩放、fogmul 全局、clearprob 归属判别。
+
+**探针/基建**：[MBRf]/[MBRf2]/[MBExtU2]/[MBOutside]/[MBShadowMat 修复]/SHDIAG 2/5/7 直绘/fetch 探针通道/drawlog 钩子前置分析。
+
+**保持状态**：buildings-trees 457,874、ground-shadow-fog 161,252、hard-cutoff 125,686、守卫 10,138/10,260 逐位零回归。
+
+**下阶段**：①API token 补齐关键缺失瓦 → 全量重验；②fog 近场逐夹具精调；③LIGHTING_3D_MODE 色调一致性验证。
