@@ -184,6 +184,10 @@ function discoverTests(): TestEntry[] {
     const shw = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shadowhw="))?.slice("shadowhw=".length);
     if (shw === "1") (globalThis as any).__mbShadowHW = true;
+    // §885 终一百零六: shadowbias=<v> → HW-path compare bias (smoothstep window).
+    const shb = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shadowbias="))?.slice("shadowbias=".length);
+    if (shb) (globalThis as any).__mbShadowBias = Number(shb);
     // §885 终八十: fogmul → distCam multiplier (single-variable fog A/B).
     const fmul = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogmul="))?.slice("fogmul=".length);

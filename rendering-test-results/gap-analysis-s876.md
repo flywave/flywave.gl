@@ -960,3 +960,8 @@ SHDIAG=2 + DECODEDBG 联合运行（新相机基准）：道路（MeshBasic drap
 
 ①cacheKey 修复落地：ground '-mbshadow-hw' / extrusion '-mbext3d-hw' / quad 'v3-hw'——HW 状态进入 program 缓存键。②SHADOW=3 读出（R=int, G=sampD, B=uv.z）实测：fill 接收体采样值 G≈0.65–0.8——**HW 深度纹理采样链工作正常**（24-bit 真深度、窗口中部值域），排除"采样损坏"假说。904k/920k 的高分是 HW 值域（真 24-bit 深度）与 16-bit pack 时代的 bias/比较参数不匹配所致——需按 24-bit 值域重新标定比较偏置与 band 位置，而非回退。
 下会话：①以 [MBShadowFit]/深度图对照重标 compare bias（软件路径同受益）；②bias 对齐后 fog 近场强度与色调标定。
+
+### §885 终一百零七：HW bias 扫描定案——采样值系统性偏移，域转换待查（2026-09-09）
+
+shadowbias=0.002 vs 0.0002：HW 路径 904,250 逐位不变——bias 窗口十倍变化不影响结果 ⇒ 采样值远离比较边界（sampD−uv.z 为大的同号值），图案位置系统性偏移而非精度/边界问题。头号候选：**深度域转换**——HW RT 的深度纹理存 GL z_ndc∈[−1,1] 经 depth range 映射到 [0,1]（= ndc·0.5+0.5），与接收体 uv4.z（m_matrix 内含同一 [0,1] remap）应同域；若主渲染器在 RT 上使用了不同的深度语义（如 REVERSED_Z/WebGL2 clip 控制），域即错位。下会话：SHDIAG 读 (sampD−uv.z) 的符号分布图（正=lit/负=shadowed 的空间分布）即可一次定位域差方向；修正后再标定暗化值。
+保持：软件路径（默认）537,993/167,069/165,774、守卫逐位零回归；shadowhw/shbias 参数与 HW RT 实现已入库。

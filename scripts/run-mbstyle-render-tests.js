@@ -121,6 +121,7 @@ function main() {
             ...(process.env.MBSTYLE_CAMDIST ? [`camdist=${process.env.MBSTYLE_CAMDIST}`] : []),
             ...(process.env.MBSTYLE_SHRAD ? [`shrad=${process.env.MBSTYLE_SHRAD}`] : []),
             ...(process.env.MBSTYLE_SHADOWHW ? ["shadowhw=1"] : []),
+            ...(process.env.MBSTYLE_SHADOWBIAS ? [`shadowbias=${process.env.MBSTYLE_SHADOWBIAS}`] : []),
             ...(process.env.MBSTYLE_MODELDIRALT ? ["modeldiralt=1"] : []),
             ...(process.env.MBSTYLE_SPHDEG ? [`sphdeg=${process.env.MBSTYLE_SPHDEG}`] : []),
             ...(process.env.MBSTYLE_SPHDS ? ["sphds=1"] : []),

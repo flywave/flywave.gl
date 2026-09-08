@@ -1185,7 +1185,7 @@ export class MBMaterialPatchManager {
                  uniform float uMbDistCam;
                  varying float vMbWallH;
                  varying vec3 vMbWorldPos;
-                 ${(globalThis as any).__mbShadowHW ? '#define MB_SH_HW 1' : ''}
+                 ${(globalThis as any).__mbShadowHW ? `#define MB_SH_HW 1\n#define MB_SH_BIAS ${Number((globalThis as any).__mbShadowBias ?? 0.0002)}` : ''}
                  ${shader.fragmentShader.includes('uMBShadowMap') ? '' :
                  `uniform sampler2D uMBShadowMap;
                  uniform mat4 uMBShadowMatrix;
@@ -1281,6 +1281,11 @@ export class MBMaterialPatchManager {
                              #else
                              float mbShD = mbShPk.r + mbShPk.g / 255.0;
                              #endif
+                             #ifdef MB_SH_HW
+                             float mbShBiasV = MB_SH_BIAS;
+                             #else
+                             float mbShBiasV = 0.0002;
+                             #endif
                              // §696/§702: smoothstep edge + (1−intensity·occ)
                              // factor. §713 A/B: mgl's slope-scaled bias
                              // constants ([0.00036,0.0012,0.012] NDC) do NOT
@@ -1289,7 +1294,7 @@ export class MBMaterialPatchManager {
                              // 172,541, z-offset-scale 281,197→331,486) and
                              // were reverted; correct scaling needs the
                              // window-depth-per-metre mapping probed first.
-                             float mbShLit = smoothstep(-0.0002, 0.0002, mbShUv.z - mbShD);
+                             float mbShLit = smoothstep(-mbShBiasV, mbShBiasV, mbShUv.z - mbShD);
                              // §717: mgl u_fade_range — shadows fade back to
                              // LIT across the far quarter of the shadow
                              // camera's coverage (mgl: mix(occlusion1, 0.0,
@@ -3085,7 +3090,7 @@ export class MBMaterialPatchManager {
                             // 16-bit depth quantum tiny — the old 0.002 bias
                             // (≈6-60m of scene depth) ATE the entire building
                             // shadow footprint (0.001-of-range signature).
-                            float mbLit = smoothstep(-0.0002, 0.0002, mbShadowUv.z - mbShadowDepth);
+                            float mbLit = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, mbShadowUv.z - mbShadowDepth);
                             // §702: mgl shadowed_light_factor = 1 − intensity·occ
                             // (_prelude_shadow.fragment.glsl) — intensity<1
                             // lightens the shadow; ours previously ignored
@@ -3126,6 +3131,11 @@ export class MBMaterialPatchManager {
                 if (!shader.fragmentShader.includes(name)) mbShadowOwn.push(decl);
             }
             shader.fragmentShader = mbShadowOwn.join('') + shader.fragmentShader;
+            {
+                const bV = Number((globalThis as any).__mbShadowBias ?? 0.0002);
+                const hwOn = (globalThis as any).__mbShadowHW ? 1 : 0;
+                shader.fragmentShader = `#define MB_SH_HW ${hwOn}\n#define MB_SH_BIAS ${bV}\n` + shader.fragmentShader;
+            }
             if ((globalThis as any).__mbShadowHW) {
                 shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;
             }
