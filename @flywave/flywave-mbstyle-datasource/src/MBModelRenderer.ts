@@ -137,7 +137,15 @@ export function modelLightDir(dataSource: any): [number, number, number] {
     // to 88,238).
     const sl = dataSource?.m_environment?.shadowLightState;
     if (sl && dirProp !== undefined && ls.dir) {
-        return ls.dir;
+        // §885 终四十五: the mgl model shader negates lightDir.xy INSIDE
+        // (lightDir.xy = -lightDir.xy) — our raw spherical form is the
+        // PRE-flip engine vector; apply the shader's xy negation for the
+        // net light direction (A/B: lightxflip=1).
+        const d = ls.dir as [number, number, number];
+        if ((globalThis as any).__mbLightXFlip) {
+            return [-d[0], d[1], d[2]];
+        }
+        return d;
     }
     return [
         Math.cos(az) * Math.sin(pl),

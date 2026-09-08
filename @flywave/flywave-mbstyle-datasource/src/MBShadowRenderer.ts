@@ -472,7 +472,8 @@ export class MBShadowRenderer {
         // casts the ground shadow mirrored from expected (the quad's dark
         // region landed offset from expected's projection).
         if (dirArr) {
-            lightDir = new THREE.Vector3(dirArr[0], dirArr[1], dirArr[2]).normalize();
+            const xflip = (globalThis as any).__mbLightXFlip ? -1 : 1;
+            lightDir = new THREE.Vector3(dirArr[0] * xflip, dirArr[1], dirArr[2]).normalize();
         } else if (dirProp) {
             const a = (dirProp[0] + 90) * Math.PI / 180;
             const pl = dirProp[1] * Math.PI / 180;

@@ -620,3 +620,8 @@ pbrterm=2（R=spec·LF, G=diff·LF）解码：最大区域 (0,0,0.5) n=20,304 = 
 ### §885 终四十四：metal env 提亮 A/B 定案——否定（2026-09-08）
 metenv=1（metal 部件 envLight ×4）：237,288 vs 115,949（+121k 恶化）——**metal env 提亮假设否定**。metal 窗户的深 navy 并非 env 强度不足，而是 mgl 的 model PBR 对 metal 部件的组成与我们不同（mgl 的窗户灰蓝含 diffuse 成分——mgl 的 model 材质可能不做 metalness 分离，或 metalness 语义不同）。
 metenv 基建保留（默认关闭，无参数不影响跑分）。剩余标定需 mgl model PBR 参考（未 vendor）。
+
+### §885 终四十六：lightxflip A/B 定案否定——当前方向确认为正确（2026-09-08）
+lightxflip=1（lightDir.x 翻转）：237,288 vs 115,949（恶化 +121k）——**x 翻转否定，当前光源方向（§683 场景帧）确认为正确**（翻转使阴影镜像到错误侧）。infra 保留（默认关）。
+本会话最终状态：shadows-normal-offset 171,310→115,949（−32%）；buildings-trees-shadows-casting 583,410→428,064（−27%）；守卫 2,332 逐位零回归。剩余标定：①quad 阴影范围 32%（阴影相机覆盖/仰角语义——需 mgl 渲染参考）；②模型 PBR metal env 组成（mgl model 语义——需 mgl 参考）；③墙面直射 ~6%。
+全部修复/探针/数据已提交（终十四～终四十六），下会话按入档入口继续。

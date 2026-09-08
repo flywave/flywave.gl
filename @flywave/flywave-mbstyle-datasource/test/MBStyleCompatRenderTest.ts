@@ -134,6 +134,10 @@ function discoverTests(): TestEntry[] {
     const metenv = (window as any).__karma__?.config?.args?.find?.(
         (a: string) => a.startsWith("metenv="))?.slice("metenv=".length);
     if (metenv === "1") (globalThis as any).__mbMetalEnv = 1;
+    // §885 终四十五: lightxflip=1 → the mgl model-shader lightDir.xy negation.
+    const lxf = (window as any).__karma__?.config?.args?.find?.(
+        (a: string) => a.startsWith("lightxflip="))?.slice("lightxflip=".length);
+    if (lxf === "1") (globalThis as any).__mbLightXFlip = true;
     // §885 终四十: ambmul=N → the model ambient multiplier A/B.
     const ambmul = (window as any).__karma__?.config?.args?.find?.(
         (a: string) => a.startsWith("ambmul="))?.slice("ambmul=".length);
