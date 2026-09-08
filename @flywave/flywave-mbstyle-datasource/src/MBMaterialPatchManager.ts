@@ -1111,6 +1111,12 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMB3DViewToWorld = { value: viewToWorld };
             shader.uniforms.uMB3DEmissive = { value: ls ? emissiveStrength : 0 };
             shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbLightDbg ? 1 : ((globalThis as any).__mbFogTDbg ? 2 : ((globalThis as any).__mbShadowUvDbg ? 3 : 0)) };
+            if ((globalThis as any).__mbDecodeDbg
+                && ((globalThis as any).__mbExtUCount = ((globalThis as any).__mbExtUCount ?? 0) + 1) <= 2) {
+                const fmtv = (v: any) => v instanceof THREE.Vector3 ? JSON.stringify([v.x.toFixed(3), v.y.toFixed(3), v.z.toFixed(3)]) : Array.isArray(v) ? JSON.stringify(v.map((n: number) => Number(n).toFixed(3))) : JSON.stringify(v);
+                // eslint-disable-next-line no-console
+                console.log(`[MBExtU2] amb=${fmtv(shader.uniforms.uMB3DAmb?.value)} dirColor=${fmtv(shader.uniforms.uMB3DDirColor?.value)} dir=${fmtv(shader.uniforms.uMB3DDir?.value)} int=${shader.uniforms.uMBShadowIntensity?.value}`);
+            }
             // §694: extrusion shadow reception — mgl fill_extrusion uses
             // shadowed_light_factor_normal to modulate the directional term.
             // The extrusion meshes ARE in RTE frame (modelMatrix×position =
@@ -3070,6 +3076,14 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBEye = { value: shSeed ? shSeed.eye.clone() : new THREE.Vector3() };
             shader.uniforms.uMBRes = { value: shSeed ? shSeed.res.clone() : new THREE.Vector2(1, 1) };
             material.__mbShadowUniforms = shader.uniforms;
+            if ((globalThis as any).__mbDecodeDbg
+                && ((globalThis as any).__mbExtUCount = ((globalThis as any).__mbExtUCount ?? 0) + 1) <= 2) {
+                const aU = shader.uniforms.uMB3DAmb?.value;
+                const dU = shader.uniforms.uMB3DDirColor?.value;
+                const dV = shader.uniforms.uMB3DDir?.value;
+                // eslint-disable-next-line no-console
+                console.log(`[MBExtU] amb=${aU ? JSON.stringify([aU.x?.toFixed?.(3) ?? aU[0], aU.y?.toFixed?.(3) ?? aU[1], aU.z?.toFixed?.(3) ?? aU[2]]) : 'missing'} dir=${dU ? JSON.stringify([dU.x?.toFixed?.(3) ?? dU[0], dU.y?.toFixed?.(3) ?? dU[1], dU.z?.toFixed?.(3) ?? dU[2]]) : 'missing'} dirV=${dV ? JSON.stringify([dV.x?.toFixed?.(3), dV.y?.toFixed?.(3), dV.z?.toFixed?.(3)]) : 'missing'}`);
+            }            material.__mbShadowUniforms = shader.uniforms;
             const mbShadowSample = `
                         vec2 mbSUV = gl_FragCoord.xy / max(uMBRes, vec2(1.0));
                         vec3 mbWP = mix(mix(uMBGC[0], uMBGC[1], mbSUV.x),
@@ -3085,6 +3099,12 @@ export class MBMaterialPatchManager {
                             mbShadowDepth = mbPk.r;
                             #else
                             mbShadowDepth = mbPk.r + mbPk.g / 255.0;
+                            #endif
+                            #ifdef MB_SH_DIAG5
+                            gl_FragColor = vec4(
+                                clamp(0.5 + 10.0 * (mbShadowDepth - mbShadowUv.z), 0.0, 1.0),
+                                clamp(mbShadowUv.z, 0.0, 1.0),
+                                clamp(mbShadowDepth, 0.0, 1.0), 1.0);
                             #endif
                             // §692: the tight §692 shadow frustum makes one
                             // 16-bit depth quantum tiny — the old 0.002 bias
@@ -3134,7 +3154,8 @@ export class MBMaterialPatchManager {
             {
                 const bV = Number((globalThis as any).__mbShadowBias ?? 0.0002);
                 const hwOn = (globalThis as any).__mbShadowHW ? 1 : 0;
-                shader.fragmentShader = `#define MB_SH_HW ${hwOn}\n#define MB_SH_BIAS ${bV}\n` + shader.fragmentShader;
+                const d5 = (globalThis as any).__mbShadowDiag === '5' ? 1 : 0;
+                shader.fragmentShader = `#define MB_SH_HW ${hwOn}\n#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n` + shader.fragmentShader;
             }
             if ((globalThis as any).__mbShadowHW) {
                 shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;

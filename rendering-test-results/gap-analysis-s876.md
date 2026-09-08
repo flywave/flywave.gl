@@ -984,3 +984,8 @@ SHDIAG=5（R=0.5+10×(depth−uvz), G=uvz, B=depth）落地并实测：
 
 新相机+新雾基准下 buildings-trees：地面阴影带已呈现（左侧黑色✓）；但**挤出墙体全部呈同一中间灰**——按样式（ambient 黑·0.4 → 未受光面 k=0 应纯黑；受光面 k≈0.5·NdotL）背光面与受光面应有强烈反差，我方无反差 → **LIGHTING_3D_MODE 的墙体光照注入在这些墙面未实际生效**（mbK 未按公式产出），这正是暗区 224k 缺口的最大构成（expected 黑墙+黑阴影 vs ours 全中间灰）。
 下会话首项：①核对 use3DLights/extrusionLightState 在该夹具的真值与 injectExtrusion3DLighting 的 compile 触达（uMB3DAmb/uMB3DDirColor uniform 值域 dump）；②确认背光面 k→0 后墙面变黑；③随之地面/墙面暗化值进入 expected 量级后，回归 fog 近场与阴影图案微调。
+
+### §885 终一百一十（续）：LIGHTING_3D_MODE 状态值核对完成（2026-09-09）
+
+[MBExtLit] 实测 ground-shadow-fog 与 buildings-trees 的 ls 值：amb=[0,0,0]（黑·0.4 ✓）、dirC=[0.5,0.5,0.5]（白·0.5 ✓）、dir=[−0.81,0.47,0.34]（✓ 与 §683 场景帧约定一致）——LIGHTING_3D_MODE 的光源状态解析正确。注入 uniform 赋值时序核对完成（uMB3DAmb 等在 __mbShadowUniforms stash 之后赋值——早期 probe 的 'missing' 读数是时点问题，非缺陷）。[MBExtU2] 探针已就位（赋值后时点）。
+下会话：①以 [MBExtU2] 确认实际 program 的 uniform 值；②墙面/地面色调差在正确光源值下重测；③fog 近场强度与暗化值标定；④re-baseline 续跑。
