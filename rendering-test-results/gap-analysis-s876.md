@@ -724,3 +724,14 @@ vendor 参考 shadow_utils.ts 的 calculateGroundShadowFactor 完整读取：fac
 - 守卫 fog 族保持终六十收益（109,221/109,568），零回归。
 
 **下会话首项（明确）**：GPU 侧 uniform 回读专项——仿照 [MBShGPU3]（renderer.getValueAt…/readRenderTarget 或 debug paint per-uniform 逐键直绘）对 fill 接收体逐 uniform 核对（int/uMBGC/uMBShadowMatrix/Res），定位 CPU→GPU 断点；随后才是 bearing/extent 标定与 fog 族暗化值标定。
+
+### §885 终六十二：flavor 地图厘清——链路已通、可见图案=ribbon flavor，剩余为逐 flavor 覆盖与标定（2026-09-08 终）
+
+强度无关 uv 直绘（dbg4 脱离 int 门控）+ 帧数封顶扩展（min(30, frames+6)，修复上一轮的无界延长超时）后的最终判别：
+- **可见的地面投影带由 ribbon:4 flavor（ShaderMaterial fill，uMBGroundRad mix）画出**——fill 接收体主链路是活的，buildings-trees 的图案缺失不是"链路死"而是"覆盖/长度不足"（终五十九的结论修正：位置偏移+长度截断，非整体缺失）。
+- **roads（MeshBasic draped）uv=(1,1,0)**：其重建点落在 far=radius·8 天空钳制角点——lines 的射线-地面求交或 corners 插值对 line 几何不适用（线在立面/桥面时 gl_FragCoord 反投影失真），属 line 接收体语义缺口（mgl 的 line 接收同样按地面）。
+- **land fill（ShaderMaterial）dbg4 直绘无插锚**（无 opaque_fragment include → tryInsert 落空）——探针盲区，不代表未注入；其 int=1 状态需 GPU 回读或专用插锚确认。
+- renderFrames 帧扩展保留（阴影激活时自动延至 ≥12 帧，封顶 30）。
+- 回归面：buildings-trees 427,316、fog 族 109,221/109,568、守卫 10,138 全部与终六十一致（本轮改动零回归）。
+
+**下会话首项（精确）**：①给 ribbon flavor 补 dbg4 插锚（用其 ribbon anchor），确认 land fill 的 int/uv 状态；②以 [MBShadowFit]/[MBShadowGrid] + expected 对照做 bearing/长度标定（投影方向已同向、长度约 1/3，疑 far 钳制或 uv.z 深度窗）；③fog 族 109k 的暗化值标定。

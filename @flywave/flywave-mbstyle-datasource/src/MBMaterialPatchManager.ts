@@ -3069,7 +3069,10 @@ export class MBMaterialPatchManager {
                     '#include <colorspace_fragment>', '');
                 shader.fragmentShader = tryInsert(
                     shader.fragmentShader, '#include <opaque_fragment>',
-                    `\nif (uMBShadowIntensity > 0.0 && uMBShadowDbg4 > 0.5) {
+                    // 终六十一: paint regardless of intensity — decouples the
+                    // "does this program render" question from the uniform
+                    // refresh chain.
+                    `\nif (uMBShadowDbg4 > 0.5) {
                             gl_FragColor = vec4(mbShadowUv.xyz, 1.0);
                         }`);
             }

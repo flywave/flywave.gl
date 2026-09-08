@@ -627,16 +627,20 @@ async function renderFrames(
     // ground. When the shadow pass is active, render enough frames for the
     // full chain to reach the GPU.
     let framesWanted = n;
-    try {
-        const ds: any = dataSource;
-        if (ds?.m_shadowRenderer?.getShadowUniforms?.()) {
-            framesWanted = Math.max(framesWanted, 12);
-        }
-    } catch { /* probe only */ }
     await new Promise<void>((resolve) => {
         let frames = 0;
         const handler = () => {
             frames++;
+            // §885 终六十一: the shadow chain activates lazily across the
+            // first frames (lights → run() → patch refresh) — re-evaluate
+            // INSIDE the loop; once active, keep going long enough for the
+            // int=1/corners uniform refresh to reach a rendered frame.
+            try {
+                const dsAny: any = dataSource;
+                if (dsAny?.m_shadowRenderer?.getShadowUniforms?.()) {
+                    framesWanted = Math.min(30, Math.max(framesWanted, frames + 6, 12));
+                }
+            } catch { /* probe only */ }
             if (frames >= framesWanted) {
                 mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
                 resolve();
