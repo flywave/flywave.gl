@@ -678,3 +678,16 @@ vendor 参考 shadow_utils.ts 的 calculateGroundShadowFactor 完整读取：fac
 **本轮落地（MBShadowRenderer.ts）**：①createLightMatrix 精确移植（视锥包围球 fit + 75° 钳制 + near=−2r/far=r/dz；单 cascade 取 cascade-0 范围——mgl receiver 在 cascade-0 界内只采样 cascade-0，故界内逐片元等价）；②quad 合成改 mgl 精确式 `rgb *= mix(pow(factor,1/2.2), 1, 1 − intensity·(1−lit))`（我们 lit=1 为受光，mgl occlusion=1 为遮挡——首轮写成 `1−intensity·lit` 语义反转已修正：受光地面被全幅暗化，buildings-trees 当前帧地面均匀灰即此症状）；③移除旧 caster-AABB 深度钳制块；programCacheKey 升 v3。
 
 **验证状态：被环境阻塞**。首批复测（fit 移植+反转公式在位）能跑但 shadows-normal-offset 帧为**全画布 uniform gray**（终五十三同款 SwiftShader 上下文耗尽），分数 178,457/424,346 为空白帧分数无意义；其后的复测 karma 全部 180s 超时挂起（测试内渲染永不完成）——**需机器重启后复测**（重启后首项：双夹具+守卫 quantization-shadows 复测，对比健康基线 115,949/428,064/10,138；预期地面暗化区与 expected 阴影区重合度显著提升）。另发现：buildings-trees-shadows-casting 当前帧**挤出建筑整体缺失**（仅地面/道路/树）——独立于本修复的大缺口，复测时优先核对。
+
+### §885 终五十六：重启后复测闭环——反引号挂起 bug 修复 + fit 移植实测改善 + shadows-normal-offset 空白帧根因=模型瓦 404（2026-09-08 终）
+
+**①复测被自身 bug 阻塞后又复通**：重启后首批复测两目标夹具 180s 超时（守卫正常）——日志实锤 `ReferenceError: lit is not defined at mat.onBeforeCompile`：终五十五的 intensity 公式注释写进了模板字符串内的 GLSL，注释里的**反引号把模板串提前终止**，其余 GLSL 变非法 JS，地面 quad 每帧编译抛异常、渲染循环卡死（run2~run6 全部超时、终五十三误判的"再次上下文耗尽"实为此 bug）。修复（注释去反引号）后三夹具全部跑通。教训：注入 shader 的注释同样在模板串内，禁用反引号。
+
+**②复测结果（健康环境，Chrome 149 headless）**：
+- buildings-trees-shadows-casting：**428,064 → 418,385（−9,679）**——fit 移植（视锥包围球）+ intensity 精确合成的实测净改善；当前帧挤出建筑已呈现（对比 §885 终五十五复核时的"建筑缺失"实为 run1 反转公式下的旧帧）。
+- 守卫 quantization-shadows：10,138 / 10,260 **逐位零回归**（两变体与基线完全一致）。
+- shadows-normal-offset：179,062 **确定性空白帧**（单跑复现，capture px=201 清屏色）。
+
+**③shadows-normal-offset 空白帧根因（终四十八"永久漂移"之谜同源破案）**：karma 日志 404——`models/landmark/mbx-meshopt/8764-5126-14.glb` 与 `mbx-lod/8764-5126-14.glb`（及 `2630-6353-14` 两份）**本地从未 vendor**（find 全仓+git log 全历史均无）——该夹具场景瓦缺失 → 整帧只剩背景。同目录 quantization-shadows 正常（其样式不带 cast-shadows 且 mismatch 仅 10k）。179,062 是**数据缺失分数**而非阴影回归——115,949→179,062 的"永久漂移"即夹具请求了本地不存在的 landmark 瓦。**仓库外挂账**（与 globe-terrain 66k 同类：向 mapbox 上游索取缺失 landmark 瓦或 CI 重生成 expected）；此前所有以 shadows-normal-offset 为标定目标的 A/B（终四十二~终五十四的部分结论）在 179,062 环境下无效，需数据到位后以 buildings-trees-shadows-casting 为主标定夹具重验。
+
+**④剩余缺口（buildings-trees 当前帧 vs expected）**：①地面无 cast-shadow 图案（expected 有大片建筑投影，ours 均匀灰）——quad 的深度采样在真实场景仍未产生投射图案，优先核对 uMBShadowMatrix 与新 fit 的投影一致性；②树模型缺失（404 类数据缺口或渲染缺口待分）；③墙面直射/PBR 配比遗留。下会话首项：以 buildings-trees 单夹具 + [MBShadowFit]/[MBShadowGrid] 探针核对新 fit 下深度图内容与地面投影的对齐。

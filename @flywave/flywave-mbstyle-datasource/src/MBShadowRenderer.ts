@@ -193,8 +193,8 @@ export class MBShadowRenderer {
                             lit = smoothstep(-0.0002, 0.0002, sampD - uv4.z);
                         }
                         // mgl shadowed_light_factor_plane_bias: occlusion is
-                        // 1 when BLOCKED; our `lit` is 1 when unblocked —
-                        // light = 1 − intensity·(1 − lit).
+                        // 1 when BLOCKED; our lit is 1 when unblocked —
+                        // light = 1 - intensity * (1 - lit).
                         gl_FragColor.rgb *= mix(
                             pow(uMBGroundShadowFactor, vec3(1.0 / 2.2)), vec3(1.0),
                             1.0 - uMBShadowIntensity * (1.0 - lit));
