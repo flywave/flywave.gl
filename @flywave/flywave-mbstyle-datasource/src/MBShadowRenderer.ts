@@ -276,7 +276,13 @@ export class MBShadowRenderer {
         // Corners stay ABSOLUTE — the fragment shader rebases by uMBEye.
         this.m_groundUniforms.uMBProjView.value
             .multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-        this.m_groundUniforms.uMBEye.value.copy(eye);
+        // §885 终十九: the frame anchor must be the CAMERA'S absolute
+        // position (the frame the corners were unprojected in and the frame
+        // the scene content's matrixWorld lives in) — projectPoint(geoCenter)
+        // returns xy at a 2× scale of the camera matrix frame (measured
+        // exactly 2.004× on two fixtures), which threw every ground sample
+        // off the map.
+        this.m_groundUniforms.uMBEye.value.copy(camPos);
         this.m_groundUniforms.uMBShadowMap.value = this.m_shTex;
         this.m_groundUniforms.uMBShadowMatrix.value = this.m_matrix;
         // mgl calculateGroundShadowFactor: shadow = ambient/(ambient+dir·NdotL)

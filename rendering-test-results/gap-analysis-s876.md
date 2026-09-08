@@ -505,3 +505,8 @@ drawlog（DRAWLOG=1+SHADOW=6）实测：被渲染的大网格（MeshStandardMate
 - **quad 从未渲染过任何像素的根因**：prepGroundQuad 的 `corners.add(eye)` 把绝对 eye.z（82/458）泄进顶点 z，fragment 的 `vMBWorldPos.z > 1.0` 天空门因此 **discard 全部片段**（eye 在 `mbWP − uMBEye` 差值中本会精确抵消，add(eye) 只破坏 z-gate）。移除 add(eye) 后 quad 首次光栅化：shadows-normal-offset 171,271 → **163,324（−7,947）**。
 - 新发现的独立缺陷：cornerOnGround 的交点与 projectPoint(geoCenter) 输出呈**精确 2.00× 比例**（两夹具一致：corners≈(42.9M,55.1M) vs eye≈(21.4M,27.5M)）——逻辑相机 matrixWorld 与 projection.projectPoint 的 xy 坐标系相差一个尺度（z 一致），地面交点不在 expected 阴影位置 → quad 虽光栅化但暗区错位（mismatch 仅 −7,947 而非大幅下降）。extrusion 家族的地面阴影由 fill 材质接收器承载，同样受此 2× 影响（buildings-trees-shadows-casting 583,410 仍失败）。
 下轮入口：①对齐 cornerOnGround 与 projectPoint 的坐标系（优先怀疑 flywave projection 的 projectPoint 输出与相机世界矩阵的 xy 尺度差一倍——在 cornerOnGround 里改用与 projectPoint 同源的投影原点/尺度，或给 uMBGC 乘 0.5 做 A/B）；②修复后 quad 暗区应落到 expected 的右下阴影区，shadows-normal-offset 应大幅下降；③守卫 quantization-shadows 2,332 已复验零回归（quad 对 intensity=0 夹具不绘制）。
+
+### §885 终十九补：uMBEye 改锚 camPos 后阴影区部分出现（2026-09-08）
+uMBEye 从 projectPoint(geoCenter) 改为 camPos（相机绝对位置）后输出与 uMBEye=eye 完全一致（163,324）→ 实测 eye 与 camPos 数值相同，2.00× 比例并非相机帧与 projectPoint 之间的尺度差，而是 cornerOnGround 交点本身的 xy 落在 2× 处（候选：far 钳制方向的 dir 归一、或 NDC 角 unproject 在该投影下的 xy 半程翻转/偏移）。地面直方图：expected 阴影区 (112) ≈12.5k 采样 vs current ~3.1k（quad 已绘制但阴影范围不足/部分错位）。
+守卫 2,332 复验零回归（intensity=0 时 drawGroundQuad 在任何改动前即 early-return，quad 不参与）。
+下轮入口：①直接在 cornerOnGround 里 dump 四角的 dir/t/out 与 projectPoint 原点对照（一次运行定位 2× 的来源——far 钳制 vs ray 方向 vs 原点）；②阴影范围对齐后重测 shadows-normal-offset（预期大幅下降）与 buildings-trees 家族；③守卫复验。
