@@ -189,14 +189,14 @@ export class MBMaterialPatchManager {
                         // shadow map — the depth pass renders layer 1 only,
                         // and without wall occluders every extrusion wall
                         // samples "lit" (the +24 uniform wall brightness).
-                        // Layer 0 keeps the main render untouched.
-                        // §720 GATED: at grazing sun the wall depth encoding
-                        // is noise-dominated without mgl's cascade/slope-bias
-                        // fidelity (full-screen ground mismatch, +26k on
-                        // ground-shadow-fog) — forensic-only until the
-                        // cascade alignment lands (shadowcast=1).
+                        // §885 终六十一: DEFAULT ON — the §720 noise rationale
+                        // (cascade/slope-bias fidelity) is resolved by the
+                        // 终五十五 mgl createLightMatrix fit; without wall
+                        // occluders the ground shows a fraction of expected's
+                        // cast-shadow coverage (buildings-trees). Opt out via
+                        // shadowcast=0.
                         for (const m of mats) {
-                            if (m?.__mbExtrusion3DLit && (globalThis as any).__mbShadowCast === true
+                            if (m?.__mbExtrusion3DLit && (globalThis as any).__mbShadowCast !== false
                                 && !o.layers.isEnabled(1)) {
                                 o.layers.enable(1);
                                 break;

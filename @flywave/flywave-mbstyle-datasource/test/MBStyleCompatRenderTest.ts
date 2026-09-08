@@ -621,11 +621,23 @@ async function renderFrames(
     dataSource: MBStyleDataSource,
     n: number,
 ): Promise<void> {
+    // §885 终六十一: the shadow chain activates lazily (lights → patcher
+    // injection → compile → int=1 refresh), each step one frame apart — a
+    // static fixture idles after ~3 frames and the capture shows unshadowed
+    // ground. When the shadow pass is active, render enough frames for the
+    // full chain to reach the GPU.
+    let framesWanted = n;
+    try {
+        const ds: any = dataSource;
+        if (ds?.m_shadowRenderer?.getShadowUniforms?.()) {
+            framesWanted = Math.max(framesWanted, 12);
+        }
+    } catch { /* probe only */ }
     await new Promise<void>((resolve) => {
         let frames = 0;
         const handler = () => {
             frames++;
-            if (frames >= n) {
+            if (frames >= framesWanted) {
                 mapView.removeEventListener(MapViewEventNames.AfterRender, handler);
                 resolve();
             } else {

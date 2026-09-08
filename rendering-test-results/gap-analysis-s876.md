@@ -714,3 +714,13 @@ vendor 参考 shadow_utils.ts 的 calculateGroundShadowFactor 完整读取：fac
 - 守卫 quantization-shadows：10,138 **逐位不变**（零回归；该夹具无 cast-shadows，链路不激活）
 
 地面阴影链路自终三十二起死亡的事实意味着：此前"fill 接收体已工作" Era（§560-§717）的所有地面阴影调参结论是在死链路上取得的，其参数（bias/衰减/factor 配比）需在活链路上重新标定。当前剩余缺口：①buildings-trees 投影位置/覆盖与 expected 的偏移（终五十九入档的标定入口）；②fog 族剩余 109k（图案已现、暗化值/边界待标）。
+
+### §885 终六十一：校准攻坚——传导层断点实锤，fill 接收体 uniform 不上 GPU（2026-09-08 终）
+
+以 shadowdbg=4 接收体 uv 直绘 + 多路 A/B 定位投影偏移的传导层：
+- **uv 直绘证实注入生效但分层**：roads（ribbon flavor）涂出 uv=(1,1,0)（黄，far=radius·8 天空钳制角点）；地面 fill 无涂装（int 仍 0）；extrusion 墙（自有 path）正常着色。即 ground fill 的 uMBShadowIntensity/corners 刷新**没有传导到渲染**。
+- **extrusion caster 默认启用**（§720 门反转，shadowcast=0 可退）：分数逐位不变——墙 occluder 本就在深度图里（census L1=160/166 实锤），覆盖不足非 caster 缺失。
+- **帧数假说排除**：renderFrames 拉到 12 帧 + 同步/定时 poke，像素逐位不变——不是"idle 太早"，是 fill 材质的 uniform 对象与实际渲染的程序之间断开（嫌疑：材质数组/程序变体缓存/共享 uniform 对象被 three 克隆）。[MBShadowRecv]（CPU 侧）读到 int=1 已写、GPU 侧无回读探针。
+- 守卫 fog 族保持终六十收益（109,221/109,568），零回归。
+
+**下会话首项（明确）**：GPU 侧 uniform 回读专项——仿照 [MBShGPU3]（renderer.getValueAt…/readRenderTarget 或 debug paint per-uniform 逐键直绘）对 fill 接收体逐 uniform 核对（int/uMBGC/uMBShadowMatrix/Res），定位 CPU→GPU 断点；随后才是 bearing/extent 标定与 fog 族暗化值标定。
