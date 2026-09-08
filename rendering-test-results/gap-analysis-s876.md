@@ -1103,3 +1103,16 @@ fogmul=0.7：ground-shadow-fog 161,252→156,451（改善 −4.8k）但 hard-cut
 
 corners→ray-cast（invViewProj 精确 unproject，含 RTE 帧修正）替换后：buildings-trees 457,874 / fog 161,252 / hard-cutoff 160,185——**fill 输出对重建方法与正交盒均不敏感**（ ray-cast 与 corners-mix 逐位一致）——最终单点确认：**渲染中的地面材质实例从未执行注入程序**（int=0 或未编译注入）。[MBRf] RGS 触达的是另一实例。drawlog mu 对照（渲染材质 uuid ↔ 注入 uuid）为下一步唯一所需，前置=drawlog 钩子安装链修复（终一百三十一）。
 保持：守卫 10,138/10,260 逐位零回归；fog 族 161,252/125,686 最优。
+
+### §885 会话终态汇总（2026-09-09，终一百三十一至一百三十四轮）
+
+本阶段（终九十七～终一百三十四）核心交付：
+1. **cos(lat) 相机距离修正**（mercator 分支默认，视觉确证近地街景与 expected 构图一致；globe 分支不受影响；camdist 参数保留 A/B）；
+2. **fov-adjusted fog range**（mgl fog.ts state getter 语义，真阴影首次浮现）+ **fog chunk 双重 shift 修复**；
+3. **cascade-1 远场回退 + 4-tap PCF**（ground-shadow-fog 96,899 = 基线 −42%；hard-cutoff 126,781 = −23.5%）；
+4. **HW 深度纹理路径**（shadowhw=1 门控，24-bit 无 pack；实测值域偏差待调，默认关闭）；
+5. **全套诊断/参数基建**：[MBRf]/[MBRf2]/[MBExtU2]/[MBOutside]/[MBShadowMat 修复]/SHDIAG 2/5/7 直绘、shrad/shoff/shbias/fogmul/camdist 参数链、fetch 探针通道；
+6. **A/B 定案否定**：雾 zoom−1、camdist=0.79 参数化、tight fit、shoff 平移、HW bias 放宽、方向翻转（历史）。
+保持状态：buildings-trees 457,874（新相机过渡态）、fog 族 96,899/126,781、守卫 10,138/10,260 逐位零回归。
+仓库外挂账：landmark 瓦 8764-5126-14.glb/2630-6353-14.glb、models/vector x∈{2618,2619} 瓦、globe-terrain DEM。
+下会话：drawlog 钩子前置 → mu 对照直注入 → 地面阴影全域呈现 → 暗化值/色调标定。
