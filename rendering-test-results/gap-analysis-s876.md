@@ -604,3 +604,7 @@ pbrterm=1 探针（R=direct.r/2, G=indirect.r/2, B=LF）解码模型区域：**d
 ### §885 终三十八：spec/diff 拆分探针 + spec 移除 A/B 定案（2026-09-08）
 pbrterm=2 拆分探针实测：墙面 spec ≈ diff ≈ 0.75（LF 归一）——**GGX spec 项为墙面亮度的必要成分**（spec 移除 A/B：mismatch 115,949 → 179,062 恶化 +63k，已回退）。结论修正：墙面过曝（255 vs 240）非 spec 移除可解，而是 spec 强度/粗糙度读取的 ~6% 标定差（阈值内难分）；窗户深 navy 为 metal 部件（metalness=1）env/spec 项过弱——两项均需 mgl model PBR 参考逐项数值迭代（参考未 vendor）。
 阴影家族当前：shadows-normal-offset 115,949（−32%）；buildings-trees-shadows-casting 428,064（−27%）；守卫 2,332 零回归。剩余标定域：①墙面 spec ~6% 微调；②窗户 metal env 提亮；③quad 阴影范围 32%→100%。模型接收链/帧系/方向/解析求交全部实证打通。
+
+### §885 终三十九：modellightport A/B 定案——PBR 分支确认为最优（2026-09-08）
+modellightport=0（§557 hemisphere/Lambert 分支）A/B：179,062 vs PBR 分支 115,949——**Lambert 分支更差 +63k，PBR 分支确认为本家族最优光照路径**（与 spec 移除 A/B 的 179,062 一致——两者同为去 spec 的 Lambert 形式）。剩余差距（115,949 vs 阈值 134）为 PBR 分支内的逐项数值标定：①metal 窗户 env 项（expected 3-4× 更亮——mgl 的 env 组成或 metal 语义差异）；②墙面直射 ~6% 饱和。**mgl 的 model PBR 参考着色器未随 mapbox-gl-js vendor**——精确数值对齐需逐项探针迭代或获取 mgl 渲染参考。
+本会话最终提交状态：shadows-normal-offset 171,310→115,949（−32%）；buildings-trees-shadows-casting 583,410→428,064（−27%）；守卫 2,332 逐位零回归；18 个提交（终十四～终三十九）全部验证。
