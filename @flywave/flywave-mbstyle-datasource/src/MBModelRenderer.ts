@@ -502,6 +502,7 @@ export function applyMglModelLighting(
                 // vMbWorldPos lands in the depth-pass frame by construction.
                 shader.uniforms.uMBShWorldMatrix = { value: new THREE.Matrix4() };
                 shader.uniforms.uMBShDbg = { value: Number((globalThis as any).__mbShadowDbg4) || 0 };
+                shader.uniforms.uMBPbrTermDbg = { value: Number((globalThis as any).__mbPbrTermDbg) || 0 };
                 // §885: shdbg=5 → receiver rebases worldPos by the shadow eye
                 // (ground-quad convention) — A/B for the light-space y offset.
                 shader.uniforms.uMBShEyeOn = {
@@ -545,6 +546,7 @@ export function applyMglModelLighting(
                      uniform mat4 uMBShMatrix;
                      uniform float uMBShIntensity;
                      uniform float uMBShDbg;
+                     uniform float uMBPbrTermDbg;
                      uniform vec3 uMBShEye;
                      uniform float uMBShEyeOn;
                      uniform float uMB3DMetal; uniform float uMB3DRough;

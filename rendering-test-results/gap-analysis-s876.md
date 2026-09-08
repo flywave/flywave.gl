@@ -612,3 +612,7 @@ modellightport=0（§557 hemisphere/Lambert 分支）A/B：179,062 vs PBR 分支
 ### §885 终四十：ambient 倍率 A/B 定案——ambient 增强使结果恶化（2026-09-08）
 ambmul=2/3 A/B（uMB3DAmb×2/×3）：均为 179,062（比基线 115,949 恶化 +63k）——**ambient 不足假设被否定**：当前 ambient（0.25 线性）不是暗部/窗户差的原因，增强反而过曝。剩余标定域最终确认：①metal 窗户的 env/spec 组成（mgl 的 model PBR env 语义——需 mgl 参考）；②quad 阴影范围 32%；③smoothstep 边界自采样（地面/墙面 uv.z==depth 的半色调带）。
 本会话最终提交状态：shadows-normal-offset 171,310→115,949（−32%）；buildings-trees-shadows-casting 583,410→428,064（−27%）；守卫 2,332 逐位零回归；20 个提交（终十四～终四十）全部验证。剩余标定需 mgl model PBR 参考（未 vendor）或逐参数 A/B（每步双夹具验证）。
+
+### §885 终四十二：PBR per-term 定量闭环（2026-09-08）
+pbrterm=2（R=spec·LF, G=diff·LF）解码：最大区域 (0,0,0.5) n=20,304 = **背光面 direct=0（NdotL≤0 clamp，物理正确）+ 仅间接光（albedo·amb·adf ≈ 0.17 线性 → sRGB ~115）**；受光面 direct≈1.0+（255 饱和）；窗户（metal=1）= spec-only 深部 ✓ 物理一致。与 expected 的差距定性：①背光面 expected ~200-210（0.6 线性）vs ours ~115（0.17 线性）——**mgl 的背光面含 ~0.5 的 direct 残留或更强的 ambient**（shadowed_light_factor 的半色调语义：背光面经 shadow map 自采样边界 → factor≈0.5 → direct×0.5）；②窗户 metal env 组成 3-4×。
+下轮入口：①direct 项对背光面给 0.5 残留（mgl shadowed_light_factor 的 shadow-map 自采样语义：背光面不在深度图中 → map=1.0 → lit=1 → full direct——即**移除 LF 的 NdotL clamp 对背光面的归零**，改用 shadow map 的 lit 因子调制）；②metal env 提亮（EnvBRDF 的 specC 用 albedo 而非 0.04 对 metal）；③每步双夹具验证。
