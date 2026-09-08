@@ -668,3 +668,13 @@ vendor 参考 shadow_utils.ts 的 calculateGroundShadowFactor 完整读取：fac
 ### §885 终五十四：解析 quad 暗化区域与 expected 阴影不重合（2026-09-08）
 解析 quad（cast-shadow 采样恢复版）mismatch 179,062 vs 无阴影 115,177（+63k 恶化）——暗化区域与 expected 阴影区不重合。暗化区域位置：readout 显示 uv≈(0.5,0.5) 的暗化（自深度边界半色调）——即 quad 暗化的区域为「深度图内容区」而非「expected 的阴影区」——**深度图的 uv 覆盖与 expected 的地面阴影投影方向/范围不一致**（阴影相机 fit 的世界系或方向仍有偏差，或 expected 的暗区并非全部为 cast shadow）。
 下会话入口：①以 readout 的 uv 直绘与 expected 阴影区做同屏叠加，可视化 quad 暗化 vs expected 阴影的位置/形状差异；②按差异调整阴影相机 fit（方向/原点/范围）；③预算许可时获取 mgl shadow_renderer.ts 渲染参考（vendor 内 3d-style/render/shadow_renderer.ts）对照实现。
+
+### §885 终五十五：mgl ground shadow 完整对照 + createLightMatrix fit 移植落地——验证被 SwiftShader 上下文耗尽阻塞（2026-09-08）
+
+**vendor 对照结论（修正终五十一的半正确解读）**：mgl 的 ground shadow receiver（ground_shadow.fragment.glsl 完整读取）**并非均匀暗化**——`shadow = mix(u_ground_shadow_factor, vec3(1), light)`，其中 `light = 1 − u_shadow_intensity·occlusion`，occlusion 来自 `shadowed_light_factor_plane_bias` 的 shadow map 采样（双 cascade light matrix + receiver-plane depth bias + 0.0001 常量）。终五十一的「均匀环境比」只是暗化**颜色项**（u_ground_shadow_factor=amb/(amb+dir·NdotL) sRGB 编码）的语义；空间图案仍由 shadow map 给出。expected 地面 112 均匀值 = 该区域全遮挡下 factor 的呈现。
+
+**阴影相机 fit 的 mgl 精确语义（createLightMatrix，shadow_renderer.ts:678）**：light camera 以**视锥最小包围球**为中心（k=sqrt(1+aspect²)·tan(fovX/2)，lxjk 公式，near=height/50、far=cascadeSplitDist=1.5×cameraToCenterDistance），ortho 半径=球半径（×roundingMargin），near=−2r、far=r/dir.z；pitch=acos(dir.z)、bearing=atan2(−dx,−dy)——与 three lookAt up=(0,0,1) 的朝向逐分量等价（right=(−dy,dx,0)/h 一致，已推导核实）；shadowDirectionFromProperties 有 **75° 极角钳制**。与我们旧实现的差异：旧版 fit caster AABB 中心+2.5× margin+投影钳深——即终五十四「暗化区=深度图内容区」的 fit 根因候选。
+
+**本轮落地（MBShadowRenderer.ts）**：①createLightMatrix 精确移植（视锥包围球 fit + 75° 钳制 + near=−2r/far=r/dz；单 cascade 取 cascade-0 范围——mgl receiver 在 cascade-0 界内只采样 cascade-0，故界内逐片元等价）；②quad 合成改 mgl 精确式 `rgb *= mix(pow(factor,1/2.2), 1, 1 − intensity·(1−lit))`（我们 lit=1 为受光，mgl occlusion=1 为遮挡——首轮写成 `1−intensity·lit` 语义反转已修正：受光地面被全幅暗化，buildings-trees 当前帧地面均匀灰即此症状）；③移除旧 caster-AABB 深度钳制块；programCacheKey 升 v3。
+
+**验证状态：被环境阻塞**。首批复测（fit 移植+反转公式在位）能跑但 shadows-normal-offset 帧为**全画布 uniform gray**（终五十三同款 SwiftShader 上下文耗尽），分数 178,457/424,346 为空白帧分数无意义；其后的复测 karma 全部 180s 超时挂起（测试内渲染永不完成）——**需机器重启后复测**（重启后首项：双夹具+守卫 quantization-shadows 复测，对比健康基线 115,949/428,064/10,138；预期地面暗化区与 expected 阴影区重合度显著提升）。另发现：buildings-trees-shadows-casting 当前帧**挤出建筑整体缺失**（仅地面/道路/树）——独立于本修复的大缺口，复测时优先核对。

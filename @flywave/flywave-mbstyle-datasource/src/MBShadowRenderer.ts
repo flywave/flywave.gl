@@ -192,11 +192,16 @@ export class MBShadowRenderer {
                             sampD = pk.r + pk.g / 255.0;
                             lit = smoothstep(-0.0002, 0.0002, sampD - uv4.z);
                         }
-                        gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(1.0 / 2.2)), vec3(1.0), lit);
+                        // mgl shadowed_light_factor_plane_bias: occlusion is
+                        // 1 when BLOCKED; our `lit` is 1 when unblocked —
+                        // light = 1 − intensity·(1 − lit).
+                        gl_FragColor.rgb *= mix(
+                            pow(uMBGroundShadowFactor, vec3(1.0 / 2.2)), vec3(1.0),
+                            1.0 - uMBShadowIntensity * (1.0 - lit));
                     }
                 }`);
             this.m_groundUniforms = shader.uniforms;
-            (mat as any).customProgramCacheKey = () => 'mbgroundquad-v2';
+            (mat as any).customProgramCacheKey = () => 'mbgroundquad-v3';
         };
         const quad = new THREE.Mesh(geo, mat);
         quad.name = 'MBShadowGroundQuad';
@@ -495,72 +500,80 @@ export class MBShadowRenderer {
         // sits at the camera target, but tiles can be a km+ away — a
         // targetDistance-sized box missed them entirely).
         const casterBox = new THREE.Box3();
-        let haveBox = false;
         for (const obj of shadowCasters) {
             obj.updateWorldMatrix?.(true, false);
             const b = new THREE.Box3().setFromObject(obj);
-            if (!b.isEmpty()) { casterBox.union(b); haveBox = true; }
+            if (!b.isEmpty()) { casterBox.union(b); }
         }
-        let frameCenter = center.clone();
-        let radius = Math.max(50, (this.m_mapView as any).targetDistance ?? 500);
-        if (haveBox) {
-            // §643: tight caster framing with a 50% reach margin (long shadows
-            // at low sun + soft edges). The §561 view-corner folding (far =
-            // radius×8 → 4km corners) blew the ortho up to ~12km and crushed
-            // the casters into ~9% of the depth canvas (~12 m/px); points
-            // outside the box already read as lit via the uv bounds check, so
-            // folding added nothing but resolution loss.
-            frameCenter = casterBox.getCenter(new THREE.Vector3());
-            const sz = casterBox.getSize(new THREE.Vector3());
-            // §885 终三十一: the ±384-unit margin clipped the ground shadow
-            // beyond the casters (the measured dark region was 32% of
-            // expected's — the far-side shadow extended past the map). A 2.5×
-            // half-span keeps the casters at ~40% of the depth canvas while
-            // covering the full cast-shadow extent.
-            radius = Math.max(50, Math.max(sz.x, sz.y, 1) * 2.5);
+        // §885 终五十五: mgl shadow_renderer.createLightMatrix exact port —
+        // the light camera frames the VIEW-FRUSTUM bounding sphere
+        // (rotation-invariant), NOT the caster AABB: the caster-AABB fit's
+        // depth-map uv coverage landed the quad's dark region where the depth
+        // map has content instead of where expected's cast shadow falls
+        // (终五十四). mgl: k = sqrt(1+aspect²)·tan(fovX/2); sphere radius per
+        // the lxjk minimal-frustum-sphere formula; sphere center at camera
+        // space (0,0,−centerDepth); ortho extent = sphere radius; near = −2r,
+        // far = r/dir.z. Cascade semantics: receivers inside cascade-0 bounds
+        // sample cascade 0 exclusively (shadow_occlusion), so a single map
+        // with cascade-0's extent (far = 1.5×cameraToCenterDistance) matches
+        // mgl for every in-bounds fragment.
+        // shadowDirectionFromProperties: polar clamped to 75°.
+        {
+            const maxPolar = 75 * Math.PI / 180;
+            const pol = Math.acos(THREE.MathUtils.clamp(lightDir.z, -1, 1));
+            if (pol > maxPolar) {
+                const hc = Math.sin(maxPolar);
+                const h = Math.hypot(lightDir.x, lightDir.y) || 1e-9;
+                lightDir.set(lightDir.x / h * hc, lightDir.y / h * hc, Math.cos(maxPolar));
+            }
         }
+        const aspect = (camera.aspect && camera.aspect > 0) ? camera.aspect : 1;
+        const fovX = 2 * Math.atan(Math.tan((camera.fov * Math.PI / 180) / 2) * aspect);
+        const k = Math.sqrt(1 + aspect * aspect) * Math.tan(fovX / 2);
+        const k2 = k * k;
+        // Our world units equal mgl's camera-space pixel units (targetDistance
+        // == cameraToCenterDistance, §872j4 readout).
+        const ctcd = Math.max(1, (this.m_mapView as any).targetDistance ?? camera.position.length());
+        const frNear = ((this.m_mapView as any).canvas?.clientHeight ?? 600) / 50;
+        const frFar = ctcd * 1.5;
+        let centerDepth: number;
+        let radius: number;
+        if (k2 > (frFar - frNear) / (frFar + frNear)) {
+            centerDepth = frFar;
+            radius = frFar * k;
+        } else {
+            centerDepth = 0.5 * (frFar + frNear) * (1 + k2);
+            radius = 0.5 * Math.sqrt(
+                (frFar - frNear) * (frFar - frNear) +
+                2 * (frFar * frFar + frNear * frNear) * k2 +
+                (frFar + frNear) * (frFar + frNear) * k2 * k2);
+        }
+        // roundingMarginFactor (resolution / (resolution − 1)) — sub-texel
+        // padding against edge clipping; shadow map is 1024 here.
+        radius *= 1024 / 1023;
+        const rteCam2 = (this.m_mapView as any).getRteCamera?.() as THREE.PerspectiveCamera | undefined;
+        const rcam = (rteCam2 ?? camera);
+        rcam.updateMatrixWorld();
+        // Sphere center = camera-space (0,0,−centerDepth) → the RTE camera
+        // sits at the scene-frame origin, so the center is forward·depth.
+        const sphereCenter = new THREE.Vector3(0, 0, -1)
+            .applyQuaternion(rcam.getWorldQuaternion(new THREE.Quaternion()))
+            .multiplyScalar(centerDepth);
         this.m_shadowCamera.left = -radius;
         this.m_shadowCamera.right = radius;
         this.m_shadowCamera.top = radius;
         this.m_shadowCamera.bottom = -radius;
-        this.m_shadowCamera.near = 0.1;
-        this.m_shadowCamera.far = radius * 4;
-        this.m_shadowCamera.position.copy(frameCenter).addScaledVector(lightDir, radius * 2);
+        this.m_shadowCamera.near = -2 * radius;
+        this.m_shadowCamera.far = radius / Math.max(lightDir.z, 0.1);
+        this.m_shadowCamera.position.copy(sphereCenter);
         this.m_shadowCamera.up.set(0, 0, 1);
-        this.m_shadowCamera.lookAt(frameCenter);
-        // §692: TIGHT DEPTH RANGE along the light axis. The old 0.1..4×radius
-        // frustum spans ~10-25km, so a 30m building's depth footprint on the
-        // ground is ~0.001 of the [0,1] window range — SMALLER than the
-        // receiver's 0.002 lit-compare bias, which made EVERY ground fragment
-        // read "lit" (the entire model-layer shadow family rendered without
-        // shadows while the depth map itself had content — [MBShadowGrid]
-        // 0.48-0.58 cluster vs scores bit-identical). Project the caster AABB
-        // onto the light axis and clamp [near, far] to it with a small slack.
-        if (haveBox) {
-            // The camera looks along −lightDir (it sits offset TOWARD the
-            // light and faces the frame center) — depth bounds must project
-            // onto THAT axis, not lightDir itself (sign flip ⇒ negative far ⇒
-            // inverted/empty frustum).
-            const viewDir = lightDir.clone().normalize().negate();
-            const corner = new THREE.Vector3();
-            let tMin = Infinity;
-            let tMax = -Infinity;
-            for (let i = 0; i < 8; i++) {
-                corner.set(
-                    i & 1 ? casterBox.max.x : casterBox.min.x,
-                    i & 2 ? casterBox.max.y : casterBox.min.y,
-                    i & 4 ? casterBox.max.z : casterBox.min.z,
-                );
-                const t = corner.sub(this.m_shadowCamera.position).dot(viewDir);
-                if (t < tMin) tMin = t;
-                if (t > tMax) tMax = t;
-            }
-            const slack = Math.max(100, (tMax - tMin) * 0.05);
-            this.m_shadowCamera.near = Math.max(0.1, tMin - slack);
-            this.m_shadowCamera.far = tMax + slack;
-        }
+        this.m_shadowCamera.lookAt(sphereCenter.clone().sub(lightDir));
         this.m_shadowCamera.updateProjectionMatrix();
         this.m_shadowCamera.updateMatrixWorld();
+        // §885 终五十五: the mgl frustum-sphere fit already clamps [near,far]
+        // around the light axis (near = −2r covers the sphere from behind the
+        // light camera, far = r/dir.z covers the deepest ground reach) — the
+        // former caster-AABB depth clamp is subsumed.
 
         // Depth-only pass over the casters (layer mask + override material)
         // in the INDEPENDENT context — the main renderer/canvas untouched.
