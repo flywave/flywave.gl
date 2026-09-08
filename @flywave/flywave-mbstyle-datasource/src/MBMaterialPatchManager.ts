@@ -246,11 +246,23 @@ export class MBMaterialPatchManager {
                             (MBMaterialPatchManager as any).__mbRfP = {};
                         }
                         const rfP = (MBMaterialPatchManager as any).__mbRfP;
+                        // §885 终九十八: per-INSTANCE log (uuid + int + GC) —
+                        // pairs with the drawlog mu to find the rendered
+                        // instance vs refreshed instance mismatch.
                         const rfKey = `${u.uMBRes ? 'R' : 'r'}${u.uMBGC ? 'G' : 'g'}${shadowState ? 'S' : 's'}`;
                         if (!rfP[rfKey]) {
                             rfP[rfKey] = 1;
                             // eslint-disable-next-line no-console
                             console.log(`[MBRf] flavor=${rfKey} hasMap=${!!u.uMBShadowMap} hasMat=${!!u.uMBShadowMatrix} hasGC=${!!u.uMBGC} hasEye=${!!u.uMBEye} hasRes=${!!u.uMBRes} hasFar=${!!u.uMBShadowFar} hasFac=${!!u.uMBGroundShadowFactor}`);
+                        }
+                        if (shadowState && u.uMBGC) {
+                            const inst = (u as any).__mbInst ?? (((u as any).__mbInst = Math.floor(Math.random() * 1e6)));
+                            const cnt = ((u as any).__mbRfN = ((u as any).__mbRfN ?? 0) + 1);
+                            if (cnt <= 4 || cnt === 60) {
+                                const g0 = u.uMBGC.value[0];
+                                // eslint-disable-next-line no-console
+                                console.log(`[MBRf2] inst=${inst} n=${cnt} int=${u.uMBShadowIntensity.value} gc0=(${g0.x.toFixed(1)},${g0.y.toFixed(1)},${g0.z.toFixed(1)}) m00=${(u.uMBShadowMatrix.value as THREE.Matrix4)?.elements[0]?.toExponential(2)}`);
+                            }
                         }
                         u.uMBShadowMap.value = shadowState?.map ?? null;
                         if (shadowState) {
