@@ -2850,6 +2850,37 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     }
                 } catch { /* probe only */ }
 
+                // §885 终十八: the GROUND receiver (background/fill material
+                // with __mbShadowUniforms but no __mbShU) — GPU-side state of
+                // the ground projection path.
+                try {
+                    const rd2 = (mapView as any)?.renderer;
+                    const glq2 = rd2?.getContext?.();
+                    if (rd2 && glq2) {
+                        let done2 = false;
+                        (mapView as any).scene?.traverse?.((o: any) => {
+                            if (done2 || !o.isMesh) return;
+                            const mm2 = Array.isArray(o.material) ? o.material[0] : o.material;
+                            if (!mm2?.__mbShadowUniforms || mm2?.userData?.__mbShU) return;
+                            const mp2 = rd2.properties?.get?.(mm2);
+                            const cp2 = mp2?.currentProgram;
+                            if (!cp2?.program) return;
+                            const gp2 = cp2.program;
+                            const u2 = (name: string) => {
+                                const loc = glq2.getUniformLocation(gp2, name);
+                                return loc ? JSON.stringify(glq2.getUniform(gp2, loc)) : 'absent';
+                            };
+                            // eslint-disable-next-line no-console
+                            console.log('[MBShGPU2] mat=' + mm2.uuid.slice(0, 8)
+                                + ' type=' + mm2.type
+                                + ' intensity=' + u2('uMBShadowIntensity')
+                                + ' map=' + u2('uMBShadowMap')
+                                + ' gc0=' + u2('uMBGC[0]'));
+                            done2 = true;
+                        });
+                    }
+                } catch { /* probe only */ }
+
                 // §818: POST the draw-call log (whole session; the captured
                 // frame is the tail) before the IBCT comparison.
                 if ((globalThis as any).__mbDrawLog?.length) {

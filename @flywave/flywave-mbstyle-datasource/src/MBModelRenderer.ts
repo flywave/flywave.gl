@@ -1102,7 +1102,26 @@ export function refreshModelShadowUniforms(
             // rebuild — unmarked MeshStandardMaterials belong to other
             // pipelines (env/terrain) and must stay native.
             const p = mat.userData?.__mbLightParams;
-            if (!p) continue;
+            if (!p) {
+                // §885 终十八: straggler patch — meshopt node meshes that
+                // reached the scene without applyLayerPaint (the re-decode
+                // race of 终十六's dual-instantiation finding) render NATIVE
+                // PBR: no mgl lighting, no shadow sampling. Batched-model
+                // nodes carry __mbNodeId; patch them once with the layer
+                // defaults and they become normal heal/refresh targets.
+                if (mat.isMeshStandardMaterial
+                    && (mesh.userData?.__mbNodeId !== undefined
+                        || mat.userData?.__mbNodeId !== undefined)) {
+                    delete mat.__mbMglLit;
+                    try {
+                        applyMglModelLighting(dataSource, {
+                            traverse: (cb: (o: any) => void) => cb(mesh),
+                        } as any, 0, undefined, undefined, undefined, undefined,
+                            false, true);
+                    } catch { /* best-effort */ }
+                }
+                continue;
+            }
             const w = mat.onBeforeCompile as any;
             if (w && w.__mbMglWrapper) mat.onBeforeCompile = w.__mbMglOrig;
             delete mat.__mbMglLit;

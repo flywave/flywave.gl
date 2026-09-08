@@ -492,3 +492,9 @@ drawlog（DRAWLOG=1+SHADOW=6）实测：被渲染的大网格（MeshStandardMate
 - 阴影仍未可见的主导因素收束为两个：**(a) 双实例化竞速**——白墙原生像素（39k）与已涂块像素同帧并存，未补整体网格（lit=0）仍在抢上屏；(b) **expected 的主导阴影是地面投影**（expected.png 右下大片深色），由 background/ground 接收端承载（§885 终 ① 的 ground quad 绘制层位问题），与模型墙面接收是两条独立链。
 - 守卫 quantization-shadows = 2,332 与基线逐位一致（uMBShWorldMatrix/竞速跳过均零回归）。
 下轮入口：①(≈30 分钟) 定位竞速网格创建者：drawlog mu 对齐两条路径的构建日志（MBBatchedModelDataSource buildMeshes vs MBBatchedModelRenderer carrier vs MBBatchedModelTile re-decode），消除未补实例上屏；②地面阴影可见性：核对 background 材质是否真被 injectGroundShadow 覆盖 + uMBGC/uMBShadowIntensity 是否随帧刷新到位；③墙面自阴影标定（bias/smoothstep 对齐 ground 路径 §692 形式）。
+
+### §885 终十八：漏网自愈补丁落地 + 地面投影未收敛（2026-09-08）
+落地：①refreshModelShadowUniforms 新增**漏网自愈补丁**——带 `__mbNodeId`（batched 模型节点标记）但无 `__mbLightParams` 的 MeshStandardMaterial 按层默认参数（emissive 0/lutOff false/receiveShadows true）原位补丁，双实例化竞速的未补实例（lit=0 上屏态）一个渲染帧内自愈，此后成为正常 heal/刷新目标；②[MBShGPU2] 探针：读取 ground 接收器（__mbShadowUniforms 有、__mbShU 无）的 GPU 状态。
+实验（全部逐位 171,271，未收敛）：ground quad 帧修正两个方案（carrier 偏移 setFrameOffset / corners−camPos）均未改变输出——quad 输出恒等于 clear color（采样恒 lit 或全 discard），且对 extrusion 家族存在回归风险（其地面阴影依赖现有 corners/uMBEye 配对），两方案已回退。
+[MBShGPU2] 关键发现：本夹具场景中**不存在任何非模型的 ground 接收器**（无 fill/line 图层，background 是 clearColor 而非网格）——expected 的地面投影只能由 ground quad 承载，而 quad 采样恒 lit 的原因仍未定位（候选：CanvasTexture 跨上下文上传在 SwiftShader headless 读空、uMBEye/corners 帧配对在 batched 帧系下系统性错位、或 z=0 平面常数需随帧系平移）。extrusion 家族地面阴影可见（同一代码）与本夹具不可见的差异点为下轮首要对照实验。
+下轮入口：①对照实验——在 buildings-trees-shadows-casting（extrusion 地面阴影可见）与 shadows-normal-offset 两夹具同时打印 quad 的 uMBShadowMatrix/uMBEye/corners 与实际采样值，锁定差异变量；②竞速态（lit=0 上屏）确认已被自愈补丁消除（drawlog lit 全 1 验证）；③墙面 bias/smoothstep 标定（模型自深度 0.894 边界全 lit，需对齐 ground 路径 §692 形式）。
