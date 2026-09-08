@@ -1022,3 +1022,8 @@ injectGroundShadow 全文复核：seeding（shSeed 终八十二）、corners+eye
 已捕获并存入 rendering-test-results/：①depth-canvas-coslat.png（新相机下深度图：内容 uv.x∈[0,1]、uv.y∈[0.12,0.71]，深度 0.04–0.55）；②uv-field-coslat.png（SHDIAG=2 地面 uv 场：fills 的 uv 群聚 (0.30–0.45) 落在内容区内 ✓ 采样链健康）；③暗区带状分布（expected 224k 全带 vs ours 27k 集中左上）。
 判读：地面阴影图案链路端到端工作、方向正确、位置大体重合；剩余差距 = 覆盖幅度（右侧建筑阴影缺失——其所在 uv 区深度图内容较薄）+ 树冠缺失（数据）+ 墙面色调（opacity 合成）。微标定入口：shrad/fogmul/shbias 参数链 A/B（已入库）。
 仓库外挂账：landmark 瓦 8764-5126-14.glb/2630-6353-14.glb、models/vector x∈{2618,2619} 瓦、globe-terrain DEM——向 mgl CI 索取或本地补瓦。
+
+### §885 终一百一十五：地面像素归属定案——灰地=背景清屏色，黑带=quad 阴影（正常工作）（2026-09-09）
+
+shrad=0.7/1.5/2 全部逐位不变 + 像素归属分析定案：可见灰色"地面" = **背景清屏色**（buildings-trees 的 'land' fill 仅覆盖水系多边形，非全幅地面；清屏色非 mesh，无接收体可调制）——地面接收体"惰性"的表象就此解开：根本没有可调制的地面 mesh。左上黑带 = quad 的地面阴影（正常工作，随深度图内容呈现）。expected 的更广阴影覆盖源自：①mgl 双 cascade 的 cascade-1 远场覆盖；②完整树/建筑 caster 数据（我方 404 缺失）。
+下会话选项：A) 双 cascade 移植补远场覆盖；B) 补 vendor 数据后重验；C) quad 阴影图案与 expected 的逐 texel 残差微调。守卫与现有收益不变。
