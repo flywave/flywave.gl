@@ -979,3 +979,8 @@ SHDIAG=5（R=0.5+10×(depth−uvz), G=uvz, B=depth）落地并实测：
 终八十三将 shift 并入 fogMglRange 后，全局 fog_fragment chunk 的公式仍减 (fogMglRange.x + fogMglShift)——双重计数使近场多 +1.5/3.5≈+0.43 的 t（白洗量）。已修正为减 fogMglRange.x。实测：ground-shadow-fog 167,069 不变（其雾走注入路径）、buildings-trees 537,993→562,664（其场景雾经 chunk 路径，修正后雾减少暴露更多真实色调差——正确方向的过渡态）。
 保持：fog 族 167,069/165,774、守卫 10,138/10,260 逐位零回归。
 下会话：新相机+新雾基准下按 expected 采样点继续色调/暗化值标定；树冠与部分暗区待仓库外数据补齐。
+
+### §885 终一百一十：墙体光照注入有效性观察（2026-09-09）
+
+新相机+新雾基准下 buildings-trees：地面阴影带已呈现（左侧黑色✓）；但**挤出墙体全部呈同一中间灰**——按样式（ambient 黑·0.4 → 未受光面 k=0 应纯黑；受光面 k≈0.5·NdotL）背光面与受光面应有强烈反差，我方无反差 → **LIGHTING_3D_MODE 的墙体光照注入在这些墙面未实际生效**（mbK 未按公式产出），这正是暗区 224k 缺口的最大构成（expected 黑墙+黑阴影 vs ours 全中间灰）。
+下会话首项：①核对 use3DLights/extrusionLightState 在该夹具的真值与 injectExtrusion3DLighting 的 compile 触达（uMB3DAmb/uMB3DDirColor uniform 值域 dump）；②确认背光面 k→0 后墙面变黑；③随之地面/墙面暗化值进入 expected 量级后，回归 fog 近场与阴影图案微调。
