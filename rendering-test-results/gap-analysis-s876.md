@@ -995,3 +995,8 @@ SHDIAG=5（R=0.5+10×(depth−uvz), G=uvz, B=depth）落地并实测：
 [MBExtU2] 探针（injectExtrusion3DLighting 内 uMB3DDbg 赋值后）在 DECODEDBG=1 下零输出，而同函数更早的 [MBExtLit] 正常打印 16 次——两者间无早退/异常路径，原因未明（候选：webpack 多 chunk 缓存、karma stderr/stdout 路由、或 __mbDecodeDbg 在该时点被改写）。已尝试两次（run78/79）均无输出。
 保持状态：buildings-trees 562,664、ground-shadow-fog 167,069 / hard-cutoff 165,774、守卫 10,138/10,260 逐位零回归。
 下阶段收口建议：①改用 fetch 探针通道（POST /mb-probe-dump）替代 console 诊断（绕过 karma 路由问题）；②逐实例确认挤出注入的 compile 与 uniform 值；③墙面变黑后回归 fog 近场/暗化值标定。仓库外挂账不变。
+
+### §885 终一百一十六：fetch 探针终态确认——挤出注入链完全正确（2026-09-09）
+
+ext-uniforms-end 延迟 dump（回调完成后终态）：fsLen=16211（注入已应用）、fsHasUmb3D=true、fsHasShadowHW=true、amb=[0,0,0] ✓、dirColor=[0.5×3] ✓、int=1 ✓、hasShadowU=true ✓——**LIGHTING_3D_MODE 挤出注入链端到端完全正确**。墙体呈中灰的机理定案：fill-extrusion-opacity 0.4 的半透明白墙叠在"未覆盖阴影的亮地面"上的合成（0.4×黑墙 + 0.6×亮地面 = 中灰）——与终九十四的归因闭环。剩余唯一缺口：**地面阴影图案的覆盖范围**（阴影相机 fit/深度窗与 expected 的对齐）。
+下会话：以已入库的 depth-canvas + SHDIAG uv 场 + 暗区带状分布三份数据做逐 texel 对齐，微调 fit（shrad/球心高度 A/B 参数已备）；数据到位后树冠自然恢复。

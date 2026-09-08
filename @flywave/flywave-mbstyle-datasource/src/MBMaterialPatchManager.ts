@@ -1111,6 +1111,38 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMB3DViewToWorld = { value: viewToWorld };
             shader.uniforms.uMB3DEmissive = { value: ls ? emissiveStrength : 0 };
             shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbLightDbg ? 1 : ((globalThis as any).__mbFogTDbg ? 2 : ((globalThis as any).__mbShadowUvDbg ? 3 : 0)) };
+            // §885 终一百一十四: fetch-channel probe — compile/uniform state
+            // of the extrusion injection via POST (console routing is lossy).
+            if ((globalThis as any).__mbDecodeDbg
+                && ((globalThis as any).__mbExtU2N = ((globalThis as any).__mbExtU2N ?? 0) + 1) <= 3) {
+                const fb2 = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+                    a.startsWith('feedback-url='))?.slice('feedback-url='.length);
+                if (fb2) {
+                    // §885 终一百一十五: delayed dump — the FINAL shader/uniform
+                    // state after the whole onBeforeCompile body has run.
+                    setTimeout(() => {
+                        fetch(`${fb2}/mb-probe-dump`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({
+                                probe: 'ext-uniforms-end',
+                                dump: {
+                                    matType: material.type,
+                                    mu: String(material.uuid ?? '').slice(0, 8),
+                                    fsLen: shader.fragmentShader.length,
+                                    fsHasUmb3D: shader.fragmentShader.includes('uMB3DAmb'),
+                                    fsHasShadowDepth: shader.fragmentShader.includes('mbShadowDepth'),
+                                    fsHasShadowHW: shader.fragmentShader.includes('MB_SH_HW'),
+                                    amb: shader.uniforms.uMB3DAmb?.value,
+                                    dirColor: shader.uniforms.uMB3DDirColor?.value,
+                                    int: shader.uniforms.uMBShadowIntensity?.value,
+                                    hasShadowU: !!material.__mbShadowUniforms,
+                                },
+                            }),
+                        }).catch(() => { });
+                    }, 4000);
+                }
+            }
             if ((globalThis as any).__mbDecodeDbg
                 && ((globalThis as any).__mbExtUCount = ((globalThis as any).__mbExtUCount ?? 0) + 1) <= 2) {
                 const fmtv = (v: any) => v instanceof THREE.Vector3 ? JSON.stringify([v.x.toFixed(3), v.y.toFixed(3), v.z.toFixed(3)]) : Array.isArray(v) ? JSON.stringify(v.map((n: number) => Number(n).toFixed(3))) : JSON.stringify(v);
