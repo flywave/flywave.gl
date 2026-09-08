@@ -819,3 +819,7 @@ ground-shadow-fog 图像级对比：expected = 近地街景（pitch 70、zoom 16
 判读：该夹具剩余 109,221 差距的主导项不是阴影暗化值，而是：①**雾过度应用**（fog range [−0.5,3.0] 白雾在低角度下把整帧拉白，§701 的 uMbDistCam 归一化在此视角下疑似偏大）；②**相机俯仰/高度与 expected 不符**（pitch 70 的近地视角 vs 我方高空）。两者都属引擎相机/雾管线，非阴影接收体链路。
 
 **下会话入口（修正后）**：①以 ground-shadow-fog 为夹具核对其相机放置（pitch 70/zoom 16.2 下 eye 高度与 expected 视角对齐）与雾距离归一化（白雾强度随距离曲线）；②相机/雾对齐后再回归阴影暗化值标定；③buildings-trees 的图案覆盖对齐（tight-fit 负结果已入档，替代方案：mgl 双 cascade 精确移植）。
+
+### §885 终七十六：雾 zoom−1 假设 A/B 定案——否定并回退（2026-09-08 终）
+
+假设"flywave zoomLevel = mgl zoom + 1 泄漏进雾归一化（uMbDistCam/uMbMetersPerUnit 的 2^zoomLevel 应为 2^(zoomLevel−1)）"——A/B 结果：ground-shadow-fog 109,221→126,333（+15.6%）、buildings-trees 427,316→499,938（+17%），**双双恶化，假设否定**，已回退。zoomLevel=17.2 vs 样式 16.2 的 +1 关系不是简单的约定偏移（或这两个夹具的历史调参已在 +1 语义下拟合）。雾白化成因需另查（候选：fogMglShift、uMbDistCam 的 focalLength 项、雾混合公式本身）。
