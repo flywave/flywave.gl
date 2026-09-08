@@ -1085,3 +1085,11 @@ run82（DRAWLOG=1）的 drawlog POST 未落地（mb-probe-dumps 为空）——d
 drawlog POST 的门 = `__mbDrawLog?.length` 非空——即 draw-call 钩子（MapView AfterRender 处 line 2349 安装，逐 draw 记录）必须先安装并记录。run83c 中该钩子未记录任何 draw（POST 缺席）；run11 成功是因为同批其它探针路径间接触发了钩子安装链。钩子安装点：harness 2350 附近 `if (drawLog && !__mbDrawLogHook)` → mapView 事件安装。
 下会话：核对钩子安装的前置（MapView 实例/事件名），修复后 drawlog 即携带逐 mesh mu/ndc 数据，地面像素归属（渲染材质 uuid）即可锁定并直注入。
 当前保持：buildings-trees 457,874 / fog 96,899 / hard-cutoff 126,781 / 守卫 10,138/10,260 逐位零回归。
+
+### §885 终一百三十二：本轮收口与全局状态（2026-09-09）
+
+drawlog 钩子安装前置核对完成（renderer.renderBufferDirect 包装、drawlog=1 门、__mbDrawLogHook 单次安装）——run83c 中钩子未记录绘制的直接原因未定位（候选：mapView.renderer 在安装时点的可用性）。mu 对照暂缓。
+**当前全局状态**（新相机+新雾正确基准的过渡态）：buildings-trees 537,993（较原始 428,064 过渡）、ground-shadow-fog 167,069（基线 167,010）、hard-cutoff 165,774（基线 165,719）、守卫 10,138/10,260 逐位零回归。
+**已确证的机制链**：quad 地面阴影正常工作（左上黑带）✓；cascade-1 远场回退扩展覆盖 ✓；fog 近场强度把黑阴影洗至 ~94 灰（expected ~10% 雾下近黑）——雾近场强度是暗区色调差的最后调制项。
+仓库外挂账：landmark 瓦 8764-5126-14.glb/2630-6353-14.glb、models/vector x∈{2618,2619} 瓦、globe-terrain DEM。
+下会话：①雾近场强度标定（fogmul 反向 0.5/0.7 扫描——distCam 偏小使近场雾过强的方向已在 fogmul=2 恶化中反向确认）；②drawlog 钩子前置修复后 mu 对照；③数据补齐重验。
