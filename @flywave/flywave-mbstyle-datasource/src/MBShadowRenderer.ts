@@ -80,6 +80,12 @@ export class MBShadowRenderer {
     private m_groundCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     /** Drawing-buffer size for the §692 screen-space receivers. */
     private m_res = new THREE.Vector2(1, 1);
+    // §885 终五十八: receiver state lives HERE — the quad's uniform map
+    // (MeshBasic onBeforeCompile stash) has no uMBGC/uMBEye, and
+    // getShadowUniforms reading them from there threw TypeError on every
+    // frame, aborting the whole AfterRender listener.
+    private m_corners = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    private m_eye = new THREE.Vector3();
 
     constructor(
         private m_mapView: any,
@@ -94,6 +100,9 @@ export class MBShadowRenderer {
 
     /** Update enable/intensity from the current 3D-lights state. */
     setLightState(enabled: boolean, intensity: number): void {
+        // §885 终五十八: state-transition probe — who clears the quad.
+        // eslint-disable-next-line no-console
+        console.log(`[MBGQLight] enabled=${enabled} int=${intensity} hadQuad=${!!this.m_groundQuad} id=${(this as any).__mbId ?? ((this as any).__mbId = Math.floor(Math.random() * 1e6))}`);
         this.m_enabled = enabled;
         this.m_intensity = intensity;
         if (!this.enabled && this.m_groundQuad) {
@@ -130,8 +139,8 @@ export class MBShadowRenderer {
             map: this.m_shTex,
             matrix: this.m_matrix,
             intensity: this.m_intensity,
-            corners: this.m_groundUniforms.uMBGC.value as THREE.Vector3[],
-            eye: this.m_groundUniforms.uMBEye.value as THREE.Vector3,
+            corners: this.m_corners,
+            eye: this.m_eye,
             res: this.m_res,
             // §717: mgl u_fade_range = [lastCascade.far×0.75, lastCascade.far]
             // (shadow_renderer.ts:363) — receiver shadows fade to lit across
@@ -157,7 +166,7 @@ export class MBShadowRenderer {
             shader.uniforms.uMBShadowMatrix = { value: new THREE.Matrix4() };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3() };
             shader.uniforms.uMBShadowIntensity = { value: 0 };
-            shader.uniforms.uMBShadowDbg = { value: (globalThis as any).__mbShadowDbg ? 1 : 0 };
+            shader.uniforms.uMBShadowDbg = { value: (globalThis as any).__mbShadowDbg ? ((globalThis as any).__mbQuadDbg ? 2 : 1) : 0 };
             shader.uniforms.uMBInvProj = { value: new THREE.Matrix4() };
             shader.uniforms.uMBCamWorld = { value: new THREE.Matrix4() };
             shader.uniforms.uMBGroundZ = { value: -80 };
@@ -192,18 +201,35 @@ export class MBShadowRenderer {
                             sampD = pk.r + pk.g / 255.0;
                             lit = smoothstep(-0.0002, 0.0002, sampD - uv4.z);
                         }
-                        // mgl shadowed_light_factor_plane_bias: occlusion is
-                        // 1 when BLOCKED; our lit is 1 when unblocked —
-                        // light = 1 - intensity * (1 - lit).
-                        gl_FragColor.rgb *= mix(
-                            pow(uMBGroundShadowFactor, vec3(1.0 / 2.2)), vec3(1.0),
-                            1.0 - uMBShadowIntensity * (1.0 - lit));
+                        // 终五十七: shadowdbg=6 quad uv readout — R=uv4.z
+                        // (clamped), G=depth-overflow flag (uv4.z>1),
+                        // B=uv.xy-in-bounds flag. Diagnoses which gate kills
+                        // the ground cast-shadow pattern.
+                        if (uMBShadowDbg > 1.5) {
+                            gl_FragColor.rgb = vec3(
+                                clamp(uv4.z, 0.0, 1.0),
+                                uv4.z > 1.0 ? 1.0 : 0.0,
+                                (uv4.x >= 0.0 && uv4.x <= 1.0 &&
+                                 uv4.y >= 0.0 && uv4.y <= 1.0) ? 1.0 : 0.0);
+                        } else {
+                            // mgl shadowed_light_factor_plane_bias: occlusion
+                            // is 1 when BLOCKED; our lit is 1 when unblocked —
+                            // light = 1 - intensity * (1 - lit).
+                            gl_FragColor.rgb *= mix(
+                                pow(uMBGroundShadowFactor, vec3(1.0 / 2.2)), vec3(1.0),
+                                1.0 - uMBShadowIntensity * (1.0 - lit));
+                        }
                     }
                 }`);
             this.m_groundUniforms = shader.uniforms;
             (mat as any).customProgramCacheKey = () => 'mbgroundquad-v3';
         };
         const quad = new THREE.Mesh(geo, mat);
+        // §885 终五十八: assignment was MISSING — the quad was built, added
+        // to both scenes and compiled (onBeforeCompile set m_groundUniforms)
+        // but m_groundQuad stayed null, so drawGroundQuad always early-
+        // returned and the clearColor never reached the quad material.
+        this.m_groundQuad = quad;
         quad.name = 'MBShadowGroundQuad';
         quad.frustumCulled = false;
         // §885 终三十二: the underlay channel (m_groundScene) is wiped by the
@@ -244,9 +270,24 @@ export class MBShadowRenderer {
      * quad lies beneath all content). Uniforms were prepared by run() in
      * WillRender; a fresh style's first frame simply draws nothing. */
     private drawGroundQuad(renderer: THREE.WebGLRenderer): void {
+        // §885 终五十八: invocation counter probe.
+        {
+            const gq = (globalThis as any);
+            gq.__mbGqInvoked = (gq.__mbGqInvoked ?? 0) + 1;
+            if (gq.__mbGqInvoked === 1 || gq.__mbGqInvoked === 60 || gq.__mbGqInvoked === 300) {
+                // eslint-disable-next-line no-console
+                console.log(`[MBGQInvoke] n=${gq.__mbGqInvoked} enabled=${this.m_enabled} int=${this.m_intensity} quad=${!!this.m_groundQuad} u=${!!this.m_groundUniforms} ortho=${this.m_orthoStyle} id=${(this as any).__mbId ?? '?'}`);
+            }
+        }
         if (!this.m_enabled || this.m_intensity <= 0) return;
-        if (!this.m_groundQuad || !this.m_groundUniforms) return;
+        if (!this.m_groundQuad) return;
         if (this.m_orthoStyle) return;
+        // 终五十八: no m_groundUniforms requirement — MeshBasicMaterial has
+        // no .uniforms, so m_groundUniforms is only set INSIDE
+        // onBeforeCompile (first render). Gating the draw on it deadlocked:
+        // the quad never rendered → never compiled → uniforms never created
+        // → getShadowUniforms() stayed null → the whole fill-receiver family
+        // stayed at intensity 0 (the missing ground cast-shadow pattern).
         const prevRT = renderer.getRenderTarget();
         try {
             renderer.setRenderTarget(null);
@@ -261,12 +302,22 @@ export class MBShadowRenderer {
 
     private prepGroundQuad(center: THREE.Vector3, radius: number, eye: THREE.Vector3): void {
         this.ensureGroundQuad();
-        // §885 终三十二: the uniform map exists only after the quad's first
-        // compile (the onBeforeCompile stash) — skip until then.
+        // 终五十八: m_groundUniforms appears only after the quad's first
+        // compile — skip the uniform WRITES until then (the draw itself no
+        // longer depends on it, see drawGroundQuad).
         if (!this.m_groundUniforms) return;
-        // §885 终三十二: the uniform map exists only after the quad's first
-        // compile (the onBeforeCompile stash) — skip until then.
-        if (!this.m_groundUniforms) return;
+        // 终五十八: pinpoint which uniform key the stash is missing.
+        {
+            const need = ['uMBInvProj', 'uMBCamWorld', 'uMBGroundZ', 'uMBShadowMap',
+                'uMBShadowMatrix', 'uMBShadowIntensity', 'uMBGroundShadowFactor'];
+            const missing = need.filter((k) => !(this.m_groundUniforms as any)[k]);
+            if (missing.length) {
+                // eslint-disable-next-line no-console
+                console.log('[MBGQPrep] missing uniforms: ' + missing.join(',') +
+                    ' have=' + Object.keys(this.m_groundUniforms).join(','));
+                return;
+            }
+        }
         const renderer = this.m_mapView?.renderer as THREE.WebGLRenderer | undefined;
         // §885 终二十七: compute the corners IN THE SCENE (RTE) frame — the
         // frame the casters, the depth pass, the shadow-camera fit, and the
@@ -293,28 +344,23 @@ export class MBShadowRenderer {
         this.m_groundUniforms.uMBInvProj.value.copy(cam.projectionMatrix).invert();
         this.m_groundUniforms.uMBCamWorld.value.copy(cam.matrixWorld);
         this.m_groundUniforms.uMBGroundZ.value = groundZ;
-        const corners = this.m_groundUniforms.uMBGC.value as THREE.Vector3[];
+        this.m_eye.copy(eye);
+        const corners = this.m_corners;
         const far = radius * 8;
         const camPos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
         this.cornerOnGround(cam, camPos, -1, -1, far, groundZ, corners[0]);
         this.cornerOnGround(cam, camPos, 1, -1, far, groundZ, corners[1]);
         this.cornerOnGround(cam, camPos, 1, 1, far, groundZ, corners[2]);
         this.cornerOnGround(cam, camPos, -1, 1, far, groundZ, corners[3]);
-        // §692: RTE render camera sits at origin (identity world matrix),
-        // so cornerOnGround computes RTE-relative ground intersections
-        // (all ≈ 0,0,0). The receiver needs ABSOLUTE world positions for
-        // `mbWP - uMBEye` to yield the correct RTE offset. Add eye back.
-        // §885 终十九: the add(eye) was REMOVED — it cancels exactly in the
-        // shader's `mbWP - uMBEye` (linear), but it leaked eye.z (82 here,
-        // 458 on buildings-trees) into vMBWorldPos.z, whose `> 1.0` sky-gate
-        // then DISCARDED EVERY fragment — the quad never rasterized a single
-        // pixel (bit-identical ground across every receiver change). The
-        // corners stay ABSOLUTE; uMBEye subtraction yields the eye-relative
-        // frame the depth pass frames the casters in.
-        // The shadow camera lives in the eye-rebased scene frame — bring the
-        // absolute-world corners into the SAME frame (casters' worldPos z
-        // also carries −eye.z, so the ground plane here is z = −eye.z).
-        // Corners stay ABSOLUTE — the fragment shader rebases by uMBEye.
+        // §885 终五十八: cornerOnGround uses the rteCamera, which sits at the
+        // RTE-frame ORIGIN — the corners come out RTE-RELATIVE. The fill
+        // receivers reconstruct `mbWP` from them and sample with
+        // `mbWP − uMBEye`, so the corners must be ABSOLUTE (RTE + eye);
+        // otherwise uv lands far outside the map and every fragment reads
+        // lit=1 — the never-diagnosed "no ground cast-shadow pattern".
+        // (终十九 removed this add because it leaked into a different
+        // channel's varying sky-gate; that channel no longer uses corners.)
+        for (const c of corners) c.add(eye);
         this.m_groundUniforms.uMBShadowMap.value = this.m_shTex;
         this.m_groundUniforms.uMBShadowMatrix.value.copy(this.m_matrix);
         this.m_groundUniforms.uMBShadowIntensity.value = this.m_intensity;
@@ -337,9 +383,11 @@ export class MBShadowRenderer {
         // background semantics — MBStyleDataSource.applyBackgroundColor).
         const clear = (this.m_mapView as any).clearColor;
         if (clear !== undefined) {
-            this.m_groundUniforms.uMBGroundColor.value.setHex(clear);
             // §885 终三十二: the MeshBasic quad's material color = the map
             // background; the injected shadow composite modulates it.
+            // 终五十八: the old uMBGroundColor uniform write here threw
+            // (key never existed in the MeshBasic stash) and killed the
+            // whole AfterRender listener from frame ~6 on.
             if (this.m_groundQuad) {
                 (this.m_groundQuad.material as THREE.MeshBasicMaterial).color.setHex(clear);
             }

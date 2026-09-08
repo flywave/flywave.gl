@@ -691,3 +691,17 @@ vendor 参考 shadow_utils.ts 的 calculateGroundShadowFactor 完整读取：fac
 **③shadows-normal-offset 空白帧根因（终四十八"永久漂移"之谜同源破案）**：karma 日志 404——`models/landmark/mbx-meshopt/8764-5126-14.glb` 与 `mbx-lod/8764-5126-14.glb`（及 `2630-6353-14` 两份）**本地从未 vendor**（find 全仓+git log 全历史均无）——该夹具场景瓦缺失 → 整帧只剩背景。同目录 quantization-shadows 正常（其样式不带 cast-shadows 且 mismatch 仅 10k）。179,062 是**数据缺失分数**而非阴影回归——115,949→179,062 的"永久漂移"即夹具请求了本地不存在的 landmark 瓦。**仓库外挂账**（与 globe-terrain 66k 同类：向 mapbox 上游索取缺失 landmark 瓦或 CI 重生成 expected）；此前所有以 shadows-normal-offset 为标定目标的 A/B（终四十二~终五十四的部分结论）在 179,062 环境下无效，需数据到位后以 buildings-trees-shadows-casting 为主标定夹具重验。
 
 **④剩余缺口（buildings-trees 当前帧 vs expected）**：①地面无 cast-shadow 图案（expected 有大片建筑投影，ours 均匀灰）——quad 的深度采样在真实场景仍未产生投射图案，优先核对 uMBShadowMatrix 与新 fit 的投影一致性；②树模型缺失（404 类数据缺口或渲染缺口待分）；③墙面直射/PBR 配比遗留。下会话首项：以 buildings-trees 单夹具 + [MBShadowFit]/[MBShadowGrid] 探针核对新 fit 下深度图内容与地面投影的对齐。
+
+### §885 终五十九：地面阴影链路五连修——cast-shadow 图案首次呈现（2026-09-08 终）
+
+以 buildings-trees-shadows-casting 单夹具 + 探针逐层定位，发现**地面接收体链路自 §885 终三十二起就整体死亡**（此前所有"fill 接收体已工作"的判断有误），五处叠加缺陷全部修复：
+
+1. **`ensureGroundQuad` 从未执行 `this.m_groundQuad = quad`**——quad 建成、入场景、编译（onBeforeCompile 设了 m_groundUniforms），但 m_groundQuad 恒 null → drawGroundQuad 永远早退、clearColor 永远写不进 quad 材质（drawlog 实锤 col=ffffff）。
+2. **`getShadowUniforms` 借用 quad uniform map 读 uMBGC/uMBEye**——quad 的 MeshBasic stash（invProj 射线法）没有这两个键 → `undefined.value` TypeError；corners/eye/res 改存渲染器实例字段（m_corners/m_eye）。
+3. **refresh 循环对 extrusion 材质裸写 uMBGC/uMBEye/uMBRes**——extrusion 注入（injectExtrusion3DLighting）的 uniform stash 无这三个键 → 同款 TypeError；改守卫式写入。
+4. **`prepGroundQuad` 残留死代码 `uMBGroundColor`**——MeshBasic stash 无此键 → TypeError（这条最先被 [MBAfterErr] 栈实锤）。以上 2/3/4 任一抛出都会**从第 ~3/6 帧起杀死整个 AfterRender 监听器**（patchTileMaterials + 阴影 pass 全部停摆，[SHST]/[MBArN] 探针实锤停在 n=2/3），且 async 监听器的 rejection 被静默吞掉——加全-body try/catch（[MBAfterErr] 栈打印）才现形。
+5. **corners 坐标系错**：cornerOnGround 用 rteCamera（RTE 原点）反投影 → corners 是 RTE 相对坐标；fill 接收体 shader 以 `mbWP − uMBEye`（绝对−绝对）采样 → uv 恒远出界、lit 恒 1、永无图案。修复：corners 加回 eye（终十九移除该偏移是为另一个已不存在的通道的 sky-gate）。
+
+**附带修复/基建**：drawGroundQuad 移除 m_groundUniforms 前置门（初始化死锁）；shadowdbg≥12 quad uv4 直绘探针；shadowdbg=4 接收体直绘证实注入生效；refresh 首次 0→1 激活时同步 poke mapView.update()（静态夹具 3 帧后 idle，补丁材质需要下一帧）；注入时以当前 shadowState 种子化 uniform；[MBGQInvoke]/[MBArN]/[MBRmBranch] 探针入库；修复 [MBShadowMat] 探针引用已删除的 frameCenter。
+
+**实测**：地面 cast-shadow 图案首次呈现（左上黑色投影带）——但**位置/范围与 expected 仍有明显偏移**（expected 中心区大片投影；ours 偏左上、覆盖不足），buildings-trees 427,316（基线 428,064，本轮 +9k 代价换来图案呈现）。下会话首项（明确的标定问题）：①核对 uMBShadowMatrix（m_matrix，RTE 系）与 fill 接收体重建点（绝对−eye=RTE）的帧一致性；②阴影方向/bearing 与 expected 投影方向的 A/B（mgl bearing=atan2(−dx,−dy)）；③ortho extent 与 corners far 钳制校准。

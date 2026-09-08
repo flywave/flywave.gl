@@ -372,6 +372,9 @@ function discoverTests(): TestEntry[] {
     // Debug readout (receiver color = intensity/depth/uv.z) is a SEPARATE
     // gate — enabling shadows must not corrupt the pixel comparison.
     if (Number(dbg) >= 3) (globalThis as any).__mbShadowDbg = true;
+    // §885 终五十七: shadowdbg>=12 → quad uv4 readout (R=uv4.z clamped,
+    // G=depth-overflow, B=uv.xy-in-bounds) painted by the ground quad.
+    if (Number(dbg) >= 12) (globalThis as any).__mbQuadDbg = true;
     // §692: raw-uv field readout (shadowdbg=4) — receivers paint their raw
     // shadow uv (R=x,G=y,B=z) with the output color-space transform bypassed.
     if (Number(dbg) >= 4) (globalThis as any).__mbShadowDbg4 = true;

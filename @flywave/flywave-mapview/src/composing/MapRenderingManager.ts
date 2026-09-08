@@ -372,6 +372,12 @@ export class MapRenderingManager implements IMapRenderingManager {
         // scene meshes (the mbstyle terrain mesh renders in the direct path
         // but not through the composer). Bypass it when idle.
         if (this.m_composer && this.m_anyEffectEnabled && !(this as any).forceDirectRender) {
+            // §885 终五十八: one-shot branch probe — which render path runs.
+            if (!(globalThis as any).__mbRmBranch) {
+                (globalThis as any).__mbRmBranch = 'composer';
+                // eslint-disable-next-line no-console
+                console.log('[MBRmBranch] composer path (preSceneHook bypassed)');
+            }
             this.m_composer.render();
         } else {
             // §598 pre-scene hook: datasources may register an underlay draw

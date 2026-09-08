@@ -2556,6 +2556,14 @@ export class MBStyleDataSource extends TileDataSource {
                 }
             });
             this.mapView.addEventListener(MapViewEventNames.AfterRender, async () => {
+                try { // §885 终五十八: full-body guard — surface the per-frame
+                      // thrower that silently kills the whole listener
+                      // (patchTileMaterials + shadow pass) from frame ~3 on.
+                { const gA = (globalThis as any); gA.__mbArN = (gA.__mbArN ?? 0) + 1;
+                  if (gA.__mbArN <= 3 || gA.__mbArN === 60 || gA.__mbArN === 300) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBArN] entry=' + gA.__mbArN);
+                } }
                 // eslint-disable-next-line no-console
                 if ((globalThis as any).__mbCoverDump) console.log('[MBCoverDumpReg] after-render fired, dumps=', (globalThis as any).__mbCoverDumps ?? 0);
                 // §835: cover dump — the datasource tileCache keys decoded to
@@ -3030,6 +3038,11 @@ export class MBStyleDataSource extends TileDataSource {
                 // overwritten by the frame itself; uniforms lag one frame
                 // (same as heatmap).
                 if (self.m_shadowRenderer) {
+                    { const gB = (globalThis as any); gB.__mbArShadow = (gB.__mbArShadow ?? 0) + 1;
+                      if (gB.__mbArShadow <= 3 || gB.__mbArShadow === 60 || gB.__mbArShadow === 300) {
+                        // eslint-disable-next-line no-console
+                        console.log('[MBArN] shadow-block=' + gB.__mbArShadow);
+                    } }
                     const sl = self.m_environment?.shadowLightState;
                     { const g: any = (globalThis as any); g.__shN = (g.__shN ?? 0) + 1;
                       if (g.__shN <= 2 || g.__shN === 60 || g.__shN === 300) { const su: any = self.m_shadowRenderer.getShadowUniforms?.();
@@ -3047,6 +3060,22 @@ export class MBStyleDataSource extends TileDataSource {
                     // construction (see MBShadowRenderer.drawGroundQuad).
                     self.m_shadowRenderer.setLightState(!!sl, sl?.intensity ?? 0);
                     self.m_shadowRenderer.run();
+                    // §885 终五十八: the shadow chain activates LAZILY
+                    // (lights resolve + patcher injects + materials compile)
+                    // — on static fixtures the map idles after ~3 frames, so
+                    // the int=1 uniform refresh never reaches a render and
+                    // the ground shows no cast-shadow pattern. Request extra
+                    // frames on first activation (compile + render cycle).
+                    const gAct = (globalThis as any);
+                    if (!gAct.__mbShActivated
+                        && !!self.m_shadowRenderer.getShadowUniforms?.()) {
+                        gAct.__mbShActivated = true;
+                        const mvS = self.mapView as any;
+                        const poke = () => { try { mvS.update?.(); } catch { /* idle */ } };
+                        setTimeout(poke, 60);
+                        setTimeout(poke, 160);
+                        setTimeout(poke, 400);
+                    }
                     // §562: model materials sample the shadow map in their
                     // direct lighting term (mgl shadowed_light_factor_normal).
                     try {
@@ -3199,6 +3228,11 @@ export class MBStyleDataSource extends TileDataSource {
                 // TerrainDraping has its own AfterRender listener that
                 // detects mesh count changes + morphing completion + lazy
                 // bake — no manual trigger needed here.
+                } catch (eGQ) {
+                    const s = (eGQ instanceof Error ? (eGQ.stack ?? eGQ.message) : String(eGQ));
+                    // eslint-disable-next-line no-console
+                    console.error('[MBAfterErr] ' + String(s).split('\n').slice(0, 6).join(' | '));
+                }
             });
         }
 

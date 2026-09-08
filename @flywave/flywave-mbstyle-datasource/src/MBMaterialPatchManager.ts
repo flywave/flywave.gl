@@ -233,17 +233,40 @@ export class MBMaterialPatchManager {
                             // prepGroundQuad mutates them in place each frame,
                             // so the shaders always read the current framing
                             // without per-material copies.
-                            u.uMBShadowMatrix.value = shadowState.matrix;
-                            u.uMBGC.value = shadowState.corners;
-                            u.uMBEye.value = shadowState.eye;
-                            u.uMBRes.value = shadowState.res;
+                            // 终五十八: GUARDED writes — extrusion materials
+                            // (injectExtrusion3DLighting) stash uniforms
+                            // WITHOUT uMBGC/uMBEye/uMBRes (their own varying
+                            // path); the unguarded write threw TypeError on
+                            // every frame ≥3, aborting the whole AfterRender
+                            // listener (patchTileMaterials + shadow pass).
+                            if (u.uMBShadowMatrix) u.uMBShadowMatrix.value = shadowState.matrix;
+                            if (u.uMBGC) u.uMBGC.value = shadowState.corners;
+                            if (u.uMBEye) u.uMBEye.value = shadowState.eye;
+                            if (u.uMBRes) u.uMBRes.value = shadowState.res;
                         } else if (identity) {
-                            u.uMBShadowMatrix.value = identity;
+                            if (u.uMBShadowMatrix) u.uMBShadowMatrix.value = identity;
                         }
                         // mgl: shadow-intensity gates the shadow PASS; the
                         // ground receiver darkness comes from the
                         // shadow_utils amb/(amb+dir·NdotL) ratio alone.
-                        u.uMBShadowIntensity.value = shadowState ? 1 : 0;
+                        // 终五十八: first 0→1 activation pokes the map — the
+                        // refreshed material needs one more render frame, and
+                        // static fixtures idle after ~3 frames.
+                        if (shadowState && u.uMBShadowIntensity.value !== 1) {
+                            u.uMBShadowIntensity.value = 1;
+                            if (!(MBMaterialPatchManager as any).__mbShPoked) {
+                                (MBMaterialPatchManager as any).__mbShPoked = true;
+                                const mvP = (this.m_dataSource as any).mapView;
+                                // eslint-disable-next-line no-console
+                                console.log('[MBShAct] first int=0→1, poking map frames');
+                                const pokeS = () => { try { mvP?.update?.(); } catch { /* idle */ } };
+                                pokeS();
+                                setTimeout(pokeS, 80);
+                                setTimeout(pokeS, 300);
+                            }
+                        } else if (!shadowState) {
+                            u.uMBShadowIntensity.value = 0;
+                        }
                         // §717: fade-envelope far bound (shadow camera far).
                         if (u.uMBShadowFar) {
                             u.uMBShadowFar.value = (shadowState as any)?.far ?? 0;
@@ -2943,9 +2966,15 @@ export class MBMaterialPatchManager {
         const orig = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
             if (orig) orig.call(material, shader);
-            shader.uniforms.uMBShadowMap = { value: null };
-            shader.uniforms.uMBShadowMatrix = { value: new THREE.Matrix4() };
-            shader.uniforms.uMBShadowIntensity = { value: 0 };
+            // §885 终五十八: seed uniforms with the CURRENT shadow state —
+            // static fixtures idle after ~3 frames, and a late-injected
+            // material compiled with zeros would never see the per-frame
+            // refresh's int=1 (the map stops before frame N+1).
+            const shSeed = (this.m_dataSource as any).m_shadowRenderer
+                ?.getShadowUniforms?.() ?? null;
+            shader.uniforms.uMBShadowMap = { value: shSeed?.map ?? null };
+            shader.uniforms.uMBShadowMatrix = { value: shSeed ? shSeed.matrix.clone() : new THREE.Matrix4() };
+            shader.uniforms.uMBShadowIntensity = { value: shSeed ? 1 : 0 };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
             // vec3[4] MUST never hold null at first compile/upload — three's
             // array-uniform setter throws on null, the exception aborts the
@@ -2955,11 +2984,12 @@ export class MBMaterialPatchManager {
             // assertions). Initialize with real vectors; the refresh swaps in
             // the shared live array on the same frame.
             shader.uniforms.uMBGC = {
-                value: [new THREE.Vector3(), new THREE.Vector3(),
-                    new THREE.Vector3(), new THREE.Vector3()],
+                value: shSeed ? shSeed.corners.map((c: any) => c.clone())
+                    : [new THREE.Vector3(), new THREE.Vector3(),
+                        new THREE.Vector3(), new THREE.Vector3()],
             };
-            shader.uniforms.uMBEye = { value: new THREE.Vector3() };
-            shader.uniforms.uMBRes = { value: new THREE.Vector2(1, 1) };
+            shader.uniforms.uMBEye = { value: shSeed ? shSeed.eye.clone() : new THREE.Vector3() };
+            shader.uniforms.uMBRes = { value: shSeed ? shSeed.res.clone() : new THREE.Vector2(1, 1) };
             material.__mbShadowUniforms = shader.uniforms;
             const mbShadowSample = `
                         vec2 mbSUV = gl_FragCoord.xy / max(uMBRes, vec2(1.0));
