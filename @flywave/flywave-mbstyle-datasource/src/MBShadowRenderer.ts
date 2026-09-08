@@ -389,7 +389,11 @@ export class MBShadowRenderer {
             // (key never existed in the MeshBasic stash) and killed the
             // whole AfterRender listener from frame ~6 on.
             if (this.m_groundQuad) {
-                (this.m_groundQuad.material as THREE.MeshBasicMaterial).color.setHex(clear);
+                // §885 终六十六: SHDIAG=3 → magenta base — proves which
+                // ground pixels belong to the quad.
+                const mag = (globalThis as any).__mbShadowDiag === '3';
+                (this.m_groundQuad.material as THREE.MeshBasicMaterial)
+                    .color.setHex(mag ? 0xff00ff : clear);
             }
         }
         // §692: drawing-buffer size for the screen-space receivers

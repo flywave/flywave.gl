@@ -762,3 +762,9 @@ shdiag=2（dbg4 改涂重建输入 mbSUV+Res）与 shdiag=0（涂 shadowUv）输
 修正终六十五：drawlog 里覆盖中心的两条 renderOrder=MAX_SAFE_INTEGER(−1) 的 RawShaderMaterial mesh 是 **TextGeometry 的文本 glyph+背景**（text-canvas 包），不是地面。结合 getMaterialConstructor：fill 技法在 shadowsEnabled 时用 MapMeshStandardMaterial、否则 MapMeshBasicMaterial——两者都在 sweep 白名单内、都被注入（[MBShadowAnchor] 两行即它们）。因此终六十五的"land fill 未注入"结论作废；**可见的"地面"很可能主要是 quad**（land fill=水系多边形、road=线，它们未阴影化但占比小）。这与终五十九图案呈现、SHDIAG 判别（地面灰=quad 的 modulate 输出而非 fill uv——两版直绘不改 quad 像素，逐位相同完全自洽）全部吻合。
 
 **收敛后的剩余缺口（下会话）**：①确认地面像素=quad（把 quad 材质底色临时改成洋红跑一帧即证）；②若成立，图案覆盖=quad 可见域 × 深度图对齐——长度 1/3 截断的标定回到深度图内容 vs quad 采样的逐 texel 对比（depth-canvas dump 与 [MBDiscPx] 式读数已备）；③quad 之上的 fill/road 层是否需要接收阴影按 mgl 语义核对（mgl 中 fill/line 层同样被 ground shadow 调制）。
+
+### §885 终六十七：洋红归因实验——quad 被上层 fill 全覆盖，可见地面=land fill（2026-09-08 终）
+
+SHDIAG=3（quad 底色洋红）实验：画面无任何洋红 → **quad 完全被 land fill 覆盖，"地面=quad 露出"假设否定**；可见地面确为 land fill（MapMeshBasic/Standard，均在 sweep 白名单内、已注入）。但本实验与 SHADOW=3/4 门控存在混淆（SHADOW=3 帧中出现 dbg4 黄路），SHDIAG 两版直绘逐位同的异常也与之相关——归因实验需在干净门控下重做（建议：SHDIAG 独立于 SHADOW 生效，或单用 paintId 逐层隐藏）。基础设施新增：SHDIAG=3 洋红开关、shdiag/shdiralt/shadowcast 参数链。
+
+**标定工作当前状态汇总**：方向已定案（§686 y 镜像正确，shdiralt=1 恶化 +171k）；extrusion caster 已默认启用（零回归）；帧扩展已就位；quad 链路全通但被覆盖。剩余单点问题：**land fill 接收体的 int=1 是否到达 GPU**（干净门控下的 uv 直绘一测即知），随后为长度 1/3 截断标定与 fog 族 109k 暗化值。
