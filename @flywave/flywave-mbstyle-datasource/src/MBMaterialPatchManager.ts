@@ -3124,14 +3124,19 @@ export class MBMaterialPatchManager {
                 console.log(`[MBExtU] amb=${aU ? JSON.stringify([aU.x?.toFixed?.(3) ?? aU[0], aU.y?.toFixed?.(3) ?? aU[1], aU.z?.toFixed?.(3) ?? aU[2]]) : 'missing'} dir=${dU ? JSON.stringify([dU.x?.toFixed?.(3) ?? dU[0], dU.y?.toFixed?.(3) ?? dU[1], dU.z?.toFixed?.(3) ?? dU[2]]) : 'missing'} dirV=${dV ? JSON.stringify([dV.x?.toFixed?.(3), dV.y?.toFixed?.(3), dV.z?.toFixed?.(3)]) : 'missing'}`);
             }            material.__mbShadowUniforms = shader.uniforms;
             const mbShadowSample = `
-                        vec2 mbSUV = gl_FragCoord.xy / max(uMBRes, vec2(1.0));
-                        vec3 mbWP = mix(mix(uMBGC[0], uMBGC[1], mbSUV.x),
-                                        mix(uMBGC[3], uMBGC[2], mbSUV.x), mbSUV.y);
+                        vec2 mbSUV2 = gl_FragCoord.xy / max(uMBRes, vec2(1.0)) * 2.0 - 1.0;
+                        vec4 mbRayFar = uMBInvViewProj * vec4(mbSUV2, 1.0, 1.0);
+                        vec4 mbRayNear = uMBInvViewProj * vec4(mbSUV2, -1.0, 1.0);
+                        vec3 mbFarW = mbRayFar.xyz / mbRayFar.w;
+                        vec3 mbNearW = mbRayNear.xyz / mbRayNear.w;
+                        vec3 mbRayDir = normalize(mbFarW - mbNearW);
+                        float mbRayT = (0.0 - mbNearW.z) / mbRayDir.z;
+                        vec3 mbWP = mbNearW + mbRayDir * mbRayT;
                         #ifdef MB_SH_DIAG7
                         gl_FragColor = vec4(mbSUV.x, mbSUV.y, 0.5, 1.0);
                         #endif
-                        vec4 mbShadowUv0 = uMBShadowMatrix * vec4(mbWP - uMBEye, 1.0);
-                        vec4 mbShadowUv1 = uMBShadowMatrix1 * vec4(mbWP - uMBEye, 1.0);
+                        vec4 mbShadowUv0 = uMBShadowMatrix * vec4(mbWP, 1.0);
+                        vec4 mbShadowUv1 = uMBShadowMatrix1 * vec4(mbWP, 1.0);
                         bool mbUse1 = !(abs(mbShadowUv0.x) <= 1.0 && abs(mbShadowUv0.y) <= 1.0 && mbShadowUv0.z <= 1.0);
                         vec4 mbShadowUv = mbUse1 ? mbShadowUv1 : mbShadowUv0;
                         float mbShadowDepth = 1.0;

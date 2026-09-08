@@ -1098,3 +1098,8 @@ drawlog 钩子安装前置核对完成（renderer.renderBufferDirect 包装、dr
 
 fogmul=0.7：ground-shadow-fog 161,252→156,451（改善 −4.8k）但 hard-cutoff 125,686→155,415（恶化 +29.7k）、buildings-trees 457,874 不变。**distCam 尺度为夹具相关**（两 fog 样式的 fog range/相机不同），无全局常数可调——fogmul=1 保持默认。fog 近场强度的逐夹具标定需在数据补齐后进行（当前树冠/部分暗区缺失主导差距）。
 保持状态：buildings-trees 457,874、ground-shadow-fog 161,252、hard-cutoff 125,686（fogmul=1 最优组合）、守卫 10,138/10,260 逐位零回归。
+
+### §885 终一百三十四：ray-cast 重建落地——fill 输出仍惰性，实例归属为最终单点（2026-09-09）
+
+corners→ray-cast（invViewProj 精确 unproject，含 RTE 帧修正）替换后：buildings-trees 457,874 / fog 161,252 / hard-cutoff 160,185——**fill 输出对重建方法与正交盒均不敏感**（ ray-cast 与 corners-mix 逐位一致）——最终单点确认：**渲染中的地面材质实例从未执行注入程序**（int=0 或未编译注入）。[MBRf] RGS 触达的是另一实例。drawlog mu 对照（渲染材质 uuid ↔ 注入 uuid）为下一步唯一所需，前置=drawlog 钩子安装链修复（终一百三十一）。
+保持：守卫 10,138/10,260 逐位零回归；fog 族 161,252/125,686 最优。
