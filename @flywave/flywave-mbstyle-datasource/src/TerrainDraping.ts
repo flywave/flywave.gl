@@ -706,7 +706,6 @@ export class TerrainDraping {
                 const camera = buildTileCamera(tile, (this.m_mapView as any).camera?.position);
                 if (!camera) continue;
                 camera.layers.enable(TerrainDraping.RASTER_LAYER);
-                }
 
                 if ((globalThis as any).__mbOccDbg && !(globalThis as any).__mbFillProj) {
                     (globalThis as any).__mbFillProj = 1;
@@ -981,6 +980,20 @@ export class TerrainDraping {
                     try {
                         const full = new Uint8Array(S * S * 4);
                         renderer.readRenderTargetPixels(rt, 0, 0, S, S, full);
+                        // §885 终一百七十五: the bake RT holds LINEAR values,
+                        // but MapTerrainMaterial's drape overwrite bypasses the
+                        // output colorspace encode — the drape rendered as
+                        // linear bytes (~117 where the reference holds ~180
+                        // sRGB). Pre-encode the snapshot bytes to sRGB so the
+                        // raw write lands on the reference brightness.
+                        for (let px = 0; px < full.length; px += 4) {
+                            for (let ch = 0; ch < 3; ch++) {
+                                const v = full[px + ch] / 255;
+                                full[px + ch] = Math.round(255 * (v <= 0.0031308
+                                    ? v * 12.92
+                                    : 1.055 * Math.pow(v, 1 / 2.4) - 0.055));
+                            }
+                        }
                         // §885 终一百七十四: key snapshots by TILE IDENTITY —
                         // the dem-tile order shuffles across passes (async
                         // loads), and an index-keyed snapshot from a retired
