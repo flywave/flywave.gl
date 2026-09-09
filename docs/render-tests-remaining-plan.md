@@ -533,3 +533,19 @@ ours-mgl 0.012**——vendored mgl 的 SwiftShader 实拍与 expected 的卫星�
 复现域**（与 line-cap/gwc/interpolate-to-zero 同类，见 终一百六十八）。
 本夹具继续像素收敛的价值受参照本身限制；"drape 亮度乘子"与"内容错位"两个
 此前的中间定性均以此为准修正。工作树与 HEAD 一致（34+1 提交）。
+
+### §885 终一百八十：fill-extrusion-line-width 家族开工取证（2026-09-10）
+
+default 夹具（z19/pitch60/geojson 建筑）实拍对拍：
+- **mgl-vs-exp 7,692 vs 我们 62,456 —— 真实实现差距（8×）**，非参照漂移；
+- 结构形态（暗色密度图）：我们上半部中空（仅侧壁渲染，**正立面缺失**），
+  expected 上半部实心（立面+顶面）；下半部左侧我们空白而 expected 有内容；
+- 颜色：我们 [5,84,5] vs expected [3,83,31]——绿基一致、蓝通道差 6×
+  （墙面着色/光照差）；mgl-live [98,170,118] 整体更亮（mgl 光照默认差，
+  其 7,692 中含光照分量）；
+- 家族当前 9 夹具 1 PASS（zero-width 0px）：building 28k / default 62k /
+  infinite-miter 16k / line-string 65k / multi-tile-polygon 71k / pattern
+  12.5k / shadows 30k / sharp-corner 13k。
+- 下轮入口：①正立面生成（pitch 视角下面向相机的 wall 缺失——疑似
+  patchExtrusionMaterial 的顶点/绕向或 backface culling 只画了背向面）；
+  ②蓝通道墙面着色；③family 其余夹具同法取证。
