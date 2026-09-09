@@ -2968,6 +2968,15 @@ export class MBMaterialPatchManager {
                              // screen-space falloff from the boundary line.
                              float mbOutlineDist = abs(vMBRibbonEdge) * uMBRibbonWidth * 0.5;
                              gl_FragColor.a *= 1.0 - smoothstep(0.0, 1.0, mbOutlineDist);` : `
+                             // §885 终一百六十七: the mgl-formula ±0.5px
+                             // LINEAR feather (clamp(mbDistEdge+0.5)) was
+                             // retested after the width-domain fix and STILL
+                             // regresses (line-cap/round +800, gradient-
+                             // vector-tile PASS→FAIL) — the references are
+                             // crisper than the vendored mgl AA formula here.
+                             // Keep the hard step; mbDistEdge is the signed
+                             // px distance from the true edge (the ribbon
+                             // carries mgl's +0.5px/side dilation).
                              float mbDistEdge = (1.0 - abs(vMBRibbonEdge)) * uMBRibbonWidth * 0.5 - 0.5;
                              gl_FragColor.a *= step(-0.5, mbDistEdge);`}
                              ${featherEnabled ? `float mbDistCenter = abs(vMBRibbonEdge) * uMBRibbonWidth * 0.5;

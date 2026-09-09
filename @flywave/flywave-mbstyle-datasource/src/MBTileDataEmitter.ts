@@ -3252,14 +3252,18 @@ export class MBTileDataEmitter {
                     (256 * Math.pow(2, this.m_zoom + 1));
                 const geoBoxW: any = (this.m_decodeInfo as any).geoBox;
                 const latWidth = (Number(geoBoxW?.north ?? 0) + Number(geoBoxW?.south ?? 0)) / 2;
-                // §885 终一百六十六: ×1.06 sub-pixel calibration — the pure
-                // cos(lat) scale left the line slightly thin vs mgl
-                // (gradient-with-corners exp-only 459px). Higher factors
-                // (1.12–1.28 scan) fit THAT fixture better (~107px) but
-                // regress the line-join family (+200px, 6 PASS→FAIL) —
-                // per-fixture optimum differs, keep the family-safe 1.06.
-                const mppScaled = metersPerPixel *
-                    Math.max(0.2, Math.cos(latWidth * Math.PI / 180)) * 1.06;
+                void latWidth;
+                // §885 终一百六十七: NO LATITUDE TERM for px-unit lines — the
+                // 终一百五十五 cos(lat) compensation (+ 终一百六十六 ×1.06) is
+                // a spurious fit. Cross-fixture optimum decomposition: both
+                // line-cap/round (lat 52.5) and gradient-with-corners
+                // (lat 38.9) resolve to the same TOTAL scale ≈ 1.0×mpp; the
+                // cos term starved high-latitude roads ~30% (exp 10-11px vs
+                // ours ~7px). Dropping it: line-cap/round 9.6k→297,
+                // gradient-with-corners 188→110, line-join/none back to PASS.
+                // The 终一百五十五 fog observation belongs to the fog/camera
+                // domain, not the px line-width domain.
+                const mppScaled = metersPerPixel;
                 // `line-width-unit: meters` — the width is metric. mgl
                 // converts with tileToMeter (mercator_coordinate.ts), which
                 // is LATITUDE-dependent: px per ground meter = equatorial
