@@ -1442,3 +1442,11 @@ mvt 解析实锤：14-8802-5374.mvt road 层 719 特征；z20 视口（z14 瓢�
 - **阶段 3 回归**：line 家族 146 + line-gradient 2 探针 + 守卫/buildings-trees/ground-shadow-fog 帧检三件套。
 
 验收：gradient-with-corners/gradient-vector-tile 转 PASS 且 very-overscaled 几何恢复（RTE 后折线两条均渲染）。
+
+### §885 终一百六十二：单位链审计判定性实验——camdist=1.284 使 gradient-with-corners 3,202→317（−90%）（2026-09-09）
+
+**实验**：gradient-with-corners + `MBSTYLE_CAMDIST=1.284`（=1/cos(38.878°)，恰好抵消终九十一的相机 cos 因子）：mismatch 3,202→**317**（−90%），bbox ours x 90-162/y 28-222 vs expected x 89-163/y 22-223——**几乎完全重合**。
+
+**结论**：相机距离的世界单位约定应为**赤道尺度（无 cos）**——终九十一把 cos(lat) 无条件乘进相机距离对无雾样式是过度修正（线-gradient 族因此 1.28× 偏大）。但 ground-shadow-fog（z16.2/pitch70）的街景构图确认又依赖该 cos——两者的边界即单位链专项的核心命题：**cos 因子属于地面尺度换算（雾/线宽/progress），不属于相机距离；相机-地面两套约定在 pitch/zoom 组合下如何解耦**是终一百六十一 阶段 1 审计的最后命题。317 px 距 PASS 尚差一步（AA/边缘残差），待专项一并解决。
+
+**专项验收不变**：gradient 双夹具 PASS + very-overscaled RTE 折线恢复 + 守卫/家族回归。
