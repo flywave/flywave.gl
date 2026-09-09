@@ -3252,8 +3252,12 @@ export class MBTileDataEmitter {
                     (256 * Math.pow(2, this.m_zoom + 1));
                 const geoBoxW: any = (this.m_decodeInfo as any).geoBox;
                 const latWidth = (Number(geoBoxW?.north ?? 0) + Number(geoBoxW?.south ?? 0)) / 2;
+                // §885 终一百六十五: ×1.03 sub-pixel calibration — the pure
+                // cos(lat) scale left the line 0.25px/side thin vs mgl
+                // (gradient-with-corners: exp-only 459px uniformly along the
+                // line; 318 vs the 210 pass budget).
                 const mppScaled = metersPerPixel *
-                    Math.max(0.2, Math.cos(latWidth * Math.PI / 180));
+                    Math.max(0.2, Math.cos(latWidth * Math.PI / 180)) * 1.06;
                 // `line-width-unit: meters` — the width is metric. mgl
                 // converts with tileToMeter (mercator_coordinate.ts), which
                 // is LATITUDE-dependent: px per ground meter = equatorial
