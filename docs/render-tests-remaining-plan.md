@@ -569,3 +569,15 @@ sharp-corner→10,215、zero-width 保 PASS；fill-extrusion-height/opacity
 9 夹具同机 stash 对照逐值一致零回归；multi-tile +3.2k（既 FAIL 域内权衡）。
 剩余（default 30.6k）：墙面 [5,93,31] 蓝分量（mgl-live 墙为白/灰、
 expected 为黑——三方各异，需逐墙几何/绕向取证）与 line-width 描边语义。
+
+### §885 终一百八十二：fill-extrusion wall mode 落地（2026-09-10）
+
+`fill-extrusion-line-width ≠ 0` 的 mgl 语义实证（fill_extrusion_bucket wallMode：
+环转线特征 + 顶点着色器 join_normal ±lineWidth/2 偏移）= **中空墙带**——内部露
+出底层 fill（default 的青色地面 9.7k/14.4k 像素出现）。落地
+`emitExtrusionWallBand`（miter 双偏移侧墙 + 双绕向 + 顶帽带）：
+- default 62,456→**21,574**、multi-tile 74,521→**6,342**（−68k）、
+  sharp-corner→9,657、zero-width 保 PASS（3/9 家族）；
+- 终一百八十一的 0.604 屋顶校准随 wall mode 撤销（阶梯差 ×1.63 实证顶面应亮）；
+- height/opacity 9 夹具（lineWidth=0 域）同机对照逐值一致零回归。
+剩余（default 21.6k）：墙带垂直渐变相位/宽度细节与 cyan 覆盖 9.7k vs 14.4k。
