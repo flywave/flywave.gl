@@ -1238,14 +1238,22 @@ export class MBMaterialPatchManager {
                     .then((m: any) => m.installWorldCopyTextGate())
                     .catch(() => {});
             }
+            // §885 终一百四十七: when USE_FOG is active the overridden
+            // fog_pars_fragment chunk ALREADY declares the fog uniforms —
+            // re-declaring them here is a hard GLSL redefinition error
+            // (extrusion/model programs failed wholesale). Compile-time
+            // branch: chunk declares when USE_FOG, we declare otherwise.
             shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
                 `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
                  uniform mat3 uMB3DViewToWorld; uniform float uMB3DEmissive; uniform float uMB3DDbg;
+                 #ifdef USE_FOG
+                 #else
                  uniform float fogMglShift; uniform float fogMglDistCam; uniform vec2 fogMglRange;
-                 uniform float uMbMetersPerUnit; uniform vec3 fogColor; uniform float fogAlpha;
+                 uniform vec3 fogColor; uniform float fogAlpha;
                  uniform float fogHorizonBlend; uniform float fogCamHeight; uniform vec2 fogVertLimit;
-                 uniform float uMbDistCam;
+                 #endif
+                 uniform float uMbMetersPerUnit; uniform float uMbDistCam;
                  varying float vMbWallH;
                  varying vec3 vMbWorldPos;
                  ${(globalThis as any).__mbShadowHW ? `#define MB_SH_HW 1\n#define MB_SH_BIAS ${Number((globalThis as any).__mbShadowBias ?? 0.0002)}` : ''}

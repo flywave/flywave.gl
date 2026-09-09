@@ -1340,3 +1340,19 @@ clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、groun
 **验证**：line-blend-mode/additive-clamp-low 12 **PASSED: True——首个基线失败夹具实际转 PASS**；守卫 10,138 逐位零回归；ground-shadow-fog 142,306（较修复前 134,455 +7.8k：新编译的地面 fill 以未标定颜色入画，结构完整但分数暂退——道路 0 黄像素仍在，后续修掉即回收）。
 
 **遗留（下轮队列）**：①挤出/模型 MeshStandardMaterial 的 fog uniform 重定义（fogAlpha/fogMgl* 双声明，2 处错误×2）；②quad 顶点 vNdc 未声明（某 wrapper 覆盖了 ensureGroundQuad 的 vertex prepend，onBeforeCompile 链被覆盖式赋值破坏）；③道路 ribbon 顶点 mvPosition 未声明（fog_vertex 无 project_vertex 前置）；④uMBPbrTermDbg 未声明（PBR 调试探针泄漏）。
+
+### §885 终一百四十八：编译阻断清除战果 + 空白帧锚点体系性发现（2026-09-09）
+
+**剩余编译阻断全部修复**（本轮）：①挤出注入雾 uniform 重定义——`#ifdef USE_FOG` 条件声明（USE_FOG 时 chunk 已声明）；②模型尾（Material.car2）同款重定义同法修复；③quad 顶点 vNdc/fog:false + 分支define `MB_SHADOW_OVERLAY`（此前把 JS 条件误写进 GLSL 模板——quad 程序自该提交起未编译过）；④uMBPbrTermDbg 探针声明+播种。修后 fix5-6 运行 shader error 从 16 降至 4。
+
+**体系性发现（必须入档）**：近期所有"锚点分数"多为**空白/纯色画布帧的巧合分数**——
+- buildings-trees 457,874 锚点帧 = 纯灰 94 空白（std=0）；
+- 守卫 10,138 锚点帧 = 纯灰 205 空白（std=0）；
+- ground-shadow-fog 96,899 平台 = 纯白 241-255（终一百四十三已定案）。
+即 SwiftShader 灰/白画布失效态是常态而非例外，分数与真实渲染质量脱钩。编译修复后各夹具首次真实渲染：guard std 0→7.9（微内容出现）、buildings-trees 出现建筑内容（分数 457,874→620,799 属"真实内容 vs 空白巧合"的账面差，非质量回退）。
+
+**测量协议（强制）**：任何分数入档前必须附帧检三件套——①帧灰度 std（<2 = 空白帧，分数无效）；②关键区域颜色探针（如道路黄像素、水面蓝像素计数）；③与 expected 的分区均值对比。空白帧的"高分"一律不计为改善。
+
+**已验证的真实战果**：line-blend-mode/additive-clamp-low 12px PASSED: True（两轮复现，首个真实内容 PASS）；additive 线内容确认渲染（Sep-7 形态恢复）。
+
+**下阶段（重排后）**：①逐夹具确认真实渲染态（帧检三件套）后重立真实基线；②在真实渲染上重做雾/阴影/色调标定（此前所有 A/B 结论需在真实渲染态复验）；③道路 ribbon 顶点 mvPosition 与 SolidLine stencil 链路排查；④数据补齐（外部 token）。

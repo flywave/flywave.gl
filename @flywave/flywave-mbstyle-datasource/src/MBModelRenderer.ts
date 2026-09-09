@@ -487,6 +487,9 @@ export function applyMglModelLighting(
                 }
                 shader.uniforms.uMB3DTint = { value: tint?.color ?? [0, 0, 0] };
                 shader.uniforms.uMB3DTintA = { value: tint?.mix ?? 0 };
+                // §885 终一百四十七: the per-term readout probe gate (declare
+                // + seed — the GLSL referenced it but nothing declared it).
+                shader.uniforms.uMBPbrTermDbg = { value: Number((globalThis as any).__mbPbrTermDbg ?? 0) };
                 shader.uniforms.uMBHbs = { value: [hr.b0, hr.b1, hr.power, hr.start] };
                 shader.uniforms.uMBHbsRange = { value: hr.range };
                 // §562: model self/ground-shadow reception (mgl
@@ -562,11 +565,15 @@ export function applyMglModelLighting(
                      uniform float uMBModelGamma;
                      uniform float uMBNoMat;
                      uniform float uMBFogOn;
+                     uniform float uMBPbrTermDbg;
+                     #ifdef USE_FOG
+                     #else
                      uniform float fogAlpha;
                      uniform float fogHorizonBlend;
                      uniform float fogCamHeight;
                      uniform vec2 fogMglRange;
                      uniform float fogMglShift;
+                     #endif
                      uniform vec2 fogVertLimit;
                      uniform vec3 mbFogColor;
                      uniform float uMbDistCam;
