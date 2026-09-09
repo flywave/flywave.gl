@@ -606,3 +606,16 @@ default 21.6k 的渐变相位细节。
 §12.76-55 同族问题，或绘制路径走未被遍历的第 5 个材质实例）。
 下轮入口：在暗面像素上做 drawlog/材质身份 dump（既有 __mbDrawLog 体系），
 确定绘制者后再实现 unlit。工作树已回退至 0b6b2614（≥10 门控的验证态）。
+
+### §885 终一百八十三（补）：drawlog 定位 + 引擎 unlit 钩子设计与回退（2026-09-10）
+
+drawlog 实证：暗面绘制者 = **~202 个 MeshStandardMaterial(#008000) 实例**
+（patchExtrusionMaterial 仅触达 4 个——CPU 侧 emissive/raw 改法只 −4k）。
+据此设计了正确的引擎级修复：DecodedTileHelpers.getMaterialConstructor 对
+`technique._mbUnlit` 的 extruded-polygon 返回 MapMeshBasicMaterial（无光照
+raw，等价 mgl wall mode 的 #008000），emitter 线分支设旗标。但落地后
+shadows 仍 0 绿（[74,74,66] 灰带且位置异于 expected）且 line-string 退化
+65k——带宽/放置在宽带下还有未解偏差，该钩子方案连同实验整体回退，留作
+设计记录。下一步（新会话）：①先单独验证 _mbUnlit 钩子对窄带（line-string）
+无害；②宽带（≥10px）的 mpp 带宽换算与放置对拍（expected 绿 6,458px vs
+我们的带明显偏细/偏位）；③再解 ≥10 门控。工作树回到 0b6b2614 验证态。
