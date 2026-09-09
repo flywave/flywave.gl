@@ -664,3 +664,17 @@ mgl-exp **6,673** vs 我们 **87,649**（13×）——**真实差距**：
   近处衰减到背景的 ramp 缺失。
 下轮入口：fog uniforms 的深度映射链（fogMglRange/fogMglDistCam/fogAlpha 在
 pitch70/zoom16 下的取值探针），§700/§701 的标定域在该 pitch/zoom 组合失效。
+
+### §885 终一百八十七：fog 深度衰减探针收口（2026-09-10）
+
+fog/color（pitch70/zoom16，range[-0.5,2.5]）uniform 探针：shift=1、
+distCam=19.7、range=[1.2,4.2]、alpha=1（数值链自洽）。帧内反解 fogFactor：
+顶 1.0 → 底 0.84（衰减存在但极弱；期望中位 ~0.28）→ **vFogDepth 远超
+[157,552] 雾窗**（估算超 3×+）。distCam 标定旋钮扫描（0.42/0.6/1.5×，
+DistKUse 探针证实 uniform 更新执行 12 次、值正确）**输出逐位不变**——
+根因锁定：**fogMglDistCam 等 lib 级 uniform 更新不达已编译的注入背景瓦片
+材质**（材质持编译时 uniform 快照；§273 同族的共享对象缺失问题）。
+这也解释了 §701 为何以常量烘焙标定。下轮入口：把 fogMgl* 做成
+UniformsLib.fog 的共享对象并在背景瓦片 patch 时引用同一对象（fogAlpha
+已是该模式），标定旋钮即可生效，随后重扫 distCam/range 拟合 expected
+的三点雾分布（顶 1.0 / 中 0.28 / 底 ~0.2）。工作树已清理至 HEAD。
