@@ -1403,3 +1403,11 @@ StaticLineMaterial 的 `vCoords.x = extrusionDir / vRange.xy`（SolidLineMateria
 ### §885 终一百五十四：ribbon 渐变链路复核——aRibbonDist 归一化已正确，残差=拐角几何（2026-09-09）
 
 复核修正 终一百五十三 的结论：gradient 夹具实际走 **ribbon 路径**（aRibbonDist 逐顶点属性），且其归一化**已正确实现**——`distAt`（MBTileDataEmitter:3750）输出 0..1 归一化折距，并按 mgl `mapbox_clip_start/end`（progressClip）锚定瓦片裁剪段，无需 SolidLine 专项改造。逐像素残差（gradient-with-corners 3.2k）的实际构成：①拐角 join 段几何差（"with-corners" 专测项——我们拐角覆盖与 mgl 形状不同：同线段 ours 透明处 expected 黄、ours 红外溢处 expected 透明）；②端点 cap 外溢。修复方向=ribbon 拐角 join 几何对齐 mgl line_bucket（addHalfVertex/段端闭合规则），属几何专项。
+
+### §885 终一百五十五：线宽纬度缩放修复——cos(lat) 补偿终九十一相机修正（2026-09-09）
+
+**机制**：终九十一将相机 cos(lat) 拉近后，固定世界宽度的线在屏幕上 spans 1/cos(lat) 像素——ground-shadow-fog 道路实测宽 12-12.5px vs expected 9.5-10（比值 1.265 = 1/cos(37.78°)）。修复：ribbon/fill-outline 的像素→世界换算乘 cos(lat)（MBTileDataEmitter 两处 metersPerPixel + 7 个消费点：worldHalfWidth/gapStrip/变量宽 halfOf/border/aaDilate/borderPx 比值/emitRibbonBorder 参数；meters 单位分支的 secLat 语义不变）。
+
+**验证**（lat 37.78 夹具组）：gradient-with-corners 3,202→**2,894**（−10%）；line-width|elevated-line-width very-overscaled 4,736→**3,761**（−21%，帧检结构已与 expected 一致）；**零回归**——additive-clamp-low 12 PASS、line-join bevel/default/miter/none 0px ×4、dasharray case/butt 16 + zero-values 0、zero-width ×2 全部保持 PASS。
+
+**遗留**：gradient 残差 2,894/5,509（拐角 join 几何+progress 相移，几何专项）；very-overscaled 3,761（残余 overscale 采样细节）；其余 line 家族非 PASS 项为透明款叠加/dash 细节（既有分析）。

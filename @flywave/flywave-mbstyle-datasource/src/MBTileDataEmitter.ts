@@ -3242,8 +3242,18 @@ export class MBTileDataEmitter {
                 // is linear (no latitude term): the world tile at level z spans
                 // EQUATORIAL_CIRCUMFERENCE/2^z, so one CSS pixel =
                 // CIRCUMFERENCE/(256 * 2^displayZoom) with displayZoom = m_zoom+1.
+                // §885 终一百五十五: LATITUDE SCALE — the 终九十一 camera fix
+                // moved the camera cos(lat) closer, so a fixed world width now
+                // spans 1/cos(lat) screen px (measured 12-12.5px vs expected
+                // 9.5-10 on ground-shadow-fog roads, lat 37.78). mgl's
+                // line-width px is screen-invariant: scale the world half
+                // width by cos(lat) to compensate.
                 const metersPerPixel = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                     (256 * Math.pow(2, this.m_zoom + 1));
+                const geoBoxW: any = (this.m_decodeInfo as any).geoBox;
+                const latWidth = (Number(geoBoxW?.north ?? 0) + Number(geoBoxW?.south ?? 0)) / 2;
+                const mppScaled = metersPerPixel *
+                    Math.max(0.2, Math.cos(latWidth * Math.PI / 180));
                 // `line-width-unit: meters` — the width is metric. mgl
                 // converts with tileToMeter (mercator_coordinate.ts), which
                 // is LATITUDE-dependent: px per ground meter = equatorial
@@ -3265,11 +3275,11 @@ export class MBTileDataEmitter {
                 const gapWidthPx = Number(layer.paint?.['line-gap-width'] ?? 0);
                 const hasGap = lineWidthPx > 0 && gapWidthPx > 0;
                 const gapStripOffWorld = hasGap
-                    ? (gapWidthPx / 2 + lineWidthPx / 2) * metersPerPixel
+                    ? (gapWidthPx / 2 + lineWidthPx / 2) * mppScaled
                     : 0;
                 const worldHalfWidth = widthUnit === 'meters'
                     ? (lineWidthPx / 2) * secLat
-                    : lineWidthPx * metersPerPixel / 2;
+                    : lineWidthPx * mppScaled / 2;
                 // NOTE: blurring would want the ribbon geometry widened by
                 // the blur radius, but in dense road networks the widened
                 // ribbons overlap and stack into large black regions —
@@ -3297,7 +3307,7 @@ export class MBTileDataEmitter {
                     }
                     if (total > 0) {
                         const halfOf = (w: number) =>
-                            widthUnit === 'meters' ? (w / 2) * secLat : (w * metersPerPixel) / 2;
+                            widthUnit === 'meters' ? (w / 2) * secLat : (w * mppScaled) / 2;
                         // mgl line-progress on vector tiles is anchored to the
                         // FULL feature via the server-provided clip fractions
                         // (line_bucket.evaluateLineProgressFeatures:
@@ -3393,7 +3403,7 @@ export class MBTileDataEmitter {
                 // (verified: thick-line-border rendered no black border).
                 const bwRawBorder = Number(layer.paint?.['line-border-width'] ?? 0);
                 const borderWorld = (bwRawBorder > 0 && !progressHalfWidths)
-                    ? (widthUnit === 'meters' ? bwRawBorder * secLat : bwRawBorder * metersPerPixel)
+                    ? (widthUnit === 'meters' ? bwRawBorder * secLat : bwRawBorder * mppScaled)
                     : 0;
                 const mainHalfWidth = Math.max(worldHalfWidth - borderWorld, 0);
                 // mgl extrudes the line quad by ANTIALIASING (0.5px @dpr1) per
@@ -3401,9 +3411,9 @@ export class MBTileDataEmitter {
                 // with the edge smoothstep — dilate the ribbon the same way so
                 // the patcher's AA ramp has coverage. Zero-width lines must
                 // stay invisible (dilating them paints a 1px line).
-                const aaDilate = lineWidthPx > 0 ? 0.5 * metersPerPixel : 0;
+                const aaDilate = lineWidthPx > 0 ? 0.5 * mppScaled : 0;
                 const trueWidthPx = widthUnit === 'meters'
-                    ? (lineWidthPx * secLat) / metersPerPixel : lineWidthPx;
+                    ? (lineWidthPx * secLat) / mppScaled : lineWidthPx;
                 // NOTE: dash lines CANNOT simply drop the solid ribbon — the
                 // SolidLineMaterial dash does not rasterize on SwiftShader, so
                 // the ribbon is the only visible path. The dash pattern must be
@@ -3440,7 +3450,7 @@ export class MBTileDataEmitter {
                 // line-border: edge ribbons under the main line (constant
                 // width only — variable-width borders are not a test case).
                 if (!progressHalfWidths) {
-                    this.emitRibbonBorder(layer, worldPts, worldHalfWidth, cumDist, metersPerPixel, offsetWorld);
+                    this.emitRibbonBorder(layer, worldPts, worldHalfWidth, cumDist, mppScaled, offsetWorld);
                 }
             }
         }
