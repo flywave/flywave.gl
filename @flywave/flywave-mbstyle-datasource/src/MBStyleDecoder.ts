@@ -494,8 +494,6 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         // implemented — routing them regressed shadows 30k→86k. Exclude
         // until the wide-band path lands.
         const nonSymbolLayers = matched.filter(l => l.type !== 'symbol' && l.type !== 'circle'
-            && !(l.type === 'fill-extrusion'
-                && Number(l.paint?.['fill-extrusion-line-width'] ?? 0) >= 10)
             && !this.isClipped(l.type, coords[0], coords[1]));
         // Circle layers render one circle per line vertex.
         const circleLayers = matched.filter(l => l.type === 'circle' && !this.isClipped('circle', coords[0], coords[1]));

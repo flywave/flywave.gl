@@ -3170,11 +3170,20 @@ export class MBTileDataEmitter {
                     continue;
                 }
                 {
-                    // §885 终一百八十二b: LINE-geometry wall bands render
-                    // UNLIT raw (shadows: mgl-live == expected == #008000);
-                    // polygon-ring bands keep the lit ladder (multi-tile).
-                    (this.m_techniques[this.getOrCreateTechniqueIndex(layer, properties)] as any)._mbWallBandRaw = true;
-                    const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
+                    // §885 终一百八十四: WIDE (>= 10px) LINE wall bands
+                    // render UNLIT raw (shadows: mgl-live == expected ==
+                    // #008000); the technique is renamed to 'fill' so the
+                    // engine's material factory builds MapMeshBasicMaterial
+                    // (unlit). Narrow bands keep the shaded extruded-polygon
+                    // path (infinite-miter's vertical gradient ladder).
+                    const wmTechIdx = this.getOrCreateTechniqueIndex(layer, properties);
+                    const wmTech: any = this.m_techniques[wmTechIdx];
+                    if (wmTech.name === 'extruded-polygon' && lw >= 10) {
+                        wmTech.name = 'fill';
+                        wmTech.color = layer.paint?.['fill-extrusion-color'] ?? '#000000';
+                        wmTech.opacity = layer.paint?.['fill-extrusion-opacity'] ?? 1;
+                    }
+                    const techniqueIdx = wmTechIdx;
                     const key = `${layer.id}:fill:${techniqueIdx}`;
                     const geo = this.getOrCreateGeometry(key);
                     geo.edge = geo.edge ?? [];
