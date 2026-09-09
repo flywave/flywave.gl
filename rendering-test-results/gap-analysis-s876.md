@@ -1469,3 +1469,15 @@ mvt 解析实锤：14-8802-5374.mvt road 层 719 特征；z20 视口（z14 瓢�
 *注：cos 相机下 gradient-with-corners 曾测 317（camdist 实验）与 318（fix9）同值——该夹具在两种相机下分数接近但 bbox 仅在赤道相机下重合。
 
 **真实基线 v2（赤道相机）**：gradient-vector-tile 19 PASS、守卫 2,332、additive 12、dasharray-butt 16、bevel 0、gradient-with-corners 318（近 PASS）。已知残留：ground-shadow-fog 的雾/阴影标定（新相机下重做）、buildings-trees 阴影图案、道路 404 瓦数据缺口。
+
+### §885 终一百六十四：真实基线 v2 立档——赤道相机下 line+fog 家族 208 夹具全量复测（2026-09-09）
+
+chunked runner（batch=6、chrome-headless-shell 指纹核对）全量复测 line 7 类目 + elevated-line 6 类目 + fill-extrusion-line-width + fog：**208 夹具，37 PASS / 171 FAIL**（Sep-7 同类目可比 30 PASS → **净增 7**）。
+
+分类目：fog **14**/62（恢复 Sep-7 水平，且为真实渲染态非白帧巧合）、line-blend-mode 5/6、line-join 4/11、line-dasharray 2/30、line-width 2/18（very-overscaled 转 RTE 专项）、line-gradient **1**/14（gradient-vector-tile 19px 新 PASS）、elevated-line-join 4/9、elevated-line-dasharray 2/29、elevated-line-width 2/7、fill-extrusion-line-width 1/2、line-cap/line-offset/elevated-line-cap/elevated-line-offset/elevated-line-gradient 0。
+
+帧检三件套：blank(std<2) 62 夹具——其中 elevated-line-dasharray 20、line-dasharray 20 等多为 dasharray/zero-width 类合法空白（expected 即空），已与 PASS 集合交叉核对（4 个 blank PASS 为合法空匹配）。
+
+**真实基线 v2 锚点**（赤道相机、零编译错误、全真实渲染）：gradient-vector-tile 19 PASS、additive-clamp-low 12 PASS、line-join bevel/default/miter/none 0px ×4、dasharray case/butt 16 + zero-values 0、zero-width ×2、fog 14/62、buildings-trees 597,802、ground-shadow-fog 137,798（首位真实内容最佳分）。
+
+**下阶段**：①gradient-with-corners AA/端点收敛（318→阈值）；②fog 家族 47 FAIL 逐项（fog/2d 族 blank 项需按帧检区分合法空与失效）；③ribbon 拐角 join 与 line-progress 相移（几何专项）；④very-overscaled RTE 架构专项；⑤数据补齐（外部 token）。
