@@ -16,7 +16,15 @@
  *          node scripts/run-mbstyle-render-tests.js symbol-z-order default-across
  *
  * Env:
- *   CHROME_BIN     - path to the chrome/chrome-headless-shell binary (required)
+ *   CHROME_BIN     - path to the chrome/chrome-headless-shell binary (required).
+ *                    §885 终一百四十二: MUST be chrome-headless-shell 131
+ *                    (~/.cache/puppeteer/chrome-headless-shell/mac_arm-131.0.6778.108/
+ *                    chrome-headless-shell-mac-arm64/chrome-headless-shell) — all
+ *                    historical baselines were measured with it (platform dir
+ *                    fingerprint web-ChromeHeadless-131.0.6778.108-MacOS). Chrome
+ *                    for Testing --headless=new (fingerprint …131.0.0.0-…) renders
+ *                    the fog/model-injection fixtures in a DIFFERENT state and
+ *                    fakes a full regression of the fog family.
  *   MBSTYLE_REPORT - output dir for results (default ./rendering-test-results/mbstyle)
  *   MBSTYLE_PORT   - port for the result server (default 8081)
  */
@@ -122,6 +130,7 @@ function main() {
             ...(process.env.MBSTYLE_FOGSHIFT ? [`fogshift=${process.env.MBSTYLE_FOGSHIFT}`] : []),
             ...(process.env.MBSTYLE_SHRAD ? [`shrad=${process.env.MBSTYLE_SHRAD}`] : []),
             ...(process.env.MBSTYLE_SHADOWHW ? ["shadowhw=1"] : []),
+            ...(process.env.MBSTYLE_SHADOWOVERLAY === "0" ? ["shadowoverlay=0"] : []),
             ...(process.env.MBSTYLE_SHADOWBIAS ? [`shadowbias=${process.env.MBSTYLE_SHADOWBIAS}`] : []),
             ...(process.env.MBSTYLE_MODELDIRALT ? ["modeldiralt=1"] : []),
             ...(process.env.MBSTYLE_SPHDEG ? [`sphdeg=${process.env.MBSTYLE_SPHDEG}`] : []),

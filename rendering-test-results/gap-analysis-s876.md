@@ -1254,3 +1254,46 @@ clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、groun
 **保持状态**：buildings-trees 457,874、ground-shadow-fog 161,252、hard-cutoff 125,686、守卫 10,138/10,260 逐位零回归。
 
 **下阶段**：①API token 补齐关键缺失瓦 → 全量重验；②fog 近场逐夹具精调；③LIGHTING_3D_MODE 色调一致性验证。
+
+### §885 终一百四十二：测量环境根因破案——chrome-headless-shell 为唯一参考浏览器（2026-09-09）
+
+**根因**：历史全部会话的 karma 平台目录为 `web-ChromeHeadless-131.0.6778.108-MacOS`（UA 完整版本号 = **chrome-headless-shell**）；本轮误用 Chrome for Testing 131 `--headless=new`（UA reduced 版本号 → `web-ChromeHeadless-131.0.0.0-MacOS`）。两者 SwiftShader 渲染路径不同：**Chrome for Testing 下雾/模型注入族夹具渲染态完全不同**（ground-shadow-fog 167,527、hard-cutoff 162,552——假性回归到基线水平），且 fogshift 旋钮只有 −4k 微效（163,542 @ 净+0.5）。
+
+**判据**：CHROME_BIN 必须指向 `~/.cache/puppeteer/chrome-headless-shell/mac_arm-131.0.6778.108/chrome-headless-shell-mac-arm64/chrome-headless-shell`。平台目录版本号（131.0.6778.108 vs 131.0.0.0）是二进制身份的可靠指纹。
+
+**正确环境下 HEAD 状态逐位复现**（chrome-headless-shell，mbstyle-s909hshell）：
+| 夹具 | 本轮实测 | 记录终态 | 判定 |
+|---|---:|---:|---|
+| 守卫 quantization-shadows | 10,138 | 10,138 | 逐位一致 ✓ |
+| 守卫 -lod | 10,260 | 10,260 | 逐位一致 ✓ |
+| buildings-trees-shadows-casting | 457,874 | 457,874 | 逐位一致 ✓ |
+| ground-shadow-fog | 96,899 | 96,899 | 逐位一致 ✓ |
+| ground-shadow-fog-hard-cutoff | 162,552 | 162,567（过渡态） | −15px ≈一致 |
+
+### §885 终一百四十三：96,899 平台=会话首位白洗态定案 + shadowoverlay A/B 门控落地（2026-09-09）
+
+**ground-shadow-fog 的分数由会话内执行位置决定**（同浏览器 chrome-headless-shell、同代码、同参数）：
+- 会话首个运行（2 夹具会话）：actual 帧**几乎纯白**（灰度 241–255，仅底部 y≥357 有 7.6 万弱非白像素）→ **96,899**；
+- 在 buildings-trees 之后运行（5 夹具会话第 2 位）：帧含完整内容（建筑+黑墙）→ **167,527**；
+- 对照组 hard-cutoff 两位置均 162,552（位置无关）；守卫两位置均 10,138。
+
+即 **96,899 平台 = 白帧与 expected 白雾区的巧合匹配**（终八十三警句同样适用于终一百三十八平台），且该白态仅在"夹具为会话首个"时出现。记录会话的 fogshift A/B 均为 fog 单夹具/首位会话 → 记录的平台值是首位白态；chunked re-baseline 批次（fog 居批次第 4 位）只会得到内容态 ~163–167k。
+
+**shadowoverlay=0 A/B 门控落地**（overlay 保持默认=记录终态；multiply=终一百四十一前形态 renderOrder −2000+色域调制）。内容态对比（fog 均为会话第 2 位）：
+
+| 夹具 | overlay | multiply |
+|---|---:|---:|
+| ground-shadow-fog（内容态） | 167,527 | **163,614** |
+| ground-shadow-fog-hard-cutoff | 162,552 | **130,374** |
+| buildings-trees-shadows-casting | 457,874 | 457,874 |
+| 守卫 quantization-shadows | 10,138 | 10,138 |
+
+内容态下 multiply 两夹具均更优（fog −3.9k、cutoff −32.2k），且记录中 hard-cutoff 的 127,427/130,109 即 multiply 读数。**默认仍保持 overlay**（与记录终态位位兼容、守卫/buildings-trees 零回归；白态 96,899 亦是 overlay 特有），multiply 门控留作下阶段逐夹具定案入口。
+
+**hard-cutoff 双峰不稳定**：{130,374, 162,552} 两值在不同会话间摇摆（同浏览器同代码同参数；记录会话内 125,686/126,781/127,427 vs 162,025/162,567 的摇摆同源）。机制=终一百三十五阈值效应（亮度 ~94 vs 阈值 60 的批量翻转），会话内全局状态决定落哪一峰。两值都不是"正确渲染"，逐夹具标定时需报告双峰。
+
+**测量契约（新增）**：①CHROME_BIN 必须=chrome-headless-shell 131（指纹 `web-ChromeHeadless-131.0.6778.108-MacOS`；Chrome for Testing `--headless=new` 指纹 `131.0.0.0` 会整体改变雾/模型注入族渲染态）；②夹具分数依赖会话内位置/组成——跨 run 对比必须固定会话组成（chunked runner 的批次划分即契约）；③对单夹具 A/B，先跑"首位"与"次位"各一轮确认目标夹具是否位置敏感；④守卫（10,138/10,260）与 buildings-trees（457,874）在全部 6+ 会话中逐位稳定，可作为跨会话健康锚点。
+
+**本轮门控代码验证**（默认 overlay 路径，与门控前对比）：守卫 10,138/10,260、buildings-trees 457,874 在所有会话逐位一致 ✓；fog 同位置（首位）逐位一致（96,899 白态复现 ✓）；hard-cutoff 落在既知双峰内（130,374/162,552，双峰在门控前记录中同样存在）——无门控引入的回归。
+
+**下阶段**（修正后）：①fog 近场逐夹具精调以"内容对齐"为目标（非分数平台；内容态基准 163,614@multiply / 167,527@overlay）；②LIGHTING_3D_MODE 色调一致性；③数据补齐（外部 token）；④每轮 karma 会话先核对平台目录版本号指纹与会话组成。

@@ -184,6 +184,11 @@ function discoverTests(): TestEntry[] {
     const shw = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shadowhw="))?.slice("shadowhw=".length);
     if (shw === "1") (globalThis as any).__mbShadowHW = true;
+    // §885 终一百四十二: shadowoverlay=0 → the ground quad composites as the
+    // multiply underlay (pre-终一百四十一 form); default = overlay on top.
+    const sov = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shadowoverlay="))?.slice("shadowoverlay=".length);
+    if (sov === "0") (globalThis as any).__mbShadowOverlay = false;
     // §885 终一百零六: shadowbias=<v> → HW-path compare bias (smoothstep window).
     const shb = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shadowbias="))?.slice("shadowbias=".length);
