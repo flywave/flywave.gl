@@ -356,6 +356,10 @@ expected.png 自身的可复现底线——expected.png 无法被 vendored mgl �
 | line-cap/round | **7552** | 297 | 131 |
 | line-gradient/gradient-with-corners | **3267** | 110 | 63 |
 
+line-pattern/line-join-none（dpr2，预算~1189）同法取证：mgl-vs-exp 35853 vs
+我们 30285 —— 同样是我们更近（三帧内容量 mgl 22672 / exp 12749 / 我们 19937
+非白像素，实拍有效；dpr2 语义下可信度略低于 dpr1 两例）。
+
 我们的渲染比 vendored mgl 实拍更接近 expected（25×/30×）。mgl 实拍的线网密度
 与 expected 一致（dark 64416 vs 63475），排除"实拍失败"解释——差异主体是 AA/描边
 语义的版本漂移，与 patcher 中"references are crisper than the vendored mgl AA
