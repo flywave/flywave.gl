@@ -374,7 +374,11 @@ export const GEOMETRY_TYPE_MAP: Record<string, string[]> = {
     // Circle layers render points on any geometry type (mapbox places circles
     // at line vertices and polygon ring vertices).
     circle: ['point', 'line', 'polygon'],
-    'fill-extrusion': ['polygon'],
+    // §885 终一百八十二b: mgl wallMode (fill-extrusion-line-width ≠ 0)
+    // converts LineString features into wall-band polygons — accept 'line'
+    // geometry; the emitter's wall-mode branch handles it (zero line-width
+    // line features render nothing, like mgl's degenerate zero-area polygon).
+    'fill-extrusion': ['polygon', 'line'],
     background: ['polygon'],
     raster: ['polygon'],
     heatmap: ['point'],

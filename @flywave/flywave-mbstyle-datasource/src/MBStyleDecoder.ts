@@ -488,7 +488,15 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         if (matched.length === 0 || !this.m_emitter) return;
 
         const symbolLayers = matched.filter(l => l.type === 'symbol' && !this.isClipped('symbol', coords[0], coords[1]));
-        const nonSymbolLayers = matched.filter(l => l.type !== 'symbol' && l.type !== 'circle' && !this.isClipped(l.type, coords[0], coords[1]));
+        // §885 终一百八十二b: fill-extrusion on LINE features enters wall
+        // mode; WIDE bands (>= 10px, e.g. the shadows fixture's 20px with
+        // unlit raw surfaces + shadow casting) carry semantics we have not
+        // implemented — routing them regressed shadows 30k→86k. Exclude
+        // until the wide-band path lands.
+        const nonSymbolLayers = matched.filter(l => l.type !== 'symbol' && l.type !== 'circle'
+            && !(l.type === 'fill-extrusion'
+                && Number(l.paint?.['fill-extrusion-line-width'] ?? 0) >= 10)
+            && !this.isClipped(l.type, coords[0], coords[1]));
         // Circle layers render one circle per line vertex.
         const circleLayers = matched.filter(l => l.type === 'circle' && !this.isClipped('circle', coords[0], coords[1]));
 

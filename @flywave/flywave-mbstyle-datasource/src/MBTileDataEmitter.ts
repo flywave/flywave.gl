@@ -2445,15 +2445,18 @@ export class MBTileDataEmitter {
     ): void {
         const half = bandW / 2;
         for (const ring of rings) {
-            if (ring.length < 3) continue;
+            if (ring.length < 2) continue;
             const n = ring.length;
-            // World-space ring points (closed).
+            const closed = ring.length >= 3;
+            // World-space ring points.
             const pts: THREE.Vector3[] = ring.map(pt => this.project(new THREE.Vector2(pt.x, pt.y)));
             // Per-vertex miter direction (unit): bisector of the adjacent
             // edge normals, clamped like a miter join.
             const dir: Array<[number, number]> = [];
             for (let i = 0; i < n; i++) {
-                const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n];
+                const p0 = closed ? pts[(i - 1 + n) % n] : pts[Math.max(0, i - 1)];
+                const p1 = pts[i];
+                const p2 = closed ? pts[(i + 1) % n] : pts[Math.min(n - 1, i + 1)];
                 let e1x = p1.x - p0.x, e1y = p1.y - p0.y;
                 let e2x = p2.x - p1.x, e2y = p2.y - p1.y;
                 const l1 = Math.hypot(e1x, e1y) || 1, l2 = Math.hypot(e2x, e2y) || 1;
@@ -2481,7 +2484,8 @@ export class MBTileDataEmitter {
                 geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
             }
             const V = (i: number, k: number) => base + ((i % n) * 4) + k;
-            for (let i = 0; i < n; i++) {
+            const segCount = closed ? n : n - 1;
+            for (let i = 0; i < segCount; i++) {
                 const j = (i + 1) % n;
                 const quad = (a: number, b: number, c: number, d: number) => {
                     // Both windings — the extruded-polygon material is
@@ -3153,6 +3157,56 @@ export class MBTileDataEmitter {
             console.log(`[MBLineProbe] tile=${tkey.level}/${tkey.column}/${tkey.row} north=${gb.north} south=${gb.south} west=${gb.west} C=${clipFrameC}`);
         }
         for (const layer of matchedLayers) {
+            // §885 终一百八十二b: mgl wallMode converts LineString features
+            // into wall bands too (fill_extrusion_bucket:1072 "LineString
+            // geometries will be converted into polygons") — the
+            // fill-extrusion-line-width fixture's line-string case renders
+            // the extrusion along the line, not as a line.
+            if (layer.type === 'fill-extrusion') {
+                const lw = Number(layer.paint?.['fill-extrusion-line-width'] ?? 0);
+                if (lw <= 0) {
+                    // Zero line-width on a LINE feature = mgl's degenerate
+                    // zero-area polygon — renders nothing.
+                    continue;
+                }
+                {
+                    // §885 终一百八十二b: LINE-geometry wall bands render
+                    // UNLIT raw (shadows: mgl-live == expected == #008000);
+                    // polygon-ring bands keep the lit ladder (multi-tile).
+                    (this.m_techniques[this.getOrCreateTechniqueIndex(layer, properties)] as any)._mbWallBandRaw = true;
+                    const techniqueIdx = this.getOrCreateTechniqueIndex(layer, properties);
+                    const key = `${layer.id}:fill:${techniqueIdx}`;
+                    const geo = this.getOrCreateGeometry(key);
+                    geo.edge = geo.edge ?? [];
+                    const featureStart = geo.indices.length;
+                    const mpp = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                        (256 * Math.pow(2, this.m_zoom + 1));
+                    const rawHeight = Number(layer.paint?.['fill-extrusion-height'] ?? 0);
+                    const rawFloor = Number(layer.paint?.['fill-extrusion-base'] ?? 0);
+                    const extraScale = this.m_heightScaleFromTerrain
+                        && ((layer.paint as any)['fill-extrusion-height-alignment'] ?? 'flat') === 'flat'
+                        ? this.m_terrainHeightScale
+                        : 1;
+                    const floorHeight = rawFloor * this.m_terrainHeightScale * extraScale;
+                    const height = Math.max(rawFloor + 1, rawHeight) * this.m_terrainHeightScale * extraScale;
+                    for (const path of linePaths) {
+                        this.emitExtrusionWallBand(
+                            geo, techniqueIdx, featureStart,
+                            [path.positions.map(p2 => ({ x: p2.x, y: p2.y }))],
+                            lw * mpp, floorHeight, height);
+                    }
+                    const cnt = geo.indices.length - featureStart;
+                    if (cnt > 0) {
+                        geo.groups.push({
+                            start: featureStart, count: cnt, materialIndex: techniqueIdx,
+                            sortKey: this.extractSortKey(layer),
+                        });
+                        geo.featureStarts.push(featureStart);
+                        geo.objInfos.push({ ...(properties ?? {}) });
+                    }
+                    continue;
+                }
+            }
             // A dasharray whose DASH elements are all zero renders nothing
             // (mgl collapses the zero-length dash ranges in the line atlas,
             // leaving only gaps) — the whole layer is invisible. This covers

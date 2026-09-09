@@ -4371,6 +4371,7 @@ export class MBMaterialPatchManager {
                              mbNdotL *= 1.0;
                          }
                          vec3 mbResultSrgb = clamp(mbColor * mbNdotL * uMBLightColor, mix(vec3(0.0), vec3(0.3), 1.0 - uMBLightColor), vec3(1.0));
+
                          // §820: mbResultSrgb is already in OUTPUT (sRGB-encoded)
                          // space — colorspace_fragment is the LAST chunk that
                          // encodes; wrapping it in srgbToLinear here re-darkened
