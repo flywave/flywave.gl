@@ -1427,3 +1427,7 @@ mvt 解析实锤：14-8802-5374.mvt road 层 719 特征；z20 视口（z14 瓢�
 ### §885 终一百五十九：line-gradient 残差二次修正——整体尺度差（相机/zoom 标定域），非 join 几何（2026-09-09）
 
 覆盖包围盒剖析：ours x 80-173/y 0-249 vs expected x 89-163/y 22-223——我们的线在四侧均匀超出 9-26px（~9% 尺度差 ≈ 0.13 zoom 级），拐角处的显著差异只是尺度差在最远端的放大显现。修正 终一百五十四/五十六 的"拐角 join 几何"定性：line-gradient 两夹具残差的主导项 = **line-gradient 家族的 zoom/相机标定残余偏差**（与 very-overscaled 的 RTE 精度、ground-shadow-fog 的 cos(lat) 系同属相机-投影标定域）。下阶段：以 line-gradient 两夹具为标定探针，反解我们与 mgl 的 zoom 级差（预期 ~0.13 级）并在相机放置链修正。
+
+### §885 终一百六十：line-gradient 尺度差的相机链反解（2026-09-09）
+
+数值反解：style zoom 11.25 / lat 38.878 / focal 768 下，mgl 相机-中心距 = 768×C·cos(lat)/(512·2^11.25) ≈ 19,270m；我们的 calculateDistanceFromZoomLevel（含终九十一 cos 修正与 zoom+1 约定）≈ 19,238m——**相机距离一致**。但 ribbon 路径渲染 span 仍 1.24-1.25× 偏大（y 向 ≥249px 被 canvas 裁剪 vs expected 201px）。矛盾锁定：**引擎内部世界单位尺度 × 相机距离的组合约定**（ribbon worldPts 的单位与 calculateDistanceFromZoomLevel 的米制约定不完全一致——多瓦/多 zoom 路径存在单位混用嫌疑）。修复需 mapview 相机-投影-瓦片单位链的端到端深查（世界单位定义/applyCameraSettings/projection.project 三处一致性），架构标定专项，随 RTE 专项同轮设计。
