@@ -621,6 +621,19 @@ export class MBTileDataEmitter {
     setStyleHasTerrain(v: boolean): void {
         this.m_styleHasTerrain = v;
     }
+
+    /**
+     * Per-source maxzoom (mgl semantics): a `line-width-unit: meters` width
+     * scales with the tile's CANONICAL zoom T = min(camera, source maxzoom)
+     * — draw_line.ts lineWidthScale = (1/tileToMeter(T)) / pixelsToTileUnits
+     * resolves to 512·2^T/(CIRC·cos), independent of camera zoom. Overzoomed
+     * tiles (camera 22 over maxzoom-18 geojson) draw meters widths 2^(T−Z)
+     * smaller than a zoom-matched tile (§885 终一百七十).
+     */
+    setSourceMaxZoomMap(m: Map<string, number>): void {
+        this.m_sourceMaxZoom = m;
+    }
+    private m_sourceMaxZoom = new Map<string, number>();
     private m_styleHasTerrain = false;
     /** Terrain-flat gate: the sampler when present, else the style flag. */
     private get terrainActive(): boolean {
@@ -3271,6 +3284,12 @@ export class MBTileDataEmitter {
                 // meters, so one ground meter = sec(lat) world units.
                 // NOTE: line-width-unit is a LAYOUT property.
                 const widthUnit = layer.layout?.['line-width-unit'] ?? 'pixels';
+                // §885 终一百七十: meters overscale — canonical tile zoom
+                // T = min(camera zoom, source maxzoom; geojson defaults 18).
+                const metersCanonical = Math.min(
+                    this.m_zoom,
+                    this.m_sourceMaxZoom.get(layer.source) ?? 22);
+                const metersOverscale = Math.pow(2, metersCanonical - this.m_zoom);
                 const geoBox: any = (this.m_decodeInfo as any).geoBox;
                 const latC = (Number(geoBox?.north ?? 0) + Number(geoBox?.south ?? 0)) / 2;
                 const secLat = 1 / Math.max(0.2, Math.cos(latC * Math.PI / 180));
@@ -3288,7 +3307,7 @@ export class MBTileDataEmitter {
                     ? (gapWidthPx / 2 + lineWidthPx / 2) * mppScaled
                     : 0;
                 const worldHalfWidth = widthUnit === 'meters'
-                    ? (lineWidthPx / 2) * secLat
+                    ? (lineWidthPx / 2) * secLat * metersOverscale
                     : lineWidthPx * mppScaled / 2;
                 // NOTE: blurring would want the ribbon geometry widened by
                 // the blur radius, but in dense road networks the widened
@@ -3317,7 +3336,7 @@ export class MBTileDataEmitter {
                     }
                     if (total > 0) {
                         const halfOf = (w: number) =>
-                            widthUnit === 'meters' ? (w / 2) * secLat : (w * mppScaled) / 2;
+                            widthUnit === 'meters' ? (w / 2) * secLat * metersOverscale : (w * mppScaled) / 2;
                         // mgl line-progress on vector tiles is anchored to the
                         // FULL feature via the server-provided clip fractions
                         // (line_bucket.evaluateLineProgressFeatures:
@@ -3413,7 +3432,7 @@ export class MBTileDataEmitter {
                 // (verified: thick-line-border rendered no black border).
                 const bwRawBorder = Number(layer.paint?.['line-border-width'] ?? 0);
                 const borderWorld = (bwRawBorder > 0 && !progressHalfWidths)
-                    ? (widthUnit === 'meters' ? bwRawBorder * secLat : bwRawBorder * mppScaled)
+                    ? (widthUnit === 'meters' ? bwRawBorder * secLat * metersOverscale : bwRawBorder * mppScaled)
                     : 0;
                 const mainHalfWidth = Math.max(worldHalfWidth - borderWorld, 0);
                 // mgl extrudes the line quad by ANTIALIASING (0.5px @dpr1) per
@@ -3423,7 +3442,7 @@ export class MBTileDataEmitter {
                 // stay invisible (dilating them paints a 1px line).
                 const aaDilate = lineWidthPx > 0 ? 0.5 * mppScaled : 0;
                 const trueWidthPx = widthUnit === 'meters'
-                    ? (lineWidthPx * secLat) / mppScaled : lineWidthPx;
+                    ? (lineWidthPx * secLat * metersOverscale) / mppScaled : lineWidthPx;
                 // NOTE: dash lines CANNOT simply drop the solid ribbon — the
                 // SolidLineMaterial dash does not rasterize on SwiftShader, so
                 // the ribbon is the only visible path. The dash pattern must be

@@ -753,6 +753,8 @@ export class MBStyleDecoder extends ThemedTileDecoder {
     private m_terrainSampler: ((x: number, y: number) => number) | null = null;
     /** Style declares terrain — mgl terrainEnabled equivalent (§514). */
     private m_styleHasTerrain = false;
+    /** §885 终一百七十: sourceId → maxzoom (meters line-width overscale). */
+    private m_sourceMaxZoom = new Map<string, number>();
     private m_crossSourceCollisions = true;
     /** §548: live terrain exaggeration (line-elevation-ground-scale). */
     private m_terrainExaggeration = 1;
@@ -842,6 +844,18 @@ export class MBStyleDecoder extends ThemedTileDecoder {
             this.m_styleHasTerrain = !!(style as any).terrain;
             if (customOptions?.styleHasTerrain !== undefined) {
                 this.m_styleHasTerrain = customOptions.styleHasTerrain === true;
+            }
+            // §885 终一百七十: per-source maxzoom for meters-unit line widths
+            // (mgl geojson defaults 18; other source types read maxzoom or 22).
+            this.m_sourceMaxZoom = new Map<string, number>();
+            for (const [sid, srcRaw] of Object.entries((style as any).sources ?? {})) {
+                const src = srcRaw as any;
+                const declared = Number(src?.maxzoom);
+                this.m_sourceMaxZoom.set(
+                    sid,
+                    src?.type === 'geojson'
+                        ? (Number.isFinite(declared) ? declared : 18)
+                        : (Number.isFinite(declared) ? declared : 22));
             }
             // §513: the elevation pre-pass doubles the MVT decode cost —
             // only pay it when the style actually references HD road
@@ -1168,6 +1182,7 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 ?? states.get(typeof id === 'number' ? String(id) : Number(id));
         });
         emitter.setStyleHasTerrain(this.m_styleHasTerrain);
+        emitter.setSourceMaxZoomMap(this.m_sourceMaxZoom);
         // mgl crossSourceCollisions=false (test metadata): the engine's own
         // POI placement must not cull across sources — placement verdicts
         // come from MBStyleSymbolPlacement's per-source collision groups.
