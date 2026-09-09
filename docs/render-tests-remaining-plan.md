@@ -369,3 +369,13 @@ step 真边、零膨胀、step -0.5）中 `step(-0.5)`+0.5px 膨胀最优，保�
 同轮宽度域定案（commit f67d6b97）：px 线宽的 cos(lat) 纬度补偿为伪拟合，
 跨夹具最优分解（line-cap lat52.5 / gwc lat38.9）收敛于同一总缩放 1.0×mpp；
 删除后 line-cap 家族 9.6k→297-404、gwc 158→110、64 夹具零 pass→fail。
+
+### §885 终一百六十九：very-overscaled 专项关闭——RTE/float32 定性作废（2026-09-09）
+
+f67d6b97（px 线宽 cos(lat) 证伪）落地后复测：**line-width/very-overscaled 与
+elevated-line-width/very-overscaled 双双 0 mismatched 全对齐**（非空白巧合：
+expected 3,155 dark px / 我们 3,298，逐像素一致）。终一百五十八的
+"float32 世界坐标精度塌缩 → RTE 架构专项"定性作废——真实根因即 cos(lat) 宽度
+饥饿（z20 柏林 lat52.5，cos≈0.61 使第二条折线宽度低于亚像素阈值被剔除）。
+RTE 专项关闭，无需架构改造；同族 line-width 家族当前 7 PASS/47 FAIL，
+剩余为 width-function/复合函数域（另行专项）。
