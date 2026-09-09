@@ -1562,7 +1562,18 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBDrapeSize = { value: dem.size };
             shader.uniforms.uMBDrapeZScale = { value: this.demZScale };
             const camAbs = (this.m_dataSource as any).mapView?.camera?.position;
-            shader.uniforms.uMBRteCamPos = { value: new (require('three').Vector2)(camAbs?.x ?? 0, camAbs?.y ?? 0) };
+            shader.uniforms.uMBRteCamPos = { value: new THREE.Vector2(camAbs?.x ?? 0, camAbs?.y ?? 0) };
+            // §885 终一百七十四: refresh EVERY render — the one-shot capture
+            // went stale when the camera settled (zoom/pan), mis-mapping the
+            // DEM sample UV to the clamped edge and sinking whole raster
+            // meshes to z≈−8081 (pattern/terrain black satellite).
+            (material as any).__mbRteCamU = shader.uniforms.uMBRteCamPos;
+            const origRteBefore = (material as any).onBeforeRender;
+            (material as any).onBeforeRender = (r2: any, sc2: any, cam2: any, g2: any, o2: any, gr2: any) => {
+                if (origRteBefore) origRteBefore(r2, sc2, cam2, g2, o2, gr2);
+                const cp = (this.m_dataSource as any).mapView?.camera?.position;
+                (material as any).__mbRteCamU?.value?.set?.(cp?.x ?? 0, cp?.y ?? 0);
+            };
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
                 `uniform sampler2D uMBDrapeDem;\nuniform vec2 uMBDrapeOrigin;\nuniform float uMBDrapeSize;\nuniform float uMBDrapeZScale;\nuniform vec2 uMBRteCamPos;\nvoid main() {`
@@ -1619,7 +1630,15 @@ export class MBMaterialPatchManager {
             }
             shader.uniforms.uMBDrapeTiles = { value: tileData };
             const camAbs2 = (this.m_dataSource as any).mapView?.camera?.position;
-            shader.uniforms.uMBRteCamPos = { value: new (require('three').Vector2)(camAbs2?.x ?? 0, camAbs2?.y ?? 0) };
+            shader.uniforms.uMBRteCamPos = { value: new THREE.Vector2(camAbs2?.x ?? 0, camAbs2?.y ?? 0) };
+            // §885 终一百七十四: per-render refresh (see single-tile note).
+            (material as any).__mbRteCamU = shader.uniforms.uMBRteCamPos;
+            const origRteBefore2 = (material as any).onBeforeRender;
+            (material as any).onBeforeRender = (r3: any, sc3: any, cam3: any, g3: any, o3: any, gr3: any) => {
+                if (origRteBefore2) origRteBefore2(r3, sc3, cam3, g3, o3, gr3);
+                const cp = (this.m_dataSource as any).mapView?.camera?.position;
+                (material as any).__mbRteCamU?.value?.set?.(cp?.x ?? 0, cp?.y ?? 0);
+            };
 
             // Build sampler / uniform declarations.
             let decl = `uniform int uMBDrapeTileCount;\nuniform vec3 uMBDrapeTiles[${N}];\nuniform float uMBDrapeZScale;\nuniform vec2 uMBRteCamPos;\n`;

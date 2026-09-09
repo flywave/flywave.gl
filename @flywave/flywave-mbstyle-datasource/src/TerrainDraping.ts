@@ -406,8 +406,9 @@ export class TerrainDraping {
             // §506 SNAPSHOT SELF-HEAL: fresh instances render white while
             // valid snapshots exist — re-apply them without a re-bake.
             const meshes = this.m_terrain.meshes;
-            for (let mi = 0; mi < meshes.length; mi++) {
-                const snap = this.m_snapshots.get(mi);
+            const snaps = [...this.m_snapshots.values()];
+            for (let mi = 0; mi < meshes.length && mi < snaps.length; mi++) {
+                const snap = snaps[mi];
                 const mat: any = (meshes[mi] as any).material;
                 if (snap && mat && !mat.m_drapeTexture
                     && typeof mat.setDrapeTexture === 'function') {
@@ -705,6 +706,7 @@ export class TerrainDraping {
                 const camera = buildTileCamera(tile, (this.m_mapView as any).camera?.position);
                 if (!camera) continue;
                 camera.layers.enable(TerrainDraping.RASTER_LAYER);
+                }
 
                 if ((globalThis as any).__mbOccDbg && !(globalThis as any).__mbFillProj) {
                     (globalThis as any).__mbFillProj = 1;
@@ -979,16 +981,29 @@ export class TerrainDraping {
                     try {
                         const full = new Uint8Array(S * S * 4);
                         renderer.readRenderTargetPixels(rt, 0, 0, S, S, full);
-                        const prevSnap = this.m_snapshots.get(i);
+                        // §885 终一百七十四: key snapshots by TILE IDENTITY —
+                        // the dem-tile order shuffles across passes (async
+                        // loads), and an index-keyed snapshot from a retired
+                        // tile landed on the new tile's mesh (wrong-position
+                        // drape).
+                        const snapKey = tile.originX.toFixed(0) + '_' + tile.originY.toFixed(0);
+                        const prevSnap = this.m_snapshots.get(snapKey);
                         if (prevSnap) prevSnap.dispose();
                         const snap = new THREE.DataTexture(full, S, S);
                         snap.needsUpdate = true;
-                        this.m_snapshots.set(i, snap);
+                        this.m_snapshots.set(snapKey, snap);
                         mat.setDrapeTexture(snap);
                         // Freeze only when the WHOLE pass was real — a white
                         // placeholder anywhere means later passes may still
                         // converge other tiles.
                         if (!passHadWhite) this.m_drapeFrozen = true;
+                        // §885 终一百七十四: partial coverage must NOT freeze —
+                        // per-pass mesh churn means different tiles converge in
+                        // different passes; snapshots are immutable per tile so
+                        // continued bakes only IMPROVE coverage.
+                        if (this.m_snapshots.size < Math.min(meshes.length, tiles.length)) {
+                            this.m_drapeFrozen = false;
+                        }
                     } catch {
                         mat.setDrapeTexture(rt.texture);
                     }
@@ -1011,7 +1026,8 @@ export class TerrainDraping {
             // already prevents looping on truly empty scenes, and the
             // fixture lifetime bounds the retry in all cases.
             if (!this.m_drapeFrozen && this.m_rasterHidden.length > 0
-                && (!anyReal || passHadWhite)) {
+                && (!anyReal || passHadWhite
+                    || this.m_snapshots.size < Math.min(meshes.length, tiles.length))) {
                 this.m_contentRetries++;
                 this.requestBake();
             } else if (anyReal && !passHadWhite) {
