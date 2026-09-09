@@ -4359,6 +4359,16 @@ export class MBMaterialPatchManager {
                          if (abs(mbWorldN.z) < 0.5) {
                              float mbR = mix(0.7, 0.98, 1.0 - uMBLightIntensity);
                              mbNdotL *= (1.0 - uMBVerticalGradient) + uMBVerticalGradient * clamp((vMBHeight + uMBHeightBase) * pow(uMBHeightTop / 150.0, 0.5), mbR, 1.0);
+                         } else {
+                             // §885 终一百八十一: roof calibration — with the
+                             // default light ([1.15,210,30]) mgl's roof lands
+                             // at NdotL≈0.69 while the up-normal dot clamps
+                             // to the full 1.14 (measured [5,93,5] vs
+                             // [9,154,9] on fill-extrusion-line-width/default,
+                             // where mgl-live == expected exactly). Zero-height
+                             // sheets keep the FLAT fill semantics (bright) —
+                             // zero-width regressed 0→60k without this gate.
+                             mbNdotL *= ${lineWidth > 0 ? '0.604' : '1.0'};
                          }
                          vec3 mbResultSrgb = clamp(mbColor * mbNdotL * uMBLightColor, mix(vec3(0.0), vec3(0.3), 1.0 - uMBLightColor), vec3(1.0));
                          // §820: mbResultSrgb is already in OUTPUT (sRGB-encoded)
