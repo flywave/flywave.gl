@@ -391,3 +391,15 @@ variable-width/interpolate-to-zero（z22 geojson）取证：mgl 实拍 vs expect
 106,970→8,814（−92%，与 mgl 实拍 7,988 同级=参照底线）；pattern −565；
 line-width 家族 7 PASS 持平、64 夹具线族对照逐值一致零回归。
 先前对 secLat 的删除为误诊（meters-default 反推 sec 项本就正确），已恢复。
+
+### §885 终一百七十一：line-progress 线性表达式变宽（2026-09-10）
+
+variable-width/pattern 取证：mgl 实拍 vs expected 130,551 ≈ 我们 132,734——但我们的
+帧缺 satellite（mean 43 vs exp 180，0 彩色像素）= **terrain draped raster 黑底**
+（架构域，design-terrain-draping.md 立项 ~96 例）。域内可修的真实缺口：
+`line-width: ["+", 14, ["*", ["line-progress"], 10]]` 线性表达式不在
+interpolate-only 的变宽解析内 → 恒宽回退。新增 `parseLinearProgressStopsStatic`
+（算术树 +−*/ 采样 p=0/1，线性映射两采样即精确端点）：
+linear 1,284→**11**、shared-layout 1,291→**17**、z-offset→349、terrain −3,207、
+pattern −888；interpolate 路径零回归。pattern/terrain 剩余主体 = draped
+satellite（待 terrain 架构专项）。
