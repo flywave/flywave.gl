@@ -1192,7 +1192,7 @@ export class MBEnvironmentManager {
             // zoom and latitude (both fold into vFogDepth's own scale). With
             // fogmglheight=1 the chunk's shift·0.15/distCam fold is rewritten
             // to that domain: fogMglShift=1, fogMglDistCam=0.15·H_eng.
-            if ((globalThis as any).__mbFogMglHeight) {
+            if ((globalThis as any).__mbFogMglHeight !== false) {
                 lib2.fogMglShift.value = 1.0;
                 lib2.fogMglDistCam.value = 0.15 * shift * hPx * Math.cos(pitchD * Math.PI / 180);
             }
@@ -1202,9 +1202,10 @@ export class MBEnvironmentManager {
             // adjusted range the ground shadow pattern becomes VISIBLE (real
             // black shadows) — score temporarily worsens until the camera/
             // placement alignment lands (终八十三).
+            const mbRangeAdj = (globalThis as any).__mbFogMglHeight !== false ? 0.2 : 0.7;
             (lib2.fogMglRange.value as THREE.Vector2).set(
-                rawRange[0] + shift + 0.7 + ((globalThis as any).__mbFogShiftAdj ?? 0),
-                rawRange[1] + shift + 0.7 + ((globalThis as any).__mbFogShiftAdj2 ?? 0));
+                rawRange[0] + shift + mbRangeAdj + ((globalThis as any).__mbFogShiftAdj ?? 0),
+                rawRange[1] + shift + mbRangeAdj + ((globalThis as any).__mbFogShiftAdj2 ?? 0));
         }
         // Mapbox renders the atmosphere glow (space→high→fog gradient) in the
         // sky region whenever fog is enabled and the horizon is visible — even

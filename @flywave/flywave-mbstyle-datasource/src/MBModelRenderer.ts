@@ -243,7 +243,7 @@ export function syncModelFogUniforms(mapView: any, env?: any): void {
         // §885 终一百四十四: fogmglheight=1 → depth domain = D/H (camera
         // height in engine units, focalPx·cos(pitch)) — mgl worldToFogMatrix
         // semantics, zoom/lat-free (they fold into the view-depth scale).
-        if ((globalThis as any).__mbFogMglHeight) {
+        if ((globalThis as any).__mbFogMglHeight !== false) {
             const mv = mapView as any;
             u.uMbDistCam.value = (mv?.focalLength ?? 768) *
                 Math.cos(Math.min(Math.max(mv?.tilt ?? 0, 0.1), 89.9) * Math.PI / 180);

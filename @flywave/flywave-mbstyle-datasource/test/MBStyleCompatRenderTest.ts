@@ -193,7 +193,7 @@ function discoverTests(): TestEntry[] {
     // height, engine units) for the chunk fog + model/extrusion injections.
     const fmh = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogmglheight="))?.slice("fogmglheight=".length);
-    if (fmh === "1") (globalThis as any).__mbFogMglHeight = true;
+    if (fmh === "0") (globalThis as any).__mbFogMglHeight = false;
     // §885 终一百零六: shadowbias=<v> → HW-path compare bias (smoothstep window).
     const shb = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shadowbias="))?.slice("shadowbias=".length);

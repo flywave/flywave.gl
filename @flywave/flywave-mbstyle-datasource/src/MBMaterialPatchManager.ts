@@ -392,7 +392,7 @@ export class MBMaterialPatchManager {
                     // mgl worldToFogMatrix semantics; zoom/lat fold into the
                     // view-depth scale). Matches the §701 equatorial-slant
                     // form otherwise.
-                    fu.uMbDistCam.value = (globalThis as any).__mbFogMglHeight
+                    fu.uMbDistCam.value = (globalThis as any).__mbFogMglHeight !== false
                         ? ((mvz as any)?.focalLength ?? 768) *
                           Math.cos(Math.min(Math.max((mvz as any)?.tilt ?? 0, 0.1), 89.9) * Math.PI / 180)
                         : ((mvz as any)?.focalLength ?? 768) *
@@ -1190,7 +1190,7 @@ export class MBMaterialPatchManager {
             // DISTANCE/CAMERA-HEIGHT in engine units (mgl worldToFogMatrix
             // semantics): uMbDistCam = focalPx·cos(pitch) — zoom/lat-free
             // because both fold into mbLen's own scale (see the env feed).
-            const mbFogH = (globalThis as any).__mbFogMglHeight;
+            const mbFogH = (globalThis as any).__mbFogMglHeight !== false;
             shader.uniforms.uMbDistCam = mbFogH
                 ? { value: ((mv0 as any)?.focalLength ?? 768) *
                     Math.cos(Math.min(Math.max((mv0 as any)?.tilt ?? 0, 0.1), 89.9) * Math.PI / 180) }
@@ -1688,7 +1688,7 @@ export class MBMaterialPatchManager {
                 // the mgl fog branch (live fogMgl* uniforms) instead of three's
                 // legacy near/far defaults (1/1000), which washed every ground
                 // pixel toward the fog color (ground-shadow-fog white ground).
-                if ((globalThis as any).__mbFogMglHeight
+                if ((globalThis as any).__mbFogMglHeight !== false
                     && shader.fragmentShader.includes('#include <fog_pars_fragment>')
                     && !shader.fragmentShader.includes('MB_RASTER_MGL_FOG')) {
                     shader.fragmentShader = shader.fragmentShader.replace(

@@ -1318,3 +1318,15 @@ clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、groun
 帧检：146,701 帧首次呈现正确的近清远白雾渐变（地面像素已贴近 expected：185 vs 198）；94,403 帧整体过雾（分数更优但近场被洗——expected 底部清晰区含道路+阴影图案，我们仍缺，分数再度奖励白化）。
 
 **定案与下阶段**：①门控保持 opt-in（默认关）——翻默认前需雾族（fog/* 62 夹具）+ terrain/globe 回归扫描；②range 在 D/H 域重扫（[1.0,4.5]→[1.7,5.2] 之间，配合边界位置对齐 expected ~60% 帧高）；③道路缺失独立排查（road 线层 vendored 瓦是否含 road source-layer / 是否被雾洗）；④地面阴影图案（quad overlay/multiply）在雾修复后重新标定。
+
+### §885 终一百四十五：fogmglheight 转正默认 + range 重标定——fog 家族回归零回退，ground-shadow-fog 默认 134,455（2026-09-09）
+
+**fogshift 扫描**（height 域内，同组合）：+0.7→146,701 / −0.35→143,357 / −0.5→139,551 / −0.7→94,403（近场过雾，分数-结构背离：expected 中带黑墙建筑与我们的清晰建筑位置错开时，白雾再次虚得分）。**分数-结构最优 = −0.5（净 range [1.2,4.7]）**。
+
+**fog/ 家族回归**（63 夹具，chunked runner 6/批全新会话，chrome-headless-shell 指纹核对）：gate-ON vs gate-OFF 直接对比 60 个共同夹具——**1 改善（fog/disable −2,607）/ 0 回退**，PASS 数相同（14/14）；vs Sep-7 旧基线亦 14 PASS 持平。转默认安全。
+
+**默认翻转落地**：`__mbFogMglHeight !== false`（unset=启用；`fogmglheight=0` 逃生口，harness+runner 同步）；range 常数新域下 +0.2（净 [1.2,4.7]），legacy 域保持 +0.7。
+
+**默认路径验证**（无环境变量，同组合）：ground-shadow-fog **134,455**（旧内容态 163,614–167,527 → −18~30%）、hard-cutoff 134,345、守卫 10,138 ✓、buildings-trees 457,874 ✓ 逐位不变。
+
+**遗留**：①道路线层零渲染（expected 19,472 黄像素 vs 我们 0；vendored 瓦含 road 层，数据在，疑 SolidLine stencil/线技术分派，独立排查）；②雾边界位置与 expected 的残余错位（相机框架差）使白雾在分数上仍占优——道路+地面阴影图案补齐后收敛；③fog 家族 47 FAIL 的主体（terrain 子族、globe 子族、horizon-blend 族）待逐项。
