@@ -338,3 +338,30 @@
 | `GLJS-584`（1） | 空 layers 数组测试 — 已正确处理（不渲染）✅ |
 | `empty`（1） | 已 ✅ |
 | `random`（1） | 随机文本渲染 — 取决于 FontCatalog 质量 |
+
+---
+
+## 七、§885 终一百六十八：线族残差的参照图可复现底线（2026-09-09）
+
+**结论：line-cap（~300px）与 gradient-with-corners（~110px）的剩余残差已低于
+expected.png 自身的可复现底线——expected.png 无法被 vendored mgl 在本平台复现，
+继续收敛需要复刻生成参照的旧版 mgl，不再是 datasource 层缺陷。**
+
+取证方法（`tmp/mgl-shot.html` + `tmp/mgl-shot.cjs`，CDP 驱动 chrome-headless-shell
+渲染 vendored mgl `dist/esm-dev`，compositor 截图规避 SwiftShader canvas readback
+全黑问题；dummy token + 本地瓦片改写）：
+
+| 夹具 | mgl 实拍 vs expected | 我们 vs expected | 预算 |
+|------|---------------------|------------------|------|
+| line-cap/round | **7552** | 297 | 131 |
+| line-gradient/gradient-with-corners | **3267** | 110 | 63 |
+
+我们的渲染比 vendored mgl 实拍更接近 expected（25×/30×）。mgl 实拍的线网密度
+与 expected 一致（dark 64416 vs 63475），排除"实拍失败"解释——差异主体是 AA/描边
+语义的版本漂移，与 patcher 中"references are crisper than the vendored mgl AA
+formula"的既有记档互证。五个 AA 变体实验（±0.5px 羽化、mgl 公式 1px 膨胀+羽化、
+step 真边、零膨胀、step -0.5）中 `step(-0.5)`+0.5px 膨胀最优，保持现状。
+
+同轮宽度域定案（commit f67d6b97）：px 线宽的 cos(lat) 纬度补偿为伪拟合，
+跨夹具最优分解（line-cap lat52.5 / gwc lat38.9）收敛于同一总缩放 1.0×mpp；
+删除后 line-cap 家族 9.6k→297-404、gwc 158→110、64 夹具零 pass→fail。
