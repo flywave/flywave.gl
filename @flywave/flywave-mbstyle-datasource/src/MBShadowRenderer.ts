@@ -189,6 +189,12 @@ export class MBShadowRenderer {
             // needs transparent:true; the multiply-underlay mode
             // (shadowoverlay=0, 终一百四十二) composites in the color op instead.
             transparent: (globalThis as any).__mbShadowOverlay !== false,
+            // §885 终一百四十七: the vertex replace drops project_vertex —
+            // with material.fog on a fog style three's fog_vertex then reads
+            // mvPosition and the program fails to compile (the quad was
+            // silently absent from every fog-style measurement). The quad IS
+            // the shadow overlay: no scene fog.
+            fog: false,
         });
         // the scene sweep must not inject the ground receiver into the quad
         (mat as any).__mbShadowSkipped = true;
@@ -221,15 +227,16 @@ export class MBShadowRenderer {
                 'gl_Position = vec4(position.xy, 0.9999, 1.0);\n    vNdc = position.xy;');
             // prepend the uniforms; replace the color write with the ground
             // shadow composite (the LINEAR-domain modulation, encoded by the
-            // trailing colorspace_fragment like every other material)
-            // §885 终一百四十七: NOTE — the fragment is missing the
-            // `varying vec2 vNdc;` declaration and the vertex replace drops
-            // project_vertex, so with USE_FOG the chunk's mvPosition read
-            // fails: on fog styles the quad program does NOT compile (it has
-            // been silently absent from every recent measurement). Reviving
-            // it needs the overlay-pattern calibration (guard shifts
-            // 10,138→23,024 when it renders). Kept as-is for anchor parity.
-            shader.fragmentShader = ('uniform sampler2D uMBShadowMap;\n' +
+            // trailing colorspace_fragment like every other material).
+            // §885 终一百四十八: the FRAGMENT must declare the vNdc varying
+            // (the vertex writes it) and the cascade-1 samplers — their
+            // absence failed this program wholesale (the quad was silently
+            // absent from every recent measurement; revived here WITH
+            // lit=1.0-outside-cascades semantics, 终一百四十七).
+            shader.fragmentShader = ('varying vec2 vNdc;\n' +
+                'uniform sampler2D uMBShadowMap;\n' +
+                'uniform sampler2D uMBShadowMap1;\n' +
+                'uniform mat4 uMBShadowMatrix1;\n' +
                 'uniform mat4 uMBShadowMatrix;\n' +
                 'uniform vec3 uMBGroundShadowFactor;\n' +
                 'uniform float uMBShadowIntensity;\n' +

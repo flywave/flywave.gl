@@ -1356,3 +1356,22 @@ clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、groun
 **已验证的真实战果**：line-blend-mode/additive-clamp-low 12px PASSED: True（两轮复现，首个真实内容 PASS）；additive 线内容确认渲染（Sep-7 形态恢复）。
 
 **下阶段（重排后）**：①逐夹具确认真实渲染态（帧检三件套）后重立真实基线；②在真实渲染上重做雾/阴影/色调标定（此前所有 A/B 结论需在真实渲染态复验）；③道路 ribbon 顶点 mvPosition 与 SolidLine stencil 链路排查；④数据补齐（外部 token）。
+
+### §885 终一百四十九：道路渲染恢复 + quad 复活 + GLSL 编译错误清零（2026-09-09）
+
+**模型尾 fogVertLimit 重定义修复**（#else 补漏）后 GLSL Shader Error 清零（本轮链路 16→10→4→0）。
+
+**quad 完整复活**：fragment 补 `varying vec2 vNdc;` + `uMBShadowMap1/uMBShadowMatrix1` 声明；材质 fog:false（规避 project_vertex 被替换后 fog_vertex 读 mvPosition 的编译失败）；overlay/multiply 分支编译期 define 化（此前 JS 条件误入 GLSL 模板——`globalThis`/`as` 语法错误，quad 自该提交起未编译过）。lit=1.0-outside-cascades 语义保留（mgl cascade fallback）。
+
+**帧检三件套实测**（fix8，无 Shader Error 状态）：
+| 夹具 | mismatch | passed | std | mean | 黄像素 |
+|---|---:|---|---:|---:|---:|
+| line-blend-mode/additive-clamp-low | 12 | **True** | 29.0 | 38 | 0 |
+| model-layer/ground-shadow-fog | 145,933 | False | 76.2 | 193 | 48 |
+| ground-shadow-fog-hard-cutoff | 145,779 | False | 76.2 | 193 | 48 |
+| model-layer/buildings-trees-shadows-casting | 677,889 | False | 49.1 | 74 | **14,574** |
+| 守卫 quantization-shadows | 23,024 | False | 7.9 | 205 | 71,616 |
+
+全部夹具真实渲染（std 7.9–76.2，无一空白）。buildings-trees 黄像素 14,574 首现（树冠/道路内容）；道路 48 像素可渲染但 vendored 瓦 15-5240-* / 14-2618/2619 列 404（日志实锤）限制覆盖——数据补齐前不可回收。
+
+**账面分数变化说明**：guard 10,138→23,024、buildings-trees 457,874→677,889 为"空白/半空白巧合帧 → 真实渲染（未标定）"的过渡，非质量回退；真实基线自本轮起以帧检三件套重立。

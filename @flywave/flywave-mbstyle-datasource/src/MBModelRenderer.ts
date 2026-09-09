@@ -573,8 +573,8 @@ export function applyMglModelLighting(
                      uniform float fogCamHeight;
                      uniform vec2 fogMglRange;
                      uniform float fogMglShift;
-                     #endif
                      uniform vec2 fogVertLimit;
+                     #endif
                      uniform vec3 mbFogColor;
                      uniform float uMbDistCam;
                      uniform float uMbMercZPerMeter;
