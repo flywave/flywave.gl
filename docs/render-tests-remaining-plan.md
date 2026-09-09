@@ -581,3 +581,16 @@ expected 为黑——三方各异，需逐墙几何/绕向取证）与 line-widt
 - 终一百八十一的 0.604 屋顶校准随 wall mode 撤销（阶梯差 ×1.63 实证顶面应亮）；
 - height/opacity 9 夹具（lineWidth=0 域）同机对照逐值一致零回归。
 剩余（default 21.6k）：墙带垂直渐变相位/宽度细节与 cyan 覆盖 9.7k vs 14.4k。
+
+### §885 终一百八十二b：wall mode 线特征 + 宽带门控（2026-09-10）
+
+GEOMETRY_TYPE_MAP 放行 `fill-extrusion × line`（mgl wallMode 语义：LineString
+也转墙带），processLineFeature 新增分支走 emitExtrusionWallBand（开路径）。
+**宽带（≥10px）门控排除**：mgl 宽带另带 unlit raw 表面 + 阴影投射语义（shadows
+夹具 mgl-live==expected==raw #008000）未实现，无门控时 shadows 30,279→86,512
+回归。miter 钳制（伤 multi-tile +3k）与 raw 着色模板（对 shadows 材质路径不
+生效）均证伪回退。终态：line-string 65,001→**25,526**、infinite-miter
+16,273→**2,861**、building 28,006→**23,241**；shadows/multi-tile/sharp-corner
+保基线；height/opacity 9 夹具逐值一致零回归。家族 3/9 PASS。
+下轮入口：shadows 宽带的 unlit+阴影语义（mgl 实拍已对齐参照可作 oracle）、
+default 21.6k 的渐变相位细节。
