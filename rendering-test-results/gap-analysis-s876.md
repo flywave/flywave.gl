@@ -1415,3 +1415,7 @@ StaticLineMaterial 的 `vCoords.x = extrusionDir / vRange.xy`（SolidLineMateria
 ### §885 终一百五十六：very-overscaled 定案——缺失 overscale 线宽放大（特征缺口）（2026-09-09）
 
 逐行像素剖析（latw 运行帧）：expected 在 very-overscaled 呈 130px 级宽暗楔（父瓦过缩放放大后的线宽），我们仅 6px 细线——**ribbon 宽度以显示 zoom 的 mpp 烘焙，未按父瓦 overscale 倍数放大**（mgl：overscale 瓦的线宽随 2^(renderZoom−tileZoom) 放大）。修复需在 ribbon 构建时按瓦的 overscale 因子缩放 worldHalfWidth/变量宽（含 fill-outline 同路径），并回归 line-width 全族（overscale 与非 overscale 夹具交叉验证）。非一轮可安全落地，列为专项。
+
+### §885 终一百五十七：very-overscaled 误判修正——几何缺失而非宽度缺口（2026-09-09）
+
+逐行剖析修正 终一百五十六：expected 并非"130px 宽楔"（此前 min-max 测量把两条线的间隙并入区间）——expected 为**两条带拐角的细折线**（5px 线宽+AA，各自带底部拐弯），我们的帧只有**单条对角细线**（宽度正确）。真实缺口 = **多子路径/拐角延续几何缺失**：overscaled 瓦的 MultiLineString（或跨瓦折线）仅渲染了其中一段。修复方向：ribbon 构建的多子路径循环与 overscaled 瓦的几何展开（parent-tile 内容到显示 zoom 的世界坐标变换），非宽度缩放问题。移入几何专项队列（与 ribbon 拐角 join 同族）。
