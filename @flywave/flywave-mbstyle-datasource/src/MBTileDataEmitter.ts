@@ -2427,6 +2427,79 @@ export class MBTileDataEmitter {
      * vertices of the earcut triangulation and the walls are quads around
      * every ring edge.
      */
+    /**
+     * §885 终一百八十二: mgl wall mode — extrude each polygon RING as a
+     * hollow wall band of horizontal width `bandW` (mgl fill-extrusion-
+     * line-width): outer/inner offset sides (miter joins), vertical walls on
+     * both, and an up-facing top cap strip. The footprint interior is left
+     * open so the underlying fill layer shows through.
+     */
+    private emitExtrusionWallBand(
+        geo: AccumulatedGeometry,
+        techniqueIdx: number,
+        _featureStart: number,
+        rings: Array<Array<{ x: number; y: number }>>,
+        bandW: number,
+        floorHeight: number,
+        height: number,
+    ): void {
+        const half = bandW / 2;
+        for (const ring of rings) {
+            if (ring.length < 3) continue;
+            const n = ring.length;
+            // World-space ring points (closed).
+            const pts: THREE.Vector3[] = ring.map(pt => this.project(new THREE.Vector2(pt.x, pt.y)));
+            // Per-vertex miter direction (unit): bisector of the adjacent
+            // edge normals, clamped like a miter join.
+            const dir: Array<[number, number]> = [];
+            for (let i = 0; i < n; i++) {
+                const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n];
+                let e1x = p1.x - p0.x, e1y = p1.y - p0.y;
+                let e2x = p2.x - p1.x, e2y = p2.y - p1.y;
+                const l1 = Math.hypot(e1x, e1y) || 1, l2 = Math.hypot(e2x, e2y) || 1;
+                e1x /= l1; e1y /= l1; e2x /= l2; e2y /= l2;
+                // left normals of both edges
+                const n1x = -e1y, n1y = e1x, n2x = -e2y, n2y = e2x;
+                let mx = n1x + n2x, my = n1y + n2y;
+                const ml = Math.hypot(mx, my);
+                if (ml < 1e-6) { mx = n1x; my = n1y; }
+                else { mx /= ml; my /= ml; }
+                dir.push([mx, my]);
+            }
+            const base = geo.positions.length / 3;
+            // 4 verts per ring vertex: L-bottom, L-top, R-bottom, R-top.
+            for (let i = 0; i < n; i++) {
+                const [mx, my] = dir[i];
+                const p = pts[i];
+                const lx = p.x + mx * half, ly = p.y + my * half;
+                const rx = p.x - mx * half, ry = p.y - my * half;
+                const hTop = height, hBot = floorHeight;
+                geo.positions.push(lx, ly, hBot, lx, ly, hTop, rx, ry, hBot, rx, ry, hTop);
+                geo.extrusionAxis.push(0, 0, height - floorHeight, 0);
+                geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
+                geo.extrusionAxis.push(0, 0, height - floorHeight, 0);
+                geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
+            }
+            const V = (i: number, k: number) => base + ((i % n) * 4) + k;
+            for (let i = 0; i < n; i++) {
+                const j = (i + 1) % n;
+                const quad = (a: number, b: number, c: number, d: number) => {
+                    // Both windings — the extruded-polygon material is
+                    // FrontSide; mgl wall normals face both ways around the
+                    // ring, single-winding left the far side black.
+                    geo.indices.push(a, b, c, a, c, d);
+                    geo.indices.push(a, c, b, a, d, c);
+                };
+                // Left wall
+                quad(V(i, 0), V(i, 1), V(j, 1), V(j, 0));
+                // Right wall
+                quad(V(i, 2), V(j, 2), V(j, 3), V(i, 3));
+                // Top cap band
+                quad(V(i, 1), V(j, 1), V(j, 3), V(i, 3));
+            }
+        }
+    }
+
     private emitExtrudedPolygon(
         geo: AccumulatedGeometry,
         layer: EvaluatedLayer,
@@ -2468,6 +2541,34 @@ export class MBTileDataEmitter {
         // Avoid fully flat extrusions (normal computation / shader issues).
         const height = Math.max(rawFloor + 1, rawHeight) * this.m_terrainHeightScale * extraScale;
         this.noteGeometryHeight(height + this.m_currentZOffset);
+
+        // §885 终一百八十二: mgl WALL MODE — `fill-extrusion-line-width > 0`
+        // converts each polygon RING into a thick wall band (fill_extrusion_
+        // bucket wallMode: rings -> line features; vertex shader offsets by
+        // ±line_width/2 via join normals). The building is HOLLOW: the
+        // interior shows the underlying fill layer (default fixture's cyan
+        // ground ring).
+        const lineWidthPxWm = Number((layer.paint as any)['fill-extrusion-line-width'] ?? 0);
+        const wmMpp = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+            (256 * Math.pow(2, this.m_zoom + 1));
+        if (lineWidthPxWm > 0) {
+            for (const polygon of geometry) {
+                this.emitExtrusionWallBand(
+                    geo, techniqueIdx, featureStart, polygon.rings,
+                    lineWidthPxWm * wmMpp, floorHeight, height);
+            }
+            // Groups/material registration falls through to the shared tail.
+            const cnt = geo.indices.length - featureStart;
+            if (cnt > 0) {
+                geo.groups.push({
+                    start: featureStart, count: cnt, materialIndex: techniqueIdx,
+                    sortKey: this.extractSortKey(layer),
+                });
+                geo.featureStarts.push(featureStart);
+                geo.objInfos.push({ ...(properties ?? {}) });
+            }
+            return;
+        }
 
         for (const polygon of geometry) {
             const rings = polygon.rings;

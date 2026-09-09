@@ -4368,7 +4368,7 @@ export class MBMaterialPatchManager {
                              // where mgl-live == expected exactly). Zero-height
                              // sheets keep the FLAT fill semantics (bright) —
                              // zero-width regressed 0→60k without this gate.
-                             mbNdotL *= ${lineWidth > 0 ? '0.604' : '1.0'};
+                             mbNdotL *= 1.0;
                          }
                          vec3 mbResultSrgb = clamp(mbColor * mbNdotL * uMBLightColor, mix(vec3(0.0), vec3(0.3), 1.0 - uMBLightColor), vec3(1.0));
                          // §820: mbResultSrgb is already in OUTPUT (sRGB-encoded)
