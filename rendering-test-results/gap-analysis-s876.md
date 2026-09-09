@@ -1423,3 +1423,7 @@ StaticLineMaterial 的 `vCoords.x = extrusionDir / vRange.xy`（SolidLineMateria
 ### §885 终一百五十八：very-overscaled 二次定案——极端过缩放 float32/RTE 精度缺口（架构专项）（2026-09-09）
 
 mvt 解析实锤：14-8802-5374.mvt road 层 719 特征；z20 视口（z14 瓢的 1/64 幅面）仅 2 条折线穿过（expected 渲染 2 条），我们渲染 1 条。缺失机制 = **float32 世界坐标精度**：z20 下 1 屏幕像素 ≈ 7.4e-4 世界单位，而 float32 在柏林世界坐标（~2.7e6）处的表示精度 ≈ 0.25 单位 ≈ 340 屏幕像素——第二 条折线的顶点在 float32 世界坐标中塌缩/退化 → 几何无效被剔除。此即 mgl very-overscaled 测试的本意（极端过缩放的精度保持，mgl 以 RTE 相对眼坐标逐瓦解决）。修复 = ribbon/折线发射链路的 RTE 化（逐顶点相对眼坐标重建），为架构级专项，需独立设计轮。至此 very-overscaled 的三层定案链完成：宽度缩放(终一百五十六,误判)→多子路径缺失(终一百五十七,修正)→RTE 精度(终一百五十八,根因)。
+
+### §885 终一百五十九：line-gradient 残差二次修正——整体尺度差（相机/zoom 标定域），非 join 几何（2026-09-09）
+
+覆盖包围盒剖析：ours x 80-173/y 0-249 vs expected x 89-163/y 22-223——我们的线在四侧均匀超出 9-26px（~9% 尺度差 ≈ 0.13 zoom 级），拐角处的显著差异只是尺度差在最远端的放大显现。修正 终一百五十四/五十六 的"拐角 join 几何"定性：line-gradient 两夹具残差的主导项 = **line-gradient 家族的 zoom/相机标定残余偏差**（与 very-overscaled 的 RTE 精度、ground-shadow-fog 的 cos(lat) 系同属相机-投影标定域）。下阶段：以 line-gradient 两夹具为标定探针，反解我们与 mgl 的 zoom 级差（预期 ~0.13 级）并在相机放置链修正。
