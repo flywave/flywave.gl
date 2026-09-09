@@ -1450,3 +1450,22 @@ mvt 解析实锤：14-8802-5374.mvt road 层 719 特征；z20 视口（z14 瓢�
 **结论**：相机距离的世界单位约定应为**赤道尺度（无 cos）**——终九十一把 cos(lat) 无条件乘进相机距离对无雾样式是过度修正（线-gradient 族因此 1.28× 偏大）。但 ground-shadow-fog（z16.2/pitch70）的街景构图确认又依赖该 cos——两者的边界即单位链专项的核心命题：**cos 因子属于地面尺度换算（雾/线宽/progress），不属于相机距离；相机-地面两套约定在 pitch/zoom 组合下如何解耦**是终一百六十一 阶段 1 审计的最后命题。317 px 距 PASS 尚差一步（AA/边缘残差），待专项一并解决。
 
 **专项验收不变**：gradient 双夹具 PASS + very-overscaled RTE 折线恢复 + 守卫/家族回归。
+
+### §885 终一百六十三：相机链重构落地——mercator 分支回归赤道约定（2026-09-09）
+
+按终一百六十二判定实验实施：Utils.ts calculateDistanceFromZoomLevel mercator 分支移除 终九十一 的 cos(lat) 因子（camdist 逃生 hatch 保留），相机距离回归赤道约定与 mgl 一致。线宽 cos(lat) 地面尺度换算（终一百五十五）保留——两者分别归属相机约定与地面尺度。
+
+**新相机约定下全量验证**：
+| 夹具 | cos 相机（旧） | 赤道相机（新） | 判定 |
+|---|---:|---:|---|
+| line-gradient/gradient-vector-tile | 5,509 | **19 PASS** | **第二个真实 PASS** |
+| line-gradient/gradient-with-corners | 3,202 | 318 | −90%，近 PASS（AA/端点残差） |
+| 守卫 quantization-shadows | 23,024 | **2,332** | −90% |
+| line-blend-mode/additive-clamp-low | 12 PASS | 12 PASS | 保持 |
+| line-join/bevel / dasharray case-butt | 0/16 PASS | 0/16 PASS | 保持（赤道夹具不受影响） |
+| model-layer/ground-shadow-fog（首位） | 137,798* | 137,798 | 最佳真实内容分数 |
+| buildings-trees-shadows-casting | 677,889 | 597,802 | 改善 −80k |
+
+*注：cos 相机下 gradient-with-corners 曾测 317（camdist 实验）与 318（fix9）同值——该夹具在两种相机下分数接近但 bbox 仅在赤道相机下重合。
+
+**真实基线 v2（赤道相机）**：gradient-vector-tile 19 PASS、守卫 2,332、additive 12、dasharray-butt 16、bevel 0、gradient-with-corners 318（近 PASS）。已知残留：ground-shadow-fog 的雾/阴影标定（新相机下重做）、buildings-trees 阴影图案、道路 404 瓦数据缺口。

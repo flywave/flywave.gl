@@ -1698,17 +1698,16 @@ export namespace MapViewUtils {
                 mglGlobeViewportMaxSize(options)
             );
             distance *= conv;
-        } else {
-            // §885 终八十六: mercator camera distance must be LAT-SCALED —
-            // the ground px scale is C·cos(lat)/2^z, so the equatorial form
-            // here placed the camera 1/cos(lat) too far (ground-shadow-fog:
-            // 797 m vs mgl 632 m; the closer camera reproduces expected's
-            // street-level view exactly). camdist=1 escapes for A/B.
-            distance *= Math.cos(mglGlobeTargetLatRad(options));
         }
-        // §885 终八十五: camdist A/B multiplier — the equatorial-circumference
-        // distance is 1/cos(lat) too far vs mgl's lat-scaled ground px
-        // (ground-shadow-fog: 797 m vs mgl 643 m). Calibration escape hatch.
+        // §885 终九十一→终一百六十三: the mercator branch stays EQUATORIAL.
+        // The 终九十一 cos(lat) factor was the wrong convention: the
+        // 终一百六十二 decisive experiment (camdist=1.284 = 1/cos(38.878°)
+        // exactly canceling it) collapsed
+        // line-gradient/gradient-with-corners 3,202→317 with the bbox
+        // matching expected — mgl's camera-distance convention is equatorial
+        // like ours; the latitude factor belongs to GROUND-SCALE conversions
+        // (fog mpp / line width / line-progress), not the camera.
+        // camdist=<N> remains the calibration escape hatch.
         const cd = (globalThis as any).__mbCamDist;
         if (typeof cd === 'number' && Number.isFinite(cd) && cd > 0) {
             distance *= cd;
