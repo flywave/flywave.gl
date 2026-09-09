@@ -470,3 +470,16 @@ pattern 西带（约 30% 宽）无卫星的定位链收口：
   此形态）；
 - datasource 层注入邻瓦片 quad 无效（输出逐字节不变——下游按 cell 裁剪几何），
   已回退；修复须引擎层（VisibleTileSet 高程感知剔除或横向覆盖扩展）。
+
+### §885 终一百七十六（补）：引擎侧两项 opt-in 实测无效（2026-09-10）
+
+为西带覆盖缺口试了引擎既有的两个扩展点，均无效（RasReq 探针：请求集恒为
+2×3 六格）：
+- **m_elevationRangeSource 私有注入**（5×5 采样 DEM min/max 适配器）：
+  VisibleTileSet 的 elevation 分支只把 near/far 扩到 viewRange——无横向效果；
+  且其 else-if 结构会**抑制** frustumFarOverride 分支（两者互斥）；
+- **m_visibleTileSetOptions.frustumFarOverride**（60000/500000 两档）：覆盖
+  集不变——限制不在 far 平面，而在 **FrustumIntersection 的地平线切面
+  （tangent）覆盖逻辑**（bearing+pitch 下朝地平线方向的单元格不计入）。
+两项实验均已回退。修复需 FrustumIntersection 层的覆盖算法改造（引擎设计级），
+是 drape 西带缺口的最后一块，也是 terrain 家族全面收敛的前置。
