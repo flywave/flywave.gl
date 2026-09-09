@@ -1419,3 +1419,7 @@ StaticLineMaterial 的 `vCoords.x = extrusionDir / vRange.xy`（SolidLineMateria
 ### §885 终一百五十七：very-overscaled 误判修正——几何缺失而非宽度缺口（2026-09-09）
 
 逐行剖析修正 终一百五十六：expected 并非"130px 宽楔"（此前 min-max 测量把两条线的间隙并入区间）——expected 为**两条带拐角的细折线**（5px 线宽+AA，各自带底部拐弯），我们的帧只有**单条对角细线**（宽度正确）。真实缺口 = **多子路径/拐角延续几何缺失**：overscaled 瓦的 MultiLineString（或跨瓦折线）仅渲染了其中一段。修复方向：ribbon 构建的多子路径循环与 overscaled 瓦的几何展开（parent-tile 内容到显示 zoom 的世界坐标变换），非宽度缩放问题。移入几何专项队列（与 ribbon 拐角 join 同族）。
+
+### §885 终一百五十八：very-overscaled 二次定案——极端过缩放 float32/RTE 精度缺口（架构专项）（2026-09-09）
+
+mvt 解析实锤：14-8802-5374.mvt road 层 719 特征；z20 视口（z14 瓢的 1/64 幅面）仅 2 条折线穿过（expected 渲染 2 条），我们渲染 1 条。缺失机制 = **float32 世界坐标精度**：z20 下 1 屏幕像素 ≈ 7.4e-4 世界单位，而 float32 在柏林世界坐标（~2.7e6）处的表示精度 ≈ 0.25 单位 ≈ 340 屏幕像素——第二 条折线的顶点在 float32 世界坐标中塌缩/退化 → 几何无效被剔除。此即 mgl very-overscaled 测试的本意（极端过缩放的精度保持，mgl 以 RTE 相对眼坐标逐瓦解决）。修复 = ribbon/折线发射链路的 RTE 化（逐顶点相对眼坐标重建），为架构级专项，需独立设计轮。至此 very-overscaled 的三层定案链完成：宽度缩放(终一百五十六,误判)→多子路径缺失(终一百五十七,修正)→RTE 精度(终一百五十八,根因)。
