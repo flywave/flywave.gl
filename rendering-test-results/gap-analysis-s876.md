@@ -1431,3 +1431,14 @@ mvt 解析实锤：14-8802-5374.mvt road 层 719 特征；z20 视口（z14 瓢�
 ### §885 终一百六十：line-gradient 尺度差的相机链反解（2026-09-09）
 
 数值反解：style zoom 11.25 / lat 38.878 / focal 768 下，mgl 相机-中心距 = 768×C·cos(lat)/(512·2^11.25) ≈ 19,270m；我们的 calculateDistanceFromZoomLevel（含终九十一 cos 修正与 zoom+1 约定）≈ 19,238m——**相机距离一致**。但 ribbon 路径渲染 span 仍 1.24-1.25× 偏大（y 向 ≥249px 被 canvas 裁剪 vs expected 201px）。矛盾锁定：**引擎内部世界单位尺度 × 相机距离的组合约定**（ribbon worldPts 的单位与 calculateDistanceFromZoomLevel 的米制约定不完全一致——多瓦/多 zoom 路径存在单位混用嫌疑）。修复需 mapview 相机-投影-瓦片单位链的端到端深查（世界单位定义/applyCameraSettings/projection.project 三处一致性），架构标定专项，随 RTE 专项同轮设计。
+
+### §885 终一百六十一：mapview 相机-投影-瓦片单位链标定专项设计（2026-09-09）
+
+**实测事实**（gradient-with-corners 逐列扫描）：折线起点段两侧行列对齐（x=122-128 覆盖一致），偏差沿折线**累积增长**（x=92 ours 147-213 vs exp 187-225；x=116 exp 下探 178 vs ours 140；x=134+ ours 上冲到 0）——逐顶点屏幕位置随折线累计长度漂移，非恒定偏移、非 join 局部差。
+
+**专项设计（三阶段）**：
+- **阶段 1 单位链审计**：核对 projection.project（lon/lat→世界）、camera 距离约定（calculateDistanceFromZoomLevel）、ribbon worldPts 缩放三处的"世界单位"定义一致性——当前证据指向投影输出的世界尺度与相机米制约定存在 ~1.24× 比差（z11.25/lat38.878 处）；
+- **阶段 2 RTE 设计**（与 very-overscaled 同根）：折线/ribbon 顶点发射改相对眼坐标（RTE），同时解决 z20 精度塌缩（终一百五十八）与单位链归一（以眼为原点后仅剩一个尺度常数需标定）；
+- **阶段 3 回归**：line 家族 146 + line-gradient 2 探针 + 守卫/buildings-trees/ground-shadow-fog 帧检三件套。
+
+验收：gradient-with-corners/gradient-vector-tile 转 PASS 且 very-overscaled 几何恢复（RTE 后折线两条均渲染）。
