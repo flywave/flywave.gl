@@ -549,3 +549,12 @@ default 夹具（z19/pitch60/geojson 建筑）实拍对拍：
 - 下轮入口：①正立面生成（pitch 视角下面向相机的 wall 缺失——疑似
   patchExtrusionMaterial 的顶点/绕向或 backface culling 只画了背向面）；
   ②蓝通道墙面着色；③family 其余夹具同法取证。
+
+### §885 终一百八十（补）：default 残差修正为色调域，几何完整（2026-09-10）
+
+像素采样修正 终一百八十 的"正立面缺失"读图：中空区实为**更亮的绿**
+（我们 [9,154,9] vs expected [5,93,31]）——建筑几何完整（含 roof），残差是
+色调/光照：屋顶整体过亮 ~1.65×、缺 expected 的蓝分量（mgl 垂直渐变/光照
+默认）。DoubleSide 试验逐字节无差（非背面剔除）。下轮入口：
+patchExtrusionMaterial 的垂直渐变与光照乘子对拍 mgl fill_extrusion
+fragment（vertical-gradient 默认 true + 光照模型）。
