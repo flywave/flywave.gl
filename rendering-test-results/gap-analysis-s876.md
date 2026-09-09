@@ -1481,3 +1481,7 @@ chunked runner（batch=6、chrome-headless-shell 指纹核对）全量复测 lin
 **真实基线 v2 锚点**（赤道相机、零编译错误、全真实渲染）：gradient-vector-tile 19 PASS、additive-clamp-low 12 PASS、line-join bevel/default/miter/none 0px ×4、dasharray case/butt 16 + zero-values 0、zero-width ×2、fog 14/62、buildings-trees 597,802、ground-shadow-fog 137,798（首位真实内容最佳分）。
 
 **下阶段**：①gradient-with-corners AA/端点收敛（318→阈值）；②fog 家族 47 FAIL 逐项（fog/2d 族 blank 项需按帧检区分合法空与失效）；③ribbon 拐角 join 与 line-progress 相移（几何专项）；④very-overscaled RTE 架构专项；⑤数据补齐（外部 token）。
+
+### §885 终一百六十五：gradient-with-corners 残差精确定量与收敛路径（318→≤210）（2026-09-09）
+
+PASS 阈值实测 = ceil(0.0008×512²) = **210 px**；当前 318。覆盖差分解：**ours-only = 0**（无任何多余覆盖）、**exp-only = 459**（沿线全长均匀分布，非拐角/端点聚集）——即我们的线宽比 mgl 细 ~0.25px/侧（a21050df 的 cos 缩放轻微过矫：宽度 9.75px vs expected 10）。收敛路径已明确：线宽 cos 缩放 ×1.03 微调（或等价地 mpp 缩放从 cos 改为 sec 的 1.03 次插值）即可命中 ≤210；每轮验证 4-8 分钟，预计 2-3 轮二分。另需同轮跑 line-width/line-join 家族回归确认无宽度回归。
