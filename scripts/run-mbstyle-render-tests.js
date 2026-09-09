@@ -131,6 +131,7 @@ function main() {
             ...(process.env.MBSTYLE_SHRAD ? [`shrad=${process.env.MBSTYLE_SHRAD}`] : []),
             ...(process.env.MBSTYLE_SHADOWHW ? ["shadowhw=1"] : []),
             ...(process.env.MBSTYLE_SHADOWOVERLAY === "0" ? ["shadowoverlay=0"] : []),
+            ...(process.env.MBSTYLE_FOGMGLHEIGHT ? ["fogmglheight=1"] : []),
             ...(process.env.MBSTYLE_SHADOWBIAS ? [`shadowbias=${process.env.MBSTYLE_SHADOWBIAS}`] : []),
             ...(process.env.MBSTYLE_MODELDIRALT ? ["modeldiralt=1"] : []),
             ...(process.env.MBSTYLE_SPHDEG ? [`sphdeg=${process.env.MBSTYLE_SPHDEG}`] : []),

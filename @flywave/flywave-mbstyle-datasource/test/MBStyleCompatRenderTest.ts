@@ -189,6 +189,11 @@ function discoverTests(): TestEntry[] {
     const sov = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shadowoverlay="))?.slice("shadowoverlay=".length);
     if (sov === "0") (globalThis as any).__mbShadowOverlay = false;
+    // §885 终一百四十四: fogmglheight=1 → mgl fog depth domain D/H (camera
+    // height, engine units) for the chunk fog + model/extrusion injections.
+    const fmh = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("fogmglheight="))?.slice("fogmglheight=".length);
+    if (fmh === "1") (globalThis as any).__mbFogMglHeight = true;
     // §885 终一百零六: shadowbias=<v> → HW-path compare bias (smoothstep window).
     const shb = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shadowbias="))?.slice("shadowbias=".length);

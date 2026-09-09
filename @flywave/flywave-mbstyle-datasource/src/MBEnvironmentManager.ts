@@ -1182,6 +1182,20 @@ export class MBEnvironmentManager {
             }
             lib2.fogMglShift.value = shift;
             lib2.fogMglDistCam.value = distCamM;
+            // §885 终一百四十四: mgl fog depth domain = DISTANCE/CAMERA-HEIGHT
+            // (v_fog_pos is the camera-relative world offset in units of the
+            // camera's map height: transform.ts worldToFogMatrix =
+            // getWorldToCameraPosition(cameraWorldSizeForFog, …)). In screen
+            // terms the slant camera→center distance = focalPx·mpp and the
+            // height H = slant·cos(pitch), so depth = D/H has a compact form
+            // in ENGINE units: H_eng = focalPx·cos(pitch) — independent of
+            // zoom and latitude (both fold into vFogDepth's own scale). With
+            // fogmglheight=1 the chunk's shift·0.15/distCam fold is rewritten
+            // to that domain: fogMglShift=1, fogMglDistCam=0.15·H_eng.
+            if ((globalThis as any).__mbFogMglHeight) {
+                lib2.fogMglShift.value = 1.0;
+                lib2.fogMglDistCam.value = 0.15 * shift * hPx * Math.cos(pitchD * Math.PI / 180);
+            }
             // §885 终八十二: mgl fog.ts state getter feeds the FOV-ADJUSTED
             // range (fovAdjustedRange = [r0+shift, r1+shift], fog.ts:87). The
             // raw style range shifted the fog window 1.5 units low. With the

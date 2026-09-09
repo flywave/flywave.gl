@@ -1297,3 +1297,24 @@ clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、groun
 **本轮门控代码验证**（默认 overlay 路径，与门控前对比）：守卫 10,138/10,260、buildings-trees 457,874 在所有会话逐位一致 ✓；fog 同位置（首位）逐位一致（96,899 白态复现 ✓）；hard-cutoff 落在既知双峰内（130,374/162,552，双峰在门控前记录中同样存在）——无门控引入的回归。
 
 **下阶段**（修正后）：①fog 近场逐夹具精调以"内容对齐"为目标（非分数平台；内容态基准 163,614@multiply / 167,527@overlay）；②LIGHTING_3D_MODE 色调一致性；③数据补齐（外部 token）；④每轮 karma 会话先核对平台目录版本号指纹与会话组成。
+
+### §885 终一百四十四：雾深域定案（D/相机高度）+ fogmglheight 门控——ground-shadow-fog 内容态 −17k/−21k 首次机制性收敛（2026-09-09）
+
+**根因链（内容态三缺失的机制解释）**：终九十一给相机放置加了 cos(lat)（797→632m 近地街景），但两条雾路径的距离归一化都没跟随——
+1. **地面/道路 fills 走 three legacy 雾分支**（fogNear=1/fogFar=1000 默认值，`MB_RASTER_MGL_FOG` 只定义在 _mbBgTile 栅格瓦上）：t≈vFogDepth/1000 → 近场 t≈0.75 → 白洗地面、道路不可见（fogt=1 探针实测地面 t=0.75 与 vFogDepth≈750 吻合）；
+2. **挤出/模型注入雾的 uMbDistCam** = focal·C/(256·2^z)（赤道斜距 1598m，无 cos(lat)、tile 256/512 语义差）→ 深 2.53× → 全帧建筑永不起雾（t<0）。
+
+**mgl 语义（transform.ts worldToFogMatrix）**：雾深 = D_m/相机高度H_m；H = slant·cos(pitch)；本夹具 H=216m、slant=632m、fovAdjustedRange=[1.0,4.5] → 中心视线 t=0.55（重雾），近场 t<0（清晰）——与 expected 的结构（近清远白）一致。ENGINE 单位下 H_eng = focalPx·cos(pitch)（zoom/纬度无关，均折叠进视深尺度）。
+
+**fogmglheight=1 门控落地**（默认关，参数链 harness+runner 入库）：①chunk 雾 `fogMglShift=1, fogMglDistCam=0.15·shift·hPx·cos(pitch)`（=0.15·H_eng）；②挤出/模型注入 `uMbDistCam=focalPx·cos(pitch)`（=262.6，编译种子+逐帧刷新+syncModelFogUniforms 三处门控）；③fill/线材质补 `#define MB_RASTER_MGL_FOG 1`（地面从 legacy 切到 mgl 分支，live uniforms 按引用绑定已就位）。
+
+**A/B 数据**（chrome-headless-shell，会话组成 buildings-trees→fog→cutoff→guard，内容态）：
+| 配置 | ground-shadow-fog | hard-cutoff | 守卫 | buildings-trees |
+|---|---:|---:|---:|---:|
+| 无门控（现状） | 163,614–167,527 | 130,374–162,552 双峰 | 10,138 | 457,874 |
+| height+range[1.7,5.2]（现默认+0.7） | **146,701**（−17k，近清远雾渐变正确✓） | 145,957 | 10,138 | 457,874 |
+| height+range[1.0,4.5]（mgl 精确，fogshift=−0.7） | **94,403**（−43%，但近场过雾） | 135,270 | 10,138 | 457,874 |
+
+帧检：146,701 帧首次呈现正确的近清远白雾渐变（地面像素已贴近 expected：185 vs 198）；94,403 帧整体过雾（分数更优但近场被洗——expected 底部清晰区含道路+阴影图案，我们仍缺，分数再度奖励白化）。
+
+**定案与下阶段**：①门控保持 opt-in（默认关）——翻默认前需雾族（fog/* 62 夹具）+ terrain/globe 回归扫描；②range 在 D/H 域重扫（[1.0,4.5]→[1.7,5.2] 之间，配合边界位置对齐 expected ~60% 帧高）；③道路缺失独立排查（road 线层 vendored 瓦是否含 road source-layer / 是否被雾洗）；④地面阴影图案（quad overlay/multiply）在雾修复后重新标定。

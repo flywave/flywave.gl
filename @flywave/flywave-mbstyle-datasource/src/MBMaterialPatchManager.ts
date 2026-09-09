@@ -387,9 +387,17 @@ export class MBMaterialPatchManager {
                     // zoom−1 attempt also doubled metersPerUnit, compounding
                     // the vertical-limit path).
                     const fogMul = Number((globalThis as any).__mbFogMul ?? 1);
-                    fu.uMbDistCam.value = ((mvz as any)?.focalLength ?? 768) *
-                        EarthConstants.EQUATORIAL_CIRCUMFERENCE /
-                        (256 * Math.pow(2, mvz?.zoomLevel ?? 16)) * fogMul;
+                    // §885 终一百四十四: fogmglheight=1 → depth domain D/H
+                    // (camera height in engine units = focalPx·cos(pitch) —
+                    // mgl worldToFogMatrix semantics; zoom/lat fold into the
+                    // view-depth scale). Matches the §701 equatorial-slant
+                    // form otherwise.
+                    fu.uMbDistCam.value = (globalThis as any).__mbFogMglHeight
+                        ? ((mvz as any)?.focalLength ?? 768) *
+                          Math.cos(Math.min(Math.max((mvz as any)?.tilt ?? 0, 0.1), 89.9) * Math.PI / 180)
+                        : ((mvz as any)?.focalLength ?? 768) *
+                          EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                          (256 * Math.pow(2, mvz?.zoomLevel ?? 16)) * fogMul;
                     const lib2 = (THREE.UniformsLib as any).fog;
                     fu.fogMglShift.value = lib2.fogMglShift.value;
                     fu.fogMglDistCam.value = lib2.fogMglDistCam.value;
@@ -1178,10 +1186,18 @@ export class MBMaterialPatchManager {
             // §701: camera-to-center distance in metres for the mgl fog
             // depth normalization (same formula as the camera placement's
             // calculateDistanceFromZoomLevel — probe-verified vs mgl §700).
-            shader.uniforms.uMbDistCam = {
-                value: ((mv0 as any)?.focalLength ?? 768) * EarthConstants.EQUATORIAL_CIRCUMFERENCE /
-                    (256 * Math.pow(2, mv0?.zoomLevel ?? 16)),
-            };
+            // §885 终一百四十四: with fogmglheight=1 the depth domain is
+            // DISTANCE/CAMERA-HEIGHT in engine units (mgl worldToFogMatrix
+            // semantics): uMbDistCam = focalPx·cos(pitch) — zoom/lat-free
+            // because both fold into mbLen's own scale (see the env feed).
+            const mbFogH = (globalThis as any).__mbFogMglHeight;
+            shader.uniforms.uMbDistCam = mbFogH
+                ? { value: ((mv0 as any)?.focalLength ?? 768) *
+                    Math.cos(Math.min(Math.max((mv0 as any)?.tilt ?? 0, 0.1), 89.9) * Math.PI / 180) }
+                : {
+                    value: ((mv0 as any)?.focalLength ?? 768) * EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+                        (256 * Math.pow(2, mv0?.zoomLevel ?? 16)),
+                };
             // NOTE: do NOT bind fogColor/fogNear/fogFar/fogDensity — three's
             // per-frame refreshFogUniforms writes scene.fog values straight
             // into these shared objects, clobbering the env's calibrated mgl
@@ -1667,6 +1683,17 @@ export class MBMaterialPatchManager {
                     'fogGlobeTransition', 'fogGlobeRange', 'fogMglRange', 'fogMglShift', 'fogMglDistCam',
                     'fogAlpha', 'fogHorizonBlend', 'fogVertLimit', 'fogCamHeight', 'fogDebugT']) {
                     if (fogLib[key] && !shader.uniforms[key]) shader.uniforms[key] = fogLib[key];
+                }
+                // §885 终一百四十四: fogmglheight=1 — ground fills/roads run
+                // the mgl fog branch (live fogMgl* uniforms) instead of three's
+                // legacy near/far defaults (1/1000), which washed every ground
+                // pixel toward the fog color (ground-shadow-fog white ground).
+                if ((globalThis as any).__mbFogMglHeight
+                    && shader.fragmentShader.includes('#include <fog_pars_fragment>')
+                    && !shader.fragmentShader.includes('MB_RASTER_MGL_FOG')) {
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        '#include <fog_pars_fragment>',
+                        '#include <fog_pars_fragment>\n#define MB_RASTER_MGL_FOG 1');
                 }
             };
             material.needsUpdate = true;

@@ -240,7 +240,16 @@ export function syncModelFogUniforms(mapView: any, env?: any): void {
         console.log(`[MBModelFog] n=${mbModelFogUniforms.size} alpha=${lib.fogAlpha?.value} range=${JSON.stringify(lib.fogMglRange?.value)} camH=${lib.fogCamHeight?.value} distCam=${distCam.toFixed(0)} color=${sceneFogColor ? [sceneFogColor.r.toFixed(2), sceneFogColor.g.toFixed(2), sceneFogColor.b.toFixed(2)].join(',') : 'none'} mapView=${mapView ? 'ok' : 'MISSING'}`);
     }
     for (const u of mbModelFogUniforms) {
-        u.uMbDistCam.value = distCam;
+        // §885 终一百四十四: fogmglheight=1 → depth domain = D/H (camera
+        // height in engine units, focalPx·cos(pitch)) — mgl worldToFogMatrix
+        // semantics, zoom/lat-free (they fold into the view-depth scale).
+        if ((globalThis as any).__mbFogMglHeight) {
+            const mv = mapView as any;
+            u.uMbDistCam.value = (mv?.focalLength ?? 768) *
+                Math.cos(Math.min(Math.max(mv?.tilt ?? 0, 0.1), 89.9) * Math.PI / 180);
+        } else {
+            u.uMbDistCam.value = distCam;
+        }
         // §775e: mercatorZfromAltitude(1, centerLat) — metres→mercator-Z for
         // the fog-space horizon term (mgl mercatorFogMatrix z lane).
         const centerLat = (mapView?.center?.lat ?? 37.8) * Math.PI / 180;
