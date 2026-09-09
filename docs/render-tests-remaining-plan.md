@@ -483,3 +483,16 @@ pattern 西带（约 30% 宽）无卫星的定位链收口：
   （tangent）覆盖逻辑**（bearing+pitch 下朝地平线方向的单元格不计入）。
 两项实验均已回退。修复需 FrustumIntersection 层的覆盖算法改造（引擎设计级），
 是 drape 西带缺口的最后一块，也是 terrain 家族全面收敛的前置。
+
+### §885 终一百七十七：pitched 覆盖半瓦外扩（西带缺口关闭，2026-09-10 六收）
+
+终一百七十六的"FrustumIntersection 地平线切面改造"落地为最小正确形态：
+- CoverDbg 探针实证：西瓦片（父 z12/757/1609）被**原始视锥以毫厘之差拒绝**
+  （frustum=false），far 覆盖选项与 elevation range 均非限制点；
+- 修复：pitch>0 时把 getTileKeyEntry 的**视锥测试盒**外扩半瓦（mgl 覆盖自带
+  border 语义；面积/距离计算仍用精确盒，LOD 不受影响）；平视图不变；
+- 效果：西带卫星出现（pattern 均值 114.7→160.5），pattern 87,109→71,480、
+  terrain 90,623→74,969（会话累计 −55k）；边距 1.0 无增益，定 0.5；
+- 回归：terrain/2d + raster-elevation（17 例）+ 线族 26 例对照逐值一致零回归。
+剩余 ~71k：亮度混合（快照 sRGB 已编码 vs live RT 未编码的瓦片并存）与 drape
+对齐细节，仍在 drape 域内继续。
