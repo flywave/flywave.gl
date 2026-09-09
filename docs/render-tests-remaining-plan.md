@@ -417,3 +417,17 @@ pattern/terrain 夹具黑底的首轮定位（复用 liteldbg/rtdump 既有探�
   base64 RT 转储可离线重建 PNG 进一步取证（tmp/rtdump3.log）。
 - 工具链提示：探针开关经 MBSTYLE_LITEDBG/MBSTYLE_RTDUMP env → karma client
   args（scripts/run-mbstyle-render-tests.js 的白名单映射）。
+
+### §885 终一百七十三：draped raster 空烘几何定位（2026-09-10 续）
+
+在 终一百七十二 基础上逐层排除，锁定到顶点着色器层：
+- bake 相机帧逐瓦片验证**正确**（9 帧精确平铺 raster 网格区，i=1/i=3 与
+  raster 3×2 网格真实重叠）；raster mesh 在每个瓦片 bake 时**全部可见**；
+- 但真实重叠瓦片（如 i=1）的 RT 全透明（T512/C0），仅 i=3 出内容——
+  **raster fill 顶点着色器的 DEM 采样 UV 在 bake 正交相机下错映射**
+  （§499 既有记档："mis-mapped UV under the ortho bake camera"，顶点被
+  −10000m 边值抬走/丢弃）——非相机帧/可见性/时序问题；
+- 部分覆盖冻结修复（snaps<size 不冻结）已验证逻辑成立但因底层 DEM-UV
+  未修只有噪声级效果，暂回退不入库，随 DEM-UV 专项一并落地；
+- 下一步：raster fill 材质的 DEM 抬升 UV 需按主相机一致的世界坐标计算
+  （或 bake 时禁用抬升、bake 后由地形面自身提供高度）。
