@@ -379,3 +379,15 @@ expected 3,155 dark px / 我们 3,298，逐像素一致）。终一百五十八�
 饥饿（z20 柏林 lat52.5，cos≈0.61 使第二条折线宽度低于亚像素阈值被剔除）。
 RTE 专项关闭，无需架构改造；同族 line-width 家族当前 7 PASS/47 FAIL，
 剩余为 width-function/复合函数域（另行专项）。
+
+### §885 终一百七十：meters 线宽过缩放因子（variable-width 域开工，2026-09-10）
+
+variable-width/interpolate-to-zero（z22 geojson）取证：mgl 实拍 vs expected 仅
+7,988 而我们 106,970 —— **真实差距**（非参照漂移）。反解 mgl draw_line.ts：
+`lineWidthScale = (1/tileToMeter(T)) / pixelsToTileUnits(z)` = `512·2^T/(CIRC·cos)`
+—— meters 宽只随 **canonical 瓦片 zoom T**（min(相机, 源maxzoom)，geojson 默认
+18）缩放，与相机 zoom 无关；过缩放桶的 meters 宽比缩放匹配桶小 `2^(T−Z)`。
+落地（emitter `setSourceMaxZoomMap` + decoder configure 建图）：夹具
+106,970→8,814（−92%，与 mgl 实拍 7,988 同级=参照底线）；pattern −565；
+line-width 家族 7 PASS 持平、64 夹具线族对照逐值一致零回归。
+先前对 secLat 的删除为误诊（meters-default 反推 sec 项本就正确），已恢复。
