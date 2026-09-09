@@ -1375,3 +1375,15 @@ clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、groun
 全部夹具真实渲染（std 7.9–76.2，无一空白）。buildings-trees 黄像素 14,574 首现（树冠/道路内容）；道路 48 像素可渲染但 vendored 瓦 15-5240-* / 14-2618/2619 列 404（日志实锤）限制覆盖——数据补齐前不可回收。
 
 **账面分数变化说明**：guard 10,138→23,024、buildings-trees 457,874→677,889 为"空白/半空白巧合帧 → 真实渲染（未标定）"的过渡，非质量回退；真实基线自本轮起以帧检三件套重立。
+
+### §885 终一百五十：line 家族复测——22 PASS 真实基线立档（2026-09-09）
+
+线渲染回归修复后（终一百四十六~四十八），chunked runner（batch=6、chrome-headless-shell 指纹核对）复测 7+7 个线类目 146 夹具：
+
+**PASS 22**（Sep-7 同类目 16）：line-blend-mode 5/6、line-join 4/11、line-dasharray 2/30、line-width 2/18、elevated-line-join 4/9、elevated-line-dasharray 2/29、elevated-line-width 2/7、fill-extrusion-line-width 1/2。
+
+**帧检三件套**：真实渲染 133/146（std≥2）；空白 13（其中 zero-width/zero-values/zero-gap-width 类本就期望空白输出，多为合法 PASS——如 line-width/zero-width、unusual-cases/zero-values）。
+
+**丢失 4 PASS 分析**（Sep-7 PASS → 现在 FAIL）：line-width|elevated-line-width/very-overscaled（0→4,736/4,737，帧检 std 36.2/35.4 与 expected 几乎一致——overscale 细节偏移，接近 PASS）；line-gradient/gradient-vector-tile|gradient-with-corners（19→5,504、34→3,157；我们 mean 202-248 vs expected 55-6——渐变色未生效，线以基色渲染，特征级缺口）。
+
+**下阶段**：①line-gradient 渐变 uniform 链路排查（特征实现）；②very-overscaled 细节偏移（接近 PASS，小步标定可过）；③line-join/line-cap/dasharray 主体的非 PASS 项为透明款叠加与 dash 细节（§876 分析已入档）。
