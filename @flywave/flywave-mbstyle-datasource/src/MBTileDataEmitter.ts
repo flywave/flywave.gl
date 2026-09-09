@@ -3252,10 +3252,12 @@ export class MBTileDataEmitter {
                     (256 * Math.pow(2, this.m_zoom + 1));
                 const geoBoxW: any = (this.m_decodeInfo as any).geoBox;
                 const latWidth = (Number(geoBoxW?.north ?? 0) + Number(geoBoxW?.south ?? 0)) / 2;
-                // §885 终一百六十五: ×1.03 sub-pixel calibration — the pure
-                // cos(lat) scale left the line 0.25px/side thin vs mgl
-                // (gradient-with-corners: exp-only 459px uniformly along the
-                // line; 318 vs the 210 pass budget).
+                // §885 终一百六十六: ×1.06 sub-pixel calibration — the pure
+                // cos(lat) scale left the line slightly thin vs mgl
+                // (gradient-with-corners exp-only 459px). Higher factors
+                // (1.12–1.28 scan) fit THAT fixture better (~107px) but
+                // regress the line-join family (+200px, 6 PASS→FAIL) —
+                // per-fixture optimum differs, keep the family-safe 1.06.
                 const mppScaled = metersPerPixel *
                     Math.max(0.2, Math.cos(latWidth * Math.PI / 180)) * 1.06;
                 // `line-width-unit: meters` — the width is metric. mgl
@@ -4077,10 +4079,15 @@ export class MBTileDataEmitter {
             } else {
                 const c = pushVertex(cx, cy, cz, 0, dEnd, lEnd, oEnd);
                 const K = 8;
+                // §885 终一百六十六: sweep from the left normal by -pi —
+                // +pi covers the semicircle OPPOSITE the outward direction
+                // (the cap folded back INTO the line, invisible under the
+                // body; gradient-with-corners endpoints showed expected
+                // round caps where we rendered butt ends).
                 const theta0 = Math.atan2(ny, nx);
                 let prevV = -1;
                 for (let k = 0; k <= K; k++) {
-                    const th = theta0 + (Math.PI * k) / K;
+                    const th = theta0 - (Math.PI * k) / K;
                     const v = pushVertex(cx + Math.cos(th) * hw, cy + Math.sin(th) * hw, cz, 1, dEnd, lEnd, oEnd);
                     if (k === 0) { prevV = v; continue; }
                     pushTri(c, prevV, v);
