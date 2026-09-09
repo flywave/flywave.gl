@@ -133,6 +133,45 @@ function parseProgressStopsStatic(raw: any): Array<[number, number]> | undefined
     return stops.length > 1 ? stops : undefined;
 }
 
+/**
+ * §885 终一百七十一: evaluate an arithmetic expression tree over constants
+ * and ["line-progress"] at a given progress p (ops + - * /). Returns NaN on
+ * anything non-numeric/non-arithmetic. Used to derive linear-form variable
+ * widths like ["+", 14, ["*", ["line-progress"], 10]] that
+ * parseProgressStopsStatic's interpolate-only path skips.
+ */
+function evalProgressArith(node: any, p: number): number {
+    if (typeof node === 'number') return node;
+    if (!Array.isArray(node) || node.length === 0) return NaN;
+    const op = node[0];
+    if (op === 'line-progress') return p;
+    if (op === 'literal' || op === 'number') return Number(node[1]);
+    const args = node.slice(1).map((n: any) => evalProgressArith(n, p));
+    if (args.some((v: number) => !Number.isFinite(v))) return NaN;
+    switch (op) {
+        case '+': return args.slice(1).reduce((a: number, b: number) => a + b, args[0]);
+        case '-': return args.length === 2 ? args[0] - args[1] : -args[0];
+        case '*': return args.slice(1).reduce((a: number, b: number) => a * b, args[0]);
+        case '/': return args.length === 2 ? args[0] / args[1] : NaN;
+        default: return NaN;
+    }
+}
+
+/**
+ * Linear-form line-progress width: sample the arithmetic expression at
+ * progress 0 and 1 — for +,-,*,/ over constants the map is linear, so the
+ * two samples are exact endpoints [[0, a], [1, a+b]].
+ */
+function parseLinearProgressStopsStatic(raw: any): Array<[number, number]> | undefined {
+    if (!Array.isArray(raw)) return undefined;
+    if (!JSON.stringify(raw).includes('line-progress')) return undefined;
+    const v0 = evalProgressArith(raw, 0);
+    const v1 = evalProgressArith(raw, 1);
+    return Number.isFinite(v0) && Number.isFinite(v1) && v0 !== v1
+        ? [[0, v0], [1, v1]]
+        : undefined;
+}
+
 /** Linear interpolation over sorted [[t, v], …] stops. */
 function interpProgressStops(stops: Array<[number, number]>, t: number): number {
     if (t <= stops[0][0]) return stops[0][1];
@@ -3321,7 +3360,8 @@ export class MBTileDataEmitter {
                 // from the cumulative distance.
                 let progressHalfWidths: number[] | undefined;
                 const rawWidthSpec = (layer as any).paintDefs?.['line-width']?.value;
-                const pwStops = parseProgressStopsStatic(rawWidthSpec);
+                const pwStops = parseProgressStopsStatic(rawWidthSpec)
+                    ?? parseLinearProgressStopsStatic(rawWidthSpec);
                 if (pwStops && worldPts.length >= 6) {
                     const cn = worldPts.length / 3;
                     const segLens: number[] = [0];
