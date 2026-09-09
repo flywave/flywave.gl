@@ -619,3 +619,16 @@ shadows 仍 0 绿（[74,74,66] 灰带且位置异于 expected）且 line-string 
 设计记录。下一步（新会话）：①先单独验证 _mbUnlit 钩子对窄带（line-string）
 无害；②宽带（≥10px）的 mpp 带宽换算与放置对拍（expected 绿 6,458px vs
 我们的带明显偏细/偏位）；③再解 ≥10 门控。工作树回到 0b6b2614 验证态。
+
+### §885 终一百八十四：shadows 宽带三步走收官（2026-09-10）
+
+① `_mbUnlit` 钩子三种形态证伪：Basic 类切换断 tile 管线、emissive 被
+MapMeshStandardMaterial 忽略（黑屏实证）、removeDiffuseLight 只去 diffuse
+仍余 ambient（[0,37,0] 不变）。② 正解：**线分支宽带（≥10px）technique 改名
+'fill'**——引擎工厂对 fill 给 MapMeshBasicMaterial（无光照 raw），墙带 z 已烘
+焙进 positions 无需挤出着色器；shadows 30,279→**25,964**（解除 ≥10 门控，
+曾 86k）。③ 窄带保 extruded-polygon 渐变路径（infinite-miter 2,861 不回归）。
+全家族 8 夹具历史最优：default 21,574 / multi-tile 6,342 / line-string
+25,526 / infinite-miter 2,861 / shadows 25,964 / building 23,241 /
+sharp-corner 9,657 / pattern 12,564；zero-width PASS；height/opacity 域
+（lineWidth=0）不受影响。
