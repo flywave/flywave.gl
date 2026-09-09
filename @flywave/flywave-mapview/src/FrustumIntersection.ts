@@ -626,7 +626,25 @@ export class FrustumIntersection {
                 return undefined;
             }
         }
-        const { area, distance } = this.computeTileAreaAndDistance(cache.tileBounds);
+        // §885 终一百七十七: mgl covers pitched views with a half-tile
+        // border — our exact-frustum test cuts coverage at the boundary
+        // between adjacent tiles (pattern/terrain: 13/1515/3218 exists,
+        // mgl renders it, our frustum rejects its box by a hair). Inflate
+        // the TEST box (area/distance still exact) by half a tile when
+        // pitched; flat views keep the exact test.
+        const pitched = MapViewUtils.extractAttitude(this.mapView, this.m_camera).pitch > 0.01;
+        let testBounds: THREE.Box3 | OrientedBox3 = cache.tileBounds;
+        if (pitched && cache.tileBounds instanceof THREE.Box3) {
+            const b = cache.tileBounds;
+            const mx = (b.max.x - b.min.x) * 0.5;
+            const my = (b.max.y - b.min.y) * 0.5;
+            const mz = Math.max((b.max.z - b.min.z) * 0.5, 500);
+            testBounds = new THREE.Box3(
+                new THREE.Vector3(b.min.x - mx, b.min.y - my, b.min.z - mz),
+                new THREE.Vector3(b.max.x + mx, b.max.y + my, b.max.z + mz)
+            );
+        }
+        const { area, distance } = this.computeTileAreaAndDistance(testBounds);
 
         if (area > 0) {
             return new TileKeyEntry(
