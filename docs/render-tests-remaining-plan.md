@@ -431,3 +431,17 @@ pattern/terrain 夹具黑底的首轮定位（复用 liteldbg/rtdump 既有探�
   未修只有噪声级效果，暂回退不入库，随 DEM-UV 专项一并落地；
 - 下一步：raster fill 材质的 DEM 抬升 UV 需按主相机一致的世界坐标计算
   （或 bake 时禁用抬升、bake 后由地形面自身提供高度）。
+
+### §885 终一百七十四：draped raster 卫星黑底修复（2026-09-10 三收）
+
+修正 终一百七十三 的 DEM-UV 定性（mesh z≈−8081 实为相机相对高度，非塌缩）。
+真实根因三处（commit 0b06a920）：
+1. **快照按循环索引键**——dem-tile 顺序跨 pass 洗牌（异步加载），退役瓦片的
+   快照安到新 mesh 上（错位 drape）；改瓦片身份键（originX/originY）；
+2. **单瓦片真实内容即全局冻结**——逐 pass raster mesh churn 使不同瓦片在不同
+   pass 收敛，一瓦即冻锁死其余黑；改部分覆盖不冻结（快照不可变，重烘只增不减）；
+3. **uMBRteCamPos 一次性捕获**——相机 settled 后 stale；改 onBeforeRender 逐帧刷新。
+效果：pattern 夹具卫星从全黑恢复（彩色像素 0→148k；均值 117/112/92 与 mgl 实拍
+119/115/96 一致）。剩余 ~132k 差为亮度域：我引擎与 mgl 实拍**同**比 expected 暗
+~60/255（疑 SwiftShader 纹理 colorspace，参照底线域）。17 夹具 terrain/2d +
+raster-elevation 对照零回归。
