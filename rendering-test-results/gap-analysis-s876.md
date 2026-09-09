@@ -1387,3 +1387,11 @@ clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、groun
 **丢失 4 PASS 分析**（Sep-7 PASS → 现在 FAIL）：line-width|elevated-line-width/very-overscaled（0→4,736/4,737，帧检 std 36.2/35.4 与 expected 几乎一致——overscale 细节偏移，接近 PASS）；line-gradient/gradient-vector-tile|gradient-with-corners（19→5,504、34→3,157；我们 mean 202-248 vs expected 55-6——渐变色未生效，线以基色渲染，特征级缺口）。
 
 **下阶段**：①line-gradient 渐变 uniform 链路排查（特征实现）；②very-overscaled 细节偏移（接近 PASS，小步标定可过）；③line-join/line-cap/dasharray 主体的非 PASS 项为透明款叠加与 dash 细节（§876 分析已入档）。
+
+### §885 终一百五十二：无背景样式透明黑清屏（mgl 画布语义）+ line-gradient 残差定位（2026-09-09）
+
+**清屏语义修正**：无可见 background 层的样式，applyBackgroundColor 末尾设置 `clearColor=0x000000, clearAlpha=0` + `sceneEnvironment.clearOverride`（防 theme 异步清屏回填白色）。mgl 画布无内容处即透明黑（expected PNG 角落实测 (0,0,0,0)），我们的不透明白角落与 mgl 画布语义不符。帧检确认修复后 gradient-with-corners 角落 (0,0,0,0)✓、渐变线像素 (0,255,38) 与 expected 逐位一致。注意：IBCT 比较器对双侧 alpha 合成，故该修复分数中性（3,157→3,202、5,504→5,509 噪声带内），但画布语义与 mgl 对齐。
+
+**line-gradient 残差定位（3.2k/5.5k 的构成）**：①线端点差（我们线延伸超出 expected 端点/缺失 expected 段——cap 与端点几何）；②line-progress 采样相移（同位置色值 (100,255,0) vs (132,255,0)——progress 归一化与 mgl 的累计折距定义存在标定差）。uMBGradient 纹理与采样链路本身正确（渐变主体色带逐位一致）。
+
+**下阶段**：①line-progress 归一化对齐 mgl lineMetrics（折距/总长定义）；②端点 cap 几何；③（外部 token）15-5240-* 等缺失瓦补齐后道路覆盖回收。

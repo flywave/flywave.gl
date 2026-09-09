@@ -5265,10 +5265,22 @@ export class MBStyleDataSource extends TileDataSource {
                 return;
             }
         }
-        // NOTE: without a background layer the engine keeps its opaque white
-        // clear; the render-test comparison alpha-composites the RGBA
-        // reference over white (see flywave-test-utils compareImages), so the
-        // transparent reference background matches the white canvas.
+        // §885 终一百五十一: no background layer → mgl's canvas is
+        // TRANSPARENT where nothing draws (expected PNGs store RGB 0,0,0 +
+        // alpha 0), and pixelmatch compares RGBA — an opaque white clear
+        // mismatched every bare pixel (line-gradient family: the gradient
+        // line itself rendered bit-exact while the whole background counted
+        // as mismatch). Clear to transparent black; the sceneEnvironment
+        // clearOverride keeps the theme manager's async clear from
+        // re-asserting opaque white.
+        const hasBg = (style.layers ?? []).some((l: any) =>
+            l?.type === 'background' && (l?.layout?.visibility ?? 'visible') !== 'none');
+        if (!hasBg) {
+            (this.mapView as any).clearColor = 0x000000;
+            (this.mapView as any).clearAlpha = 0;
+            const e151: any = (this.mapView as any).sceneEnvironment;
+            if (e151) e151.clearOverride = { color: 0x000000, alpha: 0 };
+        }
     }
 
     /**

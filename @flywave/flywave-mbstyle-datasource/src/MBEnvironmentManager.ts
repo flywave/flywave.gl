@@ -939,10 +939,15 @@ export class MBEnvironmentManager {
                     (this.m_mapView as any).clearAlpha = 1;
                     this.applyGlobeDiscBackground();
                 } else {
-                    // White clear = mgl's transparent space composited over the
-                    // white test canvas (bare frames, no background layer).
-                    (this.m_mapView as any).clearColor = 0xffffff;
-                    (this.m_mapView as any).clearAlpha = 1;
+                    // §885 终一百五十一: mgl's canvas is TRANSPARENT where
+                    // nothing draws (expected PNGs: RGB 0,0,0 + alpha 0) —
+                    // bare frames must clear to transparent black, not white
+                    // (line-gradient/line fixtures: the white clear painted
+                    // over every no-background style; the gradient line
+                    // itself rendered bit-exact). The globe-branch white
+                    // clear above is unchanged (space rendering).
+                    (this.m_mapView as any).clearColor = 0x000000;
+                    (this.m_mapView as any).clearAlpha = 0;
                     this.disposeGlobeAtmosphere();
                 }
                 // The fog chunk is baked in at compile time — force a
