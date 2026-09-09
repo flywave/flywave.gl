@@ -403,3 +403,17 @@ interpolate-only 的变宽解析内 → 恒宽回退。新增 `parseLinearProgre
 linear 1,284→**11**、shared-layout 1,291→**17**、z-offset→349、terrain −3,207、
 pattern −888；interpolate 路径零回归。pattern/terrain 剩余主体 = draped
 satellite（待 terrain 架构专项）。
+
+### §885 终一百七十二：terrain draped raster 取证开工（2026-09-10）
+
+pattern/terrain 夹具黑底的首轮定位（复用 liteldbg/rtdump 既有探针体系）：
+- bake 管线本身运转正常（bakeAll 进入、9 mesh/9 demTile、needsBake 收敛、
+  anyReal=true、snapshot 冻结）；
+- **逐瓦片 bake 内容分类（midRow）：9 个 DEM 瓦片中 8 个为空（全透明/不透明黑，
+  B0/T512/C0），仅 1 个含真实彩色内容（C405/m206）**——satellite 栅格几何只
+  覆盖/可见于 1/9 的地形瓦片，其余地形面无 drape 纹理而呈底色（黑）。
+- 待查方向：raster mesh 的世界包围盒/挂载（应横跨多个 DEM 瓦片）或 bake 正交
+  相机逐瓦片可见性（layer 2 opt-in）在其余 8 瓦片上失效；rtdump 的 64 段
+  base64 RT 转储可离线重建 PNG 进一步取证（tmp/rtdump3.log）。
+- 工具链提示：探针开关经 MBSTYLE_LITEDBG/MBSTYLE_RTDUMP env → karma client
+  args（scripts/run-mbstyle-render-tests.js 的白名单映射）。
