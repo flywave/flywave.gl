@@ -1411,3 +1411,7 @@ StaticLineMaterial 的 `vCoords.x = extrusionDir / vRange.xy`（SolidLineMateria
 **验证**（lat 37.78 夹具组）：gradient-with-corners 3,202→**2,894**（−10%）；line-width|elevated-line-width very-overscaled 4,736→**3,761**（−21%，帧检结构已与 expected 一致）；**零回归**——additive-clamp-low 12 PASS、line-join bevel/default/miter/none 0px ×4、dasharray case/butt 16 + zero-values 0、zero-width ×2 全部保持 PASS。
 
 **遗留**：gradient 残差 2,894/5,509（拐角 join 几何+progress 相移，几何专项）；very-overscaled 3,761（残余 overscale 采样细节）；其余 line 家族非 PASS 项为透明款叠加/dash 细节（既有分析）。
+
+### §885 终一百五十六：very-overscaled 定案——缺失 overscale 线宽放大（特征缺口）（2026-09-09）
+
+逐行像素剖析（latw 运行帧）：expected 在 very-overscaled 呈 130px 级宽暗楔（父瓦过缩放放大后的线宽），我们仅 6px 细线——**ribbon 宽度以显示 zoom 的 mpp 烘焙，未按父瓦 overscale 倍数放大**（mgl：overscale 瓦的线宽随 2^(renderZoom−tileZoom) 放大）。修复需在 ribbon 构建时按瓦的 overscale 因子缩放 worldHalfWidth/变量宽（含 fill-outline 同路径），并回归 line-width 全族（overscale 与非 overscale 夹具交叉验证）。非一轮可安全落地，列为专项。
