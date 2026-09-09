@@ -632,3 +632,21 @@ MapMeshStandardMaterial 忽略（黑屏实证）、removeDiffuseLight 只去 dif
 25,526 / infinite-miter 2,861 / shadows 25,964 / building 23,241 /
 sharp-corner 9,657 / pattern 12,564；zero-width PASS；height/opacity 域
 （lineWidth=0）不受影响。
+
+### §885 终一百八十五：line-dasharray 家族开工取证（2026-09-10）
+
+家族全景：59 例 4 PASS（case/butt 16/19、zero-values ×2）——**长尾分布**：
+33 例 ≤200px（unusual-cases/empty-array 12、literal/line-width-constant 21、
+composite-dash-composite-cap 21 等），仅 6 例 >1k（line-metrics 3,312、
+overscaled-terrain 3,396、slant 2,926、less-than-one 1,566、round/segments 1,130）。
+top-3 实拍对拍（512×256）：
+
+| 夹具 | mgl-vs-exp | 我们-vs-exp |
+|---|---:|---:|
+| line-metrics | 5,705 | **3,312** |
+| slant | 5,681 | **2,926** |
+| less-than-one | 5,662 | **1,573** |
+
+**我们的渲染一致比 mgl 实拍近 1.6-3.6×**——剩余主体属参照漂移域（mgl-live
+对三夹具稳定 ~5.7k，系统性差异）。继续像素收敛受参照限制；次级可收项为
+长尾 ≤200px 的 33 例（各自独立小差，非系统性缺口）。
