@@ -445,3 +445,15 @@ pattern/terrain 夹具黑底的首轮定位（复用 liteldbg/rtdump 既有探�
 119/115/96 一致）。剩余 ~132k 差为亮度域：我引擎与 mgl 实拍**同**比 expected 暗
 ~60/255（疑 SwiftShader 纹理 colorspace，参照底线域）。17 夹具 terrain/2d +
 raster-elevation 对照零回归。
+
+### §885 终一百七十五：drape 修复实际生效 + 快照 sRGB 预编码（2026-09-10 四收）
+
+发现并修复 0b06a920 误提交的 stray `}`（探针移除残留，TS1472 编译坏）——此后
+所有测试跑在旧 webpack 包上，drape 三处修复（快照瓦片身份键/部分覆盖不冻结/
+RTE 逐帧刷新）**实际首次生效**：pattern 132,120→87,109、terrain 135,524→90,623
+（各 −45k）。另加快照字节 sRGB 预编码（bake RT 持线性值，MapTerrainMaterial 的
+drape 覆写裸写 gl_FragColor：117≈linear(180)）。17 夹具 terrain/2d +
+raster-elevation 对照：仅 terrain −39.7k，其余逐值不变零回归。
+剩余差异形态：左带 drape 覆盖缺失（realContent gate 未过的瓦片）+ 亮度混合，
+继续在 drape 收敛域内。教训入档：**提交前必须 tsc/构建校验**（本轮 86 个既有
+TS 错误掩盖了新增语法错，需以 karma webpack 实际编译为准）。
