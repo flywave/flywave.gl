@@ -1395,3 +1395,7 @@ clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、groun
 **line-gradient 残差定位（3.2k/5.5k 的构成）**：①线端点差（我们线延伸超出 expected 端点/缺失 expected 段——cap 与端点几何）；②line-progress 采样相移（同位置色值 (100,255,0) vs (132,255,0)——progress 归一化与 mgl 的累计折距定义存在标定差）。uMBGradient 纹理与采样链路本身正确（渐变主体色带逐位一致）。
 
 **下阶段**：①line-progress 归一化对齐 mgl lineMetrics（折距/总长定义）；②端点 cap 几何；③（外部 token）15-5240-* 等缺失瓦补齐后道路覆盖回收。
+
+### §885 终一百五十三：line-progress 归一化机制定案（下阶段实施方案）（2026-09-09）
+
+StaticLineMaterial 的 `vCoords.x = extrusionDir / vRange.xy`（SolidLineMaterial.ts:136）是 dash 语义的挤出坐标，并非 mgl lineMetrics 的折距归一化（mgl 以 CPU 侧逐特征累计折距/总长生成 line_progress，gradient 纹理按其采样）。当前 `fract(vCoords.x)` 采样在 gradient-with-corners 上产生小幅相移（同位色值 (100,255,0) vs (132,255,0)）与端点外溢——正确方案需在 ribbon 顶点属性中引入逐特征 totalLength + 归一化 progress varying（feature 级改造，单夹具对风险收益比不成立，列为下阶段专项）。本轮以机制定案收口，不改代码。
