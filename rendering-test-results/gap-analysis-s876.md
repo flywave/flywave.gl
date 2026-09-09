@@ -1330,3 +1330,13 @@ clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、groun
 **默认路径验证**（无环境变量，同组合）：ground-shadow-fog **134,455**（旧内容态 163,614–167,527 → −18~30%）、hard-cutoff 134,345、守卫 10,138 ✓、buildings-trees 457,874 ✓ 逐位不变。
 
 **遗留**：①道路线层零渲染（expected 19,472 黄像素 vs 我们 0；vendored 瓦含 road 层，数据在，疑 SolidLine stencil/线技术分派，独立排查）；②雾边界位置与 expected 的残余错位（相机框架差）使白雾在分数上仍占优——道路+地面阴影图案补齐后收敛；③fog 家族 47 FAIL 的主体（terrain 子族、globe 子族、horizon-blend 族）待逐项。
+
+### §885 终一百四十六：线渲染回归根因+修复——注入 GLSL 编译失败族（2026-09-09）
+
+**回归定位**（git bisect + 双点确定性复验）：f6ddcf5a（终一百二十 cascade-1）起，所有携带 ground-shadow 注入的材质编译失败，线与地面 fill 整体消失（line-blend-mode/additive-clamp-low：Sep-7 PASS 12px → HEAD 10,442 黑帧；three 控制台 `'?:' : ternary operator is not allowed for opaque types` 铁证——cascade-1 的 `texture2D(mbUse1 ? uMBShadowMap1 : uMBShadowMap, …)` 采样器三元为 GLSL ES 非法）。hideq/nocull 排除覆盖与剔除假设。
+
+**编译阻断修复（已验证）**：①采样器三元→if/else 分支；②`uMBInvViewProj` 声明+播种+逐帧喂值（终一百三十四 ray-cast 重写使用但从未声明）；③`vec2(t1, 0.0)`（t1 已是 vec2，3 参构造）→float 化；④DIAG5/DIAG7 门 `#ifdef`→`#if`（`#define X 0` 下 ifdef 恒真，诊断块默认激活）；⑤injectGroundShadow 内保证 BIAS/DIAG define 存在（sweep 注入的引擎材质此前拿不到）；⑥quad 材质 fog:false（fog 样式下 USE_FOG+被替换掉的 project_vertex → quad 顶点编译失败，quad 静默消失）。
+
+**验证**：line-blend-mode/additive-clamp-low 12 **PASSED: True——首个基线失败夹具实际转 PASS**；守卫 10,138 逐位零回归；ground-shadow-fog 142,306（较修复前 134,455 +7.8k：新编译的地面 fill 以未标定颜色入画，结构完整但分数暂退——道路 0 黄像素仍在，后续修掉即回收）。
+
+**遗留（下轮队列）**：①挤出/模型 MeshStandardMaterial 的 fog uniform 重定义（fogAlpha/fogMgl* 双声明，2 处错误×2）；②quad 顶点 vNdc 未声明（某 wrapper 覆盖了 ensureGroundQuad 的 vertex prepend，onBeforeCompile 链被覆盖式赋值破坏）；③道路 ribbon 顶点 mvPosition 未声明（fog_vertex 无 project_vertex 前置）；④uMBPbrTermDbg 未声明（PBR 调试探针泄漏）。

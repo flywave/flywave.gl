@@ -36,6 +36,9 @@ export interface ShadowUniformState {
     eye: THREE.Vector3;
     /** Drawing-buffer size in device px (gl_FragCoord space). */
     res: THREE.Vector2;
+    /** §885 终一百四十六: matrixWorld·projectionMatrixInverse — the receiver
+     * ray-cast's NDC→world unproject matrix (uMBInvViewProj). */
+    invViewProj?: THREE.Matrix4;
     /** §717: shadow-camera far (world units) — the fade-out envelope. */
     far: number;
 }
@@ -142,6 +145,18 @@ export class MBShadowRenderer {
         if (!this.enabled || !this.m_shTex) return null;
         if (!this.m_groundUniforms) return null;
         const cv = this.m_mapView?.canvas as HTMLCanvasElement | undefined;
+        // §885 终一百四十六: view→world unproject matrix for the receiver
+        // ray-cast (uMBInvViewProj). matrixWorld·projectionMatrixInverse maps
+        // NDC (±1) back to world; recomputed each read so the per-frame
+        // camera move never desynchronizes the receivers.
+        const cam = this.m_mapView?.camera as THREE.PerspectiveCamera | undefined;
+        if (cam) {
+            (this as any).__mbInvViewProj =
+                ((this as any).__mbInvViewProj as THREE.Matrix4) ??
+                new THREE.Matrix4();
+            ((this as any).__mbInvViewProj as THREE.Matrix4)
+                .multiplyMatrices(cam.matrixWorld, cam.projectionMatrixInverse);
+        }
         return {
             map: this.m_shTex,
             matrix: this.m_matrix,
@@ -152,6 +167,7 @@ export class MBShadowRenderer {
             corners: this.m_corners,
             eye: this.m_eye,
             res: this.m_res,
+            invViewProj: (this as any).__mbInvViewProj as THREE.Matrix4,
             // §717: mgl u_fade_range = [lastCascade.far×0.75, lastCascade.far]
             // (shadow_renderer.ts:363) — receiver shadows fade to lit across
             // the far quarter of the coverage; single-cascade far stands in.
@@ -173,6 +189,12 @@ export class MBShadowRenderer {
             // needs transparent:true; the multiply-underlay mode
             // (shadowoverlay=0, 终一百四十二) composites in the color op instead.
             transparent: (globalThis as any).__mbShadowOverlay !== false,
+            // §885 终一百四十六: the quad's vertex replace drops
+            // project_vertex (mvPosition) — with material.fog on a fog style
+            // three's fog_vertex chunk then references mvPosition and the
+            // whole program fails to compile (quad silently gone). The quad
+            // is the shadow overlay itself: no scene fog.
+            fog: false,
         });
         // the scene sweep must not inject the ground receiver into the quad
         (mat as any).__mbShadowSkipped = true;

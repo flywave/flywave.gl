@@ -310,6 +310,12 @@ export class MBMaterialPatchManager {
                             if (u.uMBGC) u.uMBGC.value = shadowState.corners;
                             if (u.uMBEye) u.uMBEye.value = shadowState.eye;
                             if (u.uMBRes) u.uMBRes.value = shadowState.res;
+                            // §885 终一百四十六: live ray-cast unproject matrix
+                            // (recomputed per read in getShadowUniforms — copy
+                            // so the shader holds a stable snapshot per frame).
+                            if (u.uMBInvViewProj && (shadowState as any)?.invViewProj) {
+                                (u.uMBInvViewProj.value as THREE.Matrix4).copy((shadowState as any).invViewProj);
+                            }
                         } else if (identity) {
                             if (u.uMBShadowMatrix) u.uMBShadowMatrix.value = identity;
                         }
@@ -3113,6 +3119,20 @@ export class MBMaterialPatchManager {
         const orig = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
             if (orig) orig.call(material, shader);
+            // §885 终一百四十六: guarantee the receiver GLSL's compile-time
+            // defines on EVERY injected material — sweep-injected engine
+            // materials never pass through the patchFillMaterial prepend that
+            // carries MB_SH_BIAS/DIAG5/DIAG7 (their absence failed compilation
+            // wholesale: lines/ground fills vanished). Identical-text
+            // redefinition (when the fill path also emitted them) is benign.
+            const bVd = Number((globalThis as any).__mbShadowBias ?? 0.0002);
+            const d5d = (globalThis as any).__mbShadowDiag === '5' ? 1 : 0;
+            const d7d = (globalThis as any).__mbShadowDiag === '7' ? 1 : 0;
+            if (!shader.fragmentShader.includes('#define MB_SH_BIAS')) {
+                shader.fragmentShader =
+                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n`
+                    + shader.fragmentShader;
+            }
             // §885 终五十八: seed uniforms with the CURRENT shadow state —
             // static fixtures idle after ~3 frames, and a late-injected
             // material compiled with zeros would never see the per-frame
@@ -3125,6 +3145,10 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBShadowMap1 = { value: shSeed?.map1 ?? null };
             shader.uniforms.uMBShadowTexel1 = { value: (2.0 * (shSeed ? 470 : 470)) / 1024.0 };
             shader.uniforms.uMBShadowMatrix1 = { value: shSeed ? (shSeed.matrix1 ? shSeed.matrix1.clone() : new THREE.Matrix4()) : new THREE.Matrix4() };
+            // §885 终一百四十六: seed the ray-cast unproject matrix (the
+            // refresh copies the live matrix every frame; identity until the
+            // first shadow frame — the intensity=0 seed keeps it inert).
+            shader.uniforms.uMBInvViewProj = { value: new THREE.Matrix4() };
             shader.uniforms.uMBShadowIntensity = { value: shSeed ? 1 : 0 };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
             // vec3[4] MUST never hold null at first compile/upload — three's
@@ -3159,8 +3183,8 @@ export class MBMaterialPatchManager {
                         vec3 mbRayDir = normalize(mbFarW - mbNearW);
                         float mbRayT = (0.0 - mbNearW.z) / mbRayDir.z;
                         vec3 mbWP = mbNearW + mbRayDir * mbRayT;
-                        #ifdef MB_SH_DIAG7
-                        gl_FragColor = vec4(mbSUV.x, mbSUV.y, 0.5, 1.0);
+                        #if MB_SH_DIAG7
+                        gl_FragColor = vec4(mbSUV2.x, mbSUV2.y, 0.5, 1.0);
                         #endif
                         vec4 mbShadowUv0 = uMBShadowMatrix * vec4(mbWP, 1.0);
                         vec4 mbShadowUv1 = uMBShadowMatrix1 * vec4(mbWP, 1.0);
@@ -3170,12 +3194,23 @@ export class MBMaterialPatchManager {
                         if (mbWP.z <= 1.0 &&
                             mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
                             mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
-                            vec4 mbPk = texture2D(mbUse1 ? uMBShadowMap1 : uMBShadowMap, mbShadowUv.xy);
+                            // §885 终一百四十六: sampler2D is an opaque type —
+                            // GLSL ES forbids '?:' on it (ANGLE: "ternary
+                            // operator is not allowed for opaque types"). The
+                            // ternary here silently failed EVERY program
+                            // carrying the receiver injection (lines/ground
+                            // fills vanished wholesale); select via branch.
+                            vec4 mbPk;
+                            if (mbUse1) {
+                                mbPk = texture2D(uMBShadowMap1, mbShadowUv.xy);
+                            } else {
+                                mbPk = texture2D(uMBShadowMap, mbShadowUv.xy);
+                            }
                             // §885 终一百二十三: cascade-1 4-tap PCF — the 4×
                             // window has ~4× coarser texels; averaging softens
                             // the band edges toward mgl's smooth shadows.
                             if (mbUse1) {
-                                vec2 t1 = vec2(uMBShadowTexel1);
+                                float t1 = uMBShadowTexel1;
                                 float dsum = mbPk.r
                                     + texture2D(uMBShadowMap1, mbShadowUv.xy + vec2(t1, 0.0)).r
                                     + texture2D(uMBShadowMap1, mbShadowUv.xy + vec2(-t1, 0.0)).r
@@ -3189,7 +3224,7 @@ export class MBMaterialPatchManager {
                             #else
                             mbShadowDepth = mbPk.r + mbPk.g / 255.0;
                             #endif
-                            #ifdef MB_SH_DIAG5
+                            #if MB_SH_DIAG5
                             gl_FragColor = vec4(
                                 clamp(0.5 + 10.0 * (mbShadowDepth - mbShadowUv.z), 0.0, 1.0),
                                 clamp(mbShadowUv.z, 0.0, 1.0),
@@ -3232,6 +3267,10 @@ export class MBMaterialPatchManager {
                 'uniform mat4 uMBShadowMatrix1;\n',
                 'uniform float uMBShadowTexel1;\n',
                 'uniform mat4 uMBShadowMatrix;\n',
+                // §885 终一百四十六: the 终一百三十四 ray-cast rewrite reads
+                // this matrix but never declared it — every program carrying
+                // the receiver failed to compile (lines/ground fills vanished).
+                'uniform mat4 uMBInvViewProj;\n',
                 'uniform float uMBShadowIntensity;\n',
                 'uniform vec3 uMBGroundShadowFactor;\n',
                 'uniform vec3 uMBGC[4];\n',
@@ -3248,7 +3287,12 @@ export class MBMaterialPatchManager {
                 const hwOn = (globalThis as any).__mbShadowHW ? 1 : 0;
                 const d5 = (globalThis as any).__mbShadowDiag === '5' ? 1 : 0;
                 const d7 = (globalThis as any).__mbShadowDiag === '7' ? 1 : 0;
-                shader.fragmentShader = `#define MB_SH_HW ${hwOn}\n#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n` + shader.fragmentShader;
+                // §885 终一百四十六: emit MB_SH_HW only when ON (an
+                // unconditional `#define MB_SH_HW 0` makes `#ifdef MB_SH_HW`
+                // TRUE — the R-only HW decode branch compiled in the default
+                // SW path). DIAG5/DIAG7 stay value-emitted and are selected
+                // with `#if`.
+                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n` + shader.fragmentShader;
             }
             if ((globalThis as any).__mbShadowHW) {
                 shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;
