@@ -1399,3 +1399,7 @@ clean rebuild + 多轮复测确认分数稳定：buildings-trees 457,874、groun
 ### §885 终一百五十三：line-progress 归一化机制定案（下阶段实施方案）（2026-09-09）
 
 StaticLineMaterial 的 `vCoords.x = extrusionDir / vRange.xy`（SolidLineMaterial.ts:136）是 dash 语义的挤出坐标，并非 mgl lineMetrics 的折距归一化（mgl 以 CPU 侧逐特征累计折距/总长生成 line_progress，gradient 纹理按其采样）。当前 `fract(vCoords.x)` 采样在 gradient-with-corners 上产生小幅相移（同位色值 (100,255,0) vs (132,255,0)）与端点外溢——正确方案需在 ribbon 顶点属性中引入逐特征 totalLength + 归一化 progress varying（feature 级改造，单夹具对风险收益比不成立，列为下阶段专项）。本轮以机制定案收口，不改代码。
+
+### §885 终一百五十四：ribbon 渐变链路复核——aRibbonDist 归一化已正确，残差=拐角几何（2026-09-09）
+
+复核修正 终一百五十三 的结论：gradient 夹具实际走 **ribbon 路径**（aRibbonDist 逐顶点属性），且其归一化**已正确实现**——`distAt`（MBTileDataEmitter:3750）输出 0..1 归一化折距，并按 mgl `mapbox_clip_start/end`（progressClip）锚定瓦片裁剪段，无需 SolidLine 专项改造。逐像素残差（gradient-with-corners 3.2k）的实际构成：①拐角 join 段几何差（"with-corners" 专测项——我们拐角覆盖与 mgl 形状不同：同线段 ours 透明处 expected 黄、ours 红外溢处 expected 透明）；②端点 cap 外溢。修复方向=ribbon 拐角 join 几何对齐 mgl line_bucket（addHalfVertex/段端闭合规则），属几何专项。
