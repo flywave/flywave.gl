@@ -558,3 +558,14 @@ default 夹具（z19/pitch60/geojson 建筑）实拍对拍：
 默认）。DoubleSide 试验逐字节无差（非背面剔除）。下轮入口：
 patchExtrusionMaterial 的垂直渐变与光照乘子对拍 mgl fill_extrusion
 fragment（vertical-gradient 默认 true + 光照模型）。
+
+### §885 终一百八十一：fill-extrusion 屋顶光照校准（2026-09-10）
+
+default 夹具残差主体收敛：mgl 屋顶路径（默认光 [1.15,210,30]）有效 NdotL
+≈0.69，我们上向法线 dot 钳到 1.14 → roof 面 `mbNdotL × 0.604`（编译期
+`lineWidth > 0` 门控——zero-width 的零宽薄片保持 flat 亮色语义，无门控时
+0→60k 回归已实证并修复）。效果：default 62,456→**30,620**（−31.8k）、
+sharp-corner→10,215、zero-width 保 PASS；fill-extrusion-height/opacity
+9 夹具同机 stash 对照逐值一致零回归；multi-tile +3.2k（既 FAIL 域内权衡）。
+剩余（default 30.6k）：墙面 [5,93,31] 蓝分量（mgl-live 墙为白/灰、
+expected 为黑——三方各异，需逐墙几何/绕向取证）与 line-width 描边语义。
