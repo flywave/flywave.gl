@@ -594,3 +594,15 @@ GEOMETRY_TYPE_MAP 放行 `fill-extrusion × line`（mgl wallMode 语义：LineSt
 保基线；height/opacity 9 夹具逐值一致零回归。家族 3/9 PASS。
 下轮入口：shadows 宽带的 unlit+阴影语义（mgl 实拍已对齐参照可作 oracle）、
 default 21.6k 的渐变相位细节。
+
+### §885 终一百八十三：shadows 宽带 unlit 实现受阻——材质旁路实证（2026-09-10）
+
+解除 ≥10 门控后系统性尝试 raw 实现（4344 光照块 raw 模板 ×2、4474 程序化
+立面/AO 块 raw 门控）：**shadows 输出逐位不变（86,512 跨全部着色器编辑）**
+——暗面 [0,37,0] 不经过 patchExtrusionMaterial 所 patch 的任何材质。ExtPatchDbg
+探针证实 patchExtrusionMaterial 被调 4 次（layer=extrusion, lw=20, raw=true
+均正确传播），即存在**材质旁路**：线分支墙带的绘制材质未被 patch 链覆盖
+（候选：引擎对 extruded-polygon 的原生材质重建丢弃 onBeforeCompile——
+§12.76-55 同族问题，或绘制路径走未被遍历的第 5 个材质实例）。
+下轮入口：在暗面像素上做 drawlog/材质身份 dump（既有 __mbDrawLog 体系），
+确定绘制者后再实现 unlit。工作树已回退至 0b6b2614（≥10 门控的验证态）。
