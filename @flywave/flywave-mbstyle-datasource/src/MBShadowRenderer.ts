@@ -1177,6 +1177,42 @@ export class MBShadowRenderer {
 
         this.prepGroundQuad(center, radius, eye);
 
+        // §885 终二百二十六: uv/calibration probe (RTE frame + uMBGroundZ).
+        {
+            const gU = (globalThis as any);
+            gU.__mbUvN = (gU.__mbUvN ?? 0) + 1;
+            if (gU.__mbUvN === 50 || gU.__mbUvN === 51) {
+                const cam = (this.m_mapView as any).getRteCamera?.()
+                    ?? (this.m_mapView?.camera as THREE.PerspectiveCamera);
+                cam.updateMatrixWorld();
+                const gZ = (this.m_groundUniforms as any)?.uMBGroundZ?.value;
+                const out: string[] = [];
+                if (Number.isFinite(gZ)) {
+                    for (const [sx, sy] of [[128, 224], [384, 224], [256, 288], [256, 160], [120, 300], [128, 320]]) {
+                        const ndcX = (sx / 512) * 2 - 1;
+                        const ndcY = 1 - (sy / 512) * 2;
+                        const v4 = new THREE.Vector4(ndcX, ndcY, -1, 1)
+                            .applyMatrix4(cam.projectionMatrixInverse);
+                        v4.multiplyScalar(1 / v4.w);
+                        const dirW = new THREE.Vector3(v4.x, v4.y, v4.z)
+                            .applyMatrix4(new THREE.Matrix4().extractRotation(cam.matrixWorld))
+                            .normalize();
+                        if (Math.abs(dirW.z) < 1e-6 || dirW.z > 0) { out.push(`(${sx},${sy})=up`); continue; }
+                        const t = gZ / dirW.z;
+                        const W = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld)
+                            .addScaledVector(dirW, t);
+                        const u4 = new THREE.Vector4(W.x, W.y, W.z, 1).applyMatrix4(this.m_matrix);
+                        const u4b = new THREE.Vector4(W.x, W.y, W.z, 1).applyMatrix4(this.m_matrix1);
+                        out.push(`(${sx},${sy}) c0(${(u4.x / u4.w).toFixed(2)},${(u4.y / u4.w).toFixed(2)},${(u4.z / u4.w).toFixed(2)}) c1(${(u4b.x / u4b.w).toFixed(2)},${(u4b.y / u4b.w).toFixed(2)},${(u4b.z / u4b.w).toFixed(2)})`);
+                    }
+                } else {
+                    out.push('gz=undef');
+                }
+                // eslint-disable-next-line no-console
+                console.log('[MBUvProbe] frame=', gU.__mbUvN, 'gz=', gZ, out.join('  '));
+            }
+        }
+
 
         // §885 终二百一十五: overlay-mode ground quad draws HERE — the
         // composer path bypasses preSceneHook and drops engine-external

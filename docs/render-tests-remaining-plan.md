@@ -1452,3 +1452,24 @@ fill/road 的 3D 方向光照明缺失（lighting-3d-mode 域），此前归因�
 shadowed_light_factor 语义）；②与 lighting-3d-mode 家族（fill-extrusion
 --default 224k 同族）联动；③天空 atmosphere sun-intensity 15 的环境色
 贡献核对。fogprobe=2 已成为该域的标准诊断工具。
+
+### §885 终二百二十四b：cascade-1 入框细扫掠——过渡窗宽 <50 m，入界即过阴影（2026-09-11）
+
+uv 探针（c0/c1 双读出）定位：可见地面 c1 uv.x ∈ [−0.12,−0.03]——**刚好在
+cascade-1 界外一点点**（≈30-120 texel）。细扫掠过渡窗：(45,−650) →
+135,328（界外平台）；(55,−780) → 159,821（入界过阴影）；caster
+normal-offset 0/3 对照 → 逐位相同（非膨胀源）。结论：**cascade-1 入界
+即过阴影，过渡窗宽 <50 m，不存在优于 all-lit 平台 135,328 的 shoff
+位置**。入界即过阴影的根因 = 我们的 cascade-1 深度图在可视地面 uv 处
+铺满建筑深度（15° 低太阳角下建筑投影footprint本就大），叠加 overlay
+0.7 黑 alpha 全量化——而 mgl 同区域是渐进灰（76-104）。
+
+**收敛该区域的完整路径（独立专项）**：①mgl 的 cascade-1 内容核对（真机
+dump mgl 深度图对照，确认 streets texel 占比）；②PCF 核宽加大
+（3×3×1.5 texel 不足，需 mgl 的 PCF 宽度/权重）；③overlay alpha 曲线
+（0.7 常数 vs mgl shadowed_light_factor 的 NDotL 调制）。三项均在
+shadow 专项内，需 GPU frame capture 支持。
+
+**最终交付态**（=HEAD f95c8bba+终二三）：normal-offset 双端 3m + PCF/
+fade + composer 修复，ground-shadow-fog 135,328 / hard-cutoff 135,648
+（all-lit 平台 = 已知最优），三联 0/0/0，全家族 −40.6%。
