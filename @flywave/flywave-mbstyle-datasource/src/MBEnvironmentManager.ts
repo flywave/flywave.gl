@@ -309,6 +309,7 @@ export class MBEnvironmentManager {
                 return hex !== undefined ? new THREE.Color(hex).convertLinearToSRGB() : null;
             })(),
             hasSky: !!(this.m_skyMesh && !this.m_skyMesh.userData.__mbFogAtmosphereDome),
+            atmosphereTail: this.m_fogState.atmosphereTail,
         };
     }
     private m_bgFogParams: { r0: number; r1: number; shift: number; distCam: number } | null = null;
@@ -1160,6 +1161,13 @@ export class MBEnvironmentManager {
             horizonBlendRaw: Number(evalZoom(rawHorizonBlend, 0.2)),
             highColor: new THREE.Color(rawHighColor),
             spaceColor: new THREE.Color(evalZoom(rawSpaceColor, '#010b19')),
+            // §885 终二百一十: the style declares atmosphere parameters —
+            // gates the >76° background-fog quad's residual-tail floor (the
+            // mgl tile-fog residual profile is an atmosphere-family trait;
+            // plain-fog styles like fog/2d/background-color show a clean
+            // unfogged near field).
+            atmosphereTail: fog['horizon-blend'] !== undefined
+                || fog['space-color'] !== undefined,
             // §885 终二百零七: property alphas of the atmosphere gradient
             // stops — the mercator dome must reproduce mgl's premultiplied
             // composite + unpremultiplied capture for space-colors with
@@ -1277,7 +1285,7 @@ export class MBEnvironmentManager {
         // stars on mercator only when the horizon is visible; flywave's
         // mercator fog path has no horizon-visibility gate here).
         if (fog['star-intensity'] && fog['star-intensity'] > 0) {
-            this.createStars(fog['star-intensity']);
+            this.createStars(fog['star-intensity'], true);
         }
     }
 
@@ -1291,6 +1299,7 @@ export class MBEnvironmentManager {
         spaceColor: THREE.Color;
         highAlpha: number;
         spaceAlpha: number;
+        atmosphereTail: boolean;
     } | null = null;
 
     /**
@@ -2222,8 +2231,14 @@ export class MBEnvironmentManager {
             this.m_scene.remove(this.m_skyMesh);
             this.m_skyMesh = null;
         }
-        if (this.m_stars) {
+        // §885 终二百一十: only an EXPLICIT sky layer supersedes the star
+        // field — the no-sky early-return below must not destroy the stars
+        // applyFog just created (they were nulled before, killing the
+        // mercator star field right after creation).
+        if (this.m_stars && sky) {
             this.m_scene.remove(this.m_stars);
+            this.m_starScene?.remove(this.m_stars);
+            this.m_starSink?.(null);
             this.m_stars = null;
         }
 
@@ -2243,7 +2258,7 @@ export class MBEnvironmentManager {
         }
 
         if (fog && fog['star-intensity'] && fog['star-intensity'] > 0) {
-            this.createStars(fog['star-intensity']);
+            this.createStars(fog['star-intensity'], true);
         }
     }
 
@@ -2814,11 +2829,13 @@ export class MBEnvironmentManager {
      * aligned to u_right/u_up·size·0.15, faded circle shape (linear from
      * 0.6·r), premultiplied white, intensity ×= fog star-intensity.
      */
-    private createStars(intensity: number): void {
+    private createStars(intensity: number, mercator = false): void {
         // Recreate-safe: drop any previous star mesh (applyFog/refreshFog can
         // call this repeatedly — without this, every refresh adds a mesh).
         if (this.m_stars) {
             this.m_scene?.remove(this.m_stars);
+            this.m_starScene?.remove(this.m_stars);
+            this.m_starSink?.(null);
             this.m_stars = null;
         }
         const mulberry32 = (a: number): (() => number) => () => {
@@ -2878,7 +2895,15 @@ export class MBEnvironmentManager {
             // closer tile depth → stars fail. (mgl draws stars before the map
             // and lets the globe overdraw; with the dome in between, drawing
             // stars first gets them erased by the dome's alpha=1 write.)
-            transparent: false,
+            // §885 终二百一十: on mercator mgl draws the stars premultiplied
+            // (color·alpha, alpha) with (ONE, ONE_MINUS_SRC_ALPHA) AFTER the
+            // atmosphere glow — i.e. plain over-compositing on the opaque
+            // sky: mix(sky, white, alpha). The §876 globe composite (which
+            // needs uSpaceRgb/uAlpha2 from the globe dome) does not apply —
+            // on mercator that path rendered the stars as DARK dots (vis =
+            // alpha over an opaque sky). Transparent premultiplied blending
+            // reproduces the mgl order directly.
+            transparent: mercator,
             depthTest: false,
             depthWrite: false,
             blending: THREE.CustomBlending,
@@ -2886,6 +2911,8 @@ export class MBEnvironmentManager {
             blendDst: THREE.OneMinusSrcAlphaFactor,
             uniforms: {
                 uIntensity: { value: intensity },
+                uMercator: { value: mercator ? 1 : 0 },
+                uCamRot: { value: new THREE.Matrix3() },
                 uRot: { value: new THREE.Matrix3() },
                 uRight: { value: new THREE.Vector3(0.15, 0, 0) },
                 uUp: { value: new THREE.Vector3(0, 0.15, 0) },
@@ -2906,10 +2933,25 @@ export class MBEnvironmentManager {
                 uniform vec3 uUp;
                 uniform float uIntensity;
                 uniform mat4 uStarsProj;
+                uniform mat3 uCamRot;
+                uniform float uMercator;
                 varying vec2 vUv;
                 varying float vInt;
                 varying vec2 vNdc;
                 void main() {
+                    if (uMercator > 0.5) {
+                        // §885 终二百一十: mercator culls below-horizon stars
+                        // in the vertex stage (mgl draws stars before the map
+                        // so tiles cover the ground; our transparent-pass
+                        // stars must self-cull). uRot verified finite.
+                        if ((uRot * position).z < 0.0) {
+                            gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+                            return;
+                        }
+                        vUv = aUv; vInt = aOpacity * uIntensity; vNdc = vec2(0.0);
+                        gl_Position = uStarsProj * vec4(uRot * position, 1.0);
+                        return;
+                    }
                     vUv = aUv;
                     vInt = aOpacity * uIntensity;
                     // §876: mgl stars.transform — the star sphere is projected
@@ -2929,6 +2971,7 @@ export class MBEnvironmentManager {
                 varying vec2 vUv;
                 varying float vInt;
                 varying vec2 vNdc;
+                uniform float uMercator;
                 uniform vec3 uSpaceRgb;
                 uniform float uAlpha2;
                 uniform vec3 uGlobePos;
@@ -2950,6 +2993,12 @@ export class MBEnvironmentManager {
                     float d = length(vUv);
                     float alpha = 1.0 - clamp((d - 0.6) / 0.4, 0.0, 1.0);
                     alpha *= vInt;
+                    // §885 终二百一十: mercator = mgl's exact premultiplied
+                    // over-composite on the opaque sky (ONE, ONE_MINUS_SRC_ALPHA).
+                    if (uMercator > 0.5) {
+                        gl_FragColor = vec4(vec3(alpha), alpha);
+                        return;
+                    }
                     // §876: mgl composites the star onto the PREMULTIPLIED
                     // sky buffer whose canvas alpha stays uAlpha2 (the stars
                     // RGB-mask their blend); the white test canvas then shows
@@ -2969,6 +3018,13 @@ export class MBEnvironmentManager {
         // After the fog dome (1000) so the dome's opaque sky write cannot
         // erase the stars (see material comment).
         this.m_stars.renderOrder = 2000;
+        if (mercator) {
+            // §885 终二百一十: the engine's scene-object filtering drops sky
+            // meshes above ~60-70° pitch (§197) — the mercator stars draw
+            // through the background-fog renderer's AfterRender channel
+            // (setStarSink / setStarMesh) instead of the scene graph.
+            this.m_starSink?.(this.m_stars);
+        }
         // Refresh the orientation from the live view (mgl orientation quat:
         // rotX(-pitch)·rotZ(-angle)·rotX(lat)·rotY(-lng), applied to the ECEF
         // star sphere; u_right/u_up = inverse-rotated axes × sizeMultiplier).
@@ -2995,6 +3051,14 @@ export class MBEnvironmentManager {
                 .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -lng));
             const m4 = new THREE.Matrix4().makeRotationFromQuaternion(q);
             (material.uniforms.uRot.value as THREE.Matrix3).setFromMatrix4(m4);
+            if (!(globalThis as any).__mbStarDbg3) {
+                (globalThis as any).__mbStarDbg3 = 1;
+                // eslint-disable-next-line no-console
+                console.log('[MBStarDbg3] tilt=', mv.tilt, 'lat=', mv.geoCenter?.latitude,
+                    'lng=', mv.geoCenter?.longitude, 'rot0=', Array.from(
+                        (material.uniforms.uRot.value as THREE.Matrix3).elements).map(v=>v.toFixed(2)).join(','),
+                    'fov=', cam.fov, 'aspect=', (cam as any).aspect);
+            }
             // mgl computes camera up/right through the INVERSE modelview (in
             // view space), i.e. the rotated frame's axes in eye space.
             const inv = m4.clone().invert();
@@ -3018,8 +3082,24 @@ export class MBEnvironmentManager {
                 material.uniforms.uAspect.value = domeU.uAspect.value;
             }
         };
-        this.m_scene!.add(this.m_stars);
+        if (!mercator) this.m_scene!.add(this.m_stars);
     }
+
+    /**
+     * §885 终二百一十: direct-draw the mercator star field in the
+     * AfterRender channel (the engine scene filter drops sky meshes at the
+     * high pitches where stars are visible). No-op unless createStars built
+     * the dedicated star scene.
+     */
+    /**
+     * §885 终二百一十: sink for the mercator star mesh — wired to the
+     * background-fog renderer's AfterRender channel by the datasource.
+     */
+    setStarSink(sink: ((m: THREE.Mesh | null) => void) | null): void {
+        this.m_starSink = sink;
+        if (this.m_stars && sink) sink(this.m_stars);
+    }
+    private m_starSink: ((m: THREE.Mesh | null) => void) | null = null;
 
     async applyBackgroundPattern(
         patternName: string | undefined,

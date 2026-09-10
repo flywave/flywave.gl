@@ -1133,3 +1133,35 @@ globe-antialiasing/horizon-blend 不变 ✓。空间色 fixture 计数 44,372 �
 0.03）残雾直至底部——mgl 地面雾来自逐 tile 内容雾域（pitch>76 旧域喂值
 的残差剖面），quad 屏幕空间 ramp 无此尾；②±1-2 量化噪声（同终二百零八
 ③）。
+
+### §885 终二百一十：mercator 星场预乘合成修复 + quad 残雾尾下限（2026-09-10）
+
+**星场**：几何/种子（mulberry32(30)/(300)、16000 星、sizeMultiplier 0.15）
+§876 已是 mgl 移植版，但 mercator 路径的合成公式错了——fragment 复用
+globe 的 `uSpaceRgb/uAlpha2` 通道（mercator 下恒 0/1）输出 `vis = alpha`
+（暗点）而非 mgl 的预乘 over-composite `mix(sky, white, alpha)`。修复：
+mercator 星材质改 transparent 预乘混合（`vec4(vec3(alpha), alpha)`，
+ONE/ONE_MINUS_SRC_ALPHA，即 mgl colorModeAlphaBlendedWriteRGB 语义），
+顶点级世界地平线剔除（uRot·position.z < 0）。通道：引擎 scene-object
+filtering 在 >60-70° 丢天空网格（§197，星网格 onAfterRender 从不触发的
+实证）—— mercator 星场改走 **fog renderer 的 AfterRender 直绘通道**
+（setStarMesh，已验证可达画布的通道）；修复 applySky 无 sky 层早退误删
+新建星场的时序 bug。调试结论（记档）：星网格在 fog 通道内提交 32,000
+三角形（renderer.info 实证）但无可视 fragment——uRot/uStarsProj/uMercator
+均实证有限且正确，正交强制映射诊断也无像素，属 GL 管线级问题（疑似
+transparent-pass + 自定义 blending 在 SwiftShader 下的呈现路径），遗留。
+
+**quad 残雾尾**：>76° 时 quad opacity 加 0.029 下限（mgl tile-fog 残雾
+剖面，beige 220→221），底行从裸 beige 变 +1 轻雾（行 250 逐位一致）。
+
+**门控权衡（实测）**：残雾下限/quad 启用对 plain-fog 夹具（background-
+color +680）与大气族（basic −269/inverted −224/equal-range −269）双向
+作用；atmosphereTail 门控版保 background-color 弃三项改善，无门控版净
+−82 px——**取无门控**（净优且语义一致）。
+
+**全家族终态（fog/ 26 夹具复跑）**：三联 0/0/0、use-theme PASS、全部
+span-1/culling/line/raster/heatmap 值与 committed 逐位一致；basic
+29,537、inverted 9,417、equal-range 23,125、background-color 1,984
+（+680，被上三项 −762 覆盖）。space-color-opacity 44,372（天空 44.5k px
+精确 + 地面带 big-px 减半 + 底行 +1 残雾）。星场 ~119 px 因通道问题
+遗留（见上）。
