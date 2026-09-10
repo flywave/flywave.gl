@@ -743,3 +743,22 @@ mismatch 方向在带间都相反（band7 欠雾/band9 过雾），属内容-背
 窗口；②内容雾深度域对齐（worldToFogMatrix 语义）可同时服务剩余大残差
 （space-color-opacity 47k、terrain 族 28-49k、culling 族 9-32k，均
 >76° skip 或内容路径）。
+
+### §885 终一百九十：内容雾域探针取证——内容 t 场与 expected 梯度整体错位（2026-09-10）
+
+fogprobe=1 在 fill-color 内容材质上实测内容 t 场：**band0-8 全饱和 1.0、
+band9 骤降 0**——而 expected 反演的 mgl 填充雾梯度为 b0-4 饱和、b5≈0.55、
+b6≈0.32、b7≈0.14、b8≈0.085、b9≈0.79（(51,68,85)@f=0.79→(212,216,219) 与
+expected (213,217,220) 精确吻合；b9 反向跳变系 fill/quad 像素混合污染，
+中值不可靠）。结论：内容路径的深度域（view-depth 视空间深度，fog_vertex
+`vFogDepth=-mvPosition.z`，经 0.15/distCam 折叠）与 mgl 的欧氏 rayLen 域
+整体错位——近处内容我们雾不足、中远处过雾饱和。chunk 注释（fog_pars
+override 顶部）早已记录该已知偏差（"kFog 标定基于 view-space depth，欧氏
+域标定未完成"）。
+
+**原则性修法（下轮主攻）**：内容 mgl 分支的深度改用欧氏距离
+`length(vFogPos)`（vFogPos 即视空间相机→片段向量，地面片段上 ≈ quad 的
+rayLen），窗口统一到 quad 已 PASS 标定的同一仿射窗（w0=B+A·(r0+shift)、
+span=A·(r1−r0)、A=1.1493/B=−0.1063）——内容与背景雾场一致化。爆炸半径
+大（全部内容雾夹具：2d 族、regressions、terrain 内容），需按 fog/2d 家族
+逐夹具 A/B；fogshift/fogdistk 旋钮可作过渡微调。
