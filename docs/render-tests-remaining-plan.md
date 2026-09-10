@@ -819,3 +819,13 @@ MBSTYLE_EXTRA_ARGS（MBSTYLE_FOGEUCLID 只接在非 chunked runner 上，第一
 合成的次级标定（§885 终一百四十一通道）；②fill-extrusion 墙体光照域
 （环境光缺失 → 黑墙）是本类残差的共同根因；③buildings-trees 对 +
 全量 baseline 复跑。
+
+### §885 终一百九十三：buildings-trees 对环境级崩溃实证 + chunked 叶子类目支持（2026-09-10）
+
+buildings-trees-shadows-fog(-fade) 双例的浏览器崩溃与代码状态无关：
+**5aa843ba 对照与当前构建同样 DISCONNECTED（11 分 10.8s vs 11 分 10.3s，
+"Executed 0 of 4 DISCONNECTED"）**——重型 model+shadows+terrain 夹具在
+当前 headless/SwiftShader 环境下的既有崩溃，两会话均无法验证其雾位移，
+留待环境修复后随全量 baseline 复跑。chunked runner 补上**叶子夹具类目**
+支持（`…/model-layer/xxx` 直指 style.json 的路径解析为单夹具伪类目，
+filter 不再双拼前缀），重型夹具可单独 chunk-run 对比。

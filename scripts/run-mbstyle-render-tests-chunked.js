@@ -80,7 +80,11 @@ function listFixtures(category) {
             const p = path.join(d, e.name);
             const r = rel ? rel + "/" + e.name : e.name;
             if (e.isDirectory()) walk(p, r);
-            else if (e.name === "style.json") names.push(path.dirname(r));
+            // §885 终一百九十三: a leaf-fixture category (…/model-layer/xxx
+            // pointing straight at a style.json dir) filters to itself —
+            // path.dirname("style.json") would be "." and match nothing.
+            else if (e.name === "style.json")
+                names.push(rel === "" ? category : path.dirname(r));
         }
     })(path.join(fixturesRoot, category), "");
     return names;
@@ -190,9 +194,19 @@ async function main() {
     });
     await new Promise((r) => setTimeout(r, 1500));
 
-    const categories = listCategories().filter(
-        (c) => onlyCategories.length === 0 || onlyCategories.includes(c.name),
-    );
+    // §885 终一百九十三: a category arg may also be a leaf fixture path
+    // (…/model-layer/xxx) — it becomes a single-fixture pseudo-category so
+    // individual heavy fixtures can be chunk-run and compared directly.
+    const all = listCategories();
+    const categories = onlyCategories.length === 0 ? all : [];
+    for (const name of onlyCategories) {
+        const top = all.find((c) => c.name === name);
+        if (top) {
+            categories.push(top);
+        } else if (fs.existsSync(path.join(fixturesRoot, name, "style.json"))) {
+            categories.push({ name, count: 1, leaf: true });
+        }
+    }
     const total = categories.reduce((s, c) => s + c.count, 0);
     console.log(`Chunked run: ${categories.length} categories, ${total} tests total.`);
     console.log(`Session model: ≤${batch} fixtures/session, hard timeout ${sessionTimeoutMs}ms, browser tree killed at every session boundary.`);
@@ -201,6 +215,12 @@ async function main() {
     // result (re-runs after an interrupted pass pick up where they stopped).
     const pending = [];
     for (const cat of categories) {
+        // §885 终一百九十三: leaf fixture categories run themselves — the
+        // filter is the fixture path, not cat/fx (which would double it).
+        if (cat.leaf) {
+            pending.push({ cat: cat.name, fx: cat.name, leaf: true });
+            continue;
+        }
         for (const fx of listFixtures(cat.name)) {
             if (!fixtureHasResult(cat.name, fx)) pending.push({ cat: cat.name, fx });
         }
@@ -216,7 +236,7 @@ async function main() {
             // §743: category-anchored filters — bare leaf names substring-
             // match same-named tests in OTHER categories (filter=default
             // re-ran every globe */default test) and overwrite their results.
-            chunk.map((c) => `${c.cat}/${c.fx}`),
+            chunk.map((c) => (c.leaf ? c.fx : `${c.cat}/${c.fx}`)),
             port,
             sessionTimeoutMs,
             label,
