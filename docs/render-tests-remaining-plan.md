@@ -851,3 +851,41 @@ fog/terrain 夹具的地形路径不经过 __mbTerrainActive 置位点）。可�
 改用 terrainController.meshCount>0 轮询或地形激活事件做判据，并按
 terrain/2d 内容类型分别定窗。工作树已回退至 4c6980b8 + 探针任意 pitch
 渲染改进（诊断用，默认无行为变化）。
+
+### §885 终一百九十五：>70° terrain 私有域打通但方向为负——收益源重新归因（2026-09-10）
+
+三处修复后 per-material 通路打通：①scene-scan 判据补 `technique==='terrain'`
+（setDemTexture 只匹配 MapTerrainMaterial，漏 tile 地形网格）；②Euclid
+分支脱离 MB_RASTER_MGL_FOG 独立（terrain 网格 env 创建不经 patchTile，
+从未有该 define——嵌套写法把分支整体编译剔除）；③traverse 回调内
+continue→return（TS1107 曾致 webpack 全挂、四个串行跑空转）。④重包
+onBeforeCompile 必须 bump customProgramCacheKey nonce，否则命中缓存
+早退 define 不落地。
+
+结果：scoping 生效（2d/inverted、2d/basic 与 committed 逐位一致 ✓），
+但 terrain/basic 36,561→38,064（**+1.5k**）、terrain/inverted +23——
+terrain 网格直上欧氏域方向为负。**重新归因：终一百九十四无条件 A/B 中
+terrain/basic 的 −27.1k 并非 terrain 网格响应，而是全局 lib 变化经其他
+消费路径（raster-drape 材质/scene.fog 合成）产生**。工作树已回退至
+4c6980b8；>70° 欲净收益需先定位该真实受益材质（drawlog 已存
+mbstyle-s910dl：MeshBasicMaterial vn=5 ×400/帧、vn=16641 网格 Basic+Standard
+双份、RawShaderMaterial 4096 dome、ShaderMaterial 561/4）。
+
+### §885 终一百九十五：>70° terrain 私有域打通但方向为负——收益源重新归因（2026-09-10）
+
+三处修复后 per-material 通路打通：①scene-scan 判据补 `technique==='terrain'`
+（setDemTexture 只匹配 MapTerrainMaterial，漏 tile 地形网格）；②Euclid
+分支脱离 MB_RASTER_MGL_FOG 独立（terrain 网格 env 创建不经 patchTile，
+从未有该 define——嵌套写法把分支整体编译剔除）；③traverse 回调内
+continue→return（TS1107 曾致 webpack 全挂、四个串行跑空转）。④重包
+onBeforeCompile 必须 bump customProgramCacheKey nonce，否则命中缓存
+早退 define 不落地。
+
+结果：scoping 生效（2d/inverted、2d/basic 与 committed 逐位一致 ✓），
+但 terrain/basic 36,561→38,064（**+1.5k**）、terrain/inverted +23——
+terrain 网格直上欧氏域方向为负。**重新归因：终一百九十四无条件 A/B 中
+terrain/basic 的 −27.1k 并非 terrain 网格响应，而是全局 lib 变化经其他
+消费路径（raster-drape 材质/scene.fog 合成）产生**。工作树已回退至
+4c6980b8；>70° 欲净收益需先定位该真实受益材质（drawlog 已存
+mbstyle-s910dl：MeshBasicMaterial vn=5 ×400/帧、vn=16641 网格 Basic+Standard
+双份、RawShaderMaterial 4096 dome、ShaderMaterial 561/4）。
