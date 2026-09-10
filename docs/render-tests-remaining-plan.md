@@ -1165,3 +1165,20 @@ span-1/culling/line/raster/heatmap 值与 committed 逐位一致；basic
 （+680，被上三项 −762 覆盖）。space-color-opacity 44,372（天空 44.5k px
 精确 + 地面带 big-px 减半 + 底行 +1 残雾）。星场 ~119 px 因通道问题
 遗留（见上）。
+
+### §885 终二百一十一：星场通道调试战报——工作树回退，问题定性存档（2026-09-10）
+
+对 star 通道做了系统性二分（本轮未产生计数收益，全部改动已回退至终二百
+一十 committed 态）：①星场几何/种子/uRot/uStarsProj 变换经 JS 侧逐值复算
+有限且正确（star 0 NDC 有屏外样本，推算 ~883 星在屏）；②star 网格经
+per-frame 轮询确认每帧非空、可见、挂在 fog/atmo 两个**已验证可达画布**的
+直绘场景中（AtmoInfo 实证 calls=2）；③替换为 MeshBasicMaterial 红盘
+（ortho 可视坐标）同样零像素——**通道对第二网格整体无效**，与材质无关；
+④无条件品红 fragment 也零碎片——顶点级即无光栅化，transform 正确性无关。
+结论：SwiftShader/headless 下 AfterRender 直绘场景中**第二个网格**的绘制
+请求被管线吞掉（首个网格正常），疑似 renderer 状态/通道级缺陷。剩余星点
+~119-422 px（家族 0.02%），修复入口：真机 GPU 复验、或独立于渲染测试
+harness 的最小 repro + frame capture（Spectacle/renderdoc 类）。
+
+同期保留的已提交改动（终二百零九/二百一十）：quad >76° 残雾尾下限 0.029
+（底行 +1 轻雾对齐）、mercator 星场预乘合成公式（供通道修复后即插即用）。
