@@ -791,3 +791,31 @@ MBSTYLE_EXTRA_ARGS（MBSTYLE_FOGEUCLID 只接在非 chunked runner 上，第一
 2d/inverted+basic+equal-range ~63k（pitch 80，窗口未覆盖）——内容欧氏域
 推广到 >70° 需按其标定带单独拟合；③全量 baseline 复跑评估 fog 之外家族
 （regressions 等 pitch≤70 有雾夹具）的整体位移。
+
+### §885 终一百九十二：跨家族抽查——fill-extrusion 归因 + ground-shadow-fog 小退量化（2026-09-10）
+
+**fill-extrusion（+1,940）归因**：像素对 (exp=255,255,255 / cur=0,0,0)
+3,926px——夹具 fill-extrusion-color=gray、AO 0.7、无灯光。mgl 里墙体被
+雾饱和成白（f≈1），我们的墙体在欧氏窗下 t≈0 露出**光照发黑**（环境光
+缺失的 gray 墙 → 黑）——即 +1.9k 是内容雾不再过饱和后**暴露的既有墙体
+光照域问题**（§885 终一百八十二族），非雾窗口回归。欧氏门控 A/B 中该
+夹具门控开/关同为 5,053（窗来自 quad 侧），进一步佐证。
+
+**跨家族 5aa843ba 对照抽查（串行逐夹具）**：
+- wireframe/instanced-rendering（pitch 38，lowPitch 分支）：409,635 ↔
+  409,635 **逐位一致**（较 snapshot 464k 的改善系更早提交）✓
+- model-layer/ground-shadow-fog：137,795 → 140,307（**+2,512**）；
+  ground-shadow-fog-hard-cutoff：138,128 → 140,572（**+2,444**）——
+  pitch 70 shadow-overlay 与雾场合成的次级位移，雾窗+欧氏域叠加所致；
+  量级 ~5k vs 家族收益 −356.7k，净收益显著为正。
+- buildings-trees-shadows-fog(-fade) 串行跑超时未出数（重型 model 夹具），
+  留给 chunked 家族批量验证。
+
+**运行器陷阱备忘**：非 chunked runner 单会话跑多个重型 model 夹具会浏览器
+假死（"No test results were recorded"），重型夹具必须用 chunked runner
+（4/会话）；chunked 只吃目录类目参数 + MBSTYLE_EXTRA_ARGS。
+
+下轮入口（更新）：①ground-shadow-fog 双例 +2.5k——shadow-overlay×雾
+合成的次级标定（§885 终一百四十一通道）；②fill-extrusion 墙体光照域
+（环境光缺失 → 黑墙）是本类残差的共同根因；③buildings-trees 对 +
+全量 baseline 复跑。
