@@ -97,6 +97,17 @@ export class MBAtmosphereRenderer {
         u.uFogAlpha.value = state.fogAlpha;
         (u.uHighColor.value as THREE.Color).copy(state.highColor).convertLinearToSRGB();
         (u.uSpaceColor.value as THREE.Color).copy(state.spaceColor).convertLinearToSRGB();
+        // mgl uniforms carry the style's 8-bit sRGB colors; snap the
+        // linear↔sRGB round-trip error so the 8-bit pipeline emulation in
+        // the shader anchors on exact stops (§885 终二百零八).
+        const snap8 = (c: THREE.Color) => {
+            c.r = Math.round(c.r * 255) / 255;
+            c.g = Math.round(c.g * 255) / 255;
+            c.b = Math.round(c.b * 255) / 255;
+        };
+        snap8(u.uFogColor.value as THREE.Color);
+        snap8(u.uHighColor.value as THREE.Color);
+        snap8(u.uSpaceColor.value as THREE.Color);
         u.uFadeout.value = Math.max(state.fadeout, 0.0005);
         u.uSpaceAlpha.value = state.spaceAlpha ?? 1.0;
         if (MBAtmosphereRenderer.contentStandDown) {
@@ -204,11 +215,19 @@ export class MBAtmosphereRenderer {
                     // space alpha): rgb = c2*t + space*(1-t), and the render
                     // test reads the canvas UNPREMULTIPLIED (rgb/a) —
                     // fog/space-color-opacity's rgba(15,15,80,0.5) reads back
-                    // doubled (30,30,160). With spaceAlpha=1 the divisor is
-                    // exactly 1 (§885 终二百零七).
-                    float dstA = max(mix(uSpaceAlpha, 1.0, t) * t
-                        + uSpaceAlpha * (1.0 - t), 0.003);
-                    vec3 col = (c2 * t + uSpaceColor * (1.0 - t)) / dstA;
+                    // doubled (30,30,160). The alpha pass REPLACES the fb
+                    // alpha (colorModeWriteAlpha ONE/ZERO — no blend with the
+                    // clear alpha): fb_a = aP. With spaceAlpha=1 aP is
+                    // exactly 1 (§885 终二百零八).
+                    float aP = max(mix(uSpaceAlpha, 1.0, t), 1.0/255.0);
+                    // Emulate mgl's exact 8-bit pipeline: the color pass
+                    // rounds the premultiplied blend into the 8-bit fb, the
+                    // alpha pass rounds aP, and the canvas capture divides
+                    // the two UNPREMULTIPLIED 8-bit values.
+                    vec3 rgb8 = floor((c2 * t + uSpaceColor * (1.0 - t))
+                        * 255.0 + 0.5) / 255.0;
+                    float a8 = floor(aP * 255.0 + 0.5) / 255.0;
+                    vec3 col = rgb8 / a8;
                     // mgl has NO color management — atmosphere colors are
                     // sRGB floats mixed DIRECTLY (gamma space). Uniforms are
                     // pre-converted (convertLinearToSRGB) so no encode here

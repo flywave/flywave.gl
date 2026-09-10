@@ -2133,8 +2133,9 @@ export class MBEnvironmentManager {
                         float a0 = mix(uSpaceAlpha, 1.0, uHighAlpha);
                         float a1 = mix(a0, 1.0, uFogAlpha);
                         float a2 = mix(a0, a1, t);
-                        float aP = mix(uSpaceAlpha, a2, t);
-                        float dstA = max(aP * t + uSpaceAlpha * (1.0 - t), 0.003);
+                        // The ALPHA_PASS REPLACES fb alpha (ONE/ZERO) — no
+                        // blend with the clear alpha.
+                        float dstA = max(mix(uSpaceAlpha, a2, t), 0.003);
                         vec3 dstRGB = c2 * t + uSpaceColor * (1.0 - t);
                         gl_FragColor = vec4(dstRGB / dstA, 1.0);
                     }

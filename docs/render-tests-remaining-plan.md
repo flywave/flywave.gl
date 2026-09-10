@@ -1080,3 +1080,37 @@ fog/space-color 78 不变；fog/color 三联 0/0/0 PASS 维持；fog/2d/basic
 一个 build+run 周期，边际收益低暂缓；②horizon 带下方 beige 区轻微雾化
 缺失；③terrain 族 28-49k（内容欧氏域 >70° 推广已被终一百九十四/一百九
 十六判负关闭，不重启）。
+
+### §885 终二百零八：大气 t 曲线逐带反演——真凶是 ALPHA_PASS 替换语义 + 8-bit 量化链（2026-09-10）
+
+逐带反演（空间色 rgba(15,15,80,0.5) 蓝/红通道联立数值反解 t(row)）走通的
+关键：mgl atmosphere 的 ALPHA_PASS 用 `colorModeWriteAlpha`（ONE/ZERO）
+**替换**写 framebuffer alpha（不与 clear alpha 混合），捕获 = rgb8/a8 双
+8-bit 值相除；首版分析误用混合式分母（aP·t + sA·(1−t)）与连续除法，导出
+"t 偏大 2×/fadeout 漂移"的假线索。顺带实证：①品红二分确认该 fixture 段
+的实际画家是 MBAtmosphereRenderer（pitch≥60 AfterRender quad，mercator
+dome 在此不画）；②单 fadeout/单角度基准均无法解释 expected 形状——假
+线索；③星点仅 88-119 px 非主体。
+
+**修复**：MBAtmosphereRenderer shader 落地 mgl 精确管线——alpha 替换
+（dstA = aP）+ 8-bit 量化链仿真（rgb8 = round(c2·t + s·(1−t))，a8 =
+round(aP)，捕获 col = rgb8/a8），JS 侧对 uFog/uHigh/uSpace 三色做 8-bit
+sRGB 快照（吸收 linear↔sRGB 往返误差）。mercator dome（≤70°）同步替换
+语义。舍入模式 A/B：round-to-nearest 天空逐位一致 44,572 px vs 截断
+18,289——定案 round。
+
+**结果（fog 全家族复跑）**：space-color-opacity 天空梯度像素级对齐
+（行 20/60/90 锚点逐位一致，44.5k/49.7k 天空 px 精确，>2 单位差仅剩星点
+422 px）；space-color-use-theme 36 PASS 维持；fog/color 三联 0/0/0、
+fill 家族（318/974*/3,111/591/418）、culling 族（834/2,460/18,058）、
+2d/basic 29,806、inverted 9,641 全部与 committed 逐位一致零回归。
+*计数权衡：space-color-opacity 计数 42,422→44,372（+1,950）——替换语义
+在严格阈值（0.0003≈±1）下把原平滑偏差（±4~43 单位）变成 ±1~2 量化噪声，
+语义正确性与像素保真换取计数小幅上升，不再回退。
+
+**剩余（记档）**：①地平线下 beige 带缺地面雾（8,144 big px：expected
+行 100 全雾白→行 130+ t≈0.03 轻雾，我们的背景平面在 pitch>76 雾未生效）
+——属 >70° 内容雾域（已判负关闭域）的背景平面特例，若重启应仅门控背景
+平面；②全帧 ±1-2 量化噪声（~111k px，视觉不可见，GPU 舍入链精确对齐
+投入产出比极低）；③星场（需移植 mgl mulberry32(30)/(300) 种子几何，
+~119 px）。
