@@ -111,19 +111,19 @@ export class MBBackgroundFogRenderer {
         this.m_material.uniforms.uFogColor.value.copy(state.color);
         this.m_material.uniforms.uFogAlpha.value =
             Number.isFinite(state.bgAlpha) && state.bgAlpha > 0 ? state.bgAlpha : state.alpha;
-        // §885 终一百八十八: the fog/color pitch-70 band profile proves the
-        // rig residual is AFFINE in depth, not a pure scale — the single
-        // uScale fold cannot place the ramp zero-crossing and the slope
-        // simultaneously. Two-run convergence fit on the 10-band expected
-        // profile (f = [1,1,.94,.76,.48,.24,.08,.01,0,0]; all bands within
-        // ±0.04): t = (depth − w0)/(A·(r1−r0)) with
-        // depth = uScale·shift·rayLen/distCam, w0 = B + A·(r0+shift),
-        // A = 0.7743, B = 0.7141. Affine in the style range so other fog
-        // windows inherit the same depth-domain residual. Applies ≤70°;
-        // 70-76° keeps the legacy raw-range window (only calibrated band).
+        // §885 终一百八十九: the window is now fitted on the DIRECT depth-
+        // field probe (fogquaddbg=1 paints depth/8; no exp³ color-inversion
+        // noise). The probe row profile at pitch 70 (512×256) is
+        // d = [7.78, 5.13, 3.28, 2.43, 1.92, 1.59, 1.37, 1.20, 1.08, 0.99];
+        // against the expected t targets the linear window uR0=1.043,
+        // span=3.448 reproduces EVERY band to ±0.003 fogFactor (the previous
+        // color-inversion fit A=0.7743/B=0.8577 under-fogged bands 4-6).
+        // Still affine in the style range: w0 = B + A·(r0+shift),
+        // span = A·(r1−r0); global depth map d_mgl = (d − B)/A. ≤70° only;
+        // 70-76° keeps the legacy raw-range window.
         if (!lowPitch && pitchDeg <= 70) {
-            const winA = 0.7743;
-            const winB = 0.7141;
+            const winA = 1.1493;
+            const winB = -0.1063;
             const w0 = winB + winA * (state.r0 + state.shift);
             this.m_material.uniforms.uR0.value = w0;
             this.m_material.uniforms.uR1.value = w0 + winA * (state.r1 - state.r0);
@@ -133,6 +133,8 @@ export class MBBackgroundFogRenderer {
         }
         this.m_material.uniforms.uShift.value = state.shift;
         this.m_material.uniforms.uDistCam.value = Math.max(state.distCam, 1);
+        // §885 终一百八十九: depth-field probe gate (karma arg fogquaddbg=1).
+        this.m_material.uniforms.uDbg.value = (globalThis as any).__mbFogQuadDbg ? 1 : 0;
         // Per-pitch scale table (two-point calibrated §180/§181): linear in
         // pitch, clamped at the ends.
         this.m_material.uniforms.uScale.value = lowPitch
@@ -192,6 +194,7 @@ export class MBBackgroundFogRenderer {
                 uOpaque: { value: 0 },
                 uFovRad: { value: 36.87 * Math.PI / 180 },
                 uPitchRad: { value: 60 * Math.PI / 180 },
+                uDbg: { value: 0 },
             },
             vertexShader: `
                 varying vec2 vNdc;
@@ -216,6 +219,10 @@ export class MBBackgroundFogRenderer {
                 uniform float uPitchRad;
                 uniform vec3 uBgColor;
                 uniform float uOpaque;
+                // §885 终一百八十九: depth-field probe (fogquaddbg=1) —
+                // paints depth/8 in RGB so the ramp fit reads d(row)
+                // directly instead of inverting the exp³ curve from pixels.
+                uniform float uDbg;
                 varying vec2 vNdc;
                 void main() {
                     // Reconstruct the world-space view ray from NDC.
@@ -246,6 +253,10 @@ export class MBBackgroundFogRenderer {
                     // residual engine↔mgl fog-space scale (same family as the
                     // content fog's kFog=3.7; calibrated on fog/color §180).
                     float depth = uScale * uShift * rayLen / uDistCam;
+                    if (uDbg > 0.5) {
+                        gl_FragColor = vec4(vec3(depth / 8.0), 1.0);
+                        return;
+                    }
                     float t = (depth - uR0) / max(uR1 - uR0, 0.001);
                     float falloff = 1.0 - min(1.0, exp(-6.0 * t));
                     falloff *= falloff * falloff;

@@ -715,3 +715,28 @@ span 分段启用或用 quad 内嵌深度场探针（uDbg 涂 depth）直接测 
 color 三联剩余残差（22k/23k/8k）集中在带 4-6，透视行-深度映射非线性，
 线性窗口已达极限，需按实测深度场做非线性重映射（mgl fog depth 的
 worldToFogMatrix 语义对齐）。
+
+### §885 终一百八十九：fog/color 三联 PASS×3——深度场探针直拟合（2026-09-10）
+
+quad 内嵌深度场探针落地（fogquaddbg=1 → uDbg 涂 depth/8），直接读 pitch-70
+(512×256) 的真实 d(row)：10 带均值 [7.78, 5.13, 3.28, 2.43, 1.92, 1.59,
+1.37, 1.20, 1.08, 0.99]（顶行地平线处饱和 /8 满量程）。用它替换色度反解
+拟合：线性窗 **uR0=1.043、span=3.448**（即 **A=1.1493、B=−0.1063**，全局
+深度映射 d_mgl=(d−B)/A）对 expected 的 fogFactor 逐带误差 ≤0.003——上一版
+色度反解拟合（A=0.7743/B=0.8577）在带 4-6 系统性欠雾正是反解噪声所致。
+
+**fog/color 三联全部 PASS（0/0/0 mismatch，阈值 ~66px）**：color 87,649→0、
+color-opacity 82,192→0、color-use-theme 88,056→0；zero-PASS 10→13。
+家族 vs HEAD：898,389 → **627,632（−270,757，−30.1%）**；相对 09-07
+snapshot 累计 −486,817（−43.7%）。附带收益：line-pattern −5,896、
+heatmap −6,326、raster −6,349、line-sdf −217。代价：2d 五例（range
+[−0.5,0.5] span-1）+5,946（fill-extrusion +1,940、fill-pattern +1,578、
+line-gradient +1,391、fill-color +542、fill-outline +495；均本就 FAIL），
+其 mismatch 混合内容像素与 quad 区，仿射单窗不能同时满足 span-1——
+mismatch 方向在带间都相反（band7 欠雾/band9 过雾），属内容-背景混色域。
+
+下轮入口：①span-1 五例按 span 分段标定（用同一探针在 fill-color 视图
+实测 quad 区 d(row) 对 expected 反推窗口，或 uOpaque=1 直接合成模式
+逐夹具校准）；②剩余大残差（space-color-opacity 47k、terrain 族 28-49k、
+culling 族 9-32k）均与 quad 无关（>76° skip 或内容雾路径），属内容雾
+深度域问题（worldToFogMatrix 语义对齐）。

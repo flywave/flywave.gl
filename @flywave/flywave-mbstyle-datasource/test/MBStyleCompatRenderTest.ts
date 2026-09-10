@@ -226,6 +226,11 @@ function discoverTests(): TestEntry[] {
         // eslint-disable-next-line no-console
         console.log(`[MBFogDistK] parsed=${fdk}`);
     }
+    // §885 终一百八十九: fogquaddbg=1 → MBBackgroundFogRenderer paints its
+    // depth field (R = depth/8) instead of the fog ramp.
+    const fqd = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("fogquaddbg="))?.slice("fogquaddbg=".length);
+    if (fqd === "1") (globalThis as any).__mbFogQuadDbg = true;
     // §885 终八十五: camdist=<N> → calculateDistanceFromZoomLevel multiplier
     // (1/cos(lat) ≈ 0.79 @ lat37.78 tests the camera-distance hypothesis).
     const cdm = (window as any).__karma__?.config?.args?.find?.((a: string) =>

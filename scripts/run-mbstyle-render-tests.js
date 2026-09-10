@@ -128,6 +128,7 @@ function main() {
             ...(process.env.MBSTYLE_FOGMUL ? [`fogmul=${process.env.MBSTYLE_FOGMUL}`] : []),
             ...(process.env.MBSTYLE_FOGDISTK ? [`fogdistk=${process.env.MBSTYLE_FOGDISTK}`] : []),
             ...(process.env.MBSTYLE_FOGREFDBG ? ["fogrefdbg=1"] : []),
+            ...(process.env.MBSTYLE_FOGQUADDBG ? ["fogquaddbg=1"] : []),
             ...(process.env.MBSTYLE_CAMDIST ? [`camdist=${process.env.MBSTYLE_CAMDIST}`] : []),
             ...(process.env.MBSTYLE_FOGSHIFT ? [`fogshift=${process.env.MBSTYLE_FOGSHIFT}`] : []),
             ...(process.env.MBSTYLE_SHRAD ? [`shrad=${process.env.MBSTYLE_SHRAD}`] : []),
