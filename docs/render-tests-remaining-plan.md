@@ -1204,3 +1204,26 @@ fog/ 全家族 26 夹具复跑与 committed 逐位一致零回归（三联 0/0/0
 
 剩余：星亮度标定（~131-422 px 内的小额收敛）、±1-2 量化噪声、阴影管线
 战役、terrain 受益材质取证。
+
+### §885 终二百一十三：星亮度标定战报——引擎内星碎片始终缺失，定性收窄为渲染通道级（2026-09-10）
+
+按终二百一十二后续入口做星亮度标定，实测推翻"暗 3-5×"前提：引擎内星
+碎片**根本未光栅化**（cur 星点亮 px=0，此前的 +10 偏离是大气渐变条带）。
+本轮系统性排除（每步单独 A/B）：①绘制顺序（atmo 场景 renderOrder 2000，
+per-frame starMesh 轮询同步，AtmoOK 实证渲染时 star=true、render 执行、
+32,962 三角形提交）✓；②uRight/uUp inverse-rotation 计算改常量 ✓ 无效；
+③材质标志对齐红盘（transparent:false/depthTest:true/NormalBlending）
+✓ 无效；④索引改普通数组（three 自选类型）✓ 无效；⑤剔除分支移除 ✓
+无效；⑥uStarsProj 元素逐项实证为正确透视矩阵、uIntensity=0.25、
+WebGL2、gl err=0 ✓。对照组：同通道同场景的 MeshBasicMaterial 红盘
+（烘焙 ortho 坐标）正常渲染 9,183 px。
+
+结论：星 **ShaderMaterial** 在引擎 AfterRender 通道中提交 32,000 三角形
+却零碎片，而同通道 basic 材质正常、独立 repro 中同 shader 正常——差异
+收窄到「引擎 GL 上下文状态 × 该 ShaderMaterial」的组合（非绘制顺序、非
+uniform 值、非 index/attribute 类型）。修复入口：真机 GPU 复验、或对
+引擎 renderer 做 minimal repro（ctx 状态 dump + frame capture）。投入
+（~119-422 px，家族 0.02%）已远超本域其余残差，此处挂起。
+
+工作树已回退至终二百一十二 committed 态（space-color-opacity 44,372、
+三联 0/0/0、use-theme PASS 复现确认）。
