@@ -1499,3 +1499,16 @@ A/B（gate 70 → gate 90+zoom10）：
 equal-range 28.8k、zero-exaggeration（zoom 门后）的进一步窗口标定；
 ②fill-extrusion-terrain 17k/30k/81k 的模型层域排查；③星场真机
 frame-capture；④量化噪声。
+
+### §885 终二百二十六：负 opacity 泄漏修复（保护性）+ inverted/equal-range 路径定位（2026-09-11）
+
+内容雾 chunk 的 fogFactor 只封顶不封底：fogT < 0（inverted [0.5,−0.5] /
+degenerate [−0.5,−0.5] 等范围）时 fogFalloff 为负、mix 外推超过基色——
+修复为双向 clamp。A/B：三联 0/0/0 ✓、2d/basic 29,537 ✓、ground-shadow
+−4（噪声）——零回归确认；但 fog/terrain/inverted 43,205 与 equal-range
+28,777 **不变**——两者的 raster 地形雾走 terrain_raster 材质路径（非
+fog_fragment chunk），负 t 泄漏在另一处。
+
+**下轮入口**：①terrain raster 材质雾路径的负 t 修复（同 clamp 语义）；
+②fill-extrusion-terrain 17k/30k/81k 模型层域；③星场真机 frame-capture；
+④量化噪声。

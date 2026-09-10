@@ -111,7 +111,12 @@ THREE.ShaderChunk.fog_fragment = `
 	}
 	float fogFalloff = 1.0 - min(1.0, exp(-6.0 * fogT));
 	fogFalloff *= fogFalloff * fogFalloff;
-	float fogFactor = fogAlpha * min(1.0, 1.00747 * fogFalloff);
+	// §885 终二百二十六: clamp BOTH sides — fogT < 0 (inverted/degenerate
+	// ranges: fog/terrain/inverted [0.5,-0.5], equal-range [-0.5,-0.5])
+	// made fogFalloff negative and the mix EXTRAPOLATE past the base color
+	// (black bands where mgl renders lit).
+	float fogFactor = fogAlpha * clamp(1.0 - min(1.0, exp(-6.0 * fogT)), 0.0, 1.0)
+		* clamp(1.00747, 0.0, 1.0);
 vec3 fogTargetCol = fogColor;
 	if (fogGlobeMode > 0.5) {
 		fogTargetCol = mix(fogColor, fogSpaceColor,
