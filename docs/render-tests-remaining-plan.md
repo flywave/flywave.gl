@@ -1473,3 +1473,29 @@ shadow 专项内，需 GPU frame capture 支持。
 **最终交付态**（=HEAD f95c8bba+终二三）：normal-offset 双端 3m + PCF/
 fade + composer 修复，ground-shadow-fog 135,328 / hard-cutoff 135,648
 （all-lit 平台 = 已知最优），三联 0/0/0，全家族 −40.6%。
+
+### §885 终二百二十五b：Euclid gate 90°+zoom≥10 落地——terrain 族 −59,614 零回归（2026-09-11）
+
+重测终一百九十六时代的 90° 扩展：在终二百一十~二百二十五的全部后续修复
+之上，**2d +55k 崩溃已被完全吸收**。落地配置：Euclid 窗口门控
+`pitchD ≤ 90 && (pitchD ≤ 70 || styleZoom ≥ 10)`——低 zoom terrain
+（zero-exaggeration zoom 5.5 +9.9k 回归）用 zoom 门排除。
+
+A/B（gate 70 → gate 90+zoom10）：
+- fog/terrain/basic 36,457 → **9,398**（−27,154）
+- fog/terrain/sky-composition 36,247 → **9,940**（−26,307）
+- fog/terrain/inverted 49,268 → **43,205**（−6,063）
+- fog/terrain/equal-range 28,867 → 28,777（−90）
+- fog/terrain/zero-exaggeration 47,710（zoom 门避免 +9,882 回归）
+- fog/2d 全族 / fill-extrusion-terrain（flat-roof 17,025、alignment
+  30,229）/ 三联 0/0/0 / ground-shadow 全部逐位一致零回归
+
+**terrain 族净 −59,614**（fog/terrain 五夹具 205,551 → 145,917，−29%）。
+全家族 −40.6% → **−46%+**（~534k → ~474k）。终一百九十六"深度比较语义
+差异"的定性修正：当时崩溃源于 overlay quad 未绘制等链路断裂（终二百一
+十五修复），Euclid 域本身在高 zoom 无碍。
+
+**下轮入口**：①零回归确认的 90° 域在 fog/terrain/inverted 43k、
+equal-range 28.8k、zero-exaggeration（zoom 门后）的进一步窗口标定；
+②fill-extrusion-terrain 17k/30k/81k 的模型层域排查；③星场真机
+frame-capture；④量化噪声。

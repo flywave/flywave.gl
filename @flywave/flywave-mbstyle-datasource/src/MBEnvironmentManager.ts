@@ -1264,7 +1264,12 @@ export class MBEnvironmentManager {
             // fogMglShift·length(vFogPos)/fogMglDistCam reproduces the quad's
             // depth field exactly (uScale·shift·rayLen/distCam heuristic).
             // ≤70° only — the calibrated band.
-            if ((globalThis as any).__mbFogContentEuclid !== false && pitchD <= 70 && cam) {
+            // §885 终二百二十四b: gate 90 + zoom>=10 — high-pitch high-zoom
+            // fixtures take the calibrated Euclid window (terrain/basic
+            // -27k), low-zoom terrain (zero-exaggeration zoom 5.5) keeps
+            // the legacy domain (+9.9k regression avoided).
+            if ((globalThis as any).__mbFogContentEuclid !== false
+                && pitchD <= 90 && (pitchD <= 70 || styleZoom >= 10) && cam) {
                 lib2.fogMglShift.value = 0.735 * shift;
                 lib2.fogMglDistCam.value = Math.max(
                     (cam as THREE.PerspectiveCamera).position.z, 1) /
