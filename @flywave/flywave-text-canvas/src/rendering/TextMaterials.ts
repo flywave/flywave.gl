@@ -112,7 +112,6 @@ export class GlyphCopyMaterial extends NodeMaterial {
     setSourceTexture(tex: THREE.Texture) {
         tex.colorSpace = THREE.NoColorSpace;
         this.srcTextureNode.value = tex;
-        this.needsUpdate = true;
     }
 }
 
@@ -183,32 +182,64 @@ export class SdfTextMaterial extends NodeMaterial {
         };
 
         this.fragmentNode = Fn(() => {
-            const texSample = sdfTex;
-            const dist = isMsdf
-                ? max(
-                      min(texSample.r, texSample.g),
-                      min(max(texSample.r, texSample.g), texSample.b)
-                  )
-                : texSample.r;
-
             const color = isBackground ? aBgColor : aColor;
-            const weight = isBackground ? aBgWeight : aWeight;
 
-            const rotUvX = cos(aRotation).mul(aUv.x).sub(sin(aRotation).mul(aUv.y));
-            const rotUvY = sin(aRotation).mul(aUv.x).add(cos(aRotation).mul(aUv.y));
-            const rotUvXAbs = abs(rotUvX);
-            const rotUvYAbs = abs(rotUvY);
+            let opacityNode;
+            if (isBackground) {
+                // Solid rectangular plate covering the glyph quad (ink + atlas margin).
+                // Dilating the glyph SDF instead draws a plate-colored outline around every
+                // stroke, which turns thin-stroke CJK glyphs into doubled/blurry shapes; a
+                // rect plate renders a clean label strip and never samples the clipped
+                // field near the patch boundary (the detached "ghost frame" artifact).
+                const luv = attribute("aLocalUv", "vec2");
+                const ex = min(luv.x, float(1).sub(luv.x)).div(max(abs(dFdx(luv.x)), float(1e-6)));
+                const ey = min(luv.y, float(1).sub(luv.y)).div(max(abs(dFdy(luv.y)), float(1e-6)));
+                const coverage = clamp(min(ex, ey).add(0.5), 0, 1);
+                // backgroundSize = 0 keeps meaning "no plate".
+                opacityNode = coverage.mul(aBgWeight.greaterThan(0.0).select(1, 0));
+            } else {
+                const texSample = sdfTex;
+                let dist = isMsdf
+                    ? max(
+                          min(texSample.r, texSample.g),
+                          min(max(texSample.r, texSample.g), texSample.b)
+                      )
+                    : texSample.r;
 
-            const dx = dFdx(rotUvXAbs).mul(sdfParams.x);
-            const dy = dFdy(rotUvYAbs).mul(sdfParams.y);
-            const toPixels = sdfParams.w.mul(inverseSqrt(dx.mul(dx).add(dy.mul(dy))));
+                const rotUvX = cos(aRotation).mul(aUv.x).sub(sin(aRotation).mul(aUv.y));
+                const rotUvY = sin(aRotation).mul(aUv.x).add(cos(aRotation).mul(aUv.y));
+                const rotUvXAbs = abs(rotUvX);
+                const rotUvYAbs = abs(rotUvY);
 
-            const adjustedDist = dist
-                .add(min(weight, float(0.5).sub(float(1).div(sdfParams.w))))
-                .sub(0.5);
-            const opacity = clamp(adjustedDist.mul(toPixels).add(0.5), 0, 1);
+                const dx = dFdx(rotUvXAbs).mul(sdfParams.x);
+                const dy = dFdy(rotUvYAbs).mul(sdfParams.y);
+                const toPixels = sdfParams.w.mul(inverseSqrt(dx.mul(dx).add(dy.mul(dy))));
 
-            return vec4(color.rgb, color.a.mul(opacity));
+                // Font atlas pages clip the SDF field at the patch border: for CJK the ink can
+                // reach the last texel with values >= iso, and the interpolated coverage then
+                // saturates over the whole quad-edge column (vertical/horizontal hairlines
+                // around every glyph). Clamping the sampled distance by the geometric distance
+                // to the patch border (in the same px-per-distanceRange units) removes exactly
+                // the clipped region without touching interior coverage.
+                const aUvRect = attribute("aUvRect", "vec4");
+                const borderTexels = min(
+                    aUv.sub(aUvRect.xy).mul(sdfParams.x),
+                    aUvRect.zw.sub(aUv).mul(sdfParams.y)
+                );
+                const borderPx = min(borderTexels.x, borderTexels.y);
+                dist = min(dist, borderPx.div(sdfParams.w));
+
+                // 与 main 对齐：膨胀权重不得超过安全上限，否则等值线会越过被裁剪的
+                // patch 边界场，形成整圈不透明边框。
+                const weight = min(aWeight, float(0.5).sub(float(1).div(sdfParams.w)));
+
+                // 字形补丁边缘的 SDF 场被图集裁剪（边界值 ~0.06-0.18），前景等值线（0.5）
+                // 距边界还有余量；背景膨胀权重必须收紧（见背景分支的矩形板实现）。
+                const adjustedDist = dist.add(weight).sub(0.5);
+                opacityNode = clamp(adjustedDist.mul(toPixels).add(0.5), 0, 1);
+            }
+
+            return vec4(color.rgb, color.a.mul(opacityNode));
         })();
     }
 

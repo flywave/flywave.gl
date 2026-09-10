@@ -133,12 +133,16 @@ export class GlyphTextureCache {
 
         const rendererState = RendererUtils.resetRendererState(renderer, undefined);
         renderer.autoClear = false;
+        // WebGPU 后端：outputColorSpace 转换会把 render() 路由到一个画布大小的共享
+        // 中间 framebuffer，再 blit 回目标——图集拷贝会因此混入上一帧残留内容
+        //（黑框/竖线/鬼影），并被降分辨率放大。直通色彩空间让 pass 直接写入图集。
+        renderer.toneMapping = THREE.NoToneMapping;
+        renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
         renderer.setRenderTarget(this.m_rt);
 
         if (willClear) {
             for (let i = 0; i < this.m_clearRects.length; i++) {
                 this.m_clearMaterial.clearRectUniform.value.copy(this.m_clearRects[i]);
-                (this.m_clearMaterial as THREE.Material).needsUpdate = true;
                 this.m_clearQuad.render(renderer);
             }
             this.m_clearRects.length = 0;
@@ -151,7 +155,6 @@ export class GlyphTextureCache {
                 this.m_copyMaterial.setSourceTexture(entry.srcTexture);
                 this.m_copyMaterial.srcRectUniform.value.copy(entry.srcRect);
                 this.m_copyMaterial.dstRectUniform.value.copy(entry.dstRect);
-                (this.m_copyMaterial as THREE.Material).needsUpdate = true;
                 this.m_copyQuad.render(renderer);
             }
             this.m_copyEntries.length = 0;

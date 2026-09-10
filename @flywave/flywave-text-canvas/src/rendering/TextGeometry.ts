@@ -79,10 +79,12 @@ export class TextGeometry {
     private m_positionAttribute: THREE.BufferAttribute;
     private m_rotationAttribute: THREE.BufferAttribute;
     private m_uvAttribute: THREE.BufferAttribute;
+    private m_uvRectAttribute: THREE.BufferAttribute;
     private m_weightAttribute: THREE.BufferAttribute;
     private m_bgWeightAttribute: THREE.BufferAttribute;
     private m_colorAttribute: THREE.BufferAttribute;
     private m_bgColorAttribute: THREE.BufferAttribute;
+    private m_localUvAttribute: THREE.BufferAttribute;
     private m_indexBuffer: THREE.BufferAttribute;
 
     private m_geometry: THREE.BufferGeometry;
@@ -121,6 +123,12 @@ export class TextGeometry {
         this.m_rotationAttribute.setUsage(THREE.DynamicDrawUsage);
         this.m_uvAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 2), 2);
         this.m_uvAttribute.setUsage(THREE.DynamicDrawUsage);
+        // Per-vertex copy of the glyph's atlas patch rect (u0,v0,u1,v1). The fragment shader
+        // clamps the sampled SDF distance by the distance to this rect: font atlas pages clip
+        // the SDF field at the patch border (ink may reach the last texel with values >= iso),
+        // which otherwise renders as opaque vertical/horizontal hairlines at the quad edges.
+        this.m_uvRectAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 4), 4);
+        this.m_uvRectAttribute.setUsage(THREE.DynamicDrawUsage);
         this.m_weightAttribute = new THREE.BufferAttribute(new Float32Array(numVerts), 1);
         this.m_weightAttribute.setUsage(THREE.DynamicDrawUsage);
         this.m_bgWeightAttribute = new THREE.BufferAttribute(new Float32Array(numVerts), 1);
@@ -129,6 +137,9 @@ export class TextGeometry {
         this.m_colorAttribute.setUsage(THREE.DynamicDrawUsage);
         this.m_bgColorAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 4), 4);
         this.m_bgColorAttribute.setUsage(THREE.DynamicDrawUsage);
+        // Static per-corner quad UVs (0,0)(1,0)(0,1)(1,1) used by the background plate pass.
+        this.m_localUvAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 2), 2);
+        this.fillLocalUvs();
 
         this.m_indexBuffer = new THREE.BufferAttribute(
             new Uint32Array(this.m_currentCapacity * QUAD_INDEX_MEMORY_FOOTPRINT),
@@ -140,10 +151,12 @@ export class TextGeometry {
         this.m_geometry.setAttribute("position", this.m_positionAttribute);
         this.m_geometry.setAttribute("aRotation", this.m_rotationAttribute);
         this.m_geometry.setAttribute("uv", this.m_uvAttribute);
+        this.m_geometry.setAttribute("aUvRect", this.m_uvRectAttribute);
         this.m_geometry.setAttribute("aWeight", this.m_weightAttribute);
         this.m_geometry.setAttribute("aBgWeight", this.m_bgWeightAttribute);
         this.m_geometry.setAttribute("aColor", this.m_colorAttribute);
         this.m_geometry.setAttribute("aBgColor", this.m_bgColorAttribute);
+        this.m_geometry.setAttribute("aLocalUv", this.m_localUvAttribute);
         this.m_geometry.setIndex(this.m_indexBuffer);
 
         this.m_mesh = new THREE.Mesh(this.m_geometry, material);
@@ -184,6 +197,7 @@ export class TextGeometry {
                 this.m_positionAttribute,
                 this.m_rotationAttribute,
                 this.m_uvAttribute,
+                this.m_uvRectAttribute,
                 this.m_weightAttribute,
                 this.m_bgWeightAttribute,
                 this.m_colorAttribute,
@@ -250,6 +264,8 @@ export class TextGeometry {
                 glyphData.dynamicTextureCoordinates[mirroredUVIdx].x,
                 glyphData.dynamicTextureCoordinates[mirroredUVIdx].y
             );
+            const dyn = glyphData.dynamicTextureCoordinates;
+            this.m_uvRectAttribute.setXYZW(baseVertex + i, dyn[0].x, dyn[0].y, dyn[3].x, dyn[3].y);
             this.m_weightAttribute.setX(baseVertex + i, weight);
             this.m_bgWeightAttribute.setX(baseVertex + i, bgWeight);
             this.m_colorAttribute.setXYZW(
@@ -413,6 +429,14 @@ export class TextGeometry {
                     glyph.dynamicTextureCoordinates[mirroredUVIdx].x,
                     glyph.dynamicTextureCoordinates[mirroredUVIdx].y
                 );
+                const dyn = glyph.dynamicTextureCoordinates;
+                this.m_uvRectAttribute.setXYZW(
+                    targetOffset + i * VERTICES_PER_QUAD + j,
+                    dyn[0].x,
+                    dyn[0].y,
+                    dyn[3].x,
+                    dyn[3].y
+                );
                 this.m_weightAttribute.setX(targetOffset + i * VERTICES_PER_QUAD + j, w);
                 this.m_bgWeightAttribute.setX(
                     targetOffset + i * VERTICES_PER_QUAD + j,
@@ -546,7 +570,7 @@ export class TextGeometry {
      */
     updateMemoryUsage(info: MemoryUsage) {
         const numVerts = this.m_positionAttribute.count;
-        const vertexBytes = numVerts * (3 + 1 + 2 + 1 + 1 + 4 + 4) * NUM_BYTES_PER_FLOAT;
+        const vertexBytes = numVerts * (3 + 1 + 2 + 4 + 1 + 1 + 4 + 4) * NUM_BYTES_PER_FLOAT;
         const indexBytes = this.m_indexBuffer.count * NUM_BYTES_PER_INT32;
         const numBytes = vertexBytes + indexBytes;
         info.heapSize += numBytes;
@@ -569,10 +593,13 @@ export class TextGeometry {
         this.m_positionAttribute = resizeAttr(this.m_positionAttribute, numVerts, 3);
         this.m_rotationAttribute = resizeAttr(this.m_rotationAttribute, numVerts, 1);
         this.m_uvAttribute = resizeAttr(this.m_uvAttribute, numVerts, 2);
+        this.m_uvRectAttribute = resizeAttr(this.m_uvRectAttribute, numVerts, 4);
         this.m_weightAttribute = resizeAttr(this.m_weightAttribute, numVerts, 1);
         this.m_bgWeightAttribute = resizeAttr(this.m_bgWeightAttribute, numVerts, 1);
         this.m_colorAttribute = resizeAttr(this.m_colorAttribute, numVerts, 4);
         this.m_bgColorAttribute = resizeAttr(this.m_bgColorAttribute, numVerts, 4);
+        this.m_localUvAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 2), 2);
+        this.fillLocalUvs();
 
         const newIndexBuffer = new Uint32Array(size * QUAD_INDEX_MEMORY_FOOTPRINT);
         newIndexBuffer.set(this.m_indexBuffer.array);
@@ -584,10 +611,12 @@ export class TextGeometry {
         this.m_geometry.setAttribute("position", this.m_positionAttribute);
         this.m_geometry.setAttribute("aRotation", this.m_rotationAttribute);
         this.m_geometry.setAttribute("uv", this.m_uvAttribute);
+        this.m_geometry.setAttribute("aUvRect", this.m_uvRectAttribute);
         this.m_geometry.setAttribute("aWeight", this.m_weightAttribute);
         this.m_geometry.setAttribute("aBgWeight", this.m_bgWeightAttribute);
         this.m_geometry.setAttribute("aColor", this.m_colorAttribute);
         this.m_geometry.setAttribute("aBgColor", this.m_bgColorAttribute);
+        this.m_geometry.setAttribute("aLocalUv", this.m_localUvAttribute);
         this.m_geometry.setIndex(this.m_indexBuffer);
 
         this.m_pickingDataArray.length = this.m_currentCapacity;
@@ -602,5 +631,22 @@ export class TextGeometry {
         this.m_bgMesh.frustumCulled = false;
         this.m_bgScene.add(this.m_bgMesh);
         this.scene.add(this.m_mesh);
+    }
+
+    /**
+     * Fills the static per-corner quad UVs (corner order: bottom-left, bottom-right, top-left,
+     * top-right) used by the background plate pass.
+     */
+    private fillLocalUvs() {
+        const numVerts = this.m_currentCapacity * VERTICES_PER_QUAD;
+        for (let v = 0; v < numVerts; ++v) {
+            const corner = v % VERTICES_PER_QUAD;
+            this.m_localUvAttribute.setXY(
+                v,
+                corner === 1 || corner === 3 ? 1 : 0,
+                corner >= 2 ? 1 : 0
+            );
+        }
+        this.m_localUvAttribute.needsUpdate = true;
     }
 }

@@ -425,6 +425,9 @@ export class TextCanvas {
         clear?: boolean
     ) {
         this.m_fontCatalog.update(this.m_renderer);
+        // WebGPU 后端异步提交：图集更新后必须显式切回画布，
+        // 否则后续文字场景会被渲染进图集 RT（字形上出现黑框/竖线伪影）。
+        this.m_renderer.setRenderTarget(null);
         let oldTarget: THREE.RenderTarget | null = null;
         if (target !== undefined) {
             //@ts-ignore
