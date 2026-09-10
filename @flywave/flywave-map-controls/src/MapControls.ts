@@ -14,8 +14,8 @@ import { CameraTransform } from "./CameraTransform";
 export class MapControls extends BaseMapControls {
     /**
      * zoom 高频碰撞防护：滚轮连拍期间光标不动（±2px）→ 复用锁定的碰撞点，
-     * CPU 射线只在光标移动后执行一次并重新入锁；点击/拖拽/旋转等其他操作
-     * 走经典 CPU 射线路径，不消费锁。
+     * 射线只在光标移动后执行一次并重新入锁；点击/拖拽/旋转等其他操作
+     * 走经典射线路径，不消费锁。
      */
     private m_collisionLock: Vector3 | null = null;
     private m_collisionLockX: number = 0;
@@ -25,7 +25,9 @@ export class MapControls extends BaseMapControls {
         result: Vector3,
         origin: Vector3,
         target: Vector3,
-        noFallback?: boolean
+        noFallback?: boolean,
+        screenX?: number,
+        screenY?: number
     ): number {
         const weh = this.windowEventHandler;
 
@@ -40,7 +42,8 @@ export class MapControls extends BaseMapControls {
             return this.mapView.camera.position.distanceTo(this.m_collisionLock);
         }
 
-        // 经典 CPU 射线检测（GPU 碰撞引入之前的原始实现）。
+        // 一级：数据源射线检测（地形/3D Tiles 等按 enableCameraCollision
+        // 参与，地形源默认参与）。命中点是 render 空间，平移回 geo 帧。
         const canvasClientSize = this.mapView.getCanvasClientSize();
         const rayCaster = new PickingRaycaster(
             new Vector2(canvasClientSize.width, canvasClientSize.height)
@@ -65,13 +68,27 @@ export class MapControls extends BaseMapControls {
             return intersection[0].distance;
         }
 
-        const distance = this.rayCastProjectionWorld(result, origin, target);
-        if (noFallback && distance > 0) {
-            this.m_collisionLock = result.clone();
-            this.m_collisionLockX = weh.lastMouseX;
-            this.m_collisionLockY = weh.lastMouseY;
+        // 二级兜底：MapView 屏幕取点。坐标约定：getWorldPositionAt 需要
+        // "真实屏幕" client 坐标（即 lastMouseX/Y）；controls 内部流转的
+        // mouseX/Y 是 canvasWidth/Height 翻转后的坐标，勿透传——显式坐标
+        // 只由 pickPoint 这类自带换算的入口提供。GPU 深度命中上一帧渲染
+        // 表面（含地形/建筑网格）；手势期间深度槽因相机移动而冷，自动退化
+        // 为数学表面（球面 / z=0 平面）求交。返回 geo 帧坐标，无需再平移。
+        const worldPos = this.mapView.getWorldPositionAt(
+            screenX ?? weh.lastMouseX,
+            screenY ?? weh.lastMouseY,
+            false
+        );
+        if (worldPos !== null) {
+            result.copy(worldPos);
+            if (noFallback) {
+                this.m_collisionLock = result.clone();
+                this.m_collisionLockX = weh.lastMouseX;
+                this.m_collisionLockY = weh.lastMouseY;
+            }
+            return this.mapView.camera.position.distanceTo(worldPos);
         }
-        return distance;
+        return -1;
     }
 
     protected getTilesRenderDataSources(): ICameraCollidable[] {
@@ -117,15 +134,20 @@ export class MapControls extends BaseMapControls {
             this.canvasHeight - y,
             -1
         );
-        const distance = this.rayCastWorld(result, origin, target);
+        // unproject 用 canvasWidth - x / canvasHeight - y 构造射线，GPU
+        // 兜底查同一像素，保证射线与深度读数一致。
+        const distance = this.rayCastWorld(
+            result,
+            origin,
+            target,
+            undefined,
+            this.canvasWidth - x,
+            this.canvasHeight - y
+        );
         if (distance > 0) {
             return result;
         }
         return null;
-    }
-
-    protected rayCastProjectionWorld(result: Vector3, origin: Vector3, target: Vector3): number {
-        return this.cameraTransform.rayCastProjectionWorld(result, origin, target);
     }
 }
 

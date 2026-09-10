@@ -35,9 +35,22 @@ import { ExtendedFrustum } from "@flywave/flywave-utils/ExtendedFrustum";
 import { PriorityQueue } from "@flywave/flywave-utils/PriorityQueue";
 import { type WebTileDataProvider } from "@flywave/flywave-webtile-datasource";
 import debounce from "lodash.debounce";
-import { Matrix4, Mesh, Object3D, type Material } from "three/webgpu";
+import {
+    type Intersection,
+    type Material,
+    type Raycaster,
+    Matrix4,
+    Mesh,
+    Object3D,
+    Vector3
+} from "three/webgpu";
 
 import { TERRAIN_TILE_DECODER_ID } from "./Constants";
+
+// Heightfield hits have no real Object3D to report; this placeholder only
+// satisfies the three Intersection contract. This raycast is consumed by
+// camera collision only and never enters picking results.
+const terrainCollisionObject = new Object3D();
 import { type TerrainLayerMesh, type TerrainTileState } from "./dem-terrain/TerrainLayerMesh";
 import { ExclusionManager } from "./ExclusionManager";
 import {
@@ -93,6 +106,16 @@ export interface TerrainSourceOptions<DataProviderType extends DataProvider = Da
 
     /** Whether to debug tile boxes */
     showDebugInfo?: boolean;
+
+    /**
+     * Whether this terrain source participates in camera ground collision:
+     * the camera controller raycasts it for the zoom hit-point and ground
+     * clamping. Terrain is the ground itself, so unlike other data sources
+     * the default is `true`.
+     *
+     * @default true
+     */
+    enableCameraCollision?: boolean;
 }
 
 /**
@@ -144,6 +167,13 @@ export interface ITerrainSource<ProviderType extends DataProvider = DataProvider
     getProjectorOverlayManager(): ProjectorOverlayManager;
 
     getElevationProvider(): ElevationProvider;
+
+    /**
+     * Camera-collision raycast (the `ICameraCollidable` contract): marches the
+     * caller's ray against this source's elevation data. Output points are in
+     * render space; consumers translate with `.add(camera.position)`.
+     */
+    raycast(raycaster: Raycaster, intersections: Intersection[]): void;
 
     get showDebugInfo(): boolean;
 
@@ -507,6 +537,7 @@ export abstract class TerrainSource<
         this.m_loadingStages = options.loadingStages ?? 6;
 
         this.m_showDebugInfo = options.showDebugInfo ?? false;
+        this.enableCameraCollision = options.enableCameraCollision ?? true;
     }
 
     /**
@@ -877,6 +908,58 @@ export abstract class TerrainSource<
      */
     getElevationProvider(): ElevationProvider | undefined {
         return this.m_elevationProvider;
+    }
+
+    /**
+     * Camera-collision raycast (the `ICameraCollidable` contract): steps
+     * along the caller's ray, sampling the elevation provider until the
+     * sample altitude drops to the terrain height (+ 1mm tolerance). The ray
+     * arrives in the geo frame (direction is frame-invariant); the output
+     * point is render space per the data source contract, translated back by
+     * the consumer with `.add(camera.position)`. Below zoom level 13 the
+     * elevation grid is too coarse for collision, so the source opts out and
+     * the controller falls back to the mathematical surface.
+     */
+    raycast(raycaster: Raycaster, intersections: Intersection[]): void {
+        if (!this.enableCameraCollision || this.isDetached()) {
+            return;
+        }
+        const elevationProvider = this.m_elevationProvider;
+        if (!elevationProvider || this.mapView.zoomLevel < 13) {
+            return;
+        }
+
+        const projection = this.mapView.projection;
+        const maxDistance = 2 * projection.unitScale; // long enough detection distance
+        const minStep = 1.0; // meters
+        const direction = raycaster.ray.direction;
+        const origin = raycaster.ray.origin;
+        const currentPos = new Vector3();
+
+        let currentDistance = 0;
+        while (currentDistance <= maxDistance) {
+            currentPos.copy(origin).addScaledVector(direction, currentDistance);
+            const geoPos = projection.unprojectPoint(currentPos);
+            if (geoPos) {
+                const terrainHeight = elevationProvider.getHeight(geoPos) ?? 0;
+                if (geoPos.altitude <= terrainHeight + 0.001) {
+                    // small tolerance; emit a fresh point (never reuse
+                    // currentPos — consumers keep the reference)
+                    intersections.push({
+                        distance: currentDistance,
+                        point: new Vector3().copy(currentPos).sub(this.mapView.camera.position),
+                        object: terrainCollisionObject
+                    });
+                    return;
+                }
+
+                // adaptive step: large when far above ground, down to 1m
+                // near the surface
+                currentDistance += Math.max(minStep, Math.min(geoPos.altitude - terrainHeight, 50));
+            } else {
+                currentDistance += minStep;
+            }
+        }
     }
 
     /**

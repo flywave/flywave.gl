@@ -530,6 +530,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         this.cameraTransform.getOrigin(origin);
 
         const hitPoint = new Vector3();
+        // GPU 兜底的像素坐标由 rayCastWorld 内部取 lastMouseX/Y（本函数的
+        // mouseX/Y 是翻转后的内部坐标），与支点射线对应的真实像素一致。
         const dist = this.rayCastWorld(hitPoint, origin, target);
         if (dist > 0) {
             this.m_rotatePivot.copy(hitPoint);
@@ -741,7 +743,9 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         result: Vector3,
         origin: Vector3,
         target: Vector3,
-        noFallback?: boolean
+        noFallback?: boolean,
+        screenX?: number,
+        screenY?: number
     ): number;
 
     private rayCastZoomPoint(
@@ -751,7 +755,9 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         isWheel: boolean
     ): number {
         if (!this.lockCenterPoint || !isWheel) {
-            // isWheel（滚轮）→ MapControls 用碰撞锁防止 zoom 高频 CPU 射线。
+            // isWheel（滚轮）→ MapControls 用碰撞锁防止 zoom 高频射线。
+            // GPU 兜底的像素坐标由 rayCastWorld 内部取 lastMouseX/Y——
+            // 本函数收到的 mouseX/Y 是翻转后的内部坐标，不能透传。
             return this.rayCastWorld(result, origin, target, isWheel);
         } else {
             const cameraPos = new Vector3();

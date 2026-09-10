@@ -34,25 +34,31 @@ GPU 命中先返回**廉价字段**（点/距离/对象/瓦片归属）；
 raycast 并缓存。含义：相机移动后这些字段可能变 undefined（对象已不在当前
 渲染集）。权威注释：`PickHandler.ts` 的 `intersectMapObjects` 顶部大注释。
 
-## 相机碰撞（map-controls，纯 CPU 射线）
+## 相机碰撞（数据源 raycast + MapView 屏幕取点兜底）
 
 入口：滚轮/点击 → `BaseMapControls.handleMouseInteractions` →
 `rayCastZoomPoint` → `MapControls.rayCastWorld`
-（`@flywave/flywave-map-controls/src/MapControls.ts`）。三级求交顺序：
+（`@flywave/flywave-map-controls/src/MapControls.ts`）。两级求交顺序：
 
 1. **数据源 raycast**：对实现 `ICameraCollidable`
    （`@flywave/flywave-mapview/src/ICameraCollidable.ts`）且
    `enableCameraCollision` 的数据源逐个 raycast，按距离取最近命中；
    命中点是 render 空间，消费方 `.add(camera.position)` 平移回 geo 帧
    （铁律 1，范式 C）。
-2. **地形步进兜底**：`CameraTransform.rayCastTerrain`
-   （`@flywave/flywave-map-controls/src/CameraTransform.ts`）沿射线
-   采样 `elevationProvider.getHeight()`；仅 `zoomLevel >= 13` 且存在
-   elevationProvider 时启用；自适应步长 `clamp(离地高, 1, 50)` 米，
-   命中判定 `海拔 <= 地形高 + 1mm`。
-3. **数学表面兜底**：椭球 `projection.rayCast` / 平面 z=0 求交
-   （`EllipsoidCameraTransform` / `PlanerCameraTransform` 的
-   `rayCastProjectionWorld`）。
+   - **地形碰撞住在 terrain-datasource**：`TerrainSource.raycast`
+     （`@flywave/flywave-terrain-datasource/src/TerrainSource.ts`）沿射线
+     对 `elevationProvider` 做自适应步进采样（步长 `clamp(离地高, 1, 50)`
+     米，命中判定 `海拔 <= 地形高 + 1mm`；`zoomLevel >= 13` 才参与）。
+     该源的 `enableCameraCollision` 默认 **true**（地面本身）。
+   - 3D Tiles 经 `TileRenderDataSource.raycast` 参与，默认 false。
+2. **兜底 = `mapView.getWorldPositionAt(x, y, false)`**：GPU 深度命中
+   上一帧渲染表面（含地形/建筑网格）；手势期间深度槽因相机移动而冷 →
+   自动退化为数学表面（球面 / z=0 平面）求交。返回 geo 帧坐标；两层
+   全 miss 才返回 -1。
+   - **坐标约定坑**：`getWorldPositionAt` 要"真实屏幕" client 坐标
+     （`lastMouseX/Y`）；controls 内部流转的 mouseX/Y 是
+     canvasWidth/Height 翻转后的坐标，勿透传（显式坐标仅 pickPoint 这类
+     自带换算的入口提供）。
 
 - **碰撞锁 `m_collisionLock`**：滚轮连拍期间光标 ±2px 内直接复用上次
   命中点（零射线）；只有滚轮路径写入与消费，点击/拖拽不走锁。
@@ -60,8 +66,11 @@ raycast 并缓存。含义：相机移动后这些字段可能变 undefined（�
   = `EllipsoidCameraTransform.pan` 的 `collisionTo` 球面求交 + 沿面
   滑动；`minCameraHeight` 法线钳制与 GPU 中心像素深度在
   `MapView.updateLookAtSettings`（反转深度，`depth > 0` 才算命中）。
-- **GPU 深度不参与控件碰撞**。历史文档曾写 `rayCastGpuDepth` /
-  `buildGpuPoint` / `m_gpuEmptyX/Y`，这些符号在代码库中不存在。
+- `CameraTransform.rayCastTerrain` 仍保留，但只服务平面投影 pan 的
+  `collisionTo` 链路；缩放路径的地形求交已由 TerrainSource.raycast
+  承担。GPU 深度读数只出现在 getWorldPositionAt 与
+  updateLookAtSettings，历史文档所写 `rayCastGpuDepth` / `buildGpuPoint`
+  / `m_gpuEmptyX/Y` 符号不存在。
 
 ## 3DTile 碰撞契约（"方向可信 / 原点重建"）
 
