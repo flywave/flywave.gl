@@ -17,8 +17,7 @@ import { type DEMLayerKind, emptyOpaqueTex } from "./DEMTileLayerMaterial";
 
 const zAxis = new Vector3(0, 0, 1);
 const ORIGIN = new Vector3();
-/** mapbox terrain-rgb 解码常数，作为未显式提供 DEM 编码时的默认解包向量 */
-const DEFAULT_DEM_UNPACK = new Vector4(6553.6, 25.6, 0.1, 10000.0);
+const uDemUnpack0 = new Vector4(6553.6, 25.6, 0.1, 10000.0);
 
 function computeHeightMapPos(tileKey: TileKey, demTileKey: TileKey, yDown: boolean): Vector3 {
     tileKey = TileKey.fromRowColumnLevel(
@@ -75,8 +74,6 @@ export class TerrainTileState {
     private m_heightMapTexture: THREE.Texture | null = null;
     private m_heightMapPos: Vector4 = new Vector4(1, 0, 0, 0);
     private m_texSize: Vector2 = new Vector2(1, 1);
-    /** 当前 DEM 纹理的编码解包向量（跟随 DEMData.encoding；默认 mapbox） */
-    private m_demUnpack: Vector4 = DEFAULT_DEM_UNPACK.clone();
 
     private m_lastProjFactor: number = Number.NaN;
     private m_frameDirty: boolean = true;
@@ -141,11 +138,7 @@ export class TerrainTileState {
         this.m_frameDirty = true;
     }
 
-    setHeightMap(
-        texture: THREE.Texture,
-        demTileKey: TileKey,
-        demUnpack?: THREE.Vector4
-    ): void {
+    setHeightMap(texture: THREE.Texture, demTileKey: TileKey): void {
         const pos = computeHeightMapPos(
             this.m_tileKey,
             demTileKey,
@@ -153,12 +146,6 @@ export class TerrainTileState {
         );
         texture.flipY = this.m_yDown;
         this.m_heightMapTexture = texture;
-        // DEM 纹理像素保持源编码上传（见 DemData._buildTexture），解码常数必须
-        // 跟随编码（terrarium 的 (256,1,1/256,32768) 与 mapbox 完全不同比例，
-        // 硬编码 mapbox 会把 terrarium 地形解成几十万米）
-        if (demUnpack) {
-            this.m_demUnpack.copy(demUnpack);
-        }
         const img = texture.image as { width?: number; height?: number } | undefined;
         if (img && img.width) {
             this.m_texSize.set(img.width, img.height);
@@ -234,7 +221,7 @@ export class TerrainTileState {
         // tile launches into space.
         if (this.m_heightMapTexture) {
             mesh.heightMapTexture = this.m_heightMapTexture;
-            mesh.demUnpack.copy(this.m_demUnpack);
+            mesh.demUnpack.copy(uDemUnpack0);
             mesh.heightMapPos.copy(this.m_heightMapPos);
             mesh.texSize.copy(this.m_texSize);
         } else {

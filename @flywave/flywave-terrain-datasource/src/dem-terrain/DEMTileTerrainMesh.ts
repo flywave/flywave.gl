@@ -27,8 +27,6 @@ import { ProjectionSwitchController } from "../ProjectionSwitchController";
 
 const uDemUnpack0 = new Vector4(6553.6, 25.6, 0.1, 10000.0);
 const uDemUnpack1 = new Vector4(0.0, 0.0, 0, 0);
-/** mapbox terrain-rgb 解码常数，未显式提供 DEM 编码时的默认解包向量 */
-const DEFAULT_DEM_UNPACK = uDemUnpack0;
 
 const _identityImageryTransforms = [
     new Vector4(1, 1, 0, 0),
@@ -98,8 +96,6 @@ export class HeightMapTerrainMesh extends Mesh {
     private m_uHeightMapPos?: Vector3;
     private m_isSimplePatch: boolean = false;
     private m_uHeighMapTexture: THREE.Texture = matEmptyTexture;
-    /** 当前 DEM 纹理的编码解包向量（跟随 DEMData.encoding；默认 mapbox） */
-    private m_demUnpack: Vector4 = DEFAULT_DEM_UNPACK.clone();
     private m_selfGeoBox: GeoBox;
     public displacement: Vector3 = new Vector3();
     private m_transformation: TileTransformation;
@@ -312,10 +308,10 @@ export class HeightMapTerrainMesh extends Mesh {
         }
 
         if (this.m_uHeightMapPos) {
-            mat.elements[4] = this.m_demUnpack.x;
-            mat.elements[5] = this.m_demUnpack.y;
-            mat.elements[6] = this.m_demUnpack.z;
-            mat.elements[7] = this.m_demUnpack.w;
+            mat.elements[4] = uDemUnpack0.x;
+            mat.elements[5] = uDemUnpack0.y;
+            mat.elements[6] = uDemUnpack0.z;
+            mat.elements[7] = uDemUnpack0.w;
 
             mat.elements[8] = this.m_uHeightMapPos.x;
             mat.elements[9] = this.m_uHeightMapPos.y;
@@ -348,11 +344,7 @@ export class HeightMapTerrainMesh extends Mesh {
         }
     }
 
-    setHeightMap(
-        texture: THREE.Texture,
-        demTileKey: TileKey,
-        demUnpack?: THREE.Vector4
-    ) {
+    setHeightMap(texture: THREE.Texture, demTileKey: TileKey) {
         this.m_uHeightMapPos = computeHeightMapPos(
             this.m_tile.tileKey,
             demTileKey,
@@ -360,10 +352,6 @@ export class HeightMapTerrainMesh extends Mesh {
         );
         texture.flipY = this.m_yDown;
         this.m_uHeighMapTexture = texture;
-        // DEM 纹理像素保持源编码上传（见 DemData._buildTexture），解码常数必须跟随编码
-        if (demUnpack) {
-            this.m_demUnpack.copy(demUnpack);
-        }
         this.heightMapTexture = texture;
         const img = texture.image as { width?: number; height?: number } | undefined;
         if (img && img.width) {
