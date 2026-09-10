@@ -129,7 +129,10 @@ function main() {
             ...(process.env.MBSTYLE_FOGDISTK ? [`fogdistk=${process.env.MBSTYLE_FOGDISTK}`] : []),
             ...(process.env.MBSTYLE_FOGREFDBG ? ["fogrefdbg=1"] : []),
             ...(process.env.MBSTYLE_FOGQUADDBG ? ["fogquaddbg=1"] : []),
-            ...(process.env.MBSTYLE_FOGEUCLID ? ["fogeuclid=1"] : []),
+            // §885 终一百九十六: pass the VALUE through — "0" is truthy and
+            // used to disable gates (a hardcoded fogeuclid=1 made
+            // MBSTYLE_FOGEUCLID=0 runs open the gate).
+            ...(process.env.MBSTYLE_FOGEUCLID ? [`fogeuclid=${process.env.MBSTYLE_FOGEUCLID}`] : []),
             ...(process.env.MBSTYLE_CAMDIST ? [`camdist=${process.env.MBSTYLE_CAMDIST}`] : []),
             ...(process.env.MBSTYLE_FOGSHIFT ? [`fogshift=${process.env.MBSTYLE_FOGSHIFT}`] : []),
             ...(process.env.MBSTYLE_SHRAD ? [`shrad=${process.env.MBSTYLE_SHRAD}`] : []),

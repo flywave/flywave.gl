@@ -889,3 +889,26 @@ terrain/basic 的 −27.1k 并非 terrain 网格响应，而是全局 lib 变化
 4c6980b8；>70° 欲净收益需先定位该真实受益材质（drawlog 已存
 mbstyle-s910dl：MeshBasicMaterial vn=5 ×400/帧、vn=16641 网格 Basic+Standard
 双份、RawShaderMaterial 4096 dome、ShaderMaterial 561/4）。
+
+### §885 终一百九十六：>70° 全通道定案——技术上可行、方向全负，正式关闭（2026-09-10）
+
+tile 路径欧氏域落地（patchMaterial 对 technique 'terrain' 打私有
+__mbTerrainFogU + MB_FOG_CONTENT_EUCLID define + nonce 强制重编译，
+§672 逐帧环喂值）后四夹具 A/B：terrain/basic 36,561→**50,838**（+14.3k）、
+terrain/inverted 49,285→**63,962**（+14.7k）、2d/inverted 9,643→**25,087**
+（+15.4k）、2d/basic 29,809→**45,254**（+15.4k）——**全部为负**。
+
+两个关键发现：①**fog/2d 的 raster tile 技术名也是 'terrain'**（emitter 把
+带卫星源的 tile 升为 terrain-technique）——technique 名无法区分 terrain/2d
+内容，terrain-only 门控路线不可行；②runner 传参 bug：MBSTYLE_FOGEUCLID=0
+的 "0" 是真值字符串，runner 硬编码传 fogeuclid=1（已修为透传原值）——
+此前"关门仍 45,254"的矛盾即源于此。对照运行矩阵（fog/2d/basic）：干净树
+29,809 ×2 稳定 / 本树门开 45,254 ×3 稳定 / 本树 fogeuclid=0（实际=1）
+45,254 ×2——全部确定性，无环境方差。
+
+终一百九十四无条件 A/B 的 terrain/basic −27.1k 重新定性：全局 lib 变化的
+真实受益者不是 terrain tile（其直上欧氏域 +14.3k），而是某个未定位的
+其他消费材质——需 drawlog 逐 draw 前后差分定位，投入产出比低，暂记档。
+
+工作树回退至 55ccb25e + runner 传参修复。>70° 欧氏域正式关闭：≤70° 标定
+带（A=1.1493/B=-0.1063）为该域的最终状态。
