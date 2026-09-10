@@ -829,3 +829,25 @@ buildings-trees-shadows-fog(-fade) 双例的浏览器崩溃与代码状态无关
 留待环境修复后随全量 baseline 复跑。chunked runner 补上**叶子夹具类目**
 支持（`…/model-layer/xxx` 直指 style.json 的路径解析为单夹具伪类目，
 filter 不再双拼前缀），重型夹具可单独 chunk-run 对比。
+
+### §885 终一百九十四：>70° 欧氏域扩展 A/B 净负，回退保留探针与实测数据（2026-09-10）
+
+quad 深度场探针解除 pitch>76 跳过（仅 fogquaddbg=1 诊断模式），实测
+pitch-80（fog/2d/basic，256×256）d(row)=[1.86, 2.69, 6.22*, 3.58*, 1.75,
+1.17, 0.89, 0.72, 0.61, 0.53]（*带混入地平线/天空 discard 区不可靠；带
+4-9 干净）。expected 反演不可行：raster 内容非均匀色，且 base/expected
+逐带均值受视角内容差污染（expected 比 raw base 更暗，与白雾矛盾）。
+
+直接 A/B（门控 ≤70→≤85，同常数）：**净 +21.7k 不可发布**——terrain/
+basic 36,561→**9,475**（−27.1k!）、terrain/inverted −6,065，但同视图的
+平面 2d raster 填充全面回退：2d/inverted +34,971、equal-range +9,418、
+basic +8,707、symbols +783。**结论：地面平面窗不建模 pitch-80 平面内容
+域**——terrain（3D 起伏几何）与平面 2d 在同一视图下对同一窗口方向相反。
+
+terrain 门控两次尝试失败机理（记档）：applyFog 在 style 应用时**仅跑
+一次**且早于地形网格激活——[MBFogEuSkip] 实证 terrainActive=false；
+把门控移入逐帧 syncFogUniforms 后该分支从未触发（同 flag 全程 false，
+fog/terrain 夹具的地形路径不经过 __mbTerrainActive 置位点）。可行方向：
+改用 terrainController.meshCount>0 轮询或地形激活事件做判据，并按
+terrain/2d 内容类型分别定窗。工作树已回退至 4c6980b8 + 探针任意 pitch
+渲染改进（诊断用，默认无行为变化）。

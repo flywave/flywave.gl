@@ -97,7 +97,10 @@ export class MBBackgroundFogRenderer {
         // semantics and the mgl tile ramp — above 76° it alone matches the
         // expected band better (§190/§193 measurements); 60..76 keeps the
         // calibrated quad (fog/color family).
-        if (pitchDeg > 76) return;
+        // §885 终一百九十四: the depth-field probe (fogquaddbg=1) renders
+        // at ANY pitch — pitch-80 d(row) measurement for the second
+        // calibration band.
+        if (pitchDeg > 76 && !(globalThis as any).__mbFogQuadDbg) return;
         // §771h: low-pitch styles (0..60°) now ALSO composite the fog wash —
         // mgl fogs the ground/background at any pitch (trees-use-theme: fog
         // [-1.5,3.0] at pitch 0 → t≈0.55 → ~94% fog-red wash = expected).
