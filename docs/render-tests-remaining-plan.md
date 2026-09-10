@@ -1333,3 +1333,22 @@ occlusion=0 → 全 lit；⑤shadowed_light_factor = (1−intensity·occlusion)�
 fade 项（u_fade_range）补齐近地带 lit。全部就绪后以 shoff 细扫掠收敛
 中带（当前最优 139,927，缺口仍 ~139k——该对夹具的完全收敛属独立
 多轮工程）。
+
+### §885 终二百一十九：PCF 3×3 + 级联 view_depth fade 落地（2026-09-11）
+
+按终二百一十八入口补齐两项（normal-offset 对平面地面收效甚微，暂缓）：
+①ground quad 采样改 3×3 PCF（texel 1/1024 ×1.5 步幅，mgl 硬件 sampler
+双线性比较的等价软化）；②cascade-1 分支加 view_depth fade
+（uMBFadeRange = [0.75·far1, far1]，mgl shadow_renderer.ts:362-363 语义，
+viewDist = distance(mbWP, camPos)）。uniform：uMBShadowTexel/uMBFadeRange。
+
+A/B：ground-shadow-fog shoff 扫掠形态不变（50,-700 → 139,927；60,-800 →
+162,820；75,-950 → 162,638）——**翻转根因确认为 cascade-0 边界入框**：
+shoff 使视框中心 uv 进入 cascade-0 界内后，地面采样 1024² 全图建筑深度
+→ 整体阴影化。mgl 近地带 lit 得自其 cascade-0 精细图（含 normal-offset
+与真实街道纹理）与级联 fade 的组合。fog/color 三联 0/0/0 PASS 零回归 ✓。
+
+**下轮入口**：cascade-0 深度图内容对齐（深度 pass 加 normal-offset 与
+tileToMeter 比例、或提升 cascade-0 分辨率/改 4-cascade 结构）；或以
+cascade-1-only + fade 范围收窄（uMBFadeRange 左移）先行压制近地带误阴影
+（预期把 162,820 → 逼近 139,927 的同时改善中带）。已提交 PCF/fade 基建。

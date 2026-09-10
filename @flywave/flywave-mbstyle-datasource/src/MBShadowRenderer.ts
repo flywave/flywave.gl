@@ -218,6 +218,11 @@ export class MBShadowRenderer {
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3() };
             shader.uniforms.uMBShadowIntensity = { value: 0 };
             shader.uniforms.uMBShadowDbg = { value: (globalThis as any).__mbShadowDbg ? ((globalThis as any).__mbQuadDbg ? 2 : 1) : 0 };
+            // §885 终二百一十九: PCF texel size + cascade-1 view-depth fade
+            // range ([0.75·far1, far1], mgl shadow_renderer.ts:362-363).
+            shader.uniforms.uMBShadowTexel = { value: 1 / 1024 };
+            shader.uniforms.uMBFadeRange = { value: new THREE.Vector2(
+                (this.m_shadowCamera.far) * 0.75, (this.m_shadowCamera.far)) };
             shader.uniforms.uMBInvProj = { value: new THREE.Matrix4() };
             shader.uniforms.uMBCamWorld = { value: new THREE.Matrix4() };
             shader.uniforms.uMBGroundZ = { value: -80 };
@@ -243,7 +248,9 @@ export class MBShadowRenderer {
                 'uniform float uMBShadowDbg;\n' +
                 'uniform mat4 uMBInvProj;\n' +
                 'uniform mat4 uMBCamWorld;\n' +
-                'uniform float uMBGroundZ;\n' + shader.fragmentShader).replace(
+                'uniform float uMBGroundZ;\n' +
+                'uniform float uMBShadowTexel;\n' +
+                'uniform vec2 uMBFadeRange;\n' + shader.fragmentShader).replace(
                 '#include <opaque_fragment>',
                 `#include <opaque_fragment>
                 {
@@ -264,22 +271,40 @@ export class MBShadowRenderer {
                             uv4.y >= 0.0 && uv4.y <= 1.0 && uv4.z >= 0.0 && uv4.z <= 1.0;
                         bool inC1 = !inC0 && uv4b.x >= 0.0 && uv4b.x <= 1.0 &&
                             uv4b.y >= 0.0 && uv4b.y <= 1.0 && uv4b.z >= 0.0 && uv4b.z <= 1.0;
-                        if (inC0) {
-                            vec4 pk = texture2D(uMBShadowMap, uv4.xy);
-                            #ifdef MB_SH_HW
-                            sampD = pk.r;
-                            #else
-                            sampD = pk.r + pk.g / 255.0;
-                            #endif
-                            lit = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sampD - uv4.z);
-                        } else if (inC1) {
-                            vec4 pk1 = texture2D(uMBShadowMap1, uv4b.xy);
-                            #ifdef MB_SH_HW
-                            sampD = pk1.r;
-                            #else
-                            sampD = pk1.r + pk1.g / 255.0;
-                            #endif
-                            lit = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sampD - uv4b.z);
+                        // §885 终二百一十九: 3x3 PCF (mgl hardware sampler
+                        // bilinear-compare equivalent) + cascade-1
+                        // view-depth fade (u_fade_range semantics).
+                        if (inC0 || inC1) {
+                            float litSum = 0.0;
+                            for (int dy = -1; dy <= 1; dy++) {
+                                for (int dx = -1; dx <= 1; dx++) {
+                                    vec2 off = vec2(float(dx), float(dy)) * uMBShadowTexel * 1.5;
+                                    float l = 0.0;
+                                    if (inC0) {
+                                        vec4 pk = texture2D(uMBShadowMap, uv4.xy + off);
+                                        #ifdef MB_SH_HW
+                                        float sd = pk.r;
+                                        #else
+                                        float sd = pk.r + pk.g / 255.0;
+                                        #endif
+                                        l = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sd - uv4.z);
+                                    } else {
+                                        vec4 pk = texture2D(uMBShadowMap1, uv4b.xy + off);
+                                        float sd = pk.r + pk.g / 255.0;
+                                        l = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sd - uv4b.z);
+                                    }
+                                    litSum += l;
+                                }
+                            }
+                            lit = litSum / 9.0;
+                            // cascade-1 view-depth fade: fade OUT occlusion
+                            // (toward lit) across uMBFadeRange.
+                            if (inC1) {
+                                vec3 wp = (uMBCamWorld * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+                                float viewDist = distance(mbWP, wp);
+                                float fade = 1.0 - smoothstep(uMBFadeRange.x, uMBFadeRange.y, viewDist);
+                                lit = mix(1.0, lit, fade);
+                            }
                         }
                         // 终五十七: shadowdbg=6 quad uv readout — R=uv4.z
                         // (clamped), G=depth-overflow flag (uv4.z>1),
