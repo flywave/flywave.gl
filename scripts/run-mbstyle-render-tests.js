@@ -129,6 +129,7 @@ function main() {
             ...(process.env.MBSTYLE_FOGDISTK ? [`fogdistk=${process.env.MBSTYLE_FOGDISTK}`] : []),
             ...(process.env.MBSTYLE_FOGREFDBG ? ["fogrefdbg=1"] : []),
             ...(process.env.MBSTYLE_FOGQUADDBG ? ["fogquaddbg=1"] : []),
+            ...(process.env.MBSTYLE_BGQUADOFF ? ["bgquadoff=1"] : []),
             // §885 终一百九十六: pass the VALUE through — "0" is truthy and
             // used to disable gates (a hardcoded fogeuclid=1 made
             // MBSTYLE_FOGEUCLID=0 runs open the gate).

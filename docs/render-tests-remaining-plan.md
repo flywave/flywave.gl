@@ -1017,3 +1017,36 @@ line-gradient 1,110→**591**——全部精确回到 HEAD 值；fog/color 维�
 974（=HEAD，且较终一百九十四前的 1,297 好一档）。唯一残余回退：**fog/
 2d/fill-pattern +1,578**（该夹具有 background 层，白页合成不适用，其
 span-1 窗位移仍在——已知开放项）。
+
+### §885 终二百零六：zoom 依赖假说证伪 + fill-pattern 黑雾根因修复——残余回退清零（2026-09-10）
+
+**双 zoom 探针实测**：fogquaddbg=1 跑 fog/2d/fill-extrusion（zoom 17 pitch
+70，128×128）读 quad 深度场：10 带 d = [7.82, 4.95, 3.19, 3.22*, 3.21*,
+2.41, 1.85, 1.21, 1.03, 0.94]，与 zoom 16（fog/color 标定，[7.78..0.99]）
+在纯背景带（0-2、7-9）逐带差 ≤0.05（3-5 带为 extrusion 内容遮挡污染）——
+**quad 深度场确证 zoom 无关**（rayLen/uDistCam 的几何比值），终二百零一的
+"mgl 深度场 zoom 依赖"假说被证伪。fill-extrusion 残差（3,113=HEAD）重新
+归因：墙体像素的内容雾路径（墙面 rayLen ≠ quad 的地面 rayLen 交点，mgl
+逐片段欧氏距离在竖直面上远短于地面同屏行）——quad 路线对该残差无效且
+无需修复（黑底已由终二百零四白页合成解决）。
+
+**fill-pattern +1,578 根因**：非"有 background 层"（style.json 实无 bg
+层，终二百零五记录有误），而是该夹具 **fog color = black**——expected 的
+黑页 = 雾色全涂的页（mgl 雾落在整页上），白页合成（终二百零四）把近行
+t<0 露出的 uBgColor 硬编码为白色，黑雾夹具下整页错白。修复：!hasBackground
+分支 uBgColor 改为 **fogColor 的 sRGB 值**（雾色白的三 beneficiaries 逐位
+等价，黑雾 fill-pattern 近行正确变黑）。附带新增 bgquadoff=1 诊断开关
+（quad 全关实测 3,911——quad 为净收益项，排除整删路线）。
+
+**A/B（9 夹具）**：fog/color 三联 **0/0/0 PASS ✓**；fill-pattern
+1,896→**318**（精确回 HEAD，+1,578 回退清零）；fill-color 974、
+fill-extrusion 3,111、line-gradient 591、fill-extrusion-vertical-range
+3,274、fill-extrusion-pattern 24,328 全部与 committed 逐位一致（后两者
+雾色为白，改动惰性）。
+
+**全家族终态**：HEAD 基线 898,389 → **537,842（−360,547，−40.1%）**；
+相对 09-07 snapshot 累计 −51.7%。**span-1 家族残余回退全部清零**——fog
+家族无已知回归项。剩余开放项：①内容雾深度域对齐（worldToFogMatrix 语义，
+服务 space-color-opacity 47k、terrain 族 28-49k）；②阴影管线战役
+（ground-shadow-fog 影子残差，§终一百九十九归因）；③terrain −27.1k 受益
+材质 draw 取证（暂记档）。

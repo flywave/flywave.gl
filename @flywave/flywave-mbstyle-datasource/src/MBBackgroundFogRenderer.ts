@@ -75,6 +75,15 @@ export class MBBackgroundFogRenderer {
         // phase would otherwise keep rendering with stale uniforms on the
         // globe (the white-band family: fog-white from the plane horizon
         // row down over the atmosphere glow).
+        // Diagnostic A/B gate (§885 终二百零六): bgquadoff=1 hides the quad
+        // entirely — no-background sparse-geometry styles (fill-pattern)
+        // show the transparent page in the mgl reference, so per-fragment
+        // fog-on-geometry only is the ground truth there.
+        if ((typeof window !== 'undefined' && (window as any).__karma__?.config?.args?.some?.(
+            (a: string) => a === 'bgquadoff=1'))) {
+            if (this.m_mesh) this.m_mesh.visible = false;
+            return;
+        }
         if (this.m_mesh) {
             this.m_mesh.visible = state?.enabled === true && state.alpha > 0.001;
         }
@@ -152,11 +161,18 @@ export class MBBackgroundFogRenderer {
         // the PAGE (white on the reference platform), not the black clear —
         // mgl's no-fog bottom rows show the page (fill-extrusion expected:
         // white bottom; ours showed the black clear through t<0 regions).
-        // Opaque-composite the quad against the PAGE color there (content
-        // with depth still occludes the quad; the §194 heatmap concern only
-        // applies to background-layer styles, which keep transparent mode).
+        // Opaque-composite the quad there (content with depth still occludes
+        // it; the §194 heatmap concern only applies to background-layer
+        // styles, which keep transparent mode).
+        // §885 终二百零六: the page color is the FOG color, not always white
+        // — fog/2d/fill-pattern fogs black and its expected page is black
+        // (fill-extrusion's white bottom is its white fog, not a white
+        // page). Near rows (t<0, quad opacity 0) show fogColor; far rows
+        // already converge to fogColor through the ramp.
         if (!state.hasBackground && state.bgColor !== null) {
-            (this.m_material.uniforms.uBgColor.value as THREE.Color).set('#ffffff');
+            const c = state.color;
+            const srgb = c.clone().convertLinearToSRGB();
+            (this.m_material.uniforms.uBgColor.value as THREE.Color).copy(srgb);
             this.m_material.uniforms.uOpaque.value = 1;
         }
         this.m_material.uniforms.uCamHeight.value = Math.max(cam.position.z, 1);
