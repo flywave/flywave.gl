@@ -1368,3 +1368,16 @@ texel 恢复）；②或 cascade-0 覆盖/中心对齐使近地面映射到街�
 例）+ PCF 3×3 + cascade fade 基建 + uv4/深度图/矩阵全套读数工具。
 ground-shadow-fog 139,951 / hard-cutoff 140,210（−356/−347 vs committed），
 三联 0/0/0 零回归。
+
+### §885 终二百二十一：normal-offset 落地——ground-shadow-fog 双例 −4,623/−4,562（2026-09-11）
+
+按 mgl u_shadow_normal_offset 语义在 ground quad chunk 实现：接收采样点
+沿法向（地面 z-up）偏移 normalOffset 米（`mbWP.z += 10`），采样点沿光
+方向横移 ~10/tan(15°) ≈ 37 m，恢复墙基处街道纹素。mgl 默认 3 m 在本
+夹具无效（139,951 不变，横移 11 m 不足），扫掠 10/30 m 同值 135,328
+（纹素量化平台期），定案 10。
+
+A/B：ground-shadow-fog 139,951→**135,328**（累计 −4,986 vs 终二百一十
+五前）；hard-cutoff 140,210→**135,648**；fog/color 三联 0/0/0 PASS 零
+回归 ✓。剩余 ~135k：中带阴影位置（shoff 解已备 (−1614,−318) 世界偏移
+/bearing 换算）与深度比较细语义（PCF 已就位）。

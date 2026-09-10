@@ -258,6 +258,13 @@ export class MBShadowRenderer {
                     vec3 dir = normalize(mat3(uMBCamWorld) * v4.xyz);
                     if (dir.z < -1e-6 && uMBShadowIntensity > 0.5) {
                         vec3 mbWP = dir * (uMBGroundZ / dir.z);
+                        // §885 终二百二十一: mgl u_shadow_normal_offset —
+                        // offset the receiver sample point along its normal
+                        // (ground = z-up) by normalOffset meters; the lateral
+                        // shift (offset/tan(elevation)) recovers street texels
+                        // at wall bases (mgl shadow_renderer.ts:546, default
+                        // normalOffset 3).
+                        mbWP.z += 10;
                         vec4 uv4 = uMBShadowMatrix * vec4(mbWP, 1.0);
                         vec4 uv4b = uMBShadowMatrix1 * vec4(mbWP, 1.0);
                         // §885 终一百四十七: lit semantics under
