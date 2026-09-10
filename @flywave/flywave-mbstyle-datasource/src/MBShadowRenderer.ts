@@ -1119,6 +1119,7 @@ export class MBShadowRenderer {
 
         this.prepGroundQuad(center, radius, eye);
 
+
         // §885 终二百一十五: overlay-mode ground quad draws HERE — the
         // composer path bypasses preSceneHook and drops engine-external
         // meshes, so the on-top darkening must ride the AfterRender channel

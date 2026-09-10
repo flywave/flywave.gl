@@ -1272,3 +1272,19 @@ ground-shadow-fog 140,307→**139,951**（−356）、hard-cutoff 140,557→
 **下轮单点**：uMBShadowMatrix XY 偏移的解析标定——uv4 读出场显示
 clamp(x)=clamp(y) 且大范围饱和（大量 uv 落 [0,1] 外），对角平移方向待
 从 uv 场梯度反推；shoff（已验证 ±800 m 生效）与矩阵修正二选一收敛。
+
+### §885 终二百一十六：阴影排查收尾——uv 反解暴露诊断债务，标定入口就绪（2026-09-11）
+
+uv 反解探针的落地过程暴露了阻断标定的诊断债：①MBShadowRenderer 内
+readPixels 诊断块引用出作用域变量（每帧 ReferenceError 静默吞掉监听器
+后半段）；②MBMaterialPatchManager 的一次性 MBShadowRecv 探针读取已不
+存在的 uMBRes/uMBShadowMatrix 键必抛错（已加守卫）。两处均已修复/移除，
+工作树保留：composer 绕过修复（终二百一十五）+ 安全的探针守卫。
+ground-shadow-fog 139,951 / hard-cutoff 复核一致。
+
+**标定入口的最终状态**：uv 反解需在 prep 写入 uniform 之后的帧执行
+（首帧 m_groundUniforms 未建），且必须用 getRteCamera() 的 RTE 帧 +
+m_groundUniforms.uMBGroundZ（绝对坐标/错误地面平面会得到 ~4600/-14000
+级的越界 uv——那正是 shadowdbg=12 场里 uv 全越界的同族假象来源之一，
+真实的 XY 偏移量需下一轮用正确帧一次性读出）。shoff 旋钮（±800 m 生效）
+与该读数配合即可解析收敛。
