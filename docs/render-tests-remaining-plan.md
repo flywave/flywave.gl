@@ -1414,3 +1414,21 @@ ground-shadow-fog 恒 135,328（与 receiver 端 normal-offset/PCF/fade 前
 fill-extrusion--default 224k、trees 系同族），阴影战役关闭。开放项
 收窄为：星场通道（真机 frame-capture）、±1-2 量化噪声、terrain 取证
 （各自记档）。
+
+### §885 终二百二十四：模型层差异域量化——41k 暗像素缺失（2026-09-11）
+
+ground-shadow-fog 明度分类：exp 暗px(<128) 63,265 vs cur 22,006——
+**41,259 暗像素缺失**（建筑本体 + 投射阴影被雾洗掉或未渲染）；cur 中灰
+(128-210) 过量 +27,030（缺失暗内容被雾洗成中灰）。地面雾色调实测：
+expected (239,240,211) 保留 land 填色米色调，cur (245,245,245) 为
+background(lightgray 211) 雾化——land/road 层内容在雾下弱化或缺失。
+差异遍布全幅（各 rowBand 25-32k），非局部。
+
+**定性修正**：ground-shadow-fog 的 135k 残差 ≈ 41k 暗内容缺失 + 其雾洗
+中灰扩散 + 全幅细差——"模型层渲染差异域"的主根因 = **雾对模型/暗内容的
+过度洗白**（雾 range [−0.5,3.0] 大 span 下模型端雾强于 mgl，或模型材质
+的雾注入在暗色内容上过强）。
+
+**下轮入口**：①模型层雾注入强度按内容明度分档（暗内容少雾）；②对比
+mgl fill/fill-extrusion 的雾 mix 公式在暗色纹理上的系数；③land/road
+层的雾注入链核查。
