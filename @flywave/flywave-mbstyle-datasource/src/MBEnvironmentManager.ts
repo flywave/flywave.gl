@@ -3092,14 +3092,14 @@ export class MBEnvironmentManager {
      * the dedicated star scene.
      */
     /**
-     * §885 终二百一十: sink for the mercator star mesh — wired to the
-     * background-fog renderer's AfterRender channel by the datasource.
+     * §885 终二百一十二: the CURRENT mercator star mesh (or null) — polled
+     * per-frame by the datasource so the atmosphere renderer's scene always
+     * holds the live mesh (the env can be re-created at any time; a one-shot
+     * wiring loses that race).
      */
-    setStarSink(sink: ((m: THREE.Mesh | null) => void) | null): void {
-        this.m_starSink = sink;
-        if (this.m_stars && sink) sink(this.m_stars);
+    get starMesh(): THREE.Mesh | null {
+        return this.m_stars;
     }
-    private m_starSink: ((m: THREE.Mesh | null) => void) | null = null;
 
     async applyBackgroundPattern(
         patternName: string | undefined,

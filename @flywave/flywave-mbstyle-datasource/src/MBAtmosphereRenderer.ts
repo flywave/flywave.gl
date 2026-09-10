@@ -24,6 +24,22 @@ export class MBAtmosphereRenderer {
     private m_camera: THREE.OrthographicCamera;
     private m_mesh: THREE.Mesh | null = null;
     private m_material: THREE.ShaderMaterial | null = null;
+    private m_starMesh: THREE.Mesh | null = null;
+
+    /**
+     * §885 终二百一十二: the mercator star mesh draws through THIS scene —
+     * AFTER the atmosphere quad (renderOrder 2000 vs the quad's 0): the
+     * quad's fragment is OPAQUE (alpha 1) over the whole sky and erases any
+     * earlier-drawn stars (the field previously lived in the fog renderer's
+     * scene, which renders BEFORE this one — reproduced in a standalone
+     * two-mesh repro, star-repro/).
+     */
+    setStarMesh(mesh: THREE.Mesh | null): void {
+        if (this.m_starMesh === mesh) return;
+        if (this.m_starMesh) this.m_scene.remove(this.m_starMesh);
+        this.m_starMesh = mesh;
+        if (mesh) this.m_scene.add(mesh);
+    }
 
     constructor(
         private m_mapView: MapView,
@@ -64,7 +80,11 @@ export class MBAtmosphereRenderer {
         // ~pitch 70 too (§197 red-probe: 0 px at 70) — this screen-space
         // quad is the sole reliable glow channel from 60° up (it renders
         // directly in AfterRender, outside the scene graph).
-        if (pitchDeg < 60) return;
+        if (pitchDeg < 60) {
+            if (this.m_starMesh) this.m_starMesh.visible = false;
+            return;
+        }
+        if (this.m_starMesh) this.m_starMesh.visible = true;
 
         const canvas = (this.m_mapView as any).canvas as HTMLCanvasElement | undefined;
         // Off-DOM canvas: clientHeight is 0 (not null) — `??` keeps the 0 and

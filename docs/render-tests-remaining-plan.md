@@ -1182,3 +1182,25 @@ harness 的最小 repro + frame capture（Spectacle/renderdoc 类）。
 
 同期保留的已提交改动（终二百零九/二百一十）：quad >76° 残雾尾下限 0.029
 （底行 +1 轻雾对齐）、mercator 星场预乘合成公式（供通道修复后即插即用）。
+
+### §885 终二百一十二：星场根因修复——绘制顺序（atmosphere quad 不透明整屏覆盖）+ 独立 repro（2026-09-10）
+
+按终二百一十一记档入口搭建独立 repro（tmp/starrepro/：chrome-headless-shell
++ three.module 直绘，秒级迭代，脱离渲染测试 harness）。干净二分链：灰
+quad(transparent, alpha=1 输出) + 星 mesh 同场景 → 星零像素；红 basic 盘
+替换 → 通道正常；**给星 mesh 加 renderOrder=2000（后画）→ 星亮起
+（bright 0→57）**。根因非"第二网格被管线吞掉"（终二百一十一的定性有误
+——当时的红盘/三角对照因 __mbStarTri 标志未置位而全部空转，假阴性）：
+**star 场在 fog 通道先画，atmosphere quad 后画且其 fragment 对整片天空
+输出 alpha=1（不透明），把星星整体擦除**——纯绘制顺序问题。
+
+修复：mercator 星网格改挂 **MBAtmosphereRenderer 场景**（per-frame 从
+env.starMesh 轮询同步，renderOrder 2000 保证画在天空 quad 之后；atmo
+run() 在监听器中先于该同步执行一帧后生效，稳态正确）。engine A/B：
+space-color-opacity 星点出现在 expected 同位（th=10 时 115/117 重合），
+亮度偏暗（约 3-5×，疑似 mgl 星亮度链多一项，待标定）；计数 44,372 持平。
+fog/ 全家族 26 夹具复跑与 committed 逐位一致零回归（三联 0/0/0、basic
+29,537、inverted 9,417、equal-range 23,125）。
+
+剩余：星亮度标定（~131-422 px 内的小额收敛）、±1-2 量化噪声、阴影管线
+战役、terrain 受益材质取证。

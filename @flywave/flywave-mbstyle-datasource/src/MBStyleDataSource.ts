@@ -2510,8 +2510,7 @@ export class MBStyleDataSource extends TileDataSource {
                 // §885 终二百一十: mercator star field draws through the fog
                 // renderer's AfterRender channel (engine scene filter drops
                 // sky meshes at high pitch).
-                self.m_environment?.setStarSink(
-                    (m) => self.m_backgroundFogRenderer?.setStarMesh(m));
+
             } catch {}
 
             // mgl atmosphere glow as a screen-space quad (pitch > 76 where
@@ -3103,6 +3102,11 @@ export class MBStyleDataSource extends TileDataSource {
                 if (self.m_backgroundFogRenderer) {
                     self.m_backgroundFogRenderer.run();
                 }
+                // §885 终二百一十二: per-frame star-mesh sync — the stars
+                // must draw AFTER the atmosphere quad (its fragment is
+                // opaque over the whole sky and erases them otherwise).
+                self.m_atmosphereRenderer?.setStarMesh(
+                    self.m_environment?.starMesh ?? null);
 
                 // §780: globe pole caps (mgl GLOBE_POLES) — sync the fan
                 // meshes registered by the raster provider into the scene.
