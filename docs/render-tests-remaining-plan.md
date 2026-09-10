@@ -1050,3 +1050,33 @@ fill-extrusion 3,111、line-gradient 591、fill-extrusion-vertical-range
 服务 space-color-opacity 47k、terrain 族 28-49k）；②阴影管线战役
 （ground-shadow-fog 影子残差，§终一百九十九归因）；③terrain −27.1k 受益
 材质 draw 取证（暂记档）。
+
+### §885 终二百零七：space-color-opacity 天穹预乘语义对齐——use-theme 翻 PASS（2026-09-10）
+
+**归因修正**：47k 残差与雾深度域无关——像素级分析实证残差全部在天穹区：
+①expected 顶部 = (30,30,161) 恰为我们 (15,15,81) 的 2×，即 mgl 用
+**space-color 全 rgba 作 clear**（painter.ts clearColor 含 alpha 0.5），
+atmosphere 预乘输出 `(c·t, t)` 后**测试捕获按 rgb/a 反预乘**——
+rgb/a = (15,15,80)/0.5，与雾 quad/内容欧氏域均无关；雾带（3-7 带）
+本就差 ≤1。②horizon 带下方我们露纯 beige（=样式背景层本色），expected
+带轻微雾化（残差二阶）。
+
+**修复**：MBAtmosphereRenderer（pitch≥60 的 AfterRender 大气 quad，
+该 fixture 段的实际画家——mercator dome 在此段不画，品红二分实验实证）
+shader 落地完整 mgl 合成：`out = (c2·t + s·(1−t)) / (aP·t + sA·(1−t))`
+（aP 按 atmosphere ALPHA_PASS 链；spaceAlpha=1 时分母恒 1，与旧式逐位
+等价）。mercator dome（≤70°）同步同语义（fogState 新增 highAlpha/
+spaceAlpha，propAlphaOf 提取 rgba()/8 位 hex alpha），refresh 分支补
+uHighAlpha/uSpaceAlpha 同步。附带 bgquadoff=1 诊断（上轮）实勘：quad
+全关 fill-pattern 3,911 vs 开 1,896——quad 净收益项确认。
+
+**A/B（9 夹具）**：fog/space-color-opacity 47,223→**42,422**（行 2 精确
+吻合 (30,30,161)）；**fog/space-color-use-theme 翻 PASS**（36≤36）；
+fog/space-color 78 不变；fog/color 三联 0/0/0 PASS 维持；fog/2d/basic
+29,806 零回归（alpha=1 惰性实证）；globe 双例不变。
+
+**剩余（记档）**：①中带渐变 t 偏大 ~2×（row60 ours t≈0.097 vs expected
+反演 0.05）——疑 fadeout/星点/中心偏移微差，逐带反演拟合可解但每次迭代
+一个 build+run 周期，边际收益低暂缓；②horizon 带下方 beige 区轻微雾化
+缺失；③terrain 族 28-49k（内容欧氏域 >70° 推广已被终一百九十四/一百九
+十六判负关闭，不重启）。

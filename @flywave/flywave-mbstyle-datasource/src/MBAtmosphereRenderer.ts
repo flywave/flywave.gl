@@ -33,6 +33,7 @@ export class MBAtmosphereRenderer {
             highColor: THREE.Color;
             spaceColor: THREE.Color;
             fadeout: number;
+            spaceAlpha?: number;
         } | null,
     ) {
         this.m_scene = new THREE.Scene();
@@ -97,6 +98,7 @@ export class MBAtmosphereRenderer {
         (u.uHighColor.value as THREE.Color).copy(state.highColor).convertLinearToSRGB();
         (u.uSpaceColor.value as THREE.Color).copy(state.spaceColor).convertLinearToSRGB();
         u.uFadeout.value = Math.max(state.fadeout, 0.0005);
+        u.uSpaceAlpha.value = state.spaceAlpha ?? 1.0;
         if (MBAtmosphereRenderer.contentStandDown) {
             // §241: the mgl sky at full fog = the fogged-background color:
             // mix(bgColor, fogColor, alpha²) — exactly what the injected
@@ -151,6 +153,7 @@ export class MBAtmosphereRenderer {
                 uFogAlpha: { value: 1 },
                 uHighColor: { value: new THREE.Color(0.14, 0.36, 0.87) },
                 uSpaceColor: { value: new THREE.Color(0.01, 0.04, 0.1) },
+                uSpaceAlpha: { value: 1.0 },
                 uFadeout: { value: 0.025 },
             },
             vertexShader: `
@@ -171,6 +174,7 @@ export class MBAtmosphereRenderer {
                 uniform float uFogAlpha;
                 uniform vec3 uHighColor;
                 uniform vec3 uSpaceColor;
+                uniform float uSpaceAlpha;
                 uniform float uFadeout;
                 varying vec2 vNdc;
                 void main() {
@@ -196,8 +200,15 @@ export class MBAtmosphereRenderer {
                     vec3 c1 = mix(c0, uFogColor, uFogAlpha);
                     vec3 c2 = mix(c0, c1, t);
                     // mgl blends the gradient premultiplied over a clear of
-                    // space-color: result = space*(1-t) + c2*t.
-                    vec3 col = mix(uSpaceColor, c2, t);
+                    // the FULL space-color rgba (painter.ts clearColor carries
+                    // space alpha): rgb = c2*t + space*(1-t), and the render
+                    // test reads the canvas UNPREMULTIPLIED (rgb/a) —
+                    // fog/space-color-opacity's rgba(15,15,80,0.5) reads back
+                    // doubled (30,30,160). With spaceAlpha=1 the divisor is
+                    // exactly 1 (§885 终二百零七).
+                    float dstA = max(mix(uSpaceAlpha, 1.0, t) * t
+                        + uSpaceAlpha * (1.0 - t), 0.003);
+                    vec3 col = (c2 * t + uSpaceColor * (1.0 - t)) / dstA;
                     // mgl has NO color management — atmosphere colors are
                     // sRGB floats mixed DIRECTLY (gamma space). Uniforms are
                     // pre-converted (convertLinearToSRGB) so no encode here

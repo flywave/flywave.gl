@@ -347,6 +347,7 @@ export class MBEnvironmentManager {
             highColor: st.highColor,
             spaceColor: st.spaceColor,
             fadeout: st.horizonBlend,
+            spaceAlpha: st.spaceAlpha,
         };
     }
     private m_skyMesh: THREE.Mesh | null = null;
@@ -1134,6 +1135,15 @@ export class MBEnvironmentManager {
             ? evalThemed(fog['space-color'], '#010b19', 'space-color-use-theme')
             : ['interpolate', ['linear'], ['zoom'], 4, '#010b19', 7, '#367ab9'];
         const rawHighColor = evalThemed(fog['high-color'], '#245cdf', 'high-color-use-theme');
+        // rgba()/8-digit-hex alpha extraction (same shape as the globe
+        // scope's propAlpha) for the atmosphere gradient stops.
+        const propAlphaOf = (raw: any): number => {
+            const s = String(raw ?? '');
+            const m = s.match(/rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)/);
+            if (m) return +m[1];
+            if (/^#[\da-fA-F]{8}$/.test(s)) return parseInt(s.slice(7, 9), 16) / 255;
+            return 1;
+        };
         this.m_fogState = {
             color: color.clone(),
             alpha,
@@ -1150,6 +1160,12 @@ export class MBEnvironmentManager {
             horizonBlendRaw: Number(evalZoom(rawHorizonBlend, 0.2)),
             highColor: new THREE.Color(rawHighColor),
             spaceColor: new THREE.Color(evalZoom(rawSpaceColor, '#010b19')),
+            // §885 终二百零七: property alphas of the atmosphere gradient
+            // stops — the mercator dome must reproduce mgl's premultiplied
+            // composite + unpremultiplied capture for space-colors with
+            // alpha < 1 (fog/space-color-opacity).
+            highAlpha: propAlphaOf(rawHighColor),
+            spaceAlpha: propAlphaOf(evalZoom(rawSpaceColor, '#010b19')),
         };
         // mgl fog_horizon_blending + vertical-range uniforms (see the
         // fog_fragment chunk). vertical-range default [0,0] = disabled;
@@ -1273,6 +1289,8 @@ export class MBEnvironmentManager {
         horizonBlendRaw: number;
         highColor: THREE.Color;
         spaceColor: THREE.Color;
+        highAlpha: number;
+        spaceAlpha: number;
     } | null = null;
 
     /**
@@ -2051,9 +2069,9 @@ export class MBEnvironmentManager {
                     uFogColor: { value: fog.color.clone().convertLinearToSRGB() },
                     uFogAlpha: { value: fog.colorAlpha },
                     uHighColor: { value: fog.highColor.clone().convertLinearToSRGB() },
-                    uHighAlpha: { value: 1.0 },
+                    uHighAlpha: { value: fog.highAlpha },
                     uSpaceColor: { value: fog.spaceColor.clone().convertLinearToSRGB() },
-                    uSpaceAlpha: { value: 1.0 },
+                    uSpaceAlpha: { value: fog.spaceAlpha },
                     uFadeout: { value: fog.horizonBlend },
                     uHorizonRefElev: { value: horizonRefElev },
                 },
@@ -2100,12 +2118,25 @@ export class MBEnvironmentManager {
                         vec3 c1 = mix(c0, uFogColor, uFogAlpha);
                         vec3 c2 = mix(c0, c1, t);
                         // Mapbox blends the gradient with premultiplied alpha
-                        // over a clear color of space-color:
-                        //   result = space*(1-t) + c2*t
-                        // Fold that in here so the dome is self-contained and
-                        // does not depend on the canvas clear color.
-                        vec3 col = mix(uSpaceColor, c2, t);
-                        gl_FragColor = vec4(col, 1.0);
+                        // over a clear color of space-color (painter.ts clears
+                        // with the FULL space-color rgba, alpha included):
+                        //   rgb = c2*t + space.rgb*(1-t)
+                        //   a   = aPass*t + space.a*(1-t)   (atmosphere
+                        //   ALPHA_PASS: a0=mix(aS,1,aH); a1=mix(a0,1,aF);
+                        //   a2=mix(a0,a1,t); aP=mix(aS,a2,t))
+                        // and the render-test capture reads the canvas
+                        // UNPREMULTIPLIED (rgb/a) — fog/space-color-opacity's
+                        // space rgba(15,15,80,0.5) doubles to (30,30,160).
+                        // Fold the whole composite in here so the dome is
+                        // self-contained; with all alphas at 1 this reduces
+                        // exactly to the previous space→c2 mix (§885 终二百零七).
+                        float a0 = mix(uSpaceAlpha, 1.0, uHighAlpha);
+                        float a1 = mix(a0, 1.0, uFogAlpha);
+                        float a2 = mix(a0, a1, t);
+                        float aP = mix(uSpaceAlpha, a2, t);
+                        float dstA = max(aP * t + uSpaceAlpha * (1.0 - t), 0.003);
+                        vec3 dstRGB = c2 * t + uSpaceColor * (1.0 - t);
+                        gl_FragColor = vec4(dstRGB / dstA, 1.0);
                     }
                 `,
             });
@@ -2167,6 +2198,8 @@ export class MBEnvironmentManager {
                 material.uniforms.uHighColor.value.copy(fog.highColor);
                 material.uniforms.uSpaceColor.value.copy(fog.spaceColor);
                 material.uniforms.uFadeout.value = fog.horizonBlend;
+                material.uniforms.uHighAlpha.value = fog.highAlpha;
+                material.uniforms.uSpaceAlpha.value = fog.spaceAlpha;
             }
         }
     }
