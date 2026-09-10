@@ -1114,3 +1114,22 @@ fill 家族（318/974*/3,111/591/418）、culling 族（834/2,460/18,058）、
 平面；②全帧 ±1-2 量化噪声（~111k px，视觉不可见，GPU 舍入链精确对齐
 投入产出比极低）；③星场（需移植 mgl mulberry32(30)/(300) 种子几何，
 ~119 px）。
+
+### §885 终二百零九：>76° 无 sky 层样式启用 quad 地面雾——beige 带大头收敛（2026-09-10）
+
+背景平面在 mercator 下就是 CLEAR 色（无 mesh 承载雾 chunk），>76° quad
+被跳过 → 裸 beige。修复：MBBackgroundFogRenderer 的 >76° 跳过门控改为
+**仅对有显式 sky 层的样式生效**（state.hasSky，horizon-blend 家族保持
+跳过）；无 sky 层样式（space-color-opacity、2d/basic、inverted）quad
+下行画地面雾（scale 表 [85,0.10] 为 §181 既有标定）。
+
+**A/B**：space-color-opacity 地面带 big-px 8,144→**4,681**（行 109-118
+逐位一致，行 94-97 天际线 ±1）；2d/basic 29,806→**29,537**（−269）；
+2d/inverted 9,641→**9,417**（−224）；horizon-blend 双例（266/322）与
+globe-antialiasing/horizon-blend 不变 ✓。空间色 fixture 计数 44,372 不变
+（地面 big 收敛被 ±1 噪声带的像素匹配口径抵消，像素保真净升）。
+
+**剩余（记档）**：①quad ramp 尾部在行 ~120 截止，expected 保留 +1（t≈
+0.03）残雾直至底部——mgl 地面雾来自逐 tile 内容雾域（pitch>76 旧域喂值
+的残差剖面），quad 屏幕空间 ramp 无此尾；②±1-2 量化噪声（同终二百零八
+③）。

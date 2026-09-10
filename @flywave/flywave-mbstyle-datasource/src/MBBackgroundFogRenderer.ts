@@ -109,7 +109,15 @@ export class MBBackgroundFogRenderer {
         // §885 终一百九十四: the depth-field probe (fogquaddbg=1) renders
         // at ANY pitch — pitch-80 d(row) measurement for the second
         // calibration band.
-        if (pitchDeg > 76 && !(globalThis as any).__mbFogQuadDbg) return;
+        // §885 终二百零九: styles WITHOUT an explicit sky layer keep the
+        // quad above 76° too — the background there is the flat CLEAR (no
+        // mesh carries the fog chunk), so skipping the quad leaves the raw
+        // background color where mgl fogs the background tiles (space-
+        // color-opacity's beige band: expected row 100 fully fogged white →
+        // t≈0.03 near rows; ours was flat clear). Styles WITH an explicit
+        // sky layer (horizon-blend family) keep the §190 skip.
+        if (pitchDeg > 76 && state.hasSky !== false
+            && !(globalThis as any).__mbFogQuadDbg) return;
         // §771h: low-pitch styles (0..60°) now ALSO composite the fog wash —
         // mgl fogs the ground/background at any pitch (trees-use-theme: fog
         // [-1.5,3.0] at pitch 0 → t≈0.55 → ~94% fog-red wash = expected).
