@@ -1017,3 +1017,17 @@ line-gradient 1,110→**591**——全部精确回到 HEAD 值；fog/color 维�
 974（=HEAD，且较终一百九十四前的 1,297 好一档）。唯一残余回退：**fog/
 2d/fill-pattern +1,578**（该夹具有 background 层，白页合成不适用，其
 span-1 窗位移仍在——已知开放项）。
+
+### §885 终二百零七：全量位移归因表——5aa843ba 逐夹具对照（2026-09-10）
+
+后台全量复跑累积至 233/3,033 时先行分析（222 夹具 vs snapshot，净改善
+−68.4k），两大动子均以 5aa843ba 对照定案：
+- **fit-screen-coordinates/terrain −136,209：既有漂移**（5aa843ba 同为
+  108,478；pitch 45 fogAlpha=0，雾改动理论上不触及，实证一致）
+- **fill-extrusion-vertical-gradient/with-ao +51,267：既有漂移**（5aa843ba
+  同为 70,413；终一百八十四挤出族漂移）
+本会话真实位移（vs 5aa843ba）：ground-shadow 双例 +4,956、trees 双例
+−1,294、wireframe 0、fog 家族 −358,969（三联 PASS×3、culling 近清零）、
+fill 四例白页合成后归零。全量复跑继续后台累积，最终归因须以 5aa843ba
+逐家族对照复核（snapshot 含终一百八十四/一百八十五既有漂移，不可直接
+作为对照基线）。
