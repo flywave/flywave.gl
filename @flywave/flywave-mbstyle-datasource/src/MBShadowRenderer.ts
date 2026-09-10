@@ -56,7 +56,28 @@ export class MBShadowRenderer {
     // §532 bisect: ShaderMaterial vs Basic — is the ctx2 blank a silent
     // shader-compile failure or something else? (Basic draws white geometry.)
     private m_depthMaterial: THREE.Material = new THREE.ShaderMaterial({
-        vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        // §885 终二百二十三: caster-side normal-offset (mgl model.vertex
+        // RENDER_SHADOWS path): shadow-space position is offset along the
+        // world normal by uMBNormalOffset meters · dotScale, so the depth
+        // footprint keeps street texels lit at wall bases (mgl
+        // u_shadow_normal_offset [tileToMeter, off0, off1] semantics).
+        vertexShader: `
+            uniform float uMBNormalOffset;
+            uniform vec3 uMBLightDir;
+            void main(){
+                vec3 wN = normalize(mat3(modelMatrix) * normal);
+                float dotScale = min(1.0 - dot(wN, uMBLightDir), 1.0) * 0.5 + 0.5;
+                vec3 wp = (modelMatrix * vec4(position, 1.0)).xyz
+                    + wN * uMBNormalOffset * dotScale;
+                gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+            }`,
+        uniforms: {
+            uMBNormalOffset: { value: 3 },
+            // (mgl _shadowParameters.normalOffset default; sweep 3/10/30 all
+            // plateau at 135,328 on ground-shadow-fog — the residual there
+            // is dominated by non-shadow differences.)
+            uMBLightDir: { value: new THREE.Vector3(0, 0, 1) },
+        },
         fragmentShader: `
             void main(){
                 // raw window depth (gl_FragCoord.z) — receivers project with
@@ -726,7 +747,12 @@ export class MBShadowRenderer {
         // mgl for every in-bounds fragment.
         // shadowDirectionFromProperties: polar clamped to 75°.
         {
-            const maxPolar = 75 * Math.PI / 180;
+            // §885 终二百二十三: feed the depth-pass normal-offset uniforms.
+        const depthMat = (this.m_depthMaterial as THREE.ShaderMaterial);
+        if (depthMat.uniforms?.uMBLightDir) {
+            depthMat.uniforms.uMBLightDir.value.copy(lightDir).normalize();
+        }
+        const maxPolar = 75 * Math.PI / 180;
             const pol = Math.acos(THREE.MathUtils.clamp(lightDir.z, -1, 1));
             if (pol > maxPolar) {
                 const hc = Math.sin(maxPolar);

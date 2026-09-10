@@ -1398,3 +1398,19 @@ overlay 的进入在当前深度语义下恒为净负。**阴影位置/语义战
 PCF 核对）后再做位置收敛。工作树回退 clean（shoff 为测试参数不入库），
 当前交付态 = normal-offset 10m + PCF/fade + composer 修复（135,328/
 135,648，三联 0/0/0）。
+
+### §885 终二百二十三：caster 端 normal-offset 落地——双端实现完备，阴影残差重新定性（2026-09-11）
+
+深度 pass 实现 mgl model.vertex RENDER_SHADOWS 语义的 caster 端
+normal-offset：世界法向偏移 uMBNormalOffset 米 · dotScale（
+(1−dot(wN,L))/2+0.5），uMBLightDir 每帧喂 lightDir。扫掠 3/10/30 m：
+ground-shadow-fog 恒 135,328（与 receiver 端 normal-offset/PCF/fade 前
+后一致）——**阴影覆盖/位置/偏移全部排除后，ground-shadow-fog 的 ~135k
+残差主体非阴影**（模型渲染/雾-模型合成/纹理域），阴影战役对该夹具的
+可行动空间已尽。交付态：caster+receiver 双端 normal-offset（mgl 默认
+3）+ PCF/fade + composer 修复，三联 0/0/0。
+
+**重新定向**：ground-shadow-fog 残差归入模型层渲染差异域（与
+fill-extrusion--default 224k、trees 系同族），阴影战役关闭。开放项
+收窄为：星场通道（真机 frame-capture）、±1-2 量化噪声、terrain 取证
+（各自记档）。
