@@ -40,8 +40,9 @@ flywave.gl 是基于 **three/webgpu**（`WebGPURenderer` + TSL 节点材质，�
 
 1. **RTE → geo 平移**：任何 unproject / GPU 深度读数都在 camera-relative
    render camera 帧里，必须平移回 geo 帧再用（误差是地球半径量级）。
-   权威注释：`@flywave/flywave-map-controls/src/MapControls.ts` 的
-   `buildGpuPoint`；`@flywave/flywave-mapview/src/PickHandler.ts` 的
+   权威注释：`@flywave/flywave-mapview/src/MapView.ts` 的
+   `updateLookAtSettings`（GPU 中心深度 → render camera unproject →
+   平移回 geo 帧）；`@flywave/flywave-mapview/src/PickHandler.ts` 的
    `intersectMapObjects`；3DTile 侧契约见
    `@flywave/flywave-3dtile-datasource/src/TilesRenderer.ts` 的 `raycast`
    （"只信射线方向，不信原点坐标系"）。

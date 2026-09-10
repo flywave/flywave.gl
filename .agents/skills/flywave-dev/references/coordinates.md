@@ -40,9 +40,11 @@ unproject 必须用 **VRM 的 render camera**（原点相机），得到的点�
 再加回 geo 相机位置才是 geo 世界坐标。**直接用 `mapView.camera` unproject
 会得到差一个"相机位置"的结果。**
 
-权威实现：`@flywave/flywave-map-controls/src/MapControls.ts` 的
-`buildGpuPoint`（内有坐标系约定注释）；
-`@flywave/flywave-mapview/src/PickHandler.ts` 的 `intersectMapObjects`。
+权威实现：`@flywave/flywave-mapview/src/MapView.ts` 的
+`updateLookAtSettings`（GPU 中心深度 → `.unproject(renderCam)` →
+平移回 geo 帧）；`@flywave/flywave-mapview/src/PickHandler.ts` 的
+`intersectMapObjects`；可运行示例：
+`@flywave/flywave-examples/src/gpu-depth-picking/`。
 
 ### 范式 C：自定义 raycast（对地图对象做碰撞/拾取）
 

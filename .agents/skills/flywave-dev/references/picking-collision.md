@@ -34,17 +34,34 @@ GPU 命中先返回**廉价字段**（点/距离/对象/瓦片归属）；
 raycast 并缓存。含义：相机移动后这些字段可能变 undefined（对象已不在当前
 渲染集）。权威注释：`PickHandler.ts` 的 `intersectMapObjects` 顶部大注释。
 
-## 相机碰撞（MapControls 的 GPU 深度）
+## 相机碰撞（map-controls，纯 CPU 射线）
 
-`@flywave/flywave-map-controls/src/MapControls.ts`：
+入口：滚轮/点击 → `BaseMapControls.handleMouseInteractions` →
+`rayCastZoomPoint` → `MapControls.rayCastWorld`
+（`@flywave/flywave-map-controls/src/MapControls.ts`）。三级求交顺序：
 
-- 滚轮缩放前 `rayCastGpuDepth` 读光标像素深度 → `buildGpuPoint` unproject +
-  平移回 geo 帧（见 `references/coordinates.md` 范式 B）。
-- 读失败走异步重读；**"GPU 明确回答虚空"才允许 CPU 兜底**
-  （`m_gpuEmptyX/Y` 记忆机制）。
-- 碰撞锁 `m_collisionLock`：光标 2px 内复用上次结果。
-- CPU 兜底路径：对实现 `ICameraCollidable`
-  （`@flywave/flywave-mapview/src/ICameraCollidable.ts`）的数据源 raycast。
+1. **数据源 raycast**：对实现 `ICameraCollidable`
+   （`@flywave/flywave-mapview/src/ICameraCollidable.ts`）且
+   `enableCameraCollision` 的数据源逐个 raycast，按距离取最近命中；
+   命中点是 render 空间，消费方 `.add(camera.position)` 平移回 geo 帧
+   （铁律 1，范式 C）。
+2. **地形步进兜底**：`CameraTransform.rayCastTerrain`
+   （`@flywave/flywave-map-controls/src/CameraTransform.ts`）沿射线
+   采样 `elevationProvider.getHeight()`；仅 `zoomLevel >= 13` 且存在
+   elevationProvider 时启用；自适应步长 `clamp(离地高, 1, 50)` 米，
+   命中判定 `海拔 <= 地形高 + 1mm`。
+3. **数学表面兜底**：椭球 `projection.rayCast` / 平面 z=0 求交
+   （`EllipsoidCameraTransform` / `PlanerCameraTransform` 的
+   `rayCastProjectionWorld`）。
+
+- **碰撞锁 `m_collisionLock`**：滚轮连拍期间光标 ±2px 内直接复用上次
+  命中点（零射线）；只有滚轮路径写入与消费，点击/拖拽不走锁。
+- 缩放 = 相机朝命中点插值逼近（`CameraTransform.zoom`）；平移穿地防护
+  = `EllipsoidCameraTransform.pan` 的 `collisionTo` 球面求交 + 沿面
+  滑动；`minCameraHeight` 法线钳制与 GPU 中心像素深度在
+  `MapView.updateLookAtSettings`（反转深度，`depth > 0` 才算命中）。
+- **GPU 深度不参与控件碰撞**。历史文档曾写 `rayCastGpuDepth` /
+  `buildGpuPoint` / `m_gpuEmptyX/Y`，这些符号在代码库中不存在。
 
 ## 3DTile 碰撞契约（"方向可信 / 原点重建"）
 
