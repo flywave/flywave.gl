@@ -89,8 +89,7 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
         if (demTile && demTile.resource) {
             const texture = demTile.resource.demData.getPixels();
             if (texture) {
-                // 解码常数必须跟随 DEM 编码（terrarium 与 mapbox 的解包向量完全不同）
-                state.setHeightMap(texture, demTile.tileKey, demTile.resource.demData.unpackVector);
+                state.setHeightMap(texture, demTile.tileKey);
             }
         }
 
