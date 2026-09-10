@@ -91,14 +91,6 @@ export interface DemSourceDescription {
     type: "raster-dem";
 
     /**
-     * Elevation data encoding format
-     * - "terrarium": PNG format with RGB-encoded elevation (Red * 256 + Green + Blue / 256 - 32768)
-     * - "mapbox": Mapbox custom encoding, optimized compression format
-     * - "custom": Custom encoding format
-     */
-    encoding?: "terrarium" | "mapbox" | "custom";
-
-    /**
      * Data source attribution
      * Copyright information displayed on the map
      */

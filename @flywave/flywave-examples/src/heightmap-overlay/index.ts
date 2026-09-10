@@ -9,7 +9,8 @@ import {
     MapControls,
     MapControlsUI,
     CesiumWorldTerrainSource,
-    ArcGISTileProvider
+    ArcGISTileProvider,
+    DEMTerrainSource
 } from "@flywave/flywave.gl";
 import { CESIUM_ION_TOKEN } from "../token-config";
 
@@ -116,7 +117,7 @@ function createSteppedWallMap(
 /**
  * Add height map modifiers to the terrain
  */
-const addHeightMapModifiers = async (demTerrain: CesiumWorldTerrainSource): Promise<string[]> => {
+const addHeightMapModifiers = async (demTerrain: DEMTerrainSource): Promise<string[]> => {
     const manager = demTerrain.getGroundModificationManager();
     const modifierIds: string[] = [];
 
@@ -156,20 +157,27 @@ const addHeightMapModifiers = async (demTerrain: CesiumWorldTerrainSource): Prom
  * Configure DEM terrain source with height map modifiers
  */
 const configureDEMTerrainSource = async (mapView: MapView) => {
-    const cesiumTerrain = new CesiumWorldTerrainSource({
-        accessToken: CESIUM_ION_TOKEN,
-        assetId: 1
+    const demTerrain = new DEMTerrainSource({
+        source: {
+            tiles: [],
+            scheme: 'xyz' as const,
+            bounds: [-180, -85.0511, 180, 85.0511] as [number, number, number, number],
+            minzoom: 0,
+            maxzoom: 15,
+            tileSize: 256,
+            type: 'raster-dem' as const
+        }
     });
 
-    const modifierIds = await addHeightMapModifiers(cesiumTerrain);
+    const modifierIds = await addHeightMapModifiers(demTerrain);
 
-    mapView.setElevationSource(cesiumTerrain);
+    mapView.setElevationSource(demTerrain);
 
-    cesiumTerrain.addWebTileDataSource(
+    demTerrain.addWebTileDataSource(
         new ArcGISTileProvider({ minDataLevel: 0, maxDataLevel: 18 })
     );
 
-    return { cesiumTerrain, modifierIds };
+    return { demTerrain, modifierIds };
 };
 
 // Main execution
@@ -177,7 +185,7 @@ const configureDEMTerrainSource = async (mapView: MapView) => {
     try {
         const canvas = getMapCanvas("mapCanvas");
         const mapView = initializeMapView(canvas);
-        const { cesiumTerrain, modifierIds } = await configureDEMTerrainSource(mapView);
+        const { demTerrain, modifierIds } = await configureDEMTerrainSource(mapView);
 
         mapView.beginAnimation();
 
