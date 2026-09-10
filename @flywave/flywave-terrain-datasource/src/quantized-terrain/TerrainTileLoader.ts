@@ -331,7 +331,8 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                 const tile = this.dataSource.dataProvider().getPreciseResource(tileKey);
                 if (tile && tile.demMap) {
                     const texture = tile.demMap.getDisplacementMap();
-                    terrainMesh.setHeightMap(texture, tileKey);
+                    // 解码常数跟随 DEM 编码（quantized 自产 DEM 为 mapbox 默认，行为不变）
+                    terrainMesh.setHeightMap(texture, tileKey, tile.demMap.unpackVector);
                     break;
                 }
                 if (tileKey.level == 0) break;
