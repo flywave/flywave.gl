@@ -45,6 +45,21 @@ export class MBBackgroundFogRenderer {
     private m_camera: THREE.OrthographicCamera;
     private m_mesh: THREE.Mesh | null = null;
     private m_material: THREE.ShaderMaterial | null = null;
+    private m_starMesh: THREE.Mesh | null = null;
+
+    /**
+     * §885 终二百一十: draw the mercator star field through THIS renderer's
+     * AfterRender channel (proven to reach the canvas — the engine scene
+     * filter drops sky meshes at high pitch, and the standalone star
+     * direct-draw produced no fragments). The star shader ignores the
+     * camera, so the shared ortho camera is inert for it.
+     */
+    setStarMesh(mesh: THREE.Mesh | null): void {
+        if (this.m_starMesh === mesh) return;
+        if (this.m_starMesh) this.m_scene.remove(this.m_starMesh);
+        this.m_starMesh = mesh;
+        if (mesh) this.m_scene.add(mesh);
+    }
 
     constructor(
         private m_mapView: MapView,
@@ -61,6 +76,7 @@ export class MBBackgroundFogRenderer {
             hasContentLayers?: boolean;
             hasSky: boolean;
             bgColor: THREE.Color | null;
+            atmosphereTail?: boolean;
         } | null,
     ) {
         this.m_scene = new THREE.Scene();
@@ -75,6 +91,15 @@ export class MBBackgroundFogRenderer {
         // phase would otherwise keep rendering with stale uniforms on the
         // globe (the white-band family: fog-white from the plane horizon
         // row down over the atmosphere glow).
+        // Diagnostic A/B gate (§885 终二百零六): bgquadoff=1 hides the quad
+        // entirely — no-background sparse-geometry styles (fill-pattern)
+        // show the transparent page in the mgl reference, so per-fragment
+        // fog-on-geometry only is the ground truth there.
+        if ((typeof window !== 'undefined' && (window as any).__karma__?.config?.args?.some?.(
+            (a: string) => a === 'bgquadoff=1'))) {
+            if (this.m_mesh) this.m_mesh.visible = false;
+            return;
+        }
         if (this.m_mesh) {
             this.m_mesh.visible = state?.enabled === true && state.alpha > 0.001;
         }
@@ -100,7 +125,19 @@ export class MBBackgroundFogRenderer {
         // §885 终一百九十四: the depth-field probe (fogquaddbg=1) renders
         // at ANY pitch — pitch-80 d(row) measurement for the second
         // calibration band.
-        if (pitchDeg > 76 && !(globalThis as any).__mbFogQuadDbg) return;
+        // §885 终二百零九: styles WITHOUT an explicit sky layer keep the
+        // quad above 76° too — the background there is the flat CLEAR (no
+        // mesh carries the fog chunk), so skipping the quad leaves the raw
+        // background color where mgl fogs the background tiles (space-
+        // color-opacity's beige band: expected row 100 fully fogged white →
+        // t≈0.03 near rows; ours was flat clear). Styles WITH an explicit
+        // sky layer (horizon-blend family) keep the §190 skip.
+        if (pitchDeg > 76 && state.hasSky !== false
+            && !(globalThis as any).__mbFogQuadDbg) {
+            if (this.m_starMesh) this.m_starMesh.visible = false;
+            return;
+        }
+        if (this.m_starMesh) this.m_starMesh.visible = true;
         // §771h: low-pitch styles (0..60°) now ALSO composite the fog wash —
         // mgl fogs the ground/background at any pitch (trees-use-theme: fog
         // [-1.5,3.0] at pitch 0 → t≈0.55 → ~94% fog-red wash = expected).
@@ -138,6 +175,8 @@ export class MBBackgroundFogRenderer {
         this.m_material.uniforms.uDistCam.value = Math.max(state.distCam, 1);
         // §885 终一百八十九: depth-field probe gate (karma arg fogquaddbg=1).
         this.m_material.uniforms.uDbg.value = (globalThis as any).__mbFogQuadDbg ? 1 : 0;
+        this.m_material.uniforms.uMinOpacity.value =
+            pitchDeg > 76 && state.atmosphereTail ? 0.029 : 0.0;
         // Per-pitch scale table (two-point calibrated §180/§181): linear in
         // pitch, clamped at the ends.
         this.m_material.uniforms.uScale.value = lowPitch
@@ -152,11 +191,18 @@ export class MBBackgroundFogRenderer {
         // the PAGE (white on the reference platform), not the black clear —
         // mgl's no-fog bottom rows show the page (fill-extrusion expected:
         // white bottom; ours showed the black clear through t<0 regions).
-        // Opaque-composite the quad against the PAGE color there (content
-        // with depth still occludes the quad; the §194 heatmap concern only
-        // applies to background-layer styles, which keep transparent mode).
+        // Opaque-composite the quad there (content with depth still occludes
+        // it; the §194 heatmap concern only applies to background-layer
+        // styles, which keep transparent mode).
+        // §885 终二百零六: the page color is the FOG color, not always white
+        // — fog/2d/fill-pattern fogs black and its expected page is black
+        // (fill-extrusion's white bottom is its white fog, not a white
+        // page). Near rows (t<0, quad opacity 0) show fogColor; far rows
+        // already converge to fogColor through the ramp.
         if (!state.hasBackground && state.bgColor !== null) {
-            (this.m_material.uniforms.uBgColor.value as THREE.Color).set('#ffffff');
+            const c = state.color;
+            const srgb = c.clone().convertLinearToSRGB();
+            (this.m_material.uniforms.uBgColor.value as THREE.Color).copy(srgb);
             this.m_material.uniforms.uOpaque.value = 1;
         }
         this.m_material.uniforms.uCamHeight.value = Math.max(cam.position.z, 1);
@@ -209,6 +255,12 @@ export class MBBackgroundFogRenderer {
                 uFovRad: { value: 36.87 * Math.PI / 180 },
                 uPitchRad: { value: 60 * Math.PI / 180 },
                 uDbg: { value: 0 },
+                // §885 终二百一十: >76° only — the mgl ground fog comes from
+                // per-tile content fog whose residual (~0.03) persists to the
+                // bottom rows; the screen-space exp³ ramp dies out by ~mid
+                // frame. Floor the opacity there (space-color-opacity
+                // expected: beige 220→221 blue = t≈0.029).
+                uMinOpacity: { value: 0.0 },
             },
             vertexShader: `
                 varying vec2 vNdc;
@@ -233,6 +285,7 @@ export class MBBackgroundFogRenderer {
                 uniform float uPitchRad;
                 uniform vec3 uBgColor;
                 uniform float uOpaque;
+                uniform float uMinOpacity;
                 // §885 终一百八十九: depth-field probe (fogquaddbg=1) —
                 // paints depth/8 in RGB so the ramp fit reads d(row)
                 // directly instead of inverting the exp³ curve from pixels.
@@ -279,6 +332,7 @@ export class MBBackgroundFogRenderer {
                     // fog_horizon_blending (carries color.a AGAIN; the
                     // quad only paints below the horizon where the blend
                     // factor is exactly a) — so the effective alpha is a².
+                    opacity = max(opacity, uMinOpacity);
                     opacity *= uFogAlpha;
                     // uFogColor is a LINEAR THREE.Color; this raw
                     // ShaderMaterial must encode to sRGB itself.

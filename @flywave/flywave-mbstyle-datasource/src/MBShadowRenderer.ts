@@ -56,7 +56,28 @@ export class MBShadowRenderer {
     // §532 bisect: ShaderMaterial vs Basic — is the ctx2 blank a silent
     // shader-compile failure or something else? (Basic draws white geometry.)
     private m_depthMaterial: THREE.Material = new THREE.ShaderMaterial({
-        vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        // §885 终二百二十三: caster-side normal-offset (mgl model.vertex
+        // RENDER_SHADOWS path): shadow-space position is offset along the
+        // world normal by uMBNormalOffset meters · dotScale, so the depth
+        // footprint keeps street texels lit at wall bases (mgl
+        // u_shadow_normal_offset [tileToMeter, off0, off1] semantics).
+        vertexShader: `
+            uniform float uMBNormalOffset;
+            uniform vec3 uMBLightDir;
+            void main(){
+                vec3 wN = normalize(mat3(modelMatrix) * normal);
+                float dotScale = min(1.0 - dot(wN, uMBLightDir), 1.0) * 0.5 + 0.5;
+                vec3 wp = (modelMatrix * vec4(position, 1.0)).xyz
+                    + wN * uMBNormalOffset * dotScale;
+                gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+            }`,
+        uniforms: {
+            uMBNormalOffset: { value: 3 },
+            // (mgl _shadowParameters.normalOffset default; sweep 3/10/30 all
+            // plateau at 135,328 on ground-shadow-fog — the residual there
+            // is dominated by non-shadow differences.)
+            uMBLightDir: { value: new THREE.Vector3(0, 0, 1) },
+        },
         fragmentShader: `
             void main(){
                 // raw window depth (gl_FragCoord.z) — receivers project with
@@ -218,6 +239,11 @@ export class MBShadowRenderer {
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3() };
             shader.uniforms.uMBShadowIntensity = { value: 0 };
             shader.uniforms.uMBShadowDbg = { value: (globalThis as any).__mbShadowDbg ? ((globalThis as any).__mbQuadDbg ? 2 : 1) : 0 };
+            // §885 终二百一十九: PCF texel size + cascade-1 view-depth fade
+            // range ([0.75·far1, far1], mgl shadow_renderer.ts:362-363).
+            shader.uniforms.uMBShadowTexel = { value: 1 / 1024 };
+            shader.uniforms.uMBFadeRange = { value: new THREE.Vector2(
+                (this.m_shadowCamera.far) * 0.75, (this.m_shadowCamera.far)) };
             shader.uniforms.uMBInvProj = { value: new THREE.Matrix4() };
             shader.uniforms.uMBCamWorld = { value: new THREE.Matrix4() };
             shader.uniforms.uMBGroundZ = { value: -80 };
@@ -243,7 +269,9 @@ export class MBShadowRenderer {
                 'uniform float uMBShadowDbg;\n' +
                 'uniform mat4 uMBInvProj;\n' +
                 'uniform mat4 uMBCamWorld;\n' +
-                'uniform float uMBGroundZ;\n' + shader.fragmentShader).replace(
+                'uniform float uMBGroundZ;\n' +
+                'uniform float uMBShadowTexel;\n' +
+                'uniform vec2 uMBFadeRange;\n' + shader.fragmentShader).replace(
                 '#include <opaque_fragment>',
                 `#include <opaque_fragment>
                 {
@@ -251,6 +279,13 @@ export class MBShadowRenderer {
                     vec3 dir = normalize(mat3(uMBCamWorld) * v4.xyz);
                     if (dir.z < -1e-6 && uMBShadowIntensity > 0.5) {
                         vec3 mbWP = dir * (uMBGroundZ / dir.z);
+                        // §885 终二百二十一: mgl u_shadow_normal_offset —
+                        // offset the receiver sample point along its normal
+                        // (ground = z-up) by normalOffset meters; the lateral
+                        // shift (offset/tan(elevation)) recovers street texels
+                        // at wall bases (mgl shadow_renderer.ts:546, default
+                        // normalOffset 3).
+                        mbWP.z += 10;
                         vec4 uv4 = uMBShadowMatrix * vec4(mbWP, 1.0);
                         vec4 uv4b = uMBShadowMatrix1 * vec4(mbWP, 1.0);
                         // §885 终一百四十七: lit semantics under
@@ -264,22 +299,40 @@ export class MBShadowRenderer {
                             uv4.y >= 0.0 && uv4.y <= 1.0 && uv4.z >= 0.0 && uv4.z <= 1.0;
                         bool inC1 = !inC0 && uv4b.x >= 0.0 && uv4b.x <= 1.0 &&
                             uv4b.y >= 0.0 && uv4b.y <= 1.0 && uv4b.z >= 0.0 && uv4b.z <= 1.0;
-                        if (inC0) {
-                            vec4 pk = texture2D(uMBShadowMap, uv4.xy);
-                            #ifdef MB_SH_HW
-                            sampD = pk.r;
-                            #else
-                            sampD = pk.r + pk.g / 255.0;
-                            #endif
-                            lit = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sampD - uv4.z);
-                        } else if (inC1) {
-                            vec4 pk1 = texture2D(uMBShadowMap1, uv4b.xy);
-                            #ifdef MB_SH_HW
-                            sampD = pk1.r;
-                            #else
-                            sampD = pk1.r + pk1.g / 255.0;
-                            #endif
-                            lit = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sampD - uv4b.z);
+                        // §885 终二百一十九: 3x3 PCF (mgl hardware sampler
+                        // bilinear-compare equivalent) + cascade-1
+                        // view-depth fade (u_fade_range semantics).
+                        if (inC0 || inC1) {
+                            float litSum = 0.0;
+                            for (int dy = -1; dy <= 1; dy++) {
+                                for (int dx = -1; dx <= 1; dx++) {
+                                    vec2 off = vec2(float(dx), float(dy)) * uMBShadowTexel * 1.5;
+                                    float l = 0.0;
+                                    if (inC0) {
+                                        vec4 pk = texture2D(uMBShadowMap, uv4.xy + off);
+                                        #ifdef MB_SH_HW
+                                        float sd = pk.r;
+                                        #else
+                                        float sd = pk.r + pk.g / 255.0;
+                                        #endif
+                                        l = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sd - uv4.z);
+                                    } else {
+                                        vec4 pk = texture2D(uMBShadowMap1, uv4b.xy + off);
+                                        float sd = pk.r + pk.g / 255.0;
+                                        l = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sd - uv4b.z);
+                                    }
+                                    litSum += l;
+                                }
+                            }
+                            lit = litSum / 9.0;
+                            // cascade-1 view-depth fade: fade OUT occlusion
+                            // (toward lit) across uMBFadeRange.
+                            if (inC1) {
+                                vec3 wp = (uMBCamWorld * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+                                float viewDist = distance(mbWP, wp);
+                                float fade = 1.0 - smoothstep(uMBFadeRange.x, uMBFadeRange.y, viewDist);
+                                lit = mix(1.0, lit, fade);
+                            }
                         }
                         // 终五十七: shadowdbg=6 quad uv readout — R=uv4.z
                         // (clamped), G=depth-overflow flag (uv4.z>1),
@@ -328,8 +381,17 @@ export class MBShadowRenderer {
         // order (drawn before all models, after the background ground).
         // §885 终一百四十二: overlay mode rides ON TOP (999) instead.
         quad.renderOrder = (globalThis as any).__mbShadowOverlay !== false ? 999 : -2000;
+        // §885 终二百一十五: overlay mode (renderOrder 999, on-top darkening)
+        // draws through the AfterRender channel — the composer render path
+        // drops engine-external scene meshes, so a quad parented to m_scene
+        // silently vanished on effect-enabled fixtures (ground-shadow-fog:
+        // shadow-on ≡ shadow-off pixel-identical). Underlay mode keeps the
+        // m_scene parenting (it must draw BENEATH the tiles).
+        const overlayMode = (globalThis as any).__mbShadowOverlay !== false;
         this.m_groundScene.add(quad);
-        (this.m_mapView as any)?.m_scene?.add?.(quad);
+        if (!overlayMode) {
+            (this.m_mapView as any)?.m_scene?.add?.(quad);
+        }
         this.m_groundUniforms = (mat as any).uniforms || null;
     }
 
@@ -366,9 +428,9 @@ export class MBShadowRenderer {
         {
             const gq = (globalThis as any);
             gq.__mbGqInvoked = (gq.__mbGqInvoked ?? 0) + 1;
-            if (gq.__mbGqInvoked === 1 || gq.__mbGqInvoked === 60 || gq.__mbGqInvoked === 300) {
+            if (gq.__mbGqInvoked === 1 || gq.__mbGqInvoked % 300 === 0) {
                 // eslint-disable-next-line no-console
-                console.log(`[MBGQInvoke] n=${gq.__mbGqInvoked} enabled=${this.m_enabled} int=${this.m_intensity} quad=${!!this.m_groundQuad} u=${!!this.m_groundUniforms} ortho=${this.m_orthoStyle} id=${(this as any).__mbId ?? '?'}`);
+                console.log(`[MBGQInvoke] n=${gq.__mbGqInvoked} enabled=${this.m_enabled} int=${this.m_intensity} quad=${!!this.m_groundQuad} u=${!!this.m_groundUniforms} ortho=${this.m_orthoStyle} id=${(this as any).__mbId ?? '?'} draws=${gq.__mbGQDraws ?? 0}`);
             }
         }
         if (!this.m_enabled || this.m_intensity <= 0) return;
@@ -685,7 +747,12 @@ export class MBShadowRenderer {
         // mgl for every in-bounds fragment.
         // shadowDirectionFromProperties: polar clamped to 75°.
         {
-            const maxPolar = 75 * Math.PI / 180;
+            // §885 终二百二十三: feed the depth-pass normal-offset uniforms.
+        const depthMat = (this.m_depthMaterial as THREE.ShaderMaterial);
+        if (depthMat.uniforms?.uMBLightDir) {
+            depthMat.uniforms.uMBLightDir.value.copy(lightDir).normalize();
+        }
+        const maxPolar = 75 * Math.PI / 180;
             const pol = Math.acos(THREE.MathUtils.clamp(lightDir.z, -1, 1));
             if (pol > maxPolar) {
                 const hc = Math.sin(maxPolar);
@@ -1109,6 +1176,63 @@ export class MBShadowRenderer {
         }
 
         this.prepGroundQuad(center, radius, eye);
+
+        // §885 终二百二十六: uv/calibration probe (RTE frame + uMBGroundZ).
+        {
+            const gU = (globalThis as any);
+            gU.__mbUvN = (gU.__mbUvN ?? 0) + 1;
+            if (gU.__mbUvN === 50 || gU.__mbUvN === 51) {
+                const cam = (this.m_mapView as any).getRteCamera?.()
+                    ?? (this.m_mapView?.camera as THREE.PerspectiveCamera);
+                cam.updateMatrixWorld();
+                const gZ = (this.m_groundUniforms as any)?.uMBGroundZ?.value;
+                const out: string[] = [];
+                if (Number.isFinite(gZ)) {
+                    for (const [sx, sy] of [[128, 224], [384, 224], [256, 288], [256, 160], [120, 300], [128, 320]]) {
+                        const ndcX = (sx / 512) * 2 - 1;
+                        const ndcY = 1 - (sy / 512) * 2;
+                        const v4 = new THREE.Vector4(ndcX, ndcY, -1, 1)
+                            .applyMatrix4(cam.projectionMatrixInverse);
+                        v4.multiplyScalar(1 / v4.w);
+                        const dirW = new THREE.Vector3(v4.x, v4.y, v4.z)
+                            .applyMatrix4(new THREE.Matrix4().extractRotation(cam.matrixWorld))
+                            .normalize();
+                        if (Math.abs(dirW.z) < 1e-6 || dirW.z > 0) { out.push(`(${sx},${sy})=up`); continue; }
+                        const t = gZ / dirW.z;
+                        const W = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld)
+                            .addScaledVector(dirW, t);
+                        const u4 = new THREE.Vector4(W.x, W.y, W.z, 1).applyMatrix4(this.m_matrix);
+                        const u4b = new THREE.Vector4(W.x, W.y, W.z, 1).applyMatrix4(this.m_matrix1);
+                        out.push(`(${sx},${sy}) c0(${(u4.x / u4.w).toFixed(2)},${(u4.y / u4.w).toFixed(2)},${(u4.z / u4.w).toFixed(2)}) c1(${(u4b.x / u4b.w).toFixed(2)},${(u4b.y / u4b.w).toFixed(2)},${(u4b.z / u4b.w).toFixed(2)})`);
+                    }
+                } else {
+                    out.push('gz=undef');
+                }
+                // eslint-disable-next-line no-console
+                console.log('[MBUvProbe] frame=', gU.__mbUvN, 'gz=', gZ, out.join('  '));
+            }
+        }
+
+
+        // §885 终二百一十五: overlay-mode ground quad draws HERE — the
+        // composer path bypasses preSceneHook and drops engine-external
+        // meshes, so the on-top darkening must ride the AfterRender channel
+        // (the same bypass the atmosphere/fog/star quads use).
+        if ((globalThis as any).__mbShadowOverlay !== false
+            && this.m_groundQuad && this.m_groundScene) {
+            const prevAuto = renderer.autoClear;
+            const prevRT2 = renderer.getRenderTarget();
+            try {
+                renderer.autoClear = false;
+                renderer.setScissorTest(false);
+                renderer.setRenderTarget(null);
+                renderer.render(this.m_groundScene, this.m_groundCamera);
+                (globalThis as any).__mbGQDraws = ((globalThis as any).__mbGQDraws ?? 0) + 1;
+            } finally {
+                renderer.setRenderTarget(prevRT2);
+                renderer.autoClear = prevAuto;
+            }
+        }
     }
 
     dispose(): void {

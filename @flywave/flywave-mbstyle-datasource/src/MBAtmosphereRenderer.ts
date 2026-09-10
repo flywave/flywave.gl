@@ -24,6 +24,22 @@ export class MBAtmosphereRenderer {
     private m_camera: THREE.OrthographicCamera;
     private m_mesh: THREE.Mesh | null = null;
     private m_material: THREE.ShaderMaterial | null = null;
+    private m_starMesh: THREE.Mesh | null = null;
+
+    /**
+     * §885 终二百一十二: the mercator star mesh draws through THIS scene —
+     * AFTER the atmosphere quad (renderOrder 2000 vs the quad's 0): the
+     * quad's fragment is OPAQUE (alpha 1) over the whole sky and erases any
+     * earlier-drawn stars (the field previously lived in the fog renderer's
+     * scene, which renders BEFORE this one — reproduced in a standalone
+     * two-mesh repro, star-repro/).
+     */
+    setStarMesh(mesh: THREE.Mesh | null): void {
+        if (this.m_starMesh === mesh) return;
+        if (this.m_starMesh) this.m_scene.remove(this.m_starMesh);
+        this.m_starMesh = mesh;
+        if (mesh) this.m_scene.add(mesh);
+    }
 
     constructor(
         private m_mapView: MapView,
@@ -33,6 +49,7 @@ export class MBAtmosphereRenderer {
             highColor: THREE.Color;
             spaceColor: THREE.Color;
             fadeout: number;
+            spaceAlpha?: number;
         } | null,
     ) {
         this.m_scene = new THREE.Scene();
@@ -63,7 +80,11 @@ export class MBAtmosphereRenderer {
         // ~pitch 70 too (§197 red-probe: 0 px at 70) — this screen-space
         // quad is the sole reliable glow channel from 60° up (it renders
         // directly in AfterRender, outside the scene graph).
-        if (pitchDeg < 60) return;
+        if (pitchDeg < 60) {
+            if (this.m_starMesh) this.m_starMesh.visible = false;
+            return;
+        }
+        if (this.m_starMesh) this.m_starMesh.visible = true;
 
         const canvas = (this.m_mapView as any).canvas as HTMLCanvasElement | undefined;
         // Off-DOM canvas: clientHeight is 0 (not null) — `??` keeps the 0 and
@@ -96,7 +117,19 @@ export class MBAtmosphereRenderer {
         u.uFogAlpha.value = state.fogAlpha;
         (u.uHighColor.value as THREE.Color).copy(state.highColor).convertLinearToSRGB();
         (u.uSpaceColor.value as THREE.Color).copy(state.spaceColor).convertLinearToSRGB();
+        // mgl uniforms carry the style's 8-bit sRGB colors; snap the
+        // linear↔sRGB round-trip error so the 8-bit pipeline emulation in
+        // the shader anchors on exact stops (§885 终二百零八).
+        const snap8 = (c: THREE.Color) => {
+            c.r = Math.round(c.r * 255) / 255;
+            c.g = Math.round(c.g * 255) / 255;
+            c.b = Math.round(c.b * 255) / 255;
+        };
+        snap8(u.uFogColor.value as THREE.Color);
+        snap8(u.uHighColor.value as THREE.Color);
+        snap8(u.uSpaceColor.value as THREE.Color);
         u.uFadeout.value = Math.max(state.fadeout, 0.0005);
+        u.uSpaceAlpha.value = state.spaceAlpha ?? 1.0;
         if (MBAtmosphereRenderer.contentStandDown) {
             // §241: the mgl sky at full fog = the fogged-background color:
             // mix(bgColor, fogColor, alpha²) — exactly what the injected
@@ -151,6 +184,7 @@ export class MBAtmosphereRenderer {
                 uFogAlpha: { value: 1 },
                 uHighColor: { value: new THREE.Color(0.14, 0.36, 0.87) },
                 uSpaceColor: { value: new THREE.Color(0.01, 0.04, 0.1) },
+                uSpaceAlpha: { value: 1.0 },
                 uFadeout: { value: 0.025 },
             },
             vertexShader: `
@@ -171,6 +205,7 @@ export class MBAtmosphereRenderer {
                 uniform float uFogAlpha;
                 uniform vec3 uHighColor;
                 uniform vec3 uSpaceColor;
+                uniform float uSpaceAlpha;
                 uniform float uFadeout;
                 varying vec2 vNdc;
                 void main() {
@@ -196,8 +231,23 @@ export class MBAtmosphereRenderer {
                     vec3 c1 = mix(c0, uFogColor, uFogAlpha);
                     vec3 c2 = mix(c0, c1, t);
                     // mgl blends the gradient premultiplied over a clear of
-                    // space-color: result = space*(1-t) + c2*t.
-                    vec3 col = mix(uSpaceColor, c2, t);
+                    // the FULL space-color rgba (painter.ts clearColor carries
+                    // space alpha): rgb = c2*t + space*(1-t), and the render
+                    // test reads the canvas UNPREMULTIPLIED (rgb/a) —
+                    // fog/space-color-opacity's rgba(15,15,80,0.5) reads back
+                    // doubled (30,30,160). The alpha pass REPLACES the fb
+                    // alpha (colorModeWriteAlpha ONE/ZERO — no blend with the
+                    // clear alpha): fb_a = aP. With spaceAlpha=1 aP is
+                    // exactly 1 (§885 终二百零八).
+                    float aP = max(mix(uSpaceAlpha, 1.0, t), 1.0/255.0);
+                    // Emulate mgl's exact 8-bit pipeline: the color pass
+                    // rounds the premultiplied blend into the 8-bit fb, the
+                    // alpha pass rounds aP, and the canvas capture divides
+                    // the two UNPREMULTIPLIED 8-bit values.
+                    vec3 rgb8 = floor((c2 * t + uSpaceColor * (1.0 - t))
+                        * 255.0 + 0.5) / 255.0;
+                    float a8 = floor(aP * 255.0 + 0.5) / 255.0;
+                    vec3 col = rgb8 / a8;
                     // mgl has NO color management — atmosphere colors are
                     // sRGB floats mixed DIRECTLY (gamma space). Uniforms are
                     // pre-converted (convertLinearToSRGB) so no encode here

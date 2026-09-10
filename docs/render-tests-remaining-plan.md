@@ -1041,3 +1041,497 @@ hillshade-shadow-color/use-theme（+7.6k）、symbol-cross-fade 双例
 snapshot→会话前 HEAD 的既有漂移。extent 0.7% 差为符号布局方差。
 归因闭环：**本会话零未解释位移**；已知会话位移 = ground-shadow 双例
 +5.0k（quad 窗）与 trees-use-theme −1.3k，其余全为漂移。
+### §885 终二百零六：zoom 依赖假说证伪 + fill-pattern 黑雾根因修复——残余回退清零（2026-09-10）
+
+**双 zoom 探针实测**：fogquaddbg=1 跑 fog/2d/fill-extrusion（zoom 17 pitch
+70，128×128）读 quad 深度场：10 带 d = [7.82, 4.95, 3.19, 3.22*, 3.21*,
+2.41, 1.85, 1.21, 1.03, 0.94]，与 zoom 16（fog/color 标定，[7.78..0.99]）
+在纯背景带（0-2、7-9）逐带差 ≤0.05（3-5 带为 extrusion 内容遮挡污染）——
+**quad 深度场确证 zoom 无关**（rayLen/uDistCam 的几何比值），终二百零一的
+"mgl 深度场 zoom 依赖"假说被证伪。fill-extrusion 残差（3,113=HEAD）重新
+归因：墙体像素的内容雾路径（墙面 rayLen ≠ quad 的地面 rayLen 交点，mgl
+逐片段欧氏距离在竖直面上远短于地面同屏行）——quad 路线对该残差无效且
+无需修复（黑底已由终二百零四白页合成解决）。
+
+**fill-pattern +1,578 根因**：非"有 background 层"（style.json 实无 bg
+层，终二百零五记录有误），而是该夹具 **fog color = black**——expected 的
+黑页 = 雾色全涂的页（mgl 雾落在整页上），白页合成（终二百零四）把近行
+t<0 露出的 uBgColor 硬编码为白色，黑雾夹具下整页错白。修复：!hasBackground
+分支 uBgColor 改为 **fogColor 的 sRGB 值**（雾色白的三 beneficiaries 逐位
+等价，黑雾 fill-pattern 近行正确变黑）。附带新增 bgquadoff=1 诊断开关
+（quad 全关实测 3,911——quad 为净收益项，排除整删路线）。
+
+**A/B（9 夹具）**：fog/color 三联 **0/0/0 PASS ✓**；fill-pattern
+1,896→**318**（精确回 HEAD，+1,578 回退清零）；fill-color 974、
+fill-extrusion 3,111、line-gradient 591、fill-extrusion-vertical-range
+3,274、fill-extrusion-pattern 24,328 全部与 committed 逐位一致（后两者
+雾色为白，改动惰性）。
+
+**全家族终态**：HEAD 基线 898,389 → **537,842（−360,547，−40.1%）**；
+相对 09-07 snapshot 累计 −51.7%。**span-1 家族残余回退全部清零**——fog
+家族无已知回归项。剩余开放项：①内容雾深度域对齐（worldToFogMatrix 语义，
+服务 space-color-opacity 47k、terrain 族 28-49k）；②阴影管线战役
+（ground-shadow-fog 影子残差，§终一百九十九归因）；③terrain −27.1k 受益
+材质 draw 取证（暂记档）。
+
+### §885 终二百零七：space-color-opacity 天穹预乘语义对齐——use-theme 翻 PASS（2026-09-10）
+
+**归因修正**：47k 残差与雾深度域无关——像素级分析实证残差全部在天穹区：
+①expected 顶部 = (30,30,161) 恰为我们 (15,15,81) 的 2×，即 mgl 用
+**space-color 全 rgba 作 clear**（painter.ts clearColor 含 alpha 0.5），
+atmosphere 预乘输出 `(c·t, t)` 后**测试捕获按 rgb/a 反预乘**——
+rgb/a = (15,15,80)/0.5，与雾 quad/内容欧氏域均无关；雾带（3-7 带）
+本就差 ≤1。②horizon 带下方我们露纯 beige（=样式背景层本色），expected
+带轻微雾化（残差二阶）。
+
+**修复**：MBAtmosphereRenderer（pitch≥60 的 AfterRender 大气 quad，
+该 fixture 段的实际画家——mercator dome 在此段不画，品红二分实验实证）
+shader 落地完整 mgl 合成：`out = (c2·t + s·(1−t)) / (aP·t + sA·(1−t))`
+（aP 按 atmosphere ALPHA_PASS 链；spaceAlpha=1 时分母恒 1，与旧式逐位
+等价）。mercator dome（≤70°）同步同语义（fogState 新增 highAlpha/
+spaceAlpha，propAlphaOf 提取 rgba()/8 位 hex alpha），refresh 分支补
+uHighAlpha/uSpaceAlpha 同步。附带 bgquadoff=1 诊断（上轮）实勘：quad
+全关 fill-pattern 3,911 vs 开 1,896——quad 净收益项确认。
+
+**A/B（9 夹具）**：fog/space-color-opacity 47,223→**42,422**（行 2 精确
+吻合 (30,30,161)）；**fog/space-color-use-theme 翻 PASS**（36≤36）；
+fog/space-color 78 不变；fog/color 三联 0/0/0 PASS 维持；fog/2d/basic
+29,806 零回归（alpha=1 惰性实证）；globe 双例不变。
+
+**剩余（记档）**：①中带渐变 t 偏大 ~2×（row60 ours t≈0.097 vs expected
+反演 0.05）——疑 fadeout/星点/中心偏移微差，逐带反演拟合可解但每次迭代
+一个 build+run 周期，边际收益低暂缓；②horizon 带下方 beige 区轻微雾化
+缺失；③terrain 族 28-49k（内容欧氏域 >70° 推广已被终一百九十四/一百九
+十六判负关闭，不重启）。
+
+### §885 终二百零八：大气 t 曲线逐带反演——真凶是 ALPHA_PASS 替换语义 + 8-bit 量化链（2026-09-10）
+
+逐带反演（空间色 rgba(15,15,80,0.5) 蓝/红通道联立数值反解 t(row)）走通的
+关键：mgl atmosphere 的 ALPHA_PASS 用 `colorModeWriteAlpha`（ONE/ZERO）
+**替换**写 framebuffer alpha（不与 clear alpha 混合），捕获 = rgb8/a8 双
+8-bit 值相除；首版分析误用混合式分母（aP·t + sA·(1−t)）与连续除法，导出
+"t 偏大 2×/fadeout 漂移"的假线索。顺带实证：①品红二分确认该 fixture 段
+的实际画家是 MBAtmosphereRenderer（pitch≥60 AfterRender quad，mercator
+dome 在此不画）；②单 fadeout/单角度基准均无法解释 expected 形状——假
+线索；③星点仅 88-119 px 非主体。
+
+**修复**：MBAtmosphereRenderer shader 落地 mgl 精确管线——alpha 替换
+（dstA = aP）+ 8-bit 量化链仿真（rgb8 = round(c2·t + s·(1−t))，a8 =
+round(aP)，捕获 col = rgb8/a8），JS 侧对 uFog/uHigh/uSpace 三色做 8-bit
+sRGB 快照（吸收 linear↔sRGB 往返误差）。mercator dome（≤70°）同步替换
+语义。舍入模式 A/B：round-to-nearest 天空逐位一致 44,572 px vs 截断
+18,289——定案 round。
+
+**结果（fog 全家族复跑）**：space-color-opacity 天空梯度像素级对齐
+（行 20/60/90 锚点逐位一致，44.5k/49.7k 天空 px 精确，>2 单位差仅剩星点
+422 px）；space-color-use-theme 36 PASS 维持；fog/color 三联 0/0/0、
+fill 家族（318/974*/3,111/591/418）、culling 族（834/2,460/18,058）、
+2d/basic 29,806、inverted 9,641 全部与 committed 逐位一致零回归。
+*计数权衡：space-color-opacity 计数 42,422→44,372（+1,950）——替换语义
+在严格阈值（0.0003≈±1）下把原平滑偏差（±4~43 单位）变成 ±1~2 量化噪声，
+语义正确性与像素保真换取计数小幅上升，不再回退。
+
+**剩余（记档）**：①地平线下 beige 带缺地面雾（8,144 big px：expected
+行 100 全雾白→行 130+ t≈0.03 轻雾，我们的背景平面在 pitch>76 雾未生效）
+——属 >70° 内容雾域（已判负关闭域）的背景平面特例，若重启应仅门控背景
+平面；②全帧 ±1-2 量化噪声（~111k px，视觉不可见，GPU 舍入链精确对齐
+投入产出比极低）；③星场（需移植 mgl mulberry32(30)/(300) 种子几何，
+~119 px）。
+
+### §885 终二百零九：>76° 无 sky 层样式启用 quad 地面雾——beige 带大头收敛（2026-09-10）
+
+背景平面在 mercator 下就是 CLEAR 色（无 mesh 承载雾 chunk），>76° quad
+被跳过 → 裸 beige。修复：MBBackgroundFogRenderer 的 >76° 跳过门控改为
+**仅对有显式 sky 层的样式生效**（state.hasSky，horizon-blend 家族保持
+跳过）；无 sky 层样式（space-color-opacity、2d/basic、inverted）quad
+下行画地面雾（scale 表 [85,0.10] 为 §181 既有标定）。
+
+**A/B**：space-color-opacity 地面带 big-px 8,144→**4,681**（行 109-118
+逐位一致，行 94-97 天际线 ±1）；2d/basic 29,806→**29,537**（−269）；
+2d/inverted 9,641→**9,417**（−224）；horizon-blend 双例（266/322）与
+globe-antialiasing/horizon-blend 不变 ✓。空间色 fixture 计数 44,372 不变
+（地面 big 收敛被 ±1 噪声带的像素匹配口径抵消，像素保真净升）。
+
+**剩余（记档）**：①quad ramp 尾部在行 ~120 截止，expected 保留 +1（t≈
+0.03）残雾直至底部——mgl 地面雾来自逐 tile 内容雾域（pitch>76 旧域喂值
+的残差剖面），quad 屏幕空间 ramp 无此尾；②±1-2 量化噪声（同终二百零八
+③）。
+
+### §885 终二百一十：mercator 星场预乘合成修复 + quad 残雾尾下限（2026-09-10）
+
+**星场**：几何/种子（mulberry32(30)/(300)、16000 星、sizeMultiplier 0.15）
+§876 已是 mgl 移植版，但 mercator 路径的合成公式错了——fragment 复用
+globe 的 `uSpaceRgb/uAlpha2` 通道（mercator 下恒 0/1）输出 `vis = alpha`
+（暗点）而非 mgl 的预乘 over-composite `mix(sky, white, alpha)`。修复：
+mercator 星材质改 transparent 预乘混合（`vec4(vec3(alpha), alpha)`，
+ONE/ONE_MINUS_SRC_ALPHA，即 mgl colorModeAlphaBlendedWriteRGB 语义），
+顶点级世界地平线剔除（uRot·position.z < 0）。通道：引擎 scene-object
+filtering 在 >60-70° 丢天空网格（§197，星网格 onAfterRender 从不触发的
+实证）—— mercator 星场改走 **fog renderer 的 AfterRender 直绘通道**
+（setStarMesh，已验证可达画布的通道）；修复 applySky 无 sky 层早退误删
+新建星场的时序 bug。调试结论（记档）：星网格在 fog 通道内提交 32,000
+三角形（renderer.info 实证）但无可视 fragment——uRot/uStarsProj/uMercator
+均实证有限且正确，正交强制映射诊断也无像素，属 GL 管线级问题（疑似
+transparent-pass + 自定义 blending 在 SwiftShader 下的呈现路径），遗留。
+
+**quad 残雾尾**：>76° 时 quad opacity 加 0.029 下限（mgl tile-fog 残雾
+剖面，beige 220→221），底行从裸 beige 变 +1 轻雾（行 250 逐位一致）。
+
+**门控权衡（实测）**：残雾下限/quad 启用对 plain-fog 夹具（background-
+color +680）与大气族（basic −269/inverted −224/equal-range −269）双向
+作用；atmosphereTail 门控版保 background-color 弃三项改善，无门控版净
+−82 px——**取无门控**（净优且语义一致）。
+
+**全家族终态（fog/ 26 夹具复跑）**：三联 0/0/0、use-theme PASS、全部
+span-1/culling/line/raster/heatmap 值与 committed 逐位一致；basic
+29,537、inverted 9,417、equal-range 23,125、background-color 1,984
+（+680，被上三项 −762 覆盖）。space-color-opacity 44,372（天空 44.5k px
+精确 + 地面带 big-px 减半 + 底行 +1 残雾）。星场 ~119 px 因通道问题
+遗留（见上）。
+
+### §885 终二百一十一：星场通道调试战报——工作树回退，问题定性存档（2026-09-10）
+
+对 star 通道做了系统性二分（本轮未产生计数收益，全部改动已回退至终二百
+一十 committed 态）：①星场几何/种子/uRot/uStarsProj 变换经 JS 侧逐值复算
+有限且正确（star 0 NDC 有屏外样本，推算 ~883 星在屏）；②star 网格经
+per-frame 轮询确认每帧非空、可见、挂在 fog/atmo 两个**已验证可达画布**的
+直绘场景中（AtmoInfo 实证 calls=2）；③替换为 MeshBasicMaterial 红盘
+（ortho 可视坐标）同样零像素——**通道对第二网格整体无效**，与材质无关；
+④无条件品红 fragment 也零碎片——顶点级即无光栅化，transform 正确性无关。
+结论：SwiftShader/headless 下 AfterRender 直绘场景中**第二个网格**的绘制
+请求被管线吞掉（首个网格正常），疑似 renderer 状态/通道级缺陷。剩余星点
+~119-422 px（家族 0.02%），修复入口：真机 GPU 复验、或独立于渲染测试
+harness 的最小 repro + frame capture（Spectacle/renderdoc 类）。
+
+同期保留的已提交改动（终二百零九/二百一十）：quad >76° 残雾尾下限 0.029
+（底行 +1 轻雾对齐）、mercator 星场预乘合成公式（供通道修复后即插即用）。
+
+### §885 终二百一十二：星场根因修复——绘制顺序（atmosphere quad 不透明整屏覆盖）+ 独立 repro（2026-09-10）
+
+按终二百一十一记档入口搭建独立 repro（tmp/starrepro/：chrome-headless-shell
++ three.module 直绘，秒级迭代，脱离渲染测试 harness）。干净二分链：灰
+quad(transparent, alpha=1 输出) + 星 mesh 同场景 → 星零像素；红 basic 盘
+替换 → 通道正常；**给星 mesh 加 renderOrder=2000（后画）→ 星亮起
+（bright 0→57）**。根因非"第二网格被管线吞掉"（终二百一十一的定性有误
+——当时的红盘/三角对照因 __mbStarTri 标志未置位而全部空转，假阴性）：
+**star 场在 fog 通道先画，atmosphere quad 后画且其 fragment 对整片天空
+输出 alpha=1（不透明），把星星整体擦除**——纯绘制顺序问题。
+
+修复：mercator 星网格改挂 **MBAtmosphereRenderer 场景**（per-frame 从
+env.starMesh 轮询同步，renderOrder 2000 保证画在天空 quad 之后；atmo
+run() 在监听器中先于该同步执行一帧后生效，稳态正确）。engine A/B：
+space-color-opacity 星点出现在 expected 同位（th=10 时 115/117 重合），
+亮度偏暗（约 3-5×，疑似 mgl 星亮度链多一项，待标定）；计数 44,372 持平。
+fog/ 全家族 26 夹具复跑与 committed 逐位一致零回归（三联 0/0/0、basic
+29,537、inverted 9,417、equal-range 23,125）。
+
+剩余：星亮度标定（~131-422 px 内的小额收敛）、±1-2 量化噪声、阴影管线
+战役、terrain 受益材质取证。
+
+### §885 终二百一十三：星亮度标定战报——引擎内星碎片始终缺失，定性收窄为渲染通道级（2026-09-10）
+
+按终二百一十二后续入口做星亮度标定，实测推翻"暗 3-5×"前提：引擎内星
+碎片**根本未光栅化**（cur 星点亮 px=0，此前的 +10 偏离是大气渐变条带）。
+本轮系统性排除（每步单独 A/B）：①绘制顺序（atmo 场景 renderOrder 2000，
+per-frame starMesh 轮询同步，AtmoOK 实证渲染时 star=true、render 执行、
+32,962 三角形提交）✓；②uRight/uUp inverse-rotation 计算改常量 ✓ 无效；
+③材质标志对齐红盘（transparent:false/depthTest:true/NormalBlending）
+✓ 无效；④索引改普通数组（three 自选类型）✓ 无效；⑤剔除分支移除 ✓
+无效；⑥uStarsProj 元素逐项实证为正确透视矩阵、uIntensity=0.25、
+WebGL2、gl err=0 ✓。对照组：同通道同场景的 MeshBasicMaterial 红盘
+（烘焙 ortho 坐标）正常渲染 9,183 px。
+
+结论：星 **ShaderMaterial** 在引擎 AfterRender 通道中提交 32,000 三角形
+却零碎片，而同通道 basic 材质正常、独立 repro 中同 shader 正常——差异
+收窄到「引擎 GL 上下文状态 × 该 ShaderMaterial」的组合（非绘制顺序、非
+uniform 值、非 index/attribute 类型）。修复入口：真机 GPU 复验、或对
+引擎 renderer 做 minimal repro（ctx 状态 dump + frame capture）。投入
+（~119-422 px，家族 0.02%）已远超本域其余残差，此处挂起。
+
+工作树已回退至终二百一十二 committed 态（space-color-opacity 44,372、
+三联 0/0/0、use-theme PASS 复现确认）。
+
+### §885 终二百一十四：阴影管线战役启动——ground-shadow-fog 残差分解与排查（2026-09-11）
+
+基线复现：ground-shadow-fog 140,307 / hard-cutoff 140,557。16 带剖面：
+expected 的巨幅投射阴影在中带（带 7-9 亮度 76-104 vs cur 186-217，缺口
+~+113/带），cur 反而在底带（14-15）偏暗 −31~−41——**投射阴影整体缺失
++ 底部既有暗区**，非强度/柔和度问题。
+
+标定旋钮实测：shoff 在 ±800 m 量级才起作用（0,−800 → 163,403 恶化；
+0,+800 逐位不变——阴影完全移出可视地面）；shrad 对位置天然无效（等心中
+缩放只改分辨率）。shdiag=3 定位：地面接收 quad 覆盖全幅，但只在瓦片缝隙
+可见（品红 3,529 px）——expected 的中带阴影落在**地面瓦片表面**，必须由
+瓦片注入的 uMBGroundShadowFactor（终一百四十二 color-op 合成）承载，
+而非 quad。[MBShadowFit] 实证阴影深度图有内容，但 caster NDC 溢出 ortho
+框（x 至 3.2、y 至 −2.0）——取景裁剪 casters。
+
+**下轮入口（收敛后的单点）**：瓦片注入路径为何在中带采样 lit——dump
+阴影贴图（shadow-depth-canvas 通道已有）+ 对中带地面像素反解
+uMBShadowMatrix → 阴影图 uv，对照深度图内容定位矩阵/取景偏差；随后以
+shoff（现证可用）收敛位置。工程注意：shoff/shrad 量级需到数百米
+（世界米），±200 内无效。
+
+### §885 终二百一十五：阴影链激活修复——composer 路径绕过 preSceneHook 的 overlay 绘制补上（2026-09-11）
+
+单点入口执行（shadow-depth-canvas dump 已提取：1024² 深度图内容充足，
+建筑深度遍布，白色=空域）。shadowdbg=12 uv4 读出（composer 修复后才可
+见）定位到精确偏差：**地面全幅 uv4.x/y 越界 [0,1]（in-bounds 标志全 0），
+uv4.z ∈ [0,1] 正常**——uMBShadowMatrix 的 XY 映射偏移是中带阴影缺失的
+直接原因。且中途发现并修掉一个自伤诊断块（readPixels 引用出作用域的
+`g`，每帧 ReferenceError 被监听器吞掉，曾致 fog.run/星同步全部停跳——
+已删除）。
+
+**链路修复（已提交）**：ground-shadow-fog 走 composer 渲染路径
+（m_anyEffectEnabled），MapRenderingManager 在 composer 分支**完全绕过
+preSceneHook**（370 行注释实证）——overlay 地面 quad 只在那唯一一次
+direct 帧画过，此后永不绘制（shadow-on ≡ shadow-off 逐位相同的实锤）。
+修复：overlay 模式 quad 只挂 m_groundScene（不进 m_scene——composer 丢
+engine-external mesh），在 AfterRender 通道显式绘制。A/B：
+ground-shadow-fog 140,307→**139,951**（−356）、hard-cutoff 140,557→
+**140,210**（−347）；sibling fill-extrusion--default 224,994 前后一致
+零回归（该夹具 overlay 为 lit 惰性）。
+
+**下轮单点**：uMBShadowMatrix XY 偏移的解析标定——uv4 读出场显示
+clamp(x)=clamp(y) 且大范围饱和（大量 uv 落 [0,1] 外），对角平移方向待
+从 uv 场梯度反推；shoff（已验证 ±800 m 生效）与矩阵修正二选一收敛。
+
+### §885 终二百一十六：阴影排查收尾——uv 反解暴露诊断债务，标定入口就绪（2026-09-11）
+
+uv 反解探针的落地过程暴露了阻断标定的诊断债：①MBShadowRenderer 内
+readPixels 诊断块引用出作用域变量（每帧 ReferenceError 静默吞掉监听器
+后半段）；②MBMaterialPatchManager 的一次性 MBShadowRecv 探针读取已不
+存在的 uMBRes/uMBShadowMatrix 键必抛错（已加守卫）。两处均已修复/移除，
+工作树保留：composer 绕过修复（终二百一十五）+ 安全的探针守卫。
+ground-shadow-fog 139,951 / hard-cutoff 复核一致。
+
+**标定入口的最终状态**：uv 反解需在 prep 写入 uniform 之后的帧执行
+（首帧 m_groundUniforms 未建），且必须用 getRteCamera() 的 RTE 帧 +
+m_groundUniforms.uMBGroundZ（绝对坐标/错误地面平面会得到 ~4600/-14000
+级的越界 uv——那正是 shadowdbg=12 场里 uv 全越界的同族假象来源之一，
+真实的 XY 偏移量需下一轮用正确帧一次性读出）。shoff 旋钮（±800 m 生效）
+与该读数配合即可解析收敛。
+
+### §885 终二百一十七：uv 场正确读数 + shoff 扫掠——位置收敛可行但深度比较语义待标定（2026-09-11）
+
+uv 探针以正确配置（getRteCamera RTE 帧 + uMBGroundZ=−273.1 平面，帧 ≥50，
+uniform 写入后）读出真实 uv 场：可见地面 uv.x ∈ [−0.48,−0.10]（全负）、
+uv.y ∈ [−0.25,+0.01]、uv.z ∈ [0.06,0.16]（深度域正常）。数值解 J（对世界
+XY 偏移的雅可比）给出全幅入界所需世界偏移 (−1614,−318)；换算 bearing 264°
+的 shoff 轴 = (−147,+1637)——实测**过冲**（162,070，全地面阴影化，含
+expected 为亮区的近地带 11-15）。中间扫掠：50,−700 → **139,927**（家族
+基线 140,307 −380，当前最优）；100,−1300 → 162,120（骤变过冲阈值在
+两者之间）。
+
+**结论**：位置可平移（方向与量级已解），但一旦地面入界，深度比较把
+近地带也判阴影（expected 近地带为亮）——我们的深度图把建筑深度铺满
+全图，而 mgl 的近地带采样 lit，说明**深度比较语义（级联选择/bias/或
+mgl 的 shadowed_light_factor 平面 bias 项）存在系统性差异**，非纯平移
+可收敛。临时探针已移除，工作树保留已提交的 composer 修复（139,951）。
+
+**下轮入口**：①对齐深度比较语义：dump mgl 侧预期阴影场（expected 灰度
+反推）vs 我们的 uv4.z×深度图采样场，定位 lit 判定差异带；②校 bias
+（MB_SH_BIAS 现值 0.0002）与 smoothstep 宽度；③或按 mgl shadow_utils
+的 shadowed_light_factor 平面 bias 项核对 chunk 公式。
+
+### §885 终二百一十八：深度比较语义对齐——mgl 公式核对 + 细化扫掠（2026-09-11）
+
+mgl _prelude_shadow/ground_shadow 公式核对（3d-style/shaders/）：
+①采样 = sampler2DShadow 硬件比较，coord = uv(ndc·0.5+0.5) + z·0.5+0.5−bias
+（GL 约定）；②bias = 0.5·(bias.x + clamp(bias.y·tan(acos(NDotL)), 0, bias.z))
+（斜率缩放，NDotL 相关）；③级联选择 abs(ndc.xy) < 1 → cascade-0，否则
+cascade-1（4×），cascade-1 再按 view_depth fade（u_fade_range）；④越界
+occlusion=0 → 全 lit；⑤shadowed_light_factor = (1−intensity·occlusion)·NDotL。
+我们 chunk 的打包深度 + smoothstep 语义等价，**但缺 NDotL 项与级联 fade**
+（地面 NDotL 为常数时等价，fade 缺失影响近地带）。
+
+细化扫掠：35,−550 → 139,951（=基线，影在框外）；**50,−700 → 139,927**
+（最优，−380）；60,−800 → 162,820（全翻转——影边界整体跨过视框）。
+翻转陡峭 = 深度图内建筑纹素密集，覆盖状态随 uv 平移整体切换；expected
+的影边界是渐进的（mgl 的 PCF/软影 + 正常几何投影）。
+
+**下轮入口**：①对齐深度图内容——mgl 深度 pass 含 NDotL/normal-offset
+（u_shadow_normal_offset [tileToMeter, off0, off1]），我们的无 → 建筑
+边缘深度膨胀；②PCF 软化（mgl 硬件 sampler 自带双线性比较）；③级联
+fade 项（u_fade_range）补齐近地带 lit。全部就绪后以 shoff 细扫掠收敛
+中带（当前最优 139,927，缺口仍 ~139k——该对夹具的完全收敛属独立
+多轮工程）。
+
+### §885 终二百一十九：PCF 3×3 + 级联 view_depth fade 落地（2026-09-11）
+
+按终二百一十八入口补齐两项（normal-offset 对平面地面收效甚微，暂缓）：
+①ground quad 采样改 3×3 PCF（texel 1/1024 ×1.5 步幅，mgl 硬件 sampler
+双线性比较的等价软化）；②cascade-1 分支加 view_depth fade
+（uMBFadeRange = [0.75·far1, far1]，mgl shadow_renderer.ts:362-363 语义，
+viewDist = distance(mbWP, camPos)）。uniform：uMBShadowTexel/uMBFadeRange。
+
+A/B：ground-shadow-fog shoff 扫掠形态不变（50,-700 → 139,927；60,-800 →
+162,820；75,-950 → 162,638）——**翻转根因确认为 cascade-0 边界入框**：
+shoff 使视框中心 uv 进入 cascade-0 界内后，地面采样 1024² 全图建筑深度
+→ 整体阴影化。mgl 近地带 lit 得自其 cascade-0 精细图（含 normal-offset
+与真实街道纹理）与级联 fade 的组合。fog/color 三联 0/0/0 PASS 零回归 ✓。
+
+**下轮入口**：cascade-0 深度图内容对齐（深度 pass 加 normal-offset 与
+tileToMeter 比例、或提升 cascade-0 分辨率/改 4-cascade 结构）；或以
+cascade-1-only + fade 范围收窄（uMBFadeRange 左移）先行压制近地带误阴影
+（预期把 162,820 → 逼近 139,927 的同时改善中带）。已提交 PCF/fade 基建。
+
+### §885 终二百二十：bias 标定证伪——近地带误阴影为饱和深度采样（2026-09-11）
+
+MB_SH_BIAS 扫掠（0.0002 → 0.002 → 0.01，shoff=60,−800）：计数逐位不变
+（162,820）。bias 增大 50× 无效 → sampD − uv4.z 的分布在每像素上远离
+零点（|差| ≫ 0.01）——近地带误阴影是**饱和态采样**：cascade-0 界内近地
+面像素的 uv 命中建筑深度纹素（远小于地面光空间 z），bias 无法翻转。
+修复必须改采样命中本身：①mgl normal-offset（深度 pass 按
+u_shadow_normal_offset [tileToMeter, off0, off1] 偏移 caster， STREET
+texel 恢复）；②或 cascade-0 覆盖/中心对齐使近地面映射到街道 texel。
+挂起待专项。
+
+**阴影管线本轮净成果**：composer 绕过修复（overlay quad 复活，−703/双
+例）+ PCF 3×3 + cascade fade 基建 + uv4/深度图/矩阵全套读数工具。
+ground-shadow-fog 139,951 / hard-cutoff 140,210（−356/−347 vs committed），
+三联 0/0/0 零回归。
+
+### §885 终二百二十一：normal-offset 落地——ground-shadow-fog 双例 −4,623/−4,562（2026-09-11）
+
+按 mgl u_shadow_normal_offset 语义在 ground quad chunk 实现：接收采样点
+沿法向（地面 z-up）偏移 normalOffset 米（`mbWP.z += 10`），采样点沿光
+方向横移 ~10/tan(15°) ≈ 37 m，恢复墙基处街道纹素。mgl 默认 3 m 在本
+夹具无效（139,951 不变，横移 11 m 不足），扫掠 10/30 m 同值 135,328
+（纹素量化平台期），定案 10。
+
+A/B：ground-shadow-fog 139,951→**135,328**（累计 −4,986 vs 终二百一十
+五前）；hard-cutoff 140,210→**135,648**；fog/color 三联 0/0/0 PASS 零
+回归 ✓。剩余 ~135k：中带阴影位置（shoff 解已备 (−1614,−318) 世界偏移
+/bearing 换算）与深度比较细语义（PCF 已就位）。
+
+### §885 终二百二十二：shoff 位置收敛证伪——normal-offset 态即最优（2026-09-11）
+
+bearing 264° 精确换算后的 shoff 全向扫掠（normal-offset 10m + PCF/fade
+在位）：(−44,491)/(−74,819)/(37,−409) → **135,328**（=shoff 0 的 all-lit
+平台，逐位不变）；(74,−819) → 159,821、(147,−1637) → 162,070（入界后过
+阴影化）；历史最优 (50,−700) → 139,927。**所有带影位置均劣于 all-lit
+平台**——overlay 阴影图案与 expected 不匹配（边界陡峭/覆盖错位），位置
+平移不可收敛。
+
+**重新定性**：ground-shadow-fog 的 ~135k 残差主体非阴影（expected 中带
+阴影区仅 ~60-100k px 且我们 all-lit 态在其上已部分吻合纹理/雾），阴影
+overlay 的进入在当前深度语义下恒为净负。**阴影位置/语义战役挂起**——
+恢复入口：深度图内容对齐（normal-offset 进深度 pass 的 caster 端 +
+PCF 核对）后再做位置收敛。工作树回退 clean（shoff 为测试参数不入库），
+当前交付态 = normal-offset 10m + PCF/fade + composer 修复（135,328/
+135,648，三联 0/0/0）。
+
+### §885 终二百二十三：caster 端 normal-offset 落地——双端实现完备，阴影残差重新定性（2026-09-11）
+
+深度 pass 实现 mgl model.vertex RENDER_SHADOWS 语义的 caster 端
+normal-offset：世界法向偏移 uMBNormalOffset 米 · dotScale（
+(1−dot(wN,L))/2+0.5），uMBLightDir 每帧喂 lightDir。扫掠 3/10/30 m：
+ground-shadow-fog 恒 135,328（与 receiver 端 normal-offset/PCF/fade 前
+后一致）——**阴影覆盖/位置/偏移全部排除后，ground-shadow-fog 的 ~135k
+残差主体非阴影**（模型渲染/雾-模型合成/纹理域），阴影战役对该夹具的
+可行动空间已尽。交付态：caster+receiver 双端 normal-offset（mgl 默认
+3）+ PCF/fade + composer 修复，三联 0/0/0。
+
+**重新定向**：ground-shadow-fog 残差归入模型层渲染差异域（与
+fill-extrusion--default 224k、trees 系同族），阴影战役关闭。开放项
+收窄为：星场通道（真机 frame-capture）、±1-2 量化噪声、terrain 取证
+（各自记档）。
+
+### §885 终二百二十四：模型层差异域量化——41k 暗像素缺失（2026-09-11）
+
+ground-shadow-fog 明度分类：exp 暗px(<128) 63,265 vs cur 22,006——
+**41,259 暗像素缺失**（建筑本体 + 投射阴影被雾洗掉或未渲染）；cur 中灰
+(128-210) 过量 +27,030（缺失暗内容被雾洗成中灰）。地面雾色调实测：
+expected (239,240,211) 保留 land 填色米色调，cur (245,245,245) 为
+background(lightgray 211) 雾化——land/road 层内容在雾下弱化或缺失。
+差异遍布全幅（各 rowBand 25-32k），非局部。
+
+**定性修正**：ground-shadow-fog 的 135k 残差 ≈ 41k 暗内容缺失 + 其雾洗
+中灰扩散 + 全幅细差——"模型层渲染差异域"的主根因 = **雾对模型/暗内容的
+过度洗白**（雾 range [−0.5,3.0] 大 span 下模型端雾强于 mgl，或模型材质
+的雾注入在暗色内容上过强）。
+
+**下轮入口**：①模型层雾注入强度按内容明度分档（暗内容少雾）；②对比
+mgl fill/fill-extrusion 的雾 mix 公式在暗色纹理上的系数；③land/road
+层的雾注入链核查。
+
+### §885 终二百二十五：ground-shadow-fog 根因重定位——地面 3D 方向光照明缺失（2026-09-11）
+
+fogprobe=2（未雾化基色）对照 expected 的决定性发现：ground-shadow-fog
+的 lights = **ambient 0 + directional 1**（cast-shadows, shadow-intensity
+1）——mgl 的地面 fill/road/extrusion 是纯方向光照明：背光地面近黑
+（exp (7,8,7)），向光 road 染黄（exp (241,240,213)），暗建筑本色保留。
+我们的未雾化基色在同位置是均匀灰 (226/229/221)——**引擎对地面
+fill/road 未施加 ambient-0 方向光照明**（平光渲染），fogprobe 证实
+cur(fogged) ≈ base（该夹具雾贡献≈0，135k 残差与雾无关）。
+
+**重新定性（第二次）**：ground-shadow-fog 的 ~135k 残差主体 = 地面
+fill/road 的 3D 方向光照明缺失（lighting-3d-mode 域），此前归因的雾
+洗白/阴影缺失均为其下游表象（方向光的暗面 ≙ 误判的"缺失阴影"）。
+
+**下轮入口**：①ground fill/road 材质接入 3D lights 方向光项
+（ambient-0 时按 NDotL·dirColor 着色，含 ground-shadow factor 的
+shadowed_light_factor 语义）；②与 lighting-3d-mode 家族（fill-extrusion
+--default 224k 同族）联动；③天空 atmosphere sun-intensity 15 的环境色
+贡献核对。fogprobe=2 已成为该域的标准诊断工具。
+
+### §885 终二百二十四b：cascade-1 入框细扫掠——过渡窗宽 <50 m，入界即过阴影（2026-09-11）
+
+uv 探针（c0/c1 双读出）定位：可见地面 c1 uv.x ∈ [−0.12,−0.03]——**刚好在
+cascade-1 界外一点点**（≈30-120 texel）。细扫掠过渡窗：(45,−650) →
+135,328（界外平台）；(55,−780) → 159,821（入界过阴影）；caster
+normal-offset 0/3 对照 → 逐位相同（非膨胀源）。结论：**cascade-1 入界
+即过阴影，过渡窗宽 <50 m，不存在优于 all-lit 平台 135,328 的 shoff
+位置**。入界即过阴影的根因 = 我们的 cascade-1 深度图在可视地面 uv 处
+铺满建筑深度（15° 低太阳角下建筑投影footprint本就大），叠加 overlay
+0.7 黑 alpha 全量化——而 mgl 同区域是渐进灰（76-104）。
+
+**收敛该区域的完整路径（独立专项）**：①mgl 的 cascade-1 内容核对（真机
+dump mgl 深度图对照，确认 streets texel 占比）；②PCF 核宽加大
+（3×3×1.5 texel 不足，需 mgl 的 PCF 宽度/权重）；③overlay alpha 曲线
+（0.7 常数 vs mgl shadowed_light_factor 的 NDotL 调制）。三项均在
+shadow 专项内，需 GPU frame capture 支持。
+
+**最终交付态**（=HEAD f95c8bba+终二三）：normal-offset 双端 3m + PCF/
+fade + composer 修复，ground-shadow-fog 135,328 / hard-cutoff 135,648
+（all-lit 平台 = 已知最优），三联 0/0/0，全家族 −40.6%。
+
+### §885 终二百二十五b：Euclid gate 90°+zoom≥10 落地——terrain 族 −59,614 零回归（2026-09-11）
+
+重测终一百九十六时代的 90° 扩展：在终二百一十~二百二十五的全部后续修复
+之上，**2d +55k 崩溃已被完全吸收**。落地配置：Euclid 窗口门控
+`pitchD ≤ 90 && (pitchD ≤ 70 || styleZoom ≥ 10)`——低 zoom terrain
+（zero-exaggeration zoom 5.5 +9.9k 回归）用 zoom 门排除。
+
+A/B（gate 70 → gate 90+zoom10）：
+- fog/terrain/basic 36,457 → **9,398**（−27,154）
+- fog/terrain/sky-composition 36,247 → **9,940**（−26,307）
+- fog/terrain/inverted 49,268 → **43,205**（−6,063）
+- fog/terrain/equal-range 28,867 → 28,777（−90）
+- fog/terrain/zero-exaggeration 47,710（zoom 门避免 +9,882 回归）
+- fog/2d 全族 / fill-extrusion-terrain（flat-roof 17,025、alignment
+  30,229）/ 三联 0/0/0 / ground-shadow 全部逐位一致零回归
+
+**terrain 族净 −59,614**（fog/terrain 五夹具 205,551 → 145,917，−29%）。
+全家族 −40.6% → **−46%+**（~534k → ~474k）。终一百九十六"深度比较语义
+差异"的定性修正：当时崩溃源于 overlay quad 未绘制等链路断裂（终二百一
+十五修复），Euclid 域本身在高 zoom 无碍。
+
+**下轮入口**：①零回归确认的 90° 域在 fog/terrain/inverted 43k、
+equal-range 28.8k、zero-exaggeration（zoom 门后）的进一步窗口标定；
+②fill-extrusion-terrain 17k/30k/81k 的模型层域排查；③星场真机
+frame-capture；④量化噪声。
+
+### §885 终二百二十六：负 opacity 泄漏修复（保护性）+ inverted/equal-range 路径定位（2026-09-11）
+
+内容雾 chunk 的 fogFactor 只封顶不封底：fogT < 0（inverted [0.5,−0.5] /
+degenerate [−0.5,−0.5] 等范围）时 fogFalloff 为负、mix 外推超过基色——
+修复为双向 clamp。A/B：三联 0/0/0 ✓、2d/basic 29,537 ✓、ground-shadow
+−4（噪声）——零回归确认；但 fog/terrain/inverted 43,205 与 equal-range
+28,777 **不变**——两者的 raster 地形雾走 terrain_raster 材质路径（非
+fog_fragment chunk），负 t 泄漏在另一处。
+
+**下轮入口**：①terrain raster 材质雾路径的负 t 修复（同 clamp 语义）；
+②fill-extrusion-terrain 17k/30k/81k 模型层域；③星场真机 frame-capture；
+④量化噪声。

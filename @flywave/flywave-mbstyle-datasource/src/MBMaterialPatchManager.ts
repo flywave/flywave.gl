@@ -366,6 +366,7 @@ export class MBMaterialPatchManager {
                         if (!(MBMaterialPatchManager as any).__mbRecvLogged) {
                             (MBMaterialPatchManager as any).__mbRecvLogged = true;
                             try {
+                                if (!u.uMBRes || !u.uMBShadowMatrix) return;
                                 const c0 = (u.uMBGC.value as THREE.Vector3[])?.[0];
                                 const mEl = (u.uMBShadowMatrix.value as THREE.Matrix4)?.elements ?? [];
                                 // eslint-disable-next-line no-console
