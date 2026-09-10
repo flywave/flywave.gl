@@ -969,3 +969,23 @@ customProgramCacheKey() 返回值与是否被 §273 patch（确认 lib 引用持
 无条件 ≤85° 全局 lib 变化的 terrain/basic −27.1k 受益材质身份未定，但其
 伴随的平面 2d +55k 使该配置不可发布——除非未来定位受益材质并做 terrain
 独立域，否则不再尝试。
+
+### §885 终二百零一：fill-extrusion 黑底机理 + span 门控收益分析（2026-09-10）
+
+fill-extrusion（pitch 70 zoom 17 range [−0.5,0.5] span 1）黑底定位：
+带 8-9 **100% 纯黑** vs HEAD **0% 黑**（本次窗口改动引入，非既有）。机理：
+新窗下带 8-9 t<0 → quad opacity=0 → 透出渲染器**黑色 clear color**；HEAD
+旧窗同区域 t≈0.5 有雾覆盖非黑。expected 带底为白墙（灰 128 @ f≈0.67 →
+d_mgl≈1.30），而我们的深度场映射给出 t<0——**mgl 的深度场在 zoom 17 强于
+zoom 16（d_mgl(band9) 1.30 vs 0.95），与现有 zoom 无关模型矛盾**（同
+pitch/fov 下 dist/distCam 应 zoom 无关），疑 mgl distCam/雾矩阵存在
+zoom 依赖分量（cameraWorldSizeForFog 语义）。
+
+span 门控收益分析（新窗仅用于 span≥2.5）：可恢复 fill 四例 +4.4k
+（span 1），但会丢 culling/opacity（span 0.2）的 −5.9k 赢项——净 +1.5k
+不值得引入复杂度。维持 committed 全 span 应用现状（净收益 −250k+ 级）。
+
+zoom 依赖的正解（下轮）：在两个 zoom 各跑 fogquaddbg 探针实测 d(row)
+（zoom 16 已有 [7.78..0.99]），若 zoom 间 d 场成比例则给 quad 喂值加
+zoom 归一项（mgl cameraWorldSizeForFog 语义）；同时 fill-extrusion 黑底
+可临时用 quad uOpaque=1（不透明合成）模式兜底避免黑 clear 透出。
