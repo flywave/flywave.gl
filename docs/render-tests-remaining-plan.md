@@ -912,3 +912,22 @@ terrain/inverted 49,285→**63,962**（+14.7k）、2d/inverted 9,643→**25,087*
 
 工作树回退至 55ccb25e + runner 传参修复。>70° 欧氏域正式关闭：≤70° 标定
 带（A=1.1493/B=-0.1063）为该域的最终状态。
+
+### §885 终一百九十七：跨家族位移评估收口——雾改动对 model 族基本中性（2026-09-10）
+
+5aa843ba 对照 × 当前构建，串行逐夹具（可完成的子集）：
+- wireframe/instanced-rendering（pitch 38）：409,635 ↔ 409,635 零位移
+- model-layer/trees-use-theme（pitch 60）：186,441 → **185,106（−1,335）**
+- model-layer/trees-light-aligned-fog（pitch 60）：192,737 → 192,778（+41）
+- model-layer/ground-shadow-fog（pitch 70）：137,795 → 140,307（+2,512）
+- model-layer/ground-shadow-fog-hard-cutoff：138,128 → 140,572（+2,444）
+- 跨家族净位移 ≈ **+3.7k**，对照 fog 家族 −356.7k， committed 态稳健。
+- trees-use-theme 的 snapshot 171,465 → HEAD 已漂移至 186,441（终一百
+  八十四/一百八十五族既有漂移，非本次）。
+- buildings-trees 对（环境级 DISCONNECTED）、powerplants-fog-mercator、
+  buildings-trees-shadows-low-zoom-fade 串行跑未出数，随全量 baseline
+  复跑补测。
+
+下轮入口（保持）：①terrain/basic −27.1k 真实受益材质 drawlog 逐 draw
+差分；②ground-shadow-fog 双例 +2.5k shadow-overlay 次级标定；③墙体光照
+域黑墙；④全量 baseline 复跑（buildings-trees 随之补测）。
