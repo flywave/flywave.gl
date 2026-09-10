@@ -59,9 +59,21 @@ THREE.ShaderChunk.fog_fragment = `
 	// §216/§249: the mgl fog formula per fragment. vFogDepth is in ENGINE
 	// world units, not mgl mercator meters (§248: the kFog fold IS the unit
 	// conversion) — fold it so depth lands in the mgl fog-unit band.
+#ifdef MB_FOG_CONTENT_EUCLID
+	// §885 终一百九十: mgl's fog depth is the EUCLIDEAN camera-to-fragment
+	// distance (|fogMatrix·pos|); vFogPos is exactly that vector in view
+	// space. fogMglShift/fogMglDistCam carry the quad's fold
+	// (uScale·shift / distCam-heuristic) and fogMglRange the quad's
+	// calibrated affine window — content and background fog fields unify
+	// (fog/color trio PASS×3 calibration).
+	fogT = (fogMglShift * length(vFogPos) / max(fogMglDistCam, 1e-6)
+		- fogMglRange.x)
+		/ max(fogMglRange.y - fogMglRange.x, 0.001);
+#else
 	fogT = (fogMglShift * (vFogDepth * 0.15) / max(fogMglDistCam, 1.0)
 		- fogMglRange.x)
 		/ max(fogMglRange.y - fogMglRange.x, 0.001);
+#endif
 #endif
 	if (fogGlobeMode > 0.5) {
 		// mgl _prelude_fog.fragment.glsl globe branch:
@@ -1222,6 +1234,23 @@ export class MBEnvironmentManager {
             (lib2.fogMglRange.value as THREE.Vector2).set(
                 rawRange[0] + shift + mbRangeAdj + ((globalThis as any).__mbFogShiftAdj ?? 0),
                 rawRange[1] + shift + mbRangeAdj + ((globalThis as any).__mbFogShiftAdj2 ?? 0));
+            // §885 终一百九十: fogeuclid=1 — content mgl fog switches to the
+            // EUCLIDEAN depth domain with the quad's calibrated affine window
+            // (A=1.1493/B=-0.1063, the fog/color trio PASS×3 calibration):
+            // fogMglShift·length(vFogPos)/fogMglDistCam reproduces the quad's
+            // depth field exactly (uScale·shift·rayLen/distCam heuristic).
+            // ≤70° only — the calibrated band.
+            if ((globalThis as any).__mbFogContentEuclid !== false && pitchD <= 70 && cam) {
+                lib2.fogMglShift.value = 0.735 * shift;
+                lib2.fogMglDistCam.value = Math.max(
+                    (cam as THREE.PerspectiveCamera).position.z, 1) /
+                    Math.sin((90 - pitchD) * Math.PI / 180);
+                const euWinA = 1.1493;
+                const euWinB = -0.1063;
+                const euW0 = euWinB + euWinA * (rawRange[0] + shift);
+                (lib2.fogMglRange.value as THREE.Vector2).set(
+                    euW0, euW0 + euWinA * (rawRange[1] - rawRange[0]));
+            }
         }
         // Mapbox renders the atmosphere glow (space→high→fog gradient) in the
         // sky region whenever fog is enabled and the horizon is visible — even

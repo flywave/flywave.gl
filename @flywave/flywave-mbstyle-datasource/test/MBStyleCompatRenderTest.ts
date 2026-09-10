@@ -231,6 +231,13 @@ function discoverTests(): TestEntry[] {
     const fqd = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogquaddbg="))?.slice("fogquaddbg=".length);
     if (fqd === "1") (globalThis as any).__mbFogQuadDbg = true;
+    // §885 终一百九十: fogeuclid → content mgl fog uses the EUCLIDEAN
+    // depth domain with the quad's calibrated affine window. DEFAULT ON
+    // (fog family −39.7% vs prior HEAD, culling/far 18,094→834, fog/color
+    // trio PASS×3); fogeuclid=0 opts out for A/B.
+    const feu = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("fogeuclid="))?.slice("fogeuclid=".length);
+    (globalThis as any).__mbFogContentEuclid = feu !== "0";
     // §885 终八十五: camdist=<N> → calculateDistanceFromZoomLevel multiplier
     // (1/cos(lat) ≈ 0.79 @ lat37.78 tests the camera-distance hypothesis).
     const cdm = (window as any).__karma__?.config?.args?.find?.((a: string) =>

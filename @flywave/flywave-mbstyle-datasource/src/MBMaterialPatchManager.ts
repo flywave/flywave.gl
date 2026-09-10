@@ -1743,6 +1743,17 @@ export class MBMaterialPatchManager {
                         '#include <fog_pars_fragment>',
                         '#include <fog_pars_fragment>\n#define MB_RASTER_MGL_FOG 1');
                 }
+                // §885 终一百九十: content mgl fog depth uses the EUCLIDEAN
+                // camera-to-fragment distance with the quad's calibrated
+                // affine window (fog/color trio PASS×3, culling/far
+                // 18,094→834). DEFAULT ON; fogeuclid=0 opts out for A/B.
+                if ((globalThis as any).__mbFogContentEuclid !== false
+                    && shader.fragmentShader.includes('#include <fog_pars_fragment>')
+                    && !shader.fragmentShader.includes('MB_FOG_CONTENT_EUCLID')) {
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        '#include <fog_pars_fragment>',
+                        '#include <fog_pars_fragment>\n#define MB_FOG_CONTENT_EUCLID 1');
+                }
             };
             material.needsUpdate = true;
         }

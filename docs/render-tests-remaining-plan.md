@@ -762,3 +762,32 @@ rayLen），窗口统一到 quad 已 PASS 标定的同一仿射窗（w0=B+A·(r0
 span=A·(r1−r0)、A=1.1493/B=−0.1063）——内容与背景雾场一致化。爆炸半径
 大（全部内容雾夹具：2d 族、regressions、terrain 内容），需按 fog/2d 家族
 逐夹具 A/B；fogshift/fogdistk 旋钮可作过渡微调。
+
+### §885 终一百九十一：内容雾欧氏域默认落地——家族 −39.7%、culling 族近清零（2026-09-10）
+
+内容 mgl 分支深度改 `length(vFogPos)`（MB_FOG_CONTENT_EUCLID define，
+patchMaterial 注入），env feed 同步切换：fogMglShift=0.735·shift、
+fogMglDistCam=camZ/sin(90−pitch)（即 quad 的 uScale·shift/distCam 折叠）、
+fogMglRange=[w0, w0+A·(r1−r0)]（≤70°；>70° 保持旧域）。A/B（fogeuclid=1）
+fog/2d 净 −41,676 后全家族复验并**默认开启**（fogeuclid=0 可关；src 读点
+`!== false` 模式，库上下文同默认）。
+
+**家族总账 vs HEAD（898,389）→ 541,718（−356,671，−39.7%）**；相对
+09-07 snapshot 累计 1,114,449 → 541,718（**−572,731，−51.4%**）。
+fog/color 三联维持 PASS×3（默认无参 sanity 实证 0/passed:True）；
+zero-PASS 10→13。亮点：**culling 族近清零**（far 18,094→**834**、mid
+19,177→**946**、close 9,652→**2,460**、opacity 32,474→18,058）、raster
+49,141→18,872、heatmap −6,326、line-pattern −5,896、hillshade −2,139、
+line −673、fill-color 反超 HEAD（974→451）。代价：fill-extrusion
++1,940、fill-pattern +1,578、line-gradient +776、fill-outline +87（合计
++4.4k，均本就 FAIL）。注意 chunked runner 的 karma 透传用
+MBSTYLE_EXTRA_ARGS（MBSTYLE_FOGEUCLID 只接在非 chunked runner 上，第一
+次家族复跑因此跑了空门控——顺带实证 committed 态可复现 +18/627,650）。
+
+下轮入口：①fill-extrusion/fill-pattern/line-gradient/fill-outline 四例
+合计 +4.4k——fill-extrusion 的挤出材质走 __mbExtFogU 逐帧拷贝路径，其
+深度域切换需单独核对（是否吃到 MB_FOG_CONTENT_EUCLID define）；②剩余
+大残差 space-color-opacity 47k、terrain 族 28-49k（>76° 内容路径）、
+2d/inverted+basic+equal-range ~63k（pitch 80，窗口未覆盖）——内容欧氏域
+推广到 >70° 需按其标定带单独拟合；③全量 baseline 复跑评估 fog 之外家族
+（regressions 等 pitch≤70 有雾夹具）的整体位移。
