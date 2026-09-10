@@ -210,6 +210,22 @@ function discoverTests(): TestEntry[] {
     const fmul = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogmul="))?.slice("fogmul=".length);
     if (fmul) (globalThis as any).__mbFogMul = Number(fmul);
+    // §885 终一百八十八: fogdistk=<f> → lib-level fogMglDistCam multiplier
+    // (applied after every env formula branch; shared-uniform binding A/B
+    // and the mgl depth-domain fit).
+    const fdk = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("fogdistk="))?.slice("fogdistk=".length);
+    if (fdk) (globalThis as any).__mbFogDistK = Number(fdk);
+    // §885 终一百八十八: fogrefdbg=1 → one-shot compile-time binding probes
+    // ([MBFogDistK] parse, [MBFogDistKApply] env feed, [MBBgCompile]
+    // background-material uniform identity).
+    const frd = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("fogrefdbg="))?.slice("fogrefdbg=".length);
+    if (frd === "1") (globalThis as any).__mbFogRefDbg = true;
+    if (fdk) {
+        // eslint-disable-next-line no-console
+        console.log(`[MBFogDistK] parsed=${fdk}`);
+    }
     // §885 终八十五: camdist=<N> → calculateDistanceFromZoomLevel multiplier
     // (1/cos(lat) ≈ 0.79 @ lat37.78 tests the camera-distance hypothesis).
     const cdm = (window as any).__karma__?.config?.args?.find?.((a: string) =>

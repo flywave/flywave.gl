@@ -1707,6 +1707,13 @@ export class MBMaterialPatchManager {
         // before our module-load additions (fogGlobe*/fogMgl*) — so the GLSL
         // uniforms exist but stay at their 0 defaults. Share the live lib
         // objects via onBeforeCompile so per-frame updates propagate.
+        // §885 终一百八十八: kept GUARDED after an A/B — the unconditional
+        // form (snapshot clones replaced by the live lib objects) measured
+        // bit-identical on every fog fixture (static fog state ⇒ snapshot ==
+        // lib value), so the original semantics stay. The real fog/color
+        // painter is the MBBackgroundFogRenderer quad, not these materials.
+        // fogColor/fogNear/fogFar stay untouched: three's refreshFogUniforms
+        // owns them per frame (§664 white-out).
         {
             const fogLib = (THREE as any).UniformsLib.fog;
             const origFogU = material.onBeforeCompile;
@@ -1716,6 +1723,14 @@ export class MBMaterialPatchManager {
                     'fogGlobeTransition', 'fogGlobeRange', 'fogMglRange', 'fogMglShift', 'fogMglDistCam',
                     'fogAlpha', 'fogHorizonBlend', 'fogVertLimit', 'fogCamHeight', 'fogDebugT']) {
                     if (fogLib[key] && !shader.uniforms[key]) shader.uniforms[key] = fogLib[key];
+                }
+                // One-shot compile-time binding identity probe (fogrefdbg=1):
+                // verifies the drawn material's uniform entries are the live
+                // UniformsLib.fog objects.
+                if ((globalThis as any).__mbFogRefDbg
+                    && ((MBMaterialPatchManager as any).__mbFogRefCnt = ((MBMaterialPatchManager as any).__mbFogRefCnt ?? 0) + 1) <= 6) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBFogRef] type=${material.type} tech=${techName} bg=${!!(technique as any)._mbBgTile} fog=${(material as any).fog} refMgl=${shader.uniforms.fogMglDistCam === fogLib.fogMglDistCam} refAlpha=${shader.uniforms.fogAlpha === fogLib.fogAlpha} mglFog=${shader.fragmentShader.includes('MB_RASTER_MGL_FOG')}`);
                 }
                 // §885 终一百四十四: fogmglheight=1 — ground fills/roads run
                 // the mgl fog branch (live fogMgl* uniforms) instead of three's

@@ -678,3 +678,40 @@ DistKUse 探针证实 uniform 更新执行 12 次、值正确）**输出逐位�
 UniformsLib.fog 的共享对象并在背景瓦片 patch 时引用同一对象（fogAlpha
 已是该模式），标定旋钮即可生效，随后重扫 distCam/range 拟合 expected
 的三点雾分布（顶 1.0 / 中 0.28 / 底 ~0.2）。工作树已清理至 HEAD。
+
+### §885 终一百八十八：fog 家族收官——上轮根因证伪+背景雾 quad 窗口仿射重拟合（2026-09-10）
+
+**上轮根因证伪**：fog/color 夹具 `sources:{}` 无任何瓦片——drawlog 实证可见雾面的
+绘制者是 **MBBackgroundFogRenderer 的全屏幕射线重建 quad**（ShaderMaterial、
+vn=4、renderOrder 0），与瓦片材质、UniformsLib.fog、fogMgl* 链完全无关。
+distCam 旋钮扫描逐位不变的真正原因是**该链路根本不在绘制路径上**，并非
+"lib uniform 不达已编译背景瓦片材质"。§273 无条件绑定 A/B 实测：fog 家族
+62 夹具逐位零行为差（静态 fog 态下快照==lib 值），绑定保持原守卫式；
+fogrefdbg 探针（编译期 uniform 身份）与 fogdistk 旋钮（mgl 深度域，env
+公式分支之后施加）作为恒默认关闭的标定工具入档。
+
+**quad 窗口重拟合**：原窗口 `t=(depth−r0)/(r1−r0)`（r0/r1=style 原始 range）
+叠 uScale=0.735@70° 单旋钮折叠。用 10 行带剖面（expected f=[1,1,.94,.76,
+.48,.24,.08,.01,0,0]）两轮收敛：单尺度无法同时满足过零点与斜率——rig 残差
+是**深度域仿射**而非纯比例。落地 `t=(depth−w0)/(A·(r1−r0))`，
+`w0=B+A·(r0+shift)`，depth=uScale·shift·rayLen/distCam，**A=0.7743、
+B=0.7141**（对 style range 保持仿射，其他 range 夹具继承同一残差；仅 ≤70°
+启用，70-76° 保旧窗口，>76° 原 skip）。fog/color 三联：
+fog/color 87,649→**22,202**、color-opacity 82,192→**8,081**、use-theme
+88,056→**23,097**（合计 −204.5k，−79%）。
+
+**家族总账（vs HEAD 5aa843ba 全量对照）**：898,389 → **679,783**
+（**−218,606，−24.3%**）。改善 11 例：color 三联 −204.5k、raster −6,356、
+culling/opacity −5,856、line-pattern −3,990、heatmap −1,252、line-sdf −87；
+回退 5 例全为 ≤70° 小 span range 的窗口过陡（fill-pattern +1,932、
+line-gradient +519、fill-extrusion +406、fill-color +323、fill-outline
++272，合计 +3.5k）。terrain/culling 相对 09-07 snapshot 的大幅"回退"经
+HEAD 对照实证为**终一百八十四线宽改造的既有漂移**（culling/far HEAD 即
+18,094），非本次引入；fog 家族 zero-PASS 数维持 10（color 三联仍 FAIL，
+阈值 ~66px）。
+
+下轮入口：①窗口对 span<3 range 的过陡（fill-pattern +1.9k 最大）——按
+span 分段启用或用 quad 内嵌深度场探针（uDbg 涂 depth）直接测 d(row)；②
+color 三联剩余残差（22k/23k/8k）集中在带 4-6，透视行-深度映射非线性，
+线性窗口已达极限，需按实测深度场做非线性重映射（mgl fog depth 的
+worldToFogMatrix 语义对齐）。

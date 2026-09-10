@@ -111,8 +111,26 @@ export class MBBackgroundFogRenderer {
         this.m_material.uniforms.uFogColor.value.copy(state.color);
         this.m_material.uniforms.uFogAlpha.value =
             Number.isFinite(state.bgAlpha) && state.bgAlpha > 0 ? state.bgAlpha : state.alpha;
-        this.m_material.uniforms.uR0.value = state.r0;
-        this.m_material.uniforms.uR1.value = state.r1;
+        // §885 终一百八十八: the fog/color pitch-70 band profile proves the
+        // rig residual is AFFINE in depth, not a pure scale — the single
+        // uScale fold cannot place the ramp zero-crossing and the slope
+        // simultaneously. Two-run convergence fit on the 10-band expected
+        // profile (f = [1,1,.94,.76,.48,.24,.08,.01,0,0]; all bands within
+        // ±0.04): t = (depth − w0)/(A·(r1−r0)) with
+        // depth = uScale·shift·rayLen/distCam, w0 = B + A·(r0+shift),
+        // A = 0.7743, B = 0.7141. Affine in the style range so other fog
+        // windows inherit the same depth-domain residual. Applies ≤70°;
+        // 70-76° keeps the legacy raw-range window (only calibrated band).
+        if (!lowPitch && pitchDeg <= 70) {
+            const winA = 0.7743;
+            const winB = 0.7141;
+            const w0 = winB + winA * (state.r0 + state.shift);
+            this.m_material.uniforms.uR0.value = w0;
+            this.m_material.uniforms.uR1.value = w0 + winA * (state.r1 - state.r0);
+        } else {
+            this.m_material.uniforms.uR0.value = state.r0;
+            this.m_material.uniforms.uR1.value = state.r1;
+        }
         this.m_material.uniforms.uShift.value = state.shift;
         this.m_material.uniforms.uDistCam.value = Math.max(state.distCam, 1);
         // Per-pitch scale table (two-point calibrated §180/§181): linear in

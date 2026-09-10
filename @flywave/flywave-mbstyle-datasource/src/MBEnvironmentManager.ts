@@ -1201,6 +1201,17 @@ export class MBEnvironmentManager {
                 lib2.fogMglShift.value = 1.0;
                 lib2.fogMglDistCam.value = 0.15 * shift * hPx * Math.cos(pitchD * Math.PI / 180);
             }
+            // §885 终一百八十八: persistent distCam calibration knob (karma
+            // arg fogdistk=<f>, default 1) — applied AFTER every formula
+            // branch so no later assignment can dead-store it (the 终一百八十
+            // 七 sweep multiplied distCamM, then the fogmglheight=1 branch
+            // overwrote the lib value before upload → bit-identical output).
+            lib2.fogMglDistCam.value *= ((globalThis as any).__mbFogDistK ?? 1);
+            if ((globalThis as any).__mbFogRefDbg
+                && ((globalThis as any).__mbFogApplyCnt = ((globalThis as any).__mbFogApplyCnt ?? 0) + 1) <= 3) {
+                // eslint-disable-next-line no-console
+                console.log(`[MBFogDistKApply] k=${(globalThis as any).__mbFogDistK ?? 1} distCam=${lib2.fogMglDistCam.value.toFixed(3)} range=${JSON.stringify((lib2.fogMglRange.value as THREE.Vector2).toArray().map(v => +v.toFixed(3)))}`);
+            }
             // §885 终八十二: mgl fog.ts state getter feeds the FOV-ADJUSTED
             // range (fovAdjustedRange = [r0+shift, r1+shift], fog.ts:87). The
             // raw style range shifted the fog window 1.5 units low. With the
