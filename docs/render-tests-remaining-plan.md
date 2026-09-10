@@ -952,3 +952,20 @@ fogprobe=2 底色 + expected 逐带分析（512×512）：expected 在带 3-6 �
 （投射阴影覆盖/暗度）主导**，雾窗精调（span 级或否则）无法修复，所属战役
 为阴影管线而非雾。±2.5k 的雾窗位移在影子残差面前为二阶量。修复入口转
 阴影管线战役（§885 终五十五~终七十二 的 createLightMatrix/级联标定线）。
+
+### §885 终二百：terrain 欧氏域受益材质定位终局——扫描三根皆空，需 draw 时取证（2026-09-10）
+
+第四路尝试：mapview scene（TerrainDraping 同根）+ setDemTexture 判据——
+诊断实证 **mvScene 内 setDemTexture 材质 = 0**（[MBTerrFog2]）。结合此前
+m_scene 普查无高顶点网格：绘制的 16,641 顶点地形材质是**不暴露
+setDemTexture 的普通 MeshStandardMaterial/MeshBasicMaterial**（drawlog
+实证其存在），场景判据法（setDemTexture/technique 名/顶点数）三路皆无法
+定位。其 fogMgl* 引用持有于 renderer 内部 materialProperties（材质对象
+不可达）。可行取证：drawlog 扩展在 vn>10000 的 draw 上记录
+customProgramCacheKey() 返回值与是否被 §273 patch（确认 lib 引用持有者），
+或 draw 时读 GL uniform（需 readPixels 式 hack）。投入产出比低，暂记档。
+
+>70° 欧氏域战役正式关闭：≤70° 标定带（A=1.1493/B=-0.1063）为最终交付；
+无条件 ≤85° 全局 lib 变化的 terrain/basic −27.1k 受益材质身份未定，但其
+伴随的平面 2d +55k 使该配置不可发布——除非未来定位受益材质并做 terrain
+独立域，否则不再尝试。
