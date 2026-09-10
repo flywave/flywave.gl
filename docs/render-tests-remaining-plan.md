@@ -1352,3 +1352,19 @@ shoff 使视框中心 uv 进入 cascade-0 界内后，地面采样 1024² 全图
 tileToMeter 比例、或提升 cascade-0 分辨率/改 4-cascade 结构）；或以
 cascade-1-only + fade 范围收窄（uMBFadeRange 左移）先行压制近地带误阴影
 （预期把 162,820 → 逼近 139,927 的同时改善中带）。已提交 PCF/fade 基建。
+
+### §885 终二百二十：bias 标定证伪——近地带误阴影为饱和深度采样（2026-09-11）
+
+MB_SH_BIAS 扫掠（0.0002 → 0.002 → 0.01，shoff=60,−800）：计数逐位不变
+（162,820）。bias 增大 50× 无效 → sampD − uv4.z 的分布在每像素上远离
+零点（|差| ≫ 0.01）——近地带误阴影是**饱和态采样**：cascade-0 界内近地
+面像素的 uv 命中建筑深度纹素（远小于地面光空间 z），bias 无法翻转。
+修复必须改采样命中本身：①mgl normal-offset（深度 pass 按
+u_shadow_normal_offset [tileToMeter, off0, off1] 偏移 caster， STREET
+texel 恢复）；②或 cascade-0 覆盖/中心对齐使近地面映射到街道 texel。
+挂起待专项。
+
+**阴影管线本轮净成果**：composer 绕过修复（overlay quad 复活，−703/双
+例）+ PCF 3×3 + cascade fade 基建 + uv4/深度图/矩阵全套读数工具。
+ground-shadow-fog 139,951 / hard-cutoff 140,210（−356/−347 vs committed），
+三联 0/0/0 零回归。
