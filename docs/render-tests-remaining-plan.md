@@ -1310,3 +1310,26 @@ mgl 的 shadowed_light_factor 平面 bias 项）存在系统性差异**，非纯
 反推）vs 我们的 uv4.z×深度图采样场，定位 lit 判定差异带；②校 bias
 （MB_SH_BIAS 现值 0.0002）与 smoothstep 宽度；③或按 mgl shadow_utils
 的 shadowed_light_factor 平面 bias 项核对 chunk 公式。
+
+### §885 终二百一十八：深度比较语义对齐——mgl 公式核对 + 细化扫掠（2026-09-11）
+
+mgl _prelude_shadow/ground_shadow 公式核对（3d-style/shaders/）：
+①采样 = sampler2DShadow 硬件比较，coord = uv(ndc·0.5+0.5) + z·0.5+0.5−bias
+（GL 约定）；②bias = 0.5·(bias.x + clamp(bias.y·tan(acos(NDotL)), 0, bias.z))
+（斜率缩放，NDotL 相关）；③级联选择 abs(ndc.xy) < 1 → cascade-0，否则
+cascade-1（4×），cascade-1 再按 view_depth fade（u_fade_range）；④越界
+occlusion=0 → 全 lit；⑤shadowed_light_factor = (1−intensity·occlusion)·NDotL。
+我们 chunk 的打包深度 + smoothstep 语义等价，**但缺 NDotL 项与级联 fade**
+（地面 NDotL 为常数时等价，fade 缺失影响近地带）。
+
+细化扫掠：35,−550 → 139,951（=基线，影在框外）；**50,−700 → 139,927**
+（最优，−380）；60,−800 → 162,820（全翻转——影边界整体跨过视框）。
+翻转陡峭 = 深度图内建筑纹素密集，覆盖状态随 uv 平移整体切换；expected
+的影边界是渐进的（mgl 的 PCF/软影 + 正常几何投影）。
+
+**下轮入口**：①对齐深度图内容——mgl 深度 pass 含 NDotL/normal-offset
+（u_shadow_normal_offset [tileToMeter, off0, off1]），我们的无 → 建筑
+边缘深度膨胀；②PCF 软化（mgl 硬件 sampler 自带双线性比较）；③级联
+fade 项（u_fade_range）补齐近地带 lit。全部就绪后以 shoff 细扫掠收敛
+中带（当前最优 139,927，缺口仍 ~139k——该对夹具的完全收敛属独立
+多轮工程）。
