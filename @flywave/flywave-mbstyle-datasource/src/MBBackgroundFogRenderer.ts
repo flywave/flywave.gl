@@ -148,6 +148,17 @@ export class MBBackgroundFogRenderer {
         // blending is correct again; opaque mode covered content (heatmap).
         this.m_material.uniforms.uOpaque.value = 0;
         if (state.bgColor) (this.m_material.uniforms.uBgColor.value as THREE.Color).copy(state.bgColor);
+        // §885 终二百零三: styles WITHOUT a background layer composite over
+        // the PAGE (white on the reference platform), not the black clear —
+        // mgl's no-fog bottom rows show the page (fill-extrusion expected:
+        // white bottom; ours showed the black clear through t<0 regions).
+        // Opaque-composite the quad against the PAGE color there (content
+        // with depth still occludes the quad; the §194 heatmap concern only
+        // applies to background-layer styles, which keep transparent mode).
+        if (!state.hasBackground && state.bgColor !== null) {
+            (this.m_material.uniforms.uBgColor.value as THREE.Color).set('#ffffff');
+            this.m_material.uniforms.uOpaque.value = 1;
+        }
         this.m_material.uniforms.uCamHeight.value = Math.max(cam.position.z, 1);
         // Camera world→view rotation as mat3 for ray reconstruction.
         this.m_material.uniforms.uCamMatrix.value.copy(cam.matrixWorld);

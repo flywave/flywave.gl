@@ -998,3 +998,14 @@ quadopaque=1（uOpaque=1 不透明合成）A/B：fill-extrusion 5,053→**9,357*
 修复（带 8-9 黑→米色）被透明遮盖代价反超，uOpaque 兜底不可用，已回退。
 fill-extrusion 黑底的最终解仍需 zoom 依赖深度场归一（§终二百零一的双
 zoom 探针路线）。工作树回退干净。
+
+### §885 终二百零四：无 background 层白页合成——span-1 回退全部归零（2026-09-10）
+
+fill-extrusion 黑底根因实锤：该夹具**无 background 层**，mgl 无雾区合成
+的是参考平台的**白色页面**，我们透出的是**黑色 clear**。修复：quad 在
+!state.hasBackground 时 uBgColor=白 + uOpaque=1（不透明合成，带深度写入
+的内容仍遮挡 quad；§194 heatmap 顾虑仅限有 background 层的样式，保持透
+明模式）。A/B：fill-extrusion 5,053→**3,113**、fill-color 1,516→**974**、
+line-gradient 1,110→**591**——全部精确回到 HEAD 值；fog/color 维持
+0 PASS。此前 uOpaque 实验失败的真因：uBgColor 用的是黑色 clear 色而非
+页面白色。
