@@ -1432,3 +1432,23 @@ background(lightgray 211) 雾化——land/road 层内容在雾下弱化或缺�
 **下轮入口**：①模型层雾注入强度按内容明度分档（暗内容少雾）；②对比
 mgl fill/fill-extrusion 的雾 mix 公式在暗色纹理上的系数；③land/road
 层的雾注入链核查。
+
+### §885 终二百二十五：ground-shadow-fog 根因重定位——地面 3D 方向光照明缺失（2026-09-11）
+
+fogprobe=2（未雾化基色）对照 expected 的决定性发现：ground-shadow-fog
+的 lights = **ambient 0 + directional 1**（cast-shadows, shadow-intensity
+1）——mgl 的地面 fill/road/extrusion 是纯方向光照明：背光地面近黑
+（exp (7,8,7)），向光 road 染黄（exp (241,240,213)），暗建筑本色保留。
+我们的未雾化基色在同位置是均匀灰 (226/229/221)——**引擎对地面
+fill/road 未施加 ambient-0 方向光照明**（平光渲染），fogprobe 证实
+cur(fogged) ≈ base（该夹具雾贡献≈0，135k 残差与雾无关）。
+
+**重新定性（第二次）**：ground-shadow-fog 的 ~135k 残差主体 = 地面
+fill/road 的 3D 方向光照明缺失（lighting-3d-mode 域），此前归因的雾
+洗白/阴影缺失均为其下游表象（方向光的暗面 ≙ 误判的"缺失阴影"）。
+
+**下轮入口**：①ground fill/road 材质接入 3D lights 方向光项
+（ambient-0 时按 NDotL·dirColor 着色，含 ground-shadow factor 的
+shadowed_light_factor 语义）；②与 lighting-3d-mode 家族（fill-extrusion
+--default 224k 同族）联动；③天空 atmosphere sun-intensity 15 的环境色
+贡献核对。fogprobe=2 已成为该域的标准诊断工具。
