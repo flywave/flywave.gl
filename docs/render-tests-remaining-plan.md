@@ -735,8 +735,11 @@ line-gradient +1,391、fill-color +542、fill-outline +495；均本就 FAIL）�
 其 mismatch 混合内容像素与 quad 区，仿射单窗不能同时满足 span-1——
 mismatch 方向在带间都相反（band7 欠雾/band9 过雾），属内容-背景混色域。
 
-下轮入口：①span-1 五例按 span 分段标定（用同一探针在 fill-color 视图
-实测 quad 区 d(row) 对 expected 反推窗口，或 uOpaque=1 直接合成模式
-逐夹具校准）；②剩余大残差（space-color-opacity 47k、terrain 族 28-49k、
-culling 族 9-32k）均与 quad 无关（>76° skip 或内容雾路径），属内容雾
-深度域问题（worldToFogMatrix 语义对齐）。
+下轮入口：①span-1 五例残差经 fill-color 像素级 diff 重新归因——2,618 个
+差异像素中约 1,300px 期望为**纯雾白**（quad 区饱和雾，我们欠雾），446px
+期望为**原始填充色 #334455**（mgl 对近处 fill 完全不雾，我们的内容雾却
+上了雾）——主体是**内容雾路径**（fill 材质走 fogMgl*/MB_RASTER_MGL_FOG
+分支，vFogDepth·0.15/distCam 深度域 vs mgl rayLen 域的偏差），非 quad
+窗口；②内容雾深度域对齐（worldToFogMatrix 语义）可同时服务剩余大残差
+（space-color-opacity 47k、terrain 族 28-49k、culling 族 9-32k，均
+>76° skip 或内容路径）。
