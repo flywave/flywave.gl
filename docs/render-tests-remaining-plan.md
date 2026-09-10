@@ -989,3 +989,12 @@ zoom 依赖的正解（下轮）：在两个 zoom 各跑 fogquaddbg 探针实测
 （zoom 16 已有 [7.78..0.99]），若 zoom 间 d 场成比例则给 quad 喂值加
 zoom 归一项（mgl cameraWorldSizeForFog 语义）；同时 fill-extrusion 黑底
 可临时用 quad uOpaque=1（不透明合成）模式兜底避免黑 clear 透出。
+
+### §885 终二百零二：uOpaque 兜底证负——透明遮盖代价超黑底收益（2026-09-10）
+
+quadopaque=1（uOpaque=1 不透明合成）A/B：fill-extrusion 5,053→**9,357**
+（+4.3k 更差——透明混合的半透明内容像素被不透明 quad 覆盖）、fill-color
+1,516→1,770（+254）、inverted 不变、fog/color 维持 0 PASS ✓。结论：黑底
+修复（带 8-9 黑→米色）被透明遮盖代价反超，uOpaque 兜底不可用，已回退。
+fill-extrusion 黑底的最终解仍需 zoom 依赖深度场归一（§终二百零一的双
+zoom 探针路线）。工作树回退干净。
