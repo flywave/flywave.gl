@@ -1009,3 +1009,11 @@ fill-extrusion 黑底根因实锤：该夹具**无 background 层**，mgl 无雾
 line-gradient 1,110→**591**——全部精确回到 HEAD 值；fog/color 维持
 0 PASS。此前 uOpaque 实验失败的真因：uBgColor 用的是黑色 clear 色而非
 页面白色。
+
+**全家族终态（含白页合成）**：HEAD 898,389 → **539,420（−358,969，−40.0%）**；
+相对 09-07 snapshot 累计 −575,029（**−51.6%**）。zero-PASS 维持 13
+（fog/color 三联 0/0/0 ✓）。vs 上轮 committed 再改善 2,298：fill-extrusion
+−1,940、line-gradient −776、fill-outline −87（回 HEAD）；fill-color
+974（=HEAD，且较终一百九十四前的 1,297 好一档）。唯一残余回退：**fog/
+2d/fill-pattern +1,578**（该夹具有 background 层，白页合成不适用，其
+span-1 窗位移仍在——已知开放项）。
