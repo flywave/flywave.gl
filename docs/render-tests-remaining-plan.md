@@ -1227,3 +1227,24 @@ uniform 值、非 index/attribute 类型）。修复入口：真机 GPU 复验�
 
 工作树已回退至终二百一十二 committed 态（space-color-opacity 44,372、
 三联 0/0/0、use-theme PASS 复现确认）。
+
+### §885 终二百一十四：阴影管线战役启动——ground-shadow-fog 残差分解与排查（2026-09-11）
+
+基线复现：ground-shadow-fog 140,307 / hard-cutoff 140,557。16 带剖面：
+expected 的巨幅投射阴影在中带（带 7-9 亮度 76-104 vs cur 186-217，缺口
+~+113/带），cur 反而在底带（14-15）偏暗 −31~−41——**投射阴影整体缺失
++ 底部既有暗区**，非强度/柔和度问题。
+
+标定旋钮实测：shoff 在 ±800 m 量级才起作用（0,−800 → 163,403 恶化；
+0,+800 逐位不变——阴影完全移出可视地面）；shrad 对位置天然无效（等心中
+缩放只改分辨率）。shdiag=3 定位：地面接收 quad 覆盖全幅，但只在瓦片缝隙
+可见（品红 3,529 px）——expected 的中带阴影落在**地面瓦片表面**，必须由
+瓦片注入的 uMBGroundShadowFactor（终一百四十二 color-op 合成）承载，
+而非 quad。[MBShadowFit] 实证阴影深度图有内容，但 caster NDC 溢出 ortho
+框（x 至 3.2、y 至 −2.0）——取景裁剪 casters。
+
+**下轮入口（收敛后的单点）**：瓦片注入路径为何在中带采样 lit——dump
+阴影贴图（shadow-depth-canvas 通道已有）+ 对中带地面像素反解
+uMBShadowMatrix → 阴影图 uv，对照深度图内容定位矩阵/取景偏差；随后以
+shoff（现证可用）收敛位置。工程注意：shoff/shrad 量级需到数百米
+（世界米），±200 内无效。
