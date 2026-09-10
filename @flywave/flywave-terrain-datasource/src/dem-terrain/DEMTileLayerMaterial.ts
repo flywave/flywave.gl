@@ -176,6 +176,14 @@ const s_sharedNodes = (() => {
         return dot(vec4(v.xyz.mul(255.0), float(-1.0)), _demUnpack);
     });
 
+    // modifier 纹理固定为 mapbox terrain-rgb 编码（HeightMapModifierManager 约定），
+    // 解码必须用 mapbox 常量，不能复用 _demUnpack——terrarium DEM 时 _demUnpack
+    // 是 (256,1,1/256,32768)，用它解 mapbox 编码的 modifier 会产生几万米的负值
+    const _modifierUnpack = uniform(new THREE.Vector4(6553.6, 25.6, 0.1, 10000.0));
+    const decodeModifierElevation = Fn(([v]: [ReturnType<typeof vec4>]) => {
+        return dot(vec4(v.xyz.mul(255.0), float(-1.0)), _modifierUnpack);
+    });
+
     const tileUvToDemSample = Fn(([t]: [ReturnType<typeof vec2>]) => {
         return vec2(
             t.x.mul(_heightMapPos.x).add(_heightMapPos.z),
@@ -195,7 +203,7 @@ const s_sharedNodes = (() => {
             float(1).sub(t.y.sub(b.y).div(b.w.sub(b.y)))
         );
         const modSample = texture(_modifierTex, modUv);
-        const modH = decodeElevation(modSample);
+        const modH = decodeModifierElevation(modSample);
         const isAdd = _modifierOp.equal(0);
         const mod = select(
             isAdd,
