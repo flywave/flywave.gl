@@ -328,8 +328,17 @@ export class MBShadowRenderer {
         // order (drawn before all models, after the background ground).
         // §885 终一百四十二: overlay mode rides ON TOP (999) instead.
         quad.renderOrder = (globalThis as any).__mbShadowOverlay !== false ? 999 : -2000;
+        // §885 终二百一十五: overlay mode (renderOrder 999, on-top darkening)
+        // draws through the AfterRender channel — the composer render path
+        // drops engine-external scene meshes, so a quad parented to m_scene
+        // silently vanished on effect-enabled fixtures (ground-shadow-fog:
+        // shadow-on ≡ shadow-off pixel-identical). Underlay mode keeps the
+        // m_scene parenting (it must draw BENEATH the tiles).
+        const overlayMode = (globalThis as any).__mbShadowOverlay !== false;
         this.m_groundScene.add(quad);
-        (this.m_mapView as any)?.m_scene?.add?.(quad);
+        if (!overlayMode) {
+            (this.m_mapView as any)?.m_scene?.add?.(quad);
+        }
         this.m_groundUniforms = (mat as any).uniforms || null;
     }
 
@@ -366,9 +375,9 @@ export class MBShadowRenderer {
         {
             const gq = (globalThis as any);
             gq.__mbGqInvoked = (gq.__mbGqInvoked ?? 0) + 1;
-            if (gq.__mbGqInvoked === 1 || gq.__mbGqInvoked === 60 || gq.__mbGqInvoked === 300) {
+            if (gq.__mbGqInvoked === 1 || gq.__mbGqInvoked % 300 === 0) {
                 // eslint-disable-next-line no-console
-                console.log(`[MBGQInvoke] n=${gq.__mbGqInvoked} enabled=${this.m_enabled} int=${this.m_intensity} quad=${!!this.m_groundQuad} u=${!!this.m_groundUniforms} ortho=${this.m_orthoStyle} id=${(this as any).__mbId ?? '?'}`);
+                console.log(`[MBGQInvoke] n=${gq.__mbGqInvoked} enabled=${this.m_enabled} int=${this.m_intensity} quad=${!!this.m_groundQuad} u=${!!this.m_groundUniforms} ortho=${this.m_orthoStyle} id=${(this as any).__mbId ?? '?'} draws=${gq.__mbGQDraws ?? 0}`);
             }
         }
         if (!this.m_enabled || this.m_intensity <= 0) return;
@@ -1109,6 +1118,26 @@ export class MBShadowRenderer {
         }
 
         this.prepGroundQuad(center, radius, eye);
+
+        // §885 终二百一十五: overlay-mode ground quad draws HERE — the
+        // composer path bypasses preSceneHook and drops engine-external
+        // meshes, so the on-top darkening must ride the AfterRender channel
+        // (the same bypass the atmosphere/fog/star quads use).
+        if ((globalThis as any).__mbShadowOverlay !== false
+            && this.m_groundQuad && this.m_groundScene) {
+            const prevAuto = renderer.autoClear;
+            const prevRT2 = renderer.getRenderTarget();
+            try {
+                renderer.autoClear = false;
+                renderer.setScissorTest(false);
+                renderer.setRenderTarget(null);
+                renderer.render(this.m_groundScene, this.m_groundCamera);
+                (globalThis as any).__mbGQDraws = ((globalThis as any).__mbGQDraws ?? 0) + 1;
+            } finally {
+                renderer.setRenderTarget(prevRT2);
+                renderer.autoClear = prevAuto;
+            }
+        }
     }
 
     dispose(): void {

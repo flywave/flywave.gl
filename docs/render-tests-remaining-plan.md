@@ -1248,3 +1248,27 @@ expected 的巨幅投射阴影在中带（带 7-9 亮度 76-104 vs cur 186-217�
 uMBShadowMatrix → 阴影图 uv，对照深度图内容定位矩阵/取景偏差；随后以
 shoff（现证可用）收敛位置。工程注意：shoff/shrad 量级需到数百米
 （世界米），±200 内无效。
+
+### §885 终二百一十五：阴影链激活修复——composer 路径绕过 preSceneHook 的 overlay 绘制补上（2026-09-11）
+
+单点入口执行（shadow-depth-canvas dump 已提取：1024² 深度图内容充足，
+建筑深度遍布，白色=空域）。shadowdbg=12 uv4 读出（composer 修复后才可
+见）定位到精确偏差：**地面全幅 uv4.x/y 越界 [0,1]（in-bounds 标志全 0），
+uv4.z ∈ [0,1] 正常**——uMBShadowMatrix 的 XY 映射偏移是中带阴影缺失的
+直接原因。且中途发现并修掉一个自伤诊断块（readPixels 引用出作用域的
+`g`，每帧 ReferenceError 被监听器吞掉，曾致 fog.run/星同步全部停跳——
+已删除）。
+
+**链路修复（已提交）**：ground-shadow-fog 走 composer 渲染路径
+（m_anyEffectEnabled），MapRenderingManager 在 composer 分支**完全绕过
+preSceneHook**（370 行注释实证）——overlay 地面 quad 只在那唯一一次
+direct 帧画过，此后永不绘制（shadow-on ≡ shadow-off 逐位相同的实锤）。
+修复：overlay 模式 quad 只挂 m_groundScene（不进 m_scene——composer 丢
+engine-external mesh），在 AfterRender 通道显式绘制。A/B：
+ground-shadow-fog 140,307→**139,951**（−356）、hard-cutoff 140,557→
+**140,210**（−347）；sibling fill-extrusion--default 224,994 前后一致
+零回归（该夹具 overlay 为 lit 惰性）。
+
+**下轮单点**：uMBShadowMatrix XY 偏移的解析标定——uv4 读出场显示
+clamp(x)=clamp(y) 且大范围饱和（大量 uv 落 [0,1] 外），对角平移方向待
+从 uv 场梯度反推；shoff（已验证 ±800 m 生效）与矩阵修正二选一收敛。
