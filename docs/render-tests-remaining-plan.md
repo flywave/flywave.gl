@@ -931,3 +931,13 @@ terrain/inverted 49,285→**63,962**（+14.7k）、2d/inverted 9,643→**25,087*
 下轮入口（保持）：①terrain/basic −27.1k 真实受益材质 drawlog 逐 draw
 差分；②ground-shadow-fog 双例 +2.5k shadow-overlay 次级标定；③墙体光照
 域黑墙；④全量 baseline 复跑（buildings-trees 随之补测）。
+
+### §885 终一百九十八：ground-shadow-fog 双例隔离——+2.5k 源为 quad 窗，内容域无辜（2026-09-10）
+
+fogeuclid=0 隔离 A/B（内容欧氏域关、quad 窗保留）：ground-shadow-fog
+140,913、hard-cutoff 141,136 ≈ committed（140,307/140,572，±600 噪声）——
+**+2.5k 回退源 = quad 仿射窗本身**（range [−0.5,3.0] span 3.5 的坡度），
+内容欧氏域 ≤70 对该夹具族无贡献。同窗下 fog/color 三联 0/0/0（span 3），
+盲调窗常数会零和破坏 PASS×3；恢复需基于 ground-shadow-fog expected 剖面
+的 span 级精调（内容含模型/树，需先做底色探针 fogprobe=2 反演）——
+记档为独立下轮项。全量 baseline 复跑随后启动。
