@@ -820,15 +820,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
 
     private m_emitBackgroundTiles = false;
 
-    /** §885 终二三二 bisect: decoder hunk only. */
-    private m_styleHas3DLights = false;
-
     configure(options?: DecoderOptions, customOptions?: OptionsMap): void {
         super.configure(options, customOptions);
         if (customOptions?.mbStyle) {
             const style = customOptions.mbStyle as StyleSpecification;
             this.applyRuntimeStyle(style);
-            this.m_styleHas3DLights = Array.isArray((style as any).lights);
             // §236: emit the per-tile background fill only for geojson
             // content styles (the coverage tiles then carry the fogged
             // background like mgl's draw_background; raster styles keep the
@@ -1192,7 +1188,6 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 ?? states.get(typeof id === 'number' ? String(id) : Number(id));
         });
         emitter.setStyleHasTerrain(this.m_styleHasTerrain);
-        emitter.setExtrusionFaceNormalsEnabled(this.m_styleHas3DLights);
         emitter.setSourceMaxZoomMap(this.m_sourceMaxZoom);
         // mgl crossSourceCollisions=false (test metadata): the engine's own
         // POI placement must not cull across sources — placement verdicts
