@@ -41,6 +41,16 @@ const CHROME = process.env.CHROME_BIN ||
         if (errors.length) console.log("[mgl-shot] page errors:", errors.slice(0, 5));
         await page.screenshot({ path: out });
         console.log(`[mgl-shot] saved ${out}`);
+        // §885 终二三九: with probe=1, print the placed-icon dump.
+        if (extraQuery.includes("probe=1")) {
+            try {
+                await page.waitForFunction("window.__placedIcons !== undefined", { timeout: 15000 });
+                const icons = await page.evaluate("window.__placedIcons");
+                console.log("[mgl-shot] placedIcons=" + JSON.stringify(icons));
+            } catch (e) {
+                console.log("[mgl-shot] probe failed: " + e);
+            }
+        }
     } finally {
         await browser.close();
     }

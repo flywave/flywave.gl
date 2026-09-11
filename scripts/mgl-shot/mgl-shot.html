@@ -74,6 +74,38 @@
         let frames = 0;
         map.on('render', () => { if (++frames >= 60) done(); });
         setTimeout(done, 15000);
+        // §885 终二三九: ?probe=1 — after idle, dump the placed icon instances
+        // (screen position + maki + occlusion state) for placement diffing.
+        if (params.get('probe') === '1') {
+            const dump = () => {
+                try {
+                    let feats = [];
+                    try { feats = map.queryRenderedFeatures(undefined, { layers: ['icon-default-emission'] }); } catch (e) {}
+                    if (!feats.length) {
+                        try { feats = map.queryRenderedFeatures(); } catch (e2) { feats = []; }
+                    }
+                    window.__placedIcons = feats.map(f => {
+                        const c = f.properties && f.properties.maki;
+                        let px = null, py = null;
+                        try {
+                            const g = f.geometry && f.geometry.coordinates;
+                            if (g) {
+                                const pt = map.project(g);
+                                px = Math.round(pt.x * 2); py = Math.round(pt.y * 2);
+                            }
+                        } catch (e) {}
+                        const pk = f.properties ? Object.keys(f.properties).slice(0, 8) : [];
+                        return { maki: c, x: px, y: py, pk };
+                    });
+                } catch (e) { window.__placedIcons = { err: String(e) }; }
+                fetch('/__probe', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify(window.__placedIcons),
+                }).catch(() => {});
+            };
+            setTimeout(dump, 3000);
+        }
     })();
 </script>
 </body>

@@ -1770,3 +1770,15 @@ compute_flood_lighting 的 occlusion/ground-shadow factor 交互），与雾
 **结论**：三个开放域均需独立专项（depth-range 归一化 / flood-light /
 ground 方向光+阴影），当前交付态保持终二三九（symbol occlusion 战役
 −88%，守卫集净 −2,117,670，PASS 17→17）。
+
+### §885 终二四一：depth-range 归一化实验——负收益，回退（2026-09-12）
+
+落地 u_depth_range_unpack 语义（CPU readback 记录有效 log 深度
+min/max，图标 z 与深度 tap 双侧归一化后 1/300 斜率比较；GPU
+uMBDepthRange uniform + CPU anchorOccluded 同步）：data-driven
+65,839→69,180（+3,341）、after-3d +2,247、before-3d −334——**净负，
+已回退**。说明 mgl 的 occlusion 判定差异不止斜率动态范围一项，归一化
+空间本身改变了判定集合；该域的正确复刻需 mgl placeCollisionBox isClipped
+的完整语义（含其 depthRangeFor3D 的计算来源与 symbol z 的 CLIP_ZERO_TO_ONE
+分支），暂记档挂起。交付态保持终二三九（59 vs 57 图标实例，data-driven
+65,839）。
