@@ -1768,6 +1768,23 @@ export class MBModelRenderer {
         m.setPosition(model.position);
         model.matrixAutoUpdate = false;
         model.matrix.copy(m);
+        // §885 终二四五: model instance world-position dump — placement-chain
+        // audit for the model-layer scene mismatch (ground-shadow-fog car
+        // renders 2.7× oversize; matrix semantics verified identical, so a
+        // misplaced instance (closer to the camera) is the suspect).
+        if ((globalThis as any).__mbDecodeDbg
+            && ((this as any).__mbModelPosN = ((this as any).__mbModelPosN ?? 0) + 1) <= 8) {
+            try {
+                const camW = (this as any).mapView?.camera?.position
+                    ?? ((this.m_dataSource as any)?.mapView?.camera?.position);
+                const d = camW ? Math.hypot(
+                    camW.x - model.position.x,
+                    camW.y - model.position.y,
+                    camW.z - model.position.z) : -1;
+                // eslint-disable-next-line no-console
+                console.log(`[MBModelPos] pos=(${model.position.x.toFixed(1)},${model.position.y.toFixed(1)},${model.position.z.toFixed(1)}) scale=${scale.join(',')} camDist=${d.toFixed(1)} cam=(${camW ? camW.x.toFixed(1) + ',' + camW.y.toFixed(1) + ',' + camW.z.toFixed(1) : '?'})`);
+            } catch {}
+        }
 
         // model-opacity: transparent only when actually faded.
         const opacity = Number((placement as any).opacity ?? technique.opacity ?? 1);

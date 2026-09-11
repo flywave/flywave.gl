@@ -3799,7 +3799,9 @@ export class MBStyleDataSource extends TileDataSource {
 
                     if ((globalThis as any).__mbDecodeDbg) {
                         // eslint-disable-next-line no-console
-                        console.log(`[MBModelAdd] ${def.url.split('/').pop()} pos=(${model.position.x.toFixed(1)},${model.position.y.toFixed(1)},${model.position.z.toFixed(1)}) scale=${JSON.stringify(effScale)} autoUpdate=${model.matrixAutoUpdate}`);
+                        const camAdd = (this.mapView as any)?.camera?.position;
+                        const camTxt = camAdd ? ` cam=(${camAdd.x.toFixed(1)},${camAdd.y.toFixed(1)},${camAdd.z.toFixed(1)}) camDist=${Math.hypot(camAdd.x - model.position.x, camAdd.y - model.position.y, camAdd.z - model.position.z).toFixed(1)}` : ' cam=?';
+                        console.log(`[MBModelAdd] ${def.url.split('/').pop()} pos=(${model.position.x.toFixed(1)},${model.position.y.toFixed(1)},${model.position.z.toFixed(1)}) scale=${JSON.stringify(effScale)} autoUpdate=${model.matrixAutoUpdate}${camTxt}`);
                         // §-temp: world placement of child meshes (node
                         // transform preservation check — environment-test
                         // sphere rows collapsed on screen).

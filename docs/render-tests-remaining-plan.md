@@ -1843,3 +1843,25 @@ source 级 model registry 放置）。瓦片请求集：我们 5239-5243×12663-
 换算链（modelPixelConv 段）。下轮 = dump 双引擎该矩阵数值
 （mgl: calculateModelMatrix 中间量可通过 patched mgl dist 加日志；
 我们: MBModelRenderer m 构造后 dump），逐因子定位 2.7× 来源。
+
+### §885 终二四五：model-layer 放置链 dump——相机距离排除，尺寸差锁定 bake 域（2026-09-12）
+
+**相机-车距离实测排除**：新 [MBModelAdd] 探针（含相机绝对位置 dump）：
+车 pos=(6411702.1,24586535.8,0) 绝对世界系，相机=(6412337.0,24586431.1,
+273.1)，camDist=699.0 world（≈554 m 地面+高度，3D 577.7）vs mgl 理论
+554.7——**相机-车距离基本一致（比值 1.04），2.7× 过大不是距离效应，
+车的世界尺寸真的偏大**。
+
+**glTF 原始 bbox**：low-poly-car.gltf = 3.96×1.97×1.30（长×宽×高，
+Z-up——z=1.3 为车高）。naive 尺寸（native×model-scale 10）= 39.6 m：
+- 我们实测 ≈54 px@512 → 世界 ≈40.6 m ≈ naive×1.03（**我们的实现 =
+  naive 语义**）。
+- mgl 实测 ≈22.5 px@512 → 世界 ≈19 m ≈ naive×**0.48**（测量含车尾被
+  建筑部分遮挡的不确定性，因子 ∈ [0.47, 0.72]）。
+
+**结论**：mgl 的 model bake（model_bucket.ts meter_to_tile，在 SOURCE
+zoom 15 bake 后 overscale 渲染）使有效尺寸 ≈ naive 的 ~0.5×，我们 =
+naive×1.03——**尺寸差域锁定为 mgl model_bucket bake 的 meters→tile
+换算 vs 我们的 raw-metre 实例矩阵**。下轮 = dump mgl model_bucket 的
+meter_to_tile 中间量（patched dist 加日志于 model_bucket.ts:543 的
+feature.scale bake 处），或离线用 mgl 3d-style 源码数值求值 bake 矩阵。
