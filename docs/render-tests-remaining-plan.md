@@ -1698,3 +1698,29 @@ exp 0-7 vs cur 154-248 为该域表象，非本轮新回归对象）。
 **下轮入口**：①symbol occlusion 域（icon 遮挡判定，occlusion 残余
 71,930）；②ground-shadow-fog 地面/道路 3D 方向光接入（原 135k 域）；
 ③dir 集中式迁移（逐消费方门控 + 模型/阴影基线 A/B）；④其余开放项。
+
+### §885 终二三八：symbol occlusion 域首攻——log 域遮挡比较修正（2026-09-12）
+
+**机制对齐**：mgl symbol occlusion = 顶点级 occlusionFadeMultiSample
+（30×30px 框 3×4 深度纹理采样，visible-tap = 1−clamp(300·Δz_std)，
+visibility = clamp(2·avg−0.5)，opacity ×= mix(occlusion_opacity, 1, vis)）；
+数据驱动表达式 restaurant→0.7/cafe→0.25/默认 1（默认 1 = 永不遮挡）。
+我们 batch 遮挡值分配正确（occdbg 探针：0.7/0.25/1...）。
+
+**根因**：patchPoiBatchMaterials 的 mbOccVisibility 把**标准 NDC z**（图标
+mbW 换算）与 **log 编码深度**（RG 打包纹理）直接相减——两种编码的偏移
+差使边界图标全读 vis=0 被 cull（10 个 mgl 可见图标全缺）而另一些意外
+通过（33k px 多余 icon）。修复：图标深度换算到同一 log 编码域
+（log2(1+w)·FC·0.5），epsilon 按 mgl 标准 z 300 斜率等价换算 log 空间：
+Δlog = 1/(300·dfdw·(1+w)·lnFar)，dfdw = 2fn/((f−n)w²)。
+
+**度量**：occlusion/symbol-occlusion-data-driven 71,930→66,283（−7.9%），
+setProperty 9,280→8,970，terrain 9,284→8,973，before-3d 7,802→7,829
+（+27 噪声级）。蓝像素总量 59,148/69,479→59,148/59,306（总图标面积已
+对齐）；但 57 个 mgl 图标中仍有 21 个个体错位（62 vs 57）——**错位转入
+placement/collision 域**（mgl CPU placement 选择不同实例），非 opacity
+fade 域。
+
+**下轮入口**：①placement/collision 域（图标个体选择的 mgl 对齐，
+collision_index 语义）；②flood-light 域残余 91,846；③ground-shadow-fog
+地面/道路 3D 方向光；④dir 集中式迁移；⑤terrain 雾负 t。

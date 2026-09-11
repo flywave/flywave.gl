@@ -666,18 +666,28 @@ export class MBMaterialPatchManager {
                          // project the quad's UV center back to screen space
                          // via fwidth and sample there.
                          vec2 mbCenterOff = (vec2(0.5) - vUv) / max(fwidth(vUv), vec2(1e-6));
-                         float n = uMBNearFar.x;
-                         float f = uMBNearFar.y;
-                         float myZlog = 0.5 + 0.5 * ((f + n) / (f - n) - 2.0 * f * n / ((f - n) * mbW));
-                         // mgl's ramp width (1/300 in std z) converts via the
-                         // std/log derivative ratio, but the engine's
-                         // log space, but with the engine's world-scale far
-                         // world-scale far plane (1e7 m) collapses std z — the
-                         // literal conversion never occludes. Use a fixed
-                         // log-space threshold ~1e-4 (≈1-2 m at test camera
-                         // distances) so occlusion fires on real geometry
-                         // overlap like mgl's tight near/far does.
-                         float mbEps = 1.0 / 300.0;
+                         // §885 终二三八: compare in the SAME encoding as the
+                         // depth texture (three logdepthbuf: log2(w+1)·FC·0.5,
+                         // packed to RG). The old code mixed STANDARD NDC z
+                         // (icon) against LOG depth (building) — visible icons
+                         // passed only by accident of the offset encodings and
+                         // every boundary icon read vis=0 (culled) where mgl's
+                         // multisample returns partial visibility.
+                         float mbWc = max(mbW, 1e-4);
+                         float myZlog = log2(1.0 + mbWc) * uMBLogDepthBufFC * 0.5;
+                         // mgl's ramp: visible-tap = 1 - clamp(300·Δz_std), i.e.
+                         // width 1/300 in STANDARD z. dz_std/dw at view distance
+                         // w is 2fn/((f-n)·w²); one metre of depth difference
+                         // maps to d(log)/dw = 1/((1+w)·ln(far+1)) in log
+                         // space, so the equivalent log-space ramp width is
+                         // (w/300)·2fn/((f-n)·w²) / (1/((1+w)·ln(far+1))).
+                         // Simplify with the standard-z derivative:
+                         // dz_std = 2fn/((f-n)(w)²) per metre.
+                         float dfdw = 2.0 * f * n / ((f - n) * mbWc * mbWc);
+                         float lnFar = 2.0 * 0.69314718 / uMBLogDepthBufFC;
+                         // Δw at ramp width: Δz_std = dfdw·Δw = 1/300 ⇒
+                         // Δw = 1/(300·dfdw); Δlog = Δw/((1+w)·lnFar).
+                         float mbEps = max(1.0 / (300.0 * dfdw * (1.0 + mbWc) * lnFar), 1e-7);
                          vec2 mbAnchor = (gl_FragCoord.xy + mbCenterOff) * u_terrainDepthInvSize;
                          vec2 df = 16.0 * u_terrainDepthInvSize;
                          vec2 oneStep = 2.0 * df / vec2(2.0, 3.0);
