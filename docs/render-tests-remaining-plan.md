@@ -1806,3 +1806,15 @@ pitch70+model-source 组合下的语义；③对照 mgl 实拍逐帧校准。
 
 下轮入口更新：①model-layer 场景对齐专项（本条①②③）；②placement
 isClipped 完整语义（挂起）；③其余开放项不变。
+
+### §885 终二四三：相机高度 secLat 假设证伪——场景错位是内容级（2026-09-12）
+
+落地 camground=1 门控（pitch>0 时相机距离×cos(lat)，把 ground-shadow-fog
+相机高度 273.1→216 m 对齐 mgl freeCamera altitude）：141,539→**218,268
+（+77k 大幅恶化）**，已回退。结论：对齐相机高度反而加剧不匹配——
+**场景错位不是相机高度问题，而是内容级差异**（模型放置位置/瓦片内容
+语义/model 基座），此前 mgl freeCamera 的 secLat 吻合（273.1=216.8×
+sec37.78°）系巧合级证据不被采纳。终二四二的 model-layer 场景对齐专项
+入口维持，但排查方向改为：①模型实例的经纬度→世界坐标放置链；②
+15-5242-12664 瓦片 overzoom 到 16.2 的内容插值；③小车 model-scale 的
+实际渲染尺寸 dump 对照。专项挂起待续。
