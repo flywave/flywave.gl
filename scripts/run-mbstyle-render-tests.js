@@ -142,6 +142,7 @@ function main() {
             ...(process.env.MBSTYLE_FOGMGLHEIGHT === "0" ? ["fogmglheight=0"] : []),
             ...(process.env.MBSTYLE_SHADOWBIAS ? [`shadowbias=${process.env.MBSTYLE_SHADOWBIAS}`] : []),
             ...(process.env.MBSTYLE_MODELDIRALT ? ["modeldiralt=1"] : []),
+            ...(process.env.MBSTYLE_EXTDIRFLIP ? [`extdirflip=${process.env.MBSTYLE_EXTDIRFLIP}`] : []),
             ...(process.env.MBSTYLE_SPHDEG ? [`sphdeg=${process.env.MBSTYLE_SPHDEG}`] : []),
             ...(process.env.MBSTYLE_SPHDS ? ["sphds=1"] : []),
             ...(process.env.MBSTYLE_FILLFLAT ? ["fillflat=1"] : []),

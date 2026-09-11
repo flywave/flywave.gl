@@ -1125,7 +1125,20 @@ export class MBMaterialPatchManager {
             }
             shader.uniforms.uMB3DAmb = { value: ls ? ls.ambientColorLinear : [1, 1, 1] };
             shader.uniforms.uMB3DDirColor = { value: ls ? ls.directionalColorLinear : [1, 1, 1] };
-            shader.uniforms.uMB3DDir = { value: ls ? ls.dir : [0, 0, 1] };
+            // §885 终二百二十八: wall light-direction frame A/B — pixel
+            // evidence on occlusion/symbol-occlusion-data-driven: roofs match
+            // exactly (199=199) while WALLS invert (expected 29 vs ours 223),
+            // i.e. the horizontal component of ls.dir is mirrored relative to
+            // the extrusion geometry's rendered frame (the §643 y-mirror
+            // family — models take ls.dir untransformed and are correct).
+            // extdirflip=1 → y mirror, 2 → x mirror, 3 → 180°; unset → as-is.
+            const dirRaw: number[] = ls ? ls.dir : [0, 0, 1];
+            const dirFlip: number = (globalThis as any).__mbExtDirFlip ?? 0;
+            const dir3: number[] = !ls || !dirFlip ? dirRaw
+                : dirFlip === 1 ? [dirRaw[0], -dirRaw[1], dirRaw[2]]
+                : dirFlip === 2 ? [-dirRaw[0], dirRaw[1], dirRaw[2]]
+                : [-dirRaw[0], -dirRaw[1], dirRaw[2]];
+            shader.uniforms.uMB3DDir = { value: dir3 };
             shader.uniforms.uMB3DViewToWorld = { value: viewToWorld };
             shader.uniforms.uMB3DEmissive = { value: ls ? emissiveStrength : 0 };
             shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbLightDbg ? 1 : ((globalThis as any).__mbFogTDbg ? 2 : ((globalThis as any).__mbShadowUvDbg ? 3 : 0)) };

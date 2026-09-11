@@ -132,6 +132,19 @@ function discoverTests(): TestEntry[] {
     if (pterm === "2") (globalThis as any).__mbPbrTermDbg = 2;
 }
 {
+    // §885 终二百二十八: extrusion wall light-direction frame A/B — pixel
+    // evidence on occlusion/symbol-occlusion-data-driven shows roofs matching
+    // exactly (199=199) while WALLS invert (expected 29 vs ours 223): the
+    // horizontal component of uMB3DDir is mirrored relative to the extrusion
+    // geometry's rendered frame (§643 y-mirror family; the model path takes
+    // ls.dir untransformed and is correct there). extdirflip=1 → y mirror,
+    // 2 → x mirror, 3 → 180° (xy both negated).
+    const f = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("extdirflip="))?.slice("extdirflip=".length);
+    const n = Number(f);
+    if (n === 1 || n === 2 || n === 3) (globalThis as any).__mbExtDirFlip = n;
+}
+{
     // §744: unlit-clamp restore A/B (emission-strength regression candidate ②).
     const uc = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modelclamp="))?.slice("modelclamp=".length);
