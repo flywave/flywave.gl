@@ -1141,7 +1141,7 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMB3DDir = { value: dir3 };
             shader.uniforms.uMB3DViewToWorld = { value: viewToWorld };
             shader.uniforms.uMB3DEmissive = { value: ls ? emissiveStrength : 0 };
-            shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbLightDbg ? 1 : ((globalThis as any).__mbFogTDbg ? 2 : ((globalThis as any).__mbShadowUvDbg ? 3 : 0)) };
+            shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbAttrDbg ? 4 : (globalThis as any).__mbLightDbg ? 1 : ((globalThis as any).__mbFogTDbg ? 2 : ((globalThis as any).__mbShadowUvDbg ? 3 : 0)) };
             // §885 终一百一十四: fetch-channel probe — compile/uniform state
             // of the extrusion injection via POST (console routing is lossy).
             if ((globalThis as any).__mbDecodeDbg
@@ -1308,6 +1308,17 @@ export class MBMaterialPatchManager {
                      varying vec3 vMbAttrN;`
                 );
             }
+            // §885 终二三五: write the attribute normal at the top of main —
+            // the '#include <begin_vertex>' token is NOT reliable here (a
+            // chained earlier onBeforeCompile can consume it first; probe
+            // vsAttrWrite=false with the begin_vertex anchor vs=true with
+            // 'void main() {'). The normal is a raw attribute read, safe
+            // before any chunk processing.
+            shader.vertexShader = shader.vertexShader.replace(
+                'void main() {',
+                `void main() {
+                 vMbAttrN = mat3(modelMatrix) * extrusionNormal;`
+            );
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 `#include <begin_vertex>
@@ -1493,7 +1504,16 @@ export class MBMaterialPatchManager {
                      // there); this outer chain keeps only the scope-safe
                      // probes and yields to the probe when it fired.
                      if (!mbShProbeFired) {
-                        if (uMB3DDbg > 1.5) {
+                        if (uMB3DDbg > 3.5) {
+                            // §885 终二三五: attribute face normal readout —
+                            // R/G/B = 0.5+0.5 * WORLD-frame n.xyz; MAGENTA
+                            // (1,0,1) = zero attribute (fallback active).
+                            gl_FragColor.rgb = dot(vMbAttrN, vMbAttrN) > 0.25
+                                ? vec3(0.5 + 0.5 * normalize(vMbAttrN).x,
+                                       0.5 + 0.5 * normalize(vMbAttrN).y,
+                                       0.5 + 0.5 * normalize(vMbAttrN).z)
+                                : vec3(1.0, 0.0, 1.0);
+                        } else if (uMB3DDbg > 1.5) {
                             // §678: distance readout — grey = log2(metres)/16
                             // (metres = view length × uMbMetersPerUnit).
                             gl_FragColor.rgb = vec3(clamp(log2(max(mbLen, 1.0)) / 16.0, 0.0, 1.0));
@@ -1508,7 +1528,7 @@ export class MBMaterialPatchManager {
             if ((globalThis as any).__mbDecodeDbg
                 && ((globalThis as any).__mbExtLitCnt2 = ((globalThis as any).__mbExtLitCnt2 ?? 0) + 1) <= 4) {
                 // eslint-disable-next-line no-console
-                console.log(`[MBExtLit] applied replaced=${shader.fragmentShader.includes('uMB3DDir') ? 1 : 0} dbg=${shader.uniforms.uMB3DDbg?.value} lightdbgFlag=${!!(globalThis as any).__mbLightDbg} mFog=${(material as any).fog} sceneFog=${!!((this.m_dataSource as any).mapView?.scene?.fog)} fogType=${((this.m_dataSource as any).mapView?.scene?.fog)?.type ?? 'null'}`);
+                console.log(`[MBExtLit] applied replaced=${shader.fragmentShader.includes('uMB3DDir') ? 1 : 0} dbg=${shader.uniforms.uMB3DDbg?.value} lightdbgFlag=${!!(globalThis as any).__mbLightDbg} vsAttrDecl=${shader.vertexShader.includes('attribute vec3 extrusionNormal')} vsAttrWrite=${shader.vertexShader.includes('vMbAttrN = mat3')} fsVar=${shader.fragmentShader.includes('varying vec3 vMbAttrN')} mFog=${(material as any).fog} sceneFog=${!!((this.m_dataSource as any).mapView?.scene?.fog)} fogType=${((this.m_dataSource as any).mapView?.scene?.fog)?.type ?? 'null'}`);
             }
         };
         material.needsUpdate = true;

@@ -6,7 +6,7 @@
     <script src="/mapbox-gl-js/dist/mapbox-gl.js"></script>
     <style>
         html, body { margin: 0; padding: 0; background: #ffffff; }
-        #map { width: 256px; height: 256px; }
+        #map { width: 512px; height: 512px; }
     </style>
 </head>
 <body>
@@ -33,6 +33,24 @@
             if (typeof src.url === 'string' && src.url.startsWith('local://')) src.url = localize(src.url);
         }
         const t = (style.metadata ?? {}).test ?? {};
+        // §885 终二三五: light sweep override — ?laz=<azimuth>[&lpol=<polar>]
+        // rewrites the first directional 3D light's direction so the live mgl
+        // response curve value(azimuth) can be measured per wall family.
+        {
+            const laz = params.get('laz'), lpol = params.get('lpol');
+            if ((laz !== null || lpol !== null) && Array.isArray(style.lights)) {
+                for (const l of style.lights) {
+                    if (l.type === 'directional') {
+                        l.properties = l.properties ?? {};
+                        const cur = Array.isArray(l.properties.direction) ? l.properties.direction : [210, 30];
+                        l.properties.direction = [
+                            laz !== null ? Number(laz) : Number(cur[0]),
+                            lpol !== null ? Number(lpol) : Number(cur[1]),
+                        ];
+                    }
+                }
+            }
+        }
         const meta = params.get('meta') ? JSON.parse(params.get('meta')) : null;
         mapboxgl.accessToken = 'pk.eyJ1IjoibG9jYWwtdGVzdCJ9.local-test-token';
         const map = new mapboxgl.Map({

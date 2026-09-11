@@ -71,6 +71,13 @@ function discoverTests(): TestEntry[] {
     const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("lightdbg="))?.slice("lightdbg=".length);
     if (dbg === "1") (globalThis as any).__mbLightDbg = true;
+    // §885 终二三五: attrdbg=1 → uMB3DDbg=4 — paint the attribute face
+    // normal (world frame: R/G/B = 0.5+0.5*n.xyz); MAGENTA (1,0,1) marks a
+    // missing/zero attribute (derivative fallback active).
+    if ((window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("attrdbg="))?.slice("attrdbg=".length) === "1") {
+        (globalThis as any).__mbAttrDbg = true;
+    }
 }
 {
     const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>

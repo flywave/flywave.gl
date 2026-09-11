@@ -12,6 +12,8 @@ const CHROME = process.env.CHROME_BIN ||
 (async () => {
     const puppeteer = await import("puppeteer-core");
     const fixture = process.argv[2];
+    // §885 终二三五: extra query (e.g. "laz=330&lpol=30") passed after the fixture arg
+    const extraQuery = process.argv[4] || "";
     const out = process.argv[3] || `tmp/mgl-live-${fixture.replace(/\//g, "__")}.png`;
     if (!fixture) {
         console.error("usage: node tmp/mgl-shot.cjs <family/case> [out.png]");
@@ -29,9 +31,9 @@ const CHROME = process.env.CHROME_BIN ||
     });
     try {
         const page = await browser.newPage();
-        await page.setViewport({ width: 256, height: 256, deviceScaleFactor: 2 });
+        await page.setViewport({ width: 512, height: 512, deviceScaleFactor: 2 });
         await page.goto(
-            `http://localhost:8130/scripts/mgl-shot/mgl-shot.html?fixture=${encodeURIComponent(fixture)}`,
+            `http://localhost:8130/scripts/mgl-shot/mgl-shot.html?fixture=${encodeURIComponent(fixture)}${extraQuery ? "&" + extraQuery : ""}`,
             { waitUntil: "load", timeout: 60000 });
         await page.waitForFunction("window.__shotReady === true", { timeout: 60000 });
         await new Promise((r) => setTimeout(r, 500));

@@ -2829,16 +2829,38 @@ export class MBTileDataEmitter {
             // roof's top vertices would interpolate the roof's (0,0,1)
             // normal across the wall, and the 3D-lighting injection's
             // dFdx/dFdy derivative fallback is roof-polluted on walls.
+            // §885 终二三五: orientation via point-in-polygon — the
+            // away-from-ring-centroid flip A/B-fails on hole/inner rings
+            // (mgl live light sweep, scripts/mgl-shot ?laz=: the wall value
+            // peaks when the light azimuth equals the TRUE outward normal,
+            // which for hole rings points TOWARD the ring centroid). Offset
+            // the edge midpoint by ε along the candidate normal and keep the
+            // side that exits the polygon (even-odd over all rings).
             for (let r = 0; r < rings.length; r++) {
                 const ring = rings[r];
                 const ringStart = r === 0 ? 0 : holeIndices[r - 1];
-                // Ring centroid (world) for the outward test.
-                let ccxW = 0, ccyW = 0;
-                for (const pt of ring) {
-                    const w = this.project(new THREE.Vector2(pt.x, pt.y));
-                    ccxW += w.x; ccyW += w.y;
-                }
-                ccxW /= Math.max(ring.length, 1); ccyW /= Math.max(ring.length, 1);
+                // World-space ring points for the containment test.
+                const ringW = ring.map(pt =>
+                    this.project(new THREE.Vector2(pt.x, pt.y)));
+                // All rings of this polygon in world coords (even-odd test).
+                const polyRings: Array<Array<[number, number]>> = rings.map(rr =>
+                    rr.map(pt => {
+                        const w = this.project(new THREE.Vector2(pt.x, pt.y));
+                        return [w.x, w.y] as [number, number];
+                    }));
+                const insidePolygon = (px: number, py: number): boolean => {
+                    let inside = false;
+                    for (const pts of polyRings) {
+                        for (let a = 0, b = pts.length - 1; a < pts.length; b = a++) {
+                            const [xa, ya] = pts[a], [xb, yb] = pts[b];
+                            if (((ya > py) !== (yb > py)) &&
+                                (px < ((xb - xa) * (py - ya)) / (yb - ya) + xa)) {
+                                inside = !inside;
+                            }
+                        }
+                    }
+                    return inside;
+                };
                 for (let i = 0; i < ring.length; i++) {
                     const a = ringStart + i;
                     const b = ringStart + (i + 1) % ring.length;
@@ -2849,14 +2871,21 @@ export class MBTileDataEmitter {
                     // Outward horizontal normal of the edge a→b.
                     let nx = 0, ny = 0;
                     {
-                        const ax = geo.positions[b0 * 3], ay = geo.positions[b0 * 3 + 1];
-                        const bxw = geo.positions[b1 * 3], byw = geo.positions[b1 * 3 + 1];
+                        const ax = ringW[i].x, ay = ringW[i].y;
+                        const bxw = ringW[(i + 1) % ring.length].x;
+                        const byw = ringW[(i + 1) % ring.length].y;
                         const ex = bxw - ax, ey = byw - ay;
                         const el = Math.hypot(ex, ey);
                         if (el > 1e-9) {
-                            nx = -ey / el; ny = ex / el;
-                            const mx = (ax + bxw) / 2 - ccxW, my = (ay + byw) / 2 - ccyW;
-                            if (nx * mx + ny * my < 0) { nx = -nx; ny = -ny; }
+                            let px = -ey / el, py = ex / el;
+                            // Orient away from the polygon solid: step the
+                            // edge midpoint ε along the candidate; if still
+                            // inside the polygon it points inward.
+                            const eps = Math.min(0.5, el * 0.25);
+                            const mx = (ax + bxw) / 2 + px * eps;
+                            const my = (ay + byw) / 2 + py * eps;
+                            if (insidePolygon(mx, my)) { px = -px; py = -py; }
+                            nx = px; ny = py;
                         } else {
                             nx = 0; ny = 0;
                         }
@@ -5319,13 +5348,17 @@ export class MBTileDataEmitter {
                 const techs = this.m_techniques.map((t: any) =>
                     `${t?.name ?? 'NONAME'}:${t ? (t.technique ?? (t as any).type ?? '') : ''}:${(t?._paint?.['fill-color'] ?? t?.color ?? '')}`);
                 let verts = 0, geos = 0;
+                const attrNames = new Set<string>();
                 for (const [, geo] of this.m_geometries) {
                     if (geo.positions.length === 0) continue;
                     geos++;
                     verts += geo.positions.length / 3;
+                    attrNames.add(
+                        `extrusionNormals:${geo.extrusionNormals.length}/${geo.positions.length}`
+                    );
                 }
                 // eslint-disable-next-line no-console
-                console.log(`[MBDecode] tile=${String(this.m_tileKey)} geos=${geos} verts=${verts} techs=[${techs.join(',')}]`);
+                console.log(`[MBDecode] tile=${String(this.m_tileKey)} geos=${geos} verts=${verts} attrs=[${[...attrNames].join(',')}] techs=[${techs.join(',')}]`);
             } catch {}
         }
         const geometries: Geometry[] = [];

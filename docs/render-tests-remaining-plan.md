@@ -1575,3 +1575,55 @@ data-driven +363 等），净 +116（0.002%，噪声级），PASS 17→17 不变
 -buckingham 对 attribute 法线敏感（旧路径注入曾 +20,272，现注入侧回退
 对齐基线，值得单独标定 attribute 法线在该夹具的方向性）；③terrain
 raster 材质雾负 t 修复；④星场真机 frame-capture。
+
+### §885 终二三五：mgl 实拍链路恢复+attribute 法线链路双 bug 修复+光响应曲线实测（2026-09-11）
+
+**① mgl 实拍链路恢复（终二二九重建的复验与补全）**：vendored
+mapbox-gl-js/dist/（gitignored）须从 registry 灌入官方 3.27.0 UMD bundle
+（`npm pack mapbox-gl@3.27.0` 后拷 dist/mapbox-gl.js/.css/.map），否则
+mgl-shot 404 超时；实拍分辨率修正为夹具元数据规格 512×512 CSS@2x=1024。
+复验：occlusion/symbol-occlusion-data-driven 实拍与 expected.png 在 8 个
+暗墙探针点逐位一致（29,29,29），全幅 diff>16 仅 77,007 px——参照链路
+可信。新增 `?laz=<az>&lpol=<polar>` 光向覆盖参数（mgl-shot.html + cjs
+extraQuery），可对参照平台做任意光向扫掠。
+
+**② attribute 法线两处链路 bug（终二三四 A/B 无差别的真正机制）**：
+- `#include <begin_vertex>` 锚点失效：injectExtrusion3DLighting 链上更早
+  的 onBeforeCompile 已消耗该 token，`vMbAttrN = …` 从未写入（varying
+  恒 0→回退分支恒走）。新增 vsAttrDecl/vsAttrWrite 编译探针（[MBExtLit]
+  applied 行）定位。修复：`void main() {` 锚点写入（attribute 原始读取，
+  无需等 begin_vertex）。
+- **墙法线朝内（质心定向法对洞环/凹环失效）**：新增 attrdbg=1 探针
+  （uMB3DDbg=4，R/G/B=0.5+0.5·世界系法线，品红=attribute 缺失）——
+  wallA 法线 bearing≈281 与 mgl 实测一致，wallB/C/D 恰好反号（121 vs
+  mgl 实测 300）。修复：边中点沿候选法线偏移 ε 做 even-odd 点在多边形内
+  测试（跨全部环），向内则翻转。修复后 attrdbg 四点 bearing
+  281/300/300/301 与 mgl 光向扫掠峰值逐点一致。
+
+**③ mgl 墙面光响应曲线实测（?laz 扫掠 0°-330°，四墙点）**：value(az) 在
+az=墙真实方位角处达峰（wallB/C/D 峰 188@300°），暗平台 29-30（az 60-180
+广域）。两点拟合（diff 30°/60°：175/137）→ value ≈ 255·(0.334 +
+0.407·cosΔ)——**存在 ~0.33 的巨大常数项与 ~0.4 的压缩幅值**，且暗平台
+29 ≫ ambient 0.01·255≈3。我们注入的 `amb + dirColor·max(NdotL,0)`
+公式（amb 0.01、dirColor 1.0）无法重现：既给不出 29 的暗平台，也给不出
+136 的受光墙（mgl 实测对白漆受光墙 ≈136 ⇒ NdotL 等效 0.52）。
+**终二二八墙面明暗颠倒的真正根因 = 注入的 3D 光照响应公式（常数项/
+幅值/暗平台）与 mgl 不符，而非法线域**（法线域本轮已修复并对齐真值）。
+
+**④ 方位角语义**：mgl [150,30] 对墙的暗/亮分布与 toSun bearing=150 一致
+（我们 lighting3DState.dir 的 toSun≈330，180° 镜像）；但 extdirflip=3
+A/B（小批 occlusion）：修复 31,633 px（背光墙变暗）同时破坏 31,438 px
+（受光墙 167-179 vs exp 136），net ≈ 持平/+19k ibct——**方位角单独翻转
+不是净收益，须与响应公式一起改**。
+
+**⑤ 度量**：修正后小批 occlusion 552,699 vs 基线 552,700（法线域修复对
+当前公式下整幅读数中性，符合③的公式主导结论）；大批 110 夹具集 103 可比
+夹具 net +200（15 夹具 ≤±197，噪声级），PASS 17→17，line-width 家族保持
+终二三四修复后的零回归。
+
+**下轮入口（P1 主攻）**：①按 ③ 的 sweep 数据反推 mgl 的墙面光照公式
+（候选：apply_lighting 的 `color·(amb·dirFactorMin+(1-…)·min(NdotL+1,1))
++ dir·NdotL` 全式核对 fill_extrusion.shader3d 源码；0.33 常数项疑为
+vertical-gradient/半 Lambert 项）；②方位角语义与公式联动修正（复用
+mgl-shot ?laz 扫掠做参照真值，逐公式变体 A/B）；③守卫：大批
+fill-extrusion/lighting-3d/occlusion 集与本轮基线（mbstyle-fn-final2）。

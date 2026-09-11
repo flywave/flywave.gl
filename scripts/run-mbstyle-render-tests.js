@@ -96,6 +96,7 @@ function main() {
         // karma client args -> KARMA_ARGS env (space separated).
         const karmaClientArgs = [...filters.map((f) => `filter=${f}`), `feedback-url=http://localhost:${port}`,
             ...(process.env.MBSTYLE_LIGHTDBG ? ["lightdbg=1"] : []),
+            ...(process.env.MBSTYLE_ATTRDBG ? ["attrdbg=1"] : []),
             ...(process.env.MBSTYLE_OCCDBG ? ["occdbg=1"] : []),
             ...(process.env.MBSTYLE_RASRED ? ["rasred=1"] : []),
             ...(process.env.MBSTYLE_LITEDBG ? ["liteldbg=1"] : []),
