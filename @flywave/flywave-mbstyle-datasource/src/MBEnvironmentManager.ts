@@ -3601,8 +3601,21 @@ export class MBEnvironmentManager {
             // black base (globe-terrain's near-field black band).
             try {
                 const cc = (this.m_mapView as any).clearColor;
-                if (typeof cc === 'number') {
-                    this.m_terrainController.setBaseColor(cc);
+                // §885 终一百五十一 follow-up: styles without a background
+                // layer clear to TRANSPARENT black (mgl canvas semantics).
+                // mgl's terrain surface paints nothing where no drape/background
+                // exists, and the test harness composites the canvas over
+                // white — the compared domain shows WHITE terrain. Baking the
+                // black clear into the mesh base would black out the whole
+                // frame (fill-extrusion-base/property-function-terrain
+                // 39,768→255,165). Use the white composite as the base when
+                // the clear is transparent.
+                const ccAlpha = (this.m_mapView as any).clearAlpha;
+                const baseColor = (typeof cc === 'number' && ccAlpha === 0)
+                    ? 0xffffff
+                    : cc;
+                if (typeof baseColor === 'number') {
+                    this.m_terrainController.setBaseColor(baseColor);
                 }
             } catch { /* best-effort */ }
             if (this.m_terrainController.meshCount > 0

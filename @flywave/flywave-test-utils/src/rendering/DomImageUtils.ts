@@ -85,6 +85,28 @@ export async function canvasToImageData(canvas: HTMLCanvasElement): Promise<Imag
                 const src = (h - 1 - y) * w * 4;
                 imageData.data.set(data.subarray(src, src + w * 4), y * w * 4);
             }
+            // §885 终一百五十一 follow-up: styles without a background layer
+            // clear to (0,0,0,0) (mgl canvas semantics), so the raw buffer is
+            // transparent wherever nothing drew and every alpha-blended
+            // fragment (fill-extrusion opacity, shadow-overlay alpha) is
+            // stored premultiplied over BLACK. compareImages composites only
+            // the REFERENCE over white — the actual must live in the same
+            // domain or those pixels mismatch wholesale (the fill-extrusion
+            // no-background family: walls dark 66@a128 instead of 193@a255).
+            // Composite the buffer over white here; the buffer's premultiplied
+            // rgb makes the composite `rgb + 255·(1−a)` — exactly the value
+            // the old opaque-white clear produced. An opaque capture is
+            // unchanged (a=255 → identity).
+            const px = imageData.data;
+            for (let i = 0; i < px.length; i += 4) {
+                const a = px[i + 3] / 255;
+                if (a >= 1) continue;
+                const inv = 255 * (1 - a);
+                px[i] = px[i] + inv;
+                px[i + 1] = px[i + 1] + inv;
+                px[i + 2] = px[i + 2] + inv;
+                px[i + 3] = 255;
+            }
             return imageData;
         }
         return await new Promise<ImageData>((resolve, reject) => {
