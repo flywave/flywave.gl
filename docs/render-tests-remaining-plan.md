@@ -1782,3 +1782,27 @@ uMBDepthRange uniform + CPU anchorOccluded 同步）：data-driven
 的完整语义（含其 depthRangeFor3D 的计算来源与 symbol z 的 CLIP_ZERO_TO_ONE
 分支），暂记档挂起。交付态保持终二三九（59 vs 57 图标实例，data-driven
 65,839）。
+
+### §885 终二四二：ground-shadow-fog 重新定性——场景级不一致主导（2026-09-12）
+
+mgl 实拍链路修复两处后成功渲染该夹具（glyphs 缺失时 localize 崩溃 →
+加守卫；model source 的 uri 未走 localize → 补 model sources 分支；
+mgl-shot 补 TIMEOUT 时 dump 页面错误与 ?zoom=/&bearing= 相机覆盖参数）：
+
+- **mgl 实拍与 expected.png 场景结构一致**（低层街区+大型平顶建筑+暗影
+  墙+黄色路网；小车因模型加载错误缺席，不影响结构对照）。
+- **我们同夹具渲染出完全不同的场景**（高塔群+近景 10 倍大小的小车）。
+  瓦片请求核实：内容瓦片 15-5242-12664 已正确加载（无 404），排除瓦片
+  数据源问题；同 style 相机（center/zoom16.2/bearing264/pitch70）下
+  内容与相机语义均不同——**141,539 残差主体 = model-layer 场景级不一致
+  （相机定位/模型尺度语义），而非地面光照或阴影**。
+
+**历史重新定性**：终二二〇~二二三在该夹具上的阴影位置/overlay 战役
+（135,328 all-lit 平台）均在不一致场景上作战；33,671 px "exp 暗 0-7 vs
+cur 亮 154-248" 是场景错位的表象而非地面方向光缺失的直接证据。该域的
+正确入口 = **model-layer 场景对齐专项**：①模型 scale [10,10,10] 语义
+（mgl: gltf 原始尺寸×10；我们疑似过大）；②相机距离/俯仰在该
+pitch70+model-source 组合下的语义；③对照 mgl 实拍逐帧校准。
+
+下轮入口更新：①model-layer 场景对齐专项（本条①②③）；②placement
+isClipped 完整语义（挂起）；③其余开放项不变。

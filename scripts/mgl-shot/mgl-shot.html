@@ -25,12 +25,18 @@
         const res = await fetch(`/mapbox-gl-js/test/integration/render-tests/${fixture}/style.json`);
         const style = await res.json();
         const INT = '/mapbox-gl-js/test/integration';
-        const localize = (u) => u.replace(/^local:\/\//, `${INT}/`);
-        style.glyphs = localize(style.glyphs);
+        const localize = (u) => String(u).replace(/^local:\/\//, `${INT}/`);
+        if (style.glyphs) style.glyphs = localize(style.glyphs);
         if (style.sprite) style.sprite = localize(style.sprite);
         for (const [, src] of Object.entries(style.sources ?? {})) {
             if (Array.isArray(src.tiles)) src.tiles = src.tiles.map(localize);
             if (typeof src.url === 'string' && src.url.startsWith('local://')) src.url = localize(src.url);
+            // model sources: the loader fetches uri directly (终二四二)
+            if (src.type === 'model' && src.models) {
+                for (const m of Object.values(src.models)) {
+                    if (typeof m.uri === 'string' && m.uri.startsWith('local://')) m.uri = localize(m.uri);
+                }
+            }
         }
         const t = (style.metadata ?? {}).test ?? {};
         // §885 终二三五: light sweep override — ?laz=<azimuth>[&lpol=<polar>]
@@ -53,13 +59,15 @@
         }
         const meta = params.get('meta') ? JSON.parse(params.get('meta')) : null;
         mapboxgl.accessToken = 'pk.eyJ1IjoibG9jYWwtdGVzdCJ9.local-test-token';
+        // §885 终二四二: ?zoom=/&bearing= overrides for camera semantics probes.
+        const zoomOv = params.get('zoom'), bearOv = params.get('bearing');
         const map = new mapboxgl.Map({
             container: 'map',
             style,
             center: style.center,
-            zoom: style.zoom,
+            zoom: zoomOv !== null ? Number(zoomOv) : style.zoom,
             pitch: style.pitch ?? 0,
-            bearing: style.bearing ?? 0,
+            bearing: bearOv !== null ? Number(bearOv) : (style.bearing ?? 0),
             pixelRatio: t.pixelRatio ?? 2,
             fadeDuration: 0,
             attributionControl: false,

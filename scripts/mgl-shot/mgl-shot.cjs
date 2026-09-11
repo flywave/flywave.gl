@@ -32,10 +32,18 @@ const CHROME = process.env.CHROME_BIN ||
     try {
         const page = await browser.newPage();
         await page.setViewport({ width: 512, height: 512, deviceScaleFactor: 2 });
+        page.on('console', m => { const t = m.text?.() ?? ''; if (t) (globalThis.__c ||= []).push(t); });
         await page.goto(
             `http://localhost:8130/scripts/mgl-shot/mgl-shot.html?fixture=${encodeURIComponent(fixture)}${extraQuery ? "&" + extraQuery : ""}`,
             { waitUntil: "load", timeout: 60000 });
-        await page.waitForFunction("window.__shotReady === true", { timeout: 60000 });
+        try {
+            await page.waitForFunction("window.__shotReady === true", { timeout: 60000 });
+        } catch (e) {
+            const errs = await page.evaluate("window.__mbErrors ?? []").catch(() => []);
+            console.log("[mgl-shot] TIMEOUT errors=", JSON.stringify(errs.slice(0,5)),
+                "console=", JSON.stringify(((globalThis.__c) ?? []).slice(-8)));
+            throw e;
+        }
         await new Promise((r) => setTimeout(r, 500));
         const errors = await page.evaluate("window.__mbErrors ?? []");
         if (errors.length) console.log("[mgl-shot] page errors:", errors.slice(0, 5));
