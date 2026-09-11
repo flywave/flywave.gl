@@ -1670,3 +1670,31 @@ measure-light 70,630→3,594、MAPS3D-967 −60k、saturation −41k 等 22 夹�
 逐域分解）；③lighting3DState.dir 的集中式修正（阴影族 shadowLightState
 同步对齐 mgl 语义，需真机深度对照）；④其余开放项（terrain 雾负 t、
 fill-extrusion-terrain、ground-shadow-fog、星场）。
+
+### §885 终二三七：终二三六三项收尾——回归归因、残余逐域分解、dir 消费方审计（2026-09-12）
+
+**① flood-light/fog +2,853 归因**：extdirflip=3（旧方向+新雾修复）二分 =
+91,846，与 dirfix 完全相同 → 方向无关，**全部来自雾泄漏移除**（该夹具无
+`fog` 键，泄漏雾恰曾近似补偿 flood-light 域的另一处差异）。作为净正确性
+改进接受；残余 91,846 主体为 flood-light 域（红晕梯度渲染差异）。
+
+**② occlusion data-driven 残余 71,930 逐域分解**：diff 像素抽样呈蓝色
+icon 交错（exp 有 icon 我们没有、反之：exp(41,132,184) vs cur 灰 138、
+exp 灰 137 vs cur 蓝）——**残余已转入 symbol occlusion 域**
+（icon-occlusion-opacity 的图标 3D 遮挡判定），挤出光照域干净（mbLit
+探针 23/138 vs expected 29/137）。下轮主攻 icon 遮挡判定（遮挡查询/
+深度语义）。
+
+**③ lighting3DState.dir 集中式修正审计**：消费方清单 = MBShadowRenderer
+(533/693, 影相机+深度方向)、MBMeshFeatures(596, 模型墙 NdotL)、
+MBModelRenderer(122/156/327/371, 模型 PBR+影态)、MBStyleDataSource
+(3050/5227)、ground quad/caster 注入。**本轮不做集中翻转**：阴影族的
+§682/§686 校准与该 dir 深度耦合，须逐消费方挂 A/B 门控对照模型/阴影
+夹具基线后迁移。补查结果：quantization-shadows 2,330 ≈ 历史锚 2,332
+（位级守卫保持）；ground-shadow-fog 141,539 vs 锚 135,328（+6,211，仍属
+其已记档的"地面 fill/road 3D 方向光缺失"开放域——33,671 px 暗墙反转
+exp 0-7 vs cur 154-248 为该域表象，非本轮新回归对象）。
+
+**下轮入口**：①symbol occlusion 域（icon 遮挡判定，occlusion 残余
+71,930）；②ground-shadow-fog 地面/道路 3D 方向光接入（原 135k 域）；
+③dir 集中式迁移（逐消费方门控 + 模型/阴影基线 A/B）；④其余开放项。
