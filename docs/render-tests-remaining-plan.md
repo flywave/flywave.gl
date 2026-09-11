@@ -1818,3 +1818,28 @@ sec37.78°）系巧合级证据不被采纳。终二四二的 model-layer 场景
 入口维持，但排查方向改为：①模型实例的经纬度→世界坐标放置链；②
 15-5242-12664 瓦片 overzoom 到 16.2 的内容插值；③小车 model-scale 的
 实际渲染尺寸 dump 对照。专项挂起待续。
+
+### §885 终二四四：model-layer 三项实证（2026-09-12）
+
+**① 模型 scale 矩阵语义核对（一致）**：mgl calculateModelMatrix
+（3d-style/data/model.ts:205）与 MBModelRenderer:1687 均为 T·R·S·F（scale
+vec 乘入模型局部米制帧），源码级一致——scale 语义非错位根源。
+
+**② 小车实际渲染尺寸量化**：expected.png 中车 ≈45×25 px（@1024），
+我们 current 108×85 px ≈ **2.4-3.4× 线性过大**，而两者屏幕位置接近
+（中心 (447,283) vs (457,301)）。矩阵语义一致 + 实际渲染 2.7× 过大 ⇒
+嫌疑收敛到 calculateModelMatrix 的 meters→world 换算段
+（mgl modelPixelConv/scaleXY = pixelsPerMeter(position.lat) 的
+纬度相关米换算；我们的实现 §652 用 cos(lat) 拉伸——需逐项 dump 该
+矩阵数值对照）。
+
+**③ 瓦片内容与请求集核查**：15-5242-12664 为常规 streets 瓦片
+（606 building/150 road/79 poi_label features，无模型 feature——小车经
+source 级 model registry 放置）。瓦片请求集：我们 5239-5243×12663-12667
+（宽集，含 404s），mgl 仅 5241/5242-12665 404（窄集，居中 5242-12664）；
+双方均加载内容瓦片。请求集宽度差异与相机高度（终二四三证伪项）联动。
+
+**结论**：scale 矩阵一致 + 渲染 2.7× 过大 ⇒ 矛盾聚焦于 meters→world
+换算链（modelPixelConv 段）。下轮 = dump 双引擎该矩阵数值
+（mgl: calculateModelMatrix 中间量可通过 patched mgl dist 加日志；
+我们: MBModelRenderer m 构造后 dump），逐因子定位 2.7× 来源。
