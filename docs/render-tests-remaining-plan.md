@@ -1744,3 +1744,29 @@ bug）后重算：**mgl 的 57 个图标实例现已全覆盖**（此前 21"缺�
 **下轮入口**：①+2 个多余图标实例（placement 候选选择/collision 网格
 语义）；②flood-light 域残余 91,846；③ground-shadow-fog 地面/道路 3D
 方向光；④dir 集中式迁移；⑤terrain 雾负 t。
+
+### §885 终二四〇：placement 残差精查 + 三开放域可行性结论（2026-09-12）
+
+**① +2/+7/+9 图标实例差异精查**：重叠法+最近邻分类，data-driven 当前
+59 vs mgl 57：EXTRA 7（全部位于 y≈270-330 远端带）+ MISSING 9（中景
+暗墙区）。分析：CPU 锚点剔除的 log 等价 epsilon 在引擎世界级 far 平面
+下数学上趋于失效——dfdw = 2fn/((f−n)w²) ≈ 2e-7（w=1000, far=1e7）时
+eps = 1/(300·dfdw·(1+w)·lnFar) ≈ 1 ≫ 任何实际 log 深度差，即修正后的
+CPU 剔除恒不触发；mgl 能剔除是因为其 depthRangeFor3D 把 3D 层深度范围
+归一化后 300 斜率才有区分度。**正确复刻需先复刻 depth-range 归一化
+（记录 3D 层深度 min/max 并重映射）**，属独立专项（暂记 depthrange
+入口）。
+
+**② flood-light 域残余 91,846**：维持终二三七归因（红晕梯度渲染差异，
+compute_flood_lighting 的 occlusion/ground-shadow factor 交互），与雾
+无关；独立专项。
+
+**③ ground-shadow-fog 141,539**：维持终二二五归因（地面 fill/road 的
+3D 方向光+ground shadow factor 缺失，33,671 px exp 0-7 vs cur 154-248
+暗墙反转）。修复路径 = ground 材质接 apply_lighting_ground
+（u_ground_radiance，N=(0,0,1)）+ 影内地面 ground_shadow_factor——依赖
+阴影战役（终二二二挂起）的深度图内容对齐，需真机 frame-capture。
+
+**结论**：三个开放域均需独立专项（depth-range 归一化 / flood-light /
+ground 方向光+阴影），当前交付态保持终二三九（symbol occlusion 战役
+−88%，守卫集净 −2,117,670，PASS 17→17）。
