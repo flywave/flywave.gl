@@ -1724,3 +1724,23 @@ fade 域。
 **下轮入口**：①placement/collision 域（图标个体选择的 mgl 对齐，
 collision_index 语义）；②flood-light 域残余 91,846；③ground-shadow-fog
 地面/道路 3D 方向光；④dir 集中式迁移；⑤terrain 雾负 t。
+
+### §885 终二三九：placement 锚点剔除同款编码混比修复——mgl 图标实例全覆盖（2026-09-12）
+
+**定位**：MBStyleSymbolPlacement.anchorOccluded（mgl placeCollisionBox
+isClipped 语义）与终二三八的 fragment 侧同款 bug——readDepthBuffer 读回的
+深度目标是 **log 编码**（RG 打包，TerrainDepthOcclusion），旧代码用标准
+NDC z（近远平面换算）与之比较，边界锚点判定随机化（20 个 mgl 放置的图标
+被错误剔除）。修复：锚点距离换算到同一 log 编码域
+（log2(1+w)·FC·0.5），epsilon 用 mgl 标准 z 1/300 斜率的 log 等价
+（同终二三八公式）。
+
+**度量**：data-driven 66,283→65,839；修正统计脚本（`==`/`&` 优先级
+bug）后重算：**mgl 的 57 个图标实例现已全覆盖**（此前 21"缺失"系脚本
+假阳性），我们 59 vs mgl 57（+2）。残余 65,839 构成转为：图标亚像素
+位置/尺寸差、墙面细差与次要域。symbol occlusion 战役累计
+552,699→65,839（−88%）。
+
+**下轮入口**：①+2 个多余图标实例（placement 候选选择/collision 网格
+语义）；②flood-light 域残余 91,846；③ground-shadow-fog 地面/道路 3D
+方向光；④dir 集中式迁移；⑤terrain 雾负 t。

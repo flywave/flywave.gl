@@ -459,11 +459,20 @@ export class MBStyleSymbolPlacement {
             const iy = Math.round(depthH - 1 - e.sy); // GL origin bottom-left
             if (ix < 0 || iy < 0 || ix >= depthW || iy >= depthH) return false;
             const d = depthBuf[iy * depthW + ix] / 65535;
+            // §885 终二三九: the depth target is LOG-encoded (three
+            // logdepthbuf, RG-packed — see TerrainDepthOcclusion) while the
+            // old code compared a STANDARD NDC z against it. The offset
+            // between the two encodings made the verdict arbitrary for
+            // boundary anchors (20 icons mgl places were culled here).
+            // Convert the anchor distance to the same log encoding and use
+            // the log-space equivalent of mgl's 1/300 standard-z ramp:
+            // Δlog = 1/(300·dfdw·(1+w)·ln(far+1)), dfdw = 2fn/((f−n)w²).
             const dist = e.el.position.distanceTo(camPos);
-            const zNdc = (camFar + camNear) / (camFar - camNear)
-                - 2 * camFar * camNear / ((camFar - camNear) * dist);
-            const zStd = 0.5 + 0.5 * zNdc;
-            const occ = d < 1 && zStd > d + 1 / 300;
+            const logDepthBufFC = 2.0 / (Math.log(camFar + 1.0) / Math.LN2);
+            const zLog = Math.log2(1 + Math.max(dist, 1e-4)) * logDepthBufFC * 0.5;
+            const dfdw = 2 * camFar * camNear / ((camFar - camNear) * dist * dist);
+            const eps = 1 / (300 * dfdw * (1 + dist) * Math.log(camFar + 1));
+            const occ = d < 1 && zLog - d > eps;
             if ((globalThis as any).__mbOccDbg && anchorDebug.length < 300) {
                 anchorDebug.push({ x: Math.round(e.sx), y: Math.round(e.sy), d: +d.toFixed(5), z: +zStd.toFixed(5), dist: Math.round(dist), occ });
             }
