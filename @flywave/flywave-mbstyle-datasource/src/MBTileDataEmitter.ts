@@ -62,6 +62,17 @@ interface AccumulatedGeometry {
     indices: number[];
     /** Per-vertex extrusion axis (vec4) for extruded-polygon techniques. */
     extrusionAxis: number[];
+    /**
+     * Per-vertex FACE normal (vec3, world frame) for extruded-polygon
+     * techniques — mgl fill_extrusion bucket semantics: walls carry the
+     * horizontal outward edge normal, roof/cap faces carry (0,0,1). Emitted
+     * alongside dedicated (duplicated) wall vertices so a wall face never
+     * shares a vertex with the roof. The patcher's 3D-lighting injection
+     * prefers this over dFdx/dFdy screen-space derivatives (which are
+     * roof-polluted on walls) and falls back to derivatives when the
+     * attribute is missing (zero vector).
+     */
+    extrusionNormals: number[];
     /** Tile-normalized UVs (raster / hillshade texture fills). */
     uvs: number[];
     /**
@@ -878,6 +889,7 @@ export class MBTileDataEmitter {
                 positions: [],
                 indices: [],
                 extrusionAxis: [],
+                extrusionNormals: [],
                 uvs: [],
                 edgeIndex: [],
                 edgeFeatureStarts: [],
@@ -2482,6 +2494,12 @@ export class MBTileDataEmitter {
                 geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
                 geo.extrusionAxis.push(0, 0, height - floorHeight, 0);
                 geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
+                // §885 终二三四 A/B: face normals here (±m on the band walls)
+                // REGRESSED fill-extrusion-line-width sharp-corner/multi-tile/
+                // building +1-1.3k each — the band top cap shares the wall top
+                // vertices, so per-face normals force a cap duplication whose
+                // rasterization shifts. The wall band keeps the derivative
+                // fallback (no extrusionNormal attribute on this path).
             }
             const V = (i: number, k: number) => base + ((i % n) * 4) + k;
             const segCount = closed ? n : n - 1;
@@ -2502,6 +2520,38 @@ export class MBTileDataEmitter {
                 quad(V(i, 1), V(j, 1), V(j, 3), V(i, 3));
             }
         }
+    }
+
+    /**
+     * §885 终二三四: duplicate an extrusion vertex (position + extrusionAxis
+     * + uv when aligned) with an explicit face normal — used to give wall
+     * faces their own vertices instead of sharing the roof's tops.
+     */
+    private dupExtrusionVertex(
+        geo: AccumulatedGeometry,
+        srcIndex: number,
+        nx: number, ny: number, nz: number,
+    ): number {
+        const idx = geo.positions.length / 3;
+        geo.positions.push(
+            geo.positions[srcIndex * 3],
+            geo.positions[srcIndex * 3 + 1],
+            geo.positions[srcIndex * 3 + 2],
+        );
+        geo.extrusionAxis.push(
+            geo.extrusionAxis[srcIndex * 4],
+            geo.extrusionAxis[srcIndex * 4 + 1],
+            geo.extrusionAxis[srcIndex * 4 + 2],
+            geo.extrusionAxis[srcIndex * 4 + 3],
+        );
+        geo.extrusionNormals.push(nx, ny, nz);
+        // uv alignment: uvs cover exactly the vertices created before this
+        // duplicate (pattern extrusions give EVERY vertex a uv), so the new
+        // vertex inherits the source's uv.
+        if (geo.uvs.length > 0 && geo.uvs.length / 2 === idx) {
+            geo.uvs.push(geo.uvs[srcIndex * 2], geo.uvs[srcIndex * 2 + 1]);
+        }
+        return idx;
     }
 
     private emitExtrudedPolygon(
@@ -2690,10 +2740,12 @@ export class MBTileDataEmitter {
                 // bottom vertex
                 geo.positions.push(bx, by, sphericalUp ? bz : baseGround + floorHeight);
                 geo.extrusionAxis.push(0, 0, 0, 0);
+                geo.extrusionNormals.push(0, 0, 1);
                 if (isPatternExtrusion) geo.uvs.push(edgeDists[i], baseGround + floorHeight);
                 // top vertex
                 geo.positions.push(tx, ty, sphericalUp ? tz : topGround + height);
                 geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
+                geo.extrusionNormals.push(0, 0, 1);
                 if (isPatternExtrusion) geo.uvs.push(edgeDists[i], topGround + height);
             }
 
@@ -2730,6 +2782,7 @@ export class MBTileDataEmitter {
                     }
                     geo.positions.push(tx, ty, sphericalUp ? tz : topGround + height);
                     geo.extrusionAxis.push(0, 0, height - floorHeight, 1);
+                    geo.extrusionNormals.push(0, 0, 1);
                     geo.uvs.push(w.x, w.y);
                 }
                 for (let i = 0; i < triIndices.length; i++) {
@@ -2759,6 +2812,7 @@ export class MBTileDataEmitter {
                     tz += (rz / len) * (centroidElev + height);
                     geo.positions.push(tx, ty, tz);
                     geo.extrusionAxis.push(0, 0, height, 1);
+                    geo.extrusionNormals.push(0, 0, 1);
                 }
                 for (let i = 0; i < tess.indices.length; i++) {
                     geo.indices.push(roofBase + tess.indices[i]);
@@ -2769,10 +2823,22 @@ export class MBTileDataEmitter {
                 }
             }
 
-            // Walls: a quad per ring edge (two triangles).
+            // Walls: a quad per ring edge (two triangles). §885 终二三四:
+            // each wall face gets DEDICATED duplicated vertices carrying the
+            // mgl face normal (horizontal outward edge normal) — reusing the
+            // roof's top vertices would interpolate the roof's (0,0,1)
+            // normal across the wall, and the 3D-lighting injection's
+            // dFdx/dFdy derivative fallback is roof-polluted on walls.
             for (let r = 0; r < rings.length; r++) {
                 const ring = rings[r];
                 const ringStart = r === 0 ? 0 : holeIndices[r - 1];
+                // Ring centroid (world) for the outward test.
+                let ccxW = 0, ccyW = 0;
+                for (const pt of ring) {
+                    const w = this.project(new THREE.Vector2(pt.x, pt.y));
+                    ccxW += w.x; ccyW += w.y;
+                }
+                ccxW /= Math.max(ring.length, 1); ccyW /= Math.max(ring.length, 1);
                 for (let i = 0; i < ring.length; i++) {
                     const a = ringStart + i;
                     const b = ringStart + (i + 1) % ring.length;
@@ -2780,7 +2846,26 @@ export class MBTileDataEmitter {
                     const t0 = b0 + 1;
                     const b1 = baseVertex + b * 2;
                     const t1 = b1 + 1;
-                    geo.indices.push(b0, t0, t1, t1, b1, b0);
+                    // Outward horizontal normal of the edge a→b.
+                    let nx = 0, ny = 0;
+                    {
+                        const ax = geo.positions[b0 * 3], ay = geo.positions[b0 * 3 + 1];
+                        const bxw = geo.positions[b1 * 3], byw = geo.positions[b1 * 3 + 1];
+                        const ex = bxw - ax, ey = byw - ay;
+                        const el = Math.hypot(ex, ey);
+                        if (el > 1e-9) {
+                            nx = -ey / el; ny = ex / el;
+                            const mx = (ax + bxw) / 2 - ccxW, my = (ay + byw) / 2 - ccyW;
+                            if (nx * mx + ny * my < 0) { nx = -nx; ny = -ny; }
+                        } else {
+                            nx = 0; ny = 0;
+                        }
+                    }
+                    const wb0 = this.dupExtrusionVertex(geo, b0, nx, ny, 0);
+                    const wt0 = this.dupExtrusionVertex(geo, t0, nx, ny, 0);
+                    const wb1 = this.dupExtrusionVertex(geo, b1, nx, ny, 0);
+                    const wt1 = this.dupExtrusionVertex(geo, t1, nx, ny, 0);
+                    geo.indices.push(wb0, wt0, wt1, wt1, wb1, wb0);
                 }
             }
 
@@ -2850,10 +2935,14 @@ export class MBTileDataEmitter {
         const topZ = (i: number) => groundAt(i) + height;
 
         const axisW = height - floorHeight;
-        const addWorldVert = (wx: number, wy: number, z: number): number => {
+        const addWorldVert = (
+            wx: number, wy: number, z: number,
+            nx = 0, ny = 0, nz = 1,
+        ): number => {
             const idx = geo.positions.length / 3;
             geo.positions.push(wx, wy, z);
             geo.extrusionAxis.push(0, 0, axisW, 1);
+            geo.extrusionNormals.push(nx, ny, nz);
             return idx;
         };
 
@@ -2879,6 +2968,7 @@ export class MBTileDataEmitter {
             const ny = uz * vx - ux * vz;
             const nz = ux * vy - uy * vx;
             const nl = Math.hypot(nx, ny, nz) || 1;
+            const fnx = nx / nl, fny = ny / nl, fnz = nz / nl;
             const gx = (aw.x + bw.x + cwx.x) / 3, gy = (aw.y + bw.y + cwx.y) / 3;
             let keep = true;
             if (Math.abs(nz) > 0.7 * nl) {
@@ -2886,9 +2976,9 @@ export class MBTileDataEmitter {
             } else {
                 keep = nx * (gx - cw.x) + ny * (gy - cw.y) > 0; // vertical face → away
             }
-            const ia = addWorldVert(aw.x, aw.y, az);
-            const ib = addWorldVert(bw.x, bw.y, bz);
-            const ic = addWorldVert(cwx.x, cwx.y, cz);
+            const ia = addWorldVert(aw.x, aw.y, az, fnx, fny, fnz);
+            const ib = addWorldVert(bw.x, bw.y, bz, fnx, fny, fnz);
+            const ic = addWorldVert(cwx.x, cwx.y, cz, fnx, fny, fnz);
             if (keep) geo.indices.push(ia, ib, ic);
             else geo.indices.push(ia, ic, ib);
         };
@@ -2911,8 +3001,21 @@ export class MBTileDataEmitter {
             const outX = -(uy), outY = ux; // rotate edge dir -90°
             const gx = (pi + pj) / 2, gy = (qi + qj) / 2;
             const flip = outX * (gx - cw.x) + outY * (gy - cw.y) < 0;
-            if (!flip) geo.indices.push(iTop, jTop, jUp, jUp, iUp, iTop);
-            else geo.indices.push(iTop, iUp, jUp, jUp, jTop, iTop);
+            // §885 终二三四: the eaves tops carry the roof's (0,0,1) normal —
+            // duplicate them (and the raised copies) with the outward wall
+            // normal so the vertical quad shades as a wall.
+            const ol = Math.hypot(outX, outY) || 1;
+            const onx = (flip ? -outX : outX) / ol, ony = (flip ? -outY : outY) / ol;
+            const wiTop = this.dupExtrusionVertex(geo, iTop, onx, ony, 0);
+            const wjTop = this.dupExtrusionVertex(geo, jTop, onx, ony, 0);
+            geo.extrusionNormals[iUp * 3] = onx;
+            geo.extrusionNormals[iUp * 3 + 1] = ony;
+            geo.extrusionNormals[iUp * 3 + 2] = 0;
+            geo.extrusionNormals[jUp * 3] = onx;
+            geo.extrusionNormals[jUp * 3 + 1] = ony;
+            geo.extrusionNormals[jUp * 3 + 2] = 0;
+            if (!flip) geo.indices.push(wiTop, wjTop, jUp, jUp, iUp, wiTop);
+            else geo.indices.push(wiTop, iUp, jUp, jUp, wjTop, wiTop);
         };
 
         if (roofShape === 'parapet') {
@@ -5251,6 +5354,17 @@ export class MBTileDataEmitter {
                     buffer: new Float32Array(geo.extrusionAxis).buffer,
                     type: 'float' as BufferElementType,
                     itemCount: 4,
+                });
+            }
+            if (
+                geo.extrusionNormals.length > 0 &&
+                geo.extrusionNormals.length === geo.positions.length
+            ) {
+                vertexAttributes.push({
+                    name: 'extrusionNormal',
+                    buffer: new Float32Array(geo.extrusionNormals).buffer,
+                    type: 'float' as BufferElementType,
+                    itemCount: 3,
                 });
             }
             if (geo.edge && geo.edge.length > 0) {

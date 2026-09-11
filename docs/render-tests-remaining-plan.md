@@ -1535,3 +1535,43 @@ fog_fragment chunk），负 t 泄漏在另一处。
 **下轮入口**：①terrain raster 材质雾路径的负 t 修复（同 clamp 语义）；
 ②fill-extrusion-terrain 17k/30k/81k 模型层域；③星场真机 frame-capture；
 ④量化噪声。
+
+### §885 终二三四：P1 每面法线（emitter attribute）落地——终二二八墙面污染假设证伪（2026-09-11）
+
+**实装**：①emitter（MBTileDataEmitter）标准挤出路径发射逐顶点 `extrusionNormal`
+(vec3, 世界系)——底/顶 (0,0,1)；墙四边形改用 DEDICATED 复制顶点
+（dupExtrusionVertex，复制 position/extrusionAxis/uv）携带外向水平边法线
+（边 a→b 垂直、背环质心定向），墙不再与屋顶共享顶点；shaped roof
+pushTri 携带已算出的精确面法线、pushWallQuad 复制檐口顶点带墙法线。
+DecodedTile 新增 `extrusionNormal` attribute（itemCount 3，
+extrusionNormals.length === positions.length 才发射）。②注入侧两处
+（injectExtrusion3DLighting 的 opaque_fragment 注入 + 旧 uMBLightDirWorld
+路径）：`dot(vMbAttrN,vMbAttrN)>0.25` 时用 attribute 法线（viewMatrix 变换
+入视系），attribute 缺失（零向量，WebGL 默认常量属性）回退 dFdx/dFdy——
+零 attr 几何（wall-band 等）天然惰性。③fill-extrusion-line-width 的
+wall-band 路径 A/B 回归（sharp-corner +1,281/multi-tile +946/building
++755，顶盖共享带顶点被迫复制导致栅格化位移）→ **该路径回退保持导数回退**。
+
+**判定实验（P1 假设证伪）**：occlusion 三例同批次小批量逐位对照
+（stash 基线 vs 处理后，各两次逐位一致）：data-driven 552,700=552,700 /
+after-3d 527,877→527,549(−328) / before-3d 554,854=554,854——**attribute
+每面法线对 occlusion 三例无可测收益，终二二八"dFdx 墙面被屋顶化污染是
+三例明暗颠倒根因"的假设不成立**（attribute 法线已正确生效：早先探针
+批 552,700 与小批基线逐位一致即证法线生效路径畅通；三例残差主体在别的域）。
+
+**批次效应入档（重要测量纪律）**：occlusion 族读数强依赖 karma 批次组成
+——大批次（110 夹具）data-driven/after-3d/before-3d = 592,368/570,260/
+602,999，小批次（occlusion 单独）= 552,700/527,549-527,877/554,854；
+**同批次内逐位确定**（小批两次完全一致），跨批次数值不可比。此前
+终二二八的 flip0=552,686 ≈ 小批次口径。A/B 必须同批次同过滤集。
+
+**零回归确认**：大批次（同 110 夹具集）103 可比夹具 92 逐位一致，
+11 夹具微动 ≤±363（rounded-edge-ao −230/−201、zero-height +67、
+data-driven +363 等），净 +116（0.002%，噪声级），PASS 17→17 不变。
+守卫：fill-extrusion-color 7 PASS 全保持。
+
+**下轮入口**：①occlusion 三例残差（~552k 小批口径）重新归因——法线域
+已排除，转 mgl 实拍（终二二九链路）逐层 dump 对照；②landmark-conflation
+-buckingham 对 attribute 法线敏感（旧路径注入曾 +20,272，现注入侧回退
+对齐基线，值得单独标定 attribute 法线在该夹具的方向性）；③terrain
+raster 材质雾负 t 修复；④星场真机 frame-capture。

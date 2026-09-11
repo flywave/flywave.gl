@@ -1270,6 +1270,7 @@ export class MBMaterialPatchManager {
                  uniform float uMbMetersPerUnit; uniform float uMbDistCam;
                  varying float vMbWallH;
                  varying vec3 vMbWorldPos;
+                 varying vec3 vMbAttrN;
                  ${(globalThis as any).__mbShadowHW ? `#define MB_SH_HW 1\n#define MB_SH_BIAS ${Number((globalThis as any).__mbShadowBias ?? 0.0002)}` : ''}
                  ${shader.fragmentShader.includes('uMBShadowMap') ? '' :
                  `uniform sampler2D uMBShadowMap;
@@ -1292,20 +1293,27 @@ export class MBMaterialPatchManager {
                     '#include <common>',
                     `#include <common>
                      attribute vec4 extrusionAxis;
+                     attribute vec3 extrusionNormal;
                      varying float vMbWallH;
-                     varying vec3 vMbWorldPos;`
+                     varying vec3 vMbWorldPos;
+                     varying vec3 vMbAttrN;`
                 );
             } else if (!shader.vertexShader.includes('varying float vMbWallH')) {
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <common>',
-                    '#include <common>\nvarying float vMbWallH;\nvarying vec3 vMbWorldPos;'
+                    `#include <common>
+                     attribute vec3 extrusionNormal;
+                     varying float vMbWallH;
+                     varying vec3 vMbWorldPos;
+                     varying vec3 vMbAttrN;`
                 );
             }
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 `#include <begin_vertex>
                  vMbWallH = clamp(extrusionAxis.z / max(extrusionAxis.z + extrusionAxis.w, 0.001), 0.0, 1.0);
-                 vMbWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
+                 vMbWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+                 vMbAttrN = mat3(modelMatrix) * extrusionNormal;`
             );
             // Capture the UNLIT material color before three's lighting pass —
             // the scene DirectionalLight (added by applyLights) shades the
@@ -1333,7 +1341,18 @@ export class MBMaterialPatchManager {
                      // triangle regardless of the (smoothed/unreliable) vertex
                      // normals the engine extruded-polygon geometry carries.
                      // Same technique as the engine's own flat-shaded path.
+                     // §885 终二三四: prefer the emitter's per-face attribute
+                     // normal (mgl fill_extrusion bucket semantics — walls
+                     // carry the horizontal edge normal on DEDICATED wall
+                     // vertices, roofs (0,0,1)); the derivative is
+                     // roof-polluted on walls (终二二八: wall NdotL +0.73 over
+                     // the physical horizontal bound). Zero attribute
+                     // (geometry without extrusionNormal) falls back to the
+                     // derivative.
                      vec3 mbN3 = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+                     if (dot(vMbAttrN, vMbAttrN) > 0.25) {
+                         mbN3 = normalize((viewMatrix * vec4(normalize(vMbAttrN), 0.0)).xyz);
+                     }
                      // uMB3DDir is WORLD-space (x east, y north, z up); the
                      // surface normal here is VIEW-space. Transform the light
                      // dir and the world up axis into view space with three's
@@ -4349,16 +4368,21 @@ export class MBMaterialPatchManager {
                 // compile error.
                 shader.vertexShader = shader.vertexShader.replace(
                     'void main() {',
-                    'varying float vMBHeight;\nvoid main() {'
+                    `attribute vec3 extrusionNormal;
+                     varying vec3 vMBFaceN;
+                     varying float vMBHeight;
+                     void main() {`
                 );
                 shader.vertexShader = shader.vertexShader.replace(
                     '#include <fog_vertex>',
                     `#include <fog_vertex>
+                     vMBFaceN = mat3(modelMatrix) * extrusionNormal;
                      vMBHeight = (transformed.z - uMBHeightBase) / max(uMBHeightTop - uMBHeightBase, 0.001);`
                 );
                 shader.fragmentShader = shader.fragmentShader.replace(
                     '#include <common>',
-                    `#include <common>
+                     `#include <common>
+                     varying vec3 vMBFaceN;
                      varying float vMBHeight;
                      uniform vec3 uMBLightDirWorld; uniform vec3 uMBLightColor;
                      uniform float uMBLightIntensity; uniform mat3 uMBViewToWorld; uniform float uMBPaintOpacity;
@@ -4387,10 +4411,22 @@ export class MBMaterialPatchManager {
                          vec3 mbPaintSrgb = linearToSrgb(diffuseColor.rgb);
                          float mbColorValue = dot(mbPaintSrgb, vec3(0.2126, 0.7152, 0.0722));
                          vec3 mbColor = mbPaintSrgb + vec3(0.03);
-                         // Flat normal: FLAT_SHADED so vNormal is undefined; use
-                         // screen-space derivatives, rotated into world space.
-                         vec3 mbViewN = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
-                         vec3 mbWorldN = normalize(uMBViewToWorld * mbViewN);
+                         // §885 终二三四: prefer the emitter's per-face
+                         // attribute normal (mgl fill_extrusion bucket
+                         // semantics — walls carry the horizontal edge
+                         // normal, roofs (0,0,1)); it never shares a vertex
+                         // with the roof. Fall back to the screen-space
+                         // derivative (zero attribute when the geometry has
+                         // no extrusionNormal) — the derivative is
+                         // roof-polluted on walls (+0.73 NdotL over the
+                         // physical horizontal bound, 终二二八).
+                         vec3 mbWorldN;
+                         if (dot(vMBFaceN, vMBFaceN) > 0.25) {
+                             mbWorldN = normalize(vMBFaceN);
+                         } else {
+                             vec3 mbViewN = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+                             mbWorldN = normalize(uMBViewToWorld * mbViewN);
+                         }
                          // Roof normals point up (mapbox encodes roof as (0,0,1)
                          // with normal.y == 0, i.e. no vertical gradient); walls are
                          // horizontal. Detect via the world-space vertical component.
