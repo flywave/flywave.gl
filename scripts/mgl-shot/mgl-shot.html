@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <link rel="stylesheet" href="/mapbox-gl-js/dist/mapbox-gl.css"/>
+    <script src="/mapbox-gl-js/dist/mapbox-gl.js"></script>
+    <style>
+        html, body { margin: 0; padding: 0; background: #ffffff; }
+        #map { width: 256px; height: 256px; }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+    // §885 终一六八 rebuild: CDP-driven vendored-mgl live capture.
+    // Query: ?fixture=<family/case>[&ops=1]
+    // Serves the fixture style with local:// rewritten to /integration/ —
+    // the same mapping as the compat harness's localizeUrl.
+    (async function () {
+        const params = new URLSearchParams(location.search);
+        const fixture = params.get('fixture');
+        // Use the UPSTREAM integration root — it is self-contained (tiles,
+        // glyphs, sprites match the fixture expectations, e.g. the NY tiles
+        // for occlusion/*).
+        const res = await fetch(`/mapbox-gl-js/test/integration/render-tests/${fixture}/style.json`);
+        const style = await res.json();
+        const INT = '/mapbox-gl-js/test/integration';
+        const localize = (u) => u.replace(/^local:\/\//, `${INT}/`);
+        style.glyphs = localize(style.glyphs);
+        if (style.sprite) style.sprite = localize(style.sprite);
+        for (const [, src] of Object.entries(style.sources ?? {})) {
+            if (Array.isArray(src.tiles)) src.tiles = src.tiles.map(localize);
+            if (typeof src.url === 'string' && src.url.startsWith('local://')) src.url = localize(src.url);
+        }
+        const t = (style.metadata ?? {}).test ?? {};
+        const meta = params.get('meta') ? JSON.parse(params.get('meta')) : null;
+        mapboxgl.accessToken = 'pk.eyJ1IjoibG9jYWwtdGVzdCJ9.local-test-token';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style,
+            center: style.center,
+            zoom: style.zoom,
+            pitch: style.pitch ?? 0,
+            bearing: style.bearing ?? 0,
+            pixelRatio: t.pixelRatio ?? 2,
+            fadeDuration: 0,
+            attributionControl: false,
+            interactive: false,
+        });
+        window.__mbMap = map;
+        const done = () => { window.__shotReady = true; };
+        map.on('idle', done);
+        map.on('error', (e) => { (window.__mbErrors = window.__mbErrors ?? []).push(String(e && e.error || e)); });
+        // idle can fire early (style-loaded) — re-arm a settle window like
+        // the harness's waitFrameReady operation.
+        let frames = 0;
+        map.on('render', () => { if (++frames >= 60) done(); });
+        setTimeout(done, 15000);
+    })();
+</script>
+</body>
+</html>
