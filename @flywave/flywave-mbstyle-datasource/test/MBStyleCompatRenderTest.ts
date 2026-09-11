@@ -78,6 +78,12 @@ function discoverTests(): TestEntry[] {
         a.startsWith("attrdbg="))?.slice("attrdbg=".length) === "1") {
         (globalThis as any).__mbAttrDbg = true;
     }
+    // §885 终二三六: litdbg=1 → uMB3DDbg=5 — paint the PRE-FOG lit color
+    // (mbLit) to separate "lighting wrong" from "fog wash".
+    if ((window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("litdbg="))?.slice("litdbg=".length) === "1") {
+        (globalThis as any).__mbLitDbg = true;
+    }
 }
 {
     const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>

@@ -1627,3 +1627,46 @@ A/B（小批 occlusion）：修复 31,633 px（背光墙变暗）同时破坏 31
 vertical-gradient/半 Lambert 项）；②方位角语义与公式联动修正（复用
 mgl-shot ?laz 扫掠做参照真值，逐公式变体 A/B）；③守卫：大批
 fill-extrusion/lighting-3d/occlusion 集与本轮基线（mbstyle-fn-final2）。
+
+### §885 终二三六：P1 破局——toSun 方位角修正+无雾 style 雾泄漏修复，occlusion 三例 −92%（2026-09-12）
+
+**① 公式反推（fill_extrusion.shader3d ↔ _prelude_lighting.glsl 源码核对）**：
+mgl `apply_lighting(color, normal)` = `linearProduct(color, amb·ADF +
+dirColor·max(NdotL,0))`，ADF = vertical_factor(0.92..1)·ambient_dir_factor
+(dirFactorMin 0.7..1, min(NdotL+1,1))，linearProduct = sRGB·k^(1/2.2)。
+我们注入的合成公式与 uniforms 早已完全同构（终二三五拟合的 0.334/0.407
+是污染读数所致，弃用）。扫掠数据重新精拟合：wallB 峰 188 → k=0.514 =
+amb(0.01)+sin(30°)（极角 30° 对垂直墙 NdotL 上限=sinPolar）；az240→0.253
+vs 预测 0.25、az0→0.0955 vs 0.0955——公式零偏差，**唯一错误 = 方向**。
+
+**② toSun 方位角语义（扫掠峰值实证）**：value(az) 峰值出现在 style
+azimuth = 墙外向方位角 → **mgl toSun bearing = style azimuth**。我们的
+lighting3DState.dir（§682/§686 az+90+y镜像，为阴影族校准）对 [150,30]
+给出 toSun bearing 330——180° 镜像。修正：injectExtrusion3DLighting 的
+uMB3DDir 水平分量取反（集中式 getter 不动，阴影族/模型消费方另核）。
+lightdbg 探针复核：暗墙 NdotL −0.326/−0.434/−0.442（=0.5·cos131° 等，
+与理论逐位一致）。终二三五 flip3 的"净持平"反证系 PIP 法线修复前的
+陈旧证据，作废。
+
+**③ 无雾 style 的雾泄漏（第二根因，+mbLit 探针定位）**：方向修正后色彩
+输出仍 105-179 与 NdotL 矛盾——新增 litdbg=1（uMB3DDbg=5，输出雾前
+mbLit）：暗墙雾前 23（expected 29 ✓）受光墙 138（expected 137 ✓）——
+光照已像素级正确，洗白全部来自雾。根因：UniformsLib.fog.fogAlpha 模板
+默认 = 1，style 无 `fog` 时无任何路径重置它，注入的 inline mgl-fog 块
+无条件把每个无雾 style 的挤出洗白（occlusion 夹具无 fog 键，mgl 不施
+雾）。修复：材质编译时 scene.fog 不存在则 fogAlpha 覆写 {value:0}
+（有意脱离共享模板）。
+
+**④ 度量**：小批 occlusion 552,699→71,930（−87%）/527,549→27,511
+（−95%）/554,854→7,802（−98.6%），setProperty/terrain 不变，五夹具合计
+1,653,667→125,807（−92%）。大批守卫集（final2 基线）：103 夹具
+75 逐位一致，净 **−2,117,670**——occlusion 三例 −519k/−544k/−595k，
+lighting-3d-mode fill-extrusion 全族大改（default 74,823→24,573、
+measure-light 70,630→3,594、MAPS3D-967 −60k、saturation −41k 等 22 夹具
+改善），唯一回归 flood-light/fog +2,853，PASS 17→17。
+
+**下轮入口**：①flood-light/fog +2,853 回归（有雾 style 方向修正的交互，
+单独 A/B）；②occlusion data-driven 残余 71,930 的构成（对照 mgl 实拍
+逐域分解）；③lighting3DState.dir 的集中式修正（阴影族 shadowLightState
+同步对齐 mgl 语义，需真机深度对照）；④其余开放项（terrain 雾负 t、
+fill-extrusion-terrain、ground-shadow-fog、星场）。

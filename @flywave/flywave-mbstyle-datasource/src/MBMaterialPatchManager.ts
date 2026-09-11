@@ -1125,23 +1125,41 @@ export class MBMaterialPatchManager {
             }
             shader.uniforms.uMB3DAmb = { value: ls ? ls.ambientColorLinear : [1, 1, 1] };
             shader.uniforms.uMB3DDirColor = { value: ls ? ls.directionalColorLinear : [1, 1, 1] };
-            // §885 终二百二十八: wall light-direction frame A/B — pixel
-            // evidence on occlusion/symbol-occlusion-data-driven: roofs match
-            // exactly (199=199) while WALLS invert (expected 29 vs ours 223),
-            // i.e. the horizontal component of ls.dir is mirrored relative to
-            // the extrusion geometry's rendered frame (the §643 y-mirror
-            // family — models take ls.dir untransformed and are correct).
-            // extdirflip=1 → y mirror, 2 → x mirror, 3 → 180°; unset → as-is.
+            // §885 终二三六: mgl toSun semantics — the mgl live light sweep
+            // (scripts/mgl-shot ?laz, 终二三五) proves the wall value peaks
+            // when the style azimuth EQUALS the wall's outward bearing, i.e.
+            // NdotL = dot(n, toSun) with toSun bearing = style azimuth. Our
+            // lighting3DState.dir carries the §682/§686 (az+90 + y-mirror)
+            // convention calibrated for the SHADOW family and lands 180°
+            // away (toSun 330 for [150,30]) — negate the horizontal
+            // component here. The legacy-light extrusion path already
+            // satisfies mgl semantics via directionalVec (90−az) — which is
+            // why the fill-extrusion-* legacy family passes.
+            // extdirflip=1 → y mirror, 2 → x mirror, 3 → 180° (of the RAW
+            // state, for forensics); unset → mgl-corrected default.
             const dirRaw: number[] = ls ? ls.dir : [0, 0, 1];
             const dirFlip: number = (globalThis as any).__mbExtDirFlip ?? 0;
-            const dir3: number[] = !ls || !dirFlip ? dirRaw
+            const dirBase: number[] = !ls ? [0, 0, 1] : [-dirRaw[0], -dirRaw[1], dirRaw[2]];
+            const dir3: number[] = !dirFlip ? dirBase
                 : dirFlip === 1 ? [dirRaw[0], -dirRaw[1], dirRaw[2]]
                 : dirFlip === 2 ? [-dirRaw[0], dirRaw[1], dirRaw[2]]
                 : [-dirRaw[0], -dirRaw[1], dirRaw[2]];
             shader.uniforms.uMB3DDir = { value: dir3 };
             shader.uniforms.uMB3DViewToWorld = { value: viewToWorld };
             shader.uniforms.uMB3DEmissive = { value: ls ? emissiveStrength : 0 };
-            shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbAttrDbg ? 4 : (globalThis as any).__mbLightDbg ? 1 : ((globalThis as any).__mbFogTDbg ? 2 : ((globalThis as any).__mbShadowUvDbg ? 3 : 0)) };
+            // §885 终二三六: a fog-LESS style must not fog extrusions —
+            // UniformsLib.fog.fogAlpha defaults to 1 (the template value for
+            // fog styles) and nothing resets it when the style has no `fog`,
+            // so the inline mgl-fog block below washed every wall of the
+            // occlusion family (expected 29 rendered 105-179, expected 137
+            // rendered 172-177; mbLit probe proved the lighting itself was
+            // already pixel-exact). Zero the material's fogAlpha when the
+            // scene carries no fog (scene.fog exists iff the style declares
+            // fog). {value:0} detaches from the shared template on purpose.
+            if (!(mapView?.scene as THREE.Scene | null | undefined)?.fog) {
+                shader.uniforms.fogAlpha = { value: 0 };
+            }
+            shader.uniforms.uMB3DDbg = { value: (globalThis as any).__mbAttrDbg ? 4 : (globalThis as any).__mbLightDbg ? 1 : ((globalThis as any).__mbFogTDbg ? 2 : ((globalThis as any).__mbShadowUvDbg ? 3 : ((globalThis as any).__mbLitDbg ? 5 : 0))) };
             // §885 终一百一十四: fetch-channel probe — compile/uniform state
             // of the extrusion injection via POST (console routing is lossy).
             if ((globalThis as any).__mbDecodeDbg
@@ -1504,7 +1522,13 @@ export class MBMaterialPatchManager {
                      // there); this outer chain keeps only the scope-safe
                      // probes and yields to the probe when it fired.
                      if (!mbShProbeFired) {
-                        if (uMB3DDbg > 3.5) {
+                        if (uMB3DDbg > 4.5) {
+                            // §885 终二三六: pre-fog lit color readout —
+                            // distinguishes "lighting wrong" (mbLit far from
+                            // expected) from "fog wash" (mbLit ≈ expected but
+                            // final color fog-mixed).
+                            gl_FragColor.rgb = mbLit;
+                        } else if (uMB3DDbg > 3.5) {
                             // §885 终二三五: attribute face normal readout —
                             // R/G/B = 0.5+0.5 * WORLD-frame n.xyz; MAGENTA
                             // (1,0,1) = zero attribute (fallback active).
