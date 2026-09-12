@@ -1956,3 +1956,66 @@ Shader Chrome）在最重 trees-puck-* 巨网格夹具上同时运行击穿 24GB
 +8 PASS。开放项：①远场内容雾（worldToFogMatrix）；②pitch-70 请求
 集宽度；③车亮度/透明度混合；④powerplants-fog-globe-transition 退化
 归因。
+
+### §885 终二四七：model-layer 家族账收口——179 可比净 −6.59M、PASS 0→9；globe 雾簇双旋钮惰性定位（2026-09-12）
+
+**① 家族最终账（vs ml260907 基线，含本日 serial 补测）**：基线 187 可测
+夹具 29,082,174 → **22,491,891（净 −6,590,283，−22.7%）**；**PASS 0 → 9**
+（default 3,136→0、default-orientation、model-embedded-gltf-without-normals、
+model-emissive-factor、model-external-gltf-files、model-rotation、
+model-scale 112,129→0、model-translation、npot-mipmaps 75,995→0——全部
+精确 0）。179 可比中 87 改善 / 44 恶化 / 48 逐位持平；>2k 改善 69 例
+合计 −3,459,093，>2k 恶化 26 例合计 +685,414。
+
+**② 测量收口与不可测集合（记档）**：
+- 55 个中期"跳过"夹具重分类（正确语义 `platformTag.includes(tag)`，
+  修正本轮此前用反向子串的误判——griffith 系 tag `web-macos-chrome`
+  实为可跑）：**20 个上游 skip-test 元数据 web 平台跳过**（it.skip 永不
+  出数，两引擎同样，永久排除；清单 tmp/family/pending-skip.txt）；35 个
+  可跑全部补测。
+- 35 可跑中 **29 出数**（batch=4 serial，batch=2 重试 6 例再救回 4：
+  griffith 双例、trees-shadow-scaled、trees-use-theme、trees-zoom-based
+  -scale）；**6 例环境不可测**（单测 180s mocha 超时，巨网格在 Swift
+  Shader 下 >3min/例）：trees-puck ×3、trees-transition-update、
+  landmark-z-offset-munich-museum-terrain-lod、z-offset-v2-port（不在
+  基线）；另 buildings-trees ×4 环境级 DISCONNECTED（终一九三已记档）。
+  修复入口：harness 侧提高 `this.timeout(180000)` 上限或真机 GPU。
+- 补测亮点（此前未测）：vector-layer-external-models 双例 148,851→
+  **5,300**（−143k×2）、trees-shadows-terrain-high-altitude 460,665→
+  **359,223**（−101k）、munich-museum 四例 −72k~−85k×4、landmark-z-offset
+  -terrain-fix-griffith 双例 −17.5k×2。
+- 口径：结果树混合 batch=6（晨 shard）与 batch=4/2（午后 serial），
+  同批次逐位确定、跨批次微差（终二三四纪律）。
+
+**③ 退化簇归因（像素级，退化合计 +685k 的主体定域）**：
+- **globe+雾簇**（powerplants-fog-globe +88,297 / -transition +62,237 /
+  -globe-zoom-function +128,125，合计 +278k）：三例均为 globe 投影 +
+  fog 彩色（red/blue）+ zoom 3-5 + pitch 60-70。transition 夹具剖面：
+  红雾过度延伸覆盖下半幅洋面（exp 洋面 [131,205,233] vs cur
+  [137,183,211]；饱和红 px exp 905 vs cur 7,383）。**双旋钮 A/B 均逐位
+  不变**：fogeuclid=0 → 131,639/127,402 = committed；bgquadoff=1 → 同值
+  ——内容欧氏雾与背景雾 quad 在该簇双双惰性。红雾来源 = **globe 投影下
+  栅格瓦片的标准内容雾路径（fogGlobe* uniform 链域）**，非 quad/非
+  Euclid。models-on-globe* 五例逐位=基线，globe 模型放置稳定互证。
+- **landmark-wireframe 双例 +22k**：15.3k px expected 红色元素
+  （[219,28,27]）我们缺失（灰棕 [167,142,128]）+ 全幅偏暗偏棕——模型
+  材质/光照域。
+- **buckingham 双例 +49k**：kG 修复后模型尺寸正确、几何目视对齐；残差
+  = expected 带黄暗内容 [155,154,134] vs 我们平坦亮灰 [185,185,180]
+  （29k px exp 暗 [101,83,83] 我们亮灰，内容完全丢失）——模型光照/
+  环境色调域。
+- **door-light-munich-museum +36k**：方向相反——expected 亮灰
+  [145,146,146] vs cur 暗灰 [120,120,119]（226k px）——emissive 门/
+  光照域。
+- **landmark-shadows-cutoff-range 双例 +11k**：模型尺寸修正确后阴影
+  覆盖扩大（正确性改进的阴影域代价）。
+- **trees-light-aligned 四例 +94k**（+15k~+31k/例）与 trees-shadow
+  -scaled +35k：雾/光照合成域。
+- camera-orthographic-terrain-zero-pitch-no-shadows +91.5k：HEAD 相对
+  基线既有漂移（终二四六(补)已核，零可达）。
+
+**④ 下轮入口**：①globe 内容雾域标定（fogGlobe* 链，服务 +278k 簇）；
+②模型光照/材质色调域（buckingham/wireframe/door-light，+107k）；
+③180s 超时夹具的 harness 侧修复后入账；④其余开放域不变（远场内容
+雾 worldToFogMatrix、pitch-70 请求集宽度、车亮度、terrain 雾负 t、
+星场真机、depth-range 完整语义）。
