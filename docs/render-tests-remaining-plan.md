@@ -2237,3 +2237,29 @@ directional 1，与 buckingham 平坦亮灰同族战役）。
 **⑤ 仍开放**：buckingham 双例平坦亮灰（exp 带黄暗 [155] vs cur
 [185]，+49k）——mgl-shot 对拍待做；instanced 线框（需实例感知
 线段，挂起）；globe 相机帧映射前置（终二五一）。
+
+### §885 终二五三：buckingham 平坦亮灰定性——mbx landmark 模型纹理/材质缺失域（2026-09-12）
+
+**① expected 精读**（landmark-conflation-buckingham，z17.7/p22.5/
+伦敦白金汉宫 mbx landmark 模型）：模型带完整纹理材质——深灰屋顶、
+黄色天窗/玻璃带、白色立面+黄窗、红色 conflation 标线与投影阴影；
+我方渲染整体平坦亮灰 [185,185,180]（无屋顶暗色、无黄色内容、
+无立面纹理）。
+
+**② 定性**：非光照强度差（前几轮的 +49k 并非暗/亮标定问题），而是
+**mbx landmark GLB 的纹理/材质在我们 batched-model 管线中未应用**
+（基色平面渲染）；door-light-munich 的 +36k（expected 亮灰 vs cur 暗
+25 灰阶）同族嫌疑。与 终二四四③ 的请求集宽度、终二四七 的 wireframe
+红色元素并列——batched-model landmark 域三大缺口：纹理材质、线框
+（本轮已落地）、请求集。
+
+**③ mgl-shot 工具债**：landmark 夹具页面白屏（"};" 伪影）——
+batched-model 瓦片相对 URL 过不了 new Request（已修：src.tiles
+绝对化），修后仍有独立渲染期异常吞画布；errors 全量打印已加入
+cjs。下轮修复 mgl-shot 的 landmark 渲染后可做双引擎材质对拍。
+
+**④ 下轮入口**：①mbx GLB 纹理/材质链排查（decodeGlbTile 的
+images/materials 是否透传 three——TextureLoader/flipY/colorSpace/
+aoMap（§ 终二三五 mbx occlusion maps 已知））；②buckingham/door
+-light-munich 双例 A/B；③globe 相机帧映射前置（终二五一挂起）；
+④180s 超时夹具 harness 修复。
