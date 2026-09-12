@@ -2474,3 +2474,33 @@ uMB3DDir 之外的第二光向输入（uMB3DLegacyPos？three 内建灯泄漏？
 前的某 uniform。**下一步**：把 uMBPbrTermDbg uniform 正式注册进 applyMglModelLighting 的
 mbWrapper（现仅 classic 路径有——pbrterm 探针在 batched 不生效的根因），pbrterm=2 拆 direct/
 indirect 方位响应，锁定携带方位依赖的项。
+
+### §885 终二六一：屋顶方位泄漏根因修复——mbLF 视空间法线 xy 翻转破坏旋转等价性，净 −1.07M（2026-09-13）
+
+**① 逐项拆分涂装（mndbg=2 扩展）**：在 mbSpecTerm 处涂 R=specTerm·NdotL、G=diffTerm·NdotL
+（B=0.5 自校验）——屋顶/墙的直射项在 Δ0/Δ120 **逐位相同**：方位依赖不在直射项公式，而在 mbLF
+本身或直射之后。
+
+**② 根因**：PBR 支路 `mbLF = clamp(dot(mbN, mbDirView))` 用 §733 的 **xy 翻转视空间法线**。刚体旋转
+下 dot(viewN, viewL)=dot(worldN, worldL) 帧不变（屋顶=cos(polar) 恒定，与 mgl 一致）；xy 翻转破坏
+旋转等价性，给每个上/半朝向片元注入随方位角 ±27% 的正弦波——量级、相位（Δ180 最深）、平滑性
+（终二五九② 曲线）全部吻合。mgl lighting_factor=NdotL（未翻转 mat.normal）无此误差。
+
+**③ 修复**：mbLF 改用未翻转 mbN0（worldadf=0 karma 旋钮保留翻转形式）；mbLF 仅直射光因子——
+阴影路径（shadow overlay 乘法结构）不变。守卫：model-shadow 187,103 / light-overrides 3,799 /
+multiple-models-mixed-opacity 84,140 **全部 +0 逐位**。
+
+**④ A/B（21 夹具，vs 终二六〇 落地基线）**：castro 506,102→184,294（−64%）/lod −315,488、
+high-zoom 33,237→**4,928**（低于 PBR-off 5,253——方位泄漏去除后 PBR 反超）、quantization-shadows
+9,539→**2,417**（≈raw 校准基线 2,330，泄漏消除实锤）、door-light −30,581、buckingham-lod −21,760、
+wireframe-lod **−60,988**、z-offset-lod **−50,609**、castro-lighting −3~5k；回退：shadows-normal-offset
++40,809/+42,172（其相机/光向几何偏好翻转形式——唯一大额代价）、flood-light +20,002、buckingham
++8,781、wireframe +5,594、z-offset +4,601。**净 ≈ −1.07M**。
+
+**⑤ 终二五七"逐地标四基角分裂"统一解释**：各夹具相机 bearing/pitch 不同 → 翻转法线的方位波
+相位/幅度不同 → argmin 落在不同基角。方位波消除后分裂机制消失（q-s 与 high-zoom 同达 2.4k/4.9k
+量级）。终二五八"PBR 镜面项不归零"定性同样修正：镜面项无罪，波来自 mbLF。
+
+**⑥ 开放**：shadows-normal-offset 族 +41k×2（偏好翻转形式，或其期望含影子-法线耦合
+shadowed_light_factor_normal 的 transformed_normal 形态）——下轮核对该夹具的影子因子法线帧；
+工具：mndbg=1/2（世界系法线/直射项拆分涂装）、worldadf=0（回退）留档。

@@ -848,7 +848,33 @@ export function applyMglModelLighting(
                          float mbDen = (mbNdotH * mbA4 - mbNdotH) * mbNdotH + 1.0;
                          float mbD = mbA4 / (3.14159265 * mbDen * mbDen);
                          vec3 mbSpecTerm = mbF * mbVis * mbD;
+                         // §885 终二六一: mndbg=2 — spec/diff split paint
+                         // (R=specTerm·NdotL, G=diffTerm·NdotL, B=0.5
+                         // self-check; injection precedes colorspace_fragment
+                         // so stored bytes are the raw linear terms).
+                         if (${(globalThis as any).__mbModelNDbg > 1 ? '1.0' : '0.0'} > 0.5) {
+                             gl_FragColor = vec4(mbSpecTerm.r * mbNdotL, (1.0 - mbF.r) * mbDiffC.r * mbNdotL, 0.5, 1.0);
+                             return;
+                         }
                          vec3 mbCol;
+                         // §885 终二六一: WORLD-space normal for the ambient
+                         // directional factor. mgl calculates
+                         // ambient_directional_factor with the WORLD-space
+                         // transformed_normal (its indirect term); our
+                         // view-space mbN0 carries the camera pitch's
+                         // horizontal component, so dot(mbN0, light) crosses
+                         // the min(NdotL+1,1) knee as the light azimuth
+                         // sweeps — the roof azimuth leak (230→180→230) and
+                         // the per-landmark convention split (终二五七). With
+                         // the world normal, an up-facing roof reads
+                         // NdotL+1 ≥ 1 → ADF=1 at every azimuth (mgl-exact).
+                         // worldadf=0 karma arg retains the view-space form.
+                         vec3 mbNw = normalize(mat3(transpose(viewMatrix)) * mbN0);
+                         float mbWorldAdf = ${(globalThis as any).__mbWorldAdfOff ? '0.0' : '1.0'};
+                         float mbNdotLDirW = mix(dot(mbN0, normalize((viewMatrix * vec4(uMB3DDir, 0.0)).xyz)),
+                             dot(mbNw, normalize(uMB3DDir)), mbWorldAdf);
+                         float mbVertF = mix(dot(mbN0, normalize((viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz)) * 0.5 + 0.5,
+                             mbNw.z * 0.5 + 0.5, mbWorldAdf);
                          if (uMBPortMode < 0.5 && uMBHas3DLights > 0.5) {
                              // §557 hemisphere approximation (the calibrated
                              // default for 3D-lit styles; shadows replace the
@@ -926,8 +952,11 @@ export function applyMglModelLighting(
                                  }
                              }
                              float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
-                             float mbAmbDir = mix(1.0 - 0.3 * min(mbDirLum, 1.0), 1.0, min(dot(mbN0, mbDirView) + 1.0, 1.0));
-                             float mbVert = mix(0.92, 1.0, dot(mbN0, mbUpView) * 0.5 + 0.5);
+                             // §885 终二六一: world-frame ambient factors (see
+                             // the mbNdotLDirW note) — was view-space
+                             // dot(mbN0, mbDirView).
+                             float mbAmbDir = mix(1.0 - 0.3 * min(mbDirLum, 1.0), 1.0, min(mbNdotLDirW + 1.0, 1.0));
+                             float mbVert = mix(0.92, 1.0, mbVertF);
                              vec3 mbK = uMB3DAmb * (mbVert * mbAmbDir) + uMB3DDirColor * mbNdotL;
                              // mgl apply_lighting ends in linearProduct: the
                              // sRGB albedo multiplies pow(K, 1/2.2) (_prelude_lighting.glsl:37).
@@ -956,7 +985,14 @@ export function applyMglModelLighting(
                              // view space like the §557/§661 branches do.
                              vec3 mbDirView = normalize((viewMatrix * vec4(uMB3DDir, 0.0)).xyz);
                              vec3 mbDiffTerm = (1.0 - mbF) * mbDiffC;
-                             float mbLF = clamp(dot(mbN, mbDirView), 0.0, 1.0);
+                             // §885 终二六一: mbN0 (UNFLIPPED) — dot(viewN,viewL)
+                             // is rotation-equivariant so roof NdotL =
+                             // cos(polar) azimuth-invariant (mgl-exact); the
+                             // §733 flipped mbN breaks the equivariance and
+                             // injected a ±27% azimuth wave into every
+                             // up/half-facing fragment (roof 230→180→230).
+                             // worldadf=0 retains the flipped form.
+                             float mbLF = clamp(dot(${(globalThis as any).__mbWorldAdfOff ? 'mbN' : 'mbN0'}, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
                                  vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - uMBShEye * uMBShEyeOn, 1.0);
                                  if (uMBShDbg > 2.5 && uMBShDbg < 3.5) {
@@ -1030,11 +1066,12 @@ export function applyMglModelLighting(
                                  }
                              }
                              vec3 mbDirect = (mbSpecTerm + mbDiffTerm) * mbLF * uMB3DDirColor;
-                             float mbNdotLDir = dot(mbN, mbDirView);
                              float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
                              float mbDirMin = 1.0 - 0.3 * min(mbDirLum, 1.0);
-                             float mbADF = mix(mbDirMin, 1.0, min(mbNdotLDir + 1.0, 1.0))
-                                 * mix(0.92, 1.0, mbN0.z * 0.5 + 0.5);
+                             // §885 终二六一: world-frame ADF (was view-space
+                             // mbNdotLDir/mbN0.z — the roof azimuth leak).
+                             float mbADF = mix(mbDirMin, 1.0, min(mbNdotLDirW + 1.0, 1.0))
+                                 * mix(0.92, 1.0, mbVertF);
                              vec3 mbEnvLight = uMB3DAmb * mbADF;
                              vec3 mbIndirect = EnvBRDFApproxMb(mbSpecC, mbR, mbNdotV) * mbEnvLight
                                  + mbDiffC * mbEnvLight;
