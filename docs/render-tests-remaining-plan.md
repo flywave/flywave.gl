@@ -2386,3 +2386,36 @@ buildPrimitiveMesh 对 normals 逐顶点 y 取反 + meshopt 组级负 scale 经 
 
 **⑤ 终二五六落地版维持**（Δ0=mirror(az+180)），本轮零代码行为变更（batched 分支重写为 az 直算形
 式，逐位等价），新增三旋钮（mlnorm/mldiraz/mlform）+ 判定记档。
+
+### §885 终二五八：双引擎同点亮度对拍——漫反射链实证 mgl 精确，残差主源=我方 PBR 镜面项（2026-09-13）
+
+**① mgl-shot 重建（tmp/，gitignored）**：mgl-shot2.html/cjs——?laz/?lpol 光向覆盖（cast-shadows
+自动关，lsh=1 强制开）+ ?probe=x,y;... 页内 5×5 采样 + zadj zoom 语义修正（IBCT 参照平台 zoom=
+style.zoom−1，否则构图 2× 偏大）+ 滚动条隐藏。链路修复三件：meshopt wasm（api.mapbox.com 下载
+meshopt_base/simd_v0.20.wasm 并复制为 esm-dev 要的 v1.2 名，服务端 MIME application/wasm）、模型 URI
+绝对化、CSS 警告无害。参照可信度：quantization-shadows 与 expected.png 采样 diff 0.43%（1024 采样
+步 2）。
+
+**② 双引擎同墙对拍（quantization-shadows，7 探针点 × 12 方位角）**：我方侧用 azsweep2-Δ 的
+current.png 同点采样（Δ→mgl 等效方位角 a=150−Δ）。**屋顶（法线朝上，方位角必须不变）：mgl 恒
+(237,226,219)；我方随方位角 229↔179（PBR on）——方位泄漏实锤**。判别实验 modellightport=0：
+屋顶 Δ0/Δ120 完全相同（240,215,201）→ 泄漏全在我方 **PBR 镜面项**，非法线、非烘焙。
+
+**③ 漫反射链实证 mgl 精确**：PBR-off 下墙体响应与 mgl 逐点吻合（W1: Δ0↔a210 204/204、Δ120↔a30
+178/177；W5: 203/200、179/180，偏差 ≤3 灰阶）——**mirror(az+180) 漫反射约定被同点对拍实证为
+mgl 保真**（此前仅整幅 diff 间接推断）。
+
+**④ PBR-off 大批 A/B（净 −856,572）**：castro 506,102→69,984（−86%）/lod −433,564、high-zoom
+33,237→**5,253**、buckingham-lod −40,854、door-light −14,264（门控夹具也受益——门控只锁方向不锁
+着色模型）；但 shadows-normal-offset **+71,583 双例**、flood-light +16,175。分裂解释：低粗糙度材质
+mgl 镜面项可见（我方 PBR 尚近），roughness=1 材质 mgl 镜面≈0 而我方不归零（方位泄漏/能量残留）。
+**不全局翻缺省**（q-s 族会 +143k）。
+
+**⑤ 机制定案（终二五六⑥①关闭）**：量化法线精度证伪（PBR-off 漫反射对拍逐点吻合=法线数据良
+好）；烘焙光照证伪（屋顶方位不变性恢复）；**主源=我方 PBR 镜面项在 roughness→1 时不归零**。
+下一轮主攻：镜面项逐项审计（roughness 传递链、GGX α=roughness²、Fresnel/energy 补偿、specular
+occlusion），以 mgl model.fragment.glsl 逐式核对；验收判据=roughness 1 材质方位扫描平坦 +
+shadows-normal-offset 族保持。
+
+**⑥ 工具资产**：tmp/mgl-shot2.{html,cjs}（wasm 需 mapbox-gl-js/meshopt_{base,simd}_v{0.20,1.2}.wasm
+在场，gitignored 目录留意丢失）；azsweep2-*/pbr0-* 结果目录留存 argmin 曲线原始数据。
