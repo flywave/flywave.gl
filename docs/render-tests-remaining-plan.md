@@ -2547,3 +2547,24 @@ model-ambient-occlusion-intensity=0.75 为 style 显式设定与材质一致（A
 **③ 大局快照（终二五六→二六二 累计）**：模型光照战役累计净 ≈ −2.9M px；当前大残差夹具转为
 构图/请求集域（castro 184k、shadows-normal-offset 154k、buckingham 180k、door-light 158k）——
 **下一战役入口=mbx-meshopt 模型瓦片请求集宽度**（终二五三③遗产）+ 门控夹具影子耦合精调。
+
+### §885 终二六四：请求集宽度战役首证——覆盖计算算错地理格子（8763-5126 vs 2630-6352）（2026-09-13）
+
+**① 工具**：mgl-shot2.cjs 重写（CDP Network.enable 捕获 GLB 请求集；教训：二次赋值 ws.onmessage
+覆盖 RPC pump 致挂起——必须单 pump 合并 dispatch）。[MBBatchedTile] 日志补 tileKey。
+
+**② 精确复现（shadows-normal-offset，z19/center[-122.1988,37.4231] SF）**：我方仅加载 **1 块**
+模型瓦片 `8763-5126-14`（=慕尼黑，door-light/z-offset 用的那块）；正确格子按 center 计算 =
+`2630-6352-14`（文件存在！2630-6352-14.glb），mgl 渲染的正是它（mgl-shot2 实拍=expected 多建筑
+街区）。即**我方覆盖计算把 SF 相机算到了慕尼黑格子**——非"少加载相邻瓦片"，而是"算错格子"
+（铺回的 Group position −1223/1223 = 相机邻域 → 慕尼黑内容画在 SF 相机前）。同时终二六三"构图
+失配"精化：不是相机差异，是瓦片内容错位。
+
+**③ 待查（下轮）**：MBStyleDataSource:127 coveringTiles 模拟 + FrustumIntersection 的 world→tile
+映射对该 datasource 的 level/tileSize 语义（z19 请求 z14 超瓦片正确——文件只有 z14；错的是 x/y
+格子）。验证锚点：期望键 2630-6352-14；对照 mgl tiled_3d_model_worker_source 的 coverTile。
+
+**④ 其余 9 块 z14 瓦片分布**：8719-5686(慕尼黑门楼)/2619-6331/2621-6331/2621-6332/8389-5495/
+9147-5394/9327-4742/2951-6424/2630-6352——各 landmark 夹具各用一块；door-light/z-offset/buckingham
+用慕尼黑块（8763 或 8719），castro 用 8389-5495 或 2619 系——**逐夹具锚点键可从 expected 内容
++center 计算逐一固化**，作为覆盖修复的验收表。

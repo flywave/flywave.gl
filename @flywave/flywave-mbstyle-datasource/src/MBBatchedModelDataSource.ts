@@ -448,7 +448,7 @@ class MBBatchedModelDecoder implements ITileDecoder {
                     if (!sample && o.material?.vertexColors === true) sample = o;
                 });
                 // eslint-disable-next-line no-console
-                console.log('[MBBatchedTile] z' + tileKey.level +
+                console.log('[MBBatchedTile] ' + tileKey.column + '-' + tileKey.row + '-' + tileKey.level + ' ' + 'z' + tileKey.level +
                     ' meshopt=' + meshopt +
                     ' features=' + hasMeshFeatures +
                     ' meshes=' + n +
