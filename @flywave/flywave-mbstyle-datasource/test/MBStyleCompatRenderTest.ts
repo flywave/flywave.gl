@@ -137,6 +137,11 @@ function discoverTests(): TestEntry[] {
     const alt = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("modeldiralt="))?.slice("modeldiralt=".length);
     if (alt === "1") (globalThis as any).__mbModelDirAlt = true;
+    // §885 终二五六: mlform=lsdir → force the §683 lighting3DState dir onto
+    // the model shading path (no shadow chain needed) for convention A/B.
+    const mlform = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("mlform="))?.slice("mlform=".length);
+    if (mlform) (globalThis as any).__mbModelLightForm = mlform;
     // §885 终三十七: pbrterm=1 → the model PBR branch paints its per-term
     // values (R=direct.r/2, G=indirect.r/2, B=mbLF) for offline decode.
     const pterm = (window as any).__karma__?.config?.args?.find?.(
@@ -2276,7 +2281,10 @@ describe("MBStyleDataSource render-tests compatibility", function () {
         const testFn = shouldSkip ? it.skip : it;
 
         testFn(entry.name, async function () {
-            this.timeout(180000);
+            // §885 终二五六: the mlsweep=1 probe walks 12 light azimuths with
+            // render frames between them — well past the default 180s budget.
+            this.timeout((window as any).__karma__?.config?.args?.some?.(
+                (a: string) => a === "mlsweep=1") ? 900000 : 180000);
             let canvas: HTMLCanvasElement | undefined;
             let mapView: MapView | undefined;
 
@@ -3013,6 +3021,62 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         });
                     }
                 } catch { /* probe only */ }
+
+                // §885 终二五六: per-azimuth model-light sweep — at the stable
+                // capture state, walk the directional-light azimuth through
+                // [0,330] step 30 (polar kept from the fixture) and log an 8×8
+                // luminance grid per azimuth. The brightness-peak azimuth per
+                // model wall against the wall's true toSun bearing (mgl ground
+                // truth: sphericalDirectionToCartesian az+90, 终二三六
+                // zero-deviation formula) identifies the model-path ls.dir
+                // convention error's analytic form (终二五五: constant global
+                // flip is zero-sum, the error is azimuth-dependent).
+                // Lights are swept with cast-shadows OFF so the signal is pure
+                // shading; original style lights are restored before capture.
+                if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "mlsweep=1")) {
+                    try {
+                        const envS = (dataSource as any).m_environment;
+                        const styleLights = (dataSource as any).styleManager?.getStyle?.()?.lights;
+                        if (envS && styleLights?.length) {
+                            const glS = (mapView as any).renderer?.getContext?.()
+                                ?? canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+                            const wS = glS.drawingBufferWidth, hS = glS.drawingBufferHeight;
+                            const bufS = new Uint8Array(wS * hS * 4);
+                            const polar = styleLights.find((l: any) => l.type === 'directional')
+                                ?.properties?.direction?.[1] ?? 30;
+                            for (let az = 0; az < 360; az += 30) {
+                                envS.applyLights(styleLights.map((l: any) => l.type === 'directional'
+                                    ? { ...l, properties: { ...l.properties, 'cast-shadows': false, direction: [az, polar] } }
+                                    : l));
+                                await renderFrames(mapView, dataSource, 6);
+                                glS.readPixels(0, 0, wS, hS, glS.RGBA, glS.UNSIGNED_BYTE, bufS);
+                                let row = 'az=' + az + ' grid=';
+                                const cw = Math.floor(wS / 8), ch = Math.floor(hS / 8);
+                                for (let gy = 0; gy < 8; gy++) {
+                                    for (let gx = 0; gx < 8; gx++) {
+                                        let sum = 0, n = 0;
+                                        for (let y = gy * ch; y < (gy + 1) * ch; y += 4) {
+                                            for (let x = gx * cw; x < (gx + 1) * cw; x += 4) {
+                                                // readPixels is bottom-up; log top-down rows
+                                                const o = ((hS - 1 - y) * wS + x) * 4;
+                                                sum += (bufS[o] + bufS[o + 1] + bufS[o + 2]) / 3;
+                                                n++;
+                                            }
+                                        }
+                                        row += Math.round(sum / Math.max(n, 1)).toString(16).padStart(2, '0');
+                                    }
+                                }
+                                // eslint-disable-next-line no-console
+                                console.log('[MLSweep] ' + row);
+                            }
+                            envS.applyLights(styleLights);
+                            await renderFrames(mapView, dataSource, 12);
+                            // eslint-disable-next-line no-console
+                            console.log('[MLSweep] restored, dir=' +
+                                JSON.stringify((dataSource as any).m_environment?.m_3DDirectional?.direction));
+                        }
+                    } catch (e) { console.log('[MLSweep] err=' + String(e)); }
+                }
 
                 // §885 终十六: read the LIVE program uniforms back from the GL
                 // context for the first shadow-registered model material —

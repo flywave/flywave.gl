@@ -431,7 +431,10 @@ export class MBBatchedModelRenderer {
                 });
             }
             applyMglModelLighting(this.m_dataSource, model,
-                Number(paint?.['model-emissive-strength'] ?? 0));
+                Number(paint?.['model-emissive-strength'] ?? 0),
+                undefined, undefined, undefined, undefined, undefined,
+                // §885 终二五六: batched (y-mirrored) pipeline marker.
+                true);
             const op = Number(paint?.['model-opacity'] ?? 1);
             if (op < 1) {
                 model.traverse((o: any) => {

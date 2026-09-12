@@ -118,7 +118,7 @@ export function localizeModelUrl(url: string): string {
  * convention make them mgl-raw). The y-mirrored `ls.dir` (§683) is for
  * EXTRUSION walls (different normal frame), not models. The `modeldiralt=1`
  * karma arg retains the old y-mirrored form for per-fixture calibration. */
-export function modelLightDir(dataSource: any): [number, number, number] {
+export function modelLightDir(dataSource: any, batched?: boolean): [number, number, number] {
     const ls = dataSource?.m_environment?.lighting3DState;
     if (!ls) return [0, 0, 1];
     // mgl-raw (un-mirrored) is the default for models — §691 A/B measured
@@ -129,6 +129,23 @@ export function modelLightDir(dataSource: any): [number, number, number] {
     if ((globalThis as any).__mbModelDirAlt) {
         return ls.dir;  // old y-mirrored §683 convention (reverted via arg)
     }
+    // §885 终二五六: mlform=lsdir forces the §683 scene-frame dir onto the
+    // model path without activating the shadow chain — pure-shading A/B of
+    // the two direction conventions (per-azimuth sweep calibration).
+    // mlform=tosun reproduces 终二五五's flipped cast-shadows branch
+    // (ls.dir horizontal negated = the mgl-raw toSun form) as a RUNTIME knob
+    // — the 终二五五 net-negative verdict was driven by two -lod variants
+    // (+80,307/+57,243) from the LOD-streaming-timing noise family
+    // (buckingham-lod 206,599/102,912 same-tree spread, 记档排除); on the
+    // stable set the flip measured −49,730 (buckingham −9,959 /
+    // door-light-munich-museum −66,617 / munich-museum −30,101 vs
+    // shadows-normal-offset +56,947). Re-adjudicated by a same-batch A/B.
+    if ((globalThis as any).__mbModelLightForm === 'lsdir') {
+        return ls.dir;
+    }
+    if ((globalThis as any).__mbModelLightForm === 'tosun') {
+        return [-ls.dir[0], -ls.dir[1], ls.dir[2]];
+    }
     // §885 终二十二: CAST-SHADOWS styles get the lighting3DState dir (§683
     // scene-frame convention) — A/B measured −35.8k px on
     // shadows-normal-offset (the raw spherical form casts the ground/wall
@@ -138,6 +155,23 @@ export function modelLightDir(dataSource: any): [number, number, number] {
     const sl = dataSource?.m_environment?.shadowLightState;
     if (sl && dirProp !== undefined && ls.dir) {
         return ls.dir;
+    }
+    // §885 终二五六: BATCHED-pipeline (mbx Draco / mbx-meshopt / mbx-lod)
+    // models y-mirror their geometry (meshopt: group scale (w,−w,·); Draco:
+    // mirror baked into the vertices) — the mgl-faithful shading direction in
+    // our world frame is the y-MIRROR of the raw form, i.e. mirror evaluated
+    // at azimuth+180 (= ls.dir with both horizontal components negated).
+    // §691's A/B only tried raw(az) vs ls.dir(az)=mirror(−az) and picked the
+    // wrong branch of the mirror; the third candidate mirror(az+180)
+    // (runtime knob mlform=tosun, same-batch A/B) measures −97% on
+    // high-zoom-model-quantization (1,016,460→33,237 / −lod 1,016,460→
+    // 165,092) and improves every mbx fixture family, at a bounded
+    // +7..12k cost on the two meshopt shadow-textured fixtures
+    // (quantization-shadows 2,330→9,539, buckingham-lod noise-family twin).
+    // Classic (non-batched) GLB model layers keep raw: their geometry goes
+    // through GLTFLoader without the y mirror.
+    if (batched && ls.dir) {
+        return [-ls.dir[0], -ls.dir[1], ls.dir[2]];
     }
     return [
         Math.cos(az) * Math.sin(pl),
@@ -155,7 +189,8 @@ export function modelLightDir(dataSource: any): [number, number, number] {
 export function syncMglModelLighting(model: THREE.Object3D, dataSource: any): void {
     const ls = dataSource?.m_environment?.lighting3DState;
     if (!ls) return;
-    const dir = modelLightDir(dataSource);
+    // batched=true: only the batched pipeline calls this (MBBatchedModelDataSource).
+    const dir = modelLightDir(dataSource, true);
     model.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
@@ -323,6 +358,11 @@ export function applyMglModelLighting(
     // §739: model-receive-shadows (default true) — false layers never sample
     // the shadow map (mgl draw_model:557-560 shadowRenderer.enabled=false).
     receiveShadows?: boolean,
+    // §885 终二五六: batched-pipeline marker — mbx/mbx-meshopt/mbx-lod tiles
+    // y-mirror their geometry, so their non-cast-shadows shading direction is
+    // the horizontal negation of the raw form (mirror at azimuth+180).
+    // Classic GLB model layers (GLTFLoader, no mirror) keep the raw form.
+    batched?: boolean,
 ): void {
     const ls = dataSource?.m_environment?.lighting3DState;
     model.traverse((o) => {
@@ -348,7 +388,7 @@ export function applyMglModelLighting(
             // the copy).
             mat.userData.__mbLightParams = {
                 emissiveStrength, tint, heightRamp,
-                unlitMix, pbrEligible, lutOff, receiveShadows,
+                unlitMix, pbrEligible, lutOff, receiveShadows, batched,
             };
             // §775: legacy-light model materials self-draw the mgl fog in the
             // shader tail — compile out three's fog chunk (§673 pattern) so it
@@ -371,7 +411,7 @@ export function applyMglModelLighting(
                 const ls2 = dataSource?.m_environment?.lighting3DState;
                 shader.uniforms.uMB3DAmb = { value: ls2 ? ls2.ambientColorLinear : [1, 1, 1] };
                 shader.uniforms.uMB3DDirColor = { value: ls2 ? ls2.directionalColorLinear : [1, 1, 1] };
-                shader.uniforms.uMB3DDir = { value: modelLightDir(dataSource) };
+                shader.uniforms.uMB3DDir = { value: modelLightDir(dataSource, batched) };
                 shader.uniforms.uMB3DEmissive = { value: emissiveStrength ?? 0 };
                 // §744: unlit-clamp A/B gate (`modelclamp=1`) — §724.4 removed
                 // mgl-unlawful clamp(0,1) on the unlit mix; the emission
@@ -1169,7 +1209,7 @@ export function refreshModelShadowUniforms(
                         applyMglModelLighting(dataSource, {
                             traverse: (cb: (o: any) => void) => cb(mesh),
                         } as any, 0, undefined, undefined, undefined, undefined,
-                            false, true);
+                            false, true, true);
                     } catch { /* best-effort */ }
                 }
                 continue;
@@ -1184,7 +1224,8 @@ export function refreshModelShadowUniforms(
                 applyMglModelLighting(dataSource, {
                     traverse: (cb: (o: any) => void) => cb(mesh),
                 } as any, p.emissiveStrength, p.tint, p.heightRamp,
-                    p.unlitMix, p.pbrEligible, p.lutOff, p.receiveShadows);
+                    p.unlitMix, p.pbrEligible, p.lutOff, p.receiveShadows,
+                    p.batched);
                 healed++;
             } catch { /* best-effort — must never break the frame */ }
         }

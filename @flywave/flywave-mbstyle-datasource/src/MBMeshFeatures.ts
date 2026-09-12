@@ -663,7 +663,7 @@ export function applyMeshFeatures(
                 // still LUTs the albedo (expected image proof: trees-use-theme
                 // crowns are themed away from raw COLOR_0 green). So the tail
                 // LUT gate must NOT inherit lutOff.
-                applyMglModelLighting(dataSource, mesh, partsFor(mesh)[0].emissive, undefined, undefined, 0, true, false);
+                applyMglModelLighting(dataSource, mesh, partsFor(mesh)[0].emissive, undefined, undefined, 0, true, false, true);
                 root.userData.__mbFeatFeatureless.push(mesh);
             }
         });
@@ -908,7 +908,7 @@ function splitByPart(
         sub.userData.__mbMatBaseOpacity = (mat.opacity ?? 1);
         if (mat.transparent) (mat.userData ??= {}).__mbForceTransparent = true;
         const hr = mbHeightRampUniforms(style.heightEmission, bboxZMin, bboxZMax);
-        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr, 0, true, false);
+        applyMglModelLighting(dataSource, sub, style.emissive, undefined, hr, 0, true, false, true);
         sub.userData.__mbHrParams = hr;
         subMeshes.push(sub);
     }

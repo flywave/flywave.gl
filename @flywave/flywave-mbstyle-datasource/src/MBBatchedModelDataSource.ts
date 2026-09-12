@@ -1117,7 +1117,9 @@ class MBBatchedModelDecoder implements ITileDecoder {
             const emissive = num(paint?.['model-emissive-strength'], 0);
             applyMglModelLighting(this.m_envProvider, model, emissive, tint,
                 undefined, undefined, undefined,
-                paint?.["model-color-use-theme"] === "none");
+                paint?.["model-color-use-theme"] === "none",
+                // §885 终二五六: mbx tiles are the y-mirrored batched pipeline.
+                true);
             const op = Number(paint?.['model-opacity'] ?? 1);
             if (op < 1) {
                 model.traverse((o: any) => {

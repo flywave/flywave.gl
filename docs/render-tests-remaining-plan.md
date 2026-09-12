@@ -2320,3 +2320,41 @@ shadows-normal-offset 115,175 逐位恢复。
 （光源方位角, 仰角）实测 mgl 的墙面亮暗分布，反推 ls.dir 约定误差
 的解析形式（预期为方位角相关的旋转/镜像组合），再实现引擎侧
 模型程序名的正确 toSun 变换。禁止全局常量翻转（本轮证伪）。
+
+### §885 终二五六：模型方向光第三候选 mirror(az+180) 落地——batched 管线非阴影模型 −1.85M px，§691 镜像选错支（2026-09-12）
+
+**① 背景与工具重建**：终二五五指定的 mgl-shot ?laz 扫掠工具在 tmp/（gitignored）中已丢失（现存
+tmp/mgl-shot.html/cjs 为终一百六十八旧版，无 ?laz/root=mb）；改走更直接的**引擎侧**路线——mgl
+真值公式已由终二三六源码核对+实测零偏差锁定（sphericalDirectionToCartesian az+90 向光），未知量只在
+我方法线帧。新工具：①mlsweep=1 探针（MBStyleCompatRenderTest 捕获点前逐方位角 applyLights+readPixels
+8×8 亮度格，karma timeout 升至 900s）——实测 door-light 8×8 格对 az 响应幅值仅 ±8 灰阶，信噪比不足弃用；
+②mlform=lsdir/tosun 运行时旋钮（modelLightDir 强制约定，免代码翻转做同批 A/B）。
+
+**② 关键裁决翻转——终二五五的"净负"由 -lod 噪声污染**：同批重跑（mbstyle 平台 chrome-149-linux）发现
+终二五五回归主体是 -lod 孪生变体（door-light-munich-museum-lod +80,307 / shadows-normal-offset-lod
++57,243），与 buckingham-lod 高方差族（同树两次 206,599/102,912）同族；稳定集上翻转实为净改善。
+
+**③ 根因定位——解码路径双镜像约定**：MBBatchedModelDataSource 两条解码路径 y 镜像方式不同——
+meshopt（mbx-lod/mbx-meshopt 瓦片）组级 `scale(w,−w,·)` 负 determinant；Draco（mbx 瓦片）镜像烘进顶点
++绕序反转。§691 的 A/B 只在 raw(az) 与 ls.dir(az)=mirror(−az) 之间二选一，**漏掉第三候选
+mirror(az+180)=（−ls.dir.x, −ls.dir.y, ls.dir.z）**——batched 管线几何被 y 镜像后，mgl 保真方向恰是它。
+
+**④ 同批 A/B（mlform=tosun，14 夹具单批）**：high-zoom-model-quantization 1,016,460→33,237（**−97%**）、
+buckingham −9,665、door-light-munich-museum −66,634（gated 时 0）、z-offset-munich-museum −26,555、
+wireframe −23,768、flood-light-buckingham −11,830；回退仅 meshopt 阴影贴图族（quantization-shadows
++7,209、castro +4,909、-lod 噪声族 +11,682/+23,686）。⚠ 教训：先落地的 rot180 变体（raw 双分量取反，
+非镜像）在同夹具 quantization-shadows +85,622——**镜像与旋转是不同变换，A/B 必须逐变体验证**。
+
+**⑤ 落地**：modelLightDir(dataSource, batched) 增参——batched 管线（applyMglModelLighting 由
+MBBatchedModelDataSource/MBBatchedModelRenderer/MBMeshFeatures 调用点置 true，参数入 __mbLightParams
+随 Material.clone/re-patch 保真）非 cast-shadows 分支返回 mirror(az+180)；经典 GLB 模型层（GLTFLoader
+无镜像）与 cast-shadows ls.dir 门（shadowLightState）保持逐位不动。验证：guards 批（model-shadow
+187,103 / light-overrides 3,799 / feature-state 58,612 / multiple-models-mixed-opacity 84,140）全部
+**+0 逐位**；净度量 ≈ **−1.85M px**（high-zoom 双例 −1.83M 为主）。
+
+**⑥ 仍开放**：①meshopt 内部分裂（high-zoom 要镜像 −98% vs quantization-shadows/castro 要 raw
++7k/+5k，同瓦片集同灯光同 bearing=0/54.5）——疑 meshopt 量化法线逐 mesh 离散，需模型世界系法线
+dump 探针（attrdbg 模型版）定逐 mesh 真值；②door-light/buckingham 同为
+cast-shadows 但前者 shadowLightState 门生效后者不生效（shadow-intensity 0.564 vs 缺省）——门控
+判据待统一；③cast-shadows 主夹具的 ls.dir 门若解除，Draco 组预期再收 −66k（door-light）级；
+④mlsweep 亮度格探针灵敏度不足，模型法线域需 partHist/法线可视化级探针。
