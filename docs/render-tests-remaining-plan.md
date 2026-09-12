@@ -2419,3 +2419,34 @@ shadows-normal-offset 族保持。
 
 **⑥ 工具资产**：tmp/mgl-shot2.{html,cjs}（wasm 需 mapbox-gl-js/meshopt_{base,simd}_v{0.20,1.2}.wasm
 在场，gitignored 目录留意丢失）；azsweep2-*/pbr0-* 结果目录留存 argmin 曲线原始数据。
+
+### §885 终二五九：PBR 镜面项逐式审计——F/V/D 公式与 roughness 链均干净，分歧=量化法线有效倾角（2026-09-13）
+
+**① 公式审计（我方 MBModelRenderer:797-840 ↔ mgl model.fragment.glsl:280-470 逐式）**：F_SchlickFast/
+V_GGXFast/D_GGX(α=perceptualRoughness²)/EnvBRDFApprox/diffuseLambertian(LIGHTING_3D_MODE 无 PI 除)——
+**逐式一致**；roughness 传递链实测干净：mlnorm 材质 dump（quantization-shadows 全部 mesh）
+rough=1/metal=0/无 metallicRoughness 贴图 → mbR=1、mbAR=mbA4=1，mgl 侧同刻度（u_roughnessFactor=
+style model-roughness 默认 1；a_pbr nibble 仅 mesh-features 特征路径）。**roughness=1 时我方镜面项
+公式上界 ~0.6%（F≈0.04·Vis≤0.35·D≤0.42），解释不了屋顶 ±12% 方位响应——镜面公式本身无罪**。
+
+**② 屋顶方位响应精测（Δ30/60/90 补测后全曲线）**：roofA 230→220→206→191→180→180→206→230
+（Δ=0..300，平滑余弦、周期 360°、主/-lod 孪生逐位一致、Δ180（=+ls.dir）最深）——**真实着色效应，
+幅度 ±12% ≈ 有效法线倾角 ~7°**；mgl 同点全方位角恒 237。mlnorm 法线 dump：屋顶 mesh（node
+0023010230201103232020）attribute 法线显著倾斜（(0.41,0.25,0.88)/(0.27,−0.43,−0.86)），而
+307730210 干净朝上——**我方屋顶片元的有效法线相对 mgl 倾斜**。
+
+**③ 悖论与主嫌疑**：PBR-off（hemisphere 分支，同用 mbN0）屋顶却方位不变——分支行为差异指向
+**法线在两条支路的来源/解码不同**：主嫌疑=meshopt 量化法线解码差异（EXT_meshopt_compression
+OCTAHEDRAL filter：GLTFLoader+three MeshoptDecoder 路径 vs mgl 自有解码是否对 NORMAL 属性应用
+decodeFilterOct；或 flatShading 派生法线 vs 属性法线在两引擎的取舍）。判别实验设计（下轮）：
+①uMB3DDbg=5 模型版——片元级着色有效法线可视化（RGB=0.5+0.5·n）对拍 mgl 同点；②parseMeshoptScene
+对 NORMAL 属性解码的 filter 路径逐行核对 model_loader.ts:214 一带；③对单 mesh 强制 flatShading A/B。
+
+**④ pbrterm 探针教训**：pbrterm=1/2 涂装未达 batched 注入点（uMBPbrTermDbg uniform 疑未在
+applyMglModelLighting 的 uniforms 注册，读数=正常渲染）——下轮接线后再用；输出编码（three
+sRGB）会污染所有逐项读数，须先 sRGB⁻¹ 解码。
+
+**⑤ 审计小结**：终二五八"镜面项不归零"定性修正为**"法线数据/解码差异经 PBR 支路放大"**——
+PBR-off 时同法线却不变（hemisphere 公式对倾角不敏感的结构差异待③①判别）。方向约定层（终二五六
+落地）不受影响；验收判据维持：roughness-1 材质方位扫描平坦 + shadows-normal-offset 族保持 +
+castro/high-zoom 收敛至 PBR-off 级。

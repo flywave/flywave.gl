@@ -3063,17 +3063,19 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                 out += ` (${vN.x.toFixed(2)},${vN.y.toFixed(2)},${vN.z.toFixed(2)})`;
                             }
                             dumped++;
-                            // §885 终二五七: node-matrix determinant — mirrored
-                            // (det<0) node transforms are the per-landmark
-                            // normal-frame split suspect.
-                            const me = o.matrixWorld.elements;
-                            const det = me[0] * (me[5] * me[10] - me[6] * me[9])
-                                - me[4] * (me[1] * me[10] - me[2] * me[9])
-                                + me[8] * (me[1] * me[5] - me[2] * me[4]);
+                            // §885 终二五九: material PBR factors — the
+                            // roughness transfer chain (GLB factor ×
+                            // metallicRoughness texture) vs mgl's
+                            // u_roughnessFactor/a_pbr is the spec-leak
+                            // suspect.
+                            const mmN = Array.isArray(o.material) ? o.material[0] : o.material;
                             console.log(`[MBNorm] fixture=${(globalThis as any).__mbFixture ?? '?'}`
-                                + ` node=${nodeId} verts=${cnt} det=${det.toExponential(2)}`
+                                + ` node=${nodeId} verts=${cnt}`
+                                + ` rough=${mmN?.roughness} metal=${mmN?.metalness}`
+                                + ` mrTex=${mmN?.roughnessMap ? 'Y' : 'N'}`
+                                + ` aoTex=${mmN?.aoMap ? 'Y' : 'N'}`
                                 + ` lights=${JSON.stringify(o.userData?.__mbLights ?? null)}`
-                                + ` zsc=${o.userData?.__mbZScale ?? '-'} n0..n3=${out}`);
+                                + ` n0..n3=${out}`);
                         });
                         console.log(`[MBNorm] fixture=${(globalThis as any).__mbFixture ?? '?'} dumped=${dumped}`);
                     } catch (e) { console.log('[MBNorm] err=' + String(e)); }
