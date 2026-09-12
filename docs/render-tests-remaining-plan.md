@@ -1865,3 +1865,94 @@ naive×1.03——**尺寸差域锁定为 mgl model_bucket bake 的 meters→tile
 换算 vs 我们的 raw-metre 实例矩阵**。下轮 = dump mgl model_bucket 的
 meter_to_tile 中间量（patched dist 加日志于 model_bucket.ts:543 的
 feature.scale bake 处），或离线用 mgl 3d-style 源码数值求值 bake 矩阵。
+
+### §885 终二四六：model-layer 破局——kG 纬度公式喂错经度，车 3.4× 过大修复（2026-09-12）
+
+**① 终二四五 两项结论撤回**：⑴"mgl 实测 ≈22.5px"实为 expected.png 的测量
+误标——mgl-shot 里该车**从未加载成功**：mgl `loadGLTF` 把模型 URI 作为
+base 传给 `new URL(buffer.uri, base)`，glTF 内嵌 data: buffer 使 base
+解析成为必经路径，而 harness 的 localize 产出**相对路径**
+`/mapbox-gl-js/...` → "Invalid base URL" → 静默加载失败（终二四二的
+"模型加载错误"真因）。修复：mgl-shot.html 模型 URI 绝对化
+（location.origin 前缀）。⑵"尺寸域锁定 model_bucket bake"方向错误——
+`type:"model"` source 的 ModelSource.loadTile 为空，车走
+`drawModels → calculateModelMatrix`（model.ts:205, viewportScale=false）
+CPU 矩阵路径，与 model_bucket instancing 无关。
+
+**② mgl 侧数值验证（mgl-shot.html ?modelprobe=1）**：页内复刻
+calculateModelMatrix + expandedFarZProjMatrix 投影 glTF bbox 八角点
+（复制器验证：centerScreen 精确 (256,256)）。实测：mgl 相机高度
+**215.84 真米**（zoom16.2/pitch70，即 终二四三 的 216 是 mgl
+freeCamera 真值；我们引擎相机 z=273.1 是**赤道米 z 轴**下的同一物理
+高度 215.84×sec(lat)——sec-lat"巧合"实为两引擎单位制差异，相机物理
+等价）；预测车 bbox 38.3×41 @512，与 mgl 实拍（车 53×43@1024，尾部
+被建筑遮挡）与 expected（52×42）**三方一致**——vendored mgl 修复
+URL 后精确复现参照，"mgl≈naive×0.48"系幽灵。
+
+**③ 我们侧探针（modelproj=1，引擎自身数学）**：`delta=(0.0,0.0)`——
+放置位置精确等于 projection.projectPoint(style position)（终二四五的
+"世界尺寸真偏大"中位置因素排除）；但 `worldMatrixScale=(42.93,
+20.24, 42.93)`，X 列应为 12.65。
+
+**④ 根因（loadModels §652 kG 公式错）**：`MBStyleDataSource.loadModels`
+的 mercator ground-stretch 把**经度** `(lng+180)/360`（=0.16）喂进
+纬度公式 `atan(sinh(π(2x−1)))` → "纬度"=−76.5° → cos=0.2327 →
+**kG=4.297 而非 1.265** → source 级注册模型在 SF 经度带 3.4× 过大
+（车 218×175 → 修复后 64×56 @1024；npx 1549 vs expected 703 的可见性
+差为亮度域）。MBModelRenderer.instantiate 的同款公式用 placement.y
+（正确）；MBBatchedModelDataSource 亦正确——**bug 仅在 loadModels 一处**
+（纬度 0 夹具如 fill-extrusion--default 公式惰性，不受影响）。修复：
+kG = 1/cos(lat) 直接用放置纬度。
+
+**⑤ §766 z 项 1.6 过拟合撤除**：mgl 世界系各向同性（worldpx 三轴同
+单位、scaleZ raw=1）；我们系各向异性（x/y 赤道米、z 真米），高度车道
+需与 x/y 同款 kG——即 sc[2] = scale×kG×**1.0**。原 1.6 系在 kG bug
+与场景错位下的过拟合。落地 `modelzsc=` A/B 旋钮默认 1.0（karma 透传 +
+runner 白名单）。三方目视：车尺寸/姿态/位置对齐（剩余：我们车过亮=
+透明度/雾混合域）。
+
+**⑥ 剩余（本轮定性）**：ground-shadow-fog 分数 141,539（pre-fix）→
+**140,426**（残差被场景域主导）：我们渲染出高塔群而 expected 是低层
+街区——瓦片本身含 160m 塔（602 building，max 160 / 中位 12 / >100m
+×10），expected 远场塔被白雾重度雾化而我们对比度更高 + 我们请求集
+25 瓦 vs mgl 窄集（终二四四③）→ 下轮入口 = **远场内容雾强度
+（worldToFogMatrix 域）与 pitch-70 瓦片请求集宽度**。
+
+**下轮入口**：①家族回归定量归因（landmark-*/munich/london 带模型
+1.5× 增大方向）；②远场内容雾；③车亮度/透明度混合。
+
+### §885 终二四六（补）：model-layer 家族回归中期账（151/206）——净 −2,677,419（2026-09-12）
+
+chunked 逐夹具对照 ml260907 基线（跨批次口径，方向性判读）：149 个
+可归因夹具 base 22,102,849 → **19,425,430（净 −2,677,419）**；
+**新增 8 PASS、0 丢失 PASS**：default 3,136→**0**、default-orientation
+→3、model-translation→2、model-rotation→134、model-emissive-factor→**0**、
+model-external-gltf-files→59、model-embedded-gltf-without-normals→86、
+**model-scale 112,129→1**。最大赢项：model-normal-emission-occlusion
+-maps −193,413、z-offset-v2-station −179,491、model-state/multiple
+-features −113,474、model-normals −111,334、no-ambient/no-directional
+−94,726/−88,739、feature-state −89,231、ortho-high-pitch −29,922、
+environment-test −24,009（28,407→4,398，剩余为黑/白页合成域）、
+fill-extrusion--default −21,602。
+
+退化 >2k 共 14 例合计 ~−194k：powerplants-fog-globe-transition
+−62,237（globe+transition+fog 交互待查）、buckingham-lod −39,404 与
+buckingham −9,868（伦敦带模型 1.6× 增大到正确值，目视几何已对齐，
+差异转阴影/光照域）、ortho-model-depth-terrain −20,016、wireframe 系
+−22k、door-light-munich −35.9k；ground-shadow 双例 −11.3k 为跨批次
+口径（同代际 pre-fix 141,539 → post-fix 140,426 实为 −1.1k 改善）。
+
+无模型夹具 ortho-terrain-zero-pitch-no-shadows +91,538 为 HEAD 相对
+09-07 基线的既有漂移（本改动零可达，不计入归因）。
+
+**内存事故纪律**：3 路并行 karma 会话（node webpack 全仓编译 + Swift
+Shader Chrome）在最重 trees-puck-* 巨网格夹具上同时运行击穿 24GB，
+进程树被杀——**重模型夹具严禁并行 karma 会话**；单路 batch=4 串行
+为安全节奏。剩余 55 夹具（trees-*/part-styling-*/style-model-api-*
+等）按用户指示跳过，随全量 baseline 复跑补测。
+
+**交付态**：kG 纬度修复 + modelzsc=1.0 默认 + modelproj/modelprobe
+探针 + mgl-shot 模型 URI 绝对化，model-layer 家族中期净 −2.68M、
++8 PASS。开放项：①远场内容雾（worldToFogMatrix）；②pitch-70 请求
+集宽度；③车亮度/透明度混合；④powerplants-fog-globe-transition 退化
+归因。

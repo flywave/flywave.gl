@@ -31,10 +31,17 @@
         for (const [, src] of Object.entries(style.sources ?? {})) {
             if (Array.isArray(src.tiles)) src.tiles = src.tiles.map(localize);
             if (typeof src.url === 'string' && src.url.startsWith('local://')) src.url = localize(src.url);
-            // model sources: the loader fetches uri directly (终二四二)
+            // model sources: the loader fetches uri directly (终二四二).
+            // §885 终二四六: must be ABSOLUTE — mgl loadGLTF passes the uri as
+            // the base URL to `new URL(buffer.uri, base)` and the glTF's
+            // data:-embedded buffer makes base parsing mandatory; a relative
+            // base throws "Invalid base URL" and the model silently fails
+            // (this is why the car never appeared in earlier shots).
             if (src.type === 'model' && src.models) {
                 for (const m of Object.values(src.models)) {
-                    if (typeof m.uri === 'string' && m.uri.startsWith('local://')) m.uri = localize(m.uri);
+                    if (typeof m.uri === 'string' && m.uri.startsWith('local://')) {
+                        m.uri = location.origin + localize(m.uri);
+                    }
                 }
             }
         }
@@ -113,6 +120,107 @@
                 }).catch(() => {});
             };
             setTimeout(dump, 3000);
+        }
+        // §885 终二四六: ?modelprobe=1 — replicate calculateModelMatrix
+        // (model.ts:205, viewportScale=false mercator branch) in-page and
+        // project the car's glTF bbox corners through
+        // transform.expandedFarZProjMatrix to get the predicted screen bbox
+        // (CSS px @512). Closes the model-layer size chain on the mgl side.
+        if (params.get('modelprobe') === '1') {
+            const dumpModel = () => {
+                try {
+                    const tr = map.transform;
+                    const C = 40075017;
+                    // column-major mat4 (gl-matrix semantics)
+                    const ident = () => new Float64Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+                    const mul = (a, b) => { // a · b
+                        const o = new Float64Array(16);
+                        for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+                            o[c*4+r] = a[r]*b[c*4] + a[4+r]*b[c*4+1] + a[8+r]*b[c*4+2] + a[12+r]*b[c*4+3];
+                        }
+                        return o;
+                    };
+                    const xform = (m, v) => [ // m · [v,1]
+                        m[0]*v[0]+m[4]*v[1]+m[8]*v[2]+m[12],
+                        m[1]*v[0]+m[5]*v[1]+m[9]*v[2]+m[13],
+                        m[2]*v[0]+m[6]*v[1]+m[10]*v[2]+m[14],
+                        m[3]*v[0]+m[7]*v[1]+m[11]*v[2]+m[15]];
+                    const D2R = Math.PI/180;
+                    const rotZ = (a) => { const c=Math.cos(a*D2R), s=Math.sin(a*D2R); return new Float64Array([c,s,0,0, -s,c,0,0, 0,0,1,0, 0,0,0,1]); };
+                    const rotX = (a) => { const c=Math.cos(a*D2R), s=Math.sin(a*D2R); return new Float64Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]); };
+                    const rotY = (a) => { const c=Math.cos(a*D2R), s=Math.sin(a*D2R); return new Float64Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]); };
+                    const scaleM = (s) => new Float64Array([s[0],0,0,0, 0,s[1],0,0, 0,0,s[2],0, 0,0,0,1]);
+                    const translateM = (t) => new Float64Array([1,0,0,0, 0,1,0,0, 0,0,1,0, t[0],t[1],t[2],1]);
+                    const CS = new Float64Array([1,0,0,0, 0,0,1,0, 0,1,0,0, 0,0,0,1]); // COORD_SPACE_TRANSFORM y↔z
+                    const out = {
+                        zoom: tr.zoom, pitch: tr.pitch, bearing: tr.bearing,
+                        fov: tr.fov, fovDeg: tr.fov/D2R, worldSize: tr.worldSize,
+                        camToCenter: tr.cameraToCenterDistance,
+                    };
+                    try {
+                        const fc = tr.getFreeCameraOptions();
+                        const camLat = Math.atan(Math.sinh(Math.PI*(1-2*fc.position.y)));
+                        out.cameraMerc = [fc.position.x, fc.position.y, fc.position.z];
+                        out.cameraAltMeters = fc.position.z * C * Math.cos(camLat);
+                    } catch (e) { out.cameraErr = String(e); }
+                    const mpp = (lat, z) => Math.cos(lat*D2R) * C / (Math.pow(2, z) * 512);
+                    const srcStyle = style.sources.model;
+                    const models = srcStyle.models;
+                    const modelEntries = [];
+                    for (const [mid, m] of Object.entries(models)) {
+                        const pos = m.position;
+                        const scaleVec = [10,10,10], rotation = [0,0,0], translation = [0,0,0];
+                        // T(pp) · S(scaleXY, scaleXY, scaleZ) · Rz·Rx·Ry · S(scale) · CS
+                        const pp = tr.project(new mapboxgl.LngLat(pos[0], pos[1]));
+                        const scaleXY = 1 / mpp(pos[1], tr.zoom);
+                        let M = translateM([pp.x, pp.y, 0]);
+                        M = mul(M, scaleM([scaleXY, scaleXY, 1]));
+                        M = mul(M, rotZ(rotation[2]));
+                        M = mul(M, rotX(rotation[0]));
+                        M = mul(M, rotY(rotation[1]));
+                        M = mul(M, scaleM(scaleVec));
+                        M = mul(M, CS);
+                        // node car2: quat [0.70710677,0,0,0.70710683] = Rx(+90°)
+                        const Rnode = rotX(90);
+                        const NM = mul(M, Rnode);
+                        // glTF bbox: body+wheel extremes (Y-up metres)
+                        const gmin = [-1.8678845167160034, -0.984043538570404, -1.3013598918914795];
+                        const gmax = [ 2.091134786605835,  0.9840434789657593, 0];
+                        const proj = tr.expandedFarZProjMatrix;
+                        const sx = [], sy = [], world = [], screen = [];
+                        for (let i = 0; i < 8; i++) {
+                            const v = [i&1?gmax[0]:gmin[0], i&2?gmax[1]:gmin[1], i&4?gmax[2]:gmin[2]];
+                            const w = xform(NM, v);
+                            world.push(w.map(n => +n.toFixed(2)));
+                            const c = xform(proj, w);
+                            const ndcX = c[0]/c[3], ndcY = c[1]/c[3];
+                            const pxX = (ndcX*0.5+0.5)*512, pxY = (0.5-ndcY*0.5)*512;
+                            sx.push(pxX); sy.push(pxY);
+                            screen.push([+pxX.toFixed(1), +pxY.toFixed(1)]);
+                        }
+                        modelEntries.push({
+                            id: mid, position: pos,
+                            metersPerPixel: mpp(pos[1], tr.zoom),
+                            scaleXY, modelMatrixWorldSpan: scaleXY*10,
+                            groundPx: [+pp.x.toFixed(1), +pp.y.toFixed(1)],
+                            screenBBox: {
+                                x: [+Math.min(...sx).toFixed(1), +Math.max(...sx).toFixed(1)],
+                                y: [+Math.min(...sy).toFixed(1), +Math.max(...sy).toFixed(1)],
+                                w: +(Math.max(...sx)-Math.min(...sx)).toFixed(1),
+                                h: +(Math.max(...sy)-Math.min(...sy)).toFixed(1),
+                            },
+                            corners: screen, world,
+                        });
+                    }
+                    out.models = modelEntries;
+                    // sanity: project the style center ground point → expect (256,256)
+                    const cp = tr.project(new mapboxgl.LngLat(style.center[0], style.center[1]));
+                    const cc = xform(tr.expandedFarZProjMatrix, [cp.x, cp.y, 0]);
+                    out.centerScreen = [+((cc[0]/cc[3]*0.5+0.5)*512).toFixed(1), +((0.5-cc[1]/cc[3]*0.5)*512).toFixed(1)];
+                    window.__modelProbe = out;
+                } catch (e) { window.__modelProbe = { err: String(e), stack: e.stack }; }
+            };
+            setTimeout(dumpModel, 3000);
         }
     })();
 </script>

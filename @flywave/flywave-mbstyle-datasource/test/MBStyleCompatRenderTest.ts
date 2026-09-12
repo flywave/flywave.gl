@@ -343,6 +343,21 @@ function discoverTests(): TestEntry[] {
     if (hq) {
         (globalThis as any).__mbHideQuad = hq;
     }
+    // §885 终二四六: modelproj=1 → source-model placement chain dump
+    // ([MBModelProj]: placed world pos vs projection.projectPoint(style pos),
+    // camera pose, car bbox corners projected through the live camera).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "modelproj=1")) {
+        (globalThis as any).__mbModelProj = true;
+    }
+    // §885 终二四六: modelzsc=<f> → source-model height-lane factor A/B
+    // (default 1.0; the §766 1.6 overfit is sweepable).
+    {
+        const mzsc = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("modelzsc="))?.slice("modelzsc=".length);
+        if (mzsc !== undefined && Number.isFinite(Number(mzsc))) {
+            (globalThis as any).__mbModelZsc = Number(mzsc);
+        }
+    }
     // §869: zoomab=N → camera zoom A/B offset (globe diameter calibration).
     const zoomabArg = (window as any).__karma__?.config?.args
         ?.find?.((a: string) => a.startsWith("zoomab="))?.slice("zoomab=".length);

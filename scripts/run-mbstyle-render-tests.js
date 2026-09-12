@@ -103,6 +103,8 @@ function main() {
             ...(process.env.MBSTYLE_LITEDBG ? ["liteldbg=1"] : []),
             ...(process.env.MBSTYLE_RASUVDBG ? ["rasuvdbg=1"] : []),
             ...(process.env.MBSTYLE_DECODEDBG ? ["decodedbg=1"] : []),
+            ...(process.env.MBSTYLE_MODELPROJ ? ["modelproj=1"] : []),
+            ...(process.env.MBSTYLE_MODELZSC ? [`modelzsc=${process.env.MBSTYLE_MODELZSC}`] : []),
             ...(process.env.MBSTYLE_NOLIFT ? ["nolift=1"] : []),
             ...(process.env.MBSTYLE_FIXRED ? ["fixred=1"] : []),
             ...(process.env.MBSTYLE_GLYPHDBG ? ["glyphdbg=1"] : []),

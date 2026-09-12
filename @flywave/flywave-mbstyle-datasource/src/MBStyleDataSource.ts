@@ -3759,13 +3759,16 @@ export class MBStyleDataSource extends TileDataSource {
                         const sc = Array.isArray(effScaleC)
                             ? [effScaleC[0] ?? 1, effScaleC[1] ?? 1, effScaleC[2] ?? 1]
                             : (effScaleC !== undefined ? [effScaleC, effScaleC, effScaleC] : [1, 1, 1]);
-                        // §766: mgl mercator scaleZ is RAW (z world px per model
-                        // unit, zoom-independent screen 1:1) while x/y go
-                        // through 1/mpp — the z/x world ratio in mgl is
-                        // 1/mpp(lat) ≈ 1.88 at z15 vs our frames' 0.79 (kG on
-                        // x/y, meters on z). Without this the model height is
-                        // ~2.04× squashed (duck H82 vs expected 167, measured).
-                        sc[2] *= (1 / Math.max(1e-6, Math.cos((def.position[1] ?? 0) * Math.PI / 180))) * 1.6;
+                        // §766→终二四六: model height lane. mgl's world frame
+                        // is ISOTROPIC (worldpx on all axes; scaleZ raw = 1);
+                        // ours is anisotropic (x/y equatorial units, z raw
+                        // metres) so the height needs the SAME kG stretch as
+                        // x/y to reproduce mgl's proportions — sc[2] =
+                        // scale × kG × modelzsc (A/B knob, default 1.0; the
+                        // earlier 1.6 overfit ground-shadow-fog-era geometry
+                        // and rendered the car 1.6× too tall vs expected).
+                        sc[2] *= (1 / Math.max(1e-6, Math.cos((def.position[1] ?? 0) * Math.PI / 180)))
+                            * Number((globalThis as any).__mbModelZsc ?? 1.0);
                         const D2R = Math.PI / 180;
                         const m = new THREE.Matrix4()
                             // §653: render-frame y mirror flips the euler
@@ -3786,15 +3789,76 @@ export class MBStyleDataSource extends TileDataSource {
                                 0, 0, -1, 0,
                                 0, 1, 0, 0,
                                 0, 0, 0, 1));
-                        // §652(恢复): mercator ground-stretch x/y — see
-                        // MBModelRenderer.instantiate (mgl scaleXY =
-                        // modelPixelsPerMeter, lat-scaled).
-                        const kG = 1 / Math.max(1e-6, Math.cos(
-                            Math.atan(Math.sinh(Math.PI * (2 * ((lng + 180) / 360) - 1)))));
+                        // §652(恢复+终二四六修复): mercator ground-stretch x/y —
+                        // mgl scaleXY = modelPixelsPerMeter (lat-scaled): one
+                        // ground meter at latitude φ = 1/cos(φ) equatorial
+                        // units on x/y. The previous transcription fed the
+                        // mercator X ((lng+180)/360 = 0.16 here) into the
+                        // LATITUDE formula — atan(sinh(π(2x−1))) ≈ −76.5° at
+                        // this fixture → cos 0.2327 → kG 4.297 instead of
+                        // 1.265: every source-registered model rendered
+                        // ~3.4× oversized (ground-shadow-fog car 4.2×). Use
+                        // the placement latitude directly.
+                        const kG = 1 / Math.max(1e-6, Math.cos(lat * Math.PI / 180));
                         m.premultiply(new THREE.Matrix4().makeScale(kG, kG, 1));
                         m.setPosition(model.position);
                         model.matrixAutoUpdate = false;
                         model.matrix.copy(m);
+                    }
+
+                    // §885 终二四六: modelproj=1 — dump the whole source-model
+                    // placement chain with the ENGINE's own math only (no
+                    // cross-frame hand conversion): placed world position vs
+                    // projection.projectPoint(style position), live camera
+                    // pose, and the glTF bbox corners projected through the
+                    // live camera → predicted screen bbox (CSS px @512).
+                    if ((globalThis as any).__mbModelProj) {
+                        try {
+                            const cam = (this.mapView as any).camera as THREE.PerspectiveCamera;
+                            const proj = (this.mapView as any).projection;
+                            const gc = new GeoCoordinates(lat, lng);
+                            const correct = proj.projectPoint(gc);
+                                cam.updateMatrixWorld();
+                                const viewM = new THREE.Matrix4()
+                                    .copy(cam.matrixWorld).invert();
+                                const pjM = cam.projectionMatrix;
+                                const projectPx = (v: THREE.Vector3) => {
+                                    const e = v.clone().applyMatrix4(viewM).applyMatrix4(pjM);
+                                    if (!Number.isFinite(e.w) || e.w === 0) return [NaN, NaN];
+                                    const nx = e.x / e.w, ny = e.y / e.w;
+                                    return [Number(((nx * 0.5 + 0.5) * 512).toFixed(1)), Number(((0.5 - ny * 0.5) * 512).toFixed(1))];
+                                };
+                            model.matrixWorldNeedsUpdate = true;
+                            model.updateMatrixWorld(true);
+                            const lmin = new THREE.Vector3(-1.8678845167160034, -0.984043538570404, -1.3013598918914795);
+                            const lmax = new THREE.Vector3(2.091134786605835, 0.9840434789657593, 0);
+                            const pxs: Array<[number, number]> = [];
+                            for (let i = 0; i < 8; i++) {
+                                const v = new THREE.Vector3(
+                                    i & 1 ? lmax.x : lmin.x,
+                                    i & 2 ? lmax.y : lmin.y,
+                                    i & 4 ? lmax.z : lmin.z);
+                                v.applyMatrix4(model.matrixWorld);
+                                pxs.push(projectPx(v));
+                            }
+                            const xs = pxs.map(p => p[0]), ys = pxs.map(p => p[1]);
+                            // eslint-disable-next-line no-console
+                            console.log(`[MBModelProj] pos=(${model.position.x.toFixed(1)},${model.position.y.toFixed(1)},${model.position.z.toFixed(1)})` +
+                                ` correctWorld=(${correct.x.toFixed(1)},${correct.y.toFixed(1)},${((correct as any).z ?? 0).toFixed(1)})` +
+                                ` delta=(${(model.position.x - correct.x).toFixed(1)},${(model.position.y - correct.y).toFixed(1)})` +
+                                ` cam=(${cam.position.x.toFixed(1)},${cam.position.y.toFixed(1)},${cam.position.z.toFixed(1)})` +
+                                ` camDist=${cam.position.distanceTo(model.position).toFixed(1)}` +
+                                ` camToCorrect=${cam.position.distanceTo(new THREE.Vector3(correct.x, correct.y, (correct as any).z ?? 0)).toFixed(1)}` +
+                                ` fov=${cam.fov} aspect=${cam.aspect} near=${cam.near} far=${cam.far}` +
+                                ` worldMatrixScale=(${new THREE.Vector3().setFromMatrixColumn(model.matrixWorld, 0).length().toFixed(2)},${new THREE.Vector3().setFromMatrixColumn(model.matrixWorld, 1).length().toFixed(2)},${new THREE.Vector3().setFromMatrixColumn(model.matrixWorld, 2).length().toFixed(2)})`);
+                            // eslint-disable-next-line no-console
+                            console.log(`[MBModelProj] bboxPx x=[${Math.min(...xs).toFixed(1)},${Math.max(...xs).toFixed(1)}] y=[${Math.min(...ys).toFixed(1)},${Math.max(...ys).toFixed(1)}]` +
+                                ` w=${(Math.max(...xs) - Math.min(...xs)).toFixed(1)} h=${(Math.max(...ys) - Math.min(...ys)).toFixed(1)}` +
+                                ` corners=${JSON.stringify(pxs)}`);
+                        } catch (e) {
+                            // eslint-disable-next-line no-console
+                            console.log('[MBModelProj] err=' + String(e));
+                        }
                     }
 
                     if ((globalThis as any).__mbDecodeDbg) {
