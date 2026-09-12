@@ -540,7 +540,7 @@ export function applyMglModelLighting(
                 // the world shadow direction (lighting3DState.dir, §683
                 // scene-frame calibration) and the replace-form gate.
                 shader.uniforms.uMBShadowDir = { value: (dataSource?.m_environment?.lighting3DState?.dir) ?? [0, 0, 1] };
-                shader.uniforms.uMBShRepl = { value: (globalThis as any).__mbShReplOff ? 0 : 1 };
+                shader.uniforms.uMBShRepl = { value: (globalThis as any).__mbShReplOn ? 1 : 0 };
                 shader.uniforms.uMBHbs = { value: [hr.b0, hr.b1, hr.power, hr.start] };
                 shader.uniforms.uMBHbsRange = { value: hr.range };
                 // §562: model self/ground-shadow reception (mgl

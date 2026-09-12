@@ -2529,3 +2529,21 @@ shadowed_light_factor_normal(transformed_normal,…) **替换** lighting_factor�
 **⑤ 开放**：shadows-normal-offset 残差 154k 主体仍非影子因子域（替换式仅回收 1.9k）——该夹具
 （az 190/影子强度 1.0）剩余残差需独立定性（候选：AO 贴图强度、conflation 顶点色、地形拼接）；
 终二六一 mbLF 修复与本轮替换式在 gated 夹具（door-light/z-offset 主例）的交互待大批复测。
+
+### §885 终二六三：shadows-normal-offset 154k 定性——场景构图/请求集域；shrepl 默认回退（2026-09-13）
+
+**① 三候选排除（expected/current/diff 三联判读）**：diff 几乎全幅红——expected（mgl）是多建筑街区
+（长影子、SE 视角、左上相邻建筑），我方仅主建筑居中、四周建筑缺失——**残差主体=场景构图/模型
+瓦片覆盖（终二五三"请求集宽度"域）**，非 AO/conflation/地形。style 佐证：无 terrain（拼接排除）；
+model-ambient-occlusion-intensity=0.75 为 style 显式设定与材质一致（AO 强度排除）；conflation
+顶点色即 model-color measure-light/random 表达式（窗口配色依赖 measure-light brightness——
+次要真嫌疑，随请求集修复后复测）。
+
+**② gated 交互复测（shrepl 替换式 vs 终二六一 landed）**：buckingham 族 +0 逐位 ✓；**door-light
+主例 +20,313**（其 shadow-intensity 0.564 → 替换式 (1−I·occ)·NDotL_shadow 劣于乘法形态）——
+替换式净贡献转负（−3.7k vs +20.3k）。**处置：默认翻回乘法形态**（uMBShRepl 默认 0，shrepl=1
+旋钮保留替换式供 per-fixture 使用）；终二六一 landed 读数即当前基线。
+
+**③ 大局快照（终二五六→二六二 累计）**：模型光照战役累计净 ≈ −2.9M px；当前大残差夹具转为
+构图/请求集域（castro 184k、shadows-normal-offset 154k、buckingham 180k、door-light 158k）——
+**下一战役入口=mbx-meshopt 模型瓦片请求集宽度**（终二五三③遗产）+ 门控夹具影子耦合精调。

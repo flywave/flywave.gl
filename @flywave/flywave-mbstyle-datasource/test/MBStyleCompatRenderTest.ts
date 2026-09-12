@@ -156,9 +156,13 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "worldadf=0")) {
         (globalThis as any).__mbWorldAdfOff = 1;
     }
-    // §885 终二六二: shrepl=0 → retain the NdotL×shadow-mix form.
-    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shrepl=0")) {
-        (globalThis as any).__mbShReplOff = 1;
+    // §885 终二六二: shrepl=1 → the mgl replace-form shadow factor
+    // (default OFF: it costs +20,313 on door-light-munich-museum's
+    // shadow-intensity 0.564 while gaining only −1.9k on
+    // shadows-normal-offset — landed default is the 终二六一 multiplicative
+    // form).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shrepl=1")) {
+        (globalThis as any).__mbShReplOn = 1;
     }
     // §885 终三十七: pbrterm=1 → the model PBR branch paints its per-term
     // values (R=direct.r/2, G=indirect.r/2, B=mbLF) for offline decode.
