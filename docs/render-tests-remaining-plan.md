@@ -2019,3 +2019,47 @@ model-scale 112,129→0、model-translation、npot-mipmaps 75,995→0——全�
 ③180s 超时夹具的 harness 侧修复后入账；④其余开放域不变（远场内容
 雾 worldToFogMatrix、pitch-70 请求集宽度、车亮度、terrain 雾负 t、
 星场真机、depth-range 完整语义）。
+
+### §885 终二四八：globe 雾簇破局归雾 chunk——终二二六重写丢立方衰减，恢复后三例 −303,701 双例精确回基线（2026-09-12）
+
+**① 定位链（全零成本探针 + 旋钮 A/B，无一次性代码）**：①fogeuclid=0
+与 bgquadoff=1 对 powerplants-fog-globe 双双**逐位不变**（131,639）——
+内容欧氏雾与背景 quad 双双惰性（globe 分支覆写 fogT、quad 不画 globe），
+推翻 quad 大气假设；②fogdbg=1（t 场涂色）读出盘面 fogT 仅 0.20-0.22
+（理论 fogFactor 应 ~0.4）而实际渲染 0.7-0.9；③fogdbg=2（未雾化基色）
+证实瓦片基色干净（水 [117,207,240]/陆 [239,233,225]）且红天空不经瓦片
+chunk（基色帧红天空仍在=主场景 dome 画天空）；④domedbg=2 分支所有权
+涂色显示盘面像素归瓦片（非 dome）——红雾来自瓦片雾 chunk 本身。
+
+**② 根因（git 考古实锤）**：终二二六（c731569e）的"负 opacity 泄漏
+修复"重写 fogFactor 时**意外丢弃立方衰减**：
+`fogAlpha·clamp(1−exp(−6t),0,1)·clamp(1.00747,0,1)` 替换了原式
+`fogAlpha·min(1, 1.00747·fogFalloff)`（fogFalloff=(1−exp(−6t))³ 自
+1b1c5d34 起即 mgl 精确式且**本就负安全**——t<0 时 min(1,exp)=1→
+falloff=0，重写的前提"fogFalloff 变负外推"不成立）；且
+`clamp(1.00747,0,1)` 恒等于 1。净效果：小 t 处雾强度 ~2×（t=0.2 →
+0.72 vs mgl 0.37）——远场/盘面内容过雾（globe 红雾簇）且远场内容雾
+开放域（ground-shadow-fog 远塔）同根。模型雾尾（MBModelRenderer:645/
+MBMaterialPatchManager:1503）两处均保持正确立方式，唯独主 chunk 受损。
+
+**③ 修复**：`fogFactor = fogAlpha·clamp(1.00747·fogFalloff, 0, 1)`
+（mgl 曲线 + 保留终二二六的负 t 外层钳制意图）。
+
+**④ 度量（13 夹具 A/B vs family-kGfix 交付态）**：
+- **globe 三例**：powerplants-fog-globe 131,639→**43,342**（−88,297，
+  精确回 ml260907 基线）、-transition 127,402→**65,165**（−62,237，
+  精确回基线）、-globe-zoom-function 244,191→**91,024**（−153,167，
+  较基线 116,066 再优 25k）。合计 **−303,701**。
+- **mercator 守卫零回归**：fog/color 三联 0/0/0 PASS、2d/basic 29,537
+  与 2d/inverted 9,417 逐位一致、culling/far 834 逐位、space-color
+  -opacity 44,372 逐位、ground-shadow-fog 140,426→140,430（+4 噪声）、
+  terrain/basic −166/terrain/inverted +11（微动）。立方仅在小 t（远场
+  内容）起作用——mercator 标定域的 t 大，曲线差异二阶。
+- 家族总账更新：22,491,891 → **22,188,190**（vs 基线净 −6,893,984，
+  −23.7%）。
+
+**⑤ 剩余（定性更新）**：globe 三例残差（43,342/65,165/91,024）= 场景
+构图差异（同相机下我们视场覆盖整个北美而 expected 贴近海面只见
+Florida/加勒比——globe 相机高度/内容放置域，基线同值即存在，与
+ground-shadow-fog 场景错位同族）；终二四七④的①（globe 雾标定）已由
+本条关闭，②模型光照域与其余开放项不变。

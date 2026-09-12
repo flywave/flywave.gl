@@ -111,12 +111,12 @@ THREE.ShaderChunk.fog_fragment = `
 	}
 	float fogFalloff = 1.0 - min(1.0, exp(-6.0 * fogT));
 	fogFalloff *= fogFalloff * fogFalloff;
-	// §885 终二百二十六: clamp BOTH sides — fogT < 0 (inverted/degenerate
-	// ranges: fog/terrain/inverted [0.5,-0.5], equal-range [-0.5,-0.5])
-	// made fogFalloff negative and the mix EXTRAPOLATE past the base color
-	// (black bands where mgl renders lit).
-	float fogFactor = fogAlpha * clamp(1.0 - min(1.0, exp(-6.0 * fogT)), 0.0, 1.0)
-		* clamp(1.00747, 0.0, 1.0);
+	// §885 终二四八: restore the mgl-exact curve — 终二二六's rewrite
+	// recomputed the ramp WITHOUT the cube (fogFalloff became dead code),
+	// over-fogging every content surface ~2x at t≈0.2 (the powerplants
+	// globe trio's red wash; fogT 0.2 → 0.72 uncubed vs 0.37 cubed). The
+	// outer clamp keeps 终二二六's negative-t protection (falloff ≤ 0 → 0).
+	float fogFactor = fogAlpha * clamp(1.00747 * fogFalloff, 0.0, 1.0);
 vec3 fogTargetCol = fogColor;
 	if (fogGlobeMode > 0.5) {
 		fogTargetCol = mix(fogColor, fogSpaceColor,
