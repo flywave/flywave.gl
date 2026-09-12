@@ -242,6 +242,7 @@ class MBBatchedModelDecoder implements ITileDecoder {
             const w = EQUATORIAL_CIRCUMFERENCE / Math.pow(2, tileKey.level) / TILE_GRID;
             const secLat = secLatOf(tileKey);
             const inner = new THREE.Group();
+                inner.userData.__mbBatchedModelRoot = true;
             inner.name = 'MBBatchedModelGrid';
             let hasMeshFeatures = false;
             // model-ambient-occlusion-intensity (style-spec default 1).

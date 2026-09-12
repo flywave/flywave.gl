@@ -2201,3 +2201,39 @@ mercator×2）实证均劣于引擎现有斜边轨道；引擎放置在 models-o
 **⑤ 工具资产留存**：camdump=1 探针；mgl-shot ?size=&dpr= 容器参数
 化 + transform internals dump（ccd/worldSize/ppmMercPixel/camPos）+
 src.data 改写 + operations 重放——后续任何相机工作的对拍基座。
+
+### §885 终二五二：landmark-wireframe 红色线框落地——showLayers3DWireframe 元数据实现，双例 −22,929（2026-09-12）
+
+**① 根因**：landmark-wireframe 双例的 15.3k px 红色元素缺失 =
+expected 由 mgl 的调试线框模式渲染（style metadata.test.
+`showLayers3DWireframe: true` → painter.options.wireframe.layers3D →
+DEBUG_WIREFRAME prelude `vec4(0.7,0,0,0.7)` + gl_FragDepth−0.0001），
+非 style 内容/光照域。引擎侧 setLayers3DWireframe 旧实现三缺陷：
+一次性场景遍历早于模型流式加载（恒 no-op）、technique 清单不含
+model、material.wireframe 用模型自身材质色（米色线≠参照红线）。
+
+**② 实现（MBStyleDataSource.setLayers3DWireframe 重写）**：存储标志 +
+WillRender 每帧 walker——对 batched-model 瓦片网格（组根
+`__mbBatchedModelRoot` 标记）挂 LineSegments(WireframeGeometry)
+叠加：LineBasicMaterial color(0.7,0,0)×opacity 0.7、depthWrite:false、
+renderOrder 9999、onBeforeCompile 注入 gl_FragDepth−0.0001（mgl
+HANDLE_WIREFRAME_DEBUG 语义）。
+
+**③ 范围收敛两轮**：①technique 扩展（extruded-polygon/fill/solid-line，
+对齐旧清单）→ landmark-wireframe +4,812、instanced-rendering +42,503
+——引擎普通 fill 复用 'fill'/'solid-line' technique，technique 名匹配
+过度接线（mgl 的 layers3D 是程序名清单 fillExtrusion/building/
+elevatedStructures/model，plain fill 在 layers2D 清单）；②收窄为
+batched-model 根限定 + isInstancedMesh 排除（instanced 绘制的实例
+变换无法用单一 WireframeGeometry 子物体表达，expected 15.3 万红 px
+vs 叠加版 17.6 万超量）。
+
+**④ 度量**：landmark-wireframe 120,535→**107,297**（−13,238）、
+-lod 88,144→**78,453**（−9,691）；wireframe/instanced-rendering
+409,635 逐位恢复（作用域限定生效）。双例合计 **−22,929**。残差
+~10.7 万 px = 模型光照/色调域（该夹具 lights ambient 0.2 +
+directional 1，与 buckingham 平坦亮灰同族战役）。
+
+**⑤ 仍开放**：buckingham 双例平坦亮灰（exp 带黄暗 [155] vs cur
+[185]，+49k）——mgl-shot 对拍待做；instanced 线框（需实例感知
+线段，挂起）；globe 相机帧映射前置（终二五一）。

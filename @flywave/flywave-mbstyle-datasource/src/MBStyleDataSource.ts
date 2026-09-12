@@ -4297,19 +4297,86 @@ export class MBStyleDataSource extends TileDataSource {
         this.m_environment?.terrainController?.setWireframe(enabled);
     }
 
-    /** Toggle 3D layer wireframe overlay (metadata.test.showLayers3DWireframe). */
+    /**
+     * Toggle 3D layer wireframe overlay (metadata.test.showLayers3DWireframe).
+     *
+     * §885 终二五二: mgl parity (painter.options.wireframe.layers3D +
+     * DEBUG_WIREFRAME prelude) — the model triangles are re-drawn as LINES
+     * in vec4(0.7,0,0,0.7) with a −0.0001 depth pull. The previous
+     * one-shot scene walk ran before the models streamed in and toggled
+     * the MODEL's own material color (beige lines, not the reference red).
+     * Now: store the flag and attach red wireframe overlays per render
+     * frame to every non-tile mesh (model meshes stream in over frames;
+     * tile meshes carry userData.technique and are excluded).
+     */
     setLayers3DWireframe(enabled: boolean): void {
         if (!this.mapView) return;
-        const scene = (this.mapView as any).m_scene as THREE.Scene;
-        if (!scene) return;
-        scene.traverse((obj: any) => {
-            if (obj.isMesh && obj.material && obj.userData?.technique) {
-                const tech = obj.userData.technique;
-                if (tech.name === 'extruded-polygon' || tech.name === 'fill' || tech.name === 'solid-line') {
-                    obj.material.wireframe = enabled;
-                }
-            }
+        const mvAny = this.mapView as any;
+        mvAny.__mbLayers3DWireframe = enabled;
+        if (!enabled) return;
+        if (mvAny.__mbLayers3DWireframeHook) return;
+        mvAny.__mbLayers3DWireframeHook = true;
+        const wireframeMaterial = new THREE.LineBasicMaterial({
+            color: new THREE.Color(0.7, 0.0, 0.0),
+            transparent: true,
+            opacity: 0.7,
+            depthWrite: false,
         });
+        // mgl pulls the wireframe depth toward the viewer to avoid
+        // z-fighting with the coincident triangles (HANDLE_WIREFRAME_DEBUG).
+        wireframeMaterial.onBeforeCompile = (shader: any) => {
+            shader.fragmentShader = shader.fragmentShader.replace(
+                '#include <dithering_fragment>',
+                '#include <dithering_fragment>\n	gl_FragDepth = gl_FragCoord.z - 0.0001;'
+            );
+        };
+        const wireMatAny: any = wireframeMaterial;
+        wireMatAny.__mbWfMat = true;
+        const attachWireframes = (): void => {
+            const scene = mvAny.m_scene as THREE.Scene | undefined;
+            if (!scene) return;
+            scene.traverse((obj: any) => {
+                if (!obj.isMesh || obj.userData?.__mbWfDone) return;
+                // Scope: batched-model tiles only (marker set at the tile
+                // group root). mgl's layers3D list is program-name based
+                // (fillExtrusion/building/elevatedStructures/model...); the
+                // engine's tile meshes reuse the 'fill'/'solid-line'
+                // techniques for PLAIN fills, so technique matching
+                // over-wires (landmark-wireframe +4.8k, instanced-rendering
+                // +42.5k — instanced draws also need instance-aware lines a
+                // single WireframeGeometry child cannot express).
+                if (obj.userData?.technique) return;
+                if ((obj as any).isInstancedMesh) return;
+                let rooted = false;
+                for (let p: any = obj.parent; p; p = p.parent) {
+                    if (p.userData?.__mbBatchedModelRoot) { rooted = true; break; }
+                }
+                if (!rooted) return;
+                const mat = obj.material;
+                if (!mat || mat.isShaderMaterial || Array.isArray(mat)) return;
+                if (!obj.geometry?.attributes?.position || !obj.geometry?.attributes?.normal) return;
+                obj.userData.__mbWfDone = true;
+                let wf: THREE.LineSegments;
+                try {
+                    wf = new THREE.LineSegments(
+                        new THREE.WireframeGeometry(obj.geometry),
+                        wireframeMaterial
+                    );
+                } catch {
+                    return;
+                }
+                wf.renderOrder = 9999;
+                wf.userData.__mbWfOverlay = true;
+                obj.add(wf);
+            });
+        };
+        this.mapView.addEventListener(
+            (MapViewEventNames as any).WillRender,
+            () => {
+                if (!(mvAny as any).__mbLayers3DWireframe) return;
+                attachWireframes();
+            }
+        );
     }
 
     /** Toggle 2D layer wireframe overlay (metadata.test.showLayers2DWireframe). */
