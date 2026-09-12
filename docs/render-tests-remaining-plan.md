@@ -2263,3 +2263,28 @@ images/materials 是否透传 three——TextureLoader/flipY/colorSpace/
 aoMap（§ 终二三五 mbx occlusion maps 已知））；②buckingham/door
 -light-munich 双例 A/B；③globe 相机帧映射前置（终二五一挂起）；
 ④180s 超时夹具 harness 修复。
+
+### §885 终二五四：buckingham 修正定性——分部件颜色已正确渲染，残差=模型方向光缺失（2026-09-12）
+
+**① partHist 探针（mbbatchdbg=1，34 个 mesh）**：几何层分部件颜色
+完全正确——p1 白墙 [255,255,255]、p4 黄窗 [255,255,0]、p3 屋顶
+[70-150 灰系+纹理变体]、p2 青门 [127,255,255]、p6 conflation 上色
+部件（[0,24,54]/[170,170,170] 等）。终二五三的"纹理缺失"定性修正：
+颜色/部件拆分全部生效。
+
+**② 渲染图精读**：我方构图与 expected 高度一致（白墙✓近黑屋顶✓
+橄榄黄天窗✓青门✓红标线✓纪念池✓）；分歧纯为**色调**——expected
+屋顶中灰 [155-185]（方向光 elev 82.4° 强上照射亮，intensity 0.86）、
+天窗亮黄；我方屋顶近黑 [20-40]、天窗橄榄暗黄。 roof mix=0 → 色来自
+原始 4444 色（[70-150] 暗），expected 更亮 = mgl 方向光照亮了它们。
+
+**③ 根因锁定**：模型材质的**方向光项缺失/方向错误**——即 终二三六
+③ 搁置的 lighting3DState.dir 集中式迁移审计的模型消费方
+（MBMeshFeatures:596 模型墙 NdotL、MBModelRenderer、batched 灯光
+注入 applyMglModelLighting）：挤出体已修（uMB3DDir 水平翻转），模型
+路径的方向/仰角组合未同步（roof 上表面 NdotL≈0 → 近黑）。
+
+**④ 修法（下轮专项）**：模型光照注入的方向量与挤出体 uMB3DDir 修复
+对齐（同一 toSun 语义），A/B 集 Buckingham 双例 + door-light-munich
++ landmark-z-offset-munich-museum 四例（均带 lights 的 landmark 模型
+夹具）+ 大批守卫（模型夹具光照全域敏感，须同批次对照）。
