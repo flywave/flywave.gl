@@ -2288,3 +2288,35 @@ aoMap（§ 终二三五 mbx occlusion maps 已知））；②buckingham/door
 对齐（同一 toSun 语义），A/B 集 Buckingham 双例 + door-light-munich
 + landmark-z-offset-munich-museum 四例（均带 lights 的 landmark 模型
 夹具）+ 大批守卫（模型夹具光照全域敏感，须同批次对照）。
+
+### §885 终二五五：模型方向光 toSun 翻转 A/B 净负回退——效果随光源方位角变号，需 per-azimuth 地表真值扫掠（2026-09-12）
+
+**① 实现**：modelLightDir 的 cast-shadows 分支（终二十二引入，返回
+ls.dir）改为水平分量取反的 toSun 形式（与终二三六挤出体 uMB3DDir
+修复同语义）。
+
+**② A/B（9 夹具次，vs family-kGfix 同批不可比处已标注）**：
+- 改善：buckingham 190,958→180,999（−9,959）、door-light-munich
+  -museum 189,083→**122,466**（−66,617）、munich-museum 173,248→
+  **143,147**（−30,101）；
+- 恶化：door-light-munich-museum-**lod** 123,692→203,999（+80,307）、
+  shadows-normal-offset 115,175→**172,122**（+56,947）、-lod
+  114,306→**171,549**（+57,243）；
+- 守卫：quantization-shadows **2,332 逐位**（翻转不影响）、-lod
+  1,709 ✓。
+净 +48,913 为负 → **回退**，回退后 buckingham 190,958 /
+shadows-normal-offset 115,175 逐位恢复。
+
+**③ 机制发现**：翻转效果随光源方位角变号——改善组 sun
+[311.92°, 82.38°polar]（伦敦/慕尼黑低仰角 7.6°），恶化组
+[190°, 50°]（慕尼黑仰角 40°）：ls.dir 约定（§683/§682/§686 为影子
+族校准）的水平分量相对 toSun 的偏差**非常数偏移**，随方位角/仰角
+组合变号；全局翻转必然零和。另一发现：buckingham-lod 为高方差
+夹具（LOD 流式时序，同树两次读数 206,599/102,912），不可作 A/B
+信号（记档排除）。
+
+**④ 修法（模型光照专项，下轮主攻）**：以 mgl-shot ?laz 光向扫掠
+（终二三五已建）对 landmark 模型做**逐方位角地表真值**：对每组
+（光源方位角, 仰角）实测 mgl 的墙面亮暗分布，反推 ls.dir 约定误差
+的解析形式（预期为方位角相关的旋转/镜像组合），再实现引擎侧
+模型程序名的正确 toSun 变换。禁止全局常量翻转（本轮证伪）。
