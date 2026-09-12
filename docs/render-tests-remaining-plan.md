@@ -2358,3 +2358,31 @@ dump 探针（attrdbg 模型版）定逐 mesh 真值；②door-light/buckingham 
 cast-shadows 但前者 shadowLightState 门生效后者不生效（shadow-intensity 0.564 vs 缺省）——门控
 判据待统一；③cast-shadows 主夹具的 ls.dir 门若解除，Draco 组预期再收 −66k（door-light）级；
 ④mlsweep 亮度格探针灵敏度不足，模型法线域需 partHist/法线可视化级探针。
+
+### §885 终二五七：逐地标方位角 argmin 标定——偏好横跨 raw/±ls.dir 四基角，全局着色方向约定不存在（2026-09-12）
+
+**① 工具落地**：①mlnorm=1 探针（捕获点遍历带 __mbNodeId 的 batched mesh，matrixWorld normalMatrix
+变世界系法线 dump + matrixWorld 行列式 + __mbLights 覆盖）；②mldiraz=<delta> 着色方位角旋转旋钮
+（modelLightDir 的 az 统一入口；首版旋钮因 batched 分支从 ls.dir 取反而失效——重写为从 az 直接计算
+mirror(az+180)，Δ0 与已落地版逐位一致，azsweep2 Δ0 三夹具读数与 fix2a 完全相同实证）。
+
+**② argmin 标定法**：对每夹具扫 Δ∈{0,60,120,180,240,300}，与 expected.png 的 diff 在真值 Δ 处最小。
+刻度换算（az0=210 默认时）：Δ300 ≡ raw、Δ180 ≡ +ls.dir、Δ0 ≡ −ls.dir。全链路验证：quantization
+-shadows Δ300 = 2,330 = raw 基线逐位复现 ✓；high-zoom-lod Δ300 = 1,016,460 = raw 基线逐位 ✓。
+
+**③ 结果——偏好按地标分裂，四个基角全部出现**：quantization-shadows（Ames/山景城，z19）argmin
+Δ300（raw，2,330，深谷）↔ 主/lod 一致；high-zoom（布鲁塞尔，z21.9）argmin Δ180（+ls.dir，12,932）
+↔ 主/lod 一致；castro 主 Δ120（−raw，209,671 但地板高）、castro-lighting 主 Δ0（−ls.dir）/lod
+Δ240——同瓦片集内四个方向都有地标选中。buckingham 族 Δ0/Δ120/Δ180 打平（互有胜负：buckingham
+169-172k、wireframe 83.5/107/103k、z-offset 145.6/173/167k），全局换 Δ180 净 −390k 但由 castro 族
+独驱、q-s/wireframe/z-offset 恶化——拒绝追随（过拟合）。
+
+**④ 机制排除**：①节点矩阵无镜像（det=+2.0 全体）；②两条解码路径法线均正确镜像（Draco
+buildPrimitiveMesh 对 normals 逐顶点 y 取反 + meshopt 组级负 scale 经 normalMatrix）——法线帧按
+地标自洽（castro 45° 对角墙族 = Market St 斜交街区真实朝向，非解码旋转伪影）；③__mbLights 逐节点
+光照覆盖全 null。**结论：着色方向约定层面已无全局红利；残差分裂源自瓦片数据/材质域（量化法线
+精度、顶点色/纹理烘焙光照）**，需 mgl 侧同地标亮度对拍（mgl-shot ?laz 重建 + partHist 级探针）定逐
+地标真值，禁止再以全局方向变换追分。
+
+**⑤ 终二五六落地版维持**（Δ0=mirror(az+180)），本轮零代码行为变更（batched 分支重写为 az 直算形
+式，逐位等价），新增三旋钮（mlnorm/mldiraz/mlform）+ 判定记档。

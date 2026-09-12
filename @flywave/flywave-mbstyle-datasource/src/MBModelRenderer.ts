@@ -124,7 +124,11 @@ export function modelLightDir(dataSource: any, batched?: boolean): [number, numb
     // mgl-raw (un-mirrored) is the default for models — §691 A/B measured
     // −97.5% on quantization/high-zoom vs the y-mirrored ls.dir.
     const dirProp = dataSource?.m_environment?.m_3DDirectional?.direction;
-    const az = ((dirProp?.[0] ?? 210) + 90) * Math.PI / 180;
+    // §885 终二五七: mldiraz=<delta> rotates the model-shading azimuth for
+    // the per-fixture argmin sweep — the delta minimizing the diff vs
+    // expected.png IS the convention error's analytic value for that fixture.
+    const azDelta = Number((globalThis as any).__mbModelDirAzDelta ?? 0);
+    const az = ((dirProp?.[0] ?? 210) + (azDelta || 0) + 90) * Math.PI / 180;
     const pl = (dirProp?.[1] ?? 30) * Math.PI / 180;
     if ((globalThis as any).__mbModelDirAlt) {
         return ls.dir;  // old y-mirrored §683 convention (reverted via arg)
@@ -171,7 +175,9 @@ export function modelLightDir(dataSource: any, batched?: boolean): [number, numb
     // Classic (non-batched) GLB model layers keep raw: their geometry goes
     // through GLTFLoader without the y mirror.
     if (batched && ls.dir) {
-        return [-ls.dir[0], -ls.dir[1], ls.dir[2]];
+        // mirror(az+180) computed from `az` (so mldiraz sweeps apply) —
+        // at delta 0 equals (−ls.dir.x, +ls.dir.y, ls.dir.z).
+        return [-Math.cos(az) * Math.sin(pl), Math.sin(az) * Math.sin(pl), Math.cos(pl)];
     }
     return [
         Math.cos(az) * Math.sin(pl),

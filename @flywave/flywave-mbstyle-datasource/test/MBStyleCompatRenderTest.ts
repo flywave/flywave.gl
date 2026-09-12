@@ -142,6 +142,11 @@ function discoverTests(): TestEntry[] {
     const mlform = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("mlform="))?.slice("mlform=".length);
     if (mlform) (globalThis as any).__mbModelLightForm = mlform;
+    // §885 终二五七: mldiraz=<deg> rotates the model shading azimuth — the
+    // per-fixture diff argmin over the sweep is the convention error.
+    const mlaz = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("mldiraz="))?.slice("mldiraz=".length);
+    if (mlaz !== undefined && mlaz !== "") (globalThis as any).__mbModelDirAzDelta = Number(mlaz);
     // §885 终三十七: pbrterm=1 → the model PBR branch paints its per-term
     // values (R=direct.r/2, G=indirect.r/2, B=mbLF) for offline decode.
     const pterm = (window as any).__karma__?.config?.args?.find?.(
@@ -3021,6 +3026,58 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         });
                     }
                 } catch { /* probe only */ }
+
+                // §885 终二五七: per-mesh WORLD-space normal dump for the
+                // batched pipeline — resolves the mirror(az+180) vs raw
+                // preference split (high-zoom wants mirror −98%,
+                // quantization-shadows/castro want raw +7k/+5k on the same
+                // mbx-meshopt tile set). For up to K meshes carrying
+                // __mbNodeId, transform 4 sample vertex normals by the
+                // matrixWorld normal matrix and log them with the node id and
+                // per-node light overrides (__mbLights — the light-override
+                // suspect). Identical normal frames across fixtures would move
+                // the split mechanism downstream of the normals.
+                if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "mlnorm=1")) {
+                    try {
+                        const nmat = new THREE.Matrix3();
+                        const vN = new THREE.Vector3();
+                        let dumped = 0;
+                        const seenIds = new Set<string>();
+                        (mapView as any).scene?.traverse?.((o: any) => {
+                            if (dumped >= 12 || !o.isMesh) return;
+                            const nodeId = o.userData?.__mbNodeId
+                                ?? (o.material?.userData?.__mbNodeId);
+                            if (nodeId === undefined || seenIds.has(String(nodeId))) return;
+                            const geo = o.geometry;
+                            const nAttr = geo?.attributes?.normal;
+                            if (!nAttr) return;
+                            seenIds.add(String(nodeId));
+                            o.updateWorldMatrix?.(true, false);
+                            nmat.getNormalMatrix(o.matrixWorld);
+                            const cnt = nAttr.count;
+                            const picks = [0, Math.floor(cnt * 0.25), Math.floor(cnt * 0.5), Math.floor(cnt * 0.75)];
+                            let out = '';
+                            for (const pi of picks) {
+                                vN.set(nAttr.getX(pi), nAttr.getY(pi), nAttr.getZ(pi))
+                                    .applyMatrix3(nmat).normalize();
+                                out += ` (${vN.x.toFixed(2)},${vN.y.toFixed(2)},${vN.z.toFixed(2)})`;
+                            }
+                            dumped++;
+                            // §885 终二五七: node-matrix determinant — mirrored
+                            // (det<0) node transforms are the per-landmark
+                            // normal-frame split suspect.
+                            const me = o.matrixWorld.elements;
+                            const det = me[0] * (me[5] * me[10] - me[6] * me[9])
+                                - me[4] * (me[1] * me[10] - me[2] * me[9])
+                                + me[8] * (me[1] * me[5] - me[2] * me[4]);
+                            console.log(`[MBNorm] fixture=${(globalThis as any).__mbFixture ?? '?'}`
+                                + ` node=${nodeId} verts=${cnt} det=${det.toExponential(2)}`
+                                + ` lights=${JSON.stringify(o.userData?.__mbLights ?? null)}`
+                                + ` zsc=${o.userData?.__mbZScale ?? '-'} n0..n3=${out}`);
+                        });
+                        console.log(`[MBNorm] fixture=${(globalThis as any).__mbFixture ?? '?'} dumped=${dumped}`);
+                    } catch (e) { console.log('[MBNorm] err=' + String(e)); }
+                }
 
                 // §885 终二五六: per-azimuth model-light sweep — at the stable
                 // capture state, walk the directional-light azimuth through
