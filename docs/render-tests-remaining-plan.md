@@ -2119,3 +2119,45 @@ harness 侧 `zoomOnTargetPosition(mapView,0,0,zoom+1)`
 档。globe 相机模型移植后 powerplants 三例的 43,342/65,165/91,024 残差
 （场景构图域）预期大幅收敛；ground-shadow-fog 场景错位（终二四二）
 同域受益。
+
+### §885 终二五〇：globe 相机"径向高度修正"实证证伪回退——引擎 globe 管线自洽于斜边轨道，标量修正不成立（2026-09-12）
+
+**① 修正内容**：`getCameraPositionFromTargetCoordinates` 球面分支的
+`result.setLength(sqrt((R+alt)²+ground²))` 改为 `setLength(R+alt)`
+（mgl 轨道语义：径向高度 = d·cos(tilt)，切向滑移只承载经纬位移）。
+数值预期：cap 38°→31.66°（mgl 同视口 ~30.9°）。
+
+**② A/B 裁决（8 夹具，orbitfix vs family-kGfix 交付态）——净 +1.55M，
+6/7 恶化，已回退**：
+- models-on-globe 15,842→**466,380**、near-pole 227,429→517,740、
+  nested 7,342→339,456、transition 71,357→237,680（家族全崩）；
+- powerplants-fog-globe 43,342→113,930、-transition 65,165→98,805
+  （同恶化）；唯 powerplants-globe-zoom-function 91,024→**61,953**
+  （改善）。
+
+**③ 机制结论（证伪终二四九⑤的"一阶近似"）**：models-on-globe 家族
+（z2.5-5.4/p40-60）在旧斜边轨道下近乎像素级对齐 expected——引擎的
+globe 管线（瓦片放置+相机+雾+ECEF 归一）**自洽于斜边轨道**，标量级
+修正破坏自洽性。视口伪差澄清：mgl-shot 地图容器曾硬编码 256css，
+"512 视口相机相同"的旧结论无效；容器参数化（?size=&dpr=）后实测
+mgl@512×300：海拔 629,547/camLat 15.30/conv=cos(lat)（globe.range
+[3,5]+adj 实证与引擎 conv 模型**一致**——conv 非分歧源）。
+
+**④ 修订后的分歧画像（512css，z4.01/p70）**：我方 (camLat 8.26°,
+alt 1,717,351, d_target 3,260,517) vs mgl (camLat ~13.5°, alt
+~1,074,000, d_target ~3,143,000)——d_target 仅差 5%，但高度差 1.59×
+且轨道角位置不同；有效倾角（相机处径向与视线夹角）47.8° vs ~70°。
+定位：分歧在**倾角的参考系/轨道组合方式**，不在距离标定。
+
+**⑤ 修订后的修法（仍为独立专项）**：完整移植 mgl 的 mercator 空间
+相机链（_computeCameraPosition → FreeCamera mercatorPosition →
+globe ECEF 归一），即以 mgl 的 mercator (x,y,z) 相机位姿经引擎
+projection 映射放置，替代 lookAtImpl 的切向轨道组合；经验上需
+同时复刻 getProjectionInterpolationT（globe range [3,5]、size=
+min(1024,max(w,h))，已核与引擎 conv 一致可复用）。验收集同终二四
+九⑤。mgl-shot 工具链本轮补齐：?size=&dpr= 视口参数、transform
+internals dump（ccd/worldSize/ppmMercPixel/camPos）。
+
+**⑥ 教训入档**：跨引擎相机诊断必须锁定同视口尺寸（mgl-shot 容器
+曾固定 256css 致两轮伪差）；负结果 A/B（8 夹具 40 分钟）及时止损
+优于带病发布。
