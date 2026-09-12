@@ -2450,3 +2450,27 @@ sRGB）会污染所有逐项读数，须先 sRGB⁻¹ 解码。
 PBR-off 时同法线却不变（hemisphere 公式对倾角不敏感的结构差异待③①判别）。方向约定层（终二五六
 落地）不受影响；验收判据维持：roughness-1 材质方位扫描平坦 + shadows-normal-offset 族保持 +
 castro/high-zoom 收敛至 PBR-off 级。
+
+### §885 终二六〇：模型版片元法线可视化落地——屋顶有效法线朝上（与 mgl 同），法线解码假说排除（2026-09-13）
+
+**① OCTAHEDRAL/filter 源码核对（②）**：three GLTFLoader.js:1690+ 把 extensionDef.filter 传给
+MeshoptDecoder（decodeGltfBufferAsync(mode, filter)）；mgl loaders.ts:262 同样传 config.filter——
+**双方 NORMAL 属性解码路径等价**，解码差异假说排除。getNormal 对照：mgl 有 a_normal 属性则用之，
+无则派生（derivative）——我方 flatShading=!prim.normals 同语义。
+
+**② mndbg=1 探针落地（①）**：applyMglModelLighting 的 PBR 支路顶部（mbN0 之后）涂装
+pow(0.5+0.5·worldN, 2.2)——worldN=normalize(mat3(transpose(viewMatrix))·mbN0)。**关键解码知识**：
+注入点在 colorspace_fragment 之前且 return 提前退出 main → three 输出编码被跳过，stored=直接
+pow(n01,2.2)，解码 n=stored^(1/2.2)·2−1（勿再做 sRGB 逆变换）。两轮 GLSL 教训：模板插值泄漏
+globalThis（TS 表达式必须模板外求值）；int/float 字面量（'1.0' 而非 1）。
+
+**③ 判读结果**：quantization-shadows 屋顶片元（主/-lod 逐位一致）n=(0,0,1) **朝上**——与 mgl 相同；
+墙面片元水平朝向合理。high-zoom 构图不同但同样水平/朝上为主。**法线解码/倾斜假说证伪**（终二五九③
+的候选项关闭）：属性法线虽倾斜（mlnorm dump），flatShading 派生法线使有效法线朝上。
+
+**④ 悖论尖锐化（下轮主攻）**：有效法线朝上 + F/V/D 公式逐式一致 + rough=1 ⇒ 我方 PBR 直射项在
+数学上必然方位不变，但实测屋顶 230→180→230 随方位角变化。剩余自由度：直射 vs 环境间接的归属、
+uMB3DDir 之外的第二光向输入（uMB3DLegacyPos？three 内建灯泄漏？）、或 mbDirect/mbIndirect 合成
+前的某 uniform。**下一步**：把 uMBPbrTermDbg uniform 正式注册进 applyMglModelLighting 的
+mbWrapper（现仅 classic 路径有——pbrterm 探针在 batched 不生效的根因），pbrterm=2 拆 direct/
+indirect 方位响应，锁定携带方位依赖的项。

@@ -795,6 +795,16 @@ export function applyMglModelLighting(
                          // getNormal equivalent); normalize(vNormal) would
                          // ignore the normal map.
                          vec3 mbN0 = normalize(normal);
+                         // §885 终二六〇: mndbg=1 — paint the SHADER-EFFECTIVE
+                         // view-space normal, transformed back to WORLD space
+                         // (viewMatrix rotation inverted by transpose). pow(2.2)
+                         // pre-compensates three's sRGB output encoding.
+                         if (${(globalThis as any).__mbModelNDbg ? '1.0' : '0.0'} > 0.5) {
+                             vec3 mbNw = normalize(mat3(transpose(viewMatrix)) * mbN0);
+                             vec3 mbNp = pow(clamp(mbNw * 0.5 + 0.5, 0.0, 1.0), vec3(2.2));
+                             gl_FragColor = vec4(mbNp, 1.0);
+                             return;
+                         }
                          // mgl transformed_normal: xy flipped (fill-extrusion
                          // normal convention).
                          vec3 mbN = vec3(-mbN0.xy, mbN0.z);

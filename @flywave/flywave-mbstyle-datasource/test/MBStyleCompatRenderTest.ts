@@ -147,6 +147,11 @@ function discoverTests(): TestEntry[] {
     const mlaz = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("mldiraz="))?.slice("mldiraz=".length);
     if (mlaz !== undefined && mlaz !== "") (globalThis as any).__mbModelDirAzDelta = Number(mlaz);
+    // §885 终二六〇: mndbg=1 → paint the shader-effective world normal in the
+    // batched model PBR branch (0.5+0.5·n, pow(2.2) pre-compensated).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "mndbg=1")) {
+        (globalThis as any).__mbModelNDbg = 1;
+    }
     // §885 终三十七: pbrterm=1 → the model PBR branch paints its per-term
     // values (R=direct.r/2, G=indirect.r/2, B=mbLF) for offline decode.
     const pterm = (window as any).__karma__?.config?.args?.find?.(
