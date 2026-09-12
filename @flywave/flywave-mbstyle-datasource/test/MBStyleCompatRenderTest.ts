@@ -2981,6 +2981,21 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         + ' discLast=' + JSON.stringify((globalThis as any).__mbDiscLast ?? null)
                         + ' frameN=' + ((globalThis as any).__mbFrameN ?? 0));
                 } catch { /* probe only */ }
+                // §885 终二四九: camdump=1 → engine camera pose at capture
+                // time (world xyz + zoom/fov) for the mgl free-camera
+                // altitude comparison (globe scene-composition domain).
+                if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "camdump=1")) {
+                    try {
+                        const c = (mapView as any).camera as any;
+                        c.updateMatrixWorld?.(true);
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBCamDump] pos=(${c.position.x.toFixed(1)},${c.position.y.toFixed(1)},${c.position.z.toFixed(1)})` +
+                            ` len=${c.position.length().toFixed(1)} fov=${c.fov} aspect=${c.aspect}` +
+                            ` zoomLevel=${(mapView as any).zoomLevel} tilt=${(mapView as any).tilt}` +
+                            ` focalLength=${(mapView as any).focalLength}` +
+                            ` camUp=(${c.up.x.toFixed(3)},${c.up.y.toFixed(3)},${c.up.z.toFixed(3)})`);
+                    } catch (e) { console.log('[MBCamDump] err=' + String(e)); }
+                }
 
                 // §885 终四十六: the final canvas POST via the probe channel —
                 // decoupled from drawlog (the drawlog hook forces

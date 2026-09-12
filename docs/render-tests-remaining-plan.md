@@ -2063,3 +2063,59 @@ MBMaterialPatchManager:1503）两处均保持正确立方式，唯独主 chunk �
 Florida/加勒比——globe 相机高度/内容放置域，基线同值即存在，与
 ground-shadow-fog 场景错位同族）；终二四七④的①（globe 雾标定）已由
 本条关闭，②模型光照域与其余开放项不变。
+
+### §885 终二四九：globe 场景构图差异定量——双引擎相机对拍，mgl 模型源码级识别，修法定案（2026-09-12）
+
+**① 对拍工具链**：mgl-shot 扩展（tmp/，gitignored）：`root=mb` 服务我方
+render-tests 树 + local:// 改写（tiles/url/**data**——geojson source 走
+data 键此前 404）+ 模型 URI 绝对化 + 夹具 operations 重放
+（setProjection/setZoom/wait）+ `getFreeCameraOptions()` 相机 dump；
+引擎侧新增 `camdump=1` 探针（MBStyleCompatRenderTest 捕获点 dump
+camera pos/fov/zoomLevel/tilt/focalLength，默认关）。
+
+**② 定量（powerplants-fog-globe，z=4.01/pitch70/lat29.09/fov36.87/
+bearing337.85，双引擎同参数）**：
+- mgl：相机海拔 **531,461 m**（lng−74.98/lat17.40），到目标 3D 距离
+  **1,552,352 m**，可见冠角 22.62°。**512css 与 256css dump 逐位相同**
+  ——mgl globe 相机模型视口无关（推翻视口缩放假设）。
+- 我方：|cam|=8,095,488（引擎赤道米），海拔 1,717,351，到目标
+  **3,260,517**，冠角 38.01°（整北美可见）。
+- **偏差：到目标 2.100×（z=4.01）/ 2.200×（z=5.22 点）**，海拔 3.23×。
+  z=5.2 第二点：mgl 海拔 222,848/到目标 649,722。
+
+**③ mgl 模型源码级识别（transform.ts/globe.ts）**：
+- `cameraToCenterDistance = (0.5/tan(fov/2))·height·_pixelsPerMercatorPixel`，
+  其中 globe 的 `pixelSpaceConversion = 1/interp(sec45°, secLat,
+  smoothstep(5,6,styleZoom))`（**插值区间 [5,6]，z<5 恒 sec45⁻¹=0.7071**；
+  引擎现用 [2,4]+viewportAdjust 且 z=4.01 已到 cos(lat)=0.8739——错）；
+- globe 的 `pixelsPerMeter = mercatorZfromAltitude(1, 0)·worldSize`
+  （**赤道参考，不随 lat**）；
+- `_mercatorZfromZoom = cameraToCenterDistance/worldSize`；相机在
+  **mercator 空间**放置（center − forward·mercZ）后经 globe ECEF 归一
+  （非线性，故 mercZ×R≠实测海拔）。
+- 我方公式 `focal·CIRC/(2^flyZoom·256)·conv` 的误差分解：+1 zoom 惯例
+  在 globe 双重计入（世界已是绝对赤道米尺度，无 2× 像素补偿需求；
+  mercator 下 +1 已被 mgl 实拍校验正确**不得动**）×1.996，conv 区间
+  错误 ×1.236，合计 2.10/2.20（ECEF 归一的残余随 zoom 微变）。
+
+**④ zoomab 旋钮对 setZoom 路径惰性**：夹具 operations 的 setZoom 走
+harness 侧 `zoomOnTargetPosition(mapView,0,0,zoom+1)`
+（MBStyleCompatRenderTest:1357，+1 硬编码），不经 applyCameraSettings
+的 zoomAB 项——camera dump 前后逐位一致实证。修复需同时处理两处。
+
+**⑤ 修法定案（独立专项，下轮主攻）**：
+- **正解**：在 lookAtImpl 的 globe 分支移植 mgl 精确模型——
+  `mercZ = focal_px·conv_mgl/(512·2^z)`（conv_mgl 用 [5,6] 区间），相机
+  在 mercator 空间按 pitch/bearing 放置后经投影的 mercator→ECEF 映射
+  入引擎世界系；harness setZoom 与 applyCameraSettings 的 +1 在
+  `__mglGlobeCam && projection.type===1` 下同时免除。
+- **一阶近似（若 ECEF 移植受阻）**：仅免 +1（保留现 conv），冠角
+  38°→28.2°（残差 1.05×/点），回收约 80% 构图误差。
+- 验收集：powerplants 三例 + models-on-globe 五例（现逐位=基线，相机
+  改动后必然位移）+ globe 家族 + map-projections/globe；逐夹具对照
+  expected 定改善/回退。
+
+**⑥ 本轮交付**：camdump 探针（默认关）+ mgl-shot 工具链扩展 + 本记
+档。globe 相机模型移植后 powerplants 三例的 43,342/65,165/91,024 残差
+（场景构图域）预期大幅收敛；ground-shadow-fog 场景错位（终二四二）
+同域受益。
