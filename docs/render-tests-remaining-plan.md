@@ -2504,3 +2504,28 @@ wireframe-lod **−60,988**、z-offset-lod **−50,609**、castro-lighting −3~
 **⑥ 开放**：shadows-normal-offset 族 +41k×2（偏好翻转形式，或其期望含影子-法线耦合
 shadowed_light_factor_normal 的 transformed_normal 形态）——下轮核对该夹具的影子因子法线帧；
 工具：mndbg=1/2（世界系法线/直射项拆分涂装）、worldadf=0（回退）留档。
+
+### §885 终二六二：影子因子替换式重构——mgl shadowed_light_factor_normal 语义对齐，shadows-normal-offset −1.9k 双例余者逐位（2026-09-13）
+
+**① mgl 语义核对（_prelude_shadow.fragment.glsl:79 + model.fragment.glsl:146）**：
+shadowed_light_factor_normal(transformed_normal,…) **替换** lighting_factor（非与 NdotL 相乘）：
+`NDotL = dot(transformed_normal, u_shadow_direction)`（影子方向、翻转法线，非着色方向/未翻转法线）；
+`bias = calculate_shadow_bias(NDotL)`（坡度缩放/NORMAL_OFFSET 两态）；返回
+`mix(0, (1 − I·occ)·NDotL, step(0, NDotL))`。我方旧形 = 着色 NdotL（终二六一未翻转、着色方向）
+× mix(1−I, 1, lit)——两处结构偏差：因子来源方向/法线不同 + 乘法 vs 替换。
+
+**② 重构**：mbWrapper 注册 uMBShadowDir（=lighting3DState.dir，§683 场景帧标定）与 uMBShRepl
+（shrepl=0 回退旋钮）；PBR 支路影子块 shrepl 形态：
+`mbShN = dot(mbN, viewShadowDir); mbLF = mix(0, (1−I·(1−mbLitS))·mbShN, step(0, mbShN))`
+（mbLitS 为我方 smoothstep 深度比较≈1−occ；坡度 bias 由 §终二十二 smoothstep 形态承担）。
+
+**③ A/B（shrepl，影子族 4 夹具）**：shadows-normal-offset 156,020→**154,177** / lod 156,496→
+**154,612**（−1,843/−1,884）；castro/high-zoom/quantization-shadows 主 lod 六例**全部 +0 逐位**
+（无影子/不透明影子夹具不受影响 ✓ 结构隔离干净）。净 −3,727。
+
+**④ 教训**：日志中 vViewPosition/491 行 int→float 两类 Shader Error 为**历史遗留**（基线日志同样
+存在，非本轮引入——判读运行日志须先比对基线错误集）。
+
+**⑤ 开放**：shadows-normal-offset 残差 154k 主体仍非影子因子域（替换式仅回收 1.9k）——该夹具
+（az 190/影子强度 1.0）剩余残差需独立定性（候选：AO 贴图强度、conflation 顶点色、地形拼接）；
+终二六一 mbLF 修复与本轮替换式在 gated 夹具（door-light/z-offset 主例）的交互待大批复测。

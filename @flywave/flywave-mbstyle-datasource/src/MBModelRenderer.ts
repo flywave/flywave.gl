@@ -536,6 +536,11 @@ export function applyMglModelLighting(
                 // §885 终一百四十七: the per-term readout probe gate (declare
                 // + seed — the GLSL referenced it but nothing declared it).
                 shader.uniforms.uMBPbrTermDbg = { value: Number((globalThis as any).__mbPbrTermDbg ?? 0) };
+                // §885 终二六二: mgl shadowed_light_factor_normal inputs —
+                // the world shadow direction (lighting3DState.dir, §683
+                // scene-frame calibration) and the replace-form gate.
+                shader.uniforms.uMBShadowDir = { value: (dataSource?.m_environment?.lighting3DState?.dir) ?? [0, 0, 1] };
+                shader.uniforms.uMBShRepl = { value: (globalThis as any).__mbShReplOff ? 0 : 1 };
                 shader.uniforms.uMBHbs = { value: [hr.b0, hr.b1, hr.power, hr.start] };
                 shader.uniforms.uMBHbsRange = { value: hr.range };
                 // §562: model self/ground-shadow reception (mgl
@@ -612,6 +617,8 @@ export function applyMglModelLighting(
                      uniform float uMBNoMat;
                      uniform float uMBFogOn;
                      uniform float uMBPbrTermDbg;
+                     uniform vec3 uMBShadowDir;
+                     uniform float uMBShRepl;
                      #ifdef USE_FOG
                      #else
                      uniform float fogAlpha;
@@ -1062,7 +1069,21 @@ export function applyMglModelLighting(
                                      // 0.002 ≈ 1.6 depth units in the tight
                                      // frustum, enough to light wall strips).
                                      float mbLitS = smoothstep(-0.0002, 0.0002, mbShDepth - mbShUv.z);
-                                     mbLF *= mix(1.0 - uMBShIntensity, 1.0, mbLitS);
+                                     if (uMBShRepl > 0.5) {
+                                         // §885 终二六二: mgl shadowed_light_factor_normal
+                                         // REPLACES the light factor —
+                                         // (1 − I·occ)·NDotL_shadow with
+                                         // NDotL = dot(transformed_normal,
+                                         // shadow direction), step-clamped at 0
+                                         // (_prelude_shadow.fragment.glsl:79).
+                                         // The old form multiplied the SHADING
+                                         // NdotL (shading direction, unflipped
+                                         // since 终二六一) by the shadow mix.
+                                         float mbShN = dot(mbN, normalize((viewMatrix * vec4(uMBShadowDir, 0.0)).xyz));
+                                         mbLF = mix(0.0, (1.0 - uMBShIntensity * (1.0 - mbLitS)) * mbShN, step(0.0, mbShN));
+                                     } else {
+                                         mbLF *= mix(1.0 - uMBShIntensity, 1.0, mbLitS);
+                                     }
                                  }
                              }
                              vec3 mbDirect = (mbSpecTerm + mbDiffTerm) * mbLF * uMB3DDirColor;
