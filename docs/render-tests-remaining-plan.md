@@ -2161,3 +2161,43 @@ internals dump（ccd/worldSize/ppmMercPixel/camPos）。
 **⑥ 教训入档**：跨引擎相机诊断必须锁定同视口尺寸（mgl-shot 容器
 曾固定 256css 致两轮伪差）；负结果 A/B（8 夹具 40 分钟）及时止损
 优于带病发布。
+
+### §885 终二五一：mgl mercator 空间相机链移植两轮证伪回退——引擎世界帧约定未映射前公式平移无效（2026-09-12）
+
+**① 实现**：`getCameraPositionFromTargetCoordinates` 球面分支整体替换
+为 mgl 链——mercZ = ccd/worldSize（ccd = focal·conv，conv 复用引擎现
+有 mglGlobePixelSpaceConversion，已证与 mgl 同式）；cam_merc =
+center_merc − forward·mercZ（符号经 mgl camPos dump 数值验证）；
+camLng/camLat/camAlt = mercator 逆变换（alt = z·CIRC·cos(camLat)，
+即 MercatorCoordinate.toAltitude）；camera.position =
+projection.projectPoint(GeoCoordinates(camLat,camLng,camAlt))。
+
+**② 两轮 A/B（7 夹具 ×2）——全部恶化，已回退**：
+- mercZ = distance/CIRC：fog-globe 43,342→98,977、transition
+  65,165→65,617、zoom-function 91,024→201,331、models-on-globe
+  15,842→466,478、near-pole 227,429→919,256、nested 7,342→882,482、
+  mog-transition 71,357→236,264；
+- mercZ = 2×distance/CIRC（修正 flyZoom 内嵌 2×）：全部再恶化
+  （213,836/163,000/206,927/870,993/918,606/994,266/226,740）。
+
+**③ camdump 定位实现层断层**：2× 版本的相机 pos z 为**负**
+（南半球）、tilt 21.78°、径向 R+3.43M（≈π×camAlt）——我按标准
+mercator/ECEF 约定推导的 (camLat,camLng,camAlt) 经引擎
+`projection.projectPoint` 落点后出现 π 级径向偏差与半球翻转：
+**引擎世界帧的 projectPoint 海拔语义与轴约定和标准 mercator 帧
+不同**，同一公式在两帧不可直译（同一数学在 python 对 mgl 自身
+dump 逐位吻合，排除了公式推导错误）。
+
+**④ 结论（globe 相机战役收束）**：三种放置（径向高度、mercator×1、
+mercator×2）实证均劣于引擎现有斜边轨道；引擎放置在 models-on-globe
+家族近乎像素级（expected 即 mgl 渲染）——现有管线在其世界帧内自洽
+且与参照对齐。powerplants 三例的构图残差（43,342/65,165/91,024）
+归因修订为：**mgl 与引擎对同一 style 相机的世界帧表达不同**（非
+单点标定可修），修复前置条件 = 建立引擎帧映射文档
+（projectPoint/unprojectPoint 的海拔语义、轴约定、unitScale 交互，
+§833 的 0.6% unitScale 与海拔换算的耦合），再重推放置公式；或以
+真机 frame-capture 直接对拍双引擎最终矩阵。挂起。
+
+**⑤ 工具资产留存**：camdump=1 探针；mgl-shot ?size=&dpr= 容器参数
+化 + transform internals dump（ccd/worldSize/ppmMercPixel/camPos）+
+src.data 改写 + operations 重放——后续任何相机工作的对拍基座。
