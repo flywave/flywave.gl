@@ -1305,8 +1305,9 @@ export class MBShadowRenderer {
             // §885 终二七七: cascade-1 canvas dump — is the far-field pass
             // actually drawing casters?
             try {
+                const c1n = ((globalThis as any).__mbC1DumpN = ((globalThis as any).__mbC1DumpN ?? 0) + 1);
                 const fb1 = (globalThis as any).__mbShadowFeedbackUrl;
-                if (fb1 && __rc === 60) {
+                if (fb1 && (c1n === 1 || c1n === 30)) {
                     const url3 = (this.m_shRenderer.domElement as HTMLCanvasElement).toDataURL('image/png');
                     fetch(`${fb1}/mb-probe-dump`, {
                         method: 'POST',
