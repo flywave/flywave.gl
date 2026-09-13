@@ -1218,10 +1218,11 @@ export class MBShadowRenderer {
                 0, 0, 0, 1,
             );
             // §885 终二七三: migration default ON (shbfix=0 reverts).
-            if ((globalThis as any).__mbShadowBiasFix) {
-                this.m_matrix.premultiply(mbBias);
-            } else {
+            if ((globalThis as any).__mbShadowBiasFix === 0) {
+                // shbfix=0: legacy right-multiply (revert knob).
                 this.m_matrix.multiply(mbBias);
+            } else {
+                this.m_matrix.premultiply(mbBias);
             }
         }
         // §885 终二六七: one-shot composition probe — the model receivers see
@@ -1281,10 +1282,10 @@ export class MBShadowRenderer {
                 0, 0, 0.5, 0.5,
                 0, 0, 0, 1,
             );
-            if ((globalThis as any).__mbShadowBiasFix) {
-                this.m_matrix1.premultiply(mbBias1);
-            } else {
+            if ((globalThis as any).__mbShadowBiasFix === 0) {
                 this.m_matrix1.multiply(mbBias1);
+            } else {
+                this.m_matrix1.premultiply(mbBias1);
             }
         }
         scene.overrideMaterial = this.m_depthMaterial;

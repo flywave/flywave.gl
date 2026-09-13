@@ -3014,3 +3014,22 @@ q-s 2,417（+0）、castro 184,294（+0）——净正向但幅度小（影子�
 **④ 下轮（最终收口清单）**：①非确定源定位：深度 canvas 2D 拷贝与 DataTexture 上传的帧时序
 （run() 内 drawImage/clear 的执行序）；②确定性化后 sno 稳定 <66,659 → 转默认；③家族验收
 castro/highlights/z-offset-v2-port/ground-shadow。
+
+### §885 终二八五：premultiply 转默认落地——sno 主 65,308/lod 65,069 双破惯性线，守卫位级零回归（2026-09-13）
+
+**① 关键修正**：终二八三的门控布尔 bug（true!==1 恒真）使 premultiply 分支从未激活——
+此前 SHBFIX=1 的"条纹影子"实测态实为 premultiply+legacy lookAt 组合；本次将 premultiply
+转默认（shbfix=0 保留回退）+ bias 窗 ±0.002 + 接收端法线偏移 3 + legacy lookAt（不翻转、
+不 rot）后：**sno 主 65,308 / lod 65,069**——双双首次稳定低于惯性线。
+
+**② 守卫**：q-s 2,417 / castro 184,294 / high-zoom 4,928 / castro-lighting 11,779 **全部
+位级不变** ✓（这些夹具的接收器本就在 cascade-0 界内采样或与影子域无关）。
+
+**③ 机制总结（本轮系列定案）**：①bias 重映射须左乘（右乘把 +0.5 平移当几何量→接收端
+垃圾 uv→恒 lit）；②接收端采样须与深度 pass 同法线偏移（抵消 caster 深度偏浅）；③
+cascade-1 回退（4× 视锥）服务 cascade-0 外的接收器；④偏移幅值 3 为当前标定（5-tap PCF
+已就位，texel 1/1024）。
+
+**④ 残余**：sno 65.3k（影子软边/质量域）；castro 184k、highlights 228k、z-offset-v2-port
+392k 的影子域分量待同法处理；ground-shadow 双例噪声域 ±100。下轮：offset/bias 细网格
++ 深度 pass normal-offset 联动扫，向 sno 全对齐推进。
