@@ -978,8 +978,13 @@ export function applyMglModelLighting(
                                  vec4 mbShUvC = mix(mbShUv1, mbShUv, mbIn0);
                                  float mbShHasC = max(mbIn0, mbIn1);
                                  if (uMBShDbg > 5.5 && uMBShDbg < 6.5) {
-                                     // §885 终二六八: gate probe (R=has1, G=mbIn1, B=mbIn0).
-                                     gl_FragColor.rgb = vec3(uMBShHas1, mbIn1, mbIn0);
+                                     // §885 终二六九: cascade-1 compare probe —
+                                     // R = lit factor at cascade-1 uv, G = mbIn1
+                                     // gate, B = uMBShHas1.
+                                     vec4 mbShPk1 = texture2D(uMBShMap1, clamp(mbShUv1.xy, vec2(0.0), vec2(1.0)));
+                                     float mbD1 = mbShPk1.r + mbShPk1.g / 255.0;
+                                     float mbLit1 = smoothstep(-0.0002, 0.0002, mbD1 - mbShUv1.z);
+                                     gl_FragColor.rgb = vec3(mbLit1, mbIn1, uMBShHas1);
                                      return;
                                  }
                                  if (mbShHasC > 0.5 && mbShUvC.x >= 0.0 && mbShUvC.x <= 1.0 &&
@@ -1009,7 +1014,7 @@ export function applyMglModelLighting(
                                      // instead of the hard 0.002 compare —
                                      // 0.002 ≈ 1.6 depth units in the tight
                                      // frustum, enough to light wall strips).
-                                     float mbLitS = smoothstep(-0.0002, 0.0002, mbShDepth - mbShUv.z);
+                                     float mbLitS = smoothstep(-0.002, 0.002, mbShDepth - mbShUv.z + 0.001);
                                      mbNdotL *= mix(1.0 - uMBShIntensity, 1.0, mbLitS);
                                  }
                              }
@@ -1105,8 +1110,13 @@ export function applyMglModelLighting(
                                  vec4 mbShUvC = mix(mbShUv1, mbShUv, mbIn0);
                                  float mbShHasC = max(mbIn0, mbIn1);
                                  if (uMBShDbg > 5.5 && uMBShDbg < 6.5) {
-                                     // §885 终二六八: gate probe (R=has1, G=mbIn1, B=mbIn0).
-                                     gl_FragColor.rgb = vec3(uMBShHas1, mbIn1, mbIn0);
+                                     // §885 终二六九: cascade-1 compare probe —
+                                     // R = lit factor at cascade-1 uv, G = mbIn1
+                                     // gate, B = uMBShHas1.
+                                     vec4 mbShPk1 = texture2D(uMBShMap1, clamp(mbShUv1.xy, vec2(0.0), vec2(1.0)));
+                                     float mbD1 = mbShPk1.r + mbShPk1.g / 255.0;
+                                     float mbLit1 = smoothstep(-0.0002, 0.0002, mbD1 - mbShUv1.z);
+                                     gl_FragColor.rgb = vec3(mbLit1, mbIn1, uMBShHas1);
                                      return;
                                  }
                                  if (mbShHasC > 0.5 && mbShUvC.x >= 0.0 && mbShUvC.x <= 1.0 &&
@@ -1144,7 +1154,7 @@ export function applyMglModelLighting(
                                      // instead of the hard 0.002 compare —
                                      // 0.002 ≈ 1.6 depth units in the tight
                                      // frustum, enough to light wall strips).
-                                     float mbLitS = smoothstep(-0.0002, 0.0002, mbShDepth - mbShUv.z);
+                                     float mbLitS = smoothstep(-0.002, 0.002, mbShDepth - mbShUv.z + 0.001);
                                      if (uMBShRepl > 0.5) {
                                          // §885 终二六二: mgl shadowed_light_factor_normal
                                          // REPLACES the light factor —

@@ -1114,14 +1114,29 @@ export class MBShadowRenderer {
         }
 
         // world → shadow-uv matrix (proj*view + [0,1] remap).
+        // §885 终二六九: the [0,1] remap must LEFT-multiply (bias·proj·view).
+        // The legacy right-multiply (proj·view·bias) pushed the +0.5 offsets
+        // through the whole view transform as if they were geometry — every
+        // receiver sampled garbage uv (scene at uv.x≈−0.65) and stayed lit,
+        // killing ALL model-received cast shadows (sno 66.7k residual).
+        // The fix is REAL but the activated pipeline still self-shadows
+        // (acne: cascade-1 4× depth precision + compare window) — until the
+        // bias/PCF pass is calibrated it stays behind shbfix=1.
         this.m_matrix
-            .multiplyMatrices(this.m_shadowCamera.projectionMatrix, this.m_shadowCamera.matrixWorldInverse)
-            .multiply(new THREE.Matrix4().set(
+            .multiplyMatrices(this.m_shadowCamera.projectionMatrix, this.m_shadowCamera.matrixWorldInverse);
+        {
+            const mbBias = new THREE.Matrix4().set(
                 0.5, 0, 0, 0.5,
                 0, 0.5, 0, 0.5,
                 0, 0, 0.5, 0.5,
                 0, 0, 0, 1,
-            ));
+            );
+            if ((globalThis as any).__mbShadowBiasFix) {
+                this.m_matrix.premultiply(mbBias);
+            } else {
+                this.m_matrix.multiply(mbBias);
+            }
+        }
         // §885 终二六七: one-shot composition probe — the model receivers see
         // a ZERO-LINEAR m_matrix (uv constant out-of-bounds ⇒ everything lit).
         {
@@ -1171,13 +1186,20 @@ export class MBShadowRenderer {
         this.m_shadowCamera.updateProjectionMatrix();
         this.m_shadowCamera.updateMatrixWorld();
         this.m_matrix1
-            .multiplyMatrices(this.m_shadowCamera.projectionMatrix, this.m_shadowCamera.matrixWorldInverse)
-            .multiply(new THREE.Matrix4().set(
+            .multiplyMatrices(this.m_shadowCamera.projectionMatrix, this.m_shadowCamera.matrixWorldInverse);
+        {
+            const mbBias1 = new THREE.Matrix4().set(
                 0.5, 0, 0, 0.5,
                 0, 0.5, 0, 0.5,
                 0, 0, 0.5, 0.5,
                 0, 0, 0, 1,
-            ));
+            );
+            if ((globalThis as any).__mbShadowBiasFix) {
+                this.m_matrix1.premultiply(mbBias1);
+            } else {
+                this.m_matrix1.multiply(mbBias1);
+            }
+        }
         scene.overrideMaterial = this.m_depthMaterial;
         const prevLayers1 = this.m_shadowCamera.layers.mask;
         this.m_shadowCamera.layers.set(1);

@@ -2651,3 +2651,30 @@ runner 硬编码 "shdiralt=1"（=2 无法透传，已修为透传原值）。
 **⑥ 下轮入口**：dump live program 的 uMBShMatrix/uMBShWorldMatrix（three materialProperties
 路径）与 handle 对象做同一性比对；若 live 值健康则用 mode 11 读数反推 worldPos→uv 逆映射的
 畸变算子（对角/平移拟合），一击定位。
+
+### §885 终二六九：恒 lit 悖论破案——bias 重映射右乘 bug 实锤（修复已落地，shbfix=1 门控，acne 调优留档）（2026-09-13）
+
+**① 悖论收窄**：①mode 10 中心纹素探针：map center depth=0.71-0.77（**纹理有内容**，"空纹理"
+假说证伪）；②live uniforms 同一（终二六八）+ uv 推算=观测（终二六九全精度复核）——接收端、
+矩阵、纹理三环全健康，唯一剩下：**m_matrix 组装公式本身**。
+
+**② BUG 实锤**：m_matrix = (proj·viewInv)·bias —— **bias 被右乘**。列向量约定下 [0,1] 重映射
+必须左乘（uv = bias·proj·viewInv·p）；右乘把 +0.5 平移当几何量送进整个视变换：全精度对拍，
+M·p(uv.x=−0.64) ≠ (P·V·bias)·p(uv.x=+0.32)，同一世界坐标两套答案——接收端采样垃圾 uv →
+恒 lit → 模型→模型投影全丢；且垃圾变换对光源旋转的响应仍是垃圾 → 180° 转光位级不变的
+"悖论"自然化解。地面 quad/extrusion 用同一 m_matrix → 其阴影同样从未真正工作（家族大面积
+残差同源）。
+
+**③ 修复已落地但默认门控**（shbfix=1 旋钮，`__mbShadowBiasFix`）：开启后投影立即出现（墙面/
+地面斜向影带），但伴随强自遮挡条纹（acne）——sno 32.7M vs 基线 20.8M，净负不发布。acne
+成因=级联-1 4× 深度域精度 + 比较窗（±0.0002·z域）不足；bias 加宽+0.001 平移实测无效
+（32.6M，条纹非小偏移型）。默认关=与终二六六交付态**位级一致**（20,782,944 复实测 ✓）。
+
+**④ 下轮调优清单（shbfix=1 开启态）**：①cascade-1 深度精度：4× 范围（z 域 ~3000 单位）16-bit
+pack 量化 0.046/步——检查 pack 路径（r+g/255 分辨率）或对模型接收端改用 HW 深度路径
+（shadowhw=1 已有）；②比较窗斜率 bias（depth-slope scaled）替代常数窗；③PCF 4-tap
+（extrusion 已有形式可移植）；④shaz 扫角在 shbfix=1 下重标定方位；⑤验收：sno 主/lod +
+castro/highlights/z-offset-v2-port（184k/228k/392k，其残差同为投影缺失域的概率极高）。
+
+**⑤ 教训**：debug 涂装经输出色彩变换（线性→sRGB 之类），读数非线性（0.5→~0.73）——二值
+uniform 读出 0.77 属正常，须相对比较勿绝对解码；shadowdbg≥5 强制 eyeOn 的污染已记录于终二六七。
