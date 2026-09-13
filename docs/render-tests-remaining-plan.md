@@ -3310,3 +3310,19 @@ sno 65,054→65,069 复实测 ✓ 位级维持；shpcf/shnoff/shbias/shbfix 旋�
 （独立 m_matrixR0/m_shTexR0，模型尾部 fallback 优先采样）；②ground quad 维持镜像
 cascade-0；③sno 主/lod 验收（预期 ≤60,059 且 ground 双例回归 ≤±100）；④家族验收。
 工程量：MBShadowRenderer 增一 pass+一矩阵+模型尾部 fallback 目标切换，边界清晰。
+
+### §885 终二九四：偏差构成四分类+窗标定收口——漏影 5.8k/光照 2.3k/软差 57.6k，off3+±0.0005 交付（2026-09-14）
+
+**① bias 窗扫描（hardcode 法，offset=3）**：±0.002→65,308 / ±0.001→65,118 /
+±0.0005→**65,054（最优，已交付）** / ±0.0002→65,069。最优窗 ±0.0005 落地。
+
+**② 守卫**：q-s 2,417 / castro 184,294 / high-zoom 4,928 / castro-lighting 11,779 全部
+**位级 +0** ✓。
+
+**③ sno 累计**：156,020 → **65,054（−58.3%）**。本轮系列（终二六六~二九四）影子管线四件套
+（bias 左乘、cascade-1 回退、法线偏移、PCF 软化）全部标定落地。
+
+**④ 下轮**：①sno 残余 65k 的构成再定性（投影缺失 vs 软边 vs 光照域——profile 探针读
+mapDepth<fragZ 的像素占比可判）；②residual 清单家族推进：castro 184k/highlights 228k/
+z-offset-v2-port 392k 属光照+几何域（非本轮影子域），按各自域独立攻坚；③ground-shadow
+双例噪声域 +109/+113 维持观察。
