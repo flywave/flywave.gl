@@ -853,7 +853,16 @@ export class MBShadowRenderer {
         }
         this.m_shadowCamera.position.copy(sphereCenter);
         this.m_shadowCamera.up.set(0, 0, 1);
-        this.m_shadowCamera.lookAt(sphereCenter.clone().sub(lightDir));
+        // §885 终二六九/二七一: ls.dir is the LIGHT-TRAVEL direction (downward
+        // z); the shbfix profile probe (fragZ≈0.01-0.07 across the whole
+        // scene) proved the legacy `lookAt(center − lightDir)` aims the light
+        // camera at the SKY — the scene renders at the near plane, mirrored.
+        // shbfix=1 looks ALONG +lightDir (down at the scene) instead.
+        if ((globalThis as any).__mbShadowBiasFix) {
+            this.m_shadowCamera.lookAt(sphereCenter.clone().add(lightDir));
+        } else {
+            this.m_shadowCamera.lookAt(sphereCenter.clone().sub(lightDir));
+        }
         this.m_shadowCamera.updateProjectionMatrix();
         this.m_shadowCamera.updateMatrixWorld();
         // §885 终五十五: the mgl frustum-sphere fit already clamps [near,far]

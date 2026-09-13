@@ -985,10 +985,16 @@ export function applyMglModelLighting(
                                      // §885 终二六九: cascade-1 compare probe —
                                      // R = lit factor at cascade-1 uv, G = mbIn1
                                      // gate, B = uMBShHas1.
-                                     vec4 mbShPk1 = texture2D(uMBShMap1, clamp(mbShUv1.xy, vec2(0.0), vec2(1.0)));
-                                     float mbD1 = mbShPk1.r + mbShPk1.g / 255.0;
-                                     float mbLit1 = smoothstep(-0.0002, 0.0002, mbD1 - mbShUv1.z);
-                                     gl_FragColor.rgb = vec3(mbLit1, mbIn1, uMBShHas1);
+                                     // §885 终二七一: stripe profile —
+                                     // R = mapDepth (cascade-selected), G = fragZ, B = 0.5.
+                                     vec4 mbShPkC2;
+                                     if (mbIn0 > 0.5) {
+                                         mbShPkC2 = texture2D(uMBShMap, mbShUv.xy);
+                                     } else {
+                                         mbShPkC2 = texture2D(uMBShMap1, clamp(mbShUv1.xy, vec2(0.0), vec2(1.0)));
+                                     }
+                                     float mbD2 = mbShPkC2.r + mbShPkC2.g / 255.0;
+                                     gl_FragColor.rgb = vec3(clamp(mbD2, 0.0, 1.0), clamp(mbShUvC.z, 0.0, 1.0), 0.5);
                                      return;
                                  }
                                  if (mbShHasC > 0.5 && mbShUvC.x >= 0.0 && mbShUvC.x <= 1.0 &&
@@ -1131,10 +1137,16 @@ export function applyMglModelLighting(
                                      // §885 终二六九: cascade-1 compare probe —
                                      // R = lit factor at cascade-1 uv, G = mbIn1
                                      // gate, B = uMBShHas1.
-                                     vec4 mbShPk1 = texture2D(uMBShMap1, clamp(mbShUv1.xy, vec2(0.0), vec2(1.0)));
-                                     float mbD1 = mbShPk1.r + mbShPk1.g / 255.0;
-                                     float mbLit1 = smoothstep(-0.0002, 0.0002, mbD1 - mbShUv1.z);
-                                     gl_FragColor.rgb = vec3(mbLit1, mbIn1, uMBShHas1);
+                                     // §885 终二七一: stripe profile —
+                                     // R = mapDepth (cascade-selected), G = fragZ, B = 0.5.
+                                     vec4 mbShPkC2;
+                                     if (mbIn0 > 0.5) {
+                                         mbShPkC2 = texture2D(uMBShMap, mbShUv.xy);
+                                     } else {
+                                         mbShPkC2 = texture2D(uMBShMap1, clamp(mbShUv1.xy, vec2(0.0), vec2(1.0)));
+                                     }
+                                     float mbD2 = mbShPkC2.r + mbShPkC2.g / 255.0;
+                                     gl_FragColor.rgb = vec3(clamp(mbD2, 0.0, 1.0), clamp(mbShUvC.z, 0.0, 1.0), 0.5);
                                      return;
                                  }
                                  if (mbShHasC > 0.5 && mbShUvC.x >= 0.0 && mbShUvC.x <= 1.0 &&

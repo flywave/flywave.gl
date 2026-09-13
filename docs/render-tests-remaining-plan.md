@@ -2701,3 +2701,23 @@ uniform 读出 0.77 属正常，须相对比较勿绝对解码；shadowdbg≥5 �
 **③ 交付态**：所有调优默认关闭（shbfix/shadowhw/shaz/shdiralt/mode 6·10·11），默认渲染与
 终二六六交付态**位级一致**（20,782,944 复实测 ✓）；新增落地：模型尾部 cascade-1 5-tap PCF +
 uMBShTexel1 全链同步 + shbfix/shaz/hook 探针族。
+
+### §885 终二七一：剖面探针定案——阴影相机朝向反了（lookAt 沿 −lightDir 朝天看，场景在近平面）；look-flip 门控实证相机响应（2026-09-13）
+
+**① 剖面读数（mode 11 = mapDepth/fragZ 双通道）**：条纹立面 y=270 行 x∈[300,430] 剖面：
+fragZ 全行 **0.008→0.067 平滑单调**（=整个场景贴在阴影相机近平面），mapDepth 0.63-0.75（图内容
+正常）。即**阴影相机朝天看**：lookAt(center − lightDir) 中 ls.dir 是光行进方向（z 分量向下），
+取负后相机朝上；场景落在近平面之外/后，uv.z≈0 → bounds gate 全 lit → 无任何模型投影。
+推翻"场景在 cascade-0 视锥外"的终二六八表述——实际是**光轴朝向反 180°**（级联覆盖推导仍成立，
+翻转后场景 slant 才真正进入视锥）。
+
+**② look-flip 门控实证**：shbfix=1 下改 lookAt(center + lightDir)：全场景光影剧变（32.9M），
+相机取帧响应实锤。但正确构型不是单翻——需按 mgl createLightMatrix 完整重推导光轴（ls.dir 的
+z 号约定、位置偏移、near/far 对称性）+ acne 控制（HW 深度或 pack 精度 + PCF）。
+
+**③ 探针与门控现状**：shbfix=1（bias 左乘 + lookAt 翻转）+ cascade-1 回退 + PCF + shaz 全部
+门控内；默认态复实测 20,782,944 **位级一致** ✓。
+
+**④ 下轮主攻（唯一战线）**：在 shbfix=1 开启态：①shaz ∈ {0..330,60° 步} 扫描找场景居中的方位
+（uv 剖面 G 通道均值≈0.5 处）；②confirm 后逐点对拍 mgl probe 定软边；③acne 由 HW 深度或
+斜率 bias 收敛；④验收 sno 主/lod → castro/highlights/z-offset-v2-port。
