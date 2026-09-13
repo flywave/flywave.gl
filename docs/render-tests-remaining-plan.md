@@ -3067,3 +3067,20 @@ castro/highlights/z-offset-v2-port/ground-shadow。
 mapDepth<fragZ 的像素占比可判）；②residual 清单家族推进：castro 184k/highlights 228k/
 z-offset-v2-port 392k 属光照+几何域（非本轮影子域），按各自域独立攻坚；③ground-shadow
 双例噪声域 +109/+113 维持观察。
+
+### §885 终二八八：sno 残余构成量化——过度阴影 84k px 主导（方向性错位非软边）（2026-09-14）
+
+**① mode 11 量化**（R=mapDepth, G=fragZ 原始通道分类；单色变换单调故分类可靠）：
+接收器 209,670 px 中——分类遮挡 122,508 / 分类 lit 87,162。对照 expected：
+- expected 有影而我们漏影（欠阴影）：25,194 px
+- expected 无影而我们错标阴影（**过度阴影**）：**84,457 px** ← 残差主导
+- 正确阴影：38,051 px
+
+**② 定性**：过度阴影 84k 主导——光轴遮挡关系系统性错位（非软边、非精度）。候选：
+①阴影相机水平朝向镜像（方位差 ~180°，即 lookAt 应沿 +lightDir 分量水平翻转）；
+②深度 pass normal-offset(3) 方向/单位错，把别的 caster 表面压进接收器射线；
+③ls.dir 的 §643 y 镜像在阴影路径应换成 mgl raw（az+90 无镜像）——即终二十二旧判例
+的"镜像 vs raw"之争在 shbfix 新管线（bias 左乘+法线偏移）下需重判。
+
+**③ 下轮**：shdiralt=1（raw az+90 无镜像）在 shbfix=1 态重测 px——终六十四 时该实验
+因布尔门控 bug 从未真正生效，现在门控已修，一次即可判镜 mirror vs raw。
