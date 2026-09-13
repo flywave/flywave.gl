@@ -254,7 +254,7 @@ export function syncModelShadowUniforms(shadowState: {
             (u as any).matrix1.value.copy(shadowState.matrix1);
         }
         if ((u as any).texel1) (u as any).texel1.value = shadowState?.texel1 ?? 0;
-        if ((u as any).noff) (u as any).noff.value = Number((globalThis as any).__mbShadowNOff ?? 3);
+        if ((u as any).noff) (u as any).noff.value = Number((globalThis as any).__mbShadowNOff ?? 32);
         // §885: shdbg=5 receiver eye-rebase A/B — sync the eye vector and
         // the gate when the material registered them.
         if ((u as any).eye && shadowState?.eye) (u as any).eye.value.copy(shadowState.eye);
@@ -594,7 +594,7 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBShHas1 = { value: 0 };
                 shader.uniforms.uMBShMap1 = { value: null as any };
                 shader.uniforms.uMBShMatrix1 = { value: new THREE.Matrix4() };
-                shader.uniforms.uMBShNOff = { value: Number((globalThis as any).__mbShadowNOff ?? 3) };
+                shader.uniforms.uMBShNOff = { value: Number((globalThis as any).__mbShadowNOff ?? 32) };
                 shader.uniforms.uMBShTexel1 = { value: 0 };
                 // §885: shdbg=5 → receiver rebases worldPos by the shadow eye
                 // (ground-quad convention) — A/B for the light-space y offset.
@@ -1395,7 +1395,7 @@ export function refreshModelShadowUniforms(
                     (u as any).matrix1.value.copy(shadowState.matrix1);
                 }
                 if ((u as any).texel1) (u as any).texel1.value = shadowState?.texel1 ?? 0;
-        if ((u as any).noff) (u as any).noff.value = Number((globalThis as any).__mbShadowNOff ?? 3);
+        if ((u as any).noff) (u as any).noff.value = Number((globalThis as any).__mbShadowNOff ?? 32);
                 if (u.eye && shadowState?.eye) u.eye.value.copy(shadowState.eye);
                 if (u.eyeOn) u.eyeOn.value = (globalThis as any).__mbShadowEyeOn ? 1 : 0;
                 // §885 终十七: per-mesh world matrix in the DEPTH-PASS frame —
