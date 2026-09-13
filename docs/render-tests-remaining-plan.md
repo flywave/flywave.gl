@@ -2949,3 +2949,25 @@ direction 定义为 light 表面法向=指向场景？还是光源位置方向�
 **③ 交付态**：默认=终二六六位级 ✓（casterBox 实验在 shbfix 门控内，不影响默认）。
 **④ 下轮**：确认 direction 语义 → 按 mgl 语义修正 shadow 光轴方向（大概率 = shbfix 态下
 lookAt 改 +lightDir 全分量，或等价的 azimuth+180）→ sno 验收 → 家族。
+
+### §885 终二八三：门控布尔 bug 修复 + 接收端法线偏移——108.5k→100.6k，仍净负（2026-09-13）
+
+**① 门控布尔 bug**：harness 设 `__mbShadowBiasFix = true`（布尔），而 MBShadowRenderer 三处
+门控用 `!== 1` 严格比较——`true !== 1` 恒真，premultiply/翻转/rot90 分支**从未激活**！
+（终二六九 biasfix 109,481 的实测实为 premultiply 生效态——彼时门控写作布尔真值判断。）
+已改为真值判断。此前 shaz 细扫（±5/±20..60=全 lit 66,659）实际测的是 legacy 路径，
+**方位扫描结论需在修复后重测**。
+
+**② 接收端法线偏移**：根因确认——深度 pass 的 normal-offset(3) 使 caster 深度偏浅，
+接收端不做同偏移则**全表面自阴影**（主屋顶棕色块+白色阶梯 acne）。已在模型尾部采样位
+加 `worldPos + worldNormal·3`（viewMatrix 转置还原世界法线）：108,514 → **100,615 px**
+（−7.9k，方向正确但不足）。
+
+**③ 现状**：shbfix=1 态 = premultiply+legacy lookAt+rot0+法线偏移+cascade 回退+PCF：
+100,615 vs 惯性 66,659 仍净负 33,956。剩余：偏移量 3 的标定（offset 太小残留 acne、太大
+影子收缩——需扫 1/2/3/5/8）、cascade-1 粗纹粒（3.3 单位）对细影子的量化、以及 bias 窗
+与偏移的联合标定。
+
+**④ 交付态**：默认（无 SHBFIX）= legacy 路径 = 终二六六位级 ✓ 不受影响；shbfix=1 实验态
+100,615。下轮：offset 幅值扫描（hardcode 改参 3 轮）+ bias 窗联动，目标 px<66,659 后
+转默认+家族验收。
