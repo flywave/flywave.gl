@@ -589,6 +589,10 @@ function discoverTests(): TestEntry[] {
     if (Number(dbg) === 10) (globalThis as any).__mbShadowDbg4 = 5;
     // §885 终二六七: shdbg=11 → factor probe (R=shadow factor, G=sampled
     // depth, B=uv.z) painted for EVERY receiver fragment (bounds-gate-free).
+    // §885 终二八四: shnoff=<v> → receiver normal-offset magnitude.
+    const shno = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shnoff="))?.slice("shnoff=".length);
+    if (shno !== undefined && shno !== "") (globalThis as any).__mbShadowNOff = Number(shno);
     // §885 终二六九: shbfix=1 → bias·proj·view left-multiply remap.
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shbfix=1")) {
         (globalThis as any).__mbShadowBiasFix = true;
