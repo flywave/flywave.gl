@@ -2678,3 +2678,26 @@ castro/highlights/z-offset-v2-port（184k/228k/392k，其残差同为投影缺�
 
 **⑤ 教训**：debug 涂装经输出色彩变换（线性→sRGB 之类），读数非线性（0.5→~0.73）——二值
 uniform 读出 0.77 属正常，须相对比较勿绝对解码；shadowdbg≥5 强制 eyeOn 的污染已记录于终二六七。
+
+### §885 终二七〇：shbfix 调优首轮——HW 深度/PCF/bias 窗三路 A/B，acne 非小偏移型；级联-1 PCF 移植落地（2026-09-13）
+
+**① 三路 A/B（sno，sumdiff vs expected；基线=终二六六交付态 20,782,944）**：
+- shbfix=1+shadowhw=1（HW 24-bit 深度）：29,283,333——模型尾部**不认 HW 解码**（采样 r+g/255
+  而 HW 深度只读 .r，g 通道注入垃圾→深度膨胀→近恒 lit）；且 cascade-1 在 HW 态被跳过
+  （m_shTex1 不生成）→ 高俯仰场景（cascade-0 外）整体回 lit。HW 路径如要启用须给模型尾部
+  补 MB_SH_HW 解码分支 + cascade-1 的 HW 化，工程量另计。
+- shbfix=1+bias 窗 ±0.002+0.001 平移：32,633,488；±0.002 对称：32,675,383；±0.0002：32,671,178
+  ——**bias 窗宽与平移都不改变条纹强度**：条纹非比较偏移型。
+- shbfix=1+cascade-1 5-tap PCF（extrusion 终一二三形式移植，uMBShTexel1 全链同步）：32,702,768
+  ——条纹亦非采样混叠型。
+
+**② 条纹定性（图面判读）**：开启态影带出现在立面/庭院，走向沿光向、边缘锐利、宽 10-20px
+——与 expected 的**柔和均匀**影子带完全不同质感。三路 A/B 排除比较窗/采样混叠后，剩余假说：
+①map1 深度内容本身含编码条纹（2D canvas 中间帧 premultiply alpha 或 pack 量化条带）；
+②模型投影的**软边**（mgl PCF 大核/接触硬化）缺失导致质感差异被放大；③双 cascade 切换边界的
+接收器归属。下轮入口：对条纹立面逐点 mgl-vs-ours 亮度对拍（mgl-shot2 probe 点已可用），
+并用 mode 11 读 (mapDepth,fragZ) 剖面条带周期，若周期=1/255·z 域则实锤 pack 编码条带。
+
+**③ 交付态**：所有调优默认关闭（shbfix/shadowhw/shaz/shdiralt/mode 6·10·11），默认渲染与
+终二六六交付态**位级一致**（20,782,944 复实测 ✓）；新增落地：模型尾部 cascade-1 5-tap PCF +
+uMBShTexel1 全链同步 + shbfix/shaz/hook 探针族。

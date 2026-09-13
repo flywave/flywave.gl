@@ -253,6 +253,7 @@ export function syncModelShadowUniforms(shadowState: {
         if ((u as any).matrix1?.value?.copy && shadowState?.matrix1) {
             (u as any).matrix1.value.copy(shadowState.matrix1);
         }
+        if ((u as any).texel1) (u as any).texel1.value = shadowState?.texel1 ?? 0;
         // §885: shdbg=5 receiver eye-rebase A/B — sync the eye vector and
         // the gate when the material registered them.
         if ((u as any).eye && shadowState?.eye) (u as any).eye.value.copy(shadowState.eye);
@@ -592,6 +593,7 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBShHas1 = { value: 0 };
                 shader.uniforms.uMBShMap1 = { value: null as any };
                 shader.uniforms.uMBShMatrix1 = { value: new THREE.Matrix4() };
+                shader.uniforms.uMBShTexel1 = { value: 0 };
                 // §885: shdbg=5 → receiver rebases worldPos by the shadow eye
                 // (ground-quad convention) — A/B for the light-space y offset.
                 shader.uniforms.uMBShEyeOn = {
@@ -605,6 +607,7 @@ export function applyMglModelLighting(
                         has1: shader.uniforms.uMBShHas1,
                         map1: shader.uniforms.uMBShMap1,
                         matrix1: shader.uniforms.uMBShMatrix1,
+                        texel1: shader.uniforms.uMBShTexel1,
                         intensity: shader.uniforms.uMBShIntensity,
                         eye: shader.uniforms.uMBShEye,
                         eyeOn: shader.uniforms.uMBShEyeOn,
@@ -641,6 +644,7 @@ export function applyMglModelLighting(
  uniform float uMBShHas1;
  uniform sampler2D uMBShMap1;
  uniform mat4 uMBShMatrix1;
+ uniform float uMBShTexel1;
                      uniform vec3 uMBShEye;
                      uniform float uMBShEyeOn;
                      uniform float uMB3DMetal; uniform float uMB3DRough;
@@ -989,8 +993,22 @@ export function applyMglModelLighting(
                                  }
                                  if (mbShHasC > 0.5 && mbShUvC.x >= 0.0 && mbShUvC.x <= 1.0 &&
                                      mbShUvC.y >= 0.0 && mbShUvC.y <= 1.0 && mbShUvC.z <= 1.0) {
-                                     vec4 mbShPk = (mbIn0 > 0.5) ? texture2D(uMBShMap, mbShUv.xy)
-                                         : texture2D(uMBShMap1, mbShUv1.xy);
+                                     vec4 mbShPk;
+                                     if (mbIn0 > 0.5) {
+                                         mbShPk = texture2D(uMBShMap, mbShUv.xy);
+                                     } else {
+                                         // §885 终二七〇: cascade-1 5-tap PCF
+                                         // (4× coarser texels — mirror the
+                                         // extrusion 终一二三 calibration).
+                                         mbShPk = texture2D(uMBShMap1, mbShUv1.xy);
+                                         float mbT1 = uMBShTexel1;
+                                         float mbDsum = mbShPk.r
+                                             + texture2D(uMBShMap1, mbShUv1.xy + vec2(mbT1, 0.0)).r
+                                             + texture2D(uMBShMap1, mbShUv1.xy + vec2(-mbT1, 0.0)).r
+                                             + texture2D(uMBShMap1, mbShUv1.xy + vec2(0.0, mbT1)).r
+                                             + texture2D(uMBShMap1, mbShUv1.xy + vec2(0.0, -mbT1)).r;
+                                         mbShPk.r = mbDsum / 5.0;
+                                     }
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
@@ -1014,7 +1032,7 @@ export function applyMglModelLighting(
                                      // instead of the hard 0.002 compare —
                                      // 0.002 ≈ 1.6 depth units in the tight
                                      // frustum, enough to light wall strips).
-                                     float mbLitS = smoothstep(-0.002, 0.002, mbShDepth - mbShUv.z + 0.001);
+                                     float mbLitS = smoothstep(-0.002, 0.002, mbShDepth - mbShUv.z);
                                      mbNdotL *= mix(1.0 - uMBShIntensity, 1.0, mbLitS);
                                  }
                              }
@@ -1121,8 +1139,22 @@ export function applyMglModelLighting(
                                  }
                                  if (mbShHasC > 0.5 && mbShUvC.x >= 0.0 && mbShUvC.x <= 1.0 &&
                                      mbShUvC.y >= 0.0 && mbShUvC.y <= 1.0 && mbShUvC.z <= 1.0) {
-                                     vec4 mbShPk = (mbIn0 > 0.5) ? texture2D(uMBShMap, mbShUv.xy)
-                                         : texture2D(uMBShMap1, mbShUv1.xy);
+                                     vec4 mbShPk;
+                                     if (mbIn0 > 0.5) {
+                                         mbShPk = texture2D(uMBShMap, mbShUv.xy);
+                                     } else {
+                                         // §885 终二七〇: cascade-1 5-tap PCF
+                                         // (4× coarser texels — mirror the
+                                         // extrusion 终一二三 calibration).
+                                         mbShPk = texture2D(uMBShMap1, mbShUv1.xy);
+                                         float mbT1 = uMBShTexel1;
+                                         float mbDsum = mbShPk.r
+                                             + texture2D(uMBShMap1, mbShUv1.xy + vec2(mbT1, 0.0)).r
+                                             + texture2D(uMBShMap1, mbShUv1.xy + vec2(-mbT1, 0.0)).r
+                                             + texture2D(uMBShMap1, mbShUv1.xy + vec2(0.0, mbT1)).r
+                                             + texture2D(uMBShMap1, mbShUv1.xy + vec2(0.0, -mbT1)).r;
+                                         mbShPk.r = mbDsum / 5.0;
+                                     }
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
@@ -1154,7 +1186,7 @@ export function applyMglModelLighting(
                                      // instead of the hard 0.002 compare —
                                      // 0.002 ≈ 1.6 depth units in the tight
                                      // frustum, enough to light wall strips).
-                                     float mbLitS = smoothstep(-0.002, 0.002, mbShDepth - mbShUv.z + 0.001);
+                                     float mbLitS = smoothstep(-0.002, 0.002, mbShDepth - mbShUv.z);
                                      if (uMBShRepl > 0.5) {
                                          // §885 终二六二: mgl shadowed_light_factor_normal
                                          // REPLACES the light factor —
@@ -1344,6 +1376,7 @@ export function refreshModelShadowUniforms(
                 if ((u as any).matrix1?.value?.copy && shadowState?.matrix1) {
                     (u as any).matrix1.value.copy(shadowState.matrix1);
                 }
+                if ((u as any).texel1) (u as any).texel1.value = shadowState?.texel1 ?? 0;
                 if (u.eye && shadowState?.eye) u.eye.value.copy(shadowState.eye);
                 if (u.eyeOn) u.eyeOn.value = (globalThis as any).__mbShadowEyeOn ? 1 : 0;
                 // §885 终十七: per-mesh world matrix in the DEPTH-PASS frame —
