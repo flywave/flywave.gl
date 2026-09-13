@@ -2721,3 +2721,26 @@ z 号约定、位置偏移、near/far 对称性）+ acne 控制（HW 深度或 p
 **④ 下轮主攻（唯一战线）**：在 shbfix=1 开启态：①shaz ∈ {0..330,60° 步} 扫描找场景居中的方位
 （uv 剖面 G 通道均值≈0.5 处）；②confirm 后逐点对拍 mgl probe 定软边；③acne 由 HW 深度或
 斜率 bias 收敛；④验收 sno 主/lod → castro/highlights/z-offset-v2-port。
+
+### §885 终二七二：shaz 扫角+castro 交叉验证——+90° 使场景居中但 castro 恶化；bias 修正与历史 shoff 校准纠缠，整体迁移定档（2026-09-13）
+
+**① shaz plumbing 修复**：终二六九的 shaz 旋钮实测惰性（0°/90° 位级同）根因=环境 arg 断链；
+硬编码强制 90° 后接收端 uv 立即响应：roof/facade/courtyard fragZ = 0.471/0.475/0.788——
+**+90° 世界 Z 旋转使场景居中于光视锥**（对比 0° 的 0.008-0.067 近平面值）。
+
+**② sno 验收（shbfix=1+rot90 常规渲染）**：31.67M（基线 20.78M）——投影出现但方向/软边不对位
+（主屋顶被错误投影覆盖、白斑 acne 密布）。
+
+**③ castro 交叉验证否决单点迁移**：castro（bearing 54.5°，与 sno −91.7° 差 146°）shbfix=1
+shaz=0 → 30.2M sumdiff（其基线 184,294 px）；−109°（−2·bearing 律）跑分缺失但 0° 已示
+shbfix 对 castro 无收益。**结论：bias 修正是数学正解，但历史地面阴影曾靠"错矩阵+shoff 暗校准"
+对齐——单点默认开启会打破全部既有地面阴影对齐**。正确路径=整体迁移专项：bias 左乘 + 移除
+shoff 校准 + cascade 选择 + acne 控制，一次重测 shadow 家族全量基线再定默认。
+
+**④ 交付态（维持）**：默认渲染 = 终二六六交付态位级（20,782,944 复实测 ✓）；shbfix=1/shaz/
+shdiralt/mode 6·10·11/PCF/HW 探针与调优旋钮全部门控保留，工具链完备。
+
+**⑤ 专项开工清单（shbfix 迁移专项，需独立批次）**：①默认改 premultiply+lookAt 翻转+rot90；
+②全量重测 shadow 家族（sno/castro/highlights/z-offset/ground-shadow/door-light/munich 系）；
+③shoff 类暗校准逐一归零重标定；④acne：模型尾部 MB_SH_HW 解码分支 + cascade-1 HW 化或斜率
+bias；⑤mgl-shot2 probe 软边对拍定 PCF 核。

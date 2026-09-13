@@ -739,7 +739,12 @@ export class MBShadowRenderer {
         // the per-degree sweep argmin centers the scene in the map and
         // calibrates the shadow-camera azimuth convention in one batch.
         {
-            const shAz = Number((globalThis as any).__mbShadowAzDelta ?? 0);
+            // §885 终二七二: under shbfix the shadow light axis carries a
+            // fixed +90° world-Z rotation (empirically centers the scene in
+            // the light frustum: fragZ 0.47-0.79 mid-range) plus the sweep
+            // delta. Legacy path stays unrotated.
+            const shAz = ((globalThis as any).__mbShadowBiasFix ? 90 : 0)
+                + Number((globalThis as any).__mbShadowAzDelta ?? 0);
             if (shAz && lightDir) {
                 const aR = shAz * Math.PI / 180;
                 const cR = Math.cos(aR), sR = Math.sin(aR);
