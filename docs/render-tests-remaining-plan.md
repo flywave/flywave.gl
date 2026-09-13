@@ -2998,3 +2998,19 @@ mercator 帧 createLightMatrix 全帧移植（光相机位置用 mercator 球心
 {有/无 rot90} × {有/无 flip}（当前只测过 rot90+flip 组合的 off 24/32/48，未测 flip-only、
 rot-only 组合——66,131 优值属于哪个组合需重验）；②acne 的斜率 bias（depth-slope scaled）
 替代常数窗；③cascade-1 纹粒 3.3 单位的软边 PCF 核宽扫。
+
+### §885 终二八二B：细网格+默认验证——shadow 状态跨运行非确定，默认翻转暂缓（2026-09-13）
+
+**① 家族验收（shbfix=1+noff32）**：sno 主 66,131 / lod 66,391（双双低于惯性 66,659 ✓）、
+q-s 2,417（+0）、castro 184,294（+0）——净正向但幅度小（影子仅部分正确）。
+
+**② 默认态验证发现非确定**：同一构建、无旋钮默认态实测 66,659（全 lit）≠ shbfix 态 66,131，
+且互相矛盾于"两配置数学等价"——**shadow map 内容/上传时序存在跨运行非确定**（SwiftShader
+纹理上传与帧时序，§530 谱系）。默认翻转在非确定源消除前不可验证、不可发布。
+
+**③ 交付态**：默认=终二六六位级（66,659 复实测 ✓）；shbfix=1+shnoff=32 为已验证更优实验态
+（一次性 66,131），配置与旋钮全部保留。
+
+**④ 下轮（最终收口清单）**：①非确定源定位：深度 canvas 2D 拷贝与 DataTexture 上传的帧时序
+（run() 内 drawImage/clear 的执行序）；②确定性化后 sno 稳定 <66,659 → 转默认；③家族验收
+castro/highlights/z-offset-v2-port/ground-shadow。
