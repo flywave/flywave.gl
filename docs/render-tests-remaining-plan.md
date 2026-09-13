@@ -2810,3 +2810,25 @@ FarZ=(radiusPx+verticalRange·ppm)/sd.z；④ortho ±radiusPx；⑤1e6 取整 tr
 **④ 交付态**：默认=终二六六位级（66,659，全家族复实测无回归）；shbfix/shaz/mode 探针族保留。
 本轮新知：背景像素会污染 in-bounds 统计（须用已知模型采样点）；pkill 模式含 CHROME_BIN 路径
 会自杀后台 shell（用 [l] 括号技巧）。
+
+### §885 终二七六：迁移默认首批回退定案 + 方向语义复核——分析穷尽，立项确认（2026-09-13）
+
+**① 方向语义复核**：源码级核查 MBEnvironmentManager lighting3DState——ls.dir = mgl-faithful
+az+90 转换 **+ 渲染帧 y 镜像**（§643），即 ls.dir ≡ mgl sd 在咱方帧的等价向量（对 sno
+[190,50]：ls.dir=(0.133,0.754,0.643)）。legacy 阴影相机 lookAt(center − ls.dir) = 从太阳看向
+场景，**语义正确**——"朝天看"读数（终二七一 fragZ≈0.01）与语义矛盾，指向管线更深处的
+帧/纹理失配而非朝向。
+
+**② 迁移默认首批（bias 左乘+翻转+rot90 默认开启）**：sno 107,074 px 恶化于惯性 66,659——
+激活的错误方向影子比无投影误差更大；家族其余 7 夹具位级不变（接收器双态均越界全 lit）。
+**已回退**：默认=门控交付态（终二六六位级 20,782,944 复实测 ✓），shbfix=1 旋钮保留。
+
+**③ 分析穷尽清单（全部实证）**：bias 乘序（全精度对拍）✓、纹理内容（中心纹素 0.77）✓、
+pack 编解码自洽 ✓、live uniforms 同一 ✓、worldPos varying 健康 ✓、方向语义正确 ✓、
+cascade-1 回退在位 ✓——七环皆健康而投影仍缺失，剩余可能：①深度 pass 与接收端渲染的
+**帧原点差异**（rteCamera 与独立 context 相机的 matrixWorld 基准）；②CanvasTexture 上传
+时序（needsUpdate 与 draw 的竞态）；③mode 探针经输出色彩变换后的读数失真掩盖了真实状态。
+下轮：在深度 pass 后直接 readPixels 对比接收端采样点的期望深度（绕过全部中间路径），
+一次定位帧失配或纹理时序。
+
+**④ 交付态**：默认=终二六六位级（20,782,944 复实测 ✓），全部实验能力门控保留。
