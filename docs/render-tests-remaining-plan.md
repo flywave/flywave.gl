@@ -3113,3 +3113,22 @@ pass（raw 轴专用，工程中）；②或完整 mgl createLightMatrix 移植�
 消费者校准。
 
 **③ 交付态**：回退后=终二八七位级（sno 65,054/主 65,308）✓ 全部实验门控保留。
+
+### §885 终二八九B：raw far-field pass 首轮实现受挫（shader 编译失败→模型消失 179k）→ 回退；R 系基础设施保留（2026-09-14）
+
+**① 实现**：MBShadowRenderer 新增第三 pass（raw 轴 az+90、4×、独立 m_matrixR/m_shTexR/
+readPixels）+ getShadowUniforms 暴露 mapR/matrixR + 模型尾部 R 系声明/uniform/双 sync +
+fallback 重定向。首测 **179,062 px、模型整体消失**——GLSL 编译失败（karma 日志：
+'uMBShMatrixR'/'uMBShMapR' undeclared——R 系声明注入脚本因 assert 中断未落盘，而用法已
+重定向）。补齐声明后 65,164（仍劣于交付 65,054）→ 回退 cascade-1 采样，R 系基础设施
+（声明/uniform/双 sync）保留待用（mapR 未暴露时 hasR=0 惰性）。
+
+**② 结构教训**：多脚本串联编辑时 assert 中断会留下"半应用"状态（声明缺、用法在）——
+后续大改用单脚本全量 apply+verify。编译失败的全模型消失（灰底帧）是可靠信号。
+
+**③ 定论**：raw far-field pass 的框架代码已就位（MBShadowRenderer 侧可从 git 历史
+00a32186+ 本轮 diff 复原），但接收端映射后 px 65,164 vs 交付 65,054——**raw 轴远场对 sno
+并无收益**（+110），终二八九的 63,016 优值属于 SHDIRALT=1 全局 raw（含 ground 代价 +36.5k）
+的特殊组合。sno 影子收敛需重新定性 65k 残余的确切构成后再战。
+
+**④ 交付态**：默认=终二八七位级（65,054 复实测 ✓）；R 系基础设施惰性保留。
