@@ -3084,3 +3084,19 @@ z-offset-v2-port 392k 属光照+几何域（非本轮影子域），按各自域
 
 **③ 下轮**：shdiralt=1（raw az+90 无镜像）在 shbfix=1 态重测 px——终六十四 时该实验
 因布尔门控 bug 从未真正生效，现在门控已修，一次即可判镜 mirror vs raw。
+
+### §885 终二八九：raw 方向实验定量——模型接收器受益（sno −3.6k）但 ground quad 受损（+36.5k），净负维持门控（2026-09-14）
+
+**① SHDIRALT=1+SHNOFF=32 家族实测**：sno 63,016（−3,643 vs 惯性 66,659 ✓ 方向对模型接收器
+有益）；ground-shadow-fog 140,431→158,749（+18.3k）、hard-cutoff 140,596→158,798（+18.2k）
+——**ground quad 的阴影重建按 §683 镜像系校准，raw 方向破坏之**。
+
+**② 定论**：模型接收端需要 raw 方向（或等效），ground quad 需要 §683 镜像系——单一全局
+方向无法同时满足。两条收敛路径：A) 模型尾部采样矩阵独立采用 raw 方向构建的 cascade-1
+专用矩阵（ground quad 维持现 m_matrix）；B) ground quad 也迁 raw 并重标定其 uv（工程大）。
+推荐 A：模型尾部加一个"raw 方向 cascade-1 专用第二 pass"或直接让模型接收器采样时用
+独立矩阵，ground 不动。
+
+**③ 交付态**：默认=终二六六位级维持 ✓；SHDIRALT=1/SHNOFF=32 门控保留（sno 单夹具最优
+63,016）。本轮新增：cascade-1 canvas dump 探针（c1n 计数器版，作用域 bug 已修）+
+courtyard-audit 探针 + casterBox 角点 readPixels 探针。
