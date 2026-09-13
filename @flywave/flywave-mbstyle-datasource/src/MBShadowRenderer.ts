@@ -856,6 +856,21 @@ export class MBShadowRenderer {
                 }
             }
         }
+        // §885 终二八二: shbfix=1 → center the ortho on the CASTER BOX
+        // center (world-frame) instead of the view-frustum-sphere center —
+        // the empirical ~130-unit systematic offset between receiver uv and
+        // map content vanishes when both use the same reference.
+        if ((globalThis as any).__mbShadowBiasFix && !casterBox.isEmpty()) {
+            const c2 = casterBox.getCenter(new THREE.Vector3());
+            sphereCenter.copy(c2);
+            const sz = casterBox.getSize(new THREE.Vector3());
+            const rr = 0.6 * Math.max(sz.x, sz.y, sz.z);
+            this.m_shadowCamera.left = -rr; this.m_shadowCamera.right = rr;
+            this.m_shadowCamera.top = rr; this.m_shadowCamera.bottom = -rr;
+            this.m_shadowCamera.near = -2 * rr;
+            this.m_shadowCamera.far = 2 * rr / Math.max(lightDir.z, 0.1);
+            this.m_shadowCamera.updateProjectionMatrix();
+        }
         this.m_shadowCamera.position.copy(sphereCenter);
         this.m_shadowCamera.up.set(0, 0, 1);
         // §885 终二六九/二七一: ls.dir is the LIGHT-TRAVEL direction (downward

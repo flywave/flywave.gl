@@ -2933,3 +2933,19 @@ lookAt(−lightDir) + 无 rot + cascade 回退 + PCF（终二六九 109,481 px�
 为 light camera 平移基准），一行改动可验证。
 
 **④ 交付态**：默认=终二六六位级 ✓；全部探针/旋钮保留并已提交。
+
+### §885 终二八二：casterBox 居中实验阴性——收敛至光源方向语义定标（终局前最后待解项）（2026-09-13）
+
+**① 实验**：shbfix=1 下 ortho 中心/半径改 casterBox 拟合（排除视锥球心偏移与覆盖问题）：
+px=66,659（惯性签名不变）。连同此前：无论视锥怎么框，接收器采样恒 lit——**遮挡体从不出现
+在咱方光轴的接收器前方**。
+
+**② 收敛判定**：光相机位置/半径/中心/朝向翻转/y-flip/级联回退全部操作过，唯一未被定标的
+自由度 = **光源方向语义**：style `direction [azimuth 190, polar 50]` 在 mgl 中是"光行进方向"
+（太阳在 10°反侧）还是"太阳所在方向"（太阳在 190°）。两者的阴影投射方向差 180°，直接决定
+庭院影子是否存在。mgl 语义可从 directional light 文档/shader 确认（directional light 的
+direction 定义为 light 表面法向=指向场景？还是光源位置方向），并在咱方 conversion 中对齐。
+
+**③ 交付态**：默认=终二六六位级 ✓（casterBox 实验在 shbfix 门控内，不影响默认）。
+**④ 下轮**：确认 direction 语义 → 按 mgl 语义修正 shadow 光轴方向（大概率 = shbfix 态下
+lookAt 改 +lightDir 全分量，或等价的 azimuth+180）→ sno 验收 → 家族。
