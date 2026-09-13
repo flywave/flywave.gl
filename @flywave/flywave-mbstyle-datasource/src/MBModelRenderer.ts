@@ -1006,7 +1006,17 @@ export function applyMglModelLighting(
                                      mbShUvC.y >= 0.0 && mbShUvC.y <= 1.0 && mbShUvC.z <= 1.0) {
                                      vec4 mbShPk;
                                      if (mbIn0 > 0.5) {
-                                         mbShPk = texture2D(uMBShMap, mbShUv.xy);
+                                         // §885 终二九四: cascade-0 5-tap PCF —
+                                         // soften quantized band edges.
+                                         float mbT0 = 1.0 / 1024.0;
+                                         vec4 mbPkC = texture2D(uMBShMap, mbShUv.xy);
+                                         float mbDsum = mbPkC.r
+                                             + texture2D(uMBShMap, mbShUv.xy + vec2(mbT0, 0.0)).r
+                                             + texture2D(uMBShMap, mbShUv.xy + vec2(-mbT0, 0.0)).r
+                                             + texture2D(uMBShMap, mbShUv.xy + vec2(0.0, mbT0)).r
+                                             + texture2D(uMBShMap, mbShUv.xy + vec2(0.0, -mbT0)).r;
+                                         mbPkC.r = mbDsum / 5.0;
+                                         mbShPk = mbPkC;
                                      } else {
                                          // §885 终二七〇: cascade-1 5-tap PCF
                                          // (4× coarser texels — mirror the
@@ -1043,7 +1053,7 @@ export function applyMglModelLighting(
                                      // instead of the hard 0.002 compare —
                                      // 0.002 ≈ 1.6 depth units in the tight
                                      // frustum, enough to light wall strips).
-                                     float mbLitS = smoothstep(-0.0002, 0.0002, mbShDepth - mbShUv.z);
+                                     float mbLitS = smoothstep(-0.0005, 0.0005, mbShDepth - mbShUv.z);
                                      mbNdotL *= mix(1.0 - uMBShIntensity, 1.0, mbLitS);
                                  }
                              }
@@ -1159,7 +1169,17 @@ export function applyMglModelLighting(
                                      mbShUvC.y >= 0.0 && mbShUvC.y <= 1.0 && mbShUvC.z <= 1.0) {
                                      vec4 mbShPk;
                                      if (mbIn0 > 0.5) {
-                                         mbShPk = texture2D(uMBShMap, mbShUv.xy);
+                                         // §885 终二九四: cascade-0 5-tap PCF —
+                                         // soften quantized band edges.
+                                         float mbT0 = 1.0 / 1024.0;
+                                         vec4 mbPkC = texture2D(uMBShMap, mbShUv.xy);
+                                         float mbDsum = mbPkC.r
+                                             + texture2D(uMBShMap, mbShUv.xy + vec2(mbT0, 0.0)).r
+                                             + texture2D(uMBShMap, mbShUv.xy + vec2(-mbT0, 0.0)).r
+                                             + texture2D(uMBShMap, mbShUv.xy + vec2(0.0, mbT0)).r
+                                             + texture2D(uMBShMap, mbShUv.xy + vec2(0.0, -mbT0)).r;
+                                         mbPkC.r = mbDsum / 5.0;
+                                         mbShPk = mbPkC;
                                      } else {
                                          // §885 终二七〇: cascade-1 5-tap PCF
                                          // (4× coarser texels — mirror the
@@ -1204,7 +1224,7 @@ export function applyMglModelLighting(
                                      // instead of the hard 0.002 compare —
                                      // 0.002 ≈ 1.6 depth units in the tight
                                      // frustum, enough to light wall strips).
-                                     float mbLitS = smoothstep(-0.0002, 0.0002, mbShDepth - mbShUv.z);
+                                     float mbLitS = smoothstep(-0.0005, 0.0005, mbShDepth - mbShUv.z);
                                      if (uMBShRepl > 0.5) {
                                          // §885 终二六二: mgl shadowed_light_factor_normal
                                          // REPLACES the light factor —
