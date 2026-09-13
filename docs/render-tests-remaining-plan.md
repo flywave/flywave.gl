@@ -3100,3 +3100,16 @@ z-offset-v2-port 392k 属光照+几何域（非本轮影子域），按各自域
 **③ 交付态**：默认=终二六六位级维持 ✓；SHDIRALT=1/SHNOFF=32 门控保留（sno 单夹具最优
 63,016）。本轮新增：cascade-1 canvas dump 探针（c1n 计数器版，作用域 bug 已修）+
 courtyard-audit 探针 + casterBox 角点 readPixels 探针。
+
+### §885 终二九〇：cascade-1 raw 轴实验阴性——ground quad 级联回退依赖镜像系，净负回退（2026-09-14）
+
+**① 实验**：cascade-1 far-field 改 raw 方向（az+90 无镜像），cascade-0 维持镜像：sno 64,978
+（−76 微益）但 ground-shadow-fog 158,748（+18.3k 回归）——**ground quad 的 cascade-1 回退
+依赖镜像系**，raw 轴破坏其 fall-back 对齐。净负明确，已回退。
+
+**② 结构定论**：cascade-1 的方向是全局资源——ground quad 回退与模型尾部回退共用，二者
+对方向的要求冲突（镜像 vs raw）。单点改动不可行，正解只剩：①模型尾部独立第二 far-field
+pass（raw 轴专用，工程中）；②或完整 mgl createLightMatrix 移植后按 mgl 统一语义重推所有
+消费者校准。
+
+**③ 交付态**：回退后=终二八七位级（sno 65,054/主 65,308）✓ 全部实验门控保留。
