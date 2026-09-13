@@ -3132,3 +3132,23 @@ fallback 重定向。首测 **179,062 px、模型整体消失**——GLSL 编译
 的特殊组合。sno 影子收敛需重新定性 65k 残余的确切构成后再战。
 
 **④ 交付态**：默认=终二八七位级（65,054 复实测 ✓）；R 系基础设施惰性保留。
+
+### §885 终二九一：sno 残余定性完成——光轴方位实质性错位（非软边/精度），源码移植立项维持（2026-09-14）
+
+**① 剖面分类**（mode 11，R=mapDepth G=fragZ，原始通道单调可比）：条纹立面 y=270 行
+x∈[300,430]——mapDepth 0.63-0.75（图内容存在 ✓）、fragZ 0.008-0.067 平滑、分类恒 LIT。
+对照 expected：该区域应为**遮挡**（中心建筑投影）。即咱方光轴下沿该射线的遮挡体缺失/
+错位——光轴方位与 mgl 存在实质性角度差。
+
+**② 残余构成定量**（全图分类 vs expected 影子掩码）：过度阴影（expected 无影咱方有影）
+84,457 px 主导 + 漏影 25,194 px + 正确阴影 38,051 px。结论：**方向性错位**，非软边/精度；
+normal-offset/bias/PCF 微调不可修（终二八四已证）。
+
+**③ 唯一路径确认**：mgl createLightMatrix 源码级移植（mercator 球心 + FreeCamera
+setPitchBearing + getWorldToCamera(ws,ppm) + truncMatrix），替换 RTE lookAt+ls.dir 拼装。
+关键未知=咱方世界（x 东 y 北 z 上、projected meters）与 mgl mercator（x 东 y 南 z 上）
+之间的帧变换（y 镜像+可能的原点平移）——需一次专项推导并重推全部消费者（ground quad/
+extrusion/模型尾部）校准。
+
+**④ 交付态**：默认=终二八七位级（sno 65,054，bias 窗 ±0.0005 落地 ✓）；SHADOW=11/mode
+探针族保留。
