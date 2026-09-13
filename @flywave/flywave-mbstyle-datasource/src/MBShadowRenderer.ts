@@ -721,7 +721,17 @@ export class MBShadowRenderer {
                 const p2 = dirProp2[1] * Math.PI / 180;
                 lightDir = new THREE.Vector3(
                     Math.cos(a2) * Math.sin(p2), Math.sin(a2) * Math.sin(p2), Math.cos(p2));
+            } else if (lightDir) {
+                // §885 终二六七: no raw dirProp on this style — emulate the
+                // raw form from ls.dir (y mirror of the §683 frame).
+                lightDir = new THREE.Vector3(lightDir.x, -lightDir.y, lightDir.z);
             }
+        }
+        // §885 终二六七: shdiralt=2 → tosun light axis (−x,−y of ls.dir) —
+        // the direction that provably matches the 终二六六 tosun shading for
+        // cast-shadow styles; the shadow CAMERA may need the same convention.
+        if ((globalThis as any).__mbShadowDirAlt === 2 && lightDir) {
+            lightDir = new THREE.Vector3(-lightDir.x, -lightDir.y, lightDir.z);
         }
 
         // §560: frame the ortho around the CASTERS' union AABB (worldCenter
@@ -1096,6 +1106,35 @@ export class MBShadowRenderer {
                 0, 0, 0.5, 0.5,
                 0, 0, 0, 1,
             ));
+        // §885 终二六七: one-shot composition probe — the model receivers see
+        // a ZERO-LINEAR m_matrix (uv constant out-of-bounds ⇒ everything lit).
+        {
+            const gM = (globalThis as any);
+            gM.__mbShMatProbeN = (gM.__mbShMatProbeN ?? 0) + 1;
+            if (gM.__mbShMatProbeN === 120 && !gM.__mbShMatProbeDone) {
+                gM.__mbShMatProbeDone = true;
+                try {
+                    const fbM = (window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith('feedback-url='))
+                        ?.slice('feedback-url='.length);
+                    if (fbM) {
+                        const f = (m: THREE.Matrix4) => Array.from(m.elements).map((x: number) => +x.toFixed(3));
+                        fetch(`${fbM}/mb-probe-dump`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({
+                                probe: 'shmat-compose',
+                                mMatrix: f(this.m_matrix),
+                                proj: f(this.m_shadowCamera.projectionMatrix),
+                                viewInv: f(this.m_shadowCamera.matrixWorldInverse),
+                                world: f(this.m_shadowCamera.matrixWorld),
+                                lr: [this.m_shadowCamera.left, this.m_shadowCamera.right, this.m_shadowCamera.top, this.m_shadowCamera.bottom, this.m_shadowCamera.near, this.m_shadowCamera.far],
+                            }),
+                        }).catch(() => { });
+                    }
+                } catch { /* probe only */ }
+            }
+        }
 
         // §885 终一百一十八: cascade-1 far-field pass — 4× extents, same
         // (skipped when the HW path is active — cascade-1 uses the

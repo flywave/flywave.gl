@@ -2617,3 +2617,37 @@ lsdir 为回退旋钮，mlform=tosun 与默认重合。终二十二 旧判例系
 
 **⑥ 开放**：sno 残余 66.6k（受光面着色幅值/影子内法线偏移域）；mgl-shot2 现支持
 `aoint=`/`colr=` 覆盖与 `extra` 透传，可供逐属性消单。
+
+### §885 终二六七：sno 残余 66.6k 定域——batched 瓦片模型接收端 light-space uv 全越界（模型→模型投影整体丢失）（2026-09-13）
+
+**① 残差结构**：tosun 落地后 sno 66,659 的失配高度局部化（右/下象限庭院+右下地面+右立面）；
+主屋顶 (123.9,130,133.8) vs expected (126.4,129.7,131.6)、左墙 (152.3 vs 150.1) **逐位级吻合**——
+着色方位修复实锤。失配区 expected 全部更暗（~112 vs 我方 ~180-201）= 中央建筑投向庭院/
+右翼的**投影在咱方整体缺失**。
+
+**② 排除清单**：①shrad=1.3（覆盖半径）逐位零变化——非覆盖裁剪；②AO 假说证伪（aoint 0→0.75
+仅 mean 14.8）；③depth pass 完整：shadow-depth-canvas dump 显示全部建筑（含右侧高楼）带正常
+framing 入图；④m_matrix 健康组装（shmat-compose 探针：proj=±210 ortho、viewInv 正交归一，
+mesh origin uv=(0.87,0.63,0.67) 在界内）；⑤worldPos varying 健康（fract 条纹场空间连续变化，
+跨建筑跳变属正常不同 mesh）；⑥classic GLB 路径正常：model-shadow 夹具接收端 uv 中值在界内。
+
+**③ 决定性探针读数（新 shdbg mode 11）**：batched 瓦片接收端 factor 涂装 = 全场景 uv.z
+**越界**（屋顶 fragZ≤0、其余 ≥1；clamp 后 mapDepth=1.0 空读）→ bounds gate 全部走 lit →
+**模型→模型投影一个都没渲染**。此前"吻合的影子"实为几何着色暗面+地面 quad 通道（其阴影
+正常）。接收端 worldPos 实测 (−118..−525, −180..24, −71..−24) RTE 合理；handle dump
+（matrix/world/intensity=1/eyeOn=0）全部健康——**JS 侧 uniform 值与 GL 侧 live 值脱钩**或
+worldPos→uv 链路存在系统性畸变，待查 live program uniforms
+（renderer.properties.get(mat).uniforms vs handle 对象同一性）。
+
+**④ 探针污染警示**：harness `shadowdbg>=5` 强制 `__mbShadowEyeOn=true`——本轮中段所有
+uv 读数曾被 eye-rebase 弄脏（mode 11 现已显式 eyeOn=false）；`MBSTYLE_SHDIRALT` 曾被
+runner 硬编码 "shdiralt=1"（=2 无法透传，已修为透传原值）。
+
+**⑤ 工具落地**：①shdbg mode 11（因子探针 R=litFactor G=mapDepth B=fragZ，bounds-gate-free）；
+②mldiraz 修复后可扫影子系（ls.dir 水平旋转，delta 0 = tosun）；③shdiralt=2（阴影相机 tosun
+轴）；④shuv-matrix/shmat-compose 一次性 uniform dump 探针；⑤per-mesh onBeforeRender world
+矩阵 hook（本轮无像素效果，保留——语义正确的防御）；⑥mgl-shot2 `aoint=`/`colr=`/`extra` 透传。
+
+**⑥ 下轮入口**：dump live program 的 uMBShMatrix/uMBShWorldMatrix（three materialProperties
+路径）与 handle 对象做同一性比对；若 live 值健康则用 mode 11 读数反推 worldPos→uv 逆映射的
+畸变算子（对角/平移拟合），一击定位。

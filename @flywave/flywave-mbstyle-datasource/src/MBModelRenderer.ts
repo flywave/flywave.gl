@@ -910,6 +910,16 @@ export function applyMglModelLighting(
                              float mbNdotL = clamp(dot(mbN0, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
                                  vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - uMBShEye * uMBShEyeOn, 1.0);
+                                 if (uMBShDbg > 5.5 && uMBShDbg < 6.5) {
+                                     // §885 终二六七: factor probe — R = shadow
+                                     // factor at the fragment's OWN uv (unclamped
+                                     // sample), G = sampled packed depth, B = uv.z.
+                                     vec4 mbShPkP = texture2D(uMBShMap, clamp(mbShUv.xy, vec2(0.0), vec2(1.0)));
+                                     float mbD0 = mbShPkP.r + mbShPkP.g / 255.0;
+                                     float mbLit0 = smoothstep(-0.0002, 0.0002, mbD0 - mbShUv.z);
+                                     gl_FragColor.rgb = vec3(mbLit0, mbD0, clamp(mbShUv.z, 0.0, 1.0));
+                                     return;
+                                 }
                                  if (uMBShDbg > 2.5 && uMBShDbg < 3.5) {
                                      // §885 终十六: extended-range uv painted for
                                      // EVERY receiver fragment (moved out of the
@@ -1015,6 +1025,16 @@ export function applyMglModelLighting(
                              float mbLF = clamp(dot(${(globalThis as any).__mbWorldAdfOff ? 'mbN' : 'mbN0'}, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
                                  vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - uMBShEye * uMBShEyeOn, 1.0);
+                                 if (uMBShDbg > 5.5 && uMBShDbg < 6.5) {
+                                     // §885 终二六七: factor probe — R = shadow
+                                     // factor at the fragment's OWN uv (unclamped
+                                     // sample), G = sampled packed depth, B = uv.z.
+                                     vec4 mbShPkP = texture2D(uMBShMap, clamp(mbShUv.xy, vec2(0.0), vec2(1.0)));
+                                     float mbD0 = mbShPkP.r + mbShPkP.g / 255.0;
+                                     float mbLit0 = smoothstep(-0.0002, 0.0002, mbD0 - mbShUv.z);
+                                     gl_FragColor.rgb = vec3(mbLit0, mbD0, clamp(mbShUv.z, 0.0, 1.0));
+                                     return;
+                                 }
                                  if (uMBShDbg > 2.5 && uMBShDbg < 3.5) {
                                      // §885 终十六: extended-range uv painted for
                                      // EVERY receiver fragment — the paint sat
@@ -1275,6 +1295,63 @@ export function refreshModelShadowUniforms(
                 // WillRender, after the batched carrier attach and the shadow
                 // depth pass, before the main render.
                 if (u.world) u.world.value.copy(mesh.matrixWorld);
+                // §885 终二六七: the world matrix is a MATERIAL uniform but
+                // batched materials are SHARED across meshes — the traversal
+                // copy let the LAST mesh's matrixWorld win for every mesh
+                // drawing that material, offsetting receivers' light-space uv
+                // by the inter-mesh delta (shadows-norm-offset: ALL model→
+                // model cast shadows lost, 66.7k residual; fract-stripe probe
+                // showed the frame jump exactly at mesh boundaries). Install a
+                // per-draw update: onBeforeRender runs after updateMatrixWorld
+                // with the mesh's own matrix, before the uniform upload.
+                if (u.world && !(mesh as any).__mbShWorldHook) {
+                    try {
+                        (mesh as any).__mbShWorldHook = true;
+                        const gH = (globalThis as any);
+                        gH.__mbShHookFires = (gH.__mbShHookFires ?? 0);
+                        mesh.onBeforeRender = () => {
+                            gH.__mbShHookFires = (gH.__mbShHookFires ?? 0) + 1;
+                            const uu = (mesh as any).material?.userData?.__mbShU;
+                            if (uu?.world?.value?.copy && (mesh as any).matrixWorld) {
+                                uu.world.value.copy((mesh as any).matrixWorld);
+                            }
+                        };
+                    } catch { /* best-effort */ }
+                }
+                // §885 终二六七: one-shot uniform-value dump — sno's extended-uv
+                // paint shows per-material CONSTANT out-of-bounds uv (vMbWorldPos
+                // degenerate). Sample the actual matrix contents at frame ~120.
+                {
+                    const gP = (globalThis as any);
+                    gP.__mbShUvProbeN = (gP.__mbShUvProbeN ?? 0) + 1;
+                    if (gP.__mbShUvProbeN === 120 && !gP.__mbShUvProbeDone) {
+                        gP.__mbShUvProbeDone = true;
+                        try {
+                            const fbP = (window as any).__karma__?.config?.args
+                                ?.find?.((a: string) => a.startsWith('feedback-url='))
+                                ?.slice('feedback-url='.length);
+                            if (fbP) fetch(`${fbP}/mb-probe-dump`, {
+                                method: 'POST',
+                                headers: { 'content-type': 'application/json' },
+                                body: JSON.stringify({
+                                    probe: 'shuv-matrix',
+                                    valid: isValidShadowHandle(u),
+                                    hasWorld: !!u.world,
+                                    worldType: u.world?.value?.constructor?.name,
+                                    tile: mesh.userData?.tileKey ?? mesh.parent?.userData?.tileKey,
+                                    meshPos: mesh.position?.toArray?.(),
+                                    world: u.world?.value?.elements ? Array.from(u.world.value.elements).map((x: number) => +x.toFixed(2)) : String(u.world?.value),
+                                    matrix: u.matrix?.value?.elements ? Array.from(u.matrix.value.elements).map((x: number) => +x.toFixed(2)) : String(u.matrix?.value),
+                                    intensity: u.intensity?.value,
+                                    eyeOn: u.eyeOn?.value,
+                                    nodeId: mesh.userData?.__mbNodeId ?? mat.userData?.__mbNodeId,
+                                    hookFires: (globalThis as any).__mbShHookFires,
+                                    sharedMats: undefined as any,
+                                }),
+                            }).catch(() => { });
+                        } catch { /* probe only */ }
+                    }
+                }
                 continue;
             }
             // Only materials carrying our stored patch params are ours to

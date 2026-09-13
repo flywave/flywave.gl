@@ -217,6 +217,8 @@ function discoverTests(): TestEntry[] {
     const sda = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shdiralt="))?.slice("shdiralt=".length);
     if (sda === "1") (globalThis as any).__mbShadowDirAlt = true;
+    // §885 终二六七: shdiralt=2 → tosun light axis for the shadow camera.
+    if (sda === "2") (globalThis as any).__mbShadowDirAlt = 2;
     // §885 终六十五: shdiag=2 → receiver dbg4 paints reconstruction inputs
     // (mbSUV + Res) instead of the shadow uv.
     const sdg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
@@ -581,6 +583,12 @@ function discoverTests(): TestEntry[] {
     // G=fragment sampled depth, B=uv.z) — distinguishes an empty map at
     // sample time from a coordinate mismatch.
     if (Number(dbg) === 10) (globalThis as any).__mbShadowDbg4 = 5;
+    // §885 终二六七: shdbg=11 → factor probe (R=shadow factor, G=sampled
+    // depth, B=uv.z) painted for EVERY receiver fragment (bounds-gate-free).
+    if (Number(dbg) === 11) {
+        (globalThis as any).__mbShadowDbg4 = 6;
+        (globalThis as any).__mbShadowEyeOn = false;
+    }
     // §525 A/B: shadowdbg=2 opens the gate but SKIPS the depth pass —
     // discriminates depth-pass side effects from the patcher/lighting path.
     if (dbg === "2") (globalThis as any).__mbShadowSkipPass = true;
