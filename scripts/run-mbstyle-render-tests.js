@@ -127,6 +127,7 @@ function main() {
             ...(process.env.MBSTYLE_SHDBG ? [`shdbg=${process.env.MBSTYLE_SHDBG}`] : []),
             ...(process.env.MBSTYLE_SHADOWCAST ? [`shadowcast=${process.env.MBSTYLE_SHADOWCAST}`] : []),
             ...(process.env.MBSTYLE_SHDIRALT ? [`shdiralt=${process.env.MBSTYLE_SHDIRALT}`] : []),
+            ...(process.env.MBSTYLE_SHAZ ? [`shaz=${process.env.MBSTYLE_SHAZ}`] : []),
             ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),
             ...(process.env.MBSTYLE_SHOFF ? [`shoff=${process.env.MBSTYLE_SHOFF}`] : []),
             ...(process.env.MBSTYLE_FOGMUL ? [`fogmul=${process.env.MBSTYLE_FOGMUL}`] : []),

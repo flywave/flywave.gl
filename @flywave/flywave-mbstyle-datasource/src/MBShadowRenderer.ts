@@ -677,6 +677,7 @@ export class MBShadowRenderer {
             if (gc && pr) {
                 const e = pr.projectPoint(gc, { x: 0, y: 0, z: 0 });
                 eye.set((e as any).x, (e as any).y, (e as any).z ?? 0);
+                (this as any).__mbShDbgEye = [eye.x, eye.y, eye.z].map((x2: number) => +x2.toFixed(1));
                 center.sub(eye);
             }
         } catch {}
@@ -732,6 +733,21 @@ export class MBShadowRenderer {
         // cast-shadow styles; the shadow CAMERA may need the same convention.
         if ((globalThis as any).__mbShadowDirAlt === 2 && lightDir) {
             lightDir = new THREE.Vector3(-lightDir.x, -lightDir.y, lightDir.z);
+        }
+        // §885 终二六八: shaz=<deg> → rotate the shadow light axis around
+        // world Z — receivers proved LIVE (uv follows the shadow camera), so
+        // the per-degree sweep argmin centers the scene in the map and
+        // calibrates the shadow-camera azimuth convention in one batch.
+        {
+            const shAz = Number((globalThis as any).__mbShadowAzDelta ?? 0);
+            if (shAz && lightDir) {
+                const aR = shAz * Math.PI / 180;
+                const cR = Math.cos(aR), sR = Math.sin(aR);
+                lightDir = new THREE.Vector3(
+                    lightDir.x * cR - lightDir.y * sR,
+                    lightDir.x * sR + lightDir.y * cR,
+                    lightDir.z);
+            }
         }
 
         // §560: frame the ortho around the CASTERS' union AABB (worldCenter
@@ -1118,7 +1134,7 @@ export class MBShadowRenderer {
                         ?.find?.((a: string) => a.startsWith('feedback-url='))
                         ?.slice('feedback-url='.length);
                     if (fbM) {
-                        const f = (m: THREE.Matrix4) => Array.from(m.elements).map((x: number) => +x.toFixed(3));
+                        const f = (m: THREE.Matrix4) => Array.from(m.elements);
                         fetch(`${fbM}/mb-probe-dump`, {
                             method: 'POST',
                             headers: { 'content-type': 'application/json' },
@@ -1129,6 +1145,9 @@ export class MBShadowRenderer {
                                 viewInv: f(this.m_shadowCamera.matrixWorldInverse),
                                 world: f(this.m_shadowCamera.matrixWorld),
                                 lr: [this.m_shadowCamera.left, this.m_shadowCamera.right, this.m_shadowCamera.top, this.m_shadowCamera.bottom, this.m_shadowCamera.near, this.m_shadowCamera.far],
+                                camPos: Array.from(this.m_shadowCamera.position.toArray()).map((x: number) => +x.toFixed(1)),
+                                eye: (this as any).__mbShDbgEye ? Array.from((this as any).__mbShDbgEye).map((x: number) => +x.toFixed(1)) : null,
+                                worldCenter: (this.m_mapView as any)?.worldCenter?.toArray?.()?.map((x: number) => +x.toFixed(1)) ?? null,
                             }),
                         }).catch(() => { });
                     }

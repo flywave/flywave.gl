@@ -219,6 +219,10 @@ function discoverTests(): TestEntry[] {
     if (sda === "1") (globalThis as any).__mbShadowDirAlt = true;
     // §885 终二六七: shdiralt=2 → tosun light axis for the shadow camera.
     if (sda === "2") (globalThis as any).__mbShadowDirAlt = 2;
+    // §885 终二六八: shaz=<deg> → shadow-camera azimuth delta sweep.
+    const shAz = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shaz="))?.slice("shaz=".length);
+    if (shAz !== undefined && shAz !== "") (globalThis as any).__mbShadowAzDelta = Number(shAz);
     // §885 终六十五: shdiag=2 → receiver dbg4 paints reconstruction inputs
     // (mbSUV + Res) instead of the shadow uv.
     const sdg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
@@ -2423,6 +2427,9 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 });
                 // §872b: surface shader compile/link errors loudly in tests.
                 try { (mapView as any).m_renderer.debug.checkShaderErrors = true; } catch {}
+                // §885 终二六八: live renderer handle for the shadow-uniform
+                // identity probe (refreshModelShadowUniforms shuv-matrix dump).
+                (globalThis as any).__mbLiveRenderer = (mapView as any).renderer ?? (mapView as any).m_renderer;
                 // §872d: render-graph dump — wrap renderer.render to log the
                 // per-call scene population and draw stats (with-diff alpha).
                 try {

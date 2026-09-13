@@ -230,6 +230,7 @@ const mbShadowLitUniforms = new Set<any>();
 
 export function syncModelShadowUniforms(shadowState: {
     map: any; matrix: any; intensity: number; eye?: any; eyeOn?: any;
+    map1?: any; matrix1?: any;
 } | null): void {
     { const g: any = (globalThis as any); g.__shSyncN = (g.__shSyncN ?? 0) + 1;
       if (g.__shSyncN === 60) {
@@ -246,6 +247,12 @@ export function syncModelShadowUniforms(shadowState: {
         u.map.value = shadowState?.map ?? null;
         if (shadowState) u.matrix.value.copy(shadowState.matrix);
         u.intensity.value = shadowState?.intensity ?? 0;
+        // §885 终二六八: cascade-1 fallback uniforms.
+        if ((u as any).has1) (u as any).has1.value = shadowState?.map1 ? 1 : 0;
+        if ((u as any).map1) (u as any).map1.value = shadowState?.map1 ?? null;
+        if ((u as any).matrix1?.value?.copy && shadowState?.matrix1) {
+            (u as any).matrix1.value.copy(shadowState.matrix1);
+        }
         // §885: shdbg=5 receiver eye-rebase A/B — sync the eye vector and
         // the gate when the material registered them.
         if ((u as any).eye && shadowState?.eye) (u as any).eye.value.copy(shadowState.eye);
@@ -577,6 +584,14 @@ export function applyMglModelLighting(
                 // vMbWorldPos lands in the depth-pass frame by construction.
                 shader.uniforms.uMBShWorldMatrix = { value: new THREE.Matrix4() };
                 shader.uniforms.uMBShDbg = { value: Number((globalThis as any).__mbShadowDbg4) || 0 };
+                // §885 终二六八: cascade-1 fallback — batched landmarks sit
+                // beyond the cascade-0 frustum-sphere (radius 1.5×ctcd fit),
+                // so their receiver uv exits [0,1] and every model→model
+                // shadow was lost. mgl shadow_occlusion: receivers outside
+                // cascade-0 fall back to the 4× cascade-1 map.
+                shader.uniforms.uMBShHas1 = { value: 0 };
+                shader.uniforms.uMBShMap1 = { value: null as any };
+                shader.uniforms.uMBShMatrix1 = { value: new THREE.Matrix4() };
                 // §885: shdbg=5 → receiver rebases worldPos by the shadow eye
                 // (ground-quad convention) — A/B for the light-space y offset.
                 shader.uniforms.uMBShEyeOn = {
@@ -587,6 +602,9 @@ export function applyMglModelLighting(
                     mbShadowLitUniforms.add(mat.userData.__mbShU = {
                         map: shader.uniforms.uMBShMap,
                         matrix: shader.uniforms.uMBShMatrix,
+                        has1: shader.uniforms.uMBShHas1,
+                        map1: shader.uniforms.uMBShMap1,
+                        matrix1: shader.uniforms.uMBShMatrix1,
                         intensity: shader.uniforms.uMBShIntensity,
                         eye: shader.uniforms.uMBShEye,
                         eyeOn: shader.uniforms.uMBShEyeOn,
@@ -620,6 +638,9 @@ export function applyMglModelLighting(
                      uniform mat4 uMBShMatrix;
                      uniform float uMBShIntensity;
                      uniform float uMBShDbg;
+ uniform float uMBShHas1;
+ uniform sampler2D uMBShMap1;
+ uniform mat4 uMBShMatrix1;
                      uniform vec3 uMBShEye;
                      uniform float uMBShEyeOn;
                      uniform float uMB3DMetal; uniform float uMB3DRough;
@@ -910,16 +931,7 @@ export function applyMglModelLighting(
                              float mbNdotL = clamp(dot(mbN0, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
                                  vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - uMBShEye * uMBShEyeOn, 1.0);
-                                 if (uMBShDbg > 5.5 && uMBShDbg < 6.5) {
-                                     // §885 终二六七: factor probe — R = shadow
-                                     // factor at the fragment's OWN uv (unclamped
-                                     // sample), G = sampled packed depth, B = uv.z.
-                                     vec4 mbShPkP = texture2D(uMBShMap, clamp(mbShUv.xy, vec2(0.0), vec2(1.0)));
-                                     float mbD0 = mbShPkP.r + mbShPkP.g / 255.0;
-                                     float mbLit0 = smoothstep(-0.0002, 0.0002, mbD0 - mbShUv.z);
-                                     gl_FragColor.rgb = vec3(mbLit0, mbD0, clamp(mbShUv.z, 0.0, 1.0));
-                                     return;
-                                 }
+
                                  if (uMBShDbg > 2.5 && uMBShDbg < 3.5) {
                                      // §885 终十六: extended-range uv painted for
                                      // EVERY receiver fragment (moved out of the
@@ -951,9 +963,29 @@ export function applyMglModelLighting(
                                          clamp(vMbWorldPos.z / 20000.0 + 0.5, 0.0, 1.0));
                                      return;
                                  }
-                                 if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
-                                     mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
-                                     vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
+                                 // §885 终二六八: cascade-1 fallback (mgl
+                                 // shadow_occlusion outside-cascade: the
+                                 // 1.5×ctcd cascade-0 sphere misses tall
+                                 // landmarks at high pitch — receivers beyond
+                                 // it sample the 4× cascade-1 map). Samplers
+                                 // are opaque in GLSL ES — select uv, then
+                                 // ternary-pick the texture fetch.
+                                 vec4 mbShUv1 = uMBShMatrix1 * vec4(vMbWorldPos - uMBShEye * uMBShEyeOn, 1.0);
+                                 float mbIn0 = step(0.0, mbShUv.x) * step(mbShUv.x, 1.0)
+                                     * step(0.0, mbShUv.y) * step(mbShUv.y, 1.0) * step(mbShUv.z, 1.0);
+                                 float mbIn1 = uMBShHas1 * step(0.0, mbShUv1.x) * step(mbShUv1.x, 1.0)
+                                     * step(0.0, mbShUv1.y) * step(mbShUv1.y, 1.0) * step(mbShUv1.z, 1.0);
+                                 vec4 mbShUvC = mix(mbShUv1, mbShUv, mbIn0);
+                                 float mbShHasC = max(mbIn0, mbIn1);
+                                 if (uMBShDbg > 5.5 && uMBShDbg < 6.5) {
+                                     // §885 终二六八: gate probe (R=has1, G=mbIn1, B=mbIn0).
+                                     gl_FragColor.rgb = vec3(uMBShHas1, mbIn1, mbIn0);
+                                     return;
+                                 }
+                                 if (mbShHasC > 0.5 && mbShUvC.x >= 0.0 && mbShUvC.x <= 1.0 &&
+                                     mbShUvC.y >= 0.0 && mbShUvC.y <= 1.0 && mbShUvC.z <= 1.0) {
+                                     vec4 mbShPk = (mbIn0 > 0.5) ? texture2D(uMBShMap, mbShUv.xy)
+                                         : texture2D(uMBShMap1, mbShUv1.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
@@ -1025,16 +1057,7 @@ export function applyMglModelLighting(
                              float mbLF = clamp(dot(${(globalThis as any).__mbWorldAdfOff ? 'mbN' : 'mbN0'}, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
                                  vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - uMBShEye * uMBShEyeOn, 1.0);
-                                 if (uMBShDbg > 5.5 && uMBShDbg < 6.5) {
-                                     // §885 终二六七: factor probe — R = shadow
-                                     // factor at the fragment's OWN uv (unclamped
-                                     // sample), G = sampled packed depth, B = uv.z.
-                                     vec4 mbShPkP = texture2D(uMBShMap, clamp(mbShUv.xy, vec2(0.0), vec2(1.0)));
-                                     float mbD0 = mbShPkP.r + mbShPkP.g / 255.0;
-                                     float mbLit0 = smoothstep(-0.0002, 0.0002, mbD0 - mbShUv.z);
-                                     gl_FragColor.rgb = vec3(mbLit0, mbD0, clamp(mbShUv.z, 0.0, 1.0));
-                                     return;
-                                 }
+
                                  if (uMBShDbg > 2.5 && uMBShDbg < 3.5) {
                                      // §885 终十六: extended-range uv painted for
                                      // EVERY receiver fragment — the paint sat
@@ -1067,9 +1090,29 @@ export function applyMglModelLighting(
                                          clamp(vMbWorldPos.z / 20000.0 + 0.5, 0.0, 1.0));
                                      return;
                                  }
-                                 if (mbShUv.x >= 0.0 && mbShUv.x <= 1.0 &&
-                                     mbShUv.y >= 0.0 && mbShUv.y <= 1.0 && mbShUv.z <= 1.0) {
-                                     vec4 mbShPk = texture2D(uMBShMap, mbShUv.xy);
+                                 // §885 终二六八: cascade-1 fallback (mgl
+                                 // shadow_occlusion outside-cascade: the
+                                 // 1.5×ctcd cascade-0 sphere misses tall
+                                 // landmarks at high pitch — receivers beyond
+                                 // it sample the 4× cascade-1 map). Samplers
+                                 // are opaque in GLSL ES — select uv, then
+                                 // ternary-pick the texture fetch.
+                                 vec4 mbShUv1 = uMBShMatrix1 * vec4(vMbWorldPos - uMBShEye * uMBShEyeOn, 1.0);
+                                 float mbIn0 = step(0.0, mbShUv.x) * step(mbShUv.x, 1.0)
+                                     * step(0.0, mbShUv.y) * step(mbShUv.y, 1.0) * step(mbShUv.z, 1.0);
+                                 float mbIn1 = uMBShHas1 * step(0.0, mbShUv1.x) * step(mbShUv1.x, 1.0)
+                                     * step(0.0, mbShUv1.y) * step(mbShUv1.y, 1.0) * step(mbShUv1.z, 1.0);
+                                 vec4 mbShUvC = mix(mbShUv1, mbShUv, mbIn0);
+                                 float mbShHasC = max(mbIn0, mbIn1);
+                                 if (uMBShDbg > 5.5 && uMBShDbg < 6.5) {
+                                     // §885 终二六八: gate probe (R=has1, G=mbIn1, B=mbIn0).
+                                     gl_FragColor.rgb = vec3(uMBShHas1, mbIn1, mbIn0);
+                                     return;
+                                 }
+                                 if (mbShHasC > 0.5 && mbShUvC.x >= 0.0 && mbShUvC.x <= 1.0 &&
+                                     mbShUvC.y >= 0.0 && mbShUvC.y <= 1.0 && mbShUvC.z <= 1.0) {
+                                     vec4 mbShPk = (mbIn0 > 0.5) ? texture2D(uMBShMap, mbShUv.xy)
+                                         : texture2D(uMBShMap1, mbShUv1.xy);
                                      float mbShDepth = mbShPk.r + mbShPk.g / 255.0;
                                      if (uMBShDbg > 1.5) { gl_FragColor.rgb = vec3(vMbWorldPos.x / 1000.0 * 0.5 + 0.5, vMbWorldPos.y / 1000.0 * 0.5 + 0.5, clamp(vMbWorldPos.z / 500.0, 0.0, 1.0)); return; }
                                      if (uMBShDbg > 0.5 && length(vMbWorldPos) < 1.0) { gl_FragColor.rgb = vec3(1.0, 0.0, 1.0); return; }
@@ -1286,6 +1329,11 @@ export function refreshModelShadowUniforms(
                 u.map.value = shadowState?.map ?? null;
                 if (shadowState) u.matrix.value.copy(shadowState.matrix);
                 u.intensity.value = shadowState?.intensity ?? 0;
+                if ((u as any).has1) (u as any).has1.value = shadowState?.map1 ? 1 : 0;
+                if ((u as any).map1) (u as any).map1.value = shadowState?.map1 ?? null;
+                if ((u as any).matrix1?.value?.copy && shadowState?.matrix1) {
+                    (u as any).matrix1.value.copy(shadowState.matrix1);
+                }
                 if (u.eye && shadowState?.eye) u.eye.value.copy(shadowState.eye);
                 if (u.eyeOn) u.eyeOn.value = (globalThis as any).__mbShadowEyeOn ? 1 : 0;
                 // §885 终十七: per-mesh world matrix in the DEPTH-PASS frame —
@@ -1324,9 +1372,17 @@ export function refreshModelShadowUniforms(
                 {
                     const gP = (globalThis as any);
                     gP.__mbShUvProbeN = (gP.__mbShUvProbeN ?? 0) + 1;
+                    // §885 终二六八: live-program identity check — compare the
+                    // handle's uniform OBJECTS with what the renderer actually
+                    // uploads (materialProperties.uniforms via renderer.properties).
                     if (gP.__mbShUvProbeN === 120 && !gP.__mbShUvProbeDone) {
                         gP.__mbShUvProbeDone = true;
                         try {
+                            const rP: any = (globalThis as any).__mbLiveRenderer;
+                            const propsP = rP?.properties;
+                            const matPropsP = propsP?.get?.(mat);
+                            const liveU = matPropsP?.uniforms;
+                            const fM = (m: any) => m?.elements ? Array.from(m.elements).map((x: number) => +x.toFixed(2)) : String(m);
                             const fbP = (window as any).__karma__?.config?.args
                                 ?.find?.((a: string) => a.startsWith('feedback-url='))
                                 ?.slice('feedback-url='.length);
@@ -1346,10 +1402,24 @@ export function refreshModelShadowUniforms(
                                     eyeOn: u.eyeOn?.value,
                                     nodeId: mesh.userData?.__mbNodeId ?? mat.userData?.__mbNodeId,
                                     hookFires: (globalThis as any).__mbShHookFires,
-                                    sharedMats: undefined as any,
+                                    has1: (u as any).has1?.value,
+                                    map1Set: !!(u as any).map1?.value,
+                                    matrix1: (u as any).matrix1?.value?.elements ? Array.from((u as any).matrix1.value.elements).map((x: number) => +x.toFixed(2)) : String((u as any).matrix1?.value),
+                                    hasRenderer: !!rP,
+                                    hasMatProps: !!matPropsP,
+                                    liveUniformKeys: liveU ? Object.keys(liveU).filter(k => k.startsWith('uMBSh')).join(',') : String(liveU),
+                                    liveMatrixSameObj: liveU ? liveU.uMBShMatrix === u.matrix : null,
+                                    liveWorldSameObj: liveU ? liveU.uMBShWorldMatrix === u.world : null,
+                                    liveMapSameObj: liveU ? liveU.uMBShMap === u.map : null,
+                                    liveMatrixVal: liveU?.uMBShMatrix?.value?.elements ? fM(liveU.uMBShMatrix.value) : String(liveU?.uMBShMatrix?.value),
+                                    liveWorldVal: liveU?.uMBShWorldMatrix?.value?.elements ? fM(liveU.uMBShWorldMatrix.value) : String(liveU?.uMBShWorldMatrix?.value),
+                                    liveIntensity: liveU?.uMBShIntensity?.value,
+                                    matUuid: mat.uuid,
                                 }),
                             }).catch(() => { });
-                        } catch { /* probe only */ }
+                        } catch (eP) {
+                            try { (globalThis as any).__mbShUvProbeErr = String(eP); } catch {}
+                        }
                     }
                 }
                 continue;
