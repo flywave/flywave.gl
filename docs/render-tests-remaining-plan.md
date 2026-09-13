@@ -3033,3 +3033,21 @@ cascade-1 回退（4× 视锥）服务 cascade-0 外的接收器；④偏移幅�
 **④ 残余**：sno 65.3k（影子软边/质量域）；castro 184k、highlights 228k、z-offset-v2-port
 392k 的影子域分量待同法处理；ground-shadow 双例噪声域 ±100。下轮：offset/bias 细网格
 + 深度 pass normal-offset 联动扫，向 sno 全对齐推进。
+
+### §885 终二八六：bias 窗 uniform 注入路线受挫——回退至 bdecbd55 交付态（65,308 复实测 ✓）（2026-09-14）
+
+**① 实验记录**：shbias 窗（±0.001/±0.005 uniform 注入）双窗均 px=179,062（远差于交付态
+65,308）且互相相同——uniform 注入路径本身破坏了渲染（或两窗宽同落坏区），无有效信号。
+已回退 MBModelRenderer/test/runner 至 bdecbd55 交付态，sno 复实测 **65,308 位级一致** ✓。
+
+**② offset 扫描（终二八四）与 bias 窗实验的教训**：offset 扫描用「hardcode 值逐轮替换」
+可靠；uniform 注入/环境变量透传链路（runner→KARMA_ARGS→harness→global→shader 模板插值）
+环节多、易静默失效——后续标定一律用 hardcode 逐轮替换法。
+
+**③ 当前最优已知态（已交付）**：premultiply + legacy lookAt + 接收端法线偏移 3 + cascade-1
+回退 + PCF(1/1024) + bias 窗 ±0.002 → sno 主 65,308 / lod 65,069（双双低于惯性 66,659），
+守卫全 +0。
+
+**④ 下轮**：①bias 窗扫描改 hardcode 法（±0.001/±0.005 各一轮）；②offset 幅值联动
+（偏移 3 与窗 0.002 的组合未必最优）；③影子软边质量域收敛后按残差清单推进
+castro/highlights/z-offset-v2-port/ground-shadow。
