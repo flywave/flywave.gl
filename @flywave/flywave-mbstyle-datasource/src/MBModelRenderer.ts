@@ -952,7 +952,7 @@ export function applyMglModelLighting(
                              float mbNdotL = clamp(dot(mbN0, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
                                  vec3 mbWN = normalize((vec4(mbN0, 0.0) * viewMatrix).xyz);
-                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos + mbWN * uMBShNOff - uMBShEye * uMBShEyeOn, 1.0);
+                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - mbWN * uMBShNOff - uMBShEye * uMBShEyeOn, 1.0);
 
                                  if (uMBShDbg > 2.5 && uMBShDbg < 3.5) {
                                      // §885 终十六: extended-range uv painted for
@@ -1104,7 +1104,7 @@ export function applyMglModelLighting(
                              float mbLF = clamp(dot(${(globalThis as any).__mbWorldAdfOff ? 'mbN' : 'mbN0'}, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
                                  vec3 mbWN = normalize((vec4(mbN0, 0.0) * viewMatrix).xyz);
-                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos + mbWN * uMBShNOff - uMBShEye * uMBShEyeOn, 1.0);
+                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - mbWN * uMBShNOff - uMBShEye * uMBShEyeOn, 1.0);
 
                                  if (uMBShDbg > 2.5 && uMBShDbg < 3.5) {
                                      // §885 终十六: extended-range uv painted for
