@@ -1008,7 +1008,7 @@ export function applyMglModelLighting(
                                      if (mbIn0 > 0.5) {
                                          // §885 终二九四: cascade-0 5-tap PCF —
                                          // soften quantized band edges.
-                                         float mbT0 = 1.0 / 1024.0;
+                                         float mbT0 = 40.0 / 1024.0;
                                          vec4 mbPkC = texture2D(uMBShMap, mbShUv.xy);
                                          float mbDsum = mbPkC.r
                                              + texture2D(uMBShMap, mbShUv.xy + vec2(mbT0, 0.0)).r
@@ -1171,7 +1171,7 @@ export function applyMglModelLighting(
                                      if (mbIn0 > 0.5) {
                                          // §885 终二九四: cascade-0 5-tap PCF —
                                          // soften quantized band edges.
-                                         float mbT0 = 1.0 / 1024.0;
+                                         float mbT0 = 40.0 / 1024.0;
                                          vec4 mbPkC = texture2D(uMBShMap, mbShUv.xy);
                                          float mbDsum = mbPkC.r
                                              + texture2D(uMBShMap, mbShUv.xy + vec2(mbT0, 0.0)).r
