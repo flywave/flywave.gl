@@ -2787,3 +2787,26 @@ FarZ=(radiusPx+verticalRange·ppm)/sd.z；④ortho ±radiusPx；⑤1e6 取整 tr
 关键帧语义：所有量在 mercator/ws 空间（非 RTE），需与接收端 vMbWorldPos 帧统一。
 
 **④ 交付态**：默认=终二六六位级（复实测 ✓）；shbfix/shaz/mode 探针族全保留。
+
+### §885 终二七五：shaz 全向细扫完成——经验旋转路线终局证伪；源码级移植为唯一路径（2026-09-13）
+
+**① 扫角结果（shbfix=1=premultiply+flip 基准 111,059 px）**：shaz ∈ {−60,−40,−20,+20,+40,+60}
+全部返回 **66,659 px = 全 lit 签名**（与默认交付态像素级同图）。即除 0° 外任何方位旋转都使
+场景完全落出光视锥——**in-bounds 方位窗口 <±20°**，且窗口内（0°）的影子仍然错位（111k）。
+经验旋转/翻转调参路线终局证伪。
+
+**② 几何解释**：光视锥 lateral box（±210，由 1.5×ctcd 视锥球拟合而来）相对场景尺度（±400）
+天然偏小，场景贴近 box 边缘——方位微旋即整体出界。mgl 不靠方位微调而是**cascade 结构**
+（cascade-0 内圈 + cascade-1 4× 外圈 + 接收器按归属选择），且其光轴在 **mercator/ws 绝对帧**
+构建（FreeCamera.setPitchBearing + getWorldToCamera(ws, ppm)），与咱方 RTE lookAt 拼装
+根本不同域。
+
+**③ 结论与立项**：逐行移植 mgl createLightMatrix（shadow_renderer.ts:678）为唯一收敛路径：
+①mercator sphereCenter（cameraToWorldMerc·(0,0,−centerDepth/ws)）；②setPitchBearing
+(acos(sd.z), atan2(−sd.x,−sd.y))；③getWorldToCamera(ws, ppm) 视矩阵；④ortho ±radiusPx
++ lightMatrixNearZ/FarZ 公式；⑤1e6 truncMatrix。同时接收端 vMbWorldPos 帧须切换到 mercator/ws
+（或整帧逆映射），深度 pass 亦须同帧渲染。这是一次自包含的 shadow 管线重写，非增量调优。
+
+**④ 交付态**：默认=终二六六位级（66,659，全家族复实测无回归）；shbfix/shaz/mode 探针族保留。
+本轮新知：背景像素会污染 in-bounds 统计（须用已知模型采样点）；pkill 模式含 CHROME_BIN 路径
+会自杀后台 shell（用 [l] 括号技巧）。
