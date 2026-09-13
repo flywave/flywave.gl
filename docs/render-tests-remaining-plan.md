@@ -3295,3 +3295,18 @@ transmissive 部件跳过（或 mgl 语义=transmissive 材质 shadow factor=1�
 
 **③ 交付态**：默认（premultiply+legacy lookAt+off3+±0.0005+cascade-1 回退+5-tap PCF@24）
 sno 65,054→65,069 复实测 ✓ 位级维持；shpcf/shnoff/shbias/shbfix 旋钮族保留。
+
+### §885 终二九三+：shaz 方位细扫定标——raw 方向 −12° 最优（60,059），全局落地需拆分 ground/模型消费架构（2026-09-14）
+
+**① shaz 细扫（SHDIRALT=1+SHNOFF=32 态）**：0→63,016 / ±5→60,505/61,382 / ±8→60,239/61,768 /
+**−12→60,059（最优，复现 ✓）** / −14→60,345 / +10→61,768 / +15→62,048。负方位（顺时针）
+持续改善——光轴方位与 mgl 确有 ~12° 级别的系统差。
+
+**② 全局落地受阻**：SHDIRALT=1（raw 轴）下 ground-shadow 双例 +18.3k×2（ground quad 的
+级联回退按 §683 镜像系校准）——全局净负 +33k。**结构定论：ground quad（镜像系）与模型
+接收器（raw 系）需要分离的光轴/深度图**。单一全局方向、单一 cascade 结构无法同时满足。
+
+**③ 下轮（迁移专项核心）**：①shadow renderer 增加"模型专用 raw cascade-0 pass"
+（独立 m_matrixR0/m_shTexR0，模型尾部 fallback 优先采样）；②ground quad 维持镜像
+cascade-0；③sno 主/lod 验收（预期 ≤60,059 且 ground 双例回归 ≤±100）；④家族验收。
+工程量：MBShadowRenderer 增一 pass+一矩阵+模型尾部 fallback 目标切换，边界清晰。
