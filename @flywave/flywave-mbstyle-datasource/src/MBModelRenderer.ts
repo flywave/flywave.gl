@@ -1007,7 +1007,7 @@ export function applyMglModelLighting(
                                          // (4× coarser texels — mirror the
                                          // extrusion 终一二三 calibration).
                                          mbShPk = texture2D(uMBShMap1, mbShUv1.xy);
-                                         float mbT1 = uMBShTexel1;
+                                         float mbT1 = 1.0 / 1024.0;
                                          float mbDsum = mbShPk.r
                                              + texture2D(uMBShMap1, mbShUv1.xy + vec2(mbT1, 0.0)).r
                                              + texture2D(uMBShMap1, mbShUv1.xy + vec2(-mbT1, 0.0)).r
@@ -1159,7 +1159,7 @@ export function applyMglModelLighting(
                                          // (4× coarser texels — mirror the
                                          // extrusion 终一二三 calibration).
                                          mbShPk = texture2D(uMBShMap1, mbShUv1.xy);
-                                         float mbT1 = uMBShTexel1;
+                                         float mbT1 = 1.0 / 1024.0;
                                          float mbDsum = mbShPk.r
                                              + texture2D(uMBShMap1, mbShUv1.xy + vec2(mbT1, 0.0)).r
                                              + texture2D(uMBShMap1, mbShUv1.xy + vec2(-mbT1, 0.0)).r

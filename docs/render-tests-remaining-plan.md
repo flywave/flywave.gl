@@ -2851,3 +2851,25 @@ cascade-1 回退在位 ✓——七环皆健康而投影仍缺失，剩余可能
 钩子）；②pass 生效后模型尾部 cascade-1 回退（已落地）自然生效；③如 mgl 语义要求 cascade-1
 仅服务 ground，则改模型尾部直接扩 cascade-0 半径至覆盖 casterBox（shrad 动态 = casterBox/
 viewSphere 并集）。验收不变：sno 主/lod → castro/highlights/z-offset-v2-port。
+
+### §885 终二七八：PCF texel 修正后仍全 lit——深度域失配坐实，mercator 帧移植为唯一路径（2026-09-13）
+
+**① PCF texel bug 修复**：模型尾部 5-tap PCF 的 tap 偏移误用世界单位 uMBShTexel1（≈1.64 uv，
+跨大半张图）→ 采样全落 clamp 边缘；改 1/1024 后 px=66,659（=惯性全 lit 签名）。
+
+**② 关键推论**：SHBFIX=1（premultiply+flip+cascade-1 回退+正确 texel PCF）下，全场景采样
+cascade-1 深度≥fragZ → **恒 lit**。即光视锥内（cascade-1 覆盖 ✓）沿光轴看去，遮挡体不在
+接收器与太阳之间——**咱方光轴的"太阳方位/仰角"与 mgl 期望的遮挡几何不一致**。结合终二七一
+（legacy −lightDir 时场景贴近平面）与本次（+lightDir 时场景在中域但无遮挡）：两种朝向都不产生
+expected 的遮挡关系，纯经验变换已穷尽。
+
+**③ 结论**：必须按 mgl createLightMatrix 的**帧语义**重写——mercator 球心
+（cameraToWorldMerc·(0,0,−centerDepth/ws)）、FreeCamera.setPitchBearing(acos(sd.z),
+atan2(−sd.x,−sd.y))、getWorldToCamera(ws, ppm)、ortho ±radiusPx、lightMatrixNearZ
+=min(mercatorZfromZoom(17)·ws·−2, radiusPx·−2)、FarZ=(radiusPx+verticalRange·ppm)/sd.z、
+1e6 truncMatrix——并把接收端 vMbWorldPos 与深度 pass 统一到同一 mercator 球心相对帧。
+RTE lookAt 拼装 + 世界 Z 旋转的经验变换已证伪（终二七四/二七五）。
+
+**④ 交付态**：默认=终二六六位级（66,659 全 lit 签名复实测 ✓）；shbfix/shaz/PCF(texel 修正)/
+mode 探针族门控保留。工作量：一次自包含重写（光矩阵构建 ~60 行 + 接收端 uniform 帧切换），
+独立批次执行。
