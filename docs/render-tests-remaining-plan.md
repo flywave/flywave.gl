@@ -2832,3 +2832,22 @@ cascade-1 回退在位 ✓——七环皆健康而投影仍缺失，剩余可能
 一次定位帧失配或纹理时序。
 
 **④ 交付态**：默认=终二六六位级（20,782,944 复实测 ✓），全部实验能力门控保留。
+
+### §885 终二七七：cascade 审计定案——cascade-0 视锥裁剪半数 caster + cascade-1 far-field pass 未生效（2026-09-13）
+
+**① 角点审计（shuv-corner-depth 探针）**：casterBox 8 角经 shadowCamera 投影，NDC x 跨度
+**[−0.98, +2.37]**——约半数 caster 落在 cascade-0 视锥外被裁剪；in-bounds 角点的 readPixels
+深度=背景空值。**cascade-0（radius=210=1.5×ctcd 拟合）对高俯仰地标场景天然裁剪半数遮挡体**。
+
+**② cascade-1 审计**：第一 caster world origin (−1496,−73,−82)（caster 群 x 跨度 −118..−1496，
+尺度远超视图）经 m_matrix1 投影 uv=(0.82,0.56) 界内，但 map1 该点 readPixels depth=**1.0039
+（空）**——连 caster 自身应投影出的深度都缺失；cascade-1 canvas dump 探针未触发——
+**cascade-1 far-field pass 实际未生效**（m_matrix1 有值但 map1 无内容，或 pass 早退）。
+
+**③ 结论链闭合**：cascade-0 裁剪半数遮挡体（含投往庭院的遮挡建筑）+ cascade-1 回退失效 =
+模型→模型投影全丢的完整因果链；各环（矩阵数学/方向语义/纹理解码）已逐一实证健康。
+
+**④ 修复方案（终二七八开工）**：①排障 cascade-1 pass 早退原因（__mbShadowPass1Err 探针已有
+钩子）；②pass 生效后模型尾部 cascade-1 回退（已落地）自然生效；③如 mgl 语义要求 cascade-1
+仅服务 ground，则改模型尾部直接扩 cascade-0 半径至覆盖 casterBox（shrad 动态 = casterBox/
+viewSphere 并集）。验收不变：sno 主/lod → castro/highlights/z-offset-v2-port。

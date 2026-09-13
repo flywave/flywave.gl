@@ -1040,6 +1040,63 @@ export class MBShadowRenderer {
                                 headers: { 'content-type': 'application/json' },
                                 body: JSON.stringify({ probe: 'shadow-depth-canvas', dataUrl: url2 }),
                             }).catch(() => { });
+                            // §885 终二七七: numeric uv→depth consistency —
+                            // for each caster-box corner project with the
+                            // shadow camera, readPixels THAT texel, and compare
+                            // with the corner's expected NDC z (decode r+g/255).
+                            const corners: any[] = [];
+                            const px4 = new Uint8Array(4);
+                            for (let i = 0; i < 8; i++) {
+                                v.set(
+                                    i & 1 ? casterBox.max.x : casterBox.min.x,
+                                    i & 2 ? casterBox.max.y : casterBox.min.y,
+                                    i & 4 ? casterBox.max.z : casterBox.min.z,
+                                ).project(this.m_shadowCamera);
+                                const ux = Math.round((v.x * 0.5 + 0.5) * 1023);
+                                const uy = Math.round((v.y * 0.5 + 0.5) * 1023);
+                                const inb = ux >= 0 && ux <= 1023 && uy >= 0 && uy <= 1023;
+                                let dep = -1;
+                                if (inb) {
+                                    gl2.readPixels(ux, uy, 1, 1, gl2.RGBA, gl2.UNSIGNED_BYTE, px4);
+                                    dep = +((px4[0] + px4[1] / 255)).toFixed(3);
+                                }
+                                corners.push({ ndc: [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)], uv: [ux, uy], inb, depth: dep });
+                            }
+                            // §885 终二七七: courtyard-point depth audit —
+                            // project the FIRST caster's world origin through
+                            // BOTH cascade matrices and readPixels each map.
+                            try {
+                                const firstCaster: any = [...shadowCasters][0];
+                                const wp = new THREE.Vector3();
+                                firstCaster?.getWorldPosition?.(wp);
+                                const audits: any[] = [];
+                                const auditM = (tag: string, mtx: THREE.Matrix4, tex: any) => {
+                                    const u4 = new THREE.Vector4(wp.x, wp.y, wp.z, 1).applyMatrix4(mtx);
+                                    const px5 = new Uint8Array(4);
+                                    const ux = Math.round((u4.x * 0.5 + 0.5) * 1023);
+                                    const uy = Math.round((u4.y * 0.5 + 0.5) * 1023);
+                                    let dep: number | null = null;
+                                    if (ux >= 0 && ux <= 1023 && uy >= 0 && uy <= 1023) {
+                                        gl2.readPixels(ux, uy, 1, 1, gl2.RGBA, gl2.UNSIGNED_BYTE, px5);
+                                        dep = +(((px5[0] + px5[1] / 255) / 255)).toFixed(4);
+                                    }
+                                    audits.push({ tag, uv: [ux, uy], depth: dep });
+                                };
+                                auditM('cascade0', this.m_matrix, this.m_shTex);
+                                auditM('cascade1', this.m_matrix1, this.m_shTex1);
+                                const v4chk = new THREE.Vector4(wp.x, wp.y, wp.z, 1).applyMatrix4(this.m_shadowCamera.matrixWorldInverse).applyMatrix4(this.m_shadowCamera.projectionMatrix);
+                                audits.push({ tag: 'wp', world: [wp.x, wp.y, wp.z].map(x => +x.toFixed(1)), clipz: +v4chk.z.toFixed(3), projCheck: (u4b: any) => 0 } as any);
+                                fetch(`${fb}/mb-probe-dump`, {
+                                    method: 'POST',
+                                    headers: { 'content-type': 'application/json' },
+                                    body: JSON.stringify({ probe: 'courtyard-audit', audits }),
+                                }).catch(() => { });
+                            } catch (e5) { (globalThis as any).__mbCourtyardErr = String(e5); }
+                            fetch(`${fb}/mb-probe-dump`, {
+                                method: 'POST',
+                                headers: { 'content-type': 'application/json' },
+                                body: JSON.stringify({ probe: 'shuv-corner-depth', corners }),
+                            }).catch(() => { });
                         }
                     } catch { /* probe only */ }
                 } catch (e) {
@@ -1245,6 +1302,19 @@ export class MBShadowRenderer {
                 this.m_shTex1.flipY = false;
             }
             this.m_shTex1.needsUpdate = true;
+            // §885 终二七七: cascade-1 canvas dump — is the far-field pass
+            // actually drawing casters?
+            try {
+                const fb1 = (globalThis as any).__mbShadowFeedbackUrl;
+                if (fb1 && __rc === 60) {
+                    const url3 = (this.m_shRenderer.domElement as HTMLCanvasElement).toDataURL('image/png');
+                    fetch(`${fb1}/mb-probe-dump`, {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({ probe: 'shadow-depth-canvas1', dataUrl: url3 }),
+                    }).catch(() => { });
+                }
+            } catch { /* probe only */ }
         }
         }
 
