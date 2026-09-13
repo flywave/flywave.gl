@@ -589,6 +589,10 @@ function discoverTests(): TestEntry[] {
     if (Number(dbg) === 10) (globalThis as any).__mbShadowDbg4 = 5;
     // §885 终二六七: shdbg=11 → factor probe (R=shadow factor, G=sampled
     // depth, B=uv.z) painted for EVERY receiver fragment (bounds-gate-free).
+    // §885 终二九五: shpcf=<n> → cascade-0 PCF tap offset in texels.
+    const shpc = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shpcf="))?.slice("shpcf=".length);
+    if (shpc !== undefined && shpc !== "") (globalThis as any).__mbPcfTexel = Number(shpc);
     // §885 终二八四: shnoff=<v> → receiver normal-offset magnitude.
     const shno = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shnoff="))?.slice("shnoff=".length);

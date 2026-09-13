@@ -3267,3 +3267,16 @@ transmissive 部件跳过（或 mgl 语义=transmissive 材质 shadow factor=1�
 **③ 残余 62.1k 构成**：影子软边（mgl 大核 PCF 软影）+ 窗排材质域 + 光照域。
 **④ 下轮**：①PCF 核形状/宽度在 light-side 偏移新基线上重扫；②mgl-shot2 probe 软边
 对拍定核形；③家族 castro/highlights/z-offset-v2-port 各自域攻坚。
+
+### §885 终二九六B：cascade-0 PCF texel 细扫收口——24 确认最优（sno 61,347），标定完成（2026-09-14）
+
+**① texel 细扫（shpcf 旋钮，5-tap 十字）**：0(off)→65,235 / 12→61,945 / 16→61,405 /
+**24→61,347（最优，已交付）** / 32→62,918 / 48→64,810 / 96→66,630。PCF 旋钮空间收口：
+24 texel（≈4.7 世界单位半影）为该参数局部最优。
+
+**② sno 现状 61,347**（累计 −60.7%）：残余=软影形状差异（mgl 大核软影 vs 咱方 5-tap）+
+光照域。shpcf 旋钮保留供后续微调。
+
+**③ 下轮**：①sno 残余的软影形状 vs 光照域占比定性（diff 图暗像素分类）；②9-tap 对角核
+（终二八九B 阴性结论维持）；③家族 castro 184k/highlights 228k/z-offset-v2-port 392k
+光照+几何域攻坚；④ground-shadow 双例观察。
