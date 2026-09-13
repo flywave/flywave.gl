@@ -2585,3 +2585,35 @@ z14 格子计算 = (8763,5126)——**我方请求的 8763-5126-14 完全正确*
 **③ 处置**：请求集战役关闭（本族夹具单瓦片请求正确）；shadows-normal-offset 残差转入**相机构图
 域战役**（与 globe 相机帧映射 终二四九⑤ 合并处理：engine mercator 相机距离模型 z18/p69 复测）。
 光照战役（终二五六~二六二）成果不受影响（q-s/high-zoom/castro 的改善在各自正确构图下测得）。
+
+### §885 终二六六：相机构图域证伪关闭 + sno 着色方位 argmin=Δ180——cast-shadows 分支落地 tosun 形，净 −91.6k（2026-09-13）
+
+**① 相机域证伪（双判决）**：①mgl-shot2 对 sno 实拍 zadj=0/-1 与 expected.png 像素 diff——
+**zadj=0（raw mgl@style.zoom=18）mean diff 0.77 逐位吻合，zadj=-1 mean 180.96 全错**。终二五八
+zadj 注释与终二六五"mgl 需 zoom−1"均系误判（当时把 aoint 参数误传进 probe 位致覆盖从未生效，
+本次为 cjs 补 `extra=argv[8]` 通用透传）；②我方 actual vs expected 网格搜索平移：最优偏移仅
+(dx=4,dy=0)，构图一致——终二六五"~2× 取景差"不成立。**相机构图域战役在开盘前即证伪关闭**，
+mercator +1 zoom 惯例在高俯仰 z18 无恙。
+
+**② 残差重定性**：sno 156,020 px 残差中阴影暗区逐位吻合（环境光项一致），失配集中在全部受光面
+且逐表面比值双向（屋顶 0.64/左墙 1.37/右墙 0.76）——直射着色方位域，非均匀亮度因子。AO 假说
+证伪：mgl-shot2 `aoint=` 覆盖实测 0→0.75 仅 mean 14.8（GLB 烘焙 AO 对比度小），撑不起 0.75 倍
+暗化。
+
+**③ 工具缺陷修复**：`mldiraz` 旋钮被 modelLightDir 的 cast-shadows 早退分支绕过（直接返回
+ls.dir）——**终二五七 argmin 扫描从未覆盖影子系夹具**。修复：delta≠0 时对 ls.dir 水平分量做
+世界系旋转；补扫 sno Δ∈{0..330}（campaign 口径 px）：0:156,020 / 30:154,617 / 60:99,205 /
+120:99,945 / **180:66,659（argmin）** / 240:151,239 / 300:133,788 / 330:152,589。
+
+**④ 落地**：cast-shadows 分支默认改 tosun 形（水平 ls.dir 取反 = batched mirror(az+180) 同
+向量）；非影子夹具的 batched 分支默认本就等于该向量（数学恒等），改动对它们零可达。mlform=
+lsdir 为回退旋钮，mlform=tosun 与默认重合。终二十二 旧判例系 终二六一 mbLF 去翻转之前的
+测量，已被本轮取代。
+
+**⑤ A/B（同批双臂，16+16 夹具）**：shadows-normal-offset 156,020→**66,659（−89,361）**、
+-lod **66,629**；flood-light-buckingham −2,422；ground-shadow 双例 +106/+113（跨批噪声域）；
+余者 q-s 2,417/castro 184,294/high-zoom 4,928/highlights 227,810/z-offset 族全部**逐位 +0**。
+**净 −91,564**。验证批（改动落地后重编）复现 sno 66,659/66,629 且守卫逐位不变。
+
+**⑥ 开放**：sno 残余 66.6k（受光面着色幅值/影子内法线偏移域）；mgl-shot2 现支持
+`aoint=`/`colr=` 覆盖与 `extra` 透传，可供逐属性消单。

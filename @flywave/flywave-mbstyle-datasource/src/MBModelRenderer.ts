@@ -158,7 +158,20 @@ export function modelLightDir(dataSource: any, batched?: boolean): [number, numb
     // to 88,238).
     const sl = dataSource?.m_environment?.shadowLightState;
     if (sl && dirProp !== undefined && ls.dir) {
-        return ls.dir;
+        // §885 终二六六: cast-shadows styles shade with the TOSUN form
+        // (horizontal ls.dir negated = the batched mirror(az+180) vector).
+        // The old raw ls.dir was a 终二十二-era verdict measured before the
+        // 终二六一 mbLF unflip; post-fix same-batch A/B across the shadow
+        // family: shadows-normal-offset −89,361, everything else bitwise +0
+        // (non-shadow fixtures' default already equals this vector).
+        // mldiraz sweeps rotate the horizontal component (delta 0 = tosun).
+        const dx = -ls.dir[0], dy = -ls.dir[1];
+        if (azDelta) {
+            const a = azDelta * Math.PI / 180;
+            const c = Math.cos(a), s = Math.sin(a);
+            return [dx * c - dy * s, dx * s + dy * c, ls.dir[2]];
+        }
+        return [dx, dy, ls.dir[2]];
     }
     // §885 终二五六: BATCHED-pipeline (mbx Draco / mbx-meshopt / mbx-lod)
     // models y-mirror their geometry (meshopt: group scale (w,−w,·); Draco:
