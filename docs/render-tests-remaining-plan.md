@@ -3220,3 +3220,18 @@ castro/highlights/z-offset-v2-port 光照域攻坚。
 **④ 下轮**：①9-tap/对角形核对比 24 宽 5-tap；②sno 残余 61.3k 的构成（斜率 bias 已排除，
 剩余=软影形状+光照域）；③家族 castro 184k/highlights 228k/z-offset-v2-port 392k 光照+
 几何域独立攻坚；④ground-shadow 双例观察。
+
+### §885 终二九六：9-tap/对角核对比阴性——5-tap@24/1024 确认为最优并复现（2026-09-14）
+
+**① 9-tap（中心+8邻含对角）@24/1024**：63,542 px 劣于 5-tap 同宽 61,347——对角采样引入
+更深背景内容，模糊掉正确的影缘。**5-tap 十字 @24/1024 确认为当前最优核**（复现 61,347 ✓）。
+
+**② 交付态**：默认（premultiply+legacy lookAt+off3+±0.0005+cascade-1 回退+cascade-0
+5-tap PCF@24）复实测 61,347 ✓。sno 累计 156,020→61,347（**−60.7%**）。
+
+**③ 残余 61.3k 定性（承接终二九一）**：过度阴影 84k+漏影 25k 的主体=光轴方位错位；
+经验微调（窗/核宽/形状/offset）已收口至局部最优。正解=mgl createLightMatrix mercator
+帧源码级移植（帧变换推导+消费者重推校准），需独立批次专项。
+
+**④ 家族**：castro 184k/highlights 228k/z-offset-v2-port 392k 属光照+几何域独立攻坚；
+ground-shadow 双例 ±100 噪声域观察。
