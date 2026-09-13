@@ -3235,3 +3235,21 @@ castro/highlights/z-offset-v2-port 光照域攻坚。
 
 **④ 家族**：castro 184k/highlights 228k/z-offset-v2-port 392k 属光照+几何域独立攻坚；
 ground-shadow 双例 ±100 噪声域观察。
+
+### §885 终二九三B：过度阴影定域至材质级——窗排条带假说（2026-09-14）
+
+**① 帧语义定案**：mgl getWorldToCamera（quat 旋转+ws 平移+y 行翻转+z 列 ×ppm）与
+lookAt(up=z)+法线偏移的咱方实现**几何等价**——mercator 帧移植不改变遮挡关系，排除。
+光轴朝向语义亦一致（都从太阳看向场景，§643 y 镜像正确）。
+
+**② 过度阴影 84k 的材质级定域**：条带沿窗排分布（每排窗户一条）——候选=mgl 对
+window/透光（transmissive/glass）部件**不施加阴影接收**（或其 shadow 强度不同），
+而咱方模型尾部对所有部件统一乘 shadow factor → 窗排被额外压暗。与"阴影区部分正确
+38k+窗排条带错位"的图面观察吻合。
+
+**③ 验证与修复路径**：①按 part 分组统计错位像素的 part 归属（model-color 的 part
+match 分支可 aid：roof/wall/window 三类）；②若确认 window：接收端 shadow factor 对
+transmissive 部件跳过（或 mgl 语义=transmissive 材质 shadow factor=1）；③回归 sno
+主/lod+守卫。
+
+**④ 交付态**：默认=终二八七位级（65,069 复实测 ✓）；全部门控/探针保留。
