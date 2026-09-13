@@ -2765,3 +2765,25 @@ buckingham 双例 180,140/157,634、flood-buckingham 199,191（−2,422）、gro
 公式），替换 ls.dir+经验旋转的拼装。完成后 sno 预期 ≤66,659−40k（正确方向投影），并连带
 ground-shadow/castro/highlights 的投影域残差。数据已齐：mode 11 剖面探针可逐点验证光轴
 （fragZ 应从 0.008-0.067 回到 0.3-0.7 中域）。
+
+### §885 终二七四：细扫角数据 + 全精度矩阵对拍终证——右乘 bug 数值实锤；经验旋转窗窄，立项源码级移植（2026-09-13）
+
+**① 全精度数值终证**（sno-fullprec 探针，列主序严格重建）：M_dump == P·V·bias（右乘）逐元素
+吻合 ✓；正确 remap（bias·P·V）对屋顶 worldPos (−118,−8,−39) 给 uv=(0.316,0.549,0.520)（界内
+中域），而右乘 M·p=(−0.642,0.125,−0.025)（越界）——bias 乘序 bug 的最终数值实锤；16-bit
+pack（v=fragZ·255, hi=floor(v)/255, lo=fract(v)，decode r+g/255）编解码自洽，alpha=1 无
+premultiply 污染。
+
+**② 细扫角（premultiply 修复态，net = 90+shaz）**：net-80°（shaz=−10）px=66,659=惯性态签名
+（全 lit）；net-90°（rot90）px=107,074。**界内窗口窄**：±10° 即从"全 lit"跳到"有影子但方向
+错位"——经验旋转无法收敛，必须源码级移植。
+
+**③ 立项确认（mgl 源码已定位）**：mapbox-gl-js/3d-style/render/shadow_renderer.ts:678
+createLightMatrix + shadow_utils.ts shadowDirectionFromProperties（sphericalPositionToCartesian
+az+90、polar clamp 75°，无镜像）。移植要点：①camera.setPitchBearing(acos(sd.z),
+atan2(−sd.x,−sd.y)) 于 mercator sphereCenter；②lightWorldToView=getWorldToCamera(ws,
+pixelsPerMeter)；③lightMatrixNearZ=min(mercatorZfromZoom(17)·ws·−2, radiusPx·−2)、
+FarZ=(radiusPx+verticalRange·ppm)/sd.z；④ortho ±radiusPx；⑤1e6 取整 truncMatrix 抗 shimmer。
+关键帧语义：所有量在 mercator/ws 空间（非 RTE），需与接收端 vMbWorldPos 帧统一。
+
+**④ 交付态**：默认=终二六六位级（复实测 ✓）；shbfix/shaz/mode 探针族全保留。
