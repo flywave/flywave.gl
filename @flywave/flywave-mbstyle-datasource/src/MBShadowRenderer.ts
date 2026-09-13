@@ -743,7 +743,7 @@ export class MBShadowRenderer {
             // fixed +90° world-Z rotation (empirically centers the scene in
             // the light frustum: fragZ 0.47-0.79 mid-range) plus the sweep
             // delta. Legacy path stays unrotated.
-            const shAz = ((globalThis as any).__mbShadowBiasFix ? 90 : 0)
+            const shAz = ((globalThis as any).__mbShadowBiasFix === 1 ? 90 : 0)
                 + Number((globalThis as any).__mbShadowAzDelta ?? 0);
             if (shAz && lightDir) {
                 const aR = shAz * Math.PI / 180;
@@ -863,10 +863,10 @@ export class MBShadowRenderer {
         // scene) proved the legacy `lookAt(center − lightDir)` aims the light
         // camera at the SKY — the scene renders at the near plane, mirrored.
         // shbfix=1 looks ALONG +lightDir (down at the scene) instead.
-        if ((globalThis as any).__mbShadowBiasFix) {
-            this.m_shadowCamera.lookAt(sphereCenter.clone().add(lightDir));
-        } else {
+        if ((globalThis as any).__mbShadowBiasFix !== 1) {
             this.m_shadowCamera.lookAt(sphereCenter.clone().sub(lightDir));
+        } else {
+            this.m_shadowCamera.lookAt(sphereCenter.clone().add(lightDir));
         }
         this.m_shadowCamera.updateProjectionMatrix();
         this.m_shadowCamera.updateMatrixWorld();
@@ -1145,10 +1145,11 @@ export class MBShadowRenderer {
                 0, 0, 0.5, 0.5,
                 0, 0, 0, 1,
             );
-            if ((globalThis as any).__mbShadowBiasFix) {
-                this.m_matrix.premultiply(mbBias);
-            } else {
+            // §885 终二七三: migration default ON (shbfix=0 reverts).
+            if ((globalThis as any).__mbShadowBiasFix !== 1) {
                 this.m_matrix.multiply(mbBias);
+            } else {
+                this.m_matrix.premultiply(mbBias);
             }
         }
         // §885 终二六七: one-shot composition probe — the model receivers see
@@ -1208,10 +1209,10 @@ export class MBShadowRenderer {
                 0, 0, 0.5, 0.5,
                 0, 0, 0, 1,
             );
-            if ((globalThis as any).__mbShadowBiasFix) {
-                this.m_matrix1.premultiply(mbBias1);
-            } else {
+            if ((globalThis as any).__mbShadowBiasFix !== 1) {
                 this.m_matrix1.multiply(mbBias1);
+            } else {
+                this.m_matrix1.premultiply(mbBias1);
             }
         }
         scene.overrideMaterial = this.m_depthMaterial;

@@ -2744,3 +2744,24 @@ shdiralt/mode 6·10·11/PCF/HW 探针与调优旋钮全部门控保留，工具�
 ②全量重测 shadow 家族（sno/castro/highlights/z-offset/ground-shadow/door-light/munich 系）；
 ③shoff 类暗校准逐一归零重标定；④acne：模型尾部 MB_SH_HW 解码分支 + cascade-1 HW 化或斜率
 bias；⑤mgl-shot2 probe 软边对拍定 PCF 核。
+
+### §885 终二七三：迁移专项首批实测——激活态 sno 107,074 恶化于惯性态 66,659，默认回退门控；光轴重推导立项（2026-09-13）
+
+**① 迁移默认首批全量**：bias 左乘 + lookAt 翻转 + rot90 默认开启后，家族 7 夹具中
+buckingham 双例 180,140/157,634、flood-buckingham 199,191（−2,422）、ground-shadow 双例
+140,540/140,709（+109/+113 噪声域）、castro 184,294、castro-lighting 11,779 **全部位级不变**
+——这些夹具的接收器在两种矩阵下均采样越界（全 lit），迁移对其零可达。
+
+**② sno 激活实测**：**107,074 px** vs 惯性态 66,659 —— **恶化 40,415**。投影激活后引入的是
+**错误方向的影子**（遮挡关系错位 + acne），比"无投影"误差更大。即当前光轴构型
+（ls.dir+90° 旋转+lookAt 翻转）仍非 mgl 等价构型。
+
+**③ 处置**：迁移默认回退门控（shbfix=1 显式开启；默认=终二六六交付态），复实测 sno 默认
+20,782,944 sumdiff **位级一致** ✓。终二七三批测同时暴露 karma 长批次不稳（batch>3 夹具
+易超时/无输出）——后续一律 3 夹具以内小批。
+
+**④ 立项：光轴精确重推导（唯一未解环）**：需要从 mgl shadow_renderer createLightMatrix 源码
+逐行移植光轴构建（light position=eye-relative、方向=raw spherical az+90、near/far=cascade
+公式），替换 ls.dir+经验旋转的拼装。完成后 sno 预期 ≤66,659−40k（正确方向投影），并连带
+ground-shadow/castro/highlights 的投影域残差。数据已齐：mode 11 剖面探针可逐点验证光轴
+（fragZ 应从 0.008-0.067 回到 0.3-0.7 中域）。
