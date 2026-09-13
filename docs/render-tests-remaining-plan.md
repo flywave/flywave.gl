@@ -2894,3 +2894,21 @@ PCF 软边与方向微调；②全部调试涂装改走独立 colorWrite 通道�
 
 **④ 交付态**：默认=终二六六位级（复实测 ✓）；实验代码全部门控保留（shbfix/shaz/cascade-1
 回退/PCF/mode 6·10·11/读写探针族）。
+
+### §885 终二八〇：y-flip 采样实验阴性——非翻转采样为更接近构型；实验矩阵收敛完毕（2026-09-13）
+
+**① 本轮实验**：SHBFIX=1 现态（premultiply+flip+rot90+fallback+PCF）= 66,659 全 lit；y-flip
+采样（cascade-0 采样改 vec2(x, 1−y)）= 66,659 不变；隔离态（premultiply+legacy lookAt，去
+flip/rot90）+y-flip = 66,659 不变。y-flip 在两种 lookAt 下都无增益——**2D canvas premultiply/
+flipY 假说证伪**（若 y 镜像为真，翻转应产生显著变化）。
+
+**② 收敛后的实验矩阵知识**（避免下轮重复）：可见条纹影子的构型 = premultiply + legacy
+lookAt(−lightDir) + 无 rot + cascade 回退 + PCF（终二六九 109,481 px）；该态影子可见但方向/质感
+错位；任何 lookAt 翻转/rot ±90/y-flip 都不改善。66,659 = 全 lit 惯性签名（与交付态同图）。
+
+**③ 残余疑点唯一化**：影子可见态的方向错位=光源**方位**与 mgl 不一致（非翻转、非近平面）。
+两条路线待选：A) 按 mgl createLightMatrix 全帧移植（mercator 球心+FreeCamera+getWorldToCamera
+(ws,ppm)），一次到位；B) 用 mgl-shot2 的 probe 点采样 expected 影子边界 3 点反解太阳方位
+（三角测量），校准咱方 shadow 相机方位角。B 成本低可先行。
+
+**④ 交付态**：默认=终二六六位级（66,659 全 lit 签名复实测 ✓）；门控与探针族保留。
