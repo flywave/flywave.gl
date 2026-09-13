@@ -255,11 +255,6 @@ export function syncModelShadowUniforms(shadowState: {
         }
         if ((u as any).texel1) (u as any).texel1.value = shadowState?.texel1 ?? 0;
         if ((u as any).noff) (u as any).noff.value = Number((globalThis as any).__mbShadowNOff ?? 32);
-        if ((u as any).hasR) (u as any).hasR.value = shadowState?.mapR ? 1 : 0;
-        if ((u as any).mapR) (u as any).mapR.value = shadowState?.mapR ?? null;
-        if ((u as any).matrixR?.value?.copy && shadowState?.matrixR) {
-            (u as any).matrixR.value.copy(shadowState.matrixR);
-        }
         // §885: shdbg=5 receiver eye-rebase A/B — sync the eye vector and
         // the gate when the material registered them.
         if ((u as any).eye && shadowState?.eye) (u as any).eye.value.copy(shadowState.eye);
@@ -600,10 +595,6 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBShMap1 = { value: null as any };
                 shader.uniforms.uMBShMatrix1 = { value: new THREE.Matrix4() };
                 shader.uniforms.uMBShNOff = { value: Number((globalThis as any).__mbShadowNOff ?? 32) };
-                shader.uniforms.uMBShHasR = { value: 0 };
-                shader.uniforms.uMBShMapR = { value: null as any };
-                shader.uniforms.uMBShMatrixR = { value: new THREE.Matrix4() };
-                shader.uniforms.uMBShBiasWin = { value: Number((globalThis as any).__mbShadowBiasWin ?? 0.002) };
                 shader.uniforms.uMBShTexel1 = { value: 0 };
                 // §885: shdbg=5 → receiver rebases worldPos by the shadow eye
                 // (ground-quad convention) — A/B for the light-space y offset.
@@ -655,10 +646,6 @@ export function applyMglModelLighting(
                      uniform float uMBShDbg;
  uniform float uMBShHas1;
  uniform float uMBShNOff;
- uniform float uMBShHasR;
- uniform sampler2D uMBShMapR;
- uniform mat4 uMBShMatrixR;
- uniform float uMBShBiasWin;
  uniform sampler2D uMBShMap1;
  uniform mat4 uMBShMatrix1;
  uniform float uMBShTexel1;
@@ -952,7 +939,7 @@ export function applyMglModelLighting(
                              float mbNdotL = clamp(dot(mbN0, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
                                  vec3 mbWN = normalize((vec4(mbN0, 0.0) * viewMatrix).xyz);
-                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - mbWN * uMBShNOff - uMBShEye * uMBShEyeOn, 1.0);
+                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos + mbWN * uMBShNOff - uMBShEye * uMBShEyeOn, 1.0);
 
                                  if (uMBShDbg > 2.5 && uMBShDbg < 3.5) {
                                      // §885 终十六: extended-range uv painted for
@@ -1104,7 +1091,7 @@ export function applyMglModelLighting(
                              float mbLF = clamp(dot(${(globalThis as any).__mbWorldAdfOff ? 'mbN' : 'mbN0'}, mbDirView), 0.0, 1.0);
                              if (uMBShIntensity > 0.0) {
                                  vec3 mbWN = normalize((vec4(mbN0, 0.0) * viewMatrix).xyz);
-                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos - mbWN * uMBShNOff - uMBShEye * uMBShEyeOn, 1.0);
+                                 vec4 mbShUv = uMBShMatrix * vec4(vMbWorldPos + mbWN * uMBShNOff - uMBShEye * uMBShEyeOn, 1.0);
 
                                  if (uMBShDbg > 2.5 && uMBShDbg < 3.5) {
                                      // §885 终十六: extended-range uv painted for
@@ -1409,11 +1396,6 @@ export function refreshModelShadowUniforms(
                 }
                 if ((u as any).texel1) (u as any).texel1.value = shadowState?.texel1 ?? 0;
         if ((u as any).noff) (u as any).noff.value = Number((globalThis as any).__mbShadowNOff ?? 32);
-        if ((u as any).hasR) (u as any).hasR.value = shadowState?.mapR ? 1 : 0;
-        if ((u as any).mapR) (u as any).mapR.value = shadowState?.mapR ?? null;
-        if ((u as any).matrixR?.value?.copy && shadowState?.matrixR) {
-            (u as any).matrixR.value.copy(shadowState.matrixR);
-        }
                 if (u.eye && shadowState?.eye) u.eye.value.copy(shadowState.eye);
                 if (u.eyeOn) u.eyeOn.value = (globalThis as any).__mbShadowEyeOn ? 1 : 0;
                 // §885 终十七: per-mesh world matrix in the DEPTH-PASS frame —
