@@ -1081,7 +1081,18 @@ export class MBShadowRenderer {
                             // project the FIRST caster's world origin through
                             // BOTH cascade matrices and readPixels each map.
                             try {
-                                const firstCaster: any = [...shadowCasters][0];
+                                const castList: any[] = [...shadowCasters];
+                                const castInfo = castList.map((c: any, ci: number) => {
+                                    const cp = new THREE.Vector3();
+                                    c.getWorldPosition(cp);
+                                    const parts: any = {};
+                                    c.traverse((o: any) => {
+                                        const pp = o.userData?.__mbPart;
+                                        if (pp !== undefined) parts[pp] = (parts[pp] ?? 0) + 1;
+                                    });
+                                    return { i: ci, pos: [cp.x, cp.y, cp.z].map(x => +x.toFixed(0)), parts };
+                                });
+                                const firstCaster: any = castList[0];
                                 const wp = new THREE.Vector3();
                                 firstCaster?.getWorldPosition?.(wp);
                                 const audits: any[] = [];
@@ -1100,7 +1111,7 @@ export class MBShadowRenderer {
                                 auditM('cascade0', this.m_matrix, this.m_shTex);
                                 auditM('cascade1', this.m_matrix1, this.m_shTex1);
                                 const v4chk = new THREE.Vector4(wp.x, wp.y, wp.z, 1).applyMatrix4(this.m_shadowCamera.matrixWorldInverse).applyMatrix4(this.m_shadowCamera.projectionMatrix);
-                                audits.push({ tag: 'wp', world: [wp.x, wp.y, wp.z].map(x => +x.toFixed(1)), clipz: +v4chk.z.toFixed(3), projCheck: (u4b: any) => 0 } as any);
+                                audits.push({ tag: 'wp', world: [wp.x, wp.y, wp.z].map(x => +x.toFixed(1)), castInfo });
                                 fetch(`${fb}/mb-probe-dump`, {
                                     method: 'POST',
                                     headers: { 'content-type': 'application/json' },
