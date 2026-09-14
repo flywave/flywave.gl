@@ -3618,3 +3618,29 @@ cast-shadows 夹具结构性不可达，与预判一致）。
 **④ 下轮入口**：①munich-museum +79k 影子几何攻坚（createLightMatrix 源码级移植
 的首个量化靶）；②软边 78k 的 mgl-shot2 软影质感对拍；③剩余 ~95 件受影响夹具
 分批重基线；④buckingham/munich tile 抽奖（引擎 settle 语义）独立立项维持。
+
+### §885 终三〇六：munich-museum 双探针——误差=影图整体错位（A漏影142k/B多影80k 双向对称±45），88%落在未分 part 的 tile 楼面；激活后跑间方差 ±2.3k 记档（2026-09-14）
+
+**① 探针执行**：shdbg=11 首跑崩（DISCONNECTED，同 sA1 类）；重跑成功且 filter 连带
+museum-lod。partdbg 正常。casters 时序转储首获数据：**frame 60 处 casters 165→270**
+（tile 模型渐进注册直改 shadow map 内容）。
+
+**② 双向误差构成（阈值 luma 160）**：
+- **A 漏影 142,436 px**（exp 影/我 lit，exp 比我暗 44.4）
+- **B 多影 80,448 px**（exp lit/我影，exp 比我亮 45.5）
+- **双向幅度对称（±44/45）= 影图整体错位签名**——非缺影非多影单边问题，是投影/
+  光轴错位把整幅影图搬了家，createLightMatrix 源码级移植定性再证。
+
+**③ part 归属（partdbg 色相分类）**：
+- A 漏影：**88%（125k）在灰/未分 part 的 tile 楼面**，红墙 17,216、蓝/黄微量。
+- B 多影：52,092 灰 + 21,144 红墙 + 7,074 蓝。
+- 结论：museum 的影子几何债主体也在**未分 part 的 tile 模型楼面**（与 buckingham
+  一致），palace 红墙双 向各 ~2 万。
+
+**④ 测量纪律记档**：阴影激活后 museum 跑间方差 ±2.3k（198,237 / 200,573 两样本）、
+casters 注册 165→270 印证 settle 竞态进入 shadow map 内容——影子系单样本结论一律
+降级为指示性；profile 探针的 sRGB+tonemap 双重编码使 B 通道选择码偏移（180-200 散布），
+精确解码需先标定各夹具输出链。
+
+**⑤ 下轮入口**：①createLightMatrix 源码级移植（影图错位 ±44 双向对称的主攻，
+museum +79k 为量化靶）；②软边 78k 的 mgl-shot2 对拍；③tile 抽奖 settle 立项维持。
