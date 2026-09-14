@@ -997,7 +997,7 @@ export class MBShadowRenderer {
             // (few casters registered yet) and the early snapshot misled the
             // shadow investigation once already.
             const __rc = ((this as any).__mbRunCount = ((this as any).__mbRunCount ?? 0) + 1);
-            if (__rc === 1 || __rc === 30 || __rc === 60 || __rc === 1800 || __rc === 5400) {
+            if (__rc === 1 || (__rc <= 30 && __rc % 5 === 0) || __rc === 60 || __rc === 1800 || __rc === 5400) {
               try {
                 const c2: HTMLCanvasElement = (this as any).__mbDbg2d ??
                     ((this as any).__mbDbg2d = document.createElement('canvas'));
@@ -1061,7 +1061,7 @@ export class MBShadowRenderer {
                     // the result server via the harness feedback channel.
                     try {
                         const fb = (globalThis as any).__mbShadowFeedbackUrl;
-                        if (fb && __rc === 60) {
+                        if (fb && __rc === 60 || (globalThis as any).__mbShDumpSeries) {
                             const url2 = (this.m_shRenderer.domElement as HTMLCanvasElement).toDataURL('image/png');
                             fetch(`${fb}/mb-probe-dump`, {
                                 method: 'POST',
@@ -1502,7 +1502,7 @@ export class MBShadowRenderer {
         // identity at draw time. Log the actual matrix + framing once.
         if (!(this as any).__mbMatFrames) (this as any).__mbMatFrames = 0;
         const __rc = ++(this as any).__mbMatFrames;
-        if (__rc === 1 || __rc === 30 || __rc === 60 || __rc === 1800 || __rc === 5400) {
+        if (__rc === 1 || (__rc <= 30 && __rc % 5 === 0) || __rc === 60 || __rc === 1800 || __rc === 5400) {
             (this as any).__mbMatLogged = true;
             try {
                 const p = this.m_shadowCamera.position;

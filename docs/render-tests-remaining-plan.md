@@ -3552,3 +3552,39 @@ settle 序列不触发——本轮 sA 臂空转教训；sA1 无结果=首会话�
 （buckingham-lod ×3 即可判）；②multiple-extr-lod −54k 已坐实可计入交付账；
 ③sno 漏影 62% 无遮挡体（mgl createLightMatrix 源码级移植）维持主攻；④软边 78k 的
 mgl-shot2 软影质感对拍。
+
+### §885 终三〇四：多稳态根因侧袭——真根因=shadow-intensity 缺省解析 `?? 0` 使 ~百级 cast-shadows 夹具整条阴影链被禁用；对齐 mgl spec 默认值 1 并落地（2026-09-14）
+
+**① 排查链（buckingham-lod ±30-90k 多稳态 → 阴影禁用实锤）**：
+- casters 计数/时序转储三连零命中 → 复查发现 POST 仍被 `__rc===60` 双重门控（外层触发
+  放宽了、POST 没跟上）——修正并新增 `shdumpseries=1` 旋钮（每 5 帧 ≤30 POST 深度图+
+  casters/frame 时序）。
+- shuv-matrix 探针（120 帧无条件触发）读出 buckingham-lod 模型材质：**valid=true 但
+  intensity=0、matrix=IDENTITY**——阴影采样关闭但材质 patched；门控三元诊断
+  （slInt/use3D）：**slInt=None、use3D=true** → `shadowLightState` getter 的第三门
+  `m_shadowIntensity <= 0` 命中。munich multiple-extr-lod 同样（intensity=0, slInt=None）。
+- 根因：`MBEnvironmentManager` 解析 `m_shadowIntensity = Number(p['shadow-intensity']
+  ?? 0)`——**mgl style-spec 的默认值是 1**（dist 铁证：`"shadow-intensity":
+  {"type":"number","default":1,"minimum":0,"maximum":1}`）。凡 cast-shadows:true 但未
+  显式写 shadow-intensity 的样式（buckingham/munich conflation 族、trees 族、building
+  族等 ~百级），mgl 渲染全强度阴影而我们整条阴影 renderer 禁用。
+
+**② 修复与验证**：`?? 0 → ?? 1`（TS 101=101）。
+- buckingham-lod：**阴影链首次激活**（slInt=1/intensity=1/has1=1/map1Set=true），
+  mismatch 167,520=首个有阴影语义的测量（旧多稳态区间 102,912-191,358 为无阴影
+  tile 抽奖）。
+- sno：**60,892 位级不变**（显式 shadow-intensity:1.0 下默认值惰性）——锚点零回归。
+
+**③ 结论级修正（连续三轮的量化结论重审）**：
+- 终三〇二 "multiple-extr-lod −54k 坐实" **再次证伪**——该夹具阴影 renderer 同样禁用，
+  shmodelraw 惰性，分布分离是 tile 抽样巧合（新样本 63,424 落回 raw 侧区间）。
+- buckingham/munich 的 ±30-90k 多稳态=**非阴影的 tile 加载状态抽奖**（引擎瓦片挂载
+  时序），与阴影配置无关；根因在引擎 settle 语义，立项另攻。
+- **凡 cast-shadows 且未显式写 shadow-intensity 的夹具，本修复前的全部基线作废**
+  （阴影从未渲染）；终二九九/三〇二 的家族账以"显式 shadow-intensity 夹具"子集为准
+  （sno −1.2k×2 位级、MAPS3D −0.3k、port/station 位级 0）。
+
+**④ 下轮入口**：①阴影激活后的家族重基线（cast-shadows 无显式 intensity 的 ~百级
+夹具全量重测——expected 含阴影，方向预期改善）；②mgl shadow-intensity=1 下重跑
+sno 家族锚点+守卫（本批已验 sno 不变）；③sno 漏影 62% 无遮挡体（createLightMatrix
+源码级移植）与软边 78k（mgl-shot2 对拍）主攻维持。

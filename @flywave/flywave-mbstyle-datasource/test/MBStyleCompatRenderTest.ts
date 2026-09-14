@@ -691,6 +691,12 @@ async function renderUntilSettled(
     // (buckingham attractors 102912/157622/180128/191358, 终三〇二①).
     const settleNeed = Number((window as any).__karma__?.config?.args?.find?.(
         (a: string) => a.startsWith("settle="))?.slice("settle=".length)) || 3;
+    // §885 终三〇四: shdumpseries=1 → the shadow renderer POSTs its depth
+    // canvas + casters/frame counts every 5 frames (≤30) — the attractor↔
+    // caster-registration time series for the multi-stability root cause.
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shdumpseries=1")) {
+        (globalThis as any).__mbShDumpSeries = true;
+    }
     let lastCount = -1;
     let stable = 0;
     for (let i = 0; i < maxFrames && stable < settleNeed; i++) {

@@ -844,8 +844,13 @@ export class MBEnvironmentManager {
                 }
                 // mgl shadow state (shadow_renderer.ts reads these off the
                 // directional light each frame): enabled + intensity.
+                // §885 终三〇四: shadow-intensity defaults to 1 in mgl
+                // (style-spec: {"default": 1, "minimum": 0, "maximum": 1}) —
+                // the old `?? 0` silently disabled the whole shadow renderer
+                // for every cast-shadows style without an explicit value
+                // (buckingham/munich conflation families).
                 this.m_shadowEnabled = p['cast-shadows'] === true || p['cast-shadow'] === true;
-                this.m_shadowIntensity = Number(p['shadow-intensity'] ?? 0);
+                this.m_shadowIntensity = Number(p['shadow-intensity'] ?? 1);
                 // Kept out of the scene — see the ambient note above about
                 // double lighting of manually-injected materials.
             }

@@ -1614,6 +1614,8 @@ export function refreshModelShadowUniforms(
                                     eyeOn: u.eyeOn?.value,
                                     nodeId: mesh.userData?.__mbNodeId ?? mat.userData?.__mbNodeId,
                                     hookFires: (globalThis as any).__mbShHookFires,
+                                    slInt: dataSource?.m_environment?.shadowLightState?.intensity ?? null,
+                                    use3D: !!dataSource?.m_environment?.use3DLights,
                                     has1: (u as any).has1?.value,
                                     map1Set: !!(u as any).map1?.value,
                                     matrix1: (u as any).matrix1?.value?.elements ? Array.from((u as any).matrix1.value.elements).map((x: number) => +x.toFixed(2)) : String((u as any).matrix1?.value),
