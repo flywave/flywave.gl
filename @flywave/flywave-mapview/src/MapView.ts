@@ -3286,6 +3286,17 @@ export class MapView extends EventDispatcher {
         this.mapRenderingManager.fogLight.enabled = false;
         this.mapRenderingManager.fogLight.intensity = 1;
         this.mapRenderingManager.fogLight.density = 0.002;
+        this.mapRenderingManager.ssr = {
+            enabled: false,
+            resolutionScale: 0.5,
+            maxRayDistance: 5000,
+            binarySearchIterations: 4,
+            thickness: 2,
+            edgeFade: 0.9,
+            maxRoughness: 0.6,
+            intensity: 1,
+            debug: 0
+        };
 
         if (this.m_postEffects !== undefined) {
             if (this.m_postEffects.bloom !== undefined) {
@@ -3326,6 +3337,11 @@ export class MapView extends EventDispatcher {
                 // Lights are NOT part of the theme config — they register at
                 // runtime via addFogLight/removeFogLight (bloom-object style).
                 Object.assign(this.mapRenderingManager.fogLight, this.m_postEffects.fogLight);
+            }
+            if (this.m_postEffects.ssr !== undefined) {
+                // Reflective surfaces register at runtime via
+                // addReflectiveObject/removeReflectiveObject (bloom style).
+                Object.assign(this.mapRenderingManager.ssr, this.m_postEffects.ssr);
             }
             if (this.m_postEffects.antialiasing !== undefined) {
                 this.mapRenderingManager.antialiasing = this.m_postEffects.antialiasing;

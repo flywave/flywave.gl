@@ -6,5 +6,8 @@ export {
     type IMapRenderingManager,
     MapRenderingManager,
     MSAASampling,
-    type ICustomEffect
+    type ICustomEffect,
+    type IReflectiveObjectHandle,
+    type IReflectiveParams
 } from "./MapRenderingManager";
+export { createSurfaceMaterial, REFLECTION_PRESETS, type ReflectionPresetName } from "./reflective";

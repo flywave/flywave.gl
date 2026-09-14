@@ -16,6 +16,8 @@ export interface PostEffects {
     brightnessContrast?: IBrightnessContrastEffect;
     colorGradingLUT?: IColorGradingLUTEffect;
     fogLight?: IFogLightEffect;
+    /** Screen-space reflections; reflective surfaces are tagged per object. */
+    ssr?: ISSREffect;
     /**
      * Anti-aliasing strategy selector (mutually exclusive). Replaces the
      * legacy `taa?: boolean` field; `taa: true` is still accepted as a
@@ -114,6 +116,63 @@ export interface IFogLightEffect {
      * 0.002 ≈ glow saturating within a few hundred meters.
      */
     density?: number;
+}
+
+/**
+ * Screen-space reflections (SSR). A single shared post-effect pass: any mesh
+ * tagged reflective (via `mapRenderingManager.addReflectiveObject`) writes a
+ * reflectivity mask into the scene pass MRT and the SSR pass reflects the
+ * already-rendered frame onto those pixels — no second scene render.
+ *
+ * Reflective surfaces only pay for the pixels they cover on screen; the
+ * screen-space method cannot reflect geometry that is off-screen (misses fade
+ * the reflection out rather than producing artifacts).
+ */
+export interface ISSREffect {
+    /** Toggling rebuilds the render pipeline once. */
+    enabled: boolean;
+    /**
+     * Reflection pass resolution scale relative to the drawing buffer
+     * (0.25–1). Lower is cheaper and blurrier. Defaults to 0.5.
+     */
+    resolutionScale?: number;
+    /** Maximum ray march distance in meters. Defaults to 5000. */
+    maxRayDistance?: number;
+    /**
+     * Binary-search refinement steps after the coarse march finds a crossing.
+     * Defaults to 4.
+     */
+    binarySearchIterations?: number;
+    /**
+     * View-space thickness (meters) of the surface a ray may "pass through"
+     * before a crossing counts as a hit — suppresses self-intersection on the
+     * reflector itself. Defaults to 2.
+     */
+    thickness?: number;
+    /**
+     * Screen-space UV margin where reflections start fading out toward the
+     * screen border (rays leaving the screen have no scene to reflect).
+     * Defaults to 0.9.
+     */
+    edgeFade?: number;
+    /**
+     * Roughness beyond which reflections fade to zero. Reflective surfaces
+     * tagged with roughness above this render without reflections. Defaults
+     * to 0.6.
+     */
+    maxRoughness?: number;
+    /**
+     * Global reflection strength multiplier on top of each surface's own
+     * reflectivity. Defaults to 1.
+     */
+    intensity?: number;
+    /**
+     * Debug visualization for the raymarch stage (0 = off):
+     * 1 — R/G encode the sampled screen UV of the hit, B the hit weight;
+     *     masked-but-missed pixels render dim green. Black = not tagged.
+     * 2 — the unpacked view-space surface normal, remapped to RGB.
+     */
+    debug?: number;
 }
 
 export interface ITranslucentLayerConfig {

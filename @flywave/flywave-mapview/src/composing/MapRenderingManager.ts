@@ -9,16 +9,37 @@ import {
     type IHueSaturationEffect,
     type IOutlineEffect,
     type ISepiaEffect,
+    type ISSREffect,
     type IVignetteEffect
 } from "@flywave/flywave-datasource-protocol";
 import * as THREE from "three/webgpu";
-import { mrt, diffuseColor } from "three/tsl";
+import { mrt, diffuseColor, normalView, vec4 } from "three/tsl";
 import type { Renderer } from "three/webgpu";
 import { uniform, vec3 } from "three/tsl";
 
 import { type IPassManager } from "./IPassManager";
 import { type IViewRenderManager, type AntialiasingMode, type IFogLightDef } from "./vrm";
 import { TranslucentLayerEffect, OUTLINE_LAYER_BIT } from "./vrm/TranslucentLayerEffect";
+import { packOctahedralNormal } from "./vrm/effects/ssr";
+
+/**
+ * Per-surface reflection parameters stored on `mat.userData.__ssrParams` and
+ * compiled into the material's `ssrData` MRT entry. `reflectivity` doubles as
+ * the fresnel F0: 0.02 ≈ water, 0.04–0.08 ≈ polished stone, ~0.9 ≈ mirror.
+ */
+export interface IReflectiveParams {
+    /** Reflection strength / fresnel F0 (0–1). Below 0.01 = not reflective. */
+    reflectivity: number;
+    /** Surface roughness (0–1); drives reflection falloff, see ssr.maxRoughness. */
+    roughness: number;
+}
+
+export interface IReflectiveObjectHandle {
+    /** Live-tune parameters (uniforms — no pipeline or shader rebuild). */
+    update(params: Partial<IReflectiveParams>): void;
+    /** Remove the reflection mask; the material itself is left untouched. */
+    delete(): void;
+}
 
 export enum MSAASampling {
     Level_0 = 0,
@@ -42,6 +63,12 @@ export interface IMapAntialiasSettings {
 type BloomMrtMaterial = THREE.Material & {
     mrtNode: THREE.Node | null;
     userData?: Record<string, unknown>;
+};
+
+/** Defaults for {@link addReflectiveObject} — "polished floor" territory. */
+const DEFAULT_REFLECTIVE_PARAMS: IReflectiveParams = {
+    reflectivity: 0.8,
+    roughness: 0.08
 };
 
 export interface ICustomEffect {
@@ -84,6 +111,21 @@ export interface IMapRenderingManager extends IPassManager {
     removeBloomObject(object: THREE.Object3D): void;
     addIgnoreBloomObject(object: THREE.Object3D): void;
     removeIgnoreBloomObject(object: THREE.Object3D): void;
+
+    ssr: ISSREffect;
+    /**
+     * Tag an object subtree as reflective (screen-space reflections). The
+     * engine patches each material's `ssrData` MRT output — the material's
+     * own shading is untouched and no per-object pipeline is created; the
+     * pixels these surfaces cover pay for the SSR march, nothing else does.
+     * Requires `ssr.enabled` (theme `postEffects.ssr`). Call `MapView.update`
+     * afterwards (on-demand render loop).
+     */
+    addReflectiveObject(
+        object: THREE.Object3D,
+        params?: Partial<IReflectiveParams>
+    ): IReflectiveObjectHandle;
+    removeReflectiveObject(object: THREE.Object3D): void;
 
     /**
      * Register a fog light (volumetric lamp halo). Plain data def plus the
@@ -203,6 +245,23 @@ export class MapRenderingManager implements IMapRenderingManager {
         density: 0.002
     };
 
+    /**
+     * Screen-space reflections global config. Which pixels reflect is decided
+     * per object via {@link addReflectiveObject}; this slot only carries the
+     * pass config. Toggling `enabled` rebuilds the graph once.
+     */
+    ssr: ISSREffect = {
+        enabled: false,
+        resolutionScale: 0.5,
+        maxRayDistance: 5000,
+        binarySearchIterations: 4,
+        thickness: 2,
+        edgeFade: 0.9,
+        maxRoughness: 0.6,
+        intensity: 1,
+        debug: 0
+    };
+
     taaEnabled: boolean = false;
     /**
      * Active anti-aliasing strategy. Drives `vrm.config.antialiasing`.
@@ -219,6 +278,14 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_customEffects: Map<string, ICustomEffect> = new Map();
     private m_pendingBloomObjects: THREE.Object3D[] = [];
     private m_pendingOutlineObjects: THREE.Object3D[] = [];
+    /**
+     * Persistent registry of tagged reflective subtrees. Re-applied on every
+     * `syncPostEffectsToVRM`: objects tagged BEFORE the theme loaded (while
+     * `ssr.enabled` was still false) get their ssrData material entries
+     * written once the effect turns on, and disabling strips them cleanly
+     * (no stray ssrData entry left in an MRT-less pass).
+     */
+    private m_reflectiveObjects: THREE.Object3D[] = [];
     private m_pendingFogLights: { def: IFogLightDef; world: THREE.Vector3 }[] = [];
     private m_gpuPicking: boolean = false;
 
@@ -300,6 +367,8 @@ export class MapRenderingManager implements IMapRenderingManager {
         vrm.config.fogLight.intensity = this.fogLight.intensity ?? 1;
         vrm.config.fogLight.density = this.fogLight.density ?? 0.002;
 
+        Object.assign(vrm.config.ssr, this.ssr);
+
         vrm.config.taa.enabled = this.taaEnabled;
         // Resolve the active AA mode: the explicit `antialiasing` field wins,
         // but the deprecated `taaEnabled` boolean still maps to "taa".
@@ -327,6 +396,13 @@ export class MapRenderingManager implements IMapRenderingManager {
                 vrm.fogLights.set(def, world);
             }
             this.m_pendingFogLights = [];
+            // Reflective tags live in the materials, but the ssrData entry is
+            // gated on `ssr.enabled` — which this sync may have just flipped.
+            // Re-apply so tags added before the theme loaded (enabled still
+            // false at the time) land now, and a disable strips them cleanly.
+            for (const obj of this.m_reflectiveObjects) {
+                this.applyReflectiveMrtNode(obj);
+            }
         }
     }
 
@@ -416,6 +492,62 @@ export class MapRenderingManager implements IMapRenderingManager {
         this.viewRenderManager?.bloomIgnoreObjects.add(object);
     }
 
+    addReflectiveObject(
+        object: THREE.Object3D,
+        params?: Partial<IReflectiveParams>
+    ): IReflectiveObjectHandle {
+        if (!this.m_reflectiveObjects.includes(object)) {
+            this.m_reflectiveObjects.push(object);
+        }
+        this.applyReflectiveMrtNode(object, params);
+
+        const mrm = this;
+        return {
+            update(latest: Partial<IReflectiveParams>): void {
+                mrm.applyReflectiveMrtNode(object, latest);
+            },
+            delete(): void {
+                mrm.removeReflectiveObject(object);
+            }
+        };
+    }
+
+    removeReflectiveObject(object: THREE.Object3D): void {
+        this.m_reflectiveObjects = this.m_reflectiveObjects.filter(o => o !== object);
+        this.applyReflectiveMrtNode(object, null);
+    }
+
+    /**
+     * Write/clear `__ssrParams` on every material of the subtree and rebuild
+     * its mrtNode. `params == null` clears the tag; omitted = re-apply the
+     * stored tag (used by the postEffects sync). Object-level params merge
+     * over material-level ones (a material may carry baked-in params from
+     * `createSurfaceMaterial`), both over the defaults.
+     */
+    private applyReflectiveMrtNode(
+        object: THREE.Object3D,
+        params?: Partial<IReflectiveParams> | null
+    ): void {
+        object.traverse(child => {
+            const mat = (child as THREE.Mesh).material as BloomMrtMaterial | undefined;
+            if (mat == null) return;
+            mat.userData = mat.userData ?? {};
+            if (params === null) {
+                delete mat.userData.__ssrParams;
+                delete mat.userData.__ssrUniforms;
+            } else {
+                const baked = mat.userData.__ssrParams as IReflectiveParams | undefined;
+                mat.userData.__ssrParams = {
+                    ...DEFAULT_REFLECTIVE_PARAMS,
+                    ...baked,
+                    ...params
+                };
+            }
+            this.rebuildMrtNode(mat);
+        });
+        this.viewRenderManager?.onNeedsRender?.();
+    }
+
     private rebuildMrtNode(mat: BloomMrtMaterial): void {
         const entries: Record<string, THREE.Node> = {};
         const bloomIntensity = mat.userData?.__bloomIntensity;
@@ -426,6 +558,34 @@ export class MapRenderingManager implements IMapRenderingManager {
         if (layerId != null) {
             entries.translucentLayerId = uniform(layerId);
             entries.translucentColor = diffuseColor.rgb;
+        }
+        // SSR reflectivity mask — only while the SSR pass exists (the pass
+        // MRT layout carries the ssrData attachment only then; a stray mrtNode
+        // entry in an MRT-less pass would replace the fragment output). The
+        // uniforms are cached on the material so handle.update() rewrites
+        // values live, without a shader rebuild.
+        const ssrParams = mat.userData?.__ssrParams as IReflectiveParams | undefined;
+        if (ssrParams != null && this.ssr.enabled) {
+            // A three uniform node, typed loosely: the @types/three
+            // `uniform()` overload infers `unknown` and fails vec4()'s
+            // Node<"float"> overload.
+            type FloatUniform = THREE.Node<"float"> & { value: number };
+            type SsrUniforms = { reflectivity: FloatUniform; roughness: FloatUniform };
+            let u = mat.userData.__ssrUniforms as SsrUniforms | undefined;
+            if (u == null) {
+                u = {
+                    reflectivity: uniform(ssrParams.reflectivity) as FloatUniform,
+                    roughness: uniform(ssrParams.roughness) as FloatUniform
+                };
+                mat.userData.__ssrUniforms = u;
+            }
+            u.reflectivity.value = ssrParams.reflectivity;
+            u.roughness.value = ssrParams.roughness;
+            entries.ssrData = vec4(
+                packOctahedralNormal(normalView.normalize()),
+                u.reflectivity,
+                u.roughness
+            );
         }
         mat.mrtNode = Object.keys(entries).length > 0 ? mrt(entries) : null;
         mat.needsUpdate = true;

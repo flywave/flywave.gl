@@ -73,6 +73,7 @@ import {
     FOG_LIGHT_CAPACITY,
     type IFogLightUniforms
 } from "./effects/fogLight";
+import { ssr, SSRNode } from "./effects/ssr";
 import { bloom } from "./effects/bloom";
 import { outline } from "./effects/outline";
 import {
@@ -116,6 +117,17 @@ export class ViewRenderManager implements IViewRenderManager {
         sepia: { enabled: false, amount: 0 },
         colorGradingLUT: { enabled: false, url: "", opacity: 1 },
         fogLight: { enabled: false, intensity: 1, density: 0.002 },
+        ssr: {
+            enabled: false,
+            resolutionScale: 0.5,
+            maxRayDistance: 5000,
+            binarySearchIterations: 4,
+            thickness: 2,
+            edgeFade: 0.9,
+            maxRoughness: 0.6,
+            intensity: 1,
+            debug: 0
+        },
         outline: { enabled: false, thickness: 2, color: "#ffffff", xray: true },
         taa: { enabled: false },
         clouds: { enabled: false },
@@ -213,6 +225,7 @@ export class ViewRenderManager implements IViewRenderManager {
      */
     onNeedsRender?: () => void;
     private taaNode?: TemporalAntialiasNode;
+    private ssrNode?: SSRNode;
     private _smaaNode?: ReturnType<typeof smaa>;
     private scene?: THREE.Scene;
     private camera?: THREE.Camera;
@@ -309,6 +322,7 @@ export class ViewRenderManager implements IViewRenderManager {
 
         const taaEnabled = this.config.antialiasing === "taa";
         const bloomEnabled = this.config.bloom.enabled;
+        const ssrEnabled = this.config.ssr.enabled;
         const outlineEnabled = this.config.outline.enabled && this.outlineObjects.size > 0;
         const aerialEnabled = this.config.aerialPerspective.enabled;
         const hasCSM = this.csmShadowNode != null;
@@ -328,6 +342,13 @@ export class ViewRenderManager implements IViewRenderManager {
         const mrtEntries: Record<string, unknown> = { output };
         if (taaEnabled) mrtEntries.velocity = highpVelocity;
         if (bloomEnabled) mrtEntries.bloomIntensity = float(0);
+        if (ssrEnabled) {
+            // SSR reflectivity mask: default vec4(0) = NOT reflective (the
+            // raymarch skips pixels with reflectivity < 0.01). Tagged
+            // materials override this entry through their own mrtNode (see
+            // MapRenderingManager.addReflectiveObject).
+            mrtEntries.ssrData = vec4(0);
+        }
         if (aerialEnabled && hasGodRays) {
             mrtEntries.viewZUnit = positionView.z.mul(WORLD_TO_UNIT);
         }
@@ -432,6 +453,19 @@ export class ViewRenderManager implements IViewRenderManager {
         }
 
         let outputNode = colorNode;
+
+        // SSR first in the chain (linear, pre-tonemap, pre-atmosphere): it
+        // needs the raw lit scene + depth + reflectivity mask, and its
+        // composite becomes the input the rest of the chain grades. Recreated
+        // per rebuild (same lifecycle as the TAA node); its uniform params
+        // live-update via setConfig without rebuilds.
+        if (ssrEnabled) {
+            const ssrDataNode = this.passNode.getTextureNode("ssrData");
+            this.ssrNode?.dispose();
+            this.ssrNode = ssr(colorNode, depthNode, ssrDataNode, camera);
+            this.ssrNode.setConfig(this.config.ssr);
+            outputNode = this.ssrNode;
+        }
 
         // Clouds first (matches reference EffectComposer order: Clouds before
         // AerialPerspective). AerialPerspective then processes the cloud+scene
@@ -754,6 +788,8 @@ export class ViewRenderManager implements IViewRenderManager {
         this.aerialNode = undefined;
         this.m_cloudNode = undefined;
         this.taaNode = undefined;
+        this.ssrNode?.dispose();
+        this.ssrNode = undefined;
         this.m_lutController?.dispose();
         this.m_lutController = undefined;
         this.m_appliedLutUrl = undefined;

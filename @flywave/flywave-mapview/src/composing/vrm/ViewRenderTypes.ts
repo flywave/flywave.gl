@@ -104,6 +104,7 @@ export interface IAerialPerspectiveConfig {
 export interface ICloudsConfig {
     enabled: boolean;
 }
+
 export type ToneMappingMode =
     | "linear"
     | "reinhard"
@@ -116,6 +117,33 @@ export type ToneMappingMode =
 /** Anti-aliasing strategy: "none" | "taa" | "smaa" (mutually exclusive). */
 export type AntialiasingMode = "none" | "taa" | "smaa";
 
+/**
+ * Screen-space reflections config (VRM side, mirrors the theme-facing
+ * `ISSREffect` from `@flywave/flywave-datasource-protocol`). The SSR pass
+ * itself is gated on `enabled`; WHICH pixels reflect is decided per object
+ * through `MapRenderingManager.addReflectiveObject` (material MRT mask), not
+ * here.
+ */
+export interface ISSRConfig {
+    enabled: boolean;
+    /** Reflection pass resolution relative to the drawing buffer (0.25–1). */
+    resolutionScale: number;
+    /** Maximum ray march distance in meters. */
+    maxRayDistance: number;
+    /** Binary-search refinement steps after a coarse-march crossing. */
+    binarySearchIterations: number;
+    /** View-space surface thickness for hit acceptance (meters). */
+    thickness: number;
+    /** Screen-UV margin where reflections fade toward the border. */
+    edgeFade: number;
+    /** Roughness at/above which reflections fade to zero. */
+    maxRoughness: number;
+    /** Global reflection strength multiplier. */
+    intensity: number;
+    /** Debug visualization mode (0 off; see ISSREffect.debug). */
+    debug: number;
+}
+
 export interface IViewRenderConfig {
     aerialPerspective: IAerialPerspectiveConfig;
     bloom: IBloomConfig;
@@ -125,6 +153,7 @@ export interface IViewRenderConfig {
     sepia: ISepiaConfig;
     colorGradingLUT: IColorGradingLUTConfig;
     fogLight: IFogLightConfig;
+    ssr: ISSRConfig;
     outline: IOutlineConfig;
     taa: ITemporalAntialiasConfig;
     clouds?: ICloudsConfig;
