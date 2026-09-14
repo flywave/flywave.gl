@@ -3419,3 +3419,45 @@ D 双暗 1,459；软边带（和 20-90] ≈78k。**关键负发现：−12° 方
 接收端语义差异，按 part 分组统计错位像素归属（终二九三B 的窗排条带路径）；②model-shadow
 暗色调域；③漏影 53.4k 的投影几何攻坚（shadow map 覆盖 vs 深度比较二分——profile 探针读
 mapDepth<fragZ 占比可判）；④软边 78k 的 mgl 软影质感对拍。
+
+### §885 终三〇〇：双探针轮——buckingham-lod 过度阴影 part 归属（91% 在未分 part 的 conflated tile 模型楼面）+ sno 漏影二分（62% 无遮挡体投影域 / 38% PCF 空邻域稀释）（2026-09-14）
+
+**① 探针资产（本轮落地）**：
+- `partdbg=1`（+MBSTYLE_PARTDBG）：模型尾部 main() 顶部按 `uMBPartId` 平色绘制
+  （wall红/door绿/roof蓝/window黄/lamp品/logo青/none深灰），partId 由既有 per-draw
+  onBeforeRender hook 从 `mesh.userData.__mbPart` 同步（part 材质为独立 clone 无竞态）。
+  注意：绘制值经 colorspace/tonemap，离线解码需 sRGB 编码后调色板（线性值直接匹配失效）。
+- `shdbg=11` profile 探针扩展：R=mapDepth/G=fragZ 不变，**B=选中图编码（255=raw
+  cascade-0、168=镜像 cascade-0、84=cascade-1）**，采样按 mbInR→mbIn0→c1 真实选择链。
+
+**② buckingham-lod 过度阴影 part 归属（D双暗 132k）**：
+- **121k（91%）在未分 part 的 conflated tile 模型楼面**（partdbg 平色 none 证实=patched
+  模型材质、partId=0）——三方亮度 exp=143 > mirror=115 > raw0=82：**镜像态本已欠亮 28，
+  raw 轴再翻倍至 61**（99% 样本我方更暗，mean cur−exp≈−56）——过度阴影=tile 楼面的
+  raw 轴影覆盖率/影深超 expected。
+- palace 自身 parts：door(id2) **100% D**（10.8k）、lamp 27%、wall（红 52k px）**0%
+  D**（墙面干净）——palace 残差集中在 door/绿件与小件，墙体无恙。
+- 本 fixture 的 +54.7k 回归主体=tile 楼面域，非 palace 几何；后续若做 per-fixture
+  shmodelraw 关断或 tile-模型专用轴，目标即此 121k。
+
+**③ sno 漏影 53.4k 二分（shdbg=11 profile，probed 3,903 px / 漏影子集 2,022）**：
+- 覆盖缺失（mapDepth 空 ≥250）= **0**；有遮挡体在前（mapDepth<fragZ）=765（38%）；
+  **无遮挡体在前（mapDepth>fragZ，接收器最近）=1,257（62%）**。
+- 定性：**漏影主因（62%）= shadow map 中该投影位置无遮挡体**——caster 投影/光轴几何域
+  （源码级移植立项维持）；38% 为 PCF 深度平均的**空邻域稀释**——空 texel 解码 r+g/255
+  =1+1=**2.0**（白清屏 hi=lo=255），5-tap 均值被抬过 fragZ 翻 lit；mgl 语义是 lit-flag
+  平均（0/1）而非深度平均，边缘软化行为不同——记档为 PCF 语义差（可能与软边 78k 残差
+  同根，修法=平均 lit flag 或空 texel 记 1.0）。
+
+**④ 探针覆盖缺口（记档）**：sno 的 raw0-vs-mirror 差异像素 13,317 全部**未经 shdbg=11
+  绘制**（probe==raw0 位级），但镜像 cascade 深度图转储**两配置逐位一致（0 差异，污染
+  排除）**，且其中 raw0 侧 7,434 更近 expected（样本像素 raw0==expected==235 精确）——
+  即这些像素确实消费 raw 图（净改善载体）却绕过了 probed 分支。drawlog 证实模型=4 个
+  patched 材质（shu=Y，vn=29,148×4）。疑似=conflated tile 模型材质的 uMBShIntensity
+  同步/heal 路径与探针快照相斥，机制未决——探针债务，下轮可用 partdbg（uMBPartDbg 门
+  控不依赖 intensity）验证其材质归属。
+
+**⑤ 下轮入口**：①tile 楼面过度阴影（buckingham 121k）——其 expected 亮度介于两档
+  之间，先验上 raw 轴影覆盖过宽，可试 tile 模型专用 shmodelraw 关断或 shrawaz 微扫；
+  ②PCF 空 texel=2.0 稀释修正（lit-flag 平均）A/B——38% 漏影 + 软边 78k 同域；
+  ③sno 探针覆盖缺口：partdbg 复用于 sno 验证 13.3k 像素的材质归属。

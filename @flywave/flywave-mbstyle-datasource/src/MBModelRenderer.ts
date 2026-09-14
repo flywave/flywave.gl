@@ -607,6 +607,11 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBShHasR = { value: 0 };
                 shader.uniforms.uMBShMapR = { value: null as any };
                 shader.uniforms.uMBShMatrixR = { value: new THREE.Matrix4() };
+                // §885 终三〇〇: partdbg probe — per-material part id, synced
+                // per draw by the mesh onBeforeRender hook (materials are
+                // per-part clones so no cross-mesh race).
+                shader.uniforms.uMBPartId = { value: 0 };
+                shader.uniforms.uMBPartDbg = { value: (globalThis as any).__mbPartDbg ? 1 : 0 };
                 shader.uniforms.uMBShNOff = { value: Number((globalThis as any).__mbShadowNOff ?? 32) };
                 shader.uniforms.uMBShTexel1 = { value: 0 };
                 // §885: shdbg=5 → receiver rebases worldPos by the shadow eye
@@ -625,6 +630,7 @@ export function applyMglModelLighting(
                         hasR: shader.uniforms.uMBShHasR,
                         mapR: shader.uniforms.uMBShMapR,
                         matrixR: shader.uniforms.uMBShMatrixR,
+                        partId: shader.uniforms.uMBPartId,
                         texel1: shader.uniforms.uMBShTexel1,
                         noff: shader.uniforms.uMBShNOff,
                         intensity: shader.uniforms.uMBShIntensity,
@@ -668,6 +674,8 @@ export function applyMglModelLighting(
  uniform float uMBShHasR;
  uniform sampler2D uMBShMapR;
  uniform mat4 uMBShMatrixR;
+ uniform float uMBPartId;
+ uniform float uMBPartDbg;
                      uniform vec3 uMBShEye;
                      uniform float uMBShEyeOn;
                      uniform float uMB3DMetal; uniform float uMB3DRough;
@@ -781,7 +789,19 @@ export function applyMglModelLighting(
                          }
                          return mix(disp, mbFogColor, clamp(mbFactor, 0.0, 1.0) * uMBFogOn);
                      }
-                     void main() {`
+                     void main() {
+                         // §885 终三〇〇: partdbg=1 — flat per-part palette
+                         // paint (wall=red door=green roof=blue window=yellow
+                         // lamp=magenta logo=cyan none=dark gray) for the
+                         // mismatch-pixel part attribution probe.
+                         if (uMBPartDbg > 0.5) {
+                             gl_FragColor = vec4(
+                                 uMBPartId == 1.0 ? 1.0 : (uMBPartId == 4.0 ? 1.0 : 0.15),
+                                 uMBPartId == 2.0 ? 1.0 : (uMBPartId == 4.0 ? 1.0 : 0.15),
+                                 uMBPartId == 3.0 ? 1.0 : (uMBPartId == 5.0 ? 1.0 : (uMBPartId == 6.0 ? 1.0 : 0.15)),
+                                 1.0);
+                             return;
+                         }`
                 );
                 // a_pbr height ramp: mgl evaluates the ramp against the mesh
                 // LOCAL z (a_pos_3f.z, grid meters) — pass it through a
@@ -1021,14 +1041,25 @@ export function applyMglModelLighting(
                                      // gate, B = uMBShHas1.
                                      // §885 终二七一: stripe profile —
                                      // R = mapDepth (cascade-selected), G = fragZ, B = 0.5.
+                                     // §885 终三〇〇: B encodes the SELECTED map
+                                     // (1.0=raw cascade-0, 0.66=mirror cascade-0,
+                                     // 0.33=cascade-1) and R reads the selected
+                                     // map's depth — the 漏影 bisect probe
+                                     // (coverage-missing mapDepth≈1 vs compare-
+                                     // semantics mapDepth≤fragZ).
                                      vec4 mbShPkC2;
-                                     if (mbIn0 > 0.5) {
+                                     float mbSelC2 = 0.33;
+                                     if (mbInR > 0.5) {
+                                         mbShPkC2 = texture2D(uMBShMapR, mbShUvR.xy);
+                                         mbSelC2 = 1.0;
+                                     } else if (mbIn0 > 0.5) {
                                          mbShPkC2 = texture2D(uMBShMap, mbShUv.xy);
+                                         mbSelC2 = 0.66;
                                      } else {
                                          mbShPkC2 = texture2D(uMBShMap1, clamp(mbShUv1.xy, vec2(0.0), vec2(1.0)));
                                      }
                                      float mbD2 = mbShPkC2.r + mbShPkC2.g / 255.0;
-                                     gl_FragColor.rgb = vec3(clamp(mbD2, 0.0, 1.0), clamp(mbShUvC.z, 0.0, 1.0), 0.5);
+                                     gl_FragColor.rgb = vec3(clamp(mbD2, 0.0, 1.0), clamp(mbShUvC.z, 0.0, 1.0), mbSelC2);
                                      return;
                                  }
                                  if (mbShHasC > 0.5 && mbShUvC.x >= 0.0 && mbShUvC.x <= 1.0 &&
@@ -1213,14 +1244,25 @@ export function applyMglModelLighting(
                                      // gate, B = uMBShHas1.
                                      // §885 终二七一: stripe profile —
                                      // R = mapDepth (cascade-selected), G = fragZ, B = 0.5.
+                                     // §885 终三〇〇: B encodes the SELECTED map
+                                     // (1.0=raw cascade-0, 0.66=mirror cascade-0,
+                                     // 0.33=cascade-1) and R reads the selected
+                                     // map's depth — the 漏影 bisect probe
+                                     // (coverage-missing mapDepth≈1 vs compare-
+                                     // semantics mapDepth≤fragZ).
                                      vec4 mbShPkC2;
-                                     if (mbIn0 > 0.5) {
+                                     float mbSelC2 = 0.33;
+                                     if (mbInR > 0.5) {
+                                         mbShPkC2 = texture2D(uMBShMapR, mbShUvR.xy);
+                                         mbSelC2 = 1.0;
+                                     } else if (mbIn0 > 0.5) {
                                          mbShPkC2 = texture2D(uMBShMap, mbShUv.xy);
+                                         mbSelC2 = 0.66;
                                      } else {
                                          mbShPkC2 = texture2D(uMBShMap1, clamp(mbShUv1.xy, vec2(0.0), vec2(1.0)));
                                      }
                                      float mbD2 = mbShPkC2.r + mbShPkC2.g / 255.0;
-                                     gl_FragColor.rgb = vec3(clamp(mbD2, 0.0, 1.0), clamp(mbShUvC.z, 0.0, 1.0), 0.5);
+                                     gl_FragColor.rgb = vec3(clamp(mbD2, 0.0, 1.0), clamp(mbShUvC.z, 0.0, 1.0), mbSelC2);
                                      return;
                                  }
                                  if (mbShHasC > 0.5 && mbShUvC.x >= 0.0 && mbShUvC.x <= 1.0 &&
@@ -1527,6 +1569,11 @@ export function refreshModelShadowUniforms(
                             const uu = (mesh as any).material?.userData?.__mbShU;
                             if (uu?.world?.value?.copy && (mesh as any).matrixWorld) {
                                 uu.world.value.copy((mesh as any).matrixWorld);
+                            }
+                            // §885 终三〇〇: partdbg — per-draw part id (the
+                            // part sub-meshes carry per-part material clones).
+                            if (uu?.partId) {
+                                uu.partId.value = (mesh as any).userData?.__mbPart ?? 0;
                             }
                         };
                     } catch { /* best-effort */ }

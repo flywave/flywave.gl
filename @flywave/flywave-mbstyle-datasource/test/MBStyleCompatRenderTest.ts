@@ -607,6 +607,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shmodelraw=0")) {
         (globalThis as any).__mbModelRawShadow = false;
     }
+    // §885 终三〇〇: partdbg=1 → flat per-part palette paint (part
+    // attribution probe for mismatch pixels).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "partdbg=1")) {
+        (globalThis as any).__mbPartDbg = true;
+    }
     // §885 终二六九: shbfix=1 → bias·proj·view left-multiply remap.
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shbfix=1")) {
         (globalThis as any).__mbShadowBiasFix = true;

@@ -133,6 +133,7 @@ function main() {
             ...(process.env.MBSTYLE_SHPCF ? [`shpcf=${process.env.MBSTYLE_SHPCF}`] : []),
             ...(process.env.MBSTYLE_SHRAWAZ ? [`shrawaz=${process.env.MBSTYLE_SHRAWAZ}`] : []),
             ...(process.env.MBSTYLE_SHMODELRAW ? [`shmodelraw=${process.env.MBSTYLE_SHMODELRAW}`] : []),
+            ...(process.env.MBSTYLE_PARTDBG ? ["partdbg=1"] : []),
             ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),
             ...(process.env.MBSTYLE_SHOFF ? [`shoff=${process.env.MBSTYLE_SHOFF}`] : []),
             ...(process.env.MBSTYLE_FOGMUL ? [`fogmul=${process.env.MBSTYLE_FOGMUL}`] : []),
