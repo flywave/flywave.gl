@@ -3377,3 +3377,45 @@ sno 未复测 ground，+18.3k 实际自该时点已存在且未被察觉（后�
 敏感性值得单独定性（近天顶光源 × 方位旋转的极角钳制交互）；③家族 DirProp 系夹具
 （munich 311.9 族/buildings-trees 120/160 族/front-cutoff 320/30 族等 ~60 夹具）在 0°
 默认下的批量响应待复验（本轮测点均中性或改善，未见风险信号）；④shpcf/shnoff 旋钮族保留。
+
+### §885 终二九九：DirProp 系 56 件家族双臂复验——raw 0° 默认维持（净 ≈−12.2k），buckingham-lod +54.7k 真回归记档；sno 残余定性=漏影 86% 方位不敏感（2026-09-14）
+
+**① 家族双臂 A/B**（raw 0° 默认臂 famRaw0 vs shmodelraw=0 镜像臂 famMirror，同日同环境配对）：
+56 件 DirProp+cast-shadows 夹具（model-layer 全量 + wireframe/instanced-rendering）。首轮
+batch=2 会话被单件 DISCONNECTED 拖垮全会话（一件崩溃连坐同会话伙伴），batch=1 重试后
+**34 件配对、22 件无数据**——无数据件=buildings-trees ×6 + front-cutoff ×8 + trees ×3 等，
+全部 DISCONNECTED 且**所有历史结果目录均无产出记录**（终一九三 在案环境级崩溃族的同类，
+非本轮回归；两臂对称崩溃）。
+
+**② 配对结果（delta=raw0−mirror，px）**：
+- 改善 9：multiple-extrusions-lod **−54,399**、hidden-extrusions-lod **−40,594**、
+  buckingham-main **−11,230**、scale-munich-museum −5,680、z-offset-v2-lod −2,972、
+  sno-lod −1,493、sno-main −1,193、collision-munich-museum −1,530、station-lod −1,095、
+  MAPS3D-1159(-lod) −172/−157。
+- 回归 4+1：**buckingham-lod +54,710（真回归，A 档两次采样 157,622/182,954 均远高于
+  mirror 102,912；构成=D双暗 132k 过度阴影，误差主体从 mirror 态 C双亮 48.8k 翻转为
+  raw 态 D双暗）**、model-shadow +10,454（两臂皆 D双暗主导的暗色调域，raw 轻度加深）、
+  multiple-extrusions-main +1,862、scale-munich-lod +1,220。
+- 中性 19：museum/museum-lod/griffith×2/port/station/hidden-extrusions-main/shadows-
+  cutoff-range/tile-cover×4/instanced-rendering 等 ±0～±110（含多个位级 0）。
+- **家族净 ≈ −12,234（改善）**——raw 0° 默认维持。
+
+**③ z-offset-v2 双稳离群修正（方法论级发现）**：famRaw0 批 z-offset-v2 测得 290,213
+（+54,427 疑似回归），但同配置多点采样 234,708/235,227×2/235,786 共 4 次全部 ≈235k
+（=mirror 235,786 parity）——**shadow 状态跨运行非确定**（终二八二B 在案）的 upper
+attractor 翻转（−12° 档单次 290,747 同吸引子；batch=2 会话高发、batch=1 全中低位）。
+该"回归"改判中性。**教训：影子系夹具的跨批 A/B 必须同批配对 + 多点采样**，单批单样本
+的 ±55k 级波动是双稳伪象非改动效应。
+
+**④ sno 残余定性（raw 0° 档，双图双维分类）**：强误差（通道和>90）62,022 px 中
+**A 漏影 53,395（86%）**（expected 影/我 lit，集中于下半幅行 320-512——塔身投影地面/
+近景面未接收）+ B 多影 5,873 + C 双亮色调差 1,295（我方均匀偏暗 ~30/通道，光照域）+
+D 双暗 1,459；软边带（和 20-90] ≈78k。**关键负发现：−12° 方位旋转对漏影零回收**
+（53,886 ≈ 53,395），仅多影 −1.4k——漏影主体对方位角不敏感，属投影几何/深度比较域
+（mgl createLightMatrix 源码级移植立项维持），shrawaz 旋钮只作用多影域。跨批基线漂移
+同前轮记档：sno 镜像态本批 62,085/62,329 vs 文档 65,054/65,069。
+
+**⑤ 下轮入口**：①buckingham-lod 过度阴影（D双暗 132k）——mgl 对该构型的影强调制/
+接收端语义差异，按 part 分组统计错位像素归属（终二九三B 的窗排条带路径）；②model-shadow
+暗色调域；③漏影 53.4k 的投影几何攻坚（shadow map 覆盖 vs 深度比较二分——profile 探针读
+mapDepth<fragZ 占比可判）；④软边 78k 的 mgl 软影质感对拍。
