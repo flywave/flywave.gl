@@ -3644,3 +3644,38 @@ casters 注册 165→270 印证 settle 竞态进入 shadow map 内容——影�
 
 **⑤ 下轮入口**：①createLightMatrix 源码级移植（影图错位 ±44 双向对称的主攻，
 museum +79k 为量化靶）；②软边 78k 的 mgl-shot2 对拍；③tile 抽奖 settle 立项维持。
+
+### §885 终三〇七：createLightMatrix 源码级提取完成（Ar/ao 全文解码）——首次 texel-snap 移植判负回退，公式资产入档（2026-09-14）
+
+**① 提取成果（mgl dist 167cfc73 时代产物，`computeCascadeTileMatrices`/`Ar`/`ao` 全文解码）**：
+- **ao = shadowDirectionFromProperties**：direction 属性 {x,y,z}（内插笛卡尔单位向量）
+  → c5 恢复 [模长, 方位角°(atan2(−y,−x)+90), 极角°(acos(z/n))] → **极角 clamp [0,75]°**
+  → c8 重建笛卡尔并归一。即 mgl 光轴=极角钳制 75° 的笛卡尔方向（与本轮 SHDIRALT raw
+  分支同构，含 75° 钳制）。
+- **Ar = createLightMatrix(t, dir, near, far, resolution, elevation)**：①k=√(1+aspect²)·
+  tan(fovX/2)，最小视锥球公式（centerDepth m / 半径 g——与我方现有实现同式）；②球心=
+  getCameraToWorldMercator·(0,0,−m/worldSize)（mercator [0,1] 空间）；③**光相机=
+  FreeCamera{position=球心, setPitchBearing(polar, −bearing)}**，bearing=atan2(−dx,−dy)、
+  pitch=acos(dz)——罗盘式相机（非 lookAt(center∓dir)）；④**正交投影 near=
+  min(−2·mercatorZfromZoom(17)·worldSize, −2R)（负 near，相机身后大余量）**，
+  far=(R+elevation·pixelsPerMeter)/dir.z，左右上下=±R（R=半径·worldSize 像素）；
+  ⑤edge insets 非平凡时按视锥角点扩 R；⑥R·=resolution/(resolution−1)；
+  ⑦**texel snapping**：M=L·P_center（P=球心 floor 1e6 量化×worldSize），M+=res/2，
+  F=floor(M)，z=M−F−1/(res/2)，L'=translate(z)·L；⑧cascade：near/far 分档
+  c0=(height/50, 1.5·ctcd)、c1=(1.5·ctcd, 3·ctcd)，cascadeCount=2，
+  **shadowMapResolution=2048**（我方 1024），u_shadow_bias=[6e-5,.0012,.012]
+  （normalOffset=3 时）/ [36e-5,.0012,.012]，u_shadow_normal_offset=[1,e,e]→按瓦片
+  [1, s·c(zoom), l·c(zoom)] 缩放，u_fade_range=[.75·far_last, far_last]（均与我方一致）。
+- 附加语义：drawModels 中 `model-receive-shadows:false` 会**整体关闭 shadow renderer**
+  （h.enabled=false——与 终三〇四 的 intensity 门控并列为阴影禁用第二通道）。
+
+**② 首次移植尝试（texel snap）判负回退**：按⑦实现 shtexsnap 旋钮（镜像 c0+raw R0
+双矩阵 snap），museum 198,237→**180,051（−18k 改善）**但 **sno 60,892→113,166
+（+52k 灾难）**、museum-lod +5.6k——压缩码 e.av/e.aW 的标量/矢量语义与 e.aG translate
+在 clip 空间的作用点无法从产物确证，移植语义出错。**已回退**（sno 复实测 60,892
+位级恢复 ✓）。
+
+**③ 资产与下轮**：①本轮公式提取全文存 /tmp/Ar_body.txt、/tmp/Ar_callsite.txt（临时），
+建议下轮先落 `Ar_ref.ts` 参考实现（含 c5/c6/c8/Ii.setPitchBearing/getWorldToCamera/
+getCameraToClipOrthographic 的逐一定价）后再动引擎；②texel snap 与 2048 分辨率、
+罗盘式光相机为三大候选改进（museum −18k 的信号值得追）；③sno 锚点 60,892 维持。
