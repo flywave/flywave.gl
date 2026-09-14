@@ -3704,3 +3704,25 @@ getCameraToClipOrthographic 的逐一定价）后再动引擎；②texel snap �
 全部 texel 旋钮÷2，待专项）；罗盘式光相机（需 Ii 相机移植，最大项，待专项）。
 **④ 下轮入口**：①罗盘式光相机移植（pitch=polar/bearing=atan2(−dx,−dy)——影图错位
 ±44 双向对称的直接候选，museum +79k 靶）；②2048 分辨率专项；③剩余 ~80 件重基线。
+
+### §885 终三〇九：罗盘 roll A/B 中性（museum −2k/sno −87）——roll 惯例候选证伪；2048 分辨率评估留档（2026-09-14）
+
+**① shcompass=1（罗盘 roll，mgl Ti(pitch,−bearing) 定价为最短弧四元数）A/B**：
+- museum 198,237→**196,226（−2,011）**、sno 60,892→60,805（−87）、museum-lod 首测
+  182,903——**全部在跑间方差边缘**，roll 惯例候选证伪：museum ±44 双向错位不是
+  lookAt-up 投影 vs mgl 北上 roll 的差异所致。
+- 旋钮保留（shcompass=1 / MBSTYLE_SHCOMPASS，默认关）。
+
+**② museum ±44 双向错位的剩余解释（收窄）**：roll 排除后，错位只能来自
+createLightMatrix 的**帧与覆盖语义**——mercator [0,1] 空间（含 elevation 项、
+edge insets、mercatorZfromZoom(17) 负 near）与我方 RTE 米帧的本质差异。即
+**Ar_ref 全帧移植为唯一路径**（多轮专项：c5/c6/c8/Ii 相机定价已完成一半，
+剩 mercator↔RTE 帧映射推导）。
+
+**③ 2048 分辨率专项评估（未执行，留档）**：改动面=深度画布/DataTexture/readPixels
+尺寸（`size` 常量已参数化）+ 模型尾部 PCF texel 分母（/1024→/res）+ 地面 quad
+uMBShadowTexel + getShadowUniforms texel1——约 6 处；验收=museum/sno 影缘量化带
+变化。与 texel snap 组合效果优先（mgl 即 2048+snap 组合）。
+
+**④ 下轮入口**：①Ar_ref 全帧移植专项（帧映射推导→museum +79k 靶）；②2048 分辨率
++texel snap 组合 A/B（③的 6 处改动清单已列）；③剩余 ~80 件受影响夹具分批重基线。

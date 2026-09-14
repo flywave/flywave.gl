@@ -137,6 +137,7 @@ function main() {
             ...(process.env.MBSTYLE_SETTLE ? [`settle=${process.env.MBSTYLE_SETTLE}`] : []),
             ...(process.env.MBSTYLE_SHDUMPSERIES ? ["shdumpseries=1"] : []),
             ...(process.env.MBSTYLE_SHTEXSNAP ? ["shtexsnap=1"] : []),
+            ...(process.env.MBSTYLE_SHCOMPASS ? ["shcompass=1"] : []),
             ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),
             ...(process.env.MBSTYLE_SHOFF ? [`shoff=${process.env.MBSTYLE_SHOFF}`] : []),
             ...(process.env.MBSTYLE_FOGMUL ? [`fogmul=${process.env.MBSTYLE_FOGMUL}`] : []),

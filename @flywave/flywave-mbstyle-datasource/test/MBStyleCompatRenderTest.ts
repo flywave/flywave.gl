@@ -697,6 +697,11 @@ async function renderUntilSettled(
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shtexsnap=1")) {
         (globalThis as any).__mbShTexelSnap = true;
     }
+    // §885 终三〄九: shcompass=1 → mgl compass roll for the raw cascade-0
+    // light camera (shortest-arc quaternion; roll-convention candidate).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shcompass=1")) {
+        (globalThis as any).__mbShCompass = true;
+    }
     // §885 终三〇四: shdumpseries=1 → the shadow renderer POSTs its depth
     // canvas + casters/frame counts every 5 frames (≤30) — the attractor↔
     // caster-registration time series for the multi-stability root cause.

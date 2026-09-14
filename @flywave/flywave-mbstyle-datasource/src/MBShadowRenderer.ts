@@ -1434,7 +1434,19 @@ export class MBShadowRenderer {
                 depthMatR.uniforms.uMBLightDir.value.copy(lightDir).normalize();
             }
             this.m_shadowCamera.up.set(0, 0, 1);
-            if ((globalThis as any).__mbShadowBiasFix !== 1) {
+            if ((globalThis as any).__mbShCompass) {
+                // §885 终三〇九: shcompass=1 → mgl compass roll (Ti(pitch,
+                // −bearing) priced as the shortest-arc quaternion from the
+                // camera's −z to the light travel direction) instead of the
+                // up-projected lookAt roll — the roll-convention candidate
+                // for the museum 影图错位.
+                const fwd = rawDir.clone().negate().normalize();
+                const q = new THREE.Quaternion().setFromUnitVectors(
+                    new THREE.Vector3(0, 0, -1), fwd);
+                this.m_shadowCamera.quaternion.copy(q);
+                this.m_shadowCamera.lookAt(
+                    sphereCenter.x + fwd.x, sphereCenter.y + fwd.y, sphereCenter.z + fwd.z);
+            } else if ((globalThis as any).__mbShadowBiasFix !== 1) {
                 this.m_shadowCamera.lookAt(sphereCenter.clone().sub(lightDir));
             } else {
                 this.m_shadowCamera.lookAt(sphereCenter.clone().add(lightDir));
