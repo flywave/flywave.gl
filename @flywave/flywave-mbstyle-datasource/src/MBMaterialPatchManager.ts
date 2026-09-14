@@ -3,7 +3,7 @@ import { EarthConstants } from '@flywave/flywave-geoutils';
 import { MBStyleDataSource } from './MBStyleDataSource';
 import { createGuardrailMesh } from './ElevatedStructures';
 import { additiveRibbons } from './MBAdditiveLineRenderer';
-import { shadowCasters } from './MBShadowRenderer';
+import { shadowCasters, mbShadowRes } from './MBShadowRenderer';
 
 interface MaterialPatchState {
     patched: boolean;
@@ -3292,7 +3292,7 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBShadowMatrix = { value: shSeed ? shSeed.matrix.clone() : new THREE.Matrix4() };
             // §885 终一百一十九: cascade-1 far-field uniforms.
             shader.uniforms.uMBShadowMap1 = { value: shSeed?.map1 ?? null };
-            shader.uniforms.uMBShadowTexel1 = { value: (2.0 * (shSeed ? 470 : 470)) / 1024.0 };
+            shader.uniforms.uMBShadowTexel1 = { value: (2.0 * (shSeed ? 470 : 470)) / mbShadowRes() };
             shader.uniforms.uMBShadowMatrix1 = { value: shSeed ? (shSeed.matrix1 ? shSeed.matrix1.clone() : new THREE.Matrix4()) : new THREE.Matrix4() };
             // §885 终一百四十六: seed the ray-cast unproject matrix (the
             // refresh copies the live matrix every frame; identity until the

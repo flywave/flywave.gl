@@ -25,7 +25,7 @@
 import * as THREE from 'three';
 import { Tile } from '@flywave/flywave-mapview';
 import { EarthConstants } from '@flywave/flywave-geoutils';
-import { shadowCasters } from './MBShadowRenderer';
+import { shadowCasters, mbShadowRes } from './MBShadowRenderer';
 
 interface ModelPlacement {
     x: number;
@@ -1069,7 +1069,7 @@ export function applyMglModelLighting(
                                          // §885 终二九三+: raw cascade-0 5-tap
                                          // PCF (model-specific axis, same texel
                                          // knob as the mirror cascade-0).
-                                         float mbTR = ${(globalThis as any).__mbPcfTexel ?? 24}.0 / 1024.0;
+                                         float mbTR = ${(globalThis as any).__mbPcfTexel ?? 24}.0 / ${mbShadowRes()}.0;
                                          vec4 mbPkR = texture2D(uMBShMapR, mbShUvR.xy);
                                          float mbDsumR = mbPkR.r
                                              + texture2D(uMBShMapR, mbShUvR.xy + vec2(mbTR, 0.0)).r
@@ -1081,7 +1081,7 @@ export function applyMglModelLighting(
                                      } else if (mbIn0 > 0.5) {
                                          // §885 终二九四: cascade-0 5-tap PCF —
                                          // soften quantized band edges.
-                                         float mbT0 = ${(globalThis as any).__mbPcfTexel ?? 24}.0 / 1024.0;
+                                         float mbT0 = ${(globalThis as any).__mbPcfTexel ?? 24}.0 / ${mbShadowRes()}.0;
                                          vec4 mbPkC = texture2D(uMBShMap, mbShUv.xy);
                                          float mbDsum = mbPkC.r
                                              + texture2D(uMBShMap, mbShUv.xy + vec2(mbT0, 0.0)).r
@@ -1095,7 +1095,7 @@ export function applyMglModelLighting(
                                          // (4× coarser texels — mirror the
                                          // extrusion 终一二三 calibration).
                                          mbShPk = texture2D(uMBShMap1, mbShUv1.xy);
-                                         float mbT1 = 1.0 / 1024.0;
+                                         float mbT1 = 1.0 / ${mbShadowRes()}.0;
                                          float mbDsum = mbShPk.r
                                              + texture2D(uMBShMap1, mbShUv1.xy + vec2(mbT1, 0.0)).r
                                              + texture2D(uMBShMap1, mbShUv1.xy + vec2(-mbT1, 0.0)).r
@@ -1272,7 +1272,7 @@ export function applyMglModelLighting(
                                          // §885 终二九三+: raw cascade-0 5-tap
                                          // PCF (model-specific axis, same texel
                                          // knob as the mirror cascade-0).
-                                         float mbTR = ${(globalThis as any).__mbPcfTexel ?? 24}.0 / 1024.0;
+                                         float mbTR = ${(globalThis as any).__mbPcfTexel ?? 24}.0 / ${mbShadowRes()}.0;
                                          vec4 mbPkR = texture2D(uMBShMapR, mbShUvR.xy);
                                          float mbDsumR = mbPkR.r
                                              + texture2D(uMBShMapR, mbShUvR.xy + vec2(mbTR, 0.0)).r
@@ -1284,7 +1284,7 @@ export function applyMglModelLighting(
                                      } else if (mbIn0 > 0.5) {
                                          // §885 终二九四: cascade-0 5-tap PCF —
                                          // soften quantized band edges.
-                                         float mbT0 = ${(globalThis as any).__mbPcfTexel ?? 24}.0 / 1024.0;
+                                         float mbT0 = ${(globalThis as any).__mbPcfTexel ?? 24}.0 / ${mbShadowRes()}.0;
                                          vec4 mbPkC = texture2D(uMBShMap, mbShUv.xy);
                                          float mbDsum = mbPkC.r
                                              + texture2D(uMBShMap, mbShUv.xy + vec2(mbT0, 0.0)).r
@@ -1298,7 +1298,7 @@ export function applyMglModelLighting(
                                          // (4× coarser texels — mirror the
                                          // extrusion 终一二三 calibration).
                                          mbShPk = texture2D(uMBShMap1, mbShUv1.xy);
-                                         float mbT1 = 1.0 / 1024.0;
+                                         float mbT1 = 1.0 / ${mbShadowRes()}.0;
                                          float mbDsum = mbShPk.r
                                              + texture2D(uMBShMap1, mbShUv1.xy + vec2(mbT1, 0.0)).r
                                              + texture2D(uMBShMap1, mbShUv1.xy + vec2(-mbT1, 0.0)).r

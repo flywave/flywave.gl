@@ -23,6 +23,18 @@ import * as THREE from 'three';
 
 export const shadowCasters = new Set<THREE.Object3D>();
 
+/**
+ * §885 终三一二: shadow-map resolution knob (shres=<n> via test/runner
+ * MBSTYLE_SHRES; default 1024 = the calibrated delivery state). mgl runs
+ * 2048; the A/B pairs 2048 with the texel-snap knob (mgl is a 2048+snap
+ * combo). All consumers (renderer canvas/RT/readPixels, ground-quad and
+ * model-tail PCF texel denominators, snap half-resolution) read THIS at
+ * use/compile time, so a single global flip re-scales the whole pipeline.
+ */
+export function mbShadowRes(): number {
+    return (globalThis as any).__mbShadowRes ?? 1024;
+}
+
 export interface ShadowUniformState {
     map: THREE.Texture;
     matrix: THREE.Matrix4;
@@ -196,7 +208,7 @@ export class MBShadowRenderer {
             matrix1: this.m_matrix1,
             mapR: this.m_shTexR0 ?? undefined,
             matrixR: this.m_matrixR0,
-            texel1: (8 * this.m_shadRadius) / 1024,
+            texel1: (8 * this.m_shadRadius) / mbShadowRes(),
             intensity: this.m_intensity,
             corners: this.m_corners,
             eye: this.m_eye,
@@ -254,7 +266,7 @@ export class MBShadowRenderer {
             shader.uniforms.uMBShadowDbg = { value: (globalThis as any).__mbShadowDbg ? ((globalThis as any).__mbQuadDbg ? 2 : 1) : 0 };
             // §885 终二百一十九: PCF texel size + cascade-1 view-depth fade
             // range ([0.75·far1, far1], mgl shadow_renderer.ts:362-363).
-            shader.uniforms.uMBShadowTexel = { value: 1 / 1024 };
+            shader.uniforms.uMBShadowTexel = { value: 1 / mbShadowRes() };
             shader.uniforms.uMBFadeRange = { value: new THREE.Vector2(
                 (this.m_shadowCamera.far) * 0.75, (this.m_shadowCamera.far)) };
             shader.uniforms.uMBInvProj = { value: new THREE.Matrix4() };
@@ -639,7 +651,7 @@ export class MBShadowRenderer {
         // exclusion matrix; resetState negative). A second renderer keeps the
         // main context untouched; its canvas flows back as a CanvasTexture
         // (4 MB upload per frame, test-environment acceptable).
-        const size = 1024;
+        const size = mbShadowRes();
         if (!this.m_shRenderer || !this.m_shTex) {
             const canvas = document.createElement('canvas');
             canvas.width = size;
@@ -826,8 +838,9 @@ export class MBShadowRenderer {
                 (frFar + frNear) * (frFar + frNear) * k2 * k2);
         }
         // roundingMarginFactor (resolution / (resolution − 1)) — sub-texel
-        // padding against edge clipping; shadow map is 1024 here.
-        radius *= 1024 / 1023;
+        // roundingMarginFactor (resolution / (resolution − 1)) — sub-texel
+        // padding against edge clipping; shadow map resolution per shres knob.
+        radius *= size / (size - 1);
         // §885 终九十五: frustum-sphere fit under-covers the caster extents —
         // on a square viewport (aspect 1) k shrinks and casters clip at the
         // ortho edge (truncated ground shadows). A/B gate: shrad=<f>.
@@ -959,10 +972,10 @@ export class MBShadowRenderer {
         try {
             if (mainRenderer) {
                 if (!this.m_hwRT) {
-                    const dt = new THREE.DepthTexture(1024, 1024);
+                    const dt = new THREE.DepthTexture(size, size);
                     dt.type = THREE.UnsignedIntType;
                     dt.format = THREE.DepthFormat;
-                    this.m_hwRT = new THREE.WebGLRenderTarget(1024, 1024, {
+                    this.m_hwRT = new THREE.WebGLRenderTarget(size, size, {
                         depthTexture: dt, depthBuffer: true, stencilBuffer: false,
                         minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
                         generateMipmaps: false,
@@ -1290,7 +1303,7 @@ export class MBShadowRenderer {
             // z_clip = −fract(Mtexel)·(2/res); L' = translate(z_clip)·L.
             // Aligns the light-space center to texel boundaries (no shimmer).
             if ((globalThis as any).__mbShTexelSnap) {
-                const O = 512;
+                const O = mbShadowRes() / 2;
                 const Mc = new THREE.Vector4(sphereCenter.x, sphereCenter.y, sphereCenter.z, 1)
                     .applyMatrix4(this.m_matrix);
                 const zx = -(Mc.x * O - Math.floor(Mc.x * O)) / O;
@@ -1456,7 +1469,7 @@ export class MBShadowRenderer {
                 // §885 终三〇八: texel snap for the RAW cascade-0 (the model
                 // tail's primary map) — same formula, own matrix.
                 if ((globalThis as any).__mbShTexelSnap) {
-                    const OR = 512;
+                    const OR = mbShadowRes() / 2;
                     const McR = new THREE.Vector4(sphereCenter.x, sphereCenter.y, sphereCenter.z, 1)
                         .applyMatrix4(this.m_matrixR0);
                     const zRx = -(McR.x * OR - Math.floor(McR.x * OR)) / OR;
@@ -1537,15 +1550,15 @@ export class MBShadowRenderer {
         }
         {
             const gl1: any = this.m_shRenderer.getContext();
-            const px1 = 1024 * 1024 * 4;
+            const px1 = size * size * 4;
             if (!this.m_depthPixels1 || this.m_depthPixels1.length !== px1) {
                 this.m_depthPixels1 = new Uint8Array(px1);
             }
             try {
-                gl1.readPixels(0, 0, 1024, 1024, gl1.RGBA, gl1.UNSIGNED_BYTE, this.m_depthPixels1);
+                gl1.readPixels(0, 0, size, size, gl1.RGBA, gl1.UNSIGNED_BYTE, this.m_depthPixels1);
             } catch (e) { /* probe only */ }
             if (!this.m_shTex1 || !(this.m_shTex1 as any).isDataTexture) {
-                this.m_shTex1 = new THREE.DataTexture(this.m_depthPixels1, 1024, 1024, THREE.RGBAFormat);
+                this.m_shTex1 = new THREE.DataTexture(this.m_depthPixels1, size, size, THREE.RGBAFormat);
                 this.m_shTex1.magFilter = THREE.NearestFilter;
                 this.m_shTex1.minFilter = THREE.NearestFilter;
                 this.m_shTex1.generateMipmaps = false;

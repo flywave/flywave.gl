@@ -3770,3 +3770,33 @@ door-light-munich-museum 198,237→198,973（±2.3k 方差内）、sno 60,892→
 2048+snap 组合——错位候选仅剩覆盖语义/near/elevation-far/ insets 与光方向本身）；
 ②Ar_ref 桥接按②真语义重写（_transform 直接可从引擎相机位姿构造，成本已大降）；
 ③museum-lod/受影响家族本机重基线分批。
+
+### §885 终三一二：shres 全管线分辨率旋钮 + 2048+texel snap 组合——museum −12.2k（首个超方差真实改善），锚点全中性，默认关落地（2026-09-15）
+
+**① shres=<n> 旋钮（交付保留，默认 1024 位级不变）**：mbShadowRes() 单点读
+`__mbShadowRes`，全管线消费——深度画布/独立 RT/readPixels/DataTexture（镜像+
+cascade-1）、roundingMargin res/(res−1)、地面 quad uMBShadowTexel、texel1、texel
+snap 半分辨率（O=512→res/2，镜像+raw）、模型尾部 5-tap PCF texel 分母
+（MBModelRenderer 6 处）、fill 接收器 uMBShadowTexel1（MBMaterialPatchManager）。
+默认 1024 时全部表达式数值恒等（1/1024、1024/1023、512 等逐点核对）。
+
+**② 2048+snap 组合 A/B（shres=2048 shtexsnap=1，mgl 即 2048+snap 组合）**：
+- **door-light-munich-museum 198,237→186,069（−12,168）**——影图错位主靶上首个
+  超出 ±2.3k 跑间方差的真实改善（对比：shtexsnap 单独中性、2048 未单测、κ 中性）。
+- **sno 60,892→60,552（−340）**——终三〇八的 snap +52k 灾难未复现（修正 snap 语义
+  = clip×res/2 → fract → −fract×2/res），锚点安全。
+- castro-theater-quantization 184,294 **位级不变**、castro-lighting 11,779（+3）、
+  z-offset-v2 261,119（+35 方差内）。
+- 未测：museum-lod/collision/z-offset-v2-station 等（下轮补）。
+- 基建坑：chunked runner 只透传 MBSTYLE_EXTRA_ARGS（MBSTYLE_SHRES/SHTEXSNAP/
+  TESTTIMEOUT 均被吞）——sno2 批以 EXTRA_ARGS="shres=2048 shtexsnap=1
+  testtimeout=900000" 重跑生效（sno1 批数据实为默认态，反证默认位级一致性）。
+
+**③ 判定**：2048+snap 组合为影图错位候选中首个正信号；机制=影缘量化带位移
+（2048 texel 减半 + snap 对齐 mgl 影缘采样网格）。迁移决策留待：①补 museum-lod/
+collision/z-offset-v2-station 家族面；②2048 单独（无 snap）隔离归因；③全家族
+重基线成本评估（2048 下单 fixture ~13-15 min，全量 ~百件不现实——考虑按家族抽靶）。
+
+**④ 下轮入口**：①2048 单独 vs 2048+snap 归因（museum 一靶即可）；②museum-lod/
+collision 家族面补测；③Ar_ref 桥接按 _transform 真语义重写（终三一一②）；④若
+家族面干净→迁移决策（默认 2048+snap 或按投影/夹具面开）。

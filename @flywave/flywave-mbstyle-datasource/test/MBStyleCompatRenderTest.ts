@@ -721,6 +721,14 @@ async function renderUntilSettled(
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shmcenter=1")) {
         (globalThis as any).__mbShMercCenter = true;
     }
+    // §885 终三一二: shres=<n> → shadow-map resolution (default 1024; mgl
+    // runs 2048 — pair with shtexsnap=1 for the mgl 2048+snap combo). All
+    // pipeline texel denominators scale from mbShadowRes() at compile time.
+    {
+        const shr = Number((window as any).__karma__?.config?.args?.find?.(
+            (a: string) => a.startsWith("shres="))?.slice("shres=".length));
+        if (shr > 0) (globalThis as any).__mbShadowRes = shr;
+    }
     let lastCount = -1;
     let stable = 0;
     for (let i = 0; i < maxFrames && stable < settleNeed; i++) {

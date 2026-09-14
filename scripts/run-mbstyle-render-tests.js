@@ -141,6 +141,7 @@ function main() {
             ...(process.env.MBSTYLE_SHFRMPROBE ? ["shfrmprobe=1"] : []),
             ...(process.env.MBSTYLE_SHMERCENTER ? ["shmcenter=1"] : []),
             ...(process.env.MBSTYLE_TESTTIMEOUT ? [`testtimeout=${process.env.MBSTYLE_TESTTIMEOUT}`] : []),
+            ...(process.env.MBSTYLE_SHRES ? [`shres=${process.env.MBSTYLE_SHRES}`] : []),
             ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),
             ...(process.env.MBSTYLE_SHOFF ? [`shoff=${process.env.MBSTYLE_SHOFF}`] : []),
             ...(process.env.MBSTYLE_FOGMUL ? [`fogmul=${process.env.MBSTYLE_FOGMUL}`] : []),
