@@ -3588,3 +3588,33 @@ mgl-shot2 软影质感对拍。
 夹具全量重测——expected 含阴影，方向预期改善）；②mgl shadow-intensity=1 下重跑
 sno 家族锚点+守卫（本批已验 sno 不变）；③sno 漏影 62% 无遮挡体（createLightMatrix
 源码级移植）与软边 78k（mgl-shot2 对拍）主攻维持。
+
+### §885 终三〇五：阴影激活后家族重基线（43 件）——museum 族 +79k 显性化为影子几何新靶；锚点/守卫五连位级 +0（2026-09-14）
+
+**① 锚点+守卫复验（siFamGuard 批）**：sno **60,892 位级不变 ✓**、castro 184,292、
+high-zoom 4,930、q-s 2,434、castro-lighting 11,776——**五连全部 +0 位级**（无
+cast-shadows 夹具结构性不可达，与预判一致）。
+
+**② 家族重基线（siFam 批 43 件终账，首个阴影语义测量）**——filter 前缀匹配连带 terrain/lines-elevated 族 14 件（97,922-129,121 区间首测）与 sd-hd-tunnel 13,529;：
+- 恶化（影子几何未校准的可测显性化）：**munich-museum 119,292→198,237（+78,945，
+  最大新靶）**、scale-munich-lod 252,346→271,633（+19,287）——无阴影基线只含
+  exp影/我lit 单向误差，激活后错误位置影产生双向误差，属激活初期预期形态。
+- 改善：buckingham-lod 167,520→157,313（−10,207）、collision-lod 45,374→43,871
+  （−1,503）、buckingham-main 178,885（首个阴影测量）。
+- 位级不变：trees-zoom-based-scale 184,429、trees-shadows-terrain-high-altitude
+  427,033（阴影对画面无可测贡献——影斑离屏或覆盖为零）。
+- 首测新基线：building 族（facades 119,174/with-shadows 14,742/facades-no-shadow
+  120,857/wireframe 120,128）、3d-intersections（roads-depth 1,209/junction 17,200）、
+  lighting-3d-mode/shadow 族（fill-extrusion 44,100/terrain 112,462/aabb 94,007/
+  translucent 94,976/vertical-scale 63,644/draw-layer-slot 85,776）、elevated-line
+  （join-none/overlap）、hd-sd（elevated-hd-sd 28,689×2）、sd-hd（28,689/66,950）、
+  color-theme trees-monochrome 28,467、appearance/brightness 588、mbx-shadows
+  161,881/194,550、terrain/lines-elevated。
+
+**③ 判定**：`?? 1` 修复语义正确（mgl spec 默认），激活初期净账混合是**影子几何
+校准债的显性化**——museum 族 +79k 正是 createLightMatrix 源码级移植主攻的新量化
+靶标；122 件受影响夹具的全量重基线待续（本轮代表性 27 件）。
+
+**④ 下轮入口**：①munich-museum +79k 影子几何攻坚（createLightMatrix 源码级移植
+的首个量化靶）；②软边 78k 的 mgl-shot2 软影质感对拍；③剩余 ~95 件受影响夹具
+分批重基线；④buckingham/munich tile 抽奖（引擎 settle 语义）独立立项维持。
