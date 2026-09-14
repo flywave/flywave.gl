@@ -843,6 +843,43 @@ export class MBShadowRenderer {
         const sphereCenter = new THREE.Vector3(0, 0, -1)
             .applyQuaternion(rcam.getWorldQuaternion(new THREE.Quaternion()))
             .multiplyScalar(centerDepth);
+        // §885 终三一一: shmcenter=1 → mgl mercator-frame sphere-center
+        // placement. The engine scene frame is EQUIRECTANGULAR (horizontal
+        // unit = cos(lat)·vertical meter — probe-measured: 1000 scene units
+        // E→W = 668.8 ground m at Munich) while mgl's mercator frame is
+        // CONFORMAL; the isotropic forward·depth center therefore misplaces
+        // the whole light frustum by κ = mercZ-per-meter / mercX-per-unit
+        // ≈ 1/cos(lat) ≈ 1.499 (museum ±44/±45 symmetric misalignment
+        // signature). mgl: center = camPos + R_main·(0,0,−m/worldSize) in
+        // mercator (getCameraToWorldMercator = [R|pos]); mapped back through
+        // the frame affine the scene offset ∝ (f.x, f.y, κ·f.z).
+        if ((globalThis as any).__mbShMercCenter) {
+            try {
+                const prC: any = (this.m_mapView as any).projection;
+                const gcC: any = (this.m_mapView as any).geoCenter;
+                if (prC && gcC) {
+                    const mercX = (lng: number) => lng / 360 + 0.5;
+                    const eC = prC.projectPoint(gcC, { x: 0, y: 0, z: 0 });
+                    const gC: any = prC.unprojectPoint({
+                        x: (eC as any).x + 1000, y: (eC as any).y, z: (eC as any).z,
+                    });
+                    const fxC = Math.abs(mercX(gC.longitude) - mercX(gcC.longitude)) / 1000;
+                    const fzC = 1 / (40075016.686 * Math.cos(gcC.latitude * Math.PI / 180));
+                    const kappa = fzC / fxC;
+                    const fwd = new THREE.Vector3(0, 0, -1)
+                        .applyQuaternion(rcam.getWorldQuaternion(new THREE.Quaternion()));
+                    const den = Math.sqrt(fwd.x * fwd.x + fwd.y * fwd.y + kappa * kappa * fwd.z * fwd.z);
+                    sphereCenter.set(
+                        centerDepth * fwd.x / den,
+                        centerDepth * fwd.y / den,
+                        centerDepth * kappa * fwd.z / den,
+                    );
+                    (this as any).__mbShKappa = +kappa.toFixed(4);
+                }
+            } catch (e) {
+                (globalThis as any).__mbShMercCenterErr = String(e);
+            }
+        }
         this.m_shadowCamera.left = -radius;
         this.m_shadowCamera.right = radius;
         this.m_shadowCamera.top = radius;
@@ -1551,6 +1588,77 @@ export class MBShadowRenderer {
             } catch (e) {
                 // eslint-disable-next-line no-console
                 console.log('[MBShadowMat] probe error ' + String(e));
+            }
+        }
+
+        // §885 终三一一: mercator↔RTE frame probe (ArRef.ts wiring prerequisite).
+        // Dumps the live camera/transform state plus scene-axis → mercator
+        // point samples so the bridge callbacks (getCameraToWorldMercator /
+        // getWorldToCamera / mercatorZfromAltitude) can be derived from real
+        // numbers instead of guessed frame conventions.
+        {
+            const fpN = ((this as any).__mbFrameProbeN = ((this as any).__mbFrameProbeN ?? 0) + 1);
+            if ((globalThis as any).__mbShFrameProbe && (fpN === 1 || fpN === 60)) {
+                try {
+                    const mv: any = this.m_mapView;
+                    const pr = mv?.projection;
+                    const gc = mv?.geoCenter;
+                    const rc = mv?.getRteCamera?.() ?? mv?.camera;
+                    rc?.updateMatrixWorld?.();
+                    const mglMerc = (latDeg: number, lngDeg: number, alt: number) => ({
+                        x: lngDeg / 360 + 0.5,
+                        y: (1 - Math.asinh(Math.tan(latDeg * Math.PI / 180)) / Math.PI) / 2,
+                        z: alt / (40075016.686 * Math.cos(latDeg * Math.PI / 180)),
+                    });
+                    const samples: any[] = [];
+                    if (pr && gc && rc) {
+                        const eyeW = pr.projectPoint(gc, { x: 0, y: 0, z: 0 });
+                        const axes: [string, number[]][] = [
+                            ['+x', [1, 0, 0]], ['+y', [0, 1, 0]], ['-x', [-1, 0, 0]], ['-y', [0, -1, 0]],
+                        ];
+                        for (const [name, ax] of axes) {
+                            for (const d of [1000, 10000]) {
+                                const w = {
+                                    x: (eyeW as any).x + ax[0] * d,
+                                    y: (eyeW as any).y + ax[1] * d,
+                                    z: (eyeW as any).z + ax[2] * d,
+                                };
+                                const g: any = pr.unprojectPoint(w);
+                                samples.push({
+                                    axis: name, dist: d,
+                                    geo: [+g.latitude.toFixed(9), +g.longitude.toFixed(9), +(g.altitude ?? 0).toFixed(3)],
+                                    merc: mglMerc(g.latitude, g.longitude, g.altitude ?? 0),
+                                });
+                            }
+                        }
+                    }
+                    const dump = {
+                        probe: 'sh-frame-probe',
+                        frame: fpN,
+                        zoomLevel: mv?.zoomLevel,
+                        targetDistance: mv?.targetDistance,
+                        geoCenter: gc ? [gc.latitude, gc.longitude, gc.altitude ?? 0] : null,
+                        projection: pr?.type,
+                        canvas: mv?.canvas ? [mv.canvas.width, mv.canvas.height] : null,
+                        cameraFovAspect: rc ? [rc.fov, rc.aspect] : null,
+                        rteMatrixWorld: rc?.matrixWorld?.elements ? Array.from(rc.matrixWorld.elements) : null,
+                        rteProjection: rc?.projectionMatrix?.elements ? Array.from(rc.projectionMatrix.elements) : null,
+                        samples,
+                        mglExpected: gc ? mglMerc(gc.latitude, gc.longitude, gc.altitude ?? 0) : null,
+                    };
+                    // eslint-disable-next-line no-console
+                    console.log('[MBFrameProbe] ' + JSON.stringify(dump));
+                    const fb = (globalThis as any).__mbShadowFeedbackUrl;
+                    if (fb) {
+                        fetch(`${fb}/mb-probe-dump`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify(dump),
+                        }).catch(() => { });
+                    }
+                } catch (e) {
+                    (globalThis as any).__mbFrameProbeErr = String(e);
+                }
             }
         }
 

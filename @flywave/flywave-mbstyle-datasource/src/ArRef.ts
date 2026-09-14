@@ -12,10 +12,18 @@
  *   x/y ∈ [0,1] world (y south→north? mgl uses y with north = -y for
  *   bearings), z = mercator elevation units via mercatorZfromAltitude.
  * The engine's shadow camera works in the RTE scene frame (meters, z-up,
- * bearing-rotated). The bridge is NOT yet wired: the scene-frame axes vs
- * mercator axes need a runtime probe (compare a known world point's scene
- * coords against mercator*worldSize) before this reference can replace the
- * calibrated camera in MBShadowRenderer. See 终三〇九④ / 终三一〇.
+ * bearing-rotated). §885 终三一一 dist re-pricing: `getCameraToWorldMercator()`
+ * returns the FreeCamera `_transform` MATRIX ITSELF ([R | position_mercator],
+ * R = rotateZ(−bearing)·rotateX(−pitch) post-multiplied, position in mercator
+ * [0,1]) — not a pixel-space composite. Also proven analytically: the mgl
+ * compass light camera's screen-up is component-wise IDENTICAL to the engine
+ * lookAt(center+dir, up=(0,0,1)) roll for any forward, so orientation is
+ * fully excluded (终三〇九 neutrality confirmed). The runtime frame probe
+ * (shfrmprobe=1) measured the scene frame affine: horizontal 2.49532e-8
+ * merc/unit (isotropic), vertical 3.73885e-8 merc/m — the engine scene frame
+ * is EQUIRECTANGULAR (κ = 1/cos(lat) ≈ 1.499 anisotropy); the κ-corrected
+ * sphere center (shmcenter=1) proved NEUTRAL in A/B (the engine pipeline is
+ * self-consistent in its own frame), knob kept default-off.
  *
  * Inert asset: nothing in the render pipeline imports this file yet.
  */

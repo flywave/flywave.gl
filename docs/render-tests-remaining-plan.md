@@ -3726,3 +3726,47 @@ uMBShadowTexel + getShadowUniforms texel1——约 6 处；验收=museum/sno 影
 
 **④ 下轮入口**：①Ar_ref 全帧移植专项（帧映射推导→museum +79k 靶）；②2048 分辨率
 +texel snap 组合 A/B（③的 6 处改动清单已列）；③剩余 ~80 件受影响夹具分批重基线。
+
+### §885 终三一一：运行时帧探针落地 + mgl getCameraToWorldMercator 真语义——κ 各向异性假设证伪（A/B 全中性，旋钮默认关）；museum-lod 本机新吸引子 122.9k（2026-09-14）
+
+**① 帧探针（shfrmprobe=1，交付保留）**：MBShadowRenderer 帧稳态 dump RTE 相机矩阵/
+geoCenter/zoomLevel + 场景轴±1000/10000 单位 → geo → mgl mercator 点样本（console +
+mb-probe-dump 双通道）。museum 实测：zoom 18.7、ctcd=564.63、canvas 1024²、fov 36.87°
+（aspect 1）、场景帧 x=东/y=北/z=上（RTE 原点=眼点）；场景→mercator 局部仿射实测
+线性部分 = 水平 2.49532e-8/单位（各向同性）、垂直 3.73885e-8/米，且 ±1000/±10000
+严格线性 ✓。
+
+**② mgl 真语义修正（ArRef.ts 头注待更新）**：dist 逐字定价——
+`getCameraToWorldMercator() { return this._transform; }`：**直接返回相机变换矩阵本体**
+（[R|position_mercator]，R=orientationFromPitchBearing = gl-matrix
+rotateZ(−bearing)·rotateX(−pitch) 后乘序，position 在 mercator [0,1] 空间），不是
+"像素桥"复合矩阵。且解析证明：mgl 罗盘式光相机（setPitchBearing(polar,−bearing)）
+的屏幕 up 向量与引擎 lookAt(center+dir, up=(0,0,1)) 的 up **逐分量恒等**（任意前向
+下 (sin b·cos p, cos b·cos p, sin p) ≡ lookAt 投影）——终三〇九 roll 中性获得解析
+证实，roll/朝向彻底出列。
+
+**③ κ 各向异性假设证伪（shmcenter 旋钮，默认关）**：探针揭示引擎场景帧为等距柱状
+坐标（水平 1 单位 = cos(48.13°)≈0.669 真米，垂直 1 米，κ=1/cos(lat)≈1.499）；mgl
+mercator 帧保形。假设：引擎各向同性摆光球心相对 mgl 系统性错位（±44 对称签名）。
+实现：center ∝ (f.x, f.y, κ·f.z)（κ 运行时由 projection 采样）。A/B 全谱中性：
+door-light-munich-museum 198,237→198,973（±2.3k 方差内）、sno 60,892→60,850（−42）、
+守卫五连全 ±42 内（castro 184,294/high-zoom 4,928/q-s 2,417/castro-lighting
+11,779）、collision-munich-museum 42,466→44,925（+2.5k 小幅恶化）。**判定**：引擎
+帧内全管线（模型放置/相机/深度 pass/接收器）自洽，各向同性摆光不产生错位——
+影图 ±44 错位的候选再减一。
+
+**④ 本机重基线新数据（Linux chrome-headless-shell 149）**：
+- **museum-lod 吸引子漂移**：landmark-part-styling-door-light-munich-museum-lod
+  本机基线 **122,911/122,921（两位级一致样本）**，≠ 档记 182,933/182,903（终三〇八/
+  〇九 批）——多稳态家族（tile 抽奖）的另一吸引子，κ 下 122,921 位级不变。与档记
+  数字对账前必须先重采本机基线。
+- collision-munich-museum 基线 42,466 / -lod 45,454（首测）；z-offset-v2 κ 下
+  261,084（基线待采）；sno 家族与档记吻合（±42）。
+- 基建：`testtimeout=<ms>` 通用单测超时参数落地（door-light 族在 Linux SwiftShader
+  超 180s karma 默认超时被中止→IBCT 结果不 POST，runner MBSTYLE_TESTTIMEOUT 透传；
+  本批全部 A/B 用 600000）。
+
+**⑤ 下轮入口**：①2048 分辨率 + texel snap 组合 A/B（6 处改动清单已列，mgl 即
+2048+snap 组合——错位候选仅剩覆盖语义/near/elevation-far/ insets 与光方向本身）；
+②Ar_ref 桥接按②真语义重写（_transform 直接可从引擎相机位姿构造，成本已大降）；
+③museum-lod/受影响家族本机重基线分批。

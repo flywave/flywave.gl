@@ -708,6 +708,19 @@ async function renderUntilSettled(
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shdumpseries=1")) {
         (globalThis as any).__mbShDumpSeries = true;
     }
+    // §885 终三一一: shfrmprobe=1 → the shadow renderer dumps the RTE-camera
+    // ↔ mercator frame correspondence once at steady state (camera matrices,
+    // geoCenter/zoom, scene-axis → mercator point samples) — the runtime
+    // probe ArRef.ts requires before the mercator↔RTE bridge can be wired.
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shfrmprobe=1")) {
+        (globalThis as any).__mbShFrameProbe = true;
+    }
+    // §885 终三一一: shmcenter=1 → mgl mercator-frame sphere-center placement
+    // (κ = 1/cos(lat) anisotropy correction for the equirectangular engine
+    // scene frame — the ±44/±45 symmetric shadow-map misalignment candidate).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shmcenter=1")) {
+        (globalThis as any).__mbShMercCenter = true;
+    }
     let lastCount = -1;
     let stable = 0;
     for (let i = 0; i < maxFrames && stable < settleNeed; i++) {
@@ -2367,8 +2380,13 @@ describe("MBStyleDataSource render-tests compatibility", function () {
         testFn(entry.name, async function () {
             // §885 终二五六: the mlsweep=1 probe walks 12 light azimuths with
             // render frames between them — well past the default 180s budget.
+            // §885 终三一一: testtimeout=<ms> generic override — heavy shadow
+            // fixtures (door-light-munich-museum) exceed 180s on the Linux
+            // SwiftShader box and the abort kills the IBCT result POST.
+            const testTimeoutMs = Number((window as any).__karma__?.config?.args?.find?.(
+                (a: string) => a.startsWith("testtimeout="))?.slice("testtimeout=".length)) || 0;
             this.timeout((window as any).__karma__?.config?.args?.some?.(
-                (a: string) => a === "mlsweep=1") ? 900000 : 180000);
+                (a: string) => a === "mlsweep=1") ? 900000 : (testTimeoutMs || 180000));
             let canvas: HTMLCanvasElement | undefined;
             let mapView: MapView | undefined;
 
