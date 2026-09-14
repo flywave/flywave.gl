@@ -597,6 +597,16 @@ function discoverTests(): TestEntry[] {
     const shno = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shnoff="))?.slice("shnoff=".length);
     if (shno !== undefined && shno !== "") (globalThis as any).__mbShadowNOff = Number(shno);
+    // §885 终二九八: shrawaz=<deg> → model raw-axis azimuth delta (default 0
+    // = unrotated raw mgl axis; −12 is the sno-specific sweep argmin);
+    // shmodelraw=0 → disable the model raw cascade-0 pass (model tail falls
+    // back to the mirror cascades).
+    const shraw = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shrawaz="))?.slice("shrawaz=".length);
+    if (shraw !== undefined && shraw !== "") (globalThis as any).__mbShadowRawAz = Number(shraw);
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shmodelraw=0")) {
+        (globalThis as any).__mbModelRawShadow = false;
+    }
     // §885 终二六九: shbfix=1 → bias·proj·view left-multiply remap.
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shbfix=1")) {
         (globalThis as any).__mbShadowBiasFix = true;

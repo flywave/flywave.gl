@@ -231,6 +231,7 @@ const mbShadowLitUniforms = new Set<any>();
 export function syncModelShadowUniforms(shadowState: {
     map: any; matrix: any; intensity: number; eye?: any; eyeOn?: any;
     map1?: any; matrix1?: any;
+    mapR?: any; matrixR?: any;
 } | null): void {
     { const g: any = (globalThis as any); g.__shSyncN = (g.__shSyncN ?? 0) + 1;
       if (g.__shSyncN === 60) {
@@ -252,6 +253,12 @@ export function syncModelShadowUniforms(shadowState: {
         if ((u as any).map1) (u as any).map1.value = shadowState?.map1 ?? null;
         if ((u as any).matrix1?.value?.copy && shadowState?.matrix1) {
             (u as any).matrix1.value.copy(shadowState.matrix1);
+        }
+        // §885 终二九三+: model raw-axis cascade-0 uniforms.
+        if ((u as any).hasR) (u as any).hasR.value = shadowState?.mapR ? 1 : 0;
+        if ((u as any).mapR) (u as any).mapR.value = shadowState?.mapR ?? null;
+        if ((u as any).matrixR?.value?.copy && shadowState?.matrixR) {
+            (u as any).matrixR.value.copy(shadowState.matrixR);
         }
         if ((u as any).texel1) (u as any).texel1.value = shadowState?.texel1 ?? 0;
         if ((u as any).noff) (u as any).noff.value = Number((globalThis as any).__mbShadowNOff ?? 32);
@@ -594,6 +601,12 @@ export function applyMglModelLighting(
                 shader.uniforms.uMBShHas1 = { value: 0 };
                 shader.uniforms.uMBShMap1 = { value: null as any };
                 shader.uniforms.uMBShMatrix1 = { value: new THREE.Matrix4() };
+                // §885 终二九三+: model-specific raw-axis cascade-0 — the
+                // dedicated raw pass's map/matrix (model receivers prefer it;
+                // ground/fill receivers stay on the mirror cascades).
+                shader.uniforms.uMBShHasR = { value: 0 };
+                shader.uniforms.uMBShMapR = { value: null as any };
+                shader.uniforms.uMBShMatrixR = { value: new THREE.Matrix4() };
                 shader.uniforms.uMBShNOff = { value: Number((globalThis as any).__mbShadowNOff ?? 32) };
                 shader.uniforms.uMBShTexel1 = { value: 0 };
                 // §885: shdbg=5 → receiver rebases worldPos by the shadow eye
@@ -609,6 +622,9 @@ export function applyMglModelLighting(
                         has1: shader.uniforms.uMBShHas1,
                         map1: shader.uniforms.uMBShMap1,
                         matrix1: shader.uniforms.uMBShMatrix1,
+                        hasR: shader.uniforms.uMBShHasR,
+                        mapR: shader.uniforms.uMBShMapR,
+                        matrixR: shader.uniforms.uMBShMatrixR,
                         texel1: shader.uniforms.uMBShTexel1,
                         noff: shader.uniforms.uMBShNOff,
                         intensity: shader.uniforms.uMBShIntensity,
@@ -649,6 +665,9 @@ export function applyMglModelLighting(
  uniform sampler2D uMBShMap1;
  uniform mat4 uMBShMatrix1;
  uniform float uMBShTexel1;
+ uniform float uMBShHasR;
+ uniform sampler2D uMBShMapR;
+ uniform mat4 uMBShMatrixR;
                      uniform vec3 uMBShEye;
                      uniform float uMBShEyeOn;
                      uniform float uMB3DMetal; uniform float uMB3DRough;
@@ -986,8 +1005,16 @@ export function applyMglModelLighting(
                                      * step(0.0, mbShUv.y) * step(mbShUv.y, 1.0) * step(mbShUv.z, 1.0);
                                  float mbIn1 = uMBShHas1 * step(0.0, mbShUv1.x) * step(mbShUv1.x, 1.0)
                                      * step(0.0, mbShUv1.y) * step(mbShUv1.y, 1.0) * step(mbShUv1.z, 1.0);
-                                 vec4 mbShUvC = mix(mbShUv1, mbShUv, mbIn0);
-                                 float mbShHasC = max(mbIn0, mbIn1);
+                                 // §885 终二九三+: model-specific raw-axis
+                                 // cascade-0 preference — receivers sample the
+                                 // dedicated raw pass (uMBShMapR/uMBShMatrixR)
+                                 // when in bounds, else the mirror
+                                 // cascade-0/cascade-1 chain.
+                                 vec4 mbShUvR = uMBShMatrixR * vec4(vMbWorldPos + mbWN * uMBShNOff * mbSgn - uMBShEye * uMBShEyeOn, 1.0);
+                                 float mbInR = uMBShHasR * step(0.0, mbShUvR.x) * step(mbShUvR.x, 1.0)
+                                     * step(0.0, mbShUvR.y) * step(mbShUvR.y, 1.0) * step(mbShUvR.z, 1.0);
+                                 vec4 mbShUvC = mix(mix(mbShUv1, mbShUv, mbIn0), mbShUvR, mbInR);
+                                 float mbShHasC = max(mbInR, max(mbIn0, mbIn1));
                                  if (uMBShDbg > 5.5 && uMBShDbg < 6.5) {
                                      // §885 终二六九: cascade-1 compare probe —
                                      // R = lit factor at cascade-1 uv, G = mbIn1
@@ -1007,7 +1034,20 @@ export function applyMglModelLighting(
                                  if (mbShHasC > 0.5 && mbShUvC.x >= 0.0 && mbShUvC.x <= 1.0 &&
                                      mbShUvC.y >= 0.0 && mbShUvC.y <= 1.0 && mbShUvC.z <= 1.0) {
                                      vec4 mbShPk;
-                                     if (mbIn0 > 0.5) {
+                                     if (mbInR > 0.5) {
+                                         // §885 终二九三+: raw cascade-0 5-tap
+                                         // PCF (model-specific axis, same texel
+                                         // knob as the mirror cascade-0).
+                                         float mbTR = ${(globalThis as any).__mbPcfTexel ?? 24}.0 / 1024.0;
+                                         vec4 mbPkR = texture2D(uMBShMapR, mbShUvR.xy);
+                                         float mbDsumR = mbPkR.r
+                                             + texture2D(uMBShMapR, mbShUvR.xy + vec2(mbTR, 0.0)).r
+                                             + texture2D(uMBShMapR, mbShUvR.xy + vec2(-mbTR, 0.0)).r
+                                             + texture2D(uMBShMapR, mbShUvR.xy + vec2(0.0, mbTR)).r
+                                             + texture2D(uMBShMapR, mbShUvR.xy + vec2(0.0, -mbTR)).r;
+                                         mbPkR.r = mbDsumR / 5.0;
+                                         mbShPk = mbPkR;
+                                     } else if (mbIn0 > 0.5) {
                                          // §885 终二九四: cascade-0 5-tap PCF —
                                          // soften quantized band edges.
                                          float mbT0 = ${(globalThis as any).__mbPcfTexel ?? 24}.0 / 1024.0;
@@ -1055,7 +1095,13 @@ export function applyMglModelLighting(
                                      // instead of the hard 0.002 compare —
                                      // 0.002 ≈ 1.6 depth units in the tight
                                      // frustum, enough to light wall strips).
-                                     float mbLitS = smoothstep(-0.0005, 0.0005, mbShDepth - mbShUv.z);
+                                     // §885 终二九三+: the fragZ pairs with the
+                                     // selected map — raw cascade-0 compares
+                                     // against its own matrix's z (the raw
+                                     // axis rescales z_eye); cascade paths
+                                     // keep the historical mbShUv.z compare.
+                                     float mbFragZ = mbInR > 0.5 ? mbShUvR.z : mbShUv.z;
+                                     float mbLitS = smoothstep(-0.0005, 0.0005, mbShDepth - mbFragZ);
                                      mbNdotL *= mix(1.0 - uMBShIntensity, 1.0, mbLitS);
                                  }
                              }
@@ -1151,8 +1197,16 @@ export function applyMglModelLighting(
                                      * step(0.0, mbShUv.y) * step(mbShUv.y, 1.0) * step(mbShUv.z, 1.0);
                                  float mbIn1 = uMBShHas1 * step(0.0, mbShUv1.x) * step(mbShUv1.x, 1.0)
                                      * step(0.0, mbShUv1.y) * step(mbShUv1.y, 1.0) * step(mbShUv1.z, 1.0);
-                                 vec4 mbShUvC = mix(mbShUv1, mbShUv, mbIn0);
-                                 float mbShHasC = max(mbIn0, mbIn1);
+                                 // §885 终二九三+: model-specific raw-axis
+                                 // cascade-0 preference — receivers sample the
+                                 // dedicated raw pass (uMBShMapR/uMBShMatrixR)
+                                 // when in bounds, else the mirror
+                                 // cascade-0/cascade-1 chain.
+                                 vec4 mbShUvR = uMBShMatrixR * vec4(vMbWorldPos + mbWN * uMBShNOff * mbSgn - uMBShEye * uMBShEyeOn, 1.0);
+                                 float mbInR = uMBShHasR * step(0.0, mbShUvR.x) * step(mbShUvR.x, 1.0)
+                                     * step(0.0, mbShUvR.y) * step(mbShUvR.y, 1.0) * step(mbShUvR.z, 1.0);
+                                 vec4 mbShUvC = mix(mix(mbShUv1, mbShUv, mbIn0), mbShUvR, mbInR);
+                                 float mbShHasC = max(mbInR, max(mbIn0, mbIn1));
                                  if (uMBShDbg > 5.5 && uMBShDbg < 6.5) {
                                      // §885 终二六九: cascade-1 compare probe —
                                      // R = lit factor at cascade-1 uv, G = mbIn1
@@ -1172,7 +1226,20 @@ export function applyMglModelLighting(
                                  if (mbShHasC > 0.5 && mbShUvC.x >= 0.0 && mbShUvC.x <= 1.0 &&
                                      mbShUvC.y >= 0.0 && mbShUvC.y <= 1.0 && mbShUvC.z <= 1.0) {
                                      vec4 mbShPk;
-                                     if (mbIn0 > 0.5) {
+                                     if (mbInR > 0.5) {
+                                         // §885 终二九三+: raw cascade-0 5-tap
+                                         // PCF (model-specific axis, same texel
+                                         // knob as the mirror cascade-0).
+                                         float mbTR = ${(globalThis as any).__mbPcfTexel ?? 24}.0 / 1024.0;
+                                         vec4 mbPkR = texture2D(uMBShMapR, mbShUvR.xy);
+                                         float mbDsumR = mbPkR.r
+                                             + texture2D(uMBShMapR, mbShUvR.xy + vec2(mbTR, 0.0)).r
+                                             + texture2D(uMBShMapR, mbShUvR.xy + vec2(-mbTR, 0.0)).r
+                                             + texture2D(uMBShMapR, mbShUvR.xy + vec2(0.0, mbTR)).r
+                                             + texture2D(uMBShMapR, mbShUvR.xy + vec2(0.0, -mbTR)).r;
+                                         mbPkR.r = mbDsumR / 5.0;
+                                         mbShPk = mbPkR;
+                                     } else if (mbIn0 > 0.5) {
                                          // §885 终二九四: cascade-0 5-tap PCF —
                                          // soften quantized band edges.
                                          float mbT0 = ${(globalThis as any).__mbPcfTexel ?? 24}.0 / 1024.0;
@@ -1228,7 +1295,13 @@ export function applyMglModelLighting(
                                      // instead of the hard 0.002 compare —
                                      // 0.002 ≈ 1.6 depth units in the tight
                                      // frustum, enough to light wall strips).
-                                     float mbLitS = smoothstep(-0.0005, 0.0005, mbShDepth - mbShUv.z);
+                                     // §885 终二九三+: the fragZ pairs with the
+                                     // selected map — raw cascade-0 compares
+                                     // against its own matrix's z (the raw
+                                     // axis rescales z_eye); cascade paths
+                                     // keep the historical mbShUv.z compare.
+                                     float mbFragZ = mbInR > 0.5 ? mbShUvR.z : mbShUv.z;
+                                     float mbLitS = smoothstep(-0.0005, 0.0005, mbShDepth - mbFragZ);
                                      if (uMBShRepl > 0.5) {
                                          // §885 终二六二: mgl shadowed_light_factor_normal
                                          // REPLACES the light factor —
@@ -1398,7 +1471,7 @@ export function applyMglModelLighting(
 export function refreshModelShadowUniforms(
     dataSource: any,
     scene: THREE.Object3D | undefined | null,
-    shadowState: { map: any; matrix: any; intensity: number; eye?: any; eyeOn?: any } | null,
+    shadowState: { map: any; matrix: any; intensity: number; eye?: any; eyeOn?: any; mapR?: any; matrixR?: any } | null,
 ): void {
     if (!scene) return;
     let healed = 0;
@@ -1417,6 +1490,12 @@ export function refreshModelShadowUniforms(
                 if ((u as any).map1) (u as any).map1.value = shadowState?.map1 ?? null;
                 if ((u as any).matrix1?.value?.copy && shadowState?.matrix1) {
                     (u as any).matrix1.value.copy(shadowState.matrix1);
+                }
+                // §885 终二九三+: model raw-axis cascade-0 uniforms.
+                if ((u as any).hasR) (u as any).hasR.value = shadowState?.mapR ? 1 : 0;
+                if ((u as any).mapR) (u as any).mapR.value = shadowState?.mapR ?? null;
+                if ((u as any).matrixR?.value?.copy && shadowState?.matrixR) {
+                    (u as any).matrixR.value.copy(shadowState.matrixR);
                 }
                 if ((u as any).texel1) (u as any).texel1.value = shadowState?.texel1 ?? 0;
         if ((u as any).noff) (u as any).noff.value = Number((globalThis as any).__mbShadowNOff ?? 32);

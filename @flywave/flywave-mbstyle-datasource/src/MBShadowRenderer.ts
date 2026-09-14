@@ -29,6 +29,12 @@ export interface ShadowUniformState {
     map1?: THREE.Texture;
     matrix1?: THREE.Matrix4;
     texel1?: number;
+    /** §885 终二九三+: model-specific RAW-axis cascade-0 — model receivers
+     * prefer this map/matrix; the ground quad and fill receivers stay on the
+     * mirror cascades (the shaz sweep proved per-consumer axes are required:
+     * ground 镜像系 vs model raw 系 cannot share one camera). */
+    mapR?: THREE.Texture;
+    matrixR?: THREE.Matrix4;
     intensity: number;
     /** Screen-corner ground-plane world positions (NDC (-1,-1),(1,-1),(1,1),(-1,1)) —
      * receivers interpolate their ground world pos from gl_FragCoord (§692). */
@@ -51,6 +57,11 @@ export class MBShadowRenderer {
     private m_shTex1: THREE.DataTexture | null = null;
     private m_depthPixels1: Uint8Array | null = null;
     private m_matrix1 = new THREE.Matrix4();
+    // §885 终二九三+: model-specific raw-axis cascade-0 — independent pass +
+    // matrix + depth map (the ground quad keeps the mirror cascade-0/1 pair).
+    private m_shTexR0: THREE.DataTexture | null = null;
+    private m_depthPixelsR0: Uint8Array | null = null;
+    private m_matrixR0 = new THREE.Matrix4();
     private m_depthPixels: Uint8Array | null = null;
     private m_shadowCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 4000);
     // §532 bisect: ShaderMaterial vs Basic — is the ctx2 blank a silent
@@ -183,6 +194,8 @@ export class MBShadowRenderer {
             matrix: this.m_matrix,
             map1: this.m_shTex1 ?? undefined,
             matrix1: this.m_matrix1,
+            mapR: this.m_shTexR0 ?? undefined,
+            matrixR: this.m_matrixR0,
             texel1: (8 * this.m_shadRadius) / 1024,
             intensity: this.m_intensity,
             corners: this.m_corners,
@@ -1267,6 +1280,143 @@ export class MBShadowRenderer {
                     }
                 } catch { /* probe only */ }
             }
+        }
+
+        // §885 终二九三+/终二九八: model-specific RAW-axis cascade-0 pass —
+        // model receivers prefer the raw mgl spherical axis (sno −4.2k,
+        // z-offset-v2 −1.0k at 0°) while the ground quad + fill receivers
+        // stay on the mirror cascades (their calibration is mirror-frame).
+        // Consumers split: ground quad + fill receivers keep sampling
+        // m_shTex/m_matrix (mirror); the model tail prefers
+        // m_shTexR0/m_matrixR0 (this pass). Framing mirrors cascade-0 (same
+        // sphere center/radius/fit — the fit is direction-invariant for an
+        // ortho sphere fit; far recomputed from the raw axis z). The
+        // 终二九三+ −12° argmin is a sno-specific overfit (z-offset-v2 +55k)
+        // — kept as the shrawaz knob, default 0.
+        if (this.m_shRenderer && (globalThis as any).__mbModelRawShadow !== false) {
+            const dirPropR = (this.m_dataSource as any).m_environment
+                ?.m_3DDirectional?.direction as [number, number] | undefined;
+            let rawDir: THREE.Vector3;
+            if (dirPropR) {
+                // raw mgl spherical conversion (az+90, no §686 y mirror) —
+                // the SHDIRALT=1 sweep semantics.
+                const aR = (dirPropR[0] + 90) * Math.PI / 180;
+                const pR = dirPropR[1] * Math.PI / 180;
+                rawDir = new THREE.Vector3(
+                    Math.cos(aR) * Math.sin(pR), Math.sin(aR) * Math.sin(pR), Math.cos(pR));
+            } else {
+                // §683 scene-frame dir with the y mirror undone (the sweep's
+                // fallback branch for styles without a raw direction prop).
+                rawDir = new THREE.Vector3(lightDir.x, -lightDir.y, lightDir.z);
+            }
+            // shrawaz=<deg> sweep knob — default 0 = the unrotated raw mgl
+            // axis (no fitted freedom). The 终二九三+ sno argmin (−12°) is
+            // NOT the global default: it wrecks z-offset-v2 (+55k) while
+            // winning ~1k more on sno — per-fixture knob only (终二九八).
+            const rawAz = Number((globalThis as any).__mbShadowRawAz ?? 0);
+            if (rawAz) {
+                const azR = rawAz * Math.PI / 180;
+                const cR2 = Math.cos(azR), sR2 = Math.sin(azR);
+                rawDir = new THREE.Vector3(
+                    rawDir.x * cR2 - rawDir.y * sR2,
+                    rawDir.x * sR2 + rawDir.y * cR2,
+                    rawDir.z);
+            }
+            // shadowDirectionFromProperties polar clamp (75°) — kept for the
+            // y-mirror fallback form (azimuth-invariant otherwise).
+            {
+                const maxPolarR = 75 * Math.PI / 180;
+                const polR = Math.acos(THREE.MathUtils.clamp(rawDir.z, -1, 1));
+                if (polR > maxPolarR) {
+                    const hcR = Math.sin(maxPolarR);
+                    const hR = Math.hypot(rawDir.x, rawDir.y) || 1e-9;
+                    rawDir.set(rawDir.x / hR * hcR, rawDir.y / hR * hcR, Math.cos(maxPolarR));
+                }
+            }
+            // The caster-side normal offset follows THIS pass's axis (the
+            // sweep fed the depth material the same raw axis).
+            const depthMatR = (this.m_depthMaterial as THREE.ShaderMaterial);
+            if (depthMatR.uniforms?.uMBLightDir) {
+                depthMatR.uniforms.uMBLightDir.value.copy(rawDir).normalize();
+            }
+            this.m_shadowCamera.left = -radius;
+            this.m_shadowCamera.right = radius;
+            this.m_shadowCamera.top = radius;
+            this.m_shadowCamera.bottom = -radius;
+            this.m_shadowCamera.near = -2 * radius;
+            this.m_shadowCamera.far = radius / Math.max(rawDir.z, 0.1);
+            this.m_shadowCamera.position.copy(sphereCenter);
+            this.m_shadowCamera.up.set(0, 0, 1);
+            // Same lookAt convention as the mirror pass (legacy center−dir vs
+            // shbfix center+dir — the calibrated pair).
+            if ((globalThis as any).__mbShadowBiasFix !== 1) {
+                this.m_shadowCamera.lookAt(sphereCenter.clone().sub(rawDir));
+            } else {
+                this.m_shadowCamera.lookAt(sphereCenter.clone().add(rawDir));
+            }
+            this.m_shadowCamera.updateProjectionMatrix();
+            this.m_shadowCamera.updateMatrixWorld();
+            scene.overrideMaterial = this.m_depthMaterial;
+            const prevLayersR = this.m_shadowCamera.layers.mask;
+            this.m_shadowCamera.layers.set(1);
+            try {
+                this.m_shRenderer.setRenderTarget(null);
+                this.m_shRenderer.clear();
+                this.m_shRenderer.render(scene, this.m_shadowCamera);
+            } catch (e) {
+                (globalThis as any).__mbShadowPassRErr = String(e);
+            } finally {
+                scene.overrideMaterial = prevOverride;
+                this.m_shadowCamera.layers.mask = prevLayersR;
+            }
+            {
+                const glR: any = this.m_shRenderer.getContext();
+                const pxR = size * size * 4;
+                if (!this.m_depthPixelsR0 || this.m_depthPixelsR0.length !== pxR) {
+                    this.m_depthPixelsR0 = new Uint8Array(pxR);
+                }
+                try {
+                    glR.readPixels(0, 0, size, size, glR.RGBA, glR.UNSIGNED_BYTE, this.m_depthPixelsR0);
+                } catch (e) { /* probe only */ }
+                if (!this.m_shTexR0 || !(this.m_shTexR0 as any).isDataTexture) {
+                    this.m_shTexR0 = new THREE.DataTexture(this.m_depthPixelsR0!, size, size, THREE.RGBAFormat);
+                    this.m_shTexR0.magFilter = THREE.NearestFilter;
+                    this.m_shTexR0.minFilter = THREE.NearestFilter;
+                    this.m_shTexR0.generateMipmaps = false;
+                    this.m_shTexR0.flipY = false;
+                }
+                this.m_shTexR0.needsUpdate = true;
+            }
+            // world → raw shadow-uv matrix (same premultiply-bias convention
+            // as the mirror cascades — 终二六九 left-multiply).
+            this.m_matrixR0
+                .multiplyMatrices(this.m_shadowCamera.projectionMatrix, this.m_shadowCamera.matrixWorldInverse);
+            {
+                const mbBiasR = new THREE.Matrix4().set(
+                    0.5, 0, 0, 0.5,
+                    0, 0.5, 0, 0.5,
+                    0, 0, 0.5, 0.5,
+                    0, 0, 0, 1,
+                );
+                if ((globalThis as any).__mbShadowBiasFix === 0) {
+                    this.m_matrixR0.multiply(mbBiasR);
+                } else {
+                    this.m_matrixR0.premultiply(mbBiasR);
+                }
+            }
+            // Restore the MIRROR axis for the cascade-1 pass below (it reuses
+            // this camera and historically inherited cascade-0's rotation).
+            if (depthMatR.uniforms?.uMBLightDir) {
+                depthMatR.uniforms.uMBLightDir.value.copy(lightDir).normalize();
+            }
+            this.m_shadowCamera.up.set(0, 0, 1);
+            if ((globalThis as any).__mbShadowBiasFix !== 1) {
+                this.m_shadowCamera.lookAt(sphereCenter.clone().sub(lightDir));
+            } else {
+                this.m_shadowCamera.lookAt(sphereCenter.clone().add(lightDir));
+            }
+            this.m_shadowCamera.updateProjectionMatrix();
+            this.m_shadowCamera.updateMatrixWorld();
         }
 
         // §885 终一百一十八: cascade-1 far-field pass — 4× extents, same

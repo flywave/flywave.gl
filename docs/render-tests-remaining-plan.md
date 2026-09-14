@@ -3326,3 +3326,54 @@ cascade-0；③sno 主/lod 验收（预期 ≤60,059 且 ground 双例回归 ≤
 mapDepth<fragZ 的像素占比可判）；②residual 清单家族推进：castro 184k/highlights 228k/
 z-offset-v2-port 392k 属光照+几何域（非本轮影子域），按各自域独立攻坚；③ground-shadow
 双例噪声域 +109/+113 维持观察。
+
+### §885 终二九八：模型专用 raw cascade-0 pass 落地——ground/模型消费拆分实现，raw 0° 默认（家族净 −8.9k 零回归），−12° 判 sno 专属过拟合（2026-09-14）
+
+**① 实现（迁移专项核心，承接终二九三+）**：
+- MBShadowRenderer 新增模型专用 raw cascade-0 pass（m_shTexR0/m_depthPixelsR0/m_matrixR0），
+  插入点在镜像 cascade-0 读回之后、cascade-1 之前。raw 轴 = mgl 球面转换（dirProp 存在走
+  az+90，否则 ls.dir y 镜像回退）+ shrawaz 旋转（**默认 0°**）+ 75° 极角钳制；caster 侧法线
+  偏移喂本 pass 轴；frustum 球拟合与 cascade-0 同参（正交球拟合方向不变量，far 按 raw 轴 z
+  重算）；渲染/读回/premultiply-bias 与镜像链同构；收尾恢复镜像 lookAt 与深度材质轴
+  （cascade-1 与全部镜像路径位级不变）。
+- 模型尾部（两处光照分支）新增 uMBShHasR/uMBShMapR/uMBShMatrixR：raw 入界**优先采样**
+  （5-tap PCF@24 同 shpcf 旋钮），出界回退镜像 cascade-0/cascade-1 链；fragZ 按选中图配对
+  （raw 用 mbShUvR.z；cascade 路径保持历史 mbShUv.z 比较——位级不变的关键）。
+- ShadowUniformState 透传 mapR/matrixR；双 sync 路径同步；旋钮 shrawaz=<deg> / shmodelraw=0
+  （karma args + runner MBSTYLE_SHRAWAZ/MBSTYLE_SHMODELRAW 值透传）。TS 错误 101 = HEAD
+  101（零新增）。
+
+**② 消费者矩阵实测（同树三档 A/B，rawfinal/rawc0fam/rawc0famoff 批）**：
+
+| 夹具 | mirror（raw关） | **raw 0°（默认）** | raw −12° |
+|---|---|---|---|
+| sno 主 | 65,054 | **60,892（−4,162）** | 59,891 |
+| sno lod | 65,069 | **60,836（−4,233）** | 59,955 |
+| z-offset-v2 | 235,756 | 235,227（−529 噪声级） | 290,747（**+54,991**）|
+| z-offset-v2-port | 392,710 | 392,751（+41） | 392,480（−230）|
+| z-offset-v2-station | 221,804 | 221,804（+0 位级） | 221,804（+0）|
+| ground-shadow 双例 | 158,750/158,790 | 158,750/158,790（+0） | +1（±1）|
+| 守卫 castro/q-s/castro-lighting | 184,292/2,434/11,776 | 结构性不可达 | 同左（开/关逐位一致）|
+
+**③ 定档**：**shrawaz=0（未旋转 raw mgl 轴）为默认**——家族净 **−8,883** 且零回归项。
+−12°（终二九三+ shaz 扫描 argmin）是 sno 单夹具过拟合：sno 仅再赢 ~1k 而 z-offset-v2
++55k（其 dir [311.9,82.4] 近天顶，极角钳制 75° 后方位旋转被放大），降为 shrawaz 旋钮。
+与终二五七"全局着色方向约定不存在"同构——**模型接收端对影子光轴的偏好同样是夹具发散的**
+（sno 偏好 −12，z-offset-v2 偏好镜像/0°，port/station/ground 不敏感）。终二九三+ 的
+"sno ≤60,059" 验收线为 −12° 档专属，0° 档 60,892（差 833）——按家族净收益优先取 0° 档。
+"ground(镜像系)/模型(raw 系) 分离光轴"的结构假设被 ② 修正：ground 双例在 raw 开/关下
+±1（模型接收端非其残差主体），真正的约束是 z-offset-v2 类近天顶光源夹具。
+
+**④ ground 双例 158.7k 基线重定 + 漂移记档**：本轮四组测量（本树 raw 开/关、干净 HEAD、
+2b031b82=终二八七渲染器内容恢复态）×默认配置 ground-shadow-fog 全部 **158,750**（hard-cutoff
+158,790）位级一致。文档沿用的 140,431/140,596 基线列出自 终二八五~二八九 批次——其树携带
+negsign 负号泄漏混合态（终二九三 定性），基线列与恢复后交付态不可比；终二九三 恢复后仅复测
+sno 未复测 ground，+18.3k 实际自该时点已存在且未被察觉（后续条目仍以 ±100 噪声域口径沿用
+旧基线）。**ground 双例现值 158,750/158,790 为恢复态真基线**；终二八九 "raw 轴 +18.3k" 的
+定性需在真基线口径下复核（本轮 raw 开/关 ±1 证明 raw pass 与 ground 双例无交互）。
+
+**⑤ 残余与下轮**：①sno 60.9k（0° 档）构成不变（漏影+光照 2.1k+软边 ~52k），shrawaz 逐
+夹具 argmin 可再收（sno@−12=59,891 证明单夹具上限存在）；②z-offset-v2 对 −12° 的 +55k
+敏感性值得单独定性（近天顶光源 × 方位旋转的极角钳制交互）；③家族 DirProp 系夹具
+（munich 311.9 族/buildings-trees 120/160 族/front-cutoff 320/30 族等 ~60 夹具）在 0°
+默认下的批量响应待复验（本轮测点均中性或改善，未见风险信号）；④shpcf/shnoff 旋钮族保留。
