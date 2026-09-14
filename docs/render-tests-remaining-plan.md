@@ -3493,3 +3493,37 @@ high-zoom 4,930/castro-lighting 11,776）。
 **④ 下轮入口**：①buckingham tile 专项=多点采样协议下的 shmodelraw/shrawaz 双臂
 （≥3 样本/臂）；②sno 13.3k 探针覆盖缺口（partdbg 验证材质归属，不依赖 intensity
 门控）；③PCF 形态域随本轮关闭——软边 78k 需另寻 mgl 软影质感对拍入口（mgl-shot2）。
+
+### §885 终三〇二：buckingham 多点采样双臂——"+54.7k 真回归"证伪（多稳态抽奖与配置无关）；sno 13.3k 探针缺口材质归属=patched 模型材质（2026-09-14）
+
+**① buckingham 多点采样（≥3 样本/臂/夹具，同日双臂）**：
+- lod：raw {102,912×1, 157,622×3}，mirror {102,912×1, 157,622×2}——分布相同。
+- main：raw {180,128×2, 191,358×1}，mirror {180,128×1, 191,358×2}——分布相同。
+- **取值与配置无关**：~4 个离散吸引子（102,912/157,622/180,128/191,358，间距 25-35k），
+  两臂同分布。**终二九九 的"buckingham-lod +54.7k 真回归"判定证伪**——那是多稳态
+  抽样差，非 raw 轴效应；"per-fixture shmodelraw 关断"命题随之消解（无回归可修）。
+- 吸引子定性（lod 图 diff）：102k→157k 态 = **全局性变暗**（195k px 变暗 vs 54k 变亮，
+  差异处均值 −15 RGB，顶 2/3 集中）——疑为 ground quad/影 overlay 的状态竞态
+  （终二八二B 非确定性的形态刻画），根因未决。
+
+**② 对 终二九九 家族结论的重定性**：
+- 不可信（多稳态抽样）：buckingham 对 ±54.7k/±11.2k、multiple-extr-lod −54.4k、
+  hidden-extr-lod −40.6k、scale-munich −5.7k、collision −1.5k 等单样本大值。
+- 可信（跨批位级稳定）：sno 主/lod −1,193/−1,493（60,892/60,836 三批位级复现）、
+  MAPS3D-1159(-lod) −172/−157、z-offset 三件套（port/station 位级 0、v2 modal 中性）、
+  museum/griffith/instanced 位级 0。
+- **raw 0° 默认的可信净收益 ≈ −1.5k（sno+MAPS3D），大额项待多点采样复核**——默认
+  维持（可信子集无回归证据），munich 大额改善降级为"待复核"。
+
+**③ sno 13.3k 探针覆盖缺口材质归属（partdbg 复用）**：
+- **13,317/13,317 全部被 partdbg 绘制**（part 图 vs raw0 变化像素全覆盖）——材质归属
+  定案：**patched 模型尾部材质**（主色 wall 红 (255,38,38)、window 黄 (255,255,38)，
+  sRGB 编码后）。
+- 遗留机制问题：同一材质在 shdbg=11（intensity 门控）下未绘制 → 当时 uMBShIntensity
+  读 0，但其渲染随 raw 状态变（差 ~100 亮度级）——intensity 同步/门控路径与 raw 消费
+  的时序矛盾未决，记档探针债务（复现入口=shdbg=11+partdbg 同跑，双门控联合着色）。
+
+**④ 下轮入口**：①多稳态根因（ground quad/影 overlay 状态竞态）——若修复，家族测量
+噪声（±30-90k）大幅收敛，是影子系 A/B 可信度的前置；②munich 大额项（multiple-extr-
+lod/hidden-extr-lod）多点采样复核（≥3/臂）；③sno 漏影 62% 无遮挡体投影域（mgl
+createLightMatrix 源码级移植）维持主攻方向。
