@@ -3461,3 +3461,35 @@ mapDepth<fragZ 占比可判）；④软边 78k 的 mgl 软影质感对拍。
   之间，先验上 raw 轴影覆盖过宽，可试 tile 模型专用 shmodelraw 关断或 shrawaz 微扫；
   ②PCF 空 texel=2.0 稀释修正（lit-flag 平均）A/B——38% 漏影 + 软边 78k 同域；
   ③sno 探针覆盖缺口：partdbg 复用于 sno 验证 13.3k 像素的材质归属。
+
+### §885 终三〇一：lit-flag PCF A/B 判负回退——空 texel 稀释实为承重的软影梯度；buckingham tile 关断评估暂缓（双稳淹没）（2026-09-14）
+
+**① lit-flag PCF A/B（验收失败，回退）**：
+- 实现：模型尾部 5-tap **深度平均 → per-tap smoothstep 比较（±0.0005 窗）平均**
+  （mgl shadow_occlusion 语义），两分支×3 cascade 全量替换（TS 101=101）。
+- 结果：sno 60,892 → **66,246（+5,354）**——劣于基线亦劣于镜像态（62,085）；不达
+  ≤60,892 验收线。**回退**（git checkout 模型渲染器，sno 复实测 **60,892 位级恢复 ✓**）。
+- 定性修正：终三〇〇③的"空 texel=2.0 稀释"在当前标定下**不是 bug 而是承重的软影
+  梯度**——它恰好把边缘过渡做成 expected 的模糊宽度，"修成语义正确"反而偏离参照。
+  与 终一百六十八 的"参照 AA 语义漂移"同类：calibrated accident 承重。深度平均为
+  交付态，PCF 形态域关闭。
+
+**② buckingham tile 楼面 per-fixture shmodelraw 关断评估（暂缓）**：
+- 现有数据：lod raw0 {157,622, 182,954} vs mirror {102,912}（损 54.7k+）；main
+  raw0 {180,128} vs mirror {191,358}（益 11.2k）——pair 净 mirror 优 ~43.5k；但
+  munich 族方向相反（multiple-extr-lod −54.4k、hidden-extr-lod −40.6k 益）。
+- harness 无 per-fixture 旋钮（karma args 全局生效）。可行语义门=「raw 图仅服务
+  part-split 材质（uMBPartId>0），未分 part 的 tile 模型回退镜像链」：buckingham
+  pair 预期回收 ~40k，sno（全 part 分）预期不变。**但 buckingham-lod 单配置双稳
+  摆幅即 157k↔183k（25k），淹没该量级判定**。
+- 结论：**暂缓**。前置=影子系夹具多点采样协议（≥3 样本/臂/夹具，终二九九③）下的
+  专项 A/B；本lit-flag轮顺带证据：buckingham 对在 PCF 形态改动下与历史值位级一致
+  ——其输出对模型尾部 PCF 形态不敏感（双稳/覆盖路径主导），像素级 A/B 需先稳态。
+
+**③ 守卫**：lit-flag 实验未提交（工作树已回退至 终三〇〇 交付态）；守卫夹具无
+cast-shadows 结构性不可达，famRaw0 本会话已验证 +0（q-s 2,434/castro 184,292/
+high-zoom 4,930/castro-lighting 11,776）。
+
+**④ 下轮入口**：①buckingham tile 专项=多点采样协议下的 shmodelraw/shrawaz 双臂
+（≥3 样本/臂）；②sno 13.3k 探针覆盖缺口（partdbg 验证材质归属，不依赖 intensity
+门控）；③PCF 形态域随本轮关闭——软边 78k 需另寻 mgl 软影质感对拍入口（mgl-shot2）。
