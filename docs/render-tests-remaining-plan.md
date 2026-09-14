@@ -3527,3 +3527,28 @@ high-zoom 4,930/castro-lighting 11,776）。
 噪声（±30-90k）大幅收敛，是影子系 A/B 可信度的前置；②munich 大额项（multiple-extr-
 lod/hidden-extr-lod）多点采样复核（≥3/臂）；③sno 漏影 62% 无遮挡体投影域（mgl
 createLightMatrix 源码级移植）维持主攻方向。
+
+### §885 终三〇三：munich 多点采样复核——multiple-extr-lod −54k 坐实（分布完全分离）、hidden-extr-lod 双稳中性；settle 竞态假说阴性（2026-09-14）
+
+**① munich 大额项多点采样（≥3/臂，同日）**：
+- **multiple-extrusions-lod：raw {63,289×2, 117,688×1} vs mirror {117,688×3}——分布
+  完全分离（raw 最大值 < mirror 最小值），raw 0° 真配置改善 ≈ −54k 坐实**（与
+  famRaw0 65,024 / famMirror 119,423 跨批一致）。
+- hidden-extrusions-lod：raw {90,308×1, 49,435×2} vs mirror {90,023×2, 49,362×1}——
+  双稳两吸引子 {49k, 90k} 两臂同分布，**终二九九 的 −40.6k 为抽奖，中性**。
+- **raw 0° 默认的可信净收益更新 ≈ −55k**（sno −1.2k×2 位级复现 + MAPS3D −0.3k +
+  multiple-extr-lod −54k 坐实；hidden 中性）——默认决策强化。
+
+**② settle 竞态假说检验（阴性）**：新增 `settle=<n>` 旋钮（默认 3=历史行为不变），
+settle=8 ×2 实测 buckingham-lod 位级一致 182,954——仍为 settle=3 时代的吸引子之一，
+未收敛也未新增态。**多稳态根因不在 settle 帧数**（候选收窄：caster 注册时序 vs 深度
+pass、ground quad 首编译竞态、引擎瓦片挂载配额）。
+
+**③ 工具资产**：①settle 旋钮 + MBSTYLE_SETTLE 透传；②shadow-depth-canvas 转储携带
+`casters`/`frame` 计数（吸引子↔加载状态关联用），触发帧放宽 60→30/60（原 60 在短
+settle 序列不触发——本轮 sA 臂空转教训；sA1 无结果=首会话启动崩，与代码无关）。
+
+**④ 下轮入口**：①多稳态根因——用 30 帧 caster 计数转储做吸引子↔caster 数关联
+（buckingham-lod ×3 即可判）；②multiple-extr-lod −54k 已坐实可计入交付账；
+③sno 漏影 62% 无遮挡体（mgl createLightMatrix 源码级移植）维持主攻；④软边 78k 的
+mgl-shot2 软影质感对拍。

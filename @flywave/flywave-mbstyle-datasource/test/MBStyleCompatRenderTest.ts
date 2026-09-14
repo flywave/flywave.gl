@@ -685,9 +685,15 @@ async function renderUntilSettled(
     dataSource: MBStyleDataSource,
     maxFrames: number,
 ): Promise<void> {
+    // §885 终三〇三: settle=<n> → required consecutive stable frames
+    // (default 3 = the historical behavior). Longer windows close the
+    // mid-load capture race behind the shadow-family multi-stability
+    // (buckingham attractors 102912/157622/180128/191358, 终三〇二①).
+    const settleNeed = Number((window as any).__karma__?.config?.args?.find?.(
+        (a: string) => a.startsWith("settle="))?.slice("settle=".length)) || 3;
     let lastCount = -1;
     let stable = 0;
-    for (let i = 0; i < maxFrames && stable < 3; i++) {
+    for (let i = 0; i < maxFrames && stable < settleNeed; i++) {
         await renderFrames(mapView, dataSource, 1);
         // Count meshes actually ATTACHED to the scene: tile.objects lists
         // populate early, but the engine uploads geometry on a per-frame

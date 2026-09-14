@@ -997,7 +997,7 @@ export class MBShadowRenderer {
             // (few casters registered yet) and the early snapshot misled the
             // shadow investigation once already.
             const __rc = ((this as any).__mbRunCount = ((this as any).__mbRunCount ?? 0) + 1);
-            if (__rc === 1 || __rc === 60 || __rc === 1800 || __rc === 5400) {
+            if (__rc === 1 || __rc === 30 || __rc === 60 || __rc === 1800 || __rc === 5400) {
               try {
                 const c2: HTMLCanvasElement = (this as any).__mbDbg2d ??
                     ((this as any).__mbDbg2d = document.createElement('canvas'));
@@ -1066,7 +1066,7 @@ export class MBShadowRenderer {
                             fetch(`${fb}/mb-probe-dump`, {
                                 method: 'POST',
                                 headers: { 'content-type': 'application/json' },
-                                body: JSON.stringify({ probe: 'shadow-depth-canvas', dataUrl: url2 }),
+                                body: JSON.stringify({ probe: 'shadow-depth-canvas', dataUrl: url2, casters: shadowCasters.size, frame: __rc }),
                             }).catch(() => { });
                             // §885 终二七七: numeric uv→depth consistency —
                             // for each caster-box corner project with the
@@ -1502,7 +1502,7 @@ export class MBShadowRenderer {
         // identity at draw time. Log the actual matrix + framing once.
         if (!(this as any).__mbMatFrames) (this as any).__mbMatFrames = 0;
         const __rc = ++(this as any).__mbMatFrames;
-        if (__rc === 1 || __rc === 60 || __rc === 1800 || __rc === 5400) {
+        if (__rc === 1 || __rc === 30 || __rc === 60 || __rc === 1800 || __rc === 5400) {
             (this as any).__mbMatLogged = true;
             try {
                 const p = this.m_shadowCamera.position;
