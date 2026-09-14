@@ -3679,3 +3679,28 @@ museum +79k 为量化靶）；②软边 78k 的 mgl-shot2 对拍；③tile 抽�
 建议下轮先落 `Ar_ref.ts` 参考实现（含 c5/c6/c8/Ii.setPitchBearing/getWorldToCamera/
 getCameraToClipOrthographic 的逐一定价）后再动引擎；②texel snap 与 2048 分辨率、
 罗盘式光相机为三大候选改进（museum −18k 的信号值得追）；③sno 锚点 60,892 维持。
+
+### §885 终三〇八：辅助函数全定价 + texel snap 修正版落地（中性，旋钮默认关）——上轮 +52k 灾难真因=av 是标量乘法（2026-09-14）
+
+**① 辅助函数全定价（dist vec/mat 模块定义体逐一定价）**：
+- **`av=F(e,t,r)=t[i]*r`——标量乘法**（不是 vec 加法！）：上轮 snap 灾难（sno +52k）
+  的真因=把 `av(M,M,O)` 读成"加 O"，实为 **clip×O=clip×(res/2)→texel 单位**；
+  同理 getWorldToCamera 的 `av(n,n,−worldSize)`=位置×(−worldSize)（mercator 世界
+  翻转惯用法）。
+- 其余：aW=vec3 减法、cA=vec3 减法、aG=gl-matrix translate（out=a·T）、aC=identity、
+  aE=invert、aP=multiply、aK=ortho（e[0]=−2/(l−r) 标准）、aL=z/mercatorScale(lat)、
+  c6=vec3 构造、c8=st 球坐标 [len,az°,pol°]→笛卡尔（**az+90° 惯用法确认**）、
+  aI=fromQuat、aH=共轭、Ti(pitch,−bearing) 四元数、wi=quat 合成变换。
+
+**② texel snap 修正版 A/B（shtexsnap 旋钮，默认关）**：
+- 正确公式：Mtexel=clip×(res/2)；F=floor(Mtexel)；z_clip=−fract(Mtexel)×(2/res)；
+  L'=translate(z_clip)·L。
+- 结果：sno **60,781（−111）**无爆炸 ✓、museum 199,980（+1,743，±2.3k 跑间方差内）、
+  museum-lod 182,933。**像素中性**——上轮 museum −18k 是错误 snap 的侥幸抽样。
+- 落地：shtexsnap 旋钮默认关（交付态位级不变），mgl 语义正确性保留待影图错位
+  主攻验收时复用。
+
+**③ 三候选进度**：texel snap ✓（中性，已落地旋钮）；2048 分辨率（需联动 map 尺寸+
+全部 texel 旋钮÷2，待专项）；罗盘式光相机（需 Ii 相机移植，最大项，待专项）。
+**④ 下轮入口**：①罗盘式光相机移植（pitch=polar/bearing=atan2(−dx,−dy)——影图错位
+±44 双向对称的直接候选，museum +79k 靶）；②2048 分辨率专项；③剩余 ~80 件重基线。

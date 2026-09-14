@@ -691,6 +691,12 @@ async function renderUntilSettled(
     // (buckingham attractors 102912/157622/180128/191358, 终三〇二①).
     const settleNeed = Number((window as any).__karma__?.config?.args?.find?.(
         (a: string) => a.startsWith("settle="))?.slice("settle=".length)) || 3;
+    // §885 终三〈八: shtexsnap=1 → mgl texel snapping of the light matrices
+    // (Ar tail port with helpers priced: av=scalar-multiply resolves the
+    // snap units — z_clip = −fract(clip·res/2)·(2/res)).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shtexsnap=1")) {
+        (globalThis as any).__mbShTexelSnap = true;
+    }
     // §885 终三〇四: shdumpseries=1 → the shadow renderer POSTs its depth
     // canvas + casters/frame counts every 5 frames (≤30) — the attractor↔
     // caster-registration time series for the multi-stability root cause.

@@ -1248,6 +1248,19 @@ export class MBShadowRenderer {
             } else {
                 this.m_matrix.premultiply(mbBias);
             }
+            // §885 终三〇八: mgl texel snapping (Ar tail, helpers now priced —
+            // av=F is SCALAR multiply): Mtexel = clip·(res/2); F=floor(Mtexel);
+            // z_clip = −fract(Mtexel)·(2/res); L' = translate(z_clip)·L.
+            // Aligns the light-space center to texel boundaries (no shimmer).
+            if ((globalThis as any).__mbShTexelSnap) {
+                const O = 512;
+                const Mc = new THREE.Vector4(sphereCenter.x, sphereCenter.y, sphereCenter.z, 1)
+                    .applyMatrix4(this.m_matrix);
+                const zx = -(Mc.x * O - Math.floor(Mc.x * O)) / O;
+                const zy = -(Mc.y * O - Math.floor(Mc.y * O)) / O;
+                const zz = -(Mc.z * O - Math.floor(Mc.z * O)) / O;
+                this.m_matrix.premultiply(new THREE.Matrix4().makeTranslation(zx, zy, zz));
+            }
         }
         // §885 终二六七: one-shot composition probe — the model receivers see
         // a ZERO-LINEAR m_matrix (uv constant out-of-bounds ⇒ everything lit).
@@ -1402,6 +1415,17 @@ export class MBShadowRenderer {
                     this.m_matrixR0.multiply(mbBiasR);
                 } else {
                     this.m_matrixR0.premultiply(mbBiasR);
+                }
+                // §885 终三〇八: texel snap for the RAW cascade-0 (the model
+                // tail's primary map) — same formula, own matrix.
+                if ((globalThis as any).__mbShTexelSnap) {
+                    const OR = 512;
+                    const McR = new THREE.Vector4(sphereCenter.x, sphereCenter.y, sphereCenter.z, 1)
+                        .applyMatrix4(this.m_matrixR0);
+                    const zRx = -(McR.x * OR - Math.floor(McR.x * OR)) / OR;
+                    const zRy = -(McR.y * OR - Math.floor(McR.y * OR)) / OR;
+                    const zRz = -(McR.z * OR - Math.floor(McR.z * OR)) / OR;
+                    this.m_matrixR0.premultiply(new THREE.Matrix4().makeTranslation(zRx, zRy, zRz));
                 }
             }
             // Restore the MIRROR axis for the cascade-1 pass below (it reuses
