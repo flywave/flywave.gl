@@ -3800,3 +3800,78 @@ collision/z-offset-v2-station 家族面；②2048 单独（无 snap）隔离归�
 **④ 下轮入口**：①2048 单独 vs 2048+snap 归因（museum 一靶即可）；②museum-lod/
 collision 家族面补测；③Ar_ref 桥接按 _transform 真语义重写（终三一一②）；④若
 家族面干净→迁移决策（默认 2048+snap 或按投影/夹具面开）。
+
+
+### §885 终三一三: 2048 vs snap 归因完成 + 家族面 N≥2 补测——buckingham-lod −7.9k（N=1，2048 渲染 3 连崩待解）；scale 回归虚惊（默认臂自身漂移）；museum-lod 2048 单独即等效；sno 锚点二次确认；ArRef 桥接按 _transform 真语义重写并过 gl-matrix 逐位验证（2026-09-15）
+
+**① 归因（2048 单独 vs 2048+snap，museum 族 2×2 矩阵）**：
+- door-light-munich-museum：default 198,237/200,573/198,973（N=3）｜2048-only
+  **196,204**（N=1）｜snap@1024 199,980（终三〇八，N=1）｜2048+snap
+  **186,069/194,916×2/200,653**（N=4，E+J 批；194,916 两次逐位）——2048+snap
+  中位数 194.9k vs default 199.0k ≈ **−4k 方向性改善但与 default 带重叠**
+  （终三一二的 −12.2k 单样本 headline 下修为带内方向性；tile 抽奖使同 config
+  跑间达 8.8k+，影子系 N≥2 纪律 reaffirm）。
+- museum-lod：2048-only **179,400** ≈ 2048+snap **179,389**（Δ=11 逐位级）/
+  **182,934×2（E+J 逐位收敛）**——**museum-lod 上 2048 分辨率单独即完成全部
+  工作，snap 中性**；首采 249,505 为 tile 抽奖极端尾（历史吸引子带
+  122.9k-189.5k 之底以 179.4-182.9k 为新收敛值）。
+- 判定：**收益=2048×snap 交互（museum 本体，方向性）+2048 分辨率本身
+  （museum-lod，收敛且带底）**，两者机制不同；均非大幅对齐跳跃——影图 ±44
+  错位主残差仍在（ArRef 全帧接线才是正解，见③）。
+
+**② 家族面 @2048+snap（N≥2 补齐，Chrome131 ChromeHeadless）**：
+- sno 锚点 **60,552/60,519（N=2，−340/−373 vs 60,892）**——安全二次确认。
+- collision 42,456（带 42,403-42,466）/ collision-lod 45,264（与 famMirror
+  逐位相等）中性；castro 184,294 位级不变、z-offset-v2 261,119（+35，终三一二）。
+- **buckingham 178,205×2（D+K2 逐位收敛）** vs 178,885/180,128 → 中性偏正。
+- **buckingham-lod 149,441（N=1）vs 157,313/157,622 → −7.9k**：最强正信号但
+  N≥2 三连尝试（K/K-retry/K2）全部 karma DISCONNECTED（16-17 min 处
+  SwiftShader 崩溃）——**landmark-conflation-buckingham-lod + 2048 组合存在
+  fixture 特异渲染崩溃**（非 lod 同 config 两连过，museum/scale lod 均过），
+  基建坑待解，−7.9k 保持 N=1 指示性。
+- **scale-munich-museum：2048+snap {254,991/254,900}（N=2 两位级收敛）vs
+  default {231,315(famRaw0, N=1)/259,102(M 批)}——+23.6k"回归"虚惊**：default
+  臂自身多稳态（231k→259k 漂移），2048+snap 落带内且更收敛（254.9k×2）→
+  **中性**；scale-munich-lod 272,324 ≈ 上吸引子 271,633（+691）中性。
+- museum-terrain 2048-only 首测 240,634（家族多稳态 192.8k/238.1k，指示性）。
+
+**③ ArRef 桥接重写（终三一一②入口，惰性资产，无 import）**：
+- `orientationFromPitchBearingRef`：dist quat 链 verbatim（identity→rotateZ(−b)
+  →rotateX(−p)），**对 node_modules gl-matrix@3.4.3 五组位姿逐位一致**。
+- `cameraToWorldMercatorRef(pose)`：FreeCamera._transform=[R|position_mercator]
+  直接由 {position, pitch, bearing} 构造——即 getCameraToWorldMercator 桥，
+  终三一一②"直接可从引擎相机位姿构造"落地。
+- `getWorldToCameraRef`：verbatim 四步（conjugate→translate(−pos·worldSize)→
+  y-row flip→z-column×ppm），与 gl-matrix 逐步组合最大差 2.2e-5（Float32 舍入
+  量级）；**输入是世界像素（x/y=mercator×worldSize）**——旧手搓 lightCameraView
+  退役。
+- snap 尾段修正：+fract·(2/res) → **−fract·(2/res)**（对齐引擎 shtexsnap 已
+  A/B 语义；ArRef 旧草稿符号笔误）。
+- **up 恒等的显式形式（对 终三一一② 的补全）**："逐分量恒等"须经
+  scene→mercator 的 y 翻转（引擎场景 y=北 vs mercator y=南）：mgl_up =
+  (y0, −y1, y2)·lookAt_up——数值验证成立，帧映射 y 翻转语义由此显式化。
+- selfCheck 扩展全绿：c5/st round-trip、quat vs closed form、up-identity（含
+  y 翻转）、getWorldToCamera 元素级 + 眼点→原点检查。
+
+**④ 基建坑（三条）**：①CHROME_BIN 必须指向 puppeteer 缓存的 Chrome for
+Testing **131.0.6778.108**（平台目录与存档一致）；系统 Google Chrome 152 的
+UA-reduction 使 karma 平台目录变 131.0.0.0/152.0.0.0，跨版本不可直接比（偶得
+museum 同配置 152=194,829 vs 131=196,204，差 1.4k，仅参考）。②**3-4 路并行跑
+2048 重 fixture 会 karma DISCONNECTED**（23-29 min 挂死）——2048 批次限 ≤2 路
+并行或串行；runner 默认 MBSTYLE_RESUME_ROUNDS=0 不自动补跑。③
+**landmark-conflation-buckingham-lod @2048+snap 三连渲染崩溃**（16-17 min 处
+DISCONNECT，同批非 lod 两连过）——翻转 2048 默认前必须解决，否则该靶不可测。
+
+**⑤ 迁移决策（修订）**：无回归（scale 虚惊已排除；sno/castro/collision/
+buckingham/scale 全中性或改善），正信号=buckingham-lod −7.9k（N=1+崩溃待解）+
+museum 方向性（带重叠）+ 收敛性普遍变好（逐位重现频繁：buckingham×2、
+museum-lod×2、194,916×2、254.9k×2）——**默认翻转暂缓**：①buckingham-lod
+@2048 崩溃先解；②museum/buckingham-lod 各补 N≥2 巩固；③ArRef 全帧接线后
+（错位主残差解决时）2048+snap 的收益画像会变，届时一并定翻转。旋钮维持默认关。
+
+**⑥ 下轮入口**：①buckingham-lod @2048 渲染崩溃排查（SwiftShader/GPU 进程
+内存？分批单跑重试协议）；②ArRef 引擎接线专项（帧映射=仿射+y 翻转已定，
+shfrmprobe 实测可直接喂 cameraToWorldMercatorRef——mercator↔RTE 桥成本已从
+"推导"降为"接线"）；③museum/buckingham-lod N≥2 补齐（同批配对采样协议：
+default 与 2048+snap 同批各一，避免跨批 tile 抽奖混淆）；④buckingham-lod
+−7.9k 的 N=2 巩固后并入翻转决策。
