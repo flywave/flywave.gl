@@ -4032,3 +4032,39 @@ harp TileLoader/DataProvider 层面 + storageLevelOffset 交互）；②发丝�
 ③类 B 照明缺失专项（fill-extrusion 方向光调制路径）；④协议精度全族重跑
 （75 件 × criterion-only）建立新基线后逐簇推进（L4 缺口清单：FillIntersections
 LayoutArray/draw_elevated_fill/Elevation Portal Graph/护栏 per-feature flag）。
+
+### §885 终三一八: no-cross-beams 发丝化深度解剖——几何链路全部正确（数据完备/结构 7 曲线/fill 计划正确/瓦片锚定正确），但 35×瓦片对象重复添加 + 渲染仍发丝线；瓶颈收敛到渲染提交/状态层，需交互式二分（2026-09-15）
+
+**① 数据完备性（z18 MVT 手写 parser 解剖）**：18-149142-75820.mvt（6.4KB，
+ext=8192）含 hd_road_centerlines(3)/hd_road_elevation(35 curve_point)/
+hd_road_line(29: bridge_edge+guard_rail)/hd_road_polygon(11: drive 桥面+
+non-driving)——源数据完备，非数据缺失。
+
+**② 链路逐级自证（decodedbg+新增遥测）**：
+- HD 门控/结构：hd=true、elevEmpty=false、elevFeat=7 ✓（MBTileDec 新增
+  hd/elevEmpty/elevFeat 字段）。
+- fill HD 路径（新增 [MBFillHD] 遥测）：road-base/bridge/hatched 逐特征
+  plan=yes（elevId=3431750038454272 等正确解析），个别无 elevId 特征
+  plan=NO 走平地（mgl 语义 ✓）。
+- 世界包围盒（新增 [MBFillHD-bounds]）：road-base 世界盒
+  [−76..+19]×[−76..+76] z=5.05、bridge z=6.0，decodeCenter=[22800019,
+  28484029, 0] = style center ✓——**发射几何位置/高度全部正确**。
+- 瓦片锚定（[MBSceneObj]）：road-base-bridge world=(110.7,32.9,−72)=
+  center−eye ✓（眼在瓦心西 110/南 33/上 72）；deck 顶点 z=5-6 ✓。
+
+**③ 残留异常（发丝化的最终嫌疑）**：
+- **nTiles=35 且 35 个瓦片对象全部同名 tile17/74571/37910**——每次重解码
+  新增而非替换（§662 重复模式在长窗下的极端形态）。35 份重复对象本身不该
+  发丝化（只会 z-fighting 变厚），但叠加渲染状态异常（depthFunc/材质态/
+  重复 draw 的深度耗尽）可能表现为边缘残渣。
+- 相机帧：cameraZ=72、zoomLevel=19.94、camPos 大坐标（22.8M）与网格 RTE
+  小坐标并存——工作件同构且正常，RTE 重基机制应在;但**未验证渲染相机
+  实际使用的矩阵**（harp 内部 camera world vs RTE 重基的交互）。
+- 下一步（交互式二分）：①逐 mesh visible=false 二分（35 份重复→1 份时
+  渲染是否恢复）；②dump WebGL draw calls/triangles（renderer.info）确认
+  deck 三角形是否提交 GPU；③对比工作件同帧 dump 差异定位状态差异。
+
+**④ 结论**：数据完备→结构建成→fill 计划正确→锚定正确，链路自证到底；
+发丝化发生在渲染提交/状态层（重复瓦片对象 + 未验证的渲染相机矩阵）。
+**修复入口已从"几何"转移到"渲染对象管理"**：优先查 tile 对象复用/替换
+逻辑（35×重复的注册路径）与渲染相机重基。

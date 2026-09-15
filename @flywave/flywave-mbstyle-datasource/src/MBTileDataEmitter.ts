@@ -1953,6 +1953,14 @@ export class MBTileDataEmitter {
                     const plan = this.m_elevationStructures!.prepareFillGeometry(
                         properties, toLocal(effectiveRings),
                         fillElevRef === 'hd-road-markup', extents);
+                    // §885 终三一八: HD fill telemetry — per-feature path &
+                    // emitted vert count (3d-intersections deck hairline triage).
+                    if ((globalThis as any).__mbDecodeDbg) {
+                        let planVerts = 0;
+                        if (plan) for (const piece of plan.pieces) planVerts += piece.ring.length;
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBFillHD] layer=${layer.id} ref=${fillElevRef} plan=${plan ? 'yes' : 'NO'} pieces=${plan?.pieces?.length ?? 0} planVerts=${planVerts} ring0=${effectiveRings[0]?.length ?? 0} elevId=${JSON.stringify(properties?.['3d_elevation_id'])}`);
+                    }
                     if (plan && yDelta) {
                         const back = (rs: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> =>
                             rs.map(p => ({ x: p.x, y: p.y + yDelta }));
@@ -1969,6 +1977,25 @@ export class MBTileDataEmitter {
                             this.m_elevationStructures!.addPortalCandidates(
                                 plan.feature.id, plan.clippedRingsCanonical[0],
                                 plan.isTunnel, plan.feature);
+                            // §885 终三一八: world-bounds of the emitted
+                            // pieces vs the tile world box — numeric
+                            // misplacement check for the hairline triage.
+                            if ((globalThis as any).__mbDecodeDbg) {
+                                let minx = Infinity, miny = Infinity, minz = Infinity;
+                                let maxx = -Infinity, maxy = -Infinity, maxz = -Infinity;
+                                for (const piece of plan.pieces) {
+                                    for (const pt of piece.ring) {
+                                        const w = this.project(new THREE.Vector2(pt.x, pt.y));
+                                        const wz = w.z + (piece.heights[0] ?? 0);
+                                        minx = Math.min(minx, w.x); maxx = Math.max(maxx, w.x);
+                                        miny = Math.min(miny, w.y); maxy = Math.max(maxy, w.y);
+                                        minz = Math.min(minz, wz); maxz = Math.max(maxz, wz);
+                                    }
+                                }
+                                const c = this.m_decodeInfo.center;
+                                // eslint-disable-next-line no-console
+                                console.log(`[MBFillHD-bounds] layer=${layer.id} world=[${minx.toFixed(1)},${miny.toFixed(1)},${minz.toFixed(2)}]..[${maxx.toFixed(1)},${maxy.toFixed(1)},${maxz.toFixed(2)}] decodeCenter=[${c.x.toFixed(1)},${c.y.toFixed(1)},${c.z.toFixed(1)}]`);
+                            }
                             // fill-construct-bridge-guard-rail is a
                             // data-driven LAYOUT property (mgl default true).
                             const guardRailRaw = layer.layoutDefs?.['fill-construct-bridge-guard-rail'] ??
