@@ -3912,7 +3912,10 @@ cameraToWorldMercatorRef——mercator↔RTE 桥成本已从"推导"降为"接�
 - sharref@1024（**修正 T 版**，S 批）：193,399；museum-lod 182,247。
 - **sharref+2048+snap（修正 T 版，T 批）**：194,599；museum-lod 182,605；
   buckingham **180,128（=默认 famRaw0 逐位）**；buckingham-lod **157,622（=
-  默认 famRaw0 逐位）**。
+  默认 famRaw0 逐位）**。T 批 DISCONNECT 复跑后 buckingham 又落 **191,358——
+  终三〇二 记档的 4 离散吸引子（102912/157622/180128/191358）之一逐位重现**：
+  完整 mgl 组合下 buckingham 仍落在默认态已知的同一组吸引子上，④的结构性
+  结论获得直接确认。
 - 判读：sharref 系全部落 180-194k vs 默认带 198-201k——**方向性改善 ~−6~−18k
   但无决定性突破**；完整 mgl 组合不低于 2048+snap 带；buckingham 双件在
   sharref 下回退到默认值（引擎帧 2048+snap 的 −7.9k 是引擎帧专属吸引子，
