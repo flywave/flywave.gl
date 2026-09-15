@@ -3986,3 +3986,49 @@ edge insets 项补全（当前 elev=0/insets 平凡，museum 域内无损）。
 台账数字升级为协议精度；③阴影链帧间抖动定位（±100 px 残余来源：在稳定后
 逐帧 dump m_matrix/uv，找帧间差异位）；④tile 楼面非阴影差异分解（终三一四
 §⑥②维持）。
+
+### §885 终三一六/终三一七: karma 10-min 无活动超时根因实锤（"崩溃"主机制）+ 超时可调通道；3d-intersections 族（75 件）专项分诊——主失败=高程道路几何发丝化，高程链路自证到 structures 层，瓦片请求选层为主嫌（2026-09-15）
+
+**① 基建根因（W 批日志实锤，"非确定性崩溃"主机制改判）**：
+- `WARN: Disconnected (2 times), because no message in 600000 ms` — karma
+  **browserNoActivityTimeout（600s）** 在长静默渲染窗（确定性 settle 协议/
+  2048 重 fixture）期间杀连接；重试又撞 ProcessSingleton 锁（僵尸浏览器持
+  锁 → "Aborting now to avoid profile corruption" → launcher 报
+  "ChromeHeadless crashed"）。此前的 U1×2/U2×2/U3×1"崩溃"与 X1 死亡均属此
+  机制 + 少量真进程退出；终三一三补 的 buckingham-lod@2048 三连崩大概率同
+  因。修复：`MBSTYLE_BROWSER_NOACTIVITY_MS`/`MBSTYLE_BROWSER_PING_MS`/
+  `MBSTYLE_CHROME_FLAGS` 三通道入 karma.options（默认原值，交付态不变）。
+- 验证：放大 no-activity 后 X2 干净完成（6.5 min）；museum criterion-only
+  （U4/W）也即不再复现。原 Crashpad 专项降级——先修超时再观察残余真崩溃。
+
+**② settlecasters 协议精度升级（§⑤② 部分）**：
+- museum（criterion-only）：196,226×2（U4/W **逐位收敛**）。
+- buckingham-lod（criterion-only vs min40）：149,302 = 149,302 **逐位一致**。
+- buckingham：criterion-only 178,885；min40 178,781/178,885（min40 残余
+  ±104 定位为 settlemin 窗内相位的少量摆动）。
+- 台账阴影系主靶数字自本轮起可用协议精度（±~100px）表述。
+
+**③ 3d-intersections 族专项分诊（75 件，历史基线 0-205,632 px）**：
+- **主失败类 A（高程/下沉道路几何发丝化）**：no-cross-beams 167,916、
+  guard-rail-qkey-border 183,837、stacked-underground-roads 150,475、
+  elevated-circles-* 31k-120k（圆点悬浮于空背景）——expected 的宽幅桥面/
+  凹槽+挡墙在我们渲染中退化为发丝线/点阵；目视五件均同签名。
+- **主失败类 B（方向光照明缺失）**：elevated-symbols-lighting* 4 件
+  179k-195k——expected 深色沥青（方向光调制）+ 暖色挡墙 + 大块阴影区，我们
+  为未调制平色、无墙、无阴影（style 带 lights.directional 0.75+cast-shadows）。
+- **已对齐良好**：shadows-roads-depth 1,209 / shadows-junction 17,200 /
+  road-extend-tilecover-tunnel 5,897 / depth-segments-* 0。
+- **诊断进展（no-cross-beams 解剖）**：①相机/网格帧在工作件与故障件间同构
+  （相机大坐标 + 网格 RTE 小坐标，RTE 重基调和渲染）——"漏锚定"假说排除；
+  ②HD 高程链路自证到 structures 层：hd=true、elevEmpty=false、elevFeat=7
+  （MBTileDec 遥测新增 hd/elevEmpty/elevFeat 字段）；③**主嫌=瓦片请求选层**：
+  故障件（style zoom 19.94）只解码 1 个 z18 瓦片（geos=7）而本地存在 49 个
+  z18 瓦片且视锥应覆盖多片；工作件（zoom 18.95）解码多片 z16。z18 选层/
+  overzoom(maxzoom=18, display>maxzoom) 的请求路径是下一刀。
+
+**④ 下轮入口**：①瓦片选层追踪（display zoom>maxzoom 时为何只请求单片——
+harp TileLoader/DataProvider 层面 + storageLevelOffset 交互）；②发丝几何
+数值对照（解码几何 world bounds vs expected 路网，判定 scale/anchor 残差）；
+③类 B 照明缺失专项（fill-extrusion 方向光调制路径）；④协议精度全族重跑
+（75 件 × criterion-only）建立新基线后逐簇推进（L4 缺口清单：FillIntersections
+LayoutArray/draw_elevated_fill/Elevation Portal Graph/护栏 per-feature flag）。

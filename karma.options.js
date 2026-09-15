@@ -61,7 +61,15 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
                     // Chrome touches the real "Chrome Safe Storage" item at
                     // startup and macOS pops a password dialog (which also
                     // blocks the launch until answered, karma "not captured").
-                    "--use-mock-keychain"
+                    "--use-mock-keychain",
+                    // §885 终三一六: MBSTYLE_CHROME_FLAGS → extra launcher
+                    // flags for crash diagnostics (e.g. "--enable-crash-
+                    // reporter --enable-logging=stderr" for the SwiftShader
+                    // death stack, 终三一五⑤①). Default empty = the delivery
+                    // launch state is untouched.
+                    ...(process.env.MBSTYLE_CHROME_FLAGS
+                        ? process.env.MBSTYLE_CHROME_FLAGS.split(/\s+/).filter(Boolean)
+                        : [])
                 ]
             },
             ChromeDebug: {
@@ -293,11 +301,15 @@ const options = function (isCoverage, isMapSdk, prefixDirectory) {
         // 浏览器无活动超时：§695 19 fixtures 挂起族根因是 SwiftShader
         // ~10s/帧 × 60帧 = 600s 渲染期间无 karma 活动信号 → 断连。
         // 提升到 600s 配合 maxFrames=30（350s 渲染）+ 15s FrameComplete。
-        browserNoActivityTimeout: 600000,
+        // §885 终三一六: MBSTYLE_BROWSER_NOACTIVITY_MS → 可调（确定性
+        // settle 协议的长静默窗需要 >10min；museum 长窗 DISCONNECT 的
+        // "no message in 600000 ms" 即本超时，W 批日志实锤）。默认 600000
+        // = 交付态不变。
+        browserNoActivityTimeout: Number(process.env.MBSTYLE_BROWSER_NOACTIVITY_MS) || 600000,
 
         // 浏览器响应 ping 的超时：SwiftShader 下重负载用例（dynamic-filter 等）
         // 主线程可能偶发阻塞 60-120s，默认 60s 会误判 DISCONNECTED 整批重跑
-        pingTimeout: 180000,
+        pingTimeout: Number(process.env.MBSTYLE_BROWSER_PING_MS) || 180000,
 
         // 浏览器断开超时（SwiftShader 下重负载 3D 用例可能卡顿，放宽）
         browserDisconnectTimeout: 60000,

@@ -1267,7 +1267,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     const dt: any = emitter.getDecodedTile();
                     const pg: any = dt.poiGeometries?.[0];
                     const tg: any = dt.textGeometries?.[0];
-                    console.log(`[MBTileDec] z=${tileKey.level} x=${tileKey.column} y=${tileKey.row} ext=${emitter.extents} geos=${dt.geometries.length} techs=${dt.techniques.length} textGeos=${dt.textGeometries?.length ?? 0}(labels=${tg ? tg.texts.length : '?'}) textPath=${dt.textPathGeometries?.length ?? 0} poi=${dt.poiGeometries?.length ?? 0}(labels=${pg ? pg.texts.length : '?'}) pts=${(this as any).__mbPtTotal ?? ''}`);
+                    // §885 终三一七: HD elevation gate telemetry — pinpoints
+                    // which link of the hd-road-markup chain breaks per tile.
+                    console.log(`[MBTileDec] z=${tileKey.level} x=${tileKey.column} y=${tileKey.row} ext=${emitter.extents} geos=${dt.geometries.length} techs=${dt.techniques.length} textGeos=${dt.textGeometries?.length ?? 0}(labels=${tg ? tg.texts.length : '?'}) textPath=${dt.textPathGeometries?.length ?? 0} poi=${dt.poiGeometries?.length ?? 0}(labels=${pg ? pg.texts.length : '?'}) pts=${(this as any).__mbPtTotal ?? ''} hd=${this.m_styleUsesHdElevation} elevEmpty=${this.m_elevationStructures ? this.m_elevationStructures.isEmpty : 'null'} elevFeat=${this.m_elevationStructures ? (this.m_elevationStructures as any).features?.length ?? '?' : '?'}`);
                     (this as any).__mbPtTotal = 0;
                 }
             } else if (typeof data === 'string') {
