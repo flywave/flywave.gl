@@ -4085,3 +4085,16 @@ tile17/74571/37910 的世界锚 = (110.7, 32.9, −72)，但其内部网格顶�
   Tile 锚定改为存储中心−eye（或等价地把载荷重锚到显示中心），与 §746
   re-decode/children-merge 的 dx/dy 重锚机制对齐；验证=no-cross-beams
   mismatch 从 167,916 大幅下降 + shadows-roads-depth 保持 ≤1.5k。
+
+**⑥ 终三一八补2（placement 遥测定量）**：新增 [MBPlace]（tile.center vs
+camera.position vs 派生锚，逐瓦片）。目标瓦片 17/74571/37910：
+tileCenter=(22800095.4, 28483952.8, 0) vs 几何解码基准
+decodeCenter=(22800019.0, 28484029.3, 0)——**Δ=(+76.4, −76.5) ≈ 半个瓦片
+对角**（z18 半片=76.4m）。即 harp geoBox 网格把该瓦片中心放在 MVT 数据
+网格中心的东北半格处——z17 geoBox 网格与 z18 MVT 数据网格存在**半格原点
+错位**（y-flip/extent 换算 setMvtYOffset/setMvtFlip 或 DecodeInfo 中心
+计算的半格误差；overzoom+1 时暴露）。视场内其余 700 条 [MBPlace] 均自洽
+（邻瓦片 anchor 随 (x,y) 线性变化，无逐片漂移）——错位是**全局网格原点
+偏移**，非个别瓦片损坏。下一步：以 decodeCenter 为准反推 harp geoBox 的
+期望值，检查 getGeoBox(z17, 74571, 37910) 的经纬度范围与 setMvtYOffset
+的 top 计算（lat2tile(north, 18+13) 的大数精度嫌疑）。
