@@ -436,6 +436,58 @@ function mercatorZfromZoom17(t: MercatorTransformParams): number {
 }
 
 /**
+ * One-call mgl light frame (终三一四 engine wiring): given the mgl MAIN
+ * camera pose, the mercator-frame light direction, the cascade centerDepth
+ * (world-pixel units — engine targetDistance parity, §872j4) and the shadow
+ * resolution, returns the light camera view/proj EXACTLY as mgl
+ * createLightMatrix builds them:
+ *   1. sphere center = CtW(pose)·(0,0,−centerDepth/worldSize) (mercator);
+ *   2. light camera = FreeCamera{position: center, setPitchBearing(polar,
+ *      −bearing)} with bearing = atan2(−dx,−dy), polar = acos(dz);
+ *   3. view = FreeCamera.getWorldToCamera(worldSize, ppm);
+ *   4. ortho ±R, near = min(−2·mercatorZfromZoom(17)·worldSize, −2R),
+ *      far = R/dir.z (elevation term = 0 — flat-ground fixtures);
+ *   5. R = radius·worldSize⁻¹·worldSize with the caller-supplied
+ *      roundingMargin already applied to centerDepth's fit (engine parity).
+ * Column-major Float64Arrays (THREE Matrix4.fromArray-compatible).
+ */
+export function mglLightFrameRef(opts: {
+    pose: CameraPose;
+    dirMerc: [number, number, number];   // unit light dir, mercator frame, z>0
+    centerDepth: number;
+    worldSize: number;
+    ppm: number;                          // worldSize / (C·cos(lat))
+    mercatorZ17: number;                  // mercatorZfromZoom(17) ≈ 2^-17
+    radiusPx: number;                     // engine radius (roundingMargin applied)
+    resolution: number;
+}): {
+    view: Float64Array; proj: Float64Array; L: Float64Array;
+    centerWorld: [number, number, number]; near: number; far: number; R: number;
+} {
+    const h = 1 / opts.worldSize;
+    // Sphere center in mercator: camera-space (0,0,−centerDepth/worldSize).
+    const ctW = cameraToWorldMercatorRef(opts.pose);
+    const cW = multiplyMat4Vec3(ctW, [0, 0, -opts.centerDepth * h]);
+    const centerWorld: [number, number, number] = [cW[0], cW[1], cW[2]];
+    // Compass light camera.
+    const polar = Math.acos(clamp(opts.dirMerc[2], -1, 1));
+    const mglBearing = Math.atan2(-opts.dirMerc[0], -opts.dirMerc[1]);
+    const lightPose: CameraPose = {
+        position: [centerWorld[0], centerWorld[1], centerWorld[2]],
+        pitch: polar,
+        bearing: -mglBearing,
+    };
+    const view = getWorldToCameraRef(lightPose, opts.worldSize, opts.ppm);
+    const R = opts.radiusPx;
+    // Negative near: z17 mercator height ×2 behind the camera (or −2R).
+    const near = Math.min(opts.mercatorZ17 * opts.worldSize * -2, -2 * R);
+    const far = R / Math.max(opts.dirMerc[2], 0.1);
+    const proj = ortho(-R, R, -R, R, near, far);
+    const L = multiplyMat4(proj, view);
+    return { view, proj, L, centerWorld, near, far, R };
+}
+
+/**
  * Self-check (dev): c5/st round-trip, the quat-chain orientation vs its
  * closed form, the 终三一一② up-identity (compass light camera up ≡
  * lookAt(−dir, up=(0,0,1)) up for any forward), and ortho corner sanity.

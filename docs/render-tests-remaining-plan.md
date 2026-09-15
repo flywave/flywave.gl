@@ -3879,3 +3879,63 @@ buckingham/scale 全中性或改善），正信号=**buckingham-lod −7.9k（N=
 cameraToWorldMercatorRef——mercator↔RTE 桥成本已从"推导"降为"接线"）；
 ③museum 同批配对采样（default 与 2048+snap 同批各一，消跨批 tile 抽奖）；
 ④全家族重基线（2048+snap，按家族抽靶+单跑重试协议）后并入翻转决策。
+
+### §885 终三一四: ArRef 引擎接线落地（sharref=1，惰性→现役）+ 桥接双 bug 经探针验证修复——museum 方向性改善但 ±44 主残差未决定性消除；跨 config 逐位重合证明 mismatch 由离散 tile 态吸引子主导，对齐前沿改判（2026-09-15）
+
+**① 接线实现（默认关，类型检查全绿）**：
+- `ArRef.mglLightFrameRef`：一体化光帧——CtW(pose)·(0,0,−centerDepth/worldSize)
+  球心、罗盘光相机（FreeCamera.setPitchBearing 语义）、getWorldToCamera
+  （y 翻转行 + ppm z 列）、ortho near=min(−2·mZ17·worldSize, −2R)、far=R/dz。
+- `MBShadowRenderer` sharref=1：mirror c0 与 raw R0 双 pass 的光相机整体改在
+  mgl mercator 帧构造；场景↔mercator 仿射 A（h/v/y 翻转，运行时 ±1000 探针
+  实测）折进深度相机（matrixWorldInverse=V·A，matrixAutoUpdate=false 手动驱
+  动，R0 后恢复）——接收器仍采样场景坐标：m_matrix = bias·P·V·A；sphereCenter
+  改为 mercator 球心的场景像（A⁻¹·centerWorld），既有 shtexsnap/探针零改动；
+  cascade-1 维持引擎路径（混合态已记档）。
+- 测试端 sharref=1 karma arg→`__mbShArRef`；帧探针扩展 arrefPose/arrefCenter
+  字段（桥接数值验证通道）。
+
+**② 桥接双 bug（探针验证抓出并修复，过程入档）**：
+- bug1：`unprojectPoint({0,0,0})` = mercator **SW 角** [0,1,0]——
+  projectPoint/unprojectPoint 是 SW 锚定的世界帧换算，不是眼点相对坐标；作 T
+  用等于把整个光框平移到世界角落。**正交平移不变** ⇒ 影子几何保持自洽（O/P/Q
+  批数据仍有效），仅 snap 相位移动。
+- bug2：`worldCenter` 也是世界帧（实测 ≈ projectPoint(gc)，非 RTE 偏移）。
+- 修复：眼锚 = mglMerc(gc) − S·(forward·ctcd)（眼在视中心后/上 f·ctcd 处——
+  与 mgl 球心的 camera-space 惯例同构）。**S 批探针验证**：eyeMerc=
+  [0.532173, 0.347113, 4.216e-5]（慕尼黑、南偏、高 564m=f·ctcd·|fz| ✓），
+  h=2.4953202e-8/v=3.7382912e-8 与 shfrmprobe 档案真值精确一致。
+
+**③ A/B（museum 主靶；全部单跑）**：
+- sharref@1024（SW-T 版，O 批）：180,302/193,767；museum-lod 183,497。
+- sharref+2048+snap（SW-T 版，P 批）：193,399；museum-lod 182,605。
+- sharref@1024（**修正 T 版**，S 批）：193,399；museum-lod 182,247。
+- **sharref+2048+snap（修正 T 版，T 批）**：194,599；museum-lod 182,605；
+  buckingham **180,128（=默认 famRaw0 逐位）**；buckingham-lod **157,622（=
+  默认 famRaw0 逐位）**。
+- 判读：sharref 系全部落 180-194k vs 默认带 198-201k——**方向性改善 ~−6~−18k
+  但无决定性突破**；完整 mgl 组合不低于 2048+snap 带；buckingham 双件在
+  sharref 下回退到默认值（引擎帧 2048+snap 的 −7.9k 是引擎帧专属吸引子，
+  非 mgl 语义收益）。
+
+**④ 结构性发现（本轮最重要）**：跨 config 逐位重合反复出现（P/S museum
+=193,399；T buckingham/buckingham-lod = 默认档逐位；194,916×2、149,441×2、
+178,205×3）⇒ **mismatch 计数由离散 tile 态吸引子主导**（终三〇二 离散吸引子
+结论的推广），阴影细节（分辨率/snap/光帧）只能在其上移动 ~±10-20k px。
+**±44 影图错位主残差改判**：光矩阵路径已是 mgl 忠实（接线+验证完成），其可
+动空间有界；~180k 总残差的主体在 tile 楼面/材质/光照的非阴影差异——对齐前沿
+应转向（a)tile 态吸引子的 settle 语义（终三〇四 立项维持）、(b)tile 楼面
+material/lighting 差异分解。
+
+**⑤ 基建坑**：①sharref 下 R0/mirror 共享同一 mercator 轴（mgl 单管线语义，
+两 pass 地图收敛）；②帧探针在 frame 1/60 触发会采到 settle 动画中间态
+（zoom 17.9/ctcd 983 vs 落定 18.7/564.63）——桥接逐帧重推导不受影响，但用
+探针数值做静态标定时须取落定帧；③worldCenter/projectPoint/unprojectPoint
+三个坐标系的锚定（世界 SW 帧 vs RTE 帧）是引擎阴影系第一语义坑，已写入代码
+注释。
+
+**⑥ 下轮入口**：①tile 态吸引子 settle 语义专项（与终三〇四 立项合流——
+mismatch 主体的真正来源，优先级高于一切阴影侧工作）；②tile 楼面非阴影差异
+分解（partdbg/材质 diff 在同一 tile 态下成对做，消抽奖）；③sharref 保持默认
+关作为 mgl 忠实路径资产；④若后续需要：cascade-1 的 mercator 化与 elevation/
+edge insets 项补全（当前 elev=0/insets 平凡，museum 域内无损）。

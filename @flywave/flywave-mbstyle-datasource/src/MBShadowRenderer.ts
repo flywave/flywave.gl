@@ -21,6 +21,8 @@
 
 import * as THREE from 'three';
 
+import { mglLightFrameRef } from './ArRef';
+
 export const shadowCasters = new Set<THREE.Object3D>();
 
 /**
@@ -934,6 +936,127 @@ export class MBShadowRenderer {
             this.m_shadowCamera.far = 2 * rr / Math.max(lightDir.z, 0.1);
             this.m_shadowCamera.updateProjectionMatrix();
         }
+        // §885 终三一四: sharref=1 → FULL-FRAME mgl createLightMatrix port
+        // (ArRef.ts wired): light camera built END-TO-END in the mgl MERCATOR
+        // frame — CtW(pose)·(0,0,−centerDepth/worldSize) sphere center,
+        // compass light camera (FreeCamera.setPitchBearing semantics),
+        // getWorldToCamera (y-row flip + ppm z-column), ortho near =
+        // min(−2·mZ17·worldSize, −2R). The scene↔mercator affine A
+        // (probe-priced: h merc/unit horizontal, v merc/m vertical, y
+        // NEGATED — scene y=north vs mercator y=south; translation = eye
+        // mercator) folds into the depth-pass camera so receivers keep
+        // sampling scene coords: m_matrix = bias·P·V·A. sphereCenter becomes
+        // the SCENE-frame image of the mercator center (A⁻¹·centerWorld) so
+        // the shtexsnap and downstream probes stay reference-consistent.
+        // Default OFF — the calibrated scene-frame path is untouched.
+        let arrefPose: {
+            position: [number, number, number]; pitch: number; bearing: number;
+        } | null = null;
+        let arrefFrame: { h: number; v: number; eyeMerc: number[]; worldSize: number; ppm: number } | null = null;
+        if ((globalThis as any).__mbShArRef) {
+            try {
+                const mvA: any = this.m_mapView;
+                const prA = mvA?.projection;
+                const gcA = mvA?.geoCenter;
+                const rcA = mvA?.getRteCamera?.() ?? camera;
+                if (prA && gcA && rcA) {
+                    const C = 40075016.686;
+                    const mercX = (lng: number) => lng / 360 + 0.5;
+                    const mercY = (lat: number) => (1 - Math.asinh(Math.tan(lat * Math.PI / 180)) / Math.PI) / 2;
+                    const mercZ = (alt: number, lat: number) => alt / (C * Math.cos(lat * Math.PI / 180));
+                    const eA: any = prA.projectPoint(gcA, { x: 0, y: 0, z: 0 });
+                    const gE: any = prA.unprojectPoint({ x: eA.x + 1000, y: eA.y, z: eA.z });
+                    const hA = Math.abs(mercX(gE.longitude) - mercX(gcA.longitude)) / 1000;
+                    const vA = 1 / (C * Math.cos(gcA.latitude * Math.PI / 180));
+                    const fwdA = new THREE.Vector3(0, 0, -1)
+                        .applyQuaternion(rcA.getWorldQuaternion(new THREE.Quaternion()));
+                    // §885 终三一四补: the affine translation = mercator of
+                    // the RTE ORIGIN (= the true EYE). projectPoint/
+                    // unprojectPoint are SW-anchored WORLD conversions and
+                    // worldCenter is world-frame too (measured: worldCenter ≈
+                    // projectPoint(gc), NOT an RTE offset). The eye sits
+                    // behind/above the view center by forward·ctcd — the SAME
+                    // camera-space convention mgl's sphere center uses — so
+                    // eye_merc = mglMerc(gc) − S·(forward·ctcd).
+                    const ctcdA = Math.max(1, mvA.targetDistance ?? 500);
+                    const gcMerc = [mercX(gcA.longitude), mercY(gcA.latitude), mercZ(gcA.altitude ?? 0, gcA.latitude)];
+                    const eyeMerc = [
+                        gcMerc[0] - hA * fwdA.x * ctcdA,
+                        gcMerc[1] + hA * fwdA.y * ctcdA,
+                        gcMerc[2] - vA * fwdA.z * ctcdA,
+                    ];
+                    const fM = [fwdA.x, -fwdA.y, fwdA.z];
+                    const pitchM = Math.atan2(Math.hypot(fM[0], fM[1]), -fM[2]);
+                    const bearM = Math.atan2(-fM[0], -fM[1]);
+                    const wsA = 512 * Math.pow(2, mvA.zoomLevel ?? 17);
+                    const ppmA = wsA / (C * Math.cos(gcA.latitude * Math.PI / 180));
+                    arrefPose = { position: eyeMerc as [number, number, number], pitch: pitchM, bearing: bearM };
+                    arrefFrame = { h: hA, v: vA, eyeMerc, worldSize: wsA, ppm: ppmA };
+                    (this as any).__mbShArRefPose = { pitchM, bearM, h: hA, v: vA, eyeMerc, worldSize: wsA };
+                }
+            } catch (e) {
+                (globalThis as any).__mbShArRefErr = String(e);
+                arrefPose = null;
+                arrefFrame = null;
+            }
+        }
+        // Apply an mgl mercator-frame light camera for the given (already
+        // mercator-frame) direction; returns via sphereOut the SCENE image of
+        // the mercator sphere center (the snap/probe reference).
+        const arrefApplyCamera = (dirMerc: THREE.Vector3, sphereOut: THREE.Vector3): boolean => {
+            if (!arrefPose || !arrefFrame) return false;
+            const lf = mglLightFrameRef({
+                pose: arrefPose,
+                dirMerc: [dirMerc.x, dirMerc.y, dirMerc.z],
+                centerDepth,
+                worldSize: arrefFrame.worldSize,
+                ppm: arrefFrame.ppm,
+                mercatorZ17: Math.pow(2, -17),
+                radiusPx: radius,
+                resolution: size,
+            });
+            const A = new THREE.Matrix4().set(
+                arrefFrame.h, 0, 0, arrefFrame.eyeMerc[0],
+                0, -arrefFrame.h, 0, arrefFrame.eyeMerc[1],
+                0, 0, arrefFrame.v, arrefFrame.eyeMerc[2],
+                0, 0, 0, 1);
+            const Vscene = new THREE.Matrix4().fromArray(lf.view).multiply(A);
+            const cam3 = this.m_shadowCamera;
+            cam3.matrixAutoUpdate = false;
+            cam3.matrixWorld.copy(Vscene).invert();
+            cam3.matrixWorldInverse.copy(Vscene);
+            cam3.matrixWorldNeedsUpdate = true;
+            cam3.projectionMatrix.fromArray(lf.proj);
+            cam3.projectionMatrixInverse.copy(cam3.projectionMatrix).invert();
+            cam3.left = -lf.R; cam3.right = lf.R; cam3.top = lf.R; cam3.bottom = -lf.R;
+            cam3.near = lf.near; cam3.far = lf.far;
+            sphereOut.set(
+                (lf.centerWorld[0] - arrefFrame.eyeMerc[0]) / arrefFrame.h,
+                -(lf.centerWorld[1] - arrefFrame.eyeMerc[1]) / arrefFrame.h,
+                (lf.centerWorld[2] - arrefFrame.eyeMerc[2]) / arrefFrame.v);
+            cam3.position.setFromMatrixPosition(cam3.matrixWorld);
+            cam3.up.set(0, 0, 1);
+            (this as any).__mbShArRefCenter = Array.from(lf.centerWorld).map((x: number) => +x.toExponential(9));
+            return true;
+        };
+        // mgl-faithful light axis in the MERCATOR frame: the raw dirProp
+        // spherical conversion (mgl st(), az+90) is mercator-frame native;
+        // otherwise y-mirror the scene dir (the raw-branch fallback).
+        const arrefDirMerc = (): THREE.Vector3 => {
+            const dirPropA = (this.m_dataSource as any).m_environment
+                ?.m_3DDirectional?.direction as [number, number] | undefined;
+            if (dirPropA) {
+                const aA = (dirPropA[0] + 90) * Math.PI / 180;
+                const pA = dirPropA[1] * Math.PI / 180;
+                return new THREE.Vector3(
+                    Math.cos(aA) * Math.sin(pA), Math.sin(aA) * Math.sin(pA), Math.cos(pA));
+            }
+            return new THREE.Vector3(lightDir.x, -lightDir.y, lightDir.z);
+        };
+        if (arrefPose && arrefFrame && arrefApplyCamera(arrefDirMerc(), sphereCenter)) {
+            // Depth pass consumes the manual matrices directly; skip the
+            // legacy position/lookAt below.
+        } else {
         this.m_shadowCamera.position.copy(sphereCenter);
         this.m_shadowCamera.up.set(0, 0, 1);
         // §885 终二六九/二七一: ls.dir is the LIGHT-TRAVEL direction (downward
@@ -948,6 +1071,7 @@ export class MBShadowRenderer {
         }
         this.m_shadowCamera.updateProjectionMatrix();
         this.m_shadowCamera.updateMatrixWorld();
+        }
         // §885 终五十五: the mgl frustum-sphere fit already clamps [near,far]
         // around the light axis (near = −2r covers the sphere from behind the
         // light camera, far = r/dir.z covers the deepest ground reach) — the
@@ -1402,6 +1526,14 @@ export class MBShadowRenderer {
             if (depthMatR.uniforms?.uMBLightDir) {
                 depthMatR.uniforms.uMBLightDir.value.copy(rawDir).normalize();
             }
+            // §885 终三一四: under sharref the raw pass shares the mgl
+            // mercator-frame camera (mgl has a single light pipeline — the
+            // raw axis IS the mgl-native mercator dir, so both passes
+            // converge to one map; the model tail then samples the same
+            // mgl semantics as the mirror consumers).
+            if ((globalThis as any).__mbShArRef && arrefApplyCamera(arrefDirMerc(), sphereCenter)) {
+                // manual matrices set; skip the legacy pose below
+            } else {
             this.m_shadowCamera.left = -radius;
             this.m_shadowCamera.right = radius;
             this.m_shadowCamera.top = radius;
@@ -1419,6 +1551,7 @@ export class MBShadowRenderer {
             }
             this.m_shadowCamera.updateProjectionMatrix();
             this.m_shadowCamera.updateMatrixWorld();
+            }
             scene.overrideMaterial = this.m_depthMaterial;
             const prevLayersR = this.m_shadowCamera.layers.mask;
             this.m_shadowCamera.layers.set(1);
@@ -1477,6 +1610,12 @@ export class MBShadowRenderer {
                     const zRz = -(McR.z * OR - Math.floor(McR.z * OR)) / OR;
                     this.m_matrixR0.premultiply(new THREE.Matrix4().makeTranslation(zRx, zRy, zRz));
                 }
+            }
+            // §885 终三一四: restore the camera's own matrix composition
+            // before cascade-1 reuses it (sharref drove it manually above).
+            if ((globalThis as any).__mbShArRef) {
+                this.m_shadowCamera.matrixAutoUpdate = true;
+                this.m_shadowCamera.matrixWorldNeedsUpdate = true;
             }
             // Restore the MIRROR axis for the cascade-1 pass below (it reuses
             // this camera and historically inherited cascade-0's rotation).
@@ -1658,6 +1797,10 @@ export class MBShadowRenderer {
                         rteProjection: rc?.projectionMatrix?.elements ? Array.from(rc.projectionMatrix.elements) : null,
                         samples,
                         mglExpected: gc ? mglMerc(gc.latitude, gc.longitude, gc.altitude ?? 0) : null,
+                        // §885 终三一四: sharref bridge validation — the live
+                        // pose/affine the light frame was built from.
+                        arrefPose: (this as any).__mbShArRefPose ?? null,
+                        arrefCenter: (this as any).__mbShArRefCenter ?? null,
                     };
                     // eslint-disable-next-line no-console
                     console.log('[MBFrameProbe] ' + JSON.stringify(dump));
