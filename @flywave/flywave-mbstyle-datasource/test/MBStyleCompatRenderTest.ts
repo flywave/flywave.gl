@@ -25,6 +25,7 @@ import { assert } from "chai";
 import { ALL_TESTS as INDEXED_TESTS } from "./render-tests-index";
 import { MBStyleDataSource } from "../src/MBStyleDataSource";
 import { MBStyleDecoder } from "../src/MBStyleDecoder";
+import { shadowCasters } from "../src/MBShadowRenderer";
 
 
 // Compare against the local expected.png that ships with each ported
@@ -691,6 +692,17 @@ async function renderUntilSettled(
     // (buckingham attractors 102912/157622/180128/191358, 终三〇二①).
     const settleNeed = Number((window as any).__karma__?.config?.args?.find?.(
         (a: string) => a.startsWith("settle="))?.slice("settle=".length)) || 3;
+    // §885 终三一五: settlecasters=1 → the stability criterion ALSO covers
+    // the shadow-caster registration (the mesh count settles while model
+    // casters still register — museum 165→270 at frame 60, 终三〇六③ — and
+    // the capture lands on whichever side of the registration the stable
+    // window closed: the discrete tile-state attractors). settlemin=<n> →
+    // a minimum frame floor so straggler tiles land before the window even
+    // opens. Both default OFF (delivery settle semantics unchanged).
+    const settleCasters = (window as any).__karma__?.config?.args?.some?.(
+        (a: string) => a === "settlecasters=1");
+    const settleMin = Number((window as any).__karma__?.config?.args?.find?.(
+        (a: string) => a.startsWith("settlemin="))?.slice("settlemin=".length)) || 0;
     // §885 终三〈八: shtexsnap=1 → mgl texel snapping of the light matrices
     // (Ar tail port with helpers priced: av=scalar-multiply resolves the
     // snap units — z_clip = −fract(clip·res/2)·(2/res)).
@@ -737,7 +749,8 @@ async function renderUntilSettled(
     }
     let lastCount = -1;
     let stable = 0;
-    for (let i = 0; i < maxFrames && stable < settleNeed; i++) {
+    let lastCasters = -1;
+    for (let i = 0; i < maxFrames && (stable < settleNeed || i < settleMin); i++) {
         await renderFrames(mapView, dataSource, 1);
         // Count meshes actually ATTACHED to the scene: tile.objects lists
         // populate early, but the engine uploads geometry on a per-frame
@@ -877,7 +890,17 @@ async function renderUntilSettled(
                 }).catch(() => { });
             }
         }
-        if (count === lastCount) {
+        if (settleCasters) {
+            // §885 终三一五: mesh-count AND caster-registration stability.
+            const casters = shadowCasters.size;
+            if (count !== lastCount || casters !== lastCasters) {
+                stable = 0;
+                lastCount = count;
+                lastCasters = casters;
+            } else {
+                stable++;
+            }
+        } else if (count === lastCount) {
             stable++;
         } else {
             stable = 0;

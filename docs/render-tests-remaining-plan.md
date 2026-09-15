@@ -3942,3 +3942,47 @@ mismatch 主体的真正来源，优先级高于一切阴影侧工作）；②ti
 分解（partdbg/材质 diff 在同一 tile 态下成对做，消抽奖）；③sharref 保持默认
 关作为 mgl 忠实路径资产；④若后续需要：cascade-1 的 mercator 化与 elevation/
 edge insets 项补全（当前 elev=0/insets 平凡，museum 域内无损）。
+
+### §885 终三一五: 确定性 settle 协议（settlecasters=1 + settlemin）落地——buckingham 散布 88k→104px（~800×收敛，未逐位）；museum 长 settle 窗崩溃 6/6（暴露时长正相关），criterion-only 8.5min 幸存；确定性下仍落已知吸引子（2026-09-15）
+
+**① 协议实现（测试端，默认关=交付 settle 语义不变）**：
+- `settlecasters=1`：稳定判据从「mesh 计数稳定 N 帧」扩为「mesh+casters 注册双稳
+  定」——mesh 计数在模型 casters 渐进注册时不变（museum 165→270@frame60，
+  终三〇六③），稳定窗关在哪一侧即落在哪个 tile 态吸引子（离散 attractor 的
+  机制解释）。
+- `settlemin=<n>`：最少迭代下限（滞后 tile 先落地再开稳定窗）。注意迭代≠帧：
+  阴影链激活时 renderFrames 每次迭代内部渲染 ≥12 帧，settlemin=40 ≈ 480+ 帧。
+
+**② 验证结果（buckingham/museum 多点采样）**：
+- **buckingham（settlecasters+settlemin=40，V1/V2 两独立运行）**：178,781 /
+  178,885——Δ104 px（0.06%）。历史 4 吸引子散布 102,912-191,358（88k、43%）
+  → **协议把测量散布压缩 ~800×**，但未收敛到单一逐位值（残余 ~±100 px =
+  casters+mesh 之外的后效：阴影链帧量化/晚到瓦片单帧差）。
+- **museum（settlecasters+settlemin=40，U1/U2/U3 共 6 次 karma 尝试）**：
+  **6/6 浏览器崩溃**（13-18.5 min 处，非确定性 SwiftShader 死亡，与终三一三
+  补 定性一致）——**崩溃暴露率随渲染时长上升**：buckingham 短窗（5-6 min）
+  2/2 幸存，museum 长窗全灭。
+- **museum（settlecasters 无下限，U4，8.5 min）**：196,226 幸存——恰为 comp1
+  档记已知吸引子值；确定性下仍落已知吸引子（非新值）。
+
+**③ 判定**：
+- 吸引子**不能收敛为单一值**（协议下残余 ±~100 px + 仍落档记吸引子），但
+  **测量精度提升 ~800×**：±100 px 远低于任何旋钮效应量（数千 px）——
+  **settlecasters=1 自本轮起作为阴影系 A/B 的标准测量协议**（旋钮交付默认
+  仍关），历史「单样本=指示性」纪律升级为「协议样本=±100px 精度」。
+- settlemin（帧数下限）在 museum 上不可用（崩溃暴露），待 Crashpad 专项解
+  根因后再评估；buckingham 域可用。
+- 机制定性收窄：残余 ±100 px 非瓦片挂载（casters 已稳定），指向阴影链内部
+  帧间抖动（正态偏移/PCF 相位/浮点累积序）——下一层确定性在渲染器内部。
+
+**④ 基建坑**：①testtimeout 会精确杀死超时测试（U1 两次死于 15min0.5s=
+900000ms）——长 settle 协议必须同步放大 testtimeout（本批 1800000）；
+②museum + 长 settle 渲染窗 = 崩溃暴露高发（6/6），buckingham 短窗安全
+（2/2）——确定性协议按 fixture 实测可用性分级启用。
+
+**⑤ 下轮入口**：①SwiftShader 崩溃 Crashpad 专项（--enable-crash-reporter
+复跑 museum 长窗，捕获死亡栈——现在有了强相关协议触发器，复现率 6/6）；
+②settlecasters 协议下重跑阴影系主靶（museum/buckingham/lod 各 N≥2），把
+台账数字升级为协议精度；③阴影链帧间抖动定位（±100 px 残余来源：在稳定后
+逐帧 dump m_matrix/uv，找帧间差异位）；④tile 楼面非阴影差异分解（终三一四
+§⑥②维持）。
