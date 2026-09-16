@@ -4628,3 +4628,16 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   (疑截面 left 偏移或 z 残差)与横向对位。
 - 下一刀:①回归件归因(qkey-border/viewport-aligned);②护栏残余
   带宽/对位;③deck 洞(Portal Graph);④lighting 族。
+
+**㊳ 终三一九g18(回归件归因——护栏出现在 mgl 抑制的边上)**:
+- 三件回退同签名:新显形的奶油护栏恰好落在 deck 边缘(erosion 深度
+  全部 0px,无深入),而 expected 同位置是连续阴影 deck——**这些边在
+  mgl 中不应有护栏**。
+- guard-rail-qkey-border 件名即语义:quadkey 边界处护栏抑制;
+  mgl addRenderableRing 的 isOnBorder 跳过 + portal 共享边剪枝
+  决定哪些边出护栏;我们的边分类在该件/ortho-camera/viewport-aligned
+  上与 mgl 不一致——旧状态被剃刀截面掩盖(g17 修复后暴露)。
+- 净改善结论维持(−19,124):回退非 metersToTile 修复本身错误,
+  而是暴露了边分类的第二层缺陷。
+- 下一刀:①isOnBorder/portal 剪枝逐行对照 mgl(边分类);②护栏残余
+  带宽(2px vs 6px);③deck 洞(Portal Graph);④lighting 族。
