@@ -4706,9 +4706,10 @@ export class MBTileDataEmitter {
                 // order (feature order) decides which color wins at crossings,
                 // matching mapbox's painter's algorithm for a single line layer.
                 _isLineRibbon: true,
-                // §885 终三一九b: force a 4px ribbon width — the width
-                // evaluation diagnostic (the hairline bisection).
-                _ribbonWidthPx: 4,
+                // §885 终三一九b: the line-width may be a zoom-interpolate
+                // expression — resolve it at the decode zoom (Number(expr)
+                // would be NaN and kill the ribbon's edge AA).
+                _ribbonWidthPx: this.resolvePaintNumber(paint['line-width'], 1),
                 // mgl's line shaders size the dash AND the pattern aspect by
                 // `line-floorwidth` (line-width at floor zoom) — the patcher
                 // needs it for the u-tiling scale.

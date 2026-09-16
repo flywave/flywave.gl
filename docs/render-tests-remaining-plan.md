@@ -4373,3 +4373,17 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   vs 显示 zoom 19.94——线宽 2.6× 差异=发丝线主因）；②lighting 族
   fill-extrusion 方向光调制专项；③全族 75 件协议精度重基线（dsfix 配置 +
   同批配对 N≥2）。
+
+**㉒ 终三一九g3（白色标线/边缘线缺失的最终定位）**：
+- 白像素计数：OURS=0 (>235) vs EXPECTED=8,062——**全部白色标线/边缘线/
+  double-lines 在我们的渲染中缺失**（非"过细"：是完全没有）。
+- 层级定位：deck 填充 ✓（蓝色正确）、dashes ✓（部分）、**白色 solid-line
+  ribbons（double-lines 边缘线）✗ 完全缺失**。
+- 这些 ribbon 网格存在于场景（census ✓）但不产生片元。根因层级：
+  ①ribbon geometry 的 offs/dist/len 数组完整性（emission 时条件 gate
+  `geo.offs.length === geo.edge.length * 2` 可能不满足→属性被丢弃→
+  shader 读默认 0→aRibbonEdge 有效但宽度位移=0→带材塌缩成中
+  线→不可见）；②或 ribbon material 的 uniforms（uMBRibbonWidth 等）
+  在 technique 构造时未正确设置。
+- 下轮：dump ribbon geometry 的 attributes 完整性（aRibbonEdge/Offs/Len
+  是否都在）+ offs 数组的实际值域；若 offs 全 0 则带材塌缩成中线。
