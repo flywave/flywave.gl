@@ -4641,3 +4641,13 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   而是暴露了边分类的第二层缺陷。
 - 下一刀:①isOnBorder/portal 剪枝逐行对照 mgl(边分类);②护栏残余
   带宽(2px vs 6px);③deck 洞(Portal Graph);④lighting 族。
+
+**㊴ 终三一九g19(边分类补充审计——isOnBorder 排除,qkey 维度待查)**:
+- isOnBorder 逐行对照:实现一致(mgl EXTENT=8192,我们 canonical
+  4096 空间等效);排除该差异。
+- 回退件剩余嫌疑收敛到 portal 共享边剪枝的 **qkey/elevation-id 维度**
+  (guard-rail-qkey-border 件名所指):mgl 对跨 quadkey 的边有额外
+  抑制,我们对同 hash 边的处理可能多保留。
+- 本轮定性完成:回退=护栏显形暴露的边分类第二层缺陷,非 g17 修复
+  错误;影响量 ~+8k(qkey-border/ortho-camera/viewport-aligned),
+  远小于修复收益 −27k(g17 −19,124 + 结构域改善件)。
