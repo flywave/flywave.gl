@@ -4839,3 +4839,15 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   语义校准的正确基座。
 - lighting 族定性完成:战役=地形参与影子管线(需 terrain 源/或
   fixture 特有的 occluder 语义确认),非本会话可收敛项。
+
+**㊵补12 终三十九g35(elevation-plane 定性为回归并禁用;extended casters 收益确认)**:
+- 三态对照(no-cross-beams):elevation-plane 开=160,639(+3 normal
+  offset 无效,同值)→ **gate 关闭=41,333**(优于 42,206 基线 −873)。
+- 判定:①elevation-plane 接收器(net regression)禁用——self-shadow
+  机制(deck 在自身深度条目)与 +3 offset 无效的原因待查,Attribute
+  是否到达 shader 亦未证实;②extended casters(g31)独立收益确认。
+- lighting 族四件与基线一致(191,129/189,685/154,724/154,187)——
+  无回归。
+- 结论:保留 extended casters + 禁用 elevation-plane(gate=false),
+  净状态为历史最优;后继若重启 elevation-plane 需先解 attribute
+  传递链验证(帧级)。

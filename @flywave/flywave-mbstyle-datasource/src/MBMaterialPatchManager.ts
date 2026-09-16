@@ -1907,7 +1907,9 @@ export class MBMaterialPatchManager {
             // compile. Raster/hillshade/heatmap drape differently (bail).
             if (!(technique as any)._isRaster && !(technique as any)._isHillshade
                 && !(technique as any)._isHeatmap) {
-                (material as any).__mbElevPlane = (technique as any)._hdElevation !== undefined;
+                // g34 experiment disabled: elevation-plane ray-cast regressed
+                // no-cross-beams 42,206→160,639 (see 终三十九g34 notes).
+                (material as any).__mbElevPlane = false;
                 this.injectGroundShadow(material as any);
             }
         }
@@ -3402,7 +3404,10 @@ export class MBMaterialPatchManager {
                         vec3 mbFarW = mbRayFar.xyz / mbRayFar.w;
                         vec3 mbNearW = mbRayNear.xyz / mbRayNear.w;
                         vec3 mbRayDir = normalize(mbFarW - mbNearW);
-                        float mbRayT = (vMBElev - mbNearW.z) / mbRayDir.z;
+                        // mgl _shadowParameters.normalOffset (default 3 m):
+                        // sample ABOVE the surface plane so the surface's own
+                        // depth entry never self-shadows it.
+                        float mbRayT = (vMBElev + 3.0 - mbNearW.z) / mbRayDir.z;
                         vec3 mbWP = mbNearW + mbRayDir * mbRayT;`
                 : `
                         vec2 mbSUV2 = gl_FragCoord.xy / max(uMBRes, vec2(1.0)) * 2.0 - 1.0;
