@@ -353,10 +353,13 @@ function discoverTests(): TestEntry[] {
 {
     const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("decodedbg="))?.slice("decodedbg=".length);
-    // §779b: fogdbg=N → MBEnvironmentManager.fogDebugTProbe (1 = fogT
-    // profile, 2 = unfogged base color, 3 = final fog factor).
-    const fdbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
-        a.startsWith("fogdbg="))?.slice("fogdbg=".length);
+    // §885 终三一九: nopatch=1 must be visible BEFORE any tile decodes —
+    // set the global at module load (the shader-injection bisection switch).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "nopatch=1")) {
+        (globalThis as any).__mbNoPatch = true;
+    }
+    const fdbg = (window as any).__karma__?.config?.args?.find?.(
+        (a: string) => a.startsWith("fogdbg="))?.slice("fogdbg=".length);
     if (fdbg) {
         import("../src/MBEnvironmentManager").then((mod: any) => {
             mod.MBEnvironmentManager.fogDebugTProbe = Number(fdbg) || 0;
@@ -992,6 +995,12 @@ async function renderFrames(
                         const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
                         if (m?.color?.getHexString?.() === 'a3b4c8') {
                             m.color.setHex(0xff0000);
+                            // §885 终三一九: DoubleSide + depthTest off — the
+                            // bisection separates "decks culled by winding"
+                            // (red appears) from "decks clipped elsewhere"
+                            // (still no red).
+                            m.side = THREE.DoubleSide;
+                            m.depthTest = false;
                             painted.push(o.geometry?.attributes?.position?.count ?? '?');
                         }
                     });
@@ -1008,6 +1017,9 @@ async function renderFrames(
                             root?.traverse?.((o: any) => {
                                 const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
                                 if (m?.color?.getHexString?.() === 'a3b4c8') m.color.setHex(0xff0000);
+                                // §885 终三一九: the suspected occluder — the
+                                // grey plate at the RTE origin (v0w=(0,0,0)).
+                                if (o.geometry?.attributes?.position?.count === 1089) m.color.setHex(0x0000ff);
                             });
                         };
                         const redHook = () => {

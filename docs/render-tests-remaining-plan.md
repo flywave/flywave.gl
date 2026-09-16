@@ -4147,3 +4147,15 @@ prepareFillGeometry 的细分实现，A/B no-cross-beams（目标 168k→<20k）
 - 工具沉淀（decodedbg 门控，随本提交入库）：[MBPlace]（tile.center vs
   cameraPos vs 派生锚）、[MBGeoBox]（瓦片经纬框）、[MBSkip?]/[MBSkip]
   （逐对象跳过原因）、[MBPaintRed]（涂红+下一帧捕获）。
+
+**⑩ 终三一八补6（遮挡确认 + 下轮 ro-sweep 协议）**：
+- 绕向双向归一化均位级不变（167,916）→ **排除 FrontSide 剔除**；DoubleSide+
+  depthTest=false → deck 完整显示 → **锁定=深度遮挡**（有更近深度的早绘制
+  不透明面盖住 deck，drawOrder<9.6）。
+- 遮挡源候选（ro<9.6 且覆盖视场）：ro=1 fake-road-shade（d6dddb，76v，地面
+  z）与 ro=0 的 1089v 灰色板（w0=(0,0,0)，v0w=(0,0,0) 在眼点！geoBox 抬升
+  elevateGeoBox 用 maxGeometryHeight 5.5 后板可能浮到 deck 高度）。
+- 下轮协议：deck renderOrder sweep（9.6→999 逐档）+ 每 mesh 深度 dump，二分
+  找到遮挡面后修复其 z 锚定（疑 elevateGeoBox/背景注入的 z 抬升错位）。
+- 涉及提交：8d525076（遥测+结论）、c6881e7d（根因雾判定）、24880279（基建
+  通道）、fb0f548c/6a909b80/ae9eca26/2ae90754（诊断系列）。

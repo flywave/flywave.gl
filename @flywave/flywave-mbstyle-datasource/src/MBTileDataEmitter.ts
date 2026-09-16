@@ -2176,19 +2176,18 @@ export class MBTileDataEmitter {
         }
         if (allVerts.length < 6) return;
 
-        // §885 终三一九: normalize the EXTERIOR ring to CCW before earcut.
-        // The clip→subdivision pipeline can emit CW rings (the y-flipped
-        // extent space flips the signed area), and a CW ring earcuts into
-        // CW triangles that the FrontSide fill material back-face culls —
-        // the deck vanished while the (uncullable) line markings stayed
-        // (terminal 318 hairline). Heights follow their vertices.
+        // §885 终三一八补5/终三一九: the MVT y-flip inverts the winding on
+        // screen — the deck triangles must be CW in extent space (CCW on
+        // screen after the flip) to survive FrontSide culling. Reverse when
+        // the extent-space signed area is POSITIVE (CCW-in-extent = the
+        // culled orientation).
         const extCount = holeIndices.length > 0 ? holeIndices[0] : allVerts.length / 2;
         let signedArea = 0;
         for (let i = 0; i < extCount; i++) {
             const j = (i + 1) % extCount;
             signedArea += allVerts[i * 2] * allVerts[j * 2 + 1] - allVerts[j * 2] * allVerts[i * 2 + 1];
         }
-        if (signedArea < 0) {
+        if (signedArea > 0) {
             const tmp2: number[] = new Array(extCount * 2);
             const tmpH: number[] = new Array(extCount);
             for (let i = 0; i < extCount; i++) {

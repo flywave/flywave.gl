@@ -1777,6 +1777,14 @@ export class MBMaterialPatchManager {
 
     private patchMaterial(material: THREE.Material, technique: any, obj?: THREE.Object3D): void {
         if ((material as any).__mbPatched) return;
+        // §885 终三一九: nopatch=1 → shader-injection bisection switch —
+        // materials render with the RAW three.js program (no onBeforeCompile
+        // chain) to isolate which injection breaks the deck fills on
+        // SwiftShader (3d-intersections hairline). Diagnostic, default off.
+        if ((globalThis as any).__mbNoPatch) {
+            (material as any).__mbPatched = true;
+            return;
+        }
         (material as any).__mbPatched = true;
 
         // three's default program cache key is the OUTERMOST
