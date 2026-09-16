@@ -1171,6 +1171,40 @@ export class MBShadowRenderer {
             } catch (e) {
                 (globalThis as any).__mbShadowInfo = { err: String(e) };
             }
+            // §885 终三十九g33: dump the FULL depth readback as PNG (once at
+            // frame 60) — visual confirmation of caster coverage/framing.
+            const __dc = ((this as any).__mbDumpCount = ((this as any).__mbDumpCount ?? 0) + 1);
+            if (__dc === 60) {
+                try {
+                    const c3 = document.createElement('canvas');
+                    c3.width = size;
+                    c3.height = size;
+                    const id = c3.getContext('2d')!.createImageData(size, size);
+                    // depth is packed hi/lo in R/G — visualize hi directly.
+                    for (let p = 0; p < size * size; p++) {
+                        id.data[p * 4] = this.m_depthPixels[p * 4];
+                        id.data[p * 4 + 1] = this.m_depthPixels[p * 4 + 1];
+                        id.data[p * 4 + 2] = this.m_depthPixels[p * 4 + 2];
+                        id.data[p * 4 + 3] = 255;
+                    }
+                    c3.getContext('2d')!.putImageData(id, 0, 0);
+                    const url = c3.toDataURL('image/png');
+                    const fbR = (window as any).__karma__?.config?.args?.find?.(
+                        (a: string) => a.startsWith('feedback-url='))?.slice('feedback-url='.length);
+                    if (fbR) {
+                        fetch(`${fbR}/mb-probe-dump`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({ probe: 'shadow-depth-map', dataUrl: url }),
+                        }).catch(() => { });
+                        // eslint-disable-next-line no-console
+                        console.log('[MBShadowDump] depth map posted len=' + url.length);
+                    }
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.log('[MBShadowDump] fail ' + String(e));
+                }
+            }
         }
         // §530 probe: 8×8 sample of the depth canvas (shadowdbg diagnostics).
         if ((globalThis as any).__mbDecodeDbg || (globalThis as any).__mbShadowEnable) {
