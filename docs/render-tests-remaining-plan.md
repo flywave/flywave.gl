@@ -4302,3 +4302,19 @@ wall/shoulder(cream) 19.3%、marking(white) 15.8%、background 0.3%（背景对�
   带宽）。需 SpectorJS 类逐 draw 帧捕获（浏览器 DevTools）直视 ribbon
   draw 的顶点/片元输出。
 - 已入库：ribbon 属性 census 遥测（[MBSceneObj] RIBBON 行，decodedbg 门控）。
+
+**⑲ 终三一九e2（35× 瓦片对象累积根因定位）**：[MBSceneDump] 实测场景中
+**35 个同名 tile17/74571/37910 瓦片对象堆叠**——每次重解码（deferred
+elevation re-decode 等）新增一套网格而不清理旧套。35 份相同网格堆叠：
+z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态微差的
+叠加伪影 = 发丝线与残余 mismatch 的总根源。
+- 累积点：harp Tile 生命周期——重解码路径未调用对象清理（Tile.ts 的
+  dispose 流程存在但重解码路径未走）。对照 harp 上游注释："feature-state
+  updates stack ghost copies of every object"（已知问题类）。
+- 修复方向：重解码赋值 decodedTile 前/后清理旧 objects（或在
+  TileObjectsRenderer.render 的 rootNode.add 前按 object.name/uuid 去重
+  替换）；修复后 no-cross-beams 重测（预期发丝线消失、deck 单份清晰、
+  mismatch 收敛至 35,503 以下）。
+- 本缺陷同时解释：标线 randomly 被吞（z-fight）、渲染成本 ×10、以及
+  DoubleSide 才可见的 deck（35 份堆叠中 FrontSide 的可见性取决于堆叠
+  顺序的深度竞争）。
