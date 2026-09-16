@@ -4418,3 +4418,16 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   (~/.cache/puppeteer/chrome 379M 系文档确认的错误浏览器,已删)。
 - 下轮:①白线错位归因(double-lines gap/offset 几何 vs mgl)→收敛
   no-cross-beams;②两件回退归因;③dashed 线宽域专项;④补齐 9 件缺失结果。
+
+**㉕ 终三一九g5(白线错位域的新线索:高程分层 z 值)**:
+- census 实测 z 值:白色 solid/double ribbons v.z=5,dashed 网格(692 verts,
+  ShaderMaterial)v.z=5,deck 网格两件 n=16 v.z=6 / n=65 v.z=5,挡墙
+  f1ece1(struct,300 verts)v.z=5..6。
+- 疑点:markup(标线)z=5 与 deck z=5 共面(z-fight,LEQUAL+后绘可赢)但
+  z=6 的 deck 片段会整片盖住标线——与"白线只在部分区段可见"和 white→deck/
+  deck→white 双向大额错位吻合;dashed 网格存在且属性完整但片元不可见,
+  与被 z=6 deck 遮盖一致。
+- 下轮:①确认 markup 层应抬到 deck 顶(hd-road-markup reference 语义:
+  markup 应位于路面之上,若我们 deck 顶=6 而 markup=5 则是 elevation
+  reference 换算 off-by-one);②markupbias 旋钮 A/B(markupbias=1.1 抬过
+  1m 差)验证遮盖假说;③两件回退件归因。
