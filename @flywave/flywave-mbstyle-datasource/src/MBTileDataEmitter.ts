@@ -2176,6 +2176,34 @@ export class MBTileDataEmitter {
         }
         if (allVerts.length < 6) return;
 
+        // §885 终三一九: normalize the EXTERIOR ring to CCW before earcut.
+        // The clip→subdivision pipeline can emit CW rings (the y-flipped
+        // extent space flips the signed area), and a CW ring earcuts into
+        // CW triangles that the FrontSide fill material back-face culls —
+        // the deck vanished while the (uncullable) line markings stayed
+        // (terminal 318 hairline). Heights follow their vertices.
+        const extCount = holeIndices.length > 0 ? holeIndices[0] : allVerts.length / 2;
+        let signedArea = 0;
+        for (let i = 0; i < extCount; i++) {
+            const j = (i + 1) % extCount;
+            signedArea += allVerts[i * 2] * allVerts[j * 2 + 1] - allVerts[j * 2] * allVerts[i * 2 + 1];
+        }
+        if (signedArea < 0) {
+            const tmp2: number[] = new Array(extCount * 2);
+            const tmpH: number[] = new Array(extCount);
+            for (let i = 0; i < extCount; i++) {
+                tmp2[i * 2] = allVerts[i * 2];
+                tmp2[i * 2 + 1] = allVerts[i * 2 + 1];
+                tmpH[i] = allHeights[i];
+            }
+            for (let i = 0; i < extCount; i++) {
+                const s = extCount - 1 - i;
+                allVerts[i * 2] = tmp2[s * 2];
+                allVerts[i * 2 + 1] = tmp2[s * 2 + 1];
+                allHeights[i] = tmpH[s];
+            }
+        }
+
         const triIndices = earcut(allVerts, holeIndices.length > 0 ? holeIndices : null, 2);
 
         const startIdx = geo.positions.length / 3;

@@ -984,6 +984,55 @@ async function renderFrames(
         try {
             const dump = () => {
                 try {
+                    // §885 终三一九: paint the road-deck fills red once — the
+                    // capture then shows WHERE (and whether) the deck meshes
+                    // rasterize (the hairline bisection).
+                    const painted: string[] = [];
+                    (mapView as any).scene?.traverse?.((o: any) => {
+                        const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                        if (m?.color?.getHexString?.() === 'a3b4c8') {
+                            m.color.setHex(0xff0000);
+                            painted.push(o.geometry?.attributes?.position?.count ?? '?');
+                        }
+                    });
+                    if (painted.length) {
+                        console.log('[MBPaintRed] decks painted: ' + painted.join(','));
+                        // §885 终三一九: keep re-painting every frame (a tile
+                        // re-decode replaces the meshes with fresh materials)
+                        // and capture the 3rd rendered frame — the red decks
+                        // either show up (rasterized) or the frame proves
+                        // they are skipped. One-shot hook.
+                        const mvR: any = mapView;
+                        let redFrames = 0;
+                        const repaint = (root: any) => {
+                            root?.traverse?.((o: any) => {
+                                const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                                if (m?.color?.getHexString?.() === 'a3b4c8') m.color.setHex(0xff0000);
+                            });
+                        };
+                        const redHook = () => {
+                            repaint(mvR.scene);
+                            redFrames++;
+                            if (redFrames < 3) return;
+                            mvR.removeEventListener?.(MapViewEventNames.AfterRender, redHook);
+                            try {
+                                const url = mvR.renderer?.domElement?.toDataURL?.('image/png') ?? '';
+                                const fbR = (window as any).__karma__?.config?.args?.find?.(
+                                    (a: string) => a.startsWith('feedback-url='))?.slice('feedback-url='.length);
+                                if (fbR && url.length > 100) {
+                                    fetch(`${fbR}/mb-probe-dump`, {
+                                        method: 'POST',
+                                        headers: { 'content-type': 'application/json' },
+                                        body: JSON.stringify({ probe: 'red-frame', dataUrl: url }),
+                                    }).catch(() => { });
+                                    console.log('[MBPaintRed] red-frame captured len=' + url.length);
+                                }
+                            } catch (e) {
+                                console.log('[MBPaintRed] capture failed: ' + String(e));
+                            }
+                        };
+                        mvR.addEventListener?.(MapViewEventNames.AfterRender, redHook);
+                    }
                     // eslint-disable-next-line no-console
                     console.log(`[MBCamDump] zoomLevel=${(mapView as any).zoomLevel} cameraZ=${(mapView as any).camera?.position?.z?.toFixed?.(1)} canvas=${mapView.canvas?.width}x${mapView.canvas?.height} pr=${(mapView as any).pixelRatio}`);
                     const counts: Record<string, number> = {};
@@ -1008,17 +1057,21 @@ async function renderFrames(
                                 // the render camera to see where it lands.
                                 let vtx = '';
                                 const mat0v: any = Array.isArray(o.material) ? o.material[0] : o.material;
-                                if (mat0v?.color?.getHexString?.() === 'ff0000' && o.geometry?.attributes?.position) {
+                                // §885 终三一九: project the road-deck meshes
+                                // (road-base blue a3b4c8) into NDC too — the
+                                // hairline bisection needs their screen spot.
+                                const hex = mat0v?.color?.getHexString?.() ?? '';
+                                if ((hex === 'a3b4c8' || hex === 'ff0000') && o.geometry?.attributes?.position) {
                                     try {
                                         const pa2 = o.geometry.attributes.position;
                                         const V = new THREE.Vector3();
-                                        const n2 = Math.min(3, pa2.count);
+                                        const n2 = Math.min(4, pa2.count);
                                         const parts2: string[] = [];
                                         const cam2 = (mapView as any).camera;
                                         for (let vi = 0; vi < n2; vi++) {
                                             V.set(pa2.getX(vi), pa2.getY(vi), pa2.getZ(vi)).applyMatrix4(o.matrixWorld);
                                             const pm = V.clone().project(cam2);
-                                            parts2.push(`(${V.x.toFixed(0)},${V.y.toFixed(0)},${V.z.toFixed(0)}→ndc${pm.x.toFixed(2)},${pm.y.toFixed(2)})`);
+                                            parts2.push(`(${V.x.toFixed(0)},${V.y.toFixed(0)},${V.z.toFixed(0)}→${pm.x.toFixed(2)},${pm.y.toFixed(2)},${pm.z.toFixed(2)})`);
                                         }
                                         vtx = ` vndc=${parts2.join('')}`;
                                     } catch { vtx = ' vndc=err'; }
@@ -1036,7 +1089,7 @@ async function renderFrames(
                                     }
                                     vdump = ` v[0..${pa.count}]=${parts.join('')} idx=${o.geometry?.index?.count ?? '?'}`;
                                 }
-                                samples.push(`${key} local=(${pos.x?.toFixed?.(1)},${pos.y?.toFixed?.(1)},${pos.z?.toFixed?.(1)}) world=(${e[12]?.toFixed?.(1)},${e[13]?.toFixed?.(1)},${e[14]?.toFixed?.(1)}) nvert=${o.geometry?.attributes?.position?.count ?? '?'}${vdump}${vtx}`);
+                                samples.push(`${key} local=(${pos.x?.toFixed?.(1)},${pos.y?.toFixed?.(1)},${pos.z?.toFixed?.(1)}) world=(${e[12]?.toFixed?.(1)},${e[13]?.toFixed?.(1)},${e[14]?.toFixed?.(1)}) nvert=${o.geometry?.attributes?.position?.count ?? '?'} op=${mat0v?.opacity} tr=${mat0v?.transparent} depthWrite=${mat0v?.depthWrite}${vdump}${vtx}`);
                             }
                         });
                     };

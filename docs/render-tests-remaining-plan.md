@@ -4108,3 +4108,23 @@ dash 线（solid-line 技术）反而位置正确。对照 L4 缺口清单：这
 draw_elevated_fill/FillIntersectionsLayoutArray 的细分半边。下一步：读
 mgl draw_elevated_fill 的曲线细分采样密度（沿弧长 per-segment 采样）补齐
 prepareFillGeometry 的细分实现，A/B no-cross-beams（目标 168k→<20k）。
+
+**⑧ 终三一八补4（根因最终确认：全场景被雾吞没）**：
+- 逐帧重涂红 + 捕获第 3 帧：deck 网格（红、op=1、tr=false、depthWrite=true、
+  在视锥内 v0=(−14,186,−67)）**0 个红色像素**；96.5% 画布（252,826/262,144）
+  = 单一颜色 (233,242,239) = **雾色**。
+- expected 同位置路面 = (162,179,199) = road-base 填充原色 hsl(212,25%,71%)
+  **无雾**——mgl 在 zoom 19.94 不雾近场 deck，我们全雾。
+- 交叉验证：dash 线（ShaderMaterial **无雾补丁**）逐位吻合渲染 ✓；deck
+  （MeshBasic + **雾补丁**）全雾 ✗；竖直挡墙条（有雾补丁、近垂直入视）=
+  发丝线 ✓——全部现象由"补丁材质走雾公式、非补丁材质直通"统一解释。
+- **根因**：display zoom 19.94 下雾状态（fogMglRange/distCam/fogCamHeight，
+  MBEnvironmentManager §701/§224b Euclid 域）坍缩为全雾——mgl 默认雾在该
+  zoom 不雾 200 单位内近场。校准域缺口：§701 校准在 zoom≈18.7 阴影族完成，
+  zoom≥19.9 域未校准。
+- 绕向归一化（终三一九）保留：卫生性正确（earcut 输入绕向显式化），与本
+  缺陷无关（位级不变反证）。
+- **修复方向**：对齐 mgl fog.ts 的默认雾状态（无 fog 属性时的 range/depth
+  域）——重点核对 rawRange/shift/distCam 在 zoom>19 的连续性；A/B 目标
+  no-cross-beams 168k→<20k，并连带验证 elevated-symbols-lighting* 族
+  （179-195k，同为 zoom>19 高位 fixture，疑同根因）。
