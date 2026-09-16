@@ -4694,3 +4694,18 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 下一刀:①校准 dir 约定(mgl DirectionalLight 解析,预期 Lz≈sin/cos
   差一约定)→ 大块收敛;②影子域(桥全影 0.35=纯环境)与我们的
   shadow map 覆盖对齐;③deck 洞;④护栏带宽。
+
+**㊵补 终三一九g22b(桥面全影机制定量确认)**:
+- dir 约定确认:spec polar 自天顶([3.5,50] → Lz=cos50°=0.643);
+  groundRadiance(水平)= linear 0.1+0.75·0.643=0.582 → sRGB 0.786。
+- 桥面 mismatch 主体的真身:**expected 桥面 = 纯环境光**
+  (0.35 = sRGB(linear(color)×0.1),逐通道核对 a3b4c8 ✓)——
+  上层结构把下层桥面全遮影(shadow-intensity 1.0);
+  (82,85,84)/0.445 = 桥影下的地面 road-base
+  (= u_ground_shadow_factor=amb/(amb+dir)=0.1718 线性,精确吻合)。
+- **缺口本质**:我们的 elevated fills 不接收影子——影子接收注入
+  (injectGroundShadow)用屏幕空间地面平面重建世界坐标,对 5-6m 高的
+  桥面取到地面处的错误世界位置→采样为"无影"→桥面保持未调制平色。
+- 完整修复= elevated fills 换真 per-fragment 世界坐标 varying
+  (wp varying + shadow matrix 采样),非地面平面近似;工作量中等。
+- 已落地部分(g22):groundRadiance 常驻调制 −5.4k/件。
