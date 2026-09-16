@@ -4518,3 +4518,18 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   "护栏 per-feature flag"。
 - 下一刀:①对照 mgl guardRailEnabled 判定链(featureInfo 属性来源);
   ②护栏截面几何(0.5m骑顶)逐顶点对照;③deck 洞(Portal Graph)。
+
+**㉛ 终三一九g11(护栏锚定/截面定量化——长度对,高度与锚定疑错)**:
+- guardRailEnabled 判定链对照:我们(m_bGuardRail 默认 true + per-feature
+  evaluate)与 mgl(fill-construct-bridge-guard-rail 默认 true)一致——
+  判定链无 bug。
+- 护栏长度估算:expected 奶油 17,856px/带宽~6px ≈ 230m;ours
+  2,471px/带宽~1px ≈ 190m(82%)——**护栏段数量/长度大致正确**,
+  缺失的是可见高度(1px vs 5-10px)。
+- 截面疑点(census 实测):rail quad z 5→6(1m 高);mgl 语义
+  scale=0.5·metersToTile(0.5m,deck 顶之上)。两处可疑:①我们截面
+  1m=2×(metersToTile/scale 域差);②锚定:上层 deck 顶=6 而 rail 顶
+  =6——rail 被.deck 齐平吃掉(应 6→6.5)。疑 deck 分层(z=5 下层/
+  z=6 上层)与 rail 锚定点差一层。
+- 下一刀:①rail 顶点 z 与相邻 deck 顶 z 的差值 dump(确认锚定层);
+  ②metersToTile/scale 域审计(0.5 vs 1);③deck 洞(Portal Graph)。
