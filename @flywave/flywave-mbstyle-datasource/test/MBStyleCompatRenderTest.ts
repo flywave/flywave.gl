@@ -1072,6 +1072,26 @@ async function renderFrames(
                             ].filter(Boolean).join(',') || 'none';
                             const key = `${tag}|${o.name || 'unnamed'}|${Array.isArray(o.material) ? o.material.map((m: any) => m?.type).join('+') : o.material?.type}|${flags}|c=${mat0?.color?.getHexString?.() ?? '?'}|pre=${(mat0 as any)?.isDepthPrepassMaterial ? 1 : 0}|df=${(mat0 as any)?.depthFunc ?? '?'}|ro=${o.renderOrder}|g=${o.geometry?.uuid?.slice?.(0, 8) ?? '?'}`;
                             counts[key] = (counts[key] ?? 0) + 1;
+                            // §885 终三一九: ribbon attribute census — the
+                            // solid-line ribbons' aRibbonEdge/Offs/Len
+                            // presence and value ranges (the collapsed-hairline
+                            // check for the double-lines defect).
+                            if ((mat0 as any)?.__mbIsRibbon || o.geometry?.attributes?.aRibbonEdge) {
+                                const ae = o.geometry?.attributes?.aRibbonEdge;
+                                const ao = o.geometry?.attributes?.aRibbonOffs;
+                                let amin = Infinity, amax = -Infinity, omin = Infinity, omax = -Infinity;
+                                if (ae) for (let vi = 0; vi < ae.count; vi++) {
+                                    const v = ae.getX(vi);
+                                    if (v < amin) amin = v;
+                                    if (v > amax) amax = v;
+                                }
+                                if (ao) for (let vi = 0; vi < ao.count; vi++) {
+                                    const v = Math.abs(ao.getY(vi));
+                                    if (v < omin) omin = v;
+                                    if (v > omax) omax = v;
+                                }
+                                samples.push(`RIBBON ${key} n=${o.geometry?.attributes?.position?.count} aRibbonEdge=${ae ? 'yes' : 'MISSING'} edgeRange=[${ae ? amin.toFixed(2) : '?'}..${ae ? amax.toFixed(2) : '?'}] offs=${ao ? 'yes' : 'MISSING'} offsRange=[${ao ? omin.toFixed(2) : '?'}..${ao ? omax.toFixed(2) : '?'}] ro=${o.renderOrder}`);
+                            }
                             // §885 终三一九: full forensic dump for the
                             // suspected occluder (the 1089-vert grey plate).
                             if (o.geometry?.attributes?.position?.count === 1089 && samples.length < 200) {

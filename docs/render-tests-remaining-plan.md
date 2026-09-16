@@ -4293,3 +4293,12 @@ wall/shoulder(cream) 19.3%、marking(white) 15.8%、background 0.3%（背景对�
 - 下轮：double-lines 实线层的颜色/宽度对照（style hsl(0,0%,96%)=f5f5f5 vs
   expected (244,244,244) 边缘线）与 ribbon 宽度域校准；随后全族 75 件
   协议精度重基线（dsfix 配置 + 同批配对 N≥2）。
+
+**⑱ 终三一九e2（ribbon 属性 census 结果）**：
+- ribbon 属性**完整**：aRibbonEdge=[-1..1] ✓、aRibbonOffs=[0..0] ✓（无
+  line-offset，合法）、aRibbonDist ✓——属性缺失假说排除。
+- 剩余嫌疑收敛到 ribbon 着色器/宽度 uniform 域：uMBRibbonWidth 的值域、
+  edge AA ramp 的 blur 参数、或 the ribbon 几何宽度（positions 内烘焙的
+  带宽）。需 SpectorJS 类逐 draw 帧捕获（浏览器 DevTools）直视 ribbon
+  draw 的顶点/片元输出。
+- 已入库：ribbon 属性 census 遥测（[MBSceneObj] RIBBON 行，decodedbg 门控）。
