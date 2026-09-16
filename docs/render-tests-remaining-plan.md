@@ -4799,3 +4799,17 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   为下一刀;注意 DECODEDBG 的涂红钩子会污染该族视觉对比帧
   (诊断时改用采样探针)。
 - 诊断资产:MBShadowCast census 探针入库。
+
+**㊵补10 终三十九g32(接收端链路排查——活跃确认+矛盾定位)**:
+- MBRf2 实测(cast2):接收器 int=1 活跃;corners n<3 时 (0,0,0)
+  (未初始化窗口)后转绝对坐标 (35595715, 24291766, 0);shadow
+  matrix m00=5.12e-3(RTE 帧拟合)。fragment 走 ray-cast 路径
+  (uMBInvViewProj,RTE 坐标)不受 uMBGC 绝对值影响。
+- 矛盾:深度通道已含 73 casters、接收器活跃采样,但新增 deck
+  投射体前后输出逐像素一致——ground 接收器理应采到 deck 投影。
+- 剩余嫌疑(需帧级调试,静态分析已穷尽):①独立上下文深度
+  CanvasTexture 回流在此 fixture 未达主上下文;②影子相机 frustum
+  与 deck 世界坐标帧不一致(m00 域);③接收器注入的材质集与
+  实际可见地面 fill 不相交。
+- 建议下轮:帧级 WebGL 调试(spector 类捕获或 debug 输出深度图
+  本身到画布),定位回流/帧/材质三选一。
