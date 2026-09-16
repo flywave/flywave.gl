@@ -638,6 +638,20 @@ export class MBElevatedStructures {
         pieces: CanonicalPiece[];
     }): void {
         const { featureIndex, guardRailEnabled, isTunnel, pieces } = params;
+        // §885 终三一九g13: per-feature height intake audit — did the
+        // level-6 bridge feature arrive with ~6m ring heights, or already
+        // flattened to level-5?
+        if (typeof globalThis !== 'undefined' && (globalThis as any).__mbDecodeDbg) {
+            try {
+                let lo = Infinity, hi = -Infinity, n = 0;
+                for (const pc of pieces) {
+                    for (const h of pc.ringHeights) { if (h < lo) lo = h; if (h > hi) hi = h; n++; }
+                    for (const hh of pc.holeHeights) for (const h of hh) { if (h < lo) lo = h; if (h > hi) hi = h; n++; }
+                }
+                // eslint-disable-next-line no-console
+                console.log(`[MBFeatH] feat=${featureIndex} guard=${guardRailEnabled} tunnel=${isTunnel} pieces=${pieces.length} ringH=[${lo.toFixed(2)}..${hi.toFixed(2)}] n=${n}`);
+            } catch {}
+        }
         for (const piece of pieces) {
             for (const h of piece.ringHeights) {
                 if (h < 1.0) this.m_underground = true;  // mgl heightMargin 1.0

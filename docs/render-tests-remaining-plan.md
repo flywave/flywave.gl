@@ -4554,3 +4554,22 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   ②确认 bridge feature 的 addElevatedFeature 是否真被调用/其
   ringHeights 值域(在 addElevatedFeature 入口加 per-feature dump);
   ③deck 洞(Portal Graph)。
+
+**㉝ 终三一九g13(evaluatePortals 链定论——桥护栏缺失的真机制=高程采样,非 portal 压平)**:
+- MBFeatH 探针(addElevatedFeature 入口 per-feature ringHeights dump):
+  **全部 7 个 feature 到达时 ringH≤5.00**(桥 feature 亦然)——不存在
+  "portal 传播把 6.0 压平到 5.0";**bridge 的高程采样本身就给了 5.00**
+  (与 level-5 路同曲线,elevId 相同)。
+- 但 expected 的桥面真实高度≈6.0:移除 resolveZOffset 回退链中的
+  `properties.level`(+1)后 no-cross-beams 43,090→**43,469(变差)**——
+  说明现行的 +1 'level' 回退恰好补偿了桥采样缺陷(5.0+1.0=6.0 ✓)。
+  已回退该移除,基线保持。
+- mgl 侧确认:zLevel 是 addPortalCandidates 的死参(mgl 从不加进高度);
+  mgl 桥的 6.0 来自**真正的高程特征采样**(桥多边形关联 level-6 高程
+  曲线,内部点 6m)。我们的采样把桥关联到了 level-5 曲线(elevId 与
+  road-base 相同)——**高程 id 关联缺陷**是桥护栏缺失+肩部缺失的
+  共同根因;护栏在 6.0 关联修复后会自然出现(5.5..6.5)。
+- 下一刀:①桥多边形↔level-6 高程曲线的关联审计(hd_road_elevation
+  35 点的曲线归属/3d_elevation_id 解析,对照 mgl getElevationFeature);
+  ②修复后桥 deck 恢复真实 6.0(高度来自采样而非 level 补偿),rail
+  5.5..6.5 自然浮出;③届时再移除 level 回退;④deck 洞(Portal Graph)。

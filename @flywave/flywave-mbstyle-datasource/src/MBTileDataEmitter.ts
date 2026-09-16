@@ -1111,6 +1111,15 @@ export class MBTileDataEmitter {
                     return z;
                 }
             }
+            // §885 终三一九g13: NOTE — `properties.level` (the road
+            // STACKING index, PROPERTY_ELEVATION_ROAD_BASE_Z_LEVEL) is
+            // included in this fallback and mgl does NOT add it as meters.
+            // Removing it regressed no-cross-beams (43,090→43,469): our
+            // bridge plans sample ring heights at 5.00 (level-5 curve)
+            // where mgl samples ~6.0 (level-6), so the +1 currently
+            // COMPENSATES for the sampling gap. Proper fix = associate
+            // bridge polygons with the level-6 elevation curves; then
+            // drop `level` from this chain.
             const featElev = Number(
                 properties?.elevation ?? properties?.height ??
                 properties?.z ?? properties?.level ?? 0,
