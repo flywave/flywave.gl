@@ -1907,6 +1907,7 @@ export class MBMaterialPatchManager {
             // compile. Raster/hillshade/heatmap drape differently (bail).
             if (!(technique as any)._isRaster && !(technique as any)._isHillshade
                 && !(technique as any)._isHeatmap) {
+                (material as any).__mbElevPlane = (technique as any)._hdElevation !== undefined;
                 this.injectGroundShadow(material as any);
             }
         }
@@ -3337,6 +3338,14 @@ export class MBMaterialPatchManager {
                     `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n`
                     + shader.fragmentShader;
             }
+            // §885 终三十九g34: HD elevated receivers read the fragment
+            // elevation (aMBElev attribute) as the sample-plane height.
+            if ((material as any).__mbElevPlane) {
+                shader.vertexShader = ('attribute float aMBElev;\nvarying float vMBElev;\n' + shader.vertexShader).replace(
+                    '#include <project_vertex>',
+                    '#include <project_vertex>\n    vMBElev = aMBElev;');
+                shader.fragmentShader = ('varying float vMBElev;\n' + shader.fragmentShader);
+            }
             // §885 终五十八: seed uniforms with the CURRENT shadow state —
             // static fixtures idle after ~3 frames, and a late-injected
             // material compiled with zeros would never see the per-frame
@@ -3381,7 +3390,21 @@ export class MBMaterialPatchManager {
                 // eslint-disable-next-line no-console
                 console.log(`[MBExtU] amb=${aU ? JSON.stringify([aU.x?.toFixed?.(3) ?? aU[0], aU.y?.toFixed?.(3) ?? aU[1], aU.z?.toFixed?.(3) ?? aU[2]]) : 'missing'} dir=${dU ? JSON.stringify([dU.x?.toFixed?.(3) ?? dU[0], dU.y?.toFixed?.(3) ?? dU[1], dU.z?.toFixed?.(3) ?? dU[2]]) : 'missing'} dirV=${dV ? JSON.stringify([dV.x?.toFixed?.(3), dV.y?.toFixed?.(3), dV.z?.toFixed?.(3)]) : 'missing'}`);
             }            material.__mbShadowUniforms = shader.uniforms;
-            const mbShadowSample = `
+            // §885 终三十九g34: HD elevated receivers cast the sample ray at the
+            // FRAGMENT'S OWN ELEVATION (aMBElev) instead of the ground plane
+            // z=0 — decks at 5-6 m sample the shadow map where the upper
+            // structures actually occlude the sun.
+            const mbShadowSample = (material as any).__mbElevPlane
+                ? `
+                        vec2 mbSUV2 = gl_FragCoord.xy / max(uMBRes, vec2(1.0)) * 2.0 - 1.0;
+                        vec4 mbRayFar = uMBInvViewProj * vec4(mbSUV2, 1.0, 1.0);
+                        vec4 mbRayNear = uMBInvViewProj * vec4(mbSUV2, -1.0, 1.0);
+                        vec3 mbFarW = mbRayFar.xyz / mbRayFar.w;
+                        vec3 mbNearW = mbRayNear.xyz / mbRayNear.w;
+                        vec3 mbRayDir = normalize(mbFarW - mbNearW);
+                        float mbRayT = (vMBElev - mbNearW.z) / mbRayDir.z;
+                        vec3 mbWP = mbNearW + mbRayDir * mbRayT;`
+                : `
                         vec2 mbSUV2 = gl_FragCoord.xy / max(uMBRes, vec2(1.0)) * 2.0 - 1.0;
                         vec4 mbRayFar = uMBInvViewProj * vec4(mbSUV2, 1.0, 1.0);
                         vec4 mbRayNear = uMBInvViewProj * vec4(mbSUV2, -1.0, 1.0);

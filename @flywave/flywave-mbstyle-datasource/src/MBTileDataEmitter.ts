@@ -93,6 +93,13 @@ interface AccumulatedGeometry {
      */
     len?: number[];
     /**
+     * §885 终三十九g34: per-vertex ELEVATION (meters) for HD elevated
+     * fills — the shadow receiver's ray-cast uses it as the sample-plane
+     * height (decks at 5-6 m must sample the shadow map at their own
+     * elevation, not the ground plane).
+     */
+    elevAttr?: number[];
+    /**
      * Per-vertex `line-offset` displacement vector (vec2, world units).
      * mgl applies line-offset in the VERTEX SHADER (`offset2 = offset *
      * a_extrude * EXTRUDE_SCALE * normal.y * mat2(t,-u,u,t)`, added to the
@@ -2219,6 +2226,10 @@ export class MBTileDataEmitter {
         for (let i = 0; i < vertCount2d; i++) {
             const w = this.project(new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1]));
             geo.positions.push(w.x, w.y, w.z + allHeights[i]);
+            // §885 终三十九g34: per-vertex elevation for the shadow
+            // receiver's sample-plane ray-cast (aMBElev attribute).
+            geo.elevAttr = geo.elevAttr ?? [];
+            geo.elevAttr.push(allHeights[i]);
         }
         for (let i = 0; i < triIndices.length; i += 3) {
             // §885 终三一九: flip each triangle's winding (a,c,b) — the
@@ -5542,6 +5553,16 @@ export class MBTileDataEmitter {
                     buffer: new Float32Array(geo.uvs).buffer,
                     type: 'float' as BufferElementType,
                     itemCount: 2,
+                });
+            }
+            // §885 终三十九g34: per-vertex elevation for the shadow
+            // receiver's sample-plane ray-cast (HD elevated fills).
+            if (geo.elevAttr && geo.elevAttr.length === geo.positions.length / 3) {
+                vertexAttributes.push({
+                    name: 'aMBElev',
+                    buffer: new Float32Array(geo.elevAttr).buffer,
+                    type: 'float' as BufferElementType,
+                    itemCount: 1,
                 });
             }
 

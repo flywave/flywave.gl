@@ -4825,3 +4825,17 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   部分);②方向/半影;③强度渐变。均为 shadow map 内容→接收端
   采样的分布校准,不再是链路问题。
 - 校准资产:MBShadowDump 深度图导出探针入库(帧 60 自动 POST)。
+
+**㊵补12 终三十九g34(高程平面接收落地;lighting 残余确认为地形影)**:
+- aMBElev 管线完整重建(g23 误回退已恢复):emitter elevAttr 逐顶点
+  记录 → getDecodedTile 属性输出 → 接收端 ray-cast 平面 z=vMBElev
+  (替代 z=0);injectGroundShadow 经 material.__mbElevPlane 门控
+  (technique._hdElevation)。
+- 实测:lighting 族 192-163k(与 WP 变体一致)——**未收敛,且
+  expected 的暗区范围远超 deck 投影几何**——确认 g25 结论:
+  elevated-symbols-lighting 的主体暗区=地形遮挡体投影,接收端
+  校准无法单独收敛。地形体本身不在场景中(无 terrain mesh 源)。
+- 已落地为 mgl 语义基建(保留):高程平面接收 = 后续任何影子
+  语义校准的正确基座。
+- lighting 族定性完成:战役=地形参与影子管线(需 terrain 源/或
+  fixture 特有的 occluder 语义确认),非本会话可收敛项。
