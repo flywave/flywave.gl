@@ -4573,3 +4573,18 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   35 点的曲线归属/3d_elevation_id 解析,对照 mgl getElevationFeature);
   ②修复后桥 deck 恢复真实 6.0(高度来自采样而非 level 补偿),rail
   5.5..6.5 自然浮出;③届时再移除 level 回退;④deck 洞(Portal Graph)。
+
+**㉞ 终三一九g14(高程采样修复实验——阴性结果,已回退)**:
+- 实验1:移除 `resolveZOffset` 的 `properties.level` 补偿 → 43,469(变差)
+  ——expected 的桥面高度并非简单"6.0 无 level";
+- 实验2:再移除 flatFeature 边界平地捷径(强制沿细分边细分)→ 与实验1
+  完全同值 43,469——**桥特征无细分边**(getSubdivisionEdges 只在高度
+  撕裂处生成,缓坡无),细分与否对桥无效;平地捷径非桥压平根因;
+- 结论:①桥沿"6.00"在我们渲染中来自 level 补偿,在 mgl 中来自
+  (未定位的)真实机制——census 显示 mgl 桥沿有奶油带而我们不能,
+  但移除补偿/加细分都不收敛,**桥高度域真相未定**(可能 expected 桥
+  面≈5.x,偏差主因另有其处:白线/挡墙 vs 桥沿的对位);②护栏可见度
+  低的另一候选=护栏被 deck 边缘 Z 域盖住的比例问题,而非 0 高度差;
+- 已回退至 HEAD(43,090 基线 + 探针);MBFeatH/MBRailZ 探针保留在库。
+- 下一刀建议:①用 expected 奶油带像素级反推桥面真实高度(带宽度→
+  护栏露出高度→deck 高);②deck 洞(Portal Graph)转向;③lighting 族。
