@@ -4709,3 +4709,15 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 完整修复= elevated fills 换真 per-fragment 世界坐标 varying
   (wp varying + shadow matrix 采样),非地面平面近似;工作量中等。
 - 已落地部分(g22):groundRadiance 常驻调制 −5.4k/件。
+
+**㊵补2 终三一九g23(WP 接收器实验——阴性,已回退)**:
+- 三种变体(modelMatrix wp / wp+3m 法向偏移 / aMBElev 属性平面射线)
+  输出逐像素完全一致(163,383/163,076/192,057/193,738)且劣于
+  无-WP 的 lit3(191,129/154,724)——注入对输出无影响或路径未激活
+  (疑:①sweep 先于 patchFillMaterial 注入占位,②引擎 RTE 帧下
+  modelMatrix/属性帧与 shadow matrix 帧不一致,③深度通道内容与
+  语义缺口)。
+- 已回退至 g22 已提交状态(groundRadiance 调制 −5.4k/件保留)。
+- 结论:lighting 族完整收敛需要影子管线级的对照(深度通道内容/
+  接收端帧一致性),建议以 mgl shadow_renderer.ts 逐行移植的方式
+  立项,而非继续点状实验。
