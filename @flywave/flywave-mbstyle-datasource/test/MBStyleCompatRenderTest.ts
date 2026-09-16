@@ -1058,6 +1058,8 @@ async function renderFrames(
                         const cpos = (mapView as any).camera?.position;
                         // eslint-disable-next-line no-console
                         console.log(`[MBPlace] ${tk} tileCenter=(${tcenter?.x?.toFixed?.(1)},${tcenter?.y?.toFixed?.(1)},${tcenter?.z?.toFixed?.(1)}) camPos=(${cpos?.x?.toFixed?.(1)},${cpos?.y?.toFixed?.(1)},${cpos?.z?.toFixed?.(1)}) anchor=(${((tcenter?.x ?? 0) - (cpos?.x ?? 0)).toFixed(1)},${((tcenter?.y ?? 0) - (cpos?.y ?? 0)).toFixed(1)},${((tcenter?.z ?? 0) - (cpos?.z ?? 0)).toFixed(1)}) bb=${JSON.stringify((t as any).m_boundingBox?.position ?? (t as any).boundingBox?.position ?? null)}`);
+                        const gbx = (t as any).geoBox;
+                        if (gbx) console.log(`[MBGeoBox] ${tk} W=${gbx.west?.toFixed?.(6)} N=${gbx.north?.toFixed?.(6)} E=${gbx.east?.toFixed?.(6)} S=${gbx.south?.toFixed?.(6)}`);
                         // eslint-disable-next-line no-console
                         // §881: elevated-line z-offset chain — per-tile
                         // maxGeometryHeight on both the decoded tile and the

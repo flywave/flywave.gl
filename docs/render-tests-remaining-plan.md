@@ -4098,3 +4098,13 @@ decodeCenter=(22800019.0, 28484029.3, 0)——**Δ=(+76.4, −76.5) ≈ 半个�
 偏移**，非个别瓦片损坏。下一步：以 decodeCenter 为准反推 harp geoBox 的
 期望值，检查 getGeoBox(z17, 74571, 37910) 的经纬度范围与 setMvtYOffset
 的 top 计算（lat2tile(north, 18+13) 的大数精度嫌疑）。
+
+**⑦ 终三一八补3（收敛到真正缺口）**：children-merge 重锚正常（[MBMergeChild]
+d=(−76,76,0) 已施加、锚定=cellCenter−eye 正确、dash 标线与 expected 逐位吻
+合）——**真正缺口 = prepareFillGeometry 的曲线细分未生效**：deck 填充 plan
+pieces 每块仅 5-16 顶点（ring0 4-16 原样直通，无沿曲线加密），而 mgl 同类
+桥面为数千顶点的细分曲面；65-vert 的 road-base 只能画出破碎残片（发丝线），
+dash 线（solid-line 技术）反而位置正确。对照 L4 缺口清单：这正是
+draw_elevated_fill/FillIntersectionsLayoutArray 的细分半边。下一步：读
+mgl draw_elevated_fill 的曲线细分采样密度（沿弧长 per-segment 采样）补齐
+prepareFillGeometry 的细分实现，A/B no-cross-beams（目标 168k→<20k）。
