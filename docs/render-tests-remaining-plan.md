@@ -4916,3 +4916,16 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   mgl 语义决定是否可见渲染(mgl render-tests 的 shadow-caster 层
   惯例:深度通道 only);④验证 lighting 四件收敛。
 - 这是 lighting 族的正确主攻方向;预期收益 100k+(四件总和)。
+
+**㊵补18 终三十九g41(shadow-casters 墙未进解码——战役实施切入点实锤)**:
+- 解码遥测(elevated-symbols-lighting,瓦片 18/232843/103242-3):
+  maxH=10.66-11.5(道路高度),无 200m 特征——**shadow-casters 层的
+  200m 遮挡墙未出现在解码输出**;geojson extra 源(§518 管线)未把
+  该层送达 fill-extrusion 解码(或解码未按 fill-extrusion-height=200
+  处理)。
+- 实施清单(下轮直接动工):①trace geojson extra 源对
+  shadow-casters 层的瓦片请求/返回;②确认 fill-extrusion 技法
+  对 geojson 层的路由(height=200 墙);③墙入深度通道(casters,
+  g31 已支持 extruded-polygon);④lighting 四件收敛验证。
+- 本会话累计(no-cross-beams 167,916→41,333;lighting 196,539→
+  191,129;guard-rail-qkey-border −83%)全部已提交,工作树干净。
