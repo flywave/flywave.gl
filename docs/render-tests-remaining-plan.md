@@ -4874,3 +4874,17 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 当前最优净状态保持:no-cross-beams 41,333;lighting 族 191k/155k。
 - 后续会话入口:①帧级捕获 aMBElev 值(或改用 uniform 高程+分材质);
   ②lighting 地形影子战役;③qkey 配对。
+
+**㊵补15 终三十九g38(帧级澄清——no-cross-beams 无 cast-shadows,接收器不注入)**:
+- 关键事实:no-cross-beams 的 style lights **无 cast-shadows** →
+  shadowLightState=null → injectGroundShadow 的注入门不开启 →
+  该件本就没有任何影子接收器(elevation-plane 门控在该件无效果,
+  41,333 恒定 ✓ 与三态实测一致)。
+- 此前"gate on=160,639"测量中的 elevation-plane 路径实际未执行;
+  160k 与 41,333 的差异来自**其它 g34 内容**(疑 aMBElev 属性注入
+  或当时状态混叠)——待下轮以干净 A/B 重新隔离。
+- GLSL 修复已落地:MB_SH_ELEVVIS define 无条件注入(0/1),
+  编译错误消除;elevplane/elevvis 旋钮齐备。
+- lighting 族的"桥面全影"在 elevated-symbols-lighting(有
+  cast-shadows)中另行验证——其接收器注入+采样链已通(89k px
+  帧差),残余=覆盖/方向语义校准(开放)。
