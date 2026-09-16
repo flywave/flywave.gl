@@ -995,11 +995,9 @@ async function renderFrames(
                         const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
                         if (m?.color?.getHexString?.() === 'a3b4c8') {
                             m.color.setHex(0xff0000);
-                            // §885 终三一九: DoubleSide + depthTest off — the
-                            // bisection separates "decks culled by winding"
-                            // (red appears) from "decks clipped elsewhere"
-                            // (still no red).
-                            m.side = THREE.DoubleSide;
+                            // §885 终三一九 matrix B: FrontSide kept,
+                            // depthTest off — isolates depth-occlusion from
+                            // facing-cull.
                             m.depthTest = false;
                             painted.push(o.geometry?.attributes?.position?.count ?? '?');
                         }

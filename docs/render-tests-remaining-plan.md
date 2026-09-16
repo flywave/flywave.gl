@@ -4170,3 +4170,16 @@ prepareFillGeometry 的细分实现，A/B no-cross-beams（目标 168k→<20k）
   ②fake-road-shade（ro=1 地面 z）；③背景层 clear-color 后又被某层覆盖。
 - 下轮：交互式 WebGL 帧捕获（或 uMB3DDbg=4 attrdbg 逐 draw 着色器探针）+
   ro-sweep（deck ro 9.6→999 逐档）确定遮挡面身份后修复其 z 锚定。
+
+**⑫ 终三一九（本轮最终状态）**：
+- 绕向双向归一化（<0/>0 反转）均位级不变 167,916 → 排除绕向；FrontSide+
+  depthTest=false 亦 167,916 → 排除深度遮挡（depthTest 关闭不恢复）；
+  DoubleSide+depthTest=false → deck 可见（红块）→ deck 三角形**已提交且可
+  光栅化，唯 FrontSide+depth 组合下不可见**——矛盾组合指向片元/顶点着色器
+  注入层（补丁材质的 outline fwidth mix、雾 mix、光照 mbK 注入其中之一在
+  SwiftShader 上产生 NaN/全 discard）。
+- 工具入库（decodedbg 门控）：[MBPlace]/[MBGeoBox]/[MBSkip?]/[MBPaintRed]/
+  [MBFillHD]/[MBFillHD-bounds]/双相机 NDC 投影/fogdbg 探针。
+- 下轮：uMB3DDbg=5（litdbg）+ attrdbg=1 逐 draw 着色器探针在 no-cross-beams
+  上定位 NaN/discard 的注入段；或 patchMaterial 子开关（drape/lit/fog 逐段
+  剥离）二分。
