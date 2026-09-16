@@ -1031,6 +1031,14 @@ async function renderFrames(
                                 // §885 终三一九: the suspected occluder — the
                                 // grey plate at the RTE origin (v0w=(0,0,0)).
                                 if (o.geometry?.attributes?.position?.count === 1089) m.color.setHex(0x0000ff);
+                                // §885 终三一九b: force the ribbon width to
+                                // 4px + DoubleSide (the width-uniform /
+                                // facing-cull bisection for the solid lines).
+                                if (o.geometry?.attributes?.aRibbonEdge) {
+                                    m.side = THREE.DoubleSide;
+                                    const u = m.uniforms ?? (m as any).uniforms;
+                                    if (u?.uMBRibbonWidth) u.uMBRibbonWidth.value = 4.0;
+                                }
                             });
                         };
                         const redHook = () => {
