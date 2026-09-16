@@ -4225,3 +4225,17 @@ emitElevatedFillPiece 索引序翻转 (a,b,c)→(a,c,b)（MVT y-flip 使投影�
   draw_elevated_fill 密度）后同批配对 N≥2 重测；③lighting 族
   （159-198k）的 fill-extrusion 方向光调制专项；④全族 75 件协议精度
   重基线（dsfix 配置）。
+
+**⑯ 终三一九补2（残余 35.5k 逐像素差分聚类，d>60 阈值实测 49,061 px）**：
+按 expected 内容分类：other 35%（阴影渐变/hatched/抗锯齿边）、deck 29.6%、
+wall/shoulder(cream) 19.3%、marking(white) 15.8%、background 0.3%（背景对齐✓）。
+**关键拓扑对**（expected→ours）：
+- deck→background 12,770：我们的 deck 有洞（缺失区域）；
+- wall/shoulder→deck 9,425 + marking→deck 7,716：我们的 deck 颜色覆盖了
+  本应是奶油挡墙/白色标线的区域——**deck 多边形越界覆盖挡墙与标线区域，
+  同时自身有洞** = deck 填充多边形形状错误（pieces 形状/洞指派/环顺序）。
+- 机理定位：emitElevatedFillPiece 的 earcut 洞指派（holeIndices 顺序）与
+  polygonSubdivision 分片形状；非高度采样问题（deck 像素色=原色正确）。
+- 下轮：①emitElevatedFillPiece 的洞指派审计（holeIndices 与 earcut 的
+  配对）；②polygonSubdivision 分片形状与 mgl 对照（normalizeRing/半平面
+  裁剪的环顺序）；③修复后同批配对 N≥2 重测。
