@@ -4734,3 +4734,14 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - lighting 族建议单独立战役推进(公式+覆盖+强度三件套),
   现有基线:lighting 191,129 / text 189,685 / terrain 154,724 /
   text-terrain 154,187(对比最初 196,539/194,961/160,792/160,901)。
+
+**㊵补4 终三一九g25(lighting 族战役首查——真缺口=地形遮挡体缺失)**:
+- 目视对照(expected vs ours):expected 全场近全影——右上大片暗色
+  地形体(山体)投影覆盖路网,仅左上小楔形受光;我们的渲染完全
+  没有该地形遮挡体,场景亮度/几何形态差异巨大。
+- 结论:lighting 族 160-196k 的主体不是公式校准问题,而是
+  **地形 3D 遮挡体缺失**(terrain-in-shadow-pipeline 战役):
+  ①地形 mesh 是否参与影子深度通道;②elevated fills 的影子接收
+  (g23 已证地面近似不可用);③场景级相机/几何差异待查。
+- 建议:lighting 族独立立项(地形影子管线),不与 3d-intersections
+  标线/护栏校准混线;现有 −5.4k/件(groundRadiance)保留。
