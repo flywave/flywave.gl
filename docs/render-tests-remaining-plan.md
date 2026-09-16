@@ -4280,3 +4280,16 @@ wall/shoulder(cream) 19.3%、marking(white) 15.8%、background 0.3%（背景对�
 - 下轮：solid-line ribbon 未光栅化排查（aRibbonEdge/aRibbonOffs 属性是否
   为空——shader 读零属性则带材塌缩成中线发丝 ✓ 与发丝线现象吻合；对照
   dashed ribbons 的属性差异）→ 修复 → A/B → 全族重基线。
+
+**⑰ 终三一九e（洞指派修复 + 排除链闭合）**：
+- 洞重心探针修复落地（holeProbe = 洞片元顶点重心替代 part[0] 边界点——
+  分割线共享点上跨线判定不稳定的鲁棒性修正）——A/B 位级不变 35,503：
+  本 fixture 的洞指派路径原本未触发丢弃（无洞多边形），修正为鲁棒性
+  预防性加固（保留）。
+- **残余 35,503 的定位收敛**：扫描线对比证实 deck 本体颜色/位置与 expected
+  逐点一致（(162,179,199) ✓）、背景 ✓；缺失 = 路面内部精细结构（白色
+  边缘实线 double-lines、奶油肩部、暗边线）——**线渲染细节域**（solid
+  ribbon 的颜色/宽度/分层），几何/深度/绕向/雾全部排除闭合。
+- 下轮：double-lines 实线层的颜色/宽度对照（style hsl(0,0%,96%)=f5f5f5 vs
+  expected (244,244,244) 边缘线）与 ribbon 宽度域校准；随后全族 75 件
+  协议精度重基线（dsfix 配置 + 同批配对 N≥2）。

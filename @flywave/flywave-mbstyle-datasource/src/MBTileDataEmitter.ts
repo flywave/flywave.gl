@@ -4706,7 +4706,7 @@ export class MBTileDataEmitter {
                 // order (feature order) decides which color wins at crossings,
                 // matching mapbox's painter's algorithm for a single line layer.
                 _isLineRibbon: true,
-                _ribbonWidthPx: Number(paint['line-width'] ?? 1),
+                _ribbonWidthPx: this.resolvePaintNumber(paint['line-width'], 1),
                 // mgl's line shaders size the dash AND the pattern aspect by
                 // `line-floorwidth` (line-width at floor zoom) — the patcher
                 // needs it for the u-tiling scale.
@@ -4714,7 +4714,7 @@ export class MBTileDataEmitter {
                 // line-blur stays in CSS px even under line-width-unit:meters
                 // (fitted against the meters-blur reference: the alpha ramp
                 // matches clamp(1 - distCenter/blurPx) with the RAW value).
-                _ribbonBlurPx: Number(paint['line-blur'] ?? 0),
+                _ribbonBlurPx: this.resolvePaintNumber(paint['line-blur'], 0),
                 _translate: paint['line-translate'] ?? [0, 0],
                 _translateAnchor: paint['line-translate-anchor'] ?? 'map',
                 color: paint['line-color'] ?? '#000000',
@@ -4723,6 +4723,24 @@ export class MBTileDataEmitter {
             this.m_techniques.push(technique as IndexedTechnique);
         }
         return idx;
+    }
+
+    /**
+     * §885 终三一九b: resolve a possibly-zoom-interpolated paint value to a
+     * number at the decode zoom. `Number(expressionObject)` is NaN — the
+     * direct cause of the invisible solid-line ribbons on the
+     * 3d-intersections family (the widths came from zoom-interpolate
+     * expressions; the constants worked, the expressions vanished).
+     */
+    private resolvePaintNumber(v: unknown, fallback: number): number {
+        if (typeof v === 'number') return Number.isFinite(v) ? v : fallback;
+        if (v == null) return fallback;
+        try {
+            const n = Number(MBExpressionEngine.evaluate(v as any, { zoom: this.m_zoom } as any));
+            return Number.isFinite(n) ? n : fallback;
+        } catch {
+            return fallback;
+        }
     }
 
     /**

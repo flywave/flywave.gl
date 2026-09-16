@@ -417,13 +417,31 @@ export class MBElevatedStructures {
         const exteriorPieces = polygonSubdivision([clipped[0]], edges as SubdivisionEdge[]);
         const holePieces = clipped.slice(1).map(ring => polygonSubdivision([ring], edges as SubdivisionEdge[]));
 
+        // §885 终三一九b2: hole→piece re-attachment via the hole piece's
+        // VERTEX CENTROID. part[0] (the first vertex) can sit exactly on a
+        // cut-line boundary shared with the exterior piece's own boundary,
+        // where the crossing test is undefined and the hole randomly drops
+        // (the deck then fills the hole area — the terminal-318 "deck
+        // overruns the markings" signature). The half-plane split pieces
+        // are convex, so the centroid is guaranteed interior.
+        const holeProbe = (part: ClipPoint[]): ClipPoint => {
+            let sx = 0;
+            let sy = 0;
+            for (const pt of part) {
+                sx += pt.x;
+                sy += pt.y;
+            }
+            return { x: sx / part.length, y: sy / part.length };
+        };
+
         for (const piece of exteriorPieces) {
             const holes: FillElevationPiece['holes'] = [];
             const holesCanonical: ClipPoint[][] = [];
             const holeHeightsCanonical: number[][] = [];
             for (const parts of holePieces) {
                 for (const part of parts) {
-                    if (pointInRing(part[0], piece)) {
+                    const probe = holeProbe(part);
+                    if (pointInRing(probe, piece)) {
                         const hs = part.map(sample);
                         holes.push({ ring: back(part), heights: hs });
                         holesCanonical.push(part);
