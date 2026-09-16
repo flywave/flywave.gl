@@ -4266,3 +4266,17 @@ wall/shoulder(cream) 19.3%、marking(white) 15.8%、background 0.3%（背景对�
 - 本轮工具入库：TileObjectsRenderer [MBSkip?] 遥测（TS 源）、MBStyleCompat
  RenderTest 双相机 NDC 投影 + nopatch 门控（MBMaterialPatchManager，诊断
  默认关）。
+
+**⑱ 终三一九d（残余构成最终定位）**：
+- 绿涂实验（double-lines 实线 ribbon 网格涂绿）：**0 绿色像素**——
+  **double-lines 的 solid ribbon 网格从未光栅化**（对比 dashed 标线正常
+  渲染）= 残余 35.5k 的主体（沿路缘的连续白色双实线缺失）。
+- markupbias 旋钮（0.05→0.5）位级不变 → 排除 markup 抬升深度问题（该旋钮
+  保留作诊断资产）。
+- 差距构成最终分解（no-cross-beams 35,503）：
+  ①double-lines 实线 ribbon 缺失（主体，沿路缘连续白双实线）；
+  ②标线细节（dashes 相位/宽度微差，已部分渲染）；
+  ③deck 高度插值细节（分段平面对 vs expected 连续坡度）。
+- 下轮：solid-line ribbon 未光栅化排查（aRibbonEdge/aRibbonOffs 属性是否
+  为空——shader 读零属性则带材塌缩成中线发丝 ✓ 与发丝线现象吻合；对照
+  dashed ribbons 的属性差异）→ 修复 → A/B → 全族重基线。

@@ -358,6 +358,13 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "nopatch=1")) {
         (globalThis as any).__mbNoPatch = true;
     }
+    // §885 终三一九b: markupbias=<m> → the HD markup lift over the deck
+    // (default 0.05 m — sub-depth-precision at high zoom).
+    {
+        const mb = Number((window as any).__karma__?.config?.args?.find?.(
+            (a: string) => a.startsWith("markupbias="))?.slice("markupbias=".length));
+        if (mb > 0) (globalThis as any).__mbMarkupBias = mb;
+    }
     const fdbg = (window as any).__karma__?.config?.args?.find?.(
         (a: string) => a.startsWith("fogdbg="))?.slice("fogdbg=".length);
     if (fdbg) {

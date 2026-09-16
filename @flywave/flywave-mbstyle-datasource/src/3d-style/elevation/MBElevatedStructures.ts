@@ -353,7 +353,11 @@ export class MBElevatedStructures {
         }
         if (clipped.length === 0) return null;
 
-        const bias = isMarkup ? MARKUP_ELEVATION_BIAS : 0;
+        // §885 终三一九b: markupbias=<m> — the markup lift over the deck;
+        // the 0.05 m default is sub-depth-precision at high zoom (the
+        // markings z-fight into the deck). Default stays 0.05.
+        const markupBias = Number((globalThis as any).__mbMarkupBias ?? MARKUP_ELEVATION_BIAS);
+        const bias = isMarkup ? markupBias : 0;
         const edges = feature.constantHeight != null
             ? []
             : feature.getSubdivisionEdges(this.m_metersToTile);
@@ -469,7 +473,11 @@ export class MBElevatedStructures {
             ? points
             : points.map(p => ({ x: p.x * scale, y: p.y * scale }));
 
-        const bias = isMarkup ? MARKUP_ELEVATION_BIAS : 0;
+        // §885 终三一九b: markupbias=<m> — the markup lift over the deck;
+        // the 0.05 m default is sub-depth-precision at high zoom (the
+        // markings z-fight into the deck). Default stays 0.05.
+        const markupBias = Number((globalThis as any).__mbMarkupBias ?? MARKUP_ELEVATION_BIAS);
+        const bias = isMarkup ? markupBias : 0;
         // Results convert back to extent units so the caller projects them
         // in its own frame.
         const back = (p: ClipPoint): ClipPoint =>
