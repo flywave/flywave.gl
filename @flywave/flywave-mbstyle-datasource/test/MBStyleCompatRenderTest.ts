@@ -116,6 +116,11 @@ function discoverTests(): TestEntry[] {
     const rl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("raillift="))?.slice("raillift=".length);
     if (rl !== undefined) (globalThis as any).__mbRailLift = Number(rl) || 0;
+    // nodeck=1 — hide road-base deck fills (a3b4c8 / painted red) so the
+    // rails can be inspected alone (buried-vs-broken bisection).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "nodeck=1")) {
+        (globalThis as any).__mbNoDeck = true;
+    }
 }
 // §499 LITE bake probe: ONE console line per bakeAll (no readbacks, no
 // traverses) — diagnostics with negligible frame-timing distortion.
@@ -1029,6 +1034,12 @@ async function renderFrames(
                         // §885 终三一九g10: wallside=1 — walls DoubleSide.
                         if ((globalThis as any).__mbWallDS && (m as any)?.__mbStructLit) {
                             m.side = THREE.DoubleSide;
+                        }
+                        // §885 终三一九g15: nodeck=1 — hide deck fills.
+                        if ((globalThis as any).__mbNoDeck &&
+                            (m?.color?.getHexString?.() === 'a3b4c8' ||
+                             m?.color?.getHexString?.() === 'ff0000')) {
+                            o.visible = false;
                         }
                         // §885 终三一九b: hide the suspected 1089-vert grey
                         // ground plate (v0 at the eye) — if the decks appear,

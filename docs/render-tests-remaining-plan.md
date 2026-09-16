@@ -4602,3 +4602,14 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   z 域差(墙 z 与 deck z 的 0.5~1m 系统差,g12 的 z=5..6 疑点));
   raillift 全截面抬升不能区分这三种,需带 side/横向偏移的扫描。
 - 旋钮入库:raillift(runner MBSTYLE_RAILLIFT);默认 0 位级不变。
+
+**㊱ 终三一九g16(nodeck 二分——排除 deck 遮挡,锁定截面自身)**:
+- nodeck=1(隐藏 a3b4c8/red deck 填充)后:护栏只余 ~1px 细线
+  (浅橙)沿路缘分布——**即使无 deck 遮盖,护栏可见量仍是 1px 级**,
+  "deck 填充外扩盖住护栏"候选排除。
+- 剩两候选:①rail 截面横向(left 方向)偏移朝路内,只露侧棱;
+  ②rail 截面 z/尺度域差。而 metersToTile 数学自洽性已两度验证
+  (±0.5m 精确),①嫌疑上升——mgl cross-section 左右各半
+  (left±up·scale),若我们 left 方向/符号错,截面陷入路体。
+- 下一刀:raillateral 旋钮(截面 left 分量符号/幅度扫描);
+  或逐顶点 dump rail 四角 xy vs 环边界 xy(内外侧判定)。
