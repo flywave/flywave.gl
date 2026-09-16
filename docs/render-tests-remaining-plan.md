@@ -4862,3 +4862,15 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 后续修复入口:捕获真实 getShaderInfoLog(或在独立最小工程中
   复现该 GLSL),定位编译错误后 elevation-plane 才可重启。
 - 旋钮入库:elevplane/elevvis(runner+test 解析,默认关闭)。
+
+**㊵补14 终三十九g37(真实 GLSL 错误捕获 + 修复——elevation-plane 重启仍无效果, 保持禁用)**:
+- MBProgDiag 探针(renderer.info.programs diagnostics)捕获真实错误:
+  ①`'MB_SH_ELEVVIS' : unexpected token after conditional expression`
+  =宏未定义时 #if 硬错误(已修:define 无条件注入 0/1);
+  ②修复后 elevation-plane 启用=41,333(与禁用完全一致)——采样平面
+  3m vs 0m 零像素差 → vMBElev 仍无效(疑 attribute 未达 shader 或
+  编译仍失败但回落),需帧级 WebGL info log 深挖。
+- 期间一次 JS 模板三目反引号缺失导致的编译断裂已修复。
+- 当前最优净状态保持:no-cross-beams 41,333;lighting 族 191k/155k。
+- 后续会话入口:①帧级捕获 aMBElev 值(或改用 uniform 高程+分材质);
+  ②lighting 地形影子战役;③qkey 配对。

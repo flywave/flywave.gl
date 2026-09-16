@@ -282,6 +282,23 @@ export class MBMaterialPatchManager {
                             // eslint-disable-next-line no-console
                             console.log(`[MBRf] flavor=${rfKey} hasMap=${!!u.uMBShadowMap} hasMat=${!!u.uMBShadowMatrix} hasGC=${!!u.uMBGC} hasEye=${!!u.uMBEye} hasRes=${!!u.uMBRes} hasFar=${!!u.uMBShadowFar} hasFac=${!!u.uMBGroundShadowFactor}`);
                         }
+                        // §885 终三十九g37: capture REAL shader compile
+                        // diagnostics (program cache holds per-program
+                        // diagnostics with the GLSL error line) — one shot.
+                        if ((globalThis as any).__mbElevPlane
+                            && !(MBMaterialPatchManager as any).__mbDiagDumped) {
+                            const progs = (this.m_dataSource as any).mapView?.renderer
+                                ?.info?.programs ?? [];
+                            for (const pr of progs) {
+                                const dg = pr?.diagnostics;
+                                if (dg && Object.keys(dg).length > 0) {
+                                    (MBMaterialPatchManager as any).__mbDiagDumped = true;
+                                    // eslint-disable-next-line no-console
+                                    console.log('[MBProgDiag] ' + JSON.stringify(dg).slice(0, 3000));
+                                    break;
+                                }
+                            }
+                        }
                         if (shadowState && u.uMBGC) {
                             const inst = (u as any).__mbInst ?? (((u as any).__mbInst = Math.floor(Math.random() * 1e6)));
                             const cnt = ((u as any).__mbRfN = ((u as any).__mbRfN ?? 0) + 1);
@@ -3346,10 +3363,15 @@ export class MBMaterialPatchManager {
                     `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n`
                     + shader.fragmentShader;
             }
-            // §885 终三十九g36: elevation visualization define.
-            if ((material as any).__mbElevVis
-                && !shader.fragmentShader.includes('#define MB_SH_ELEVVIS')) {
-                shader.fragmentShader = '#define MB_SH_ELEVVIS 1\n' + shader.fragmentShader;
+            // §885 终三十九g37: MB_SH_ELEVVIS must ALWAYS be defined for
+            // elevated receivers — an undefined macro inside #if is a hard
+            // GLSL error on SwiftShader ('unexpected token after conditional
+            // expression'), which cascaded into undeclared-identifier errors
+            // and left the elevated fills unrendered (160k regression).
+            if (!shader.fragmentShader.includes('#define MB_SH_ELEVVIS')) {
+                const vis = ((material as any).__mbElevPlane
+                    && (globalThis as any).__mbElevVis) ? 1 : 0;
+                shader.fragmentShader = `#define MB_SH_ELEVVIS ${vis}\n` + shader.fragmentShader;
             }
             // §885 终三十九g34: HD elevated receivers read the fragment
             // elevation (aMBElev attribute) as the sample-plane height.
@@ -3407,31 +3429,19 @@ export class MBMaterialPatchManager {
             // FRAGMENT'S OWN ELEVATION (aMBElev) instead of the ground plane
             // z=0 — decks at 5-6 m sample the shadow map where the upper
             // structures actually occlude the sun.
-            const mbShadowSample = (material as any).__mbElevPlane
-                ? `
+            const mbRayPlane = (material as any).__mbElevPlane ? 'vMBElev + 3.0' : '0.0';
+            const mbShadowSample = `
                         vec2 mbSUV2 = gl_FragCoord.xy / max(uMBRes, vec2(1.0)) * 2.0 - 1.0;
                         vec4 mbRayFar = uMBInvViewProj * vec4(mbSUV2, 1.0, 1.0);
                         vec4 mbRayNear = uMBInvViewProj * vec4(mbSUV2, -1.0, 1.0);
                         vec3 mbFarW = mbRayFar.xyz / mbRayFar.w;
                         vec3 mbNearW = mbRayNear.xyz / mbRayNear.w;
                         vec3 mbRayDir = normalize(mbFarW - mbNearW);
-                        // mgl _shadowParameters.normalOffset (default 3 m):
-                        // sample ABOVE the surface plane so the surface's own
-                        // depth entry never self-shadows it.
-                        float mbRayT = (vMBElev + 3.0 - mbNearW.z) / mbRayDir.z;
+                        float mbRayT = (${mbRayPlane} - mbNearW.z) / mbRayDir.z;
                         vec3 mbWP = mbNearW + mbRayDir * mbRayT;
                         #if MB_SH_ELEVVIS
                         gl_FragColor.rgb = vec3(clamp(vMBElev / 6.0, 0.0, 1.0));
-                        #endif`
-                : `
-                        vec2 mbSUV2 = gl_FragCoord.xy / max(uMBRes, vec2(1.0)) * 2.0 - 1.0;
-                        vec4 mbRayFar = uMBInvViewProj * vec4(mbSUV2, 1.0, 1.0);
-                        vec4 mbRayNear = uMBInvViewProj * vec4(mbSUV2, -1.0, 1.0);
-                        vec3 mbFarW = mbRayFar.xyz / mbRayFar.w;
-                        vec3 mbNearW = mbRayNear.xyz / mbRayNear.w;
-                        vec3 mbRayDir = normalize(mbFarW - mbNearW);
-                        float mbRayT = (0.0 - mbNearW.z) / mbRayDir.z;
-                        vec3 mbWP = mbNearW + mbRayDir * mbRayT;
+                        #endif
                         #if MB_SH_DIAG7
                         gl_FragColor = vec4(mbSUV2.x, mbSUV2.y, 0.5, 1.0);
                         #endif
