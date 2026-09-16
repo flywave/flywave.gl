@@ -616,6 +616,24 @@ export class MBElevatedStructures {
         this.evaluatedPortals = this.m_unevaluatedPortals
             ? MBElevationPortalGraph.evaluate([this.m_unevaluatedPortals])
             : new MBElevationPortalGraph();
+        // §885 终三一九g20: singleton audit — unevaluated portals dropped
+        // by evaluate (no hash partner) become rails; count them per type.
+        if (typeof globalThis !== 'undefined' && (globalThis as any).__mbDecodeDbg) {
+            try {
+                const all = this.m_unevaluatedPortals?.portals ?? [];
+                const kept = this.evaluatedPortals.portals;
+                const keptHashes = new Set(kept.map(p => p.hash.toString()));
+                const singles = all.filter(p => !keptHashes.has(p.hash.toString()));
+                const byType: Record<string, number> = {};
+                for (const p of singles) byType[p.type] = (byType[p.type] ?? 0) + 1;
+                // eslint-disable-next-line no-console
+                console.log(`[MBPortal] total=${all.length} kept=${kept.length} singletonDropped=${singles.length} byType=${JSON.stringify(byType)}`);
+                for (const p of singles.slice(0, 6)) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBPortalS] type=${p.type} va=(${p.vaX.toFixed(2)},${p.vaY.toFixed(2)}) vb=(${p.vbX.toFixed(2)},${p.vbY.toFixed(2)})`);
+                }
+            } catch {}
+        }
         return this.evaluatedPortals;
     }
 

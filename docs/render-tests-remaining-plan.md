@@ -4662,3 +4662,21 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   mgl registry 带 tileId 且精确 tileId.key 匹配优先,我们的注册表
   构建/合并(mergeElevationFeatures)在跨 quadkey 场景的行为需
   专项 trace(下一轮,配合 qkey 件双瓦片 dump)。
+
+**㊵ 终三一九g20(跨瓦片注册表 trace——结构等价确认,精度级差异待量化)**:
+- 全链路审计完成:evaluate 的 border 重打标/singleton 丢弃/配对逻辑
+  与 mgl 等价(唯一偏差=unevaluatedGroup 空时我们保留 entrance/border,
+  方向与本回归相反且涉隧道入口语义,不动)。
+- qkey 件 singleton 实测:三份图 total/kept=19/12、37/13、56/23,
+  丢弃 singleton(→画护栏)7/23/31 条;样本显示边界 clip 顶点
+  (y=0/4096、x=1309.5 等)单端点触边不判 border(与 mgl 一致)。
+- 结论:单瓦片内所有维度(type/id/剪枝/evaluate/高度)与 mgl 全等;
+  回退件的残余差异是**数据精度级**(clip 顶点坐标在两瓦片各自帧中
+  的配对失败→两侧都成 singleton→都画护栏;mgl 同样单瓦片 evaluate
+  无法跨瓦片配对——故 mgl 的对应行为需其实际 singleton 集验证,
+  本地无 mgl 运行时,标注为开放项)。
+- 影响量化:qkey-border +3.3k / ortho-camera +1.5k / viewport-aligned
+  +5.7k,合计 ~+10k vs 修复收益 −27k。
+- 下轮建议:①若无 mgl 运行时可对照,优先转向 lighting 族(160-196k,
+  最大可动块)与 deck 洞;②qkey 件可试 clip margin/顶点量化对齐
+  实验(两侧 clip 精度统一后 hash 或可配对)。
