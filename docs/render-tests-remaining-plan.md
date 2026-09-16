@@ -4183,3 +4183,18 @@ prepareFillGeometry 的细分实现，A/B no-cross-beams（目标 168k→<20k）
 - 下轮：uMB3DDbg=5（litdbg）+ attrdbg=1 逐 draw 着色器探针在 no-cross-beams
   上定位 NaN/discard 的注入段；或 patchMaterial 子开关（drape/lit/fog 逐段
   剥离）二分。
+
+**⑬ 终三一九补（实验矩阵修正 + 多稳态警示）**：
+- 矩阵补充：FrontSide+depthTest=false → 167,916（深度无关确认）；DoubleSide+
+  depthTest → 185,752（DoubleSide 的背面片元额外 +17.8k mismatch = 背面
+  可见但与 expected 不符——背面朝向的几何在视内渲染了错误内容）。
+- **多稳态警示**：no-cross-beams 同 config 跨 run 计数漂移（185,752 两 run
+  一致但与 167,916 并存）——单 run A/B 在该 fixture 上不可靠，必须
+  N≥2 同批配对。本轮所有"位级不变"结论只在计数域成立，像素域需重验。
+- 排除链更新：绕向归一化双向无效 + depthTest 开关无效 + DoubleSide 才可见
+  → 非单一机制；deck 网格已提交且部分可见（ro=9.6 正面），发丝线的构成
+  = 线网格+局部正确片段，剩余 mismatch 主体在 deck 填充的颜色/高度域。
+- 下轮：①同批配对协议（每 config N=2 同批）重测四个矩阵格；②以
+  mtxC2 的 185,752（DoubleSide 可见态）为基准做 deck 填充颜色/高度域
+  排查（prepareFillGeometry 的 heights 采样正确性——对照 mgl
+  draw_elevated_fill 的 per-vertex 高度域）。

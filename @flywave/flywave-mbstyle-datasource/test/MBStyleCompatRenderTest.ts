@@ -995,10 +995,10 @@ async function renderFrames(
                         const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
                         if (m?.color?.getHexString?.() === 'a3b4c8') {
                             m.color.setHex(0xff0000);
-                            // §885 终三一九 matrix B: FrontSide kept,
-                            // depthTest off — isolates depth-occlusion from
-                            // facing-cull.
-                            m.depthTest = false;
+                            // §885 终三一九 matrix C: DoubleSide kept,
+                            // depthTest ON — tests whether the decks pass the
+                            // depth test when not facing-culled.
+                            m.side = THREE.DoubleSide;
                             painted.push(o.geometry?.attributes?.position?.count ?? '?');
                         }
                     });
