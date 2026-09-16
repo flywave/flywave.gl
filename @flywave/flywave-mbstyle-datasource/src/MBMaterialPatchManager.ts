@@ -1777,10 +1777,12 @@ export class MBMaterialPatchManager {
 
     private patchMaterial(material: THREE.Material, technique: any, obj?: THREE.Object3D): void {
         if ((material as any).__mbPatched) return;
-        // §885 终三一九: nopatch=1 → shader-injection bisection switch —
-        // materials render with the RAW three.js program (no onBeforeCompile
-        // chain) to isolate which injection breaks the deck fills on
-        // SwiftShader (3d-intersections hairline). Diagnostic, default off.
+        // §885 终三一九: HD elevated deck fills render DOUBLE-SIDED — mgl's
+        // draw_elevated_fill decks are visible from above AND below; with
+        // FrontSide the projected winding of the y-flip extent path
+        // back-face culls the whole deck (the no-cross-beams 0-raster
+        // defect: red-paint capture showed zero deck pixels while
+        // DoubleSide rendered them fully).
         if ((globalThis as any).__mbNoPatch) {
             (material as any).__mbPatched = true;
             return;

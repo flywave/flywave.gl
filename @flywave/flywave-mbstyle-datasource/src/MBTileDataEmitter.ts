@@ -2211,8 +2211,17 @@ export class MBTileDataEmitter {
             const w = this.project(new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1]));
             geo.positions.push(w.x, w.y, w.z + allHeights[i]);
         }
-        for (let i = 0; i < triIndices.length; i++) {
-            geo.indices.push(triIndices[i] + startIdx);
+        for (let i = 0; i < triIndices.length; i += 3) {
+            // §885 终三一九: flip each triangle's winding (a,c,b) — the
+            // projected winding of the y-flip extent path is back-facing,
+            // which FrontSide fill materials cull (the decks vanished:
+            // DoubleSide worked but exposed the shaded underside; the
+            // mgl-parity fix is the winding itself).
+            geo.indices.push(
+                triIndices[i] + startIdx,
+                triIndices[i + 2] + startIdx,
+                triIndices[i + 1] + startIdx,
+            );
         }
     }
 

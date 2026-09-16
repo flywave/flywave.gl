@@ -4198,3 +4198,16 @@ prepareFillGeometry 的细分实现，A/B no-cross-beams（目标 168k→<20k）
   mtxC2 的 185,752（DoubleSide 可见态）为基准做 deck 填充颜色/高度域
   排查（prepareFillGeometry 的 heights 采样正确性——对照 mgl
   draw_elevated_fill 的 per-vertex 高度域）。
+
+**⑭ 终三一八补8（修复落地+全族验证）**：**HD 填充三角绕向翻转落地**——
+emitElevatedFillPiece 索引序翻转 (a,b,c)→(a,c,b)（MVT y-flip 使投影绕向
+反向，FrontSide 全量剔除 deck；等价于把绕向归一化方向修正，但以语义化
+索引翻转实现，保持 FrontSide 远面剔除语义）。
+- **全族 N=1 验证（windflip-n2 批，zoom 19.94 高位域）**：
+  no-cross-beams 167,916→**35,503（−79%）**；elevated-symbols-lighting
+  195,498→194,493（−0.5%）；lighting-text 194,434→193,017（−0.7%）；
+  lighting-terrain-enabled 179,712→**159,272（−11.4%）**——**零回归，
+  全部改善** ✓✓✓
+- 机理：HD 填充三角形的投影绕向因 MVT y-flip 反向，FrontSide 全量剔除
+  deck（DoubleSide 掩盖性修复已被绕向翻转替代——语义化、保留远面剔除）。
+- 残余 35.5k = deck 细分密度/高度插值/标线细节差异（下轮继续）。
