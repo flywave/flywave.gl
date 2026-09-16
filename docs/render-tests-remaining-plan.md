@@ -4745,3 +4745,17 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   (g23 已证地面近似不可用);③场景级相机/几何差异待查。
 - 建议:lighting 族独立立项(地形影子管线),不与 3d-intersections
   标线/护栏校准混线;现有 −5.4k/件(groundRadiance)保留。
+
+**㊵补5 终三十九g26(deck 洞形态学——均匀边界内缩+坡道端缺失)**:
+- 洞可视化(deck→bg 红色覆盖):expected deck 在**所有边缘**比我们
+  多 2-3px(均匀内缩,非随机);坡道端部整段缺失(图顶区域);膨胀
+  3px 仅覆盖 59%——剩余为内部孤岛(细分 sliver/掉片)。
+- 两个子缺陷:①deck 多边形系统性内缩(clip margin/细分收缩/边界
+  量化,待二分);②坡道端部整段缺失(Portal Graph 端点/终端
+  连接,L4)。
+- g14 教训复用:flatFeature 捷径不是内缩原因(已证与桥无关);
+  内缩幅度 ~2-3px≈0.15-0.25m,疑 clip margin(ELEVATION_CLIP_MARGIN)
+  或细分 cut-bridge 收缩。
+- 下一刀:①clipRingToBox margin 数值实验(margin→0 A/B);
+  ②polygonSubdivision 收缩审计;③端部缺失=Portal 终端连接
+  (isTerminalVertex/entrance 分类)。
