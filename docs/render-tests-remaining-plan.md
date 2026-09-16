@@ -4211,3 +4211,17 @@ emitElevatedFillPiece 索引序翻转 (a,b,c)→(a,c,b)（MVT y-flip 使投影�
 - 机理：HD 填充三角形的投影绕向因 MVT y-flip 反向，FrontSide 全量剔除
   deck（DoubleSide 掩盖性修复已被绕向翻转替代——语义化、保留远面剔除）。
 - 残余 35.5k = deck 细分密度/高度插值/标线细节差异（下轮继续）。
+
+**⑮ 终三一九补（状态固化与剩余差距分解）**：
+- **已落地并验证**：HD 填充绕向翻转（3d-intersections 族零回归，
+  no-cross-beams −79% → 35,503，deck 像素与 expected 逐点一致
+  (162,179,199)）；nopatch/ro-sweep/双相机 NDC/红涂捕获诊断工具链。
+- **剩余差距构成（35.5k 残余的分解假设）**：①deck 标线（dashes/hatched）
+  的位置与宽度细节；②deck 阴影（expected 的对角阴影带 vs 我们的阴影
+  渲染路径）；③prepareFillGeometry 的分段高度插值（当前 pieces 呈
+  z=5.05 平面——若道路有纵坡则需沿曲线加密采样）。
+- **下轮**：①expected/current 逐像素差分聚类（把 35.5k 按内容分类：
+  标线/阴影/底色）；②prepareFillGeometry 沿弧长加密采样（对齐 mgl
+  draw_elevated_fill 密度）后同批配对 N≥2 重测；③lighting 族
+  （159-198k）的 fill-extrusion 方向光调制专项；④全族 75 件协议精度
+  重基线（dsfix 配置）。
