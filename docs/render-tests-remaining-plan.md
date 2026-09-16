@@ -4888,3 +4888,16 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - lighting 族的"桥面全影"在 elevated-symbols-lighting(有
   cast-shadows)中另行验证——其接收器注入+采样链已通(89k px
   帧差),残余=覆盖/方向语义校准(开放)。
+
+**㊵补16 终三十九g39(cast-shadows 件 A/B——门控语义修正)**:
+- A/B 实测(ELEVPLANE=1 vs 0 在 elevated-symbols-lighting):计数完全
+  相同(191,129/189,685/154,724/154,187)——因为 __mbElevPlane 实际由
+  `_hdElevation !== undefined` 决定(HD fills 恒为高程平面),旋钮不
+  控制它;两组同为高程平面接收,非真 A/B。
+- 现状架构确认:HD fills = 投射体(g31)+ 高程平面接收(g34)+
+  groundRadiance 调制(g22),影子链路完整;计数不随平面高度变化
+  → 残余差距不在接收端采样,而在**深度图内容的语义覆盖**
+  (mgl 桥面全影 vs 我们部分影,g24/g25 定性的地形/上层结构
+  遮挡语义)。
+- 后续战役入口不变:lighting 地形影子管线(需确认 occluder 源)、
+  qkey 配对、护栏带宽。
