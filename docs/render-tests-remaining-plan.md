@@ -4759,3 +4759,13 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 下一刀:①clipRingToBox margin 数值实验(margin→0 A/B);
   ②polygonSubdivision 收缩审计;③端部缺失=Portal 终端连接
   (isTerminalVertex/entrance 分类)。
+
+**㊵补6 终三十九g27(deck 洞归因修正——边界位移搅动,非多边形内缩)**:
+- 面积/周长法定量:deck 面积比 0.962(净亏 6.3k),但 implied uniform
+  inset 仅 **0.29px/侧**——"均匀内缩 2-3px"读数系边界位移搅动
+  (24k 洞 vs 6.4k 反向多余 deck,净额小);我们周长 +13%(碎片化)。
+- 结论修正:deck 洞的主体=**相机/帧微偏移((6,-12)px)导致的边界
+  位移搅动**,而非多边形几何内缩缺陷;clip margin/细分收缩候选排除。
+- 修正后的优先级:①no-cross-beams 最大单项杠杆=相机/zoom 映射校准
+  (camdist=0.96 已证 −7.4k);②deck 碎片化的周长+13%(细分 piece
+  接缝 AA)次之;③Portal 终端(坡道端缺失)范围有限。
