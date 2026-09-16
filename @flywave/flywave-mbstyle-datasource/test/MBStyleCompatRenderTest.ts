@@ -1028,17 +1028,17 @@ async function renderFrames(
                             root?.traverse?.((o: any) => {
                                 const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
                                 if (m?.color?.getHexString?.() === 'a3b4c8') m.color.setHex(0xff0000);
+                                // §885 终三一九g: paint the SolidLineMaterial
+                                // ribbons via their diffuseColor uniform —
+                                // the material.color path is ignored by the
+                                // ribbon shader.
+                                const u = (m as any)?.uniforms;
+                                if (u?.diffuseColor?.value?.isColor) {
+                                    (u.diffuseColor.value as THREE.Color).setHex(0x00ff00);
+                                }
                                 // §885 终三一九: the suspected occluder — the
                                 // grey plate at the RTE origin (v0w=(0,0,0)).
                                 if (o.geometry?.attributes?.position?.count === 1089) m.color.setHex(0x0000ff);
-                                // §885 终三一九b: force the ribbon width to
-                                // 4px + DoubleSide (the width-uniform /
-                                // facing-cull bisection for the solid lines).
-                                if (o.geometry?.attributes?.aRibbonEdge) {
-                                    m.side = THREE.DoubleSide;
-                                    const u = m.uniforms ?? (m as any).uniforms;
-                                    if (u?.uMBRibbonWidth) u.uMBRibbonWidth.value = 4.0;
-                                }
                             });
                         };
                         const redHook = () => {
