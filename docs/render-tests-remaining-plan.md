@@ -4941,3 +4941,14 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   c)层路由(sourceId=shadow-casters)未匹配到 extra 数据。
 - 下一刀:decoder 逐层 feature 计数探针(layer×sourceId→feature 数),
   一次运行定位 a/b/c。
+
+**㊵补20 终三十九g43(geojson extra 坐标换算修复——墙数据已入 stash)**:
+- 断点实锤(b 类):extras 请求用 level-cell 坐标请求 level-mgl 瓦片
+  (空间错 2×),shadow-casters geojson 全部 42 字节空响应;
+- 修复:x/y 按 cell→mgl 层级差换算(<<up / >>-up)+ maxzoom clamp;
+- 修复后:x=465686/y=206486 返回 **280 字节(墙要素数据)**——
+  数据流打通(stash→decodeTileWithSources);
+- mismatch 暂持平 191,129:后续为墙解码→fill-extrusion 渲染→
+  深度通道→接收端采样的逐环验证(基建全部在位)。
+- 连同 g31(投射体)+g34(高程平面接收)+g22(groundRadiance),
+  lighting 族的链路骨架已全部打通,剩校准与验证迭代。

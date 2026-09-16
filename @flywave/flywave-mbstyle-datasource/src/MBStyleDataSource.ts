@@ -1275,6 +1275,18 @@ class MBExtraVectorSourcesProvider extends DataProvider {
             let lvl = mglLevel;
             let x = tileKey.column;
             let y = tileKey.row;
+            // §885 终三十九g43: rescale x/y from the CELL level to the mgl
+            // request level — the old code requested level-mgl tiles with
+            // level-cell coordinates (off by 2× in space), so geojson extras
+            // (shadow-casters walls) always resolved to the wrong, empty tile.
+            const up = mglLevel - tileKey.level;
+            if (up > 0) {
+                x = x << up;
+                y = y << up;
+            } else if (up < 0) {
+                x = x >> -up;
+                y = y >> -up;
+            }
             if (lvl > ex.maxzoom) {
                 const shift = lvl - ex.maxzoom;
                 lvl = ex.maxzoom;
@@ -1284,6 +1296,12 @@ class MBExtraVectorSourcesProvider extends DataProvider {
             try {
                 const bytes = await ex.provider.getTile(
                     TileKey.fromRowColumnLevel(y, x, lvl), abortSignal);
+                // §885 终三十九g43: extra-source fetch census — did the
+                // shadow-casters geojson walls get fetched and stashed?
+                if ((globalThis as any).__mbDecodeDbg) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBExtraFetch] src=${ex.sourceId} lvl=${lvl} x=${x} y=${y} bytes=${typeof bytes === 'string' ? bytes.length : (bytes as any)?.byteLength ?? 'none'}`);
+                }
                 if (typeof bytes === 'string' || bytes instanceof ArrayBuffer || bytes instanceof Uint8Array) {
                     const push = (bb: ArrayBufferLike | string, xx: number, yy: number, inst: boolean) => {
                         // §644: geojson extras carry a JSON string payload —
