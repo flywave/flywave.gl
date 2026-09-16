@@ -19,6 +19,7 @@ import { StyleSpecification } from './MBStyleSpec';
 import { findPoleOfInaccessibility } from './PoleOfInaccessibility';
 import {
     HD_ELEVATION_SOURCE_LAYER,
+    ELEVATION_EXTENT,
 } from './3d-style/elevation/MBElevationConstants';
 import {
     MBElevatedStructures,
@@ -1040,11 +1041,19 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         emitter.setElevationStructures(structures);
         emitter.setElevationYDelta((extents: number) => processor.elevationYDelta(extents));
         this.m_elevationPassProcessor = new MBElevationOnlyProcessor(processor);
-        // meters→canonical-extent-units factor for tessellation; same
-        // formula the finalize step has used since §511.
-        structures.setMetersToTile(
-            EarthConstants.EQUATORIAL_CIRCUMFERENCE /
-            (256 * Math.pow(2, zoom + 1)));
+        // meters→canonical-extent-units factor (mgl tileToMeter⁻¹,
+        // mercator_coordinate.ts: latitude-dependent, per EXTENT unit).
+        // §885 终三一九g17: the old formula (C/(256·2^(zoom+1)) ≈ 0.6)
+        // was dimensionally wrong — mgl's metersToTile is ~108 extent
+        // units/m. The guard-rail cross-section (±0.5 m × metersToTile)
+        // collapsed from 54 units to ±0.3 units (≈3 mm) — razor-thin
+        // rails, the missing cream shoulder bands.
+        const z17 = tileKey.level;
+        const mercY = (tileKey.row + 0.5) / (1 << z17);
+        const expTerm = Math.exp(Math.PI * (1 - 2 * mercY));
+        const tileToMeter = EarthConstants.EQUATORIAL_CIRCUMFERENCE * 2 * expTerm /
+            (expTerm * expTerm + 1) / ELEVATION_EXTENT / (1 << z17);
+        structures.setMetersToTile(1 / tileToMeter);
     }
 
     /** Assemble curves after the elevation pre-pass and register the tile. */
