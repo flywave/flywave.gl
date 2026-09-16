@@ -4252,3 +4252,17 @@ wall/shoulder(cream) 19.3%、marking(white) 15.8%、background 0.3%（背景对�
 - 下轮：①double-lines 层的颜色与宽度对照（style hsl(0,0%,96%) vs expected
   的边缘线色）；②标线色差（橙色 vs 白）的 color-management 检查；③修复后
   全族协议精度重基线。
+
+**⑰ 终三一九c（矩阵实验定论 + 采样对齐边界）**：
+- 矩阵定论：depthTest=false 不改变（排除深度遮挡）；DoubleSide 使 deck 色块
+  可见（正面剔除确认）→ 修复=DoubleSide 或等价的绕向修正；deck 正面颜色
+  (162,179,199) 与 expected 逐点一致 ✓。
+- 残余 35.5k 主体 = 标线的微位移/宽度差（expected 白线像素处我们渲染 deck
+  色 = 线位置/宽度微差），非 deck 缺失——线渲染细节域（ribbon 宽度/dash
+  相位/抗锯齿）。
+- 换日计划：①线渲染细节域（ribbon 宽度/dash 相位/抗锯齿）对照 mgl
+  line_solid.ts 参数校准；②lighting 族 fill-extrusion 方向光调制专项；
+  ③全族 75 件协议精度重基线（dsfix 配置 + 同批配对 N≥2）。
+- 本轮工具入库：TileObjectsRenderer [MBSkip?] 遥测（TS 源）、MBStyleCompat
+ RenderTest 双相机 NDC 投影 + nopatch 门控（MBMaterialPatchManager，诊断
+ 默认关）。
