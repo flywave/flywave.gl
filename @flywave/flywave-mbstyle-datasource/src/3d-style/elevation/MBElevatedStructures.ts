@@ -912,8 +912,11 @@ export class MBElevatedStructures {
             // Cross-sections are built in tile units (mgl toTileVec);
             // emit with z converted back to METERS (mgl addVertex's
             // tileToMeters argument) so the mesh shares one z unit.
+            // §885 终三一九g15: raillift=<m> — diagnostic lift of the
+            // whole rail cross-section in meters (sweep knob).
+            const railLift = Number((globalThis as any).__mbRailLift ?? 0);
             const m = (v: Vec3, n: Vec3): number =>
-                addVertex(builder, [v[0], v[1], v[2] / metersToTile], n);
+                addVertex(builder, [v[0], v[1], v[2] / metersToTile + railLift], n);
 
             // Outer side
             quad(builder,

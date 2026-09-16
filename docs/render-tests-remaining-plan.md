@@ -4588,3 +4588,17 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 已回退至 HEAD(43,090 基线 + 探针);MBFeatH/MBRailZ 探针保留在库。
 - 下一刀建议:①用 expected 奶油带像素级反推桥面真实高度(带宽度→
   护栏露出高度→deck 高);②deck 洞(Portal Graph)转向;③lighting 族。
+
+**㉟ 终三一九g15(奶油带反推 + raillift 扫描——部分埋没确认,非主力)**:
+- expected 奶油带实测:n=2703 条,带宽中位 **6px ≈ 0.58m 露出**
+  (0.5m 护栏骑 deck 顶 + AA ✓ mgl 语义);ours n=1545(57%)、带宽中位
+  **1px ≈ 0.1m**——护栏几乎与 deck 齐平或被盖。
+- raillift 扫描(no-cross-beams):0→43,090,**0.5→42,175,1.0→41,485,
+  1.5→41,497,2.0→41,323**——单调改善后平台,总增益 ~1.8k,远小于
+  15k 奶油缺口;抬 2m 在几何上也与 expected 0.58m 露出矛盾。
+- 判读:护栏存在且大致沿正确边线(数量 57%),但**可见带被压缩到
+  ~1px 的机制未定**(候选:①deck 填充多边形外扩越过 ring 边界把
+  rail 下半盖住;②rail 截面左右偏移(left 方向)朝路内;③mesh
+  z 域差(墙 z 与 deck z 的 0.5~1m 系统差,g12 的 z=5..6 疑点));
+  raillift 全截面抬升不能区分这三种,需带 side/横向偏移的扫描。
+- 旋钮入库:raillift(runner MBSTYLE_RAILLIFT);默认 0 位级不变。

@@ -112,6 +112,10 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "wallside=1")) {
         (globalThis as any).__mbWallDS = true;
     }
+    // §885 终三一九g15: raillift=<m> — diagnostic rail z lift.
+    const rl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("raillift="))?.slice("raillift=".length);
+    if (rl !== undefined) (globalThis as any).__mbRailLift = Number(rl) || 0;
 }
 // §499 LITE bake probe: ONE console line per bakeAll (no readbacks, no
 // traverses) — diagnostics with negligible frame-timing distortion.
