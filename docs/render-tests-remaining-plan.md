@@ -4318,3 +4318,14 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 本缺陷同时解释：标线 randomly 被吞（z-fight）、渲染成本 ×10、以及
   DoubleSide 才可见的 deck（35 份堆叠中 FrontSide 的可见性取决于堆叠
   顺序的深度竞争）。
+
+**⑳ 终三一九f2（当前态 35,503 的逐像素聚类分解）**：
+- deck→background 12,770（26%）：我们的 deck 洞（缺失区域露背景）；
+- wall/shoulder(cream)→deck 9,425（19%）：expected 挡墙区域我们画了 deck 色；
+- marking(white)→deck 7,716（16%）：expected 白标线区域我们画了 deck 色；
+- other（阴影渐变/hatched/AA 边）35%：多源复合。
+- **构成定性**：deck 填充多边形与 expected 的精细内部结构（挡墙/标线/边线
+  分层）存在形状/覆盖错位——非单一缺失，而是 deck 层与内部精细层的
+  覆盖关系/分层顺序差异。
+- 已入库工具：逐像素差分聚类脚本（/tmp/diffclu2.py 模式，d>60 阈值 +
+  内容域分类），可复用于任意 fixture/current 对。
