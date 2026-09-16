@@ -4128,3 +4128,22 @@ prepareFillGeometry 的细分实现，A/B no-cross-beams（目标 168k→<20k）
   域）——重点核对 rawRange/shift/distCam 在 zoom>19 的连续性；A/B 目标
   no-cross-beams 168k→<20k，并连带验证 elevated-symbols-lighting* 族
   （179-195k，同为 zoom>19 高位 fixture，疑同根因）。
+
+**⑨ 终三一八补5（红样式决定性实验 + 渲染层锁定）**：
+- 红 style 实验：road-base/bridge fill-color 原地改 #ff0000（fixture 诊断
+  后已还原）——渲染**零红色像素**：deck 填充网格确认从未被光栅化（非颜色/
+  雾/光照差异）。
+- 逐帧重涂（repaint 每 AfterRender）+ 第 3 帧捕获：仍 0 红像素——排除
+  重解码冲掉涂色的干扰。
+- processTileObject 遥测（[MBSkip?]，TS 源，decodedbg 门控）：deck 网格
+  通过全部门（vis=true、techMaxZ=undefined、techEnabled=undef、features
+  组非空、adapter isVisible 过）并被 rootNode.add + frustumCulled=false
+  + matrixWorld 单位缩放——CPU 侧提交链路完全正常。
+- **收敛：deck 三角形已提交 GPU（RIDRAW calls=32 tris=32377）但 0 片元
+  落屏——顶点/片元着色器层嫌疑**（补丁材质的 onBeforeCompile 注入在
+  SwiftShader/WebGL2 上对顶点做位移或 discard；或 tile 对象挂载的
+  m_sceneRoot 与渲染场景树分叉）。需交互式 WebGL 帧捕获（SpectorJS 类
+  工具或 uMB3DDbg 着色器探针）逐 draw 排查。
+- 工具沉淀（decodedbg 门控，随本提交入库）：[MBPlace]（tile.center vs
+  cameraPos vs 派生锚）、[MBGeoBox]（瓦片经纬框）、[MBSkip?]/[MBSkip]
+  （逐对象跳过原因）、[MBPaintRed]（涂红+下一帧捕获）。

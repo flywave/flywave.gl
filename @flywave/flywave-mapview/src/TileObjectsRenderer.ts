@@ -223,10 +223,33 @@ export class TileObjectRenderer {
         object: TileObject,
         mapObjectAdapter?: MapObjectAdapter
     ) {
+        // §885 终三一九: skip-reason telemetry (decodedbg=1, first 40 objects
+        // per session) — the no-cross-beams deck fills never rasterize and
+        // this pinpoints which gate drops them.
+        const dbgOn =
+            (globalThis as any).__mbDecodeDbg &&
+            ((globalThis as any).__mbSkipLogN ?? 0) < 40;
+        if (dbgOn) {
+            (globalThis as any).__mbSkipLogN = ((globalThis as any).__mbSkipLogN ?? 0) + 1;
+            const t0: any = (object.userData as any).technique ?? {};
+            const matAny: any = Array.isArray(object.material)
+                ? object.material[0]
+                : object.material;
+            // eslint-disable-next-line no-console
+            console.log(`[MBSkip?] ro=${object.renderOrder} c=${matAny?.color ? matAny.color.getHexString() : '?'} n=${object.geometry?.attributes?.position?.count ?? '?'} vis=${object.visible} techMaxZ=${t0.maxZoomLevel} techEnabled=${t0.enabled === undefined ? 'undef' : 'set'}`);
+        }
         if (!object.visible) {
             return false;
         }
         if (!this.processTileObjectFeatures(tile, storageLevel, zoomLevel, object)) {
+            if (dbgOn) {
+                const matAny2: any = Array.isArray(object.material)
+                    ? object.material[0]
+                    : object.material;
+                const t0: any = (object.userData as any).technique ?? {};
+                // eslint-disable-next-line no-console
+                console.log(`[MBSkip] features-empty c=${matAny2?.color ? matAny2.color.getHexString() : '?'} techMaxZ=${t0.maxZoomLevel}`);
+            }
             return false;
         }
 

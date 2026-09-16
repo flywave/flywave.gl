@@ -1089,7 +1089,7 @@ async function renderFrames(
                                     }
                                     vdump = ` v[0..${pa.count}]=${parts.join('')} idx=${o.geometry?.index?.count ?? '?'}`;
                                 }
-                                samples.push(`${key} local=(${pos.x?.toFixed?.(1)},${pos.y?.toFixed?.(1)},${pos.z?.toFixed?.(1)}) world=(${e[12]?.toFixed?.(1)},${e[13]?.toFixed?.(1)},${e[14]?.toFixed?.(1)}) nvert=${o.geometry?.attributes?.position?.count ?? '?'} op=${mat0v?.opacity} tr=${mat0v?.transparent} depthWrite=${mat0v?.depthWrite}${vdump}${vtx}`);
+                                samples.push(`${key} local=(${pos.x?.toFixed?.(1)},${pos.y?.toFixed?.(1)},${pos.z?.toFixed?.(1)}) world=(${e[12]?.toFixed?.(1)},${e[13]?.toFixed?.(1)},${e[14]?.toFixed?.(1)}) nvert=${o.geometry?.attributes?.position?.count ?? '?'} op=${mat0v?.opacity} tr=${mat0v?.transparent} depthWrite=${mat0v?.depthWrite} mwScale=(${Math.hypot(e[0], e[1], e[2]).toFixed(4)},${Math.hypot(e[4], e[5], e[6]).toFixed(4)},${Math.hypot(e[8], e[9], e[10]).toFixed(4)})${vdump}${vtx}`);
                             }
                         });
                     };
