@@ -4159,3 +4159,14 @@ prepareFillGeometry 的细分实现，A/B no-cross-beams（目标 168k→<20k）
   找到遮挡面后修复其 z 锚定（疑 elevateGeoBox/背景注入的 z 抬升错位）。
 - 涉及提交：8d525076（遥测+结论）、c6881e7d（根因雾判定）、24880279（基建
   通道）、fb0f548c/6a909b80/ae9eca26/2ae90754（诊断系列）。
+
+**⑪ 终三一八补7（双相机 NDC 探针 + 排除汇总）**：
+- 双相机投影遥测落地（world camera vs rte camera 逐顶点 NDC）——deck 顶点
+  world 相机下 NDC=(2.65,2.26,1.00)（视外远平面）、rte 相机下在视内。
+- 绕向双向归一化（<0 反转 / >0 反转）均位级不变 → FrontSide 剔除排除；
+  DoubleSide+depthTest=false → deck 完整显示 → **深度遮挡最终锁定**。
+- 遮挡面待定：ro<9.6 更近深度不透明面。候选=①1089v 灰板（v0 世界坐标恰在
+  RTE 原点=眼点——一块穿过相机的板必遮全场；DI23 未复现其归属）；
+  ②fake-road-shade（ro=1 地面 z）；③背景层 clear-color 后又被某层覆盖。
+- 下轮：交互式 WebGL 帧捕获（或 uMB3DDbg=4 attrdbg 逐 draw 着色器探针）+
+  ro-sweep（deck ro 9.6→999 逐档）确定遮挡面身份后修复其 z 锚定。

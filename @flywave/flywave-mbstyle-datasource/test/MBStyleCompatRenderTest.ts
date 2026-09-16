@@ -1061,6 +1061,20 @@ async function renderFrames(
                             ].filter(Boolean).join(',') || 'none';
                             const key = `${tag}|${o.name || 'unnamed'}|${Array.isArray(o.material) ? o.material.map((m: any) => m?.type).join('+') : o.material?.type}|${flags}|c=${mat0?.color?.getHexString?.() ?? '?'}|pre=${(mat0 as any)?.isDepthPrepassMaterial ? 1 : 0}|df=${(mat0 as any)?.depthFunc ?? '?'}|ro=${o.renderOrder}|g=${o.geometry?.uuid?.slice?.(0, 8) ?? '?'}`;
                             counts[key] = (counts[key] ?? 0) + 1;
+                            // §885 终三一九: full forensic dump for the
+                            // suspected occluder (the 1089-vert grey plate).
+                            if (o.geometry?.attributes?.position?.count === 1089 && samples.length < 200) {
+                                o.updateWorldMatrix?.(true, false);
+                                const e2 = o.matrixWorld?.elements ?? [];
+                                const pa3 = o.geometry.attributes.position;
+                                const corners: string[] = [];
+                                for (let vi = 0; vi < Math.min(4, pa3.count); vi++) {
+                                    corners.push(`(${pa3.getX(vi)?.toFixed?.(1)},${pa3.getY(vi)?.toFixed?.(1)},${pa3.getZ(vi)?.toFixed?.(1)})`);
+                                }
+                                const parentName = o.parent?.type ?? '?';
+                                const grandName = o.parent?.parent?.type ?? '?';
+                                samples.push(`PLATE1089 parent=${parentName}/${grandName} mwT=(${e2[12]?.toFixed?.(1)},${e2[13]?.toFixed?.(1)},${e2[14]?.toFixed?.(1)}) v0..3=${corners.join('')} bsR=${o.geometry?.boundingSphere?.radius?.toFixed?.(1)} bsC=(${o.geometry?.boundingSphere?.center?.x?.toFixed?.(1)},${o.geometry?.boundingSphere?.center?.y?.toFixed?.(1)},${o.geometry?.boundingSphere?.center?.z?.toFixed?.(1)})`);
+                            }
                             if (samples.length < 16) {
                                 o.updateWorldMatrix?.(true, false);
                                 const e = o.matrixWorld?.elements ?? [0, 0, 0];
@@ -1073,19 +1087,27 @@ async function renderFrames(
                                 // (road-base blue a3b4c8) into NDC too — the
                                 // hairline bisection needs their screen spot.
                                 const hex = mat0v?.color?.getHexString?.() ?? '';
-                                if ((hex === 'a3b4c8' || hex === 'ff0000') && o.geometry?.attributes?.position) {
+                                if ((hex === 'a3b4c8' || hex === 'ff0000' || hex === 'd6dddb' || hex === 'f5f5f5') && o.geometry?.attributes?.position) {
                                     try {
                                         const pa2 = o.geometry.attributes.position;
                                         const V = new THREE.Vector3();
-                                        const n2 = Math.min(4, pa2.count);
+                                        const n2 = Math.min(2, pa2.count);
                                         const parts2: string[] = [];
-                                        const cam2 = (mapView as any).camera;
+                                        // §885 终三一九: project with BOTH
+                                        // cameras — the world camera (huge)
+                                        // vs the rte camera (origin, the
+                                        // actual render camera) — the split
+                                        // exposes the anchor/frames bug.
+                                        const camW = (mapView as any).camera;
+                                        const camR = (mapView as any).getRteCamera?.() ?? camW;
                                         for (let vi = 0; vi < n2; vi++) {
-                                            V.set(pa2.getX(vi), pa2.getY(vi), pa2.getZ(vi)).applyMatrix4(o.matrixWorld);
-                                            const pm = V.clone().project(cam2);
-                                            parts2.push(`(${V.x.toFixed(0)},${V.y.toFixed(0)},${V.z.toFixed(0)}→${pm.x.toFixed(2)},${pm.y.toFixed(2)},${pm.z.toFixed(2)})`);
+                                            const vx = pa2.getX(vi), vy = pa2.getY(vi), vz = pa2.getZ(vi);
+                                            V.set(vx, vy, vz).applyMatrix4(o.matrixWorld);
+                                            const pw = V.clone().project(camW);
+                                            const pr = V.clone().project(camR);
+                                            parts2.push(`v${vi}(${vx.toFixed(0)},${vy.toFixed(0)},${vz.toFixed(0)}) w(${pw.x.toFixed(2)},${pw.y.toFixed(2)},${pw.z.toFixed(2)}) rte(${pr.x.toFixed(2)},${pr.y.toFixed(2)},${pr.z.toFixed(2)})`);
                                         }
-                                        vtx = ` vndc=${parts2.join('')}`;
+                                        vtx = ` ${parts2.join(' ')}`;
                                     } catch { vtx = ' vndc=err'; }
                                 }
                                 // §782: first vertices + index count — tile-
