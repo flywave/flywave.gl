@@ -4239,3 +4239,16 @@ wall/shoulder(cream) 19.3%、marking(white) 15.8%、background 0.3%（背景对�
 - 下轮：①emitElevatedFillPiece 的洞指派审计（holeIndices 与 earcut 的
   配对）；②polygonSubdivision 分片形状与 mgl 对照（normalizeRing/半平面
   裁剪的环顺序）；③修复后同批配对 N≥2 重测。
+
+**⑯ 终三一九b（平地捷径 + 残余构成定量）**：
+- prepareFillGeometry 平地捷径落地（环顶点高度 max−min < 0.05m 时跳过细分
+  整片发射）——A/B 位级不变 35,503 → **细分间隙假说排除**（分片输出本就
+  正确），捷径保留（免去无效细分）。
+- **残余 35,503 的构成定量**（diff.png 目视+采样）：主体 = **道路边缘连续
+  实线（double-lines 层）的颜色/宽度差异**（沿路缘的长红带）+ 标线的细微
+  色差（橙色=部分匹配）；路面本体/背景已对齐（白色=匹配）。几何/深度/
+  绕向/雾全部排除——剩余为**线渲染细节域**（double-lines 的颜色/宽度/
+  分层）。
+- 下轮：①double-lines 层的颜色与宽度对照（style hsl(0,0%,96%) vs expected
+  的边缘线色）；②标线色差（橙色 vs 白）的 color-management 检查；③修复后
+  全族协议精度重基线。

@@ -993,13 +993,19 @@ async function renderFrames(
                     const painted: string[] = [];
                     (mapView as any).scene?.traverse?.((o: any) => {
                         const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                        // §885 终三一九 matrix C2: DoubleSide + depthTest ON —
+                        // tests whether the decks pass the depth test when not
+                        // facing-culled.
                         if (m?.color?.getHexString?.() === 'a3b4c8') {
                             m.color.setHex(0xff0000);
-                            // §885 终三一九 matrix C: DoubleSide kept,
-                            // depthTest ON — tests whether the decks pass the
-                            // depth test when not facing-culled.
                             m.side = THREE.DoubleSide;
                             painted.push(o.geometry?.attributes?.position?.count ?? '?');
+                        }
+                        // §885 终三一九b: hide the suspected 1089-vert grey
+                        // ground plate (v0 at the eye) — if the decks appear,
+                        // the plate is the depth occluder.
+                        if (o.geometry?.attributes?.position?.count === 1089) {
+                            o.visible = false;
                         }
                     });
                     if (painted.length) {

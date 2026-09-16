@@ -360,13 +360,29 @@ export class MBElevatedStructures {
         const sample = (p: ClipPoint): number =>
             this.biased(feature.pointElevation(p.x, p.y), bias);
 
+        // §885 终三一九b: flat-feature shortcut — when every ring vertex
+        // samples (nearly) the same height, the polygon subdivision adds
+        // nothing but SH-split gaps (the degenerate cut bridges are
+        // invisible, and the dropped slivers show the background through
+        // the deck); emit the whole clipped polygon as ONE constant piece.
+        let hMin = Infinity;
+        let hMax = -Infinity;
+        for (const ring of clipped) {
+            for (const pt of ring) {
+                const hh = sample(pt);
+                if (hh < hMin) hMin = hh;
+                if (hh > hMax) hMax = hh;
+            }
+        }
+        const flatFeature = hMax - hMin < 0.05;
+
         const back = (ring: ClipPoint[]): ClipPoint[] =>
             scale === 1 ? ring : ring.map(p => ({ x: p.x * inv, y: p.y * inv }));
 
         const pieces: FillElevationPiece[] = [];
         const piecesCanonical: CanonicalPiece[] = [];
 
-        if (feature.constantHeight != null || edges.length === 0) {
+        if (feature.constantHeight != null || edges.length === 0 || flatFeature) {
             const h = feature.pointElevation(clipped[0][0].x, clipped[0][0].y);
             const heightsAll = clipped[0].map(() => this.biased(h, bias));
             pieces.push({
