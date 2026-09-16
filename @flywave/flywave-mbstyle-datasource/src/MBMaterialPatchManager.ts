@@ -355,6 +355,11 @@ export class MBMaterialPatchManager {
                                     const d = ls.directionalColorLinear[i] * ndl;
                                     f.setComponent(i, a > 0 ? a / (a + d) : 0);
                                 }
+                                // §885 终三一九g21: mgl apply_lighting_ground —
+                                // the always-on `color * u_ground_radiance`
+                                // modulation (sRGB vec3 from the environment).
+                                const gr = u.uMBGroundRadiance?.value as THREE.Vector3 | undefined;
+                                if (gr) gr.set(ls.groundRadiance[0], ls.groundRadiance[1], ls.groundRadiance[2]);
                             } else {
                                 f.set(0, 0, 0);
                             }
@@ -3240,6 +3245,36 @@ export class MBMaterialPatchManager {
             && (this.m_dataSource as any).m_environment?.shadowLightState) {
             this.injectGroundShadow(material as any);
         }
+        // §885 终三一九g21: mgl apply_lighting_ground — when the style uses
+        // the 3D `lights` API, draped fills are lit as
+        // `color * u_ground_radiance` (a per-channel sRGB scalar computed
+        // from ambient + directional contributions on the ground normal).
+        // Applied SHADER-side (order-independent of paint color assignment).
+        if (!technique?._isRaster && !technique?._isHillshade) {
+            const ls = (this.m_dataSource as any).m_environment?.lighting3DState;
+            if (ls && !(material as any).__mbGroundRadApplied) {
+                (material as any).__mbGroundRadApplied = true;
+                const gr = ls.groundRadiance;
+                const origCompile = material.onBeforeCompile;
+                const keySuffix = `mbgr:${gr.map((c: number) => c.toFixed(4)).join(',')}`;
+                const origKey = material.customProgramCacheKey?.bind(material);
+                material.customProgramCacheKey = (): string =>
+                    keySuffix + ':' + (origKey ? origKey() : 'mb');
+                material.onBeforeCompile = (shader: any): void => {
+                    origCompile?.call(material, shader);
+                    const block = `\tgl_FragColor.rgb *= vec3(${gr[0].toFixed(6)}, ${gr[1].toFixed(6)}, ${gr[2].toFixed(6)});\n`;
+                    if (shader.fragmentShader.includes('#include <colorspace_fragment>')) {
+                        shader.fragmentShader = shader.fragmentShader.replace(
+                            '#include <colorspace_fragment>',
+                            '#include <colorspace_fragment>\n' + block);
+                    } else if (shader.fragmentShader.includes('gl_FragColor = vec4(outputDiffuse')) {
+                        shader.fragmentShader = shader.fragmentShader.replace(
+                            /gl_FragColor = vec4\(outputDiffuse[^;]*;/,
+                            (m0: string) => m0 + '\n' + block);
+                    }
+                };
+            }
+        }
         material.needsUpdate = true;
     }
 
@@ -3310,6 +3345,9 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMBInvViewProj = { value: new THREE.Matrix4() };
             shader.uniforms.uMBShadowIntensity = { value: shSeed ? 1 : 0 };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
+            // §885 终三一九g21: mgl apply_lighting_ground — draped fills are
+            // lit as `color * u_ground_radiance` (sRGB), refreshed per frame.
+            shader.uniforms.uMBGroundRadiance = { value: new THREE.Vector3(1, 1, 1) };
             // vec3[4] MUST never hold null at first compile/upload — three's
             // array-uniform setter throws on null, the exception aborts the
             // frame BEFORE the AfterRender refresh can install the real
@@ -3399,6 +3437,11 @@ export class MBMaterialPatchManager {
                             // lightens the shadow; ours previously ignored
                             // uMBShadowIntensity (identical at intensity=1).
                             float mbLight = mix(1.0 - uMBShadowIntensity, 1.0, mbLit);
+                            // §885 终三一九g21: mgl apply_lighting_ground —
+                            // draped fills are lit as color × u_ground_radiance
+                            // (sRGB scalar for horizontal surfaces) BEFORE the
+                            // shadow mix; default (1,1,1) when lights are off.
+                            gl_FragColor.rgb *= uMBGroundRadiance;
                             // mgl: out(sRGB) *= mix(u_ground_shadow_factor, 1, light)
                             // with the factor = linear-strengths ratio. Our
                             // fragment is linear: multiplying it by ratio^2.2
@@ -3432,6 +3475,7 @@ export class MBMaterialPatchManager {
                 'uniform mat4 uMBInvViewProj;\n',
                 'uniform float uMBShadowIntensity;\n',
                 'uniform vec3 uMBGroundShadowFactor;\n',
+                'uniform vec3 uMBGroundRadiance;\n',
                 'uniform vec3 uMBGC[4];\n',
                 'uniform vec3 uMBEye;\n',
                 'uniform vec2 uMBRes;\n',

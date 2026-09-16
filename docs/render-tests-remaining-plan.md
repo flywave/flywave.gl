@@ -4680,3 +4680,17 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 下轮建议:①若无 mgl 运行时可对照,优先转向 lighting 族(160-196k,
   最大可动块)与 deck 洞;②qkey 件可试 clip margin/顶点量化对齐
   实验(两侧 clip 精度统一后 hash 或可配对)。
+
+**㊵ 终三一九g22(lighting 族专项启动——apply_lighting_ground 落地,幅度待校准)**:
+- 差异定量:expected 桥面/我们的比值 = 常数标量(deck 0.350 = 线性 0.0997
+  ≈ 纯环境光 0.1 即全影;surface 0.445 = 线性 0.171 ≈ 环境 0.1+方向
+  0.75·Lz)——mgl apply_lighting_ground 语义确认。
+- 落地:patchFillMaterial shader 侧注入(颜色空间后 ×groundRadiance),
+  防 via __mbGroundRadApplied + customProgramCacheKey 分键;均匀刷新处
+  同步 uMBGroundRadiance;两处注入(fills 链 + per-frame 域)。
+- 首测:lighting 196,539→191,129(−5.4k);text −5.3k;terrain-enabled
+  −6.6k——方向正确,幅度不足(疑 dir 极角约定:polar 自天顶/地平、
+  或 [az,pol] 顺序;实测需 Lz≈0.095-0.17,现取值偏大→调制偏弱)。
+- 下一刀:①校准 dir 约定(mgl DirectionalLight 解析,预期 Lz≈sin/cos
+  差一约定)→ 大块收敛;②影子域(桥全影 0.35=纯环境)与我们的
+  shadow map 覆盖对齐;③deck 洞;④护栏带宽。
