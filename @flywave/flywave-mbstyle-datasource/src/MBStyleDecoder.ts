@@ -1503,6 +1503,12 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     }
                     maxH = Math.max(maxH, child.maxGeometryHeight ?? 0);
                     minH = Math.min(minH, child.minGeometryHeight ?? 0);
+                    // §885 终三十九g44: extra decode census — did the walls
+                    // decode into fill-extrusion geometry?
+                    if ((globalThis as any).__mbDecodeDbg) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBExtraDec] src=${ex.sourceId} techs=${child.techniques.length} geos=${child.geometries?.length ?? 0} maxH=${(child.maxGeometryHeight ?? 0).toFixed(1)} tech0=${JSON.stringify({ name: child.techniques[0]?.name, height: (child.techniques[0] as any)?.height, layerId: (child.techniques[0] as any)?._layerId })}`);
+                    }
                 } catch {
                     // A missing extra-source tile renders its layers empty —
                     // same as the single-source pre-fallback behavior.

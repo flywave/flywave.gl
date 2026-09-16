@@ -4952,3 +4952,16 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   深度通道→接收端采样的逐环验证(基建全部在位)。
 - 连同 g31(投射体)+g34(高程平面接收)+g22(groundRadiance),
   lighting 族的链路骨架已全部打通,剩校准与验证迭代。
+
+**㊵补21 终三十九g44(断点再收窄——geojson payload 解码未路由 fill-extrusion)**:
+- MBExtraDec 探针(扩展 technique dump):child 解码结果
+  techs=1 tech0={name:'fill', layerId:'background'}——**只匹配了
+  background 层,shadow-casters(fill-extrusion)层未匹配/未产出**。
+- 即:geojson payload 的 themed decode 走通了 background(特判
+  __mb_background__),但 fill-extrusion 层在 geojson payload 解码中
+  未被路由(decodeThemedTile 的 feature→technique 分发对该
+  payload+层组合跳过)。
+- 下一刀:①审 decodeThemedTile 对 geojson payload 的层迭代
+  (visible/matched 逻辑与 sourceId 匹配);②fill-extrusion 技法
+  对 geojson feature 的发射(height=200);③墙渲染+caster;
+  ④lighting 四件收敛验证。
