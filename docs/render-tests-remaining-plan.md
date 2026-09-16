@@ -4533,3 +4533,24 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   z=6 上层)与 rail 锚定点差一层。
 - 下一刀:①rail 顶点 z 与相邻 deck 顶 z 的差值 dump(确认锚定层);
   ②metersToTile/scale 域审计(0.5 vs 1);③deck 洞(Portal Graph)。
+
+**㉜ 终三一九g12(护栏锚定验证完成——真缺陷:level-6 桥的护栏整体缺失)**:
+- 探针(MBRailZ):construct() 内按 bridgeSection dump railZ vs ringH。
+  结果:7 段护栏全部 railZ=[4.50..5.50](=level-5 环高 5.0±0.5);
+  feat6=[4.10..5.50] 证明 rail 按顶点高度逐点正确(h±0.5 自洽,
+  metersToTile 域审计通过——scale 换算 self-consistent)。
+- **缺陷实锤**:fill 侧遥测(MBFillHD-bounds)显示 road-base 填充
+  z=5.05(level-5 ✓)而 **road-base-bridge 填充 z=6.00(level-6 桥面)**;
+  若桥的 rail 存在应跨 [5.50..6.50]——但全场景无任何 railZ 上限 >5.50,
+  **level-6 桥的护栏 0 生成**。桥沿的奶油肩部带( expected 大量)因此
+  全部缺失;level-5 段 rail 顶 5.5 vs deck 5.05 也只剩 0.45m 可见。
+- 疑点收敛:bridge feature 的 ringHeights 经 portal 评估
+  (evaluatePortals/prepareEdges 高度传播)被压平到 level-5(桥与
+  lower road 之间的 portal 传播 bug)——mgl portal 传播语义需逐行对照。
+- metersToTile 审计结论:我们的 setMetersToTile(C/(256·2^(z+1)))与
+  mgl tileToMeter 域不同但 rail 截面经 /metersToTile 回转后自洽
+  (feat6 证明),非根因。
+- 下一刀:①evaluatePortals 高度传播逐行对照 mgl(level-6 压平点);
+  ②确认 bridge feature 的 addElevatedFeature 是否真被调用/其
+  ringHeights 值域(在 addElevatedFeature 入口加 per-feature dump);
+  ③deck 洞(Portal Graph)。

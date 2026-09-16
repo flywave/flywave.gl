@@ -740,6 +740,32 @@ export class MBElevatedStructures {
         const maskIndices = [...tunnelQuads, ...this.m_unevalTriangles];
 
         if (indices.length === 0 && depthIndices.length === 0) return null;
+        // §885 终三一九g12: rail anchoring audit — per bridge section, the
+        // emitted rail z range in METERS vs the ring heights it was built
+        // from (deck top). Rails should span deckTop−0.5..deckTop+0.5.
+        if (typeof globalThis !== 'undefined' && (globalThis as any).__mbDecodeDbg) {
+            try {
+                const zm = (from: number, to: number): [number, number] => {
+                    let lo = Infinity, hi = -Infinity;
+                    for (let i = from; i < to && i * 3 + 2 < positions.length; i++) {
+                        const z = positions[i * 3 + 2];
+                        if (z < lo) lo = z;
+                        if (z > hi) hi = z;
+                    }
+                    return [lo, hi];
+                };
+                for (let si = 0; si < bridgeSections.length; si++) {
+                    const s = bridgeSections[si];
+                    const e = si + 1 < bridgeSections.length ? bridgeSections[si + 1].vertexStart : positions.length / 3;
+                    const [lo, hi] = zm(s.vertexStart, e);
+                    // ring heights for this feature
+                    let rlo = Infinity, rhi = -Infinity;
+                    for (const h of this.m_unevalHeights) { if (h < rlo) rlo = h; if (h > rhi) rhi = h; }
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBRailZ] feat=${s.featureIndex} railZ=[${lo.toFixed(2)}..${hi.toFixed(2)}] ringH=[${rlo.toFixed(2)}..${rhi.toFixed(2)}] verts=${e - s.vertexStart}`);
+                }
+            } catch {}
+        }
         return {
             positions, normals, indices, tunnelStart, bridgeSections, tunnelSections,
             depthIndices, maskIndices, underground: this.m_underground,
