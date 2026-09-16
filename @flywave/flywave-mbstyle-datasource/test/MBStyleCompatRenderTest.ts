@@ -102,6 +102,11 @@ function discoverTests(): TestEntry[] {
     const rsw = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("raswhite="))?.slice("raswhite=".length);
     if (rsw === "1") (globalThis as any).__mbRasWhite = true;
+    // §885 终三一九g8: edgestep=1 — ribbon AA dilation band hard-cut at the
+    // true edge (step(0, mbDistEdge)) instead of keeping it opaque.
+    const es = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("edgestep="))?.slice("edgestep=".length);
+    if (es !== undefined) (globalThis as any).__mbEdgeStep = Number(es) || 0;
 }
 // §499 LITE bake probe: ONE console line per bakeAll (no readbacks, no
 // traverses) — diagnostics with negligible frame-timing distortion.
@@ -1129,7 +1134,7 @@ async function renderFrames(
                                     if (v < omin) omin = v;
                                     if (v > omax) omax = v;
                                 }
-                                samples.push(`RIBBON ${key} n=${o.geometry?.attributes?.position?.count} aRibbonEdge=${ae ? 'yes' : 'MISSING'} edgeRange=[${ae ? amin.toFixed(2) : '?'}..${ae ? amax.toFixed(2) : '?'}] offs=${ao ? 'yes' : 'MISSING'} offsRange=[${ao ? omin.toFixed(2) : '?'}..${ao ? omax.toFixed(2) : '?'}] ro=${o.renderOrder}`);
+                                samples.push(`RIBBON ${key} n=${o.geometry?.attributes?.position?.count} aRibbonEdge=${ae ? 'yes' : 'MISSING'} edgeRange=[${ae ? amin.toFixed(2) : '?'}..${ae ? amax.toFixed(2) : '?'}] offs=${ao ? 'yes' : 'MISSING'} offsRange=[${ao ? omin.toFixed(2) : '?'}..${ao ? omax.toFixed(2) : '?'}] dist=${o.geometry?.attributes?.aRibbonDist ? 'yes' : 'MISSING'} len=${o.geometry?.attributes?.aRibbonLen ? 'yes' : 'MISSING'} lenRange=[${o.geometry?.attributes?.aRibbonLen ? (() => { let l0 = Infinity, l1 = -Infinity; const la: any = o.geometry.attributes.aRibbonLen; for (let vi = 0; vi < la.count; vi++) { const v = la.getX(vi); if (v < l0) l0 = v; if (v > l1) l1 = v; } return l0.toFixed(2) + '..' + l1.toFixed(2); })() : '?'}] ro=${o.renderOrder}`);
                                 // §885 终三一九g3: why zero fragments — is the
                                 // mesh drawn at all (cull/drawRange/index) and
                                 // where does it sit in NDC?

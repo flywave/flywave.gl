@@ -102,6 +102,7 @@ function main() {
             ...(process.env.MBSTYLE_RASRED ? ["rasred=1"] : []),
             ...(process.env.MBSTYLE_RASWHITE ? [`raswhite=${process.env.MBSTYLE_RASWHITE}`] : []),
             ...(process.env.MBSTYLE_MARKUPBIAS ? [`markupbias=${process.env.MBSTYLE_MARKUPBIAS}`] : []),
+            ...(process.env.MBSTYLE_EDGESTEP ? [`edgestep=${process.env.MBSTYLE_EDGESTEP}`] : []),
             ...(process.env.MBSTYLE_LITEDBG ? ["liteldbg=1"] : []),
             ...(process.env.MBSTYLE_RASUVDBG ? ["rasuvdbg=1"] : []),
             ...(process.env.MBSTYLE_DECODEDBG ? ["decodedbg=1"] : []),

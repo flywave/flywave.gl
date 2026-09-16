@@ -4488,3 +4488,15 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   白线本身已接近对齐(位置±4px、宽度差 1px)。下一刀=①白线宽度域
   (AA dilation 校准,~1px/线×全线网=数千 px);②shoulder 带渲染
   (f1ece1 层的覆盖范围 vs expected 肩部几何);③deck 边缘侵蚀。
+
+**㉙ 终三一九g9(白线宽度域 A/B——贡献极小,排除)**:
+- 机理确认:emitter 按 +0.5px/侧 dilate 几何,shader step(-0.5) 把整个
+  dilate 带保持全不透明(mgl 原式为淡出带)→每条实线 +1px,与扫描线
+  实测(W3-4 vs W2-3)吻合。
+- A/B(新旋钮 edgestep=1,step(0, mbDistEdge) 真边硬切):
+  no-cross-beams 43,090→42,700(−390)——**线宽差贡献极小,排除**。
+  旋钮保留 opt-in(默认语义不变)。
+- 至此 no-cross-beams 剩余 ~42.7k 的构成定论:deck 洞/边缘侵蚀 +
+  奶油肩部带缺失(挡墙/肩部 L4 分层)+ 阴影带。白线位置/宽度已
+  基本对齐。下一刀=肩部带渲染(f1ece1 层覆盖范围 vs expected 肩部
+  几何)与 deck 边缘侵蚀,均为多轮 L4 工程。

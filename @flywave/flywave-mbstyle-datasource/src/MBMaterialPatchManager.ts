@@ -3120,7 +3120,7 @@ export class MBMaterialPatchManager {
                              // px distance from the true edge (the ribbon
                              // carries mgl's +0.5px/side dilation).
                              float mbDistEdge = (1.0 - abs(vMBRibbonEdge)) * uMBRibbonWidth * 0.5 - 0.5;
-                             gl_FragColor.a *= step(-0.5, mbDistEdge);`}
+                             gl_FragColor.a *= step(-0.5, mbDistEdge + ${Number((globalThis as any).__mbEdgeStep ?? 0)}.5);`}
                              ${featherEnabled ? `float mbDistCenter = abs(vMBRibbonEdge) * uMBRibbonWidth * 0.5;
                                  gl_FragColor.a *= clamp(1.0 - mbDistCenter / max(uMBRibbonBlur, 0.5), 0.0, 1.0);` : ''}
                          }`
