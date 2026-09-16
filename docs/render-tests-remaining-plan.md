@@ -4778,3 +4778,13 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   需逐域归因(疑 focalLength/fov 约定或 per-fixture 高度差)。
 - deck 洞战役定性完成:主体=边界搅动(相机域),非几何内缩;
   下一刀回到 lighting 地形影子管线与 Portal 端点连接。
+
+**㊵补8 终三十九g29(Portal 端点连接审计——实现等价)**:
+- isTerminalVertex/computeVertexConnections/端帽 quad 生成逐行对照:
+  与 mgl 完全一致(终端=无 from/to 连接的顶点;h<0.01 才出端帽)。
+- 至此 Portal/护栏/高程/剪枝域的全部**可静态对照代码均验证等价**;
+  3d-intersections 族的剩余差异全部收敛到三个需要运行时/数据级
+  对照的开放战役:①lighting 地形影子管线(战役级);②相机域
+  focalLength 运行时对照;③qkey 跨瓦片数据精度配对。
+- 后续会话不再有"低成本代码对照"收益,转向=战役实施或
+  mgl 运行时数据采集。
