@@ -4929,3 +4929,15 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   g31 已支持 extruded-polygon);④lighting 四件收敛验证。
 - 本会话累计(no-cross-beams 167,916→41,333;lighting 196,539→
   191,129;guard-rail-qkey-border −83%)全部已提交,工作树干净。
+
+**㊵补19 终三十九g42(战役实施推进——断点定位到"层要素未达解码")**:
+- 已确认:①extras 机制(§518)本身支持 geojson 源(GeoJSONDataProvider
+  注册路径存在);②fill-extrusion 技法默认值/路由存在
+  (MBLayerEvaluator:147);③GeoJSON 层 source-layer 回退存在(:578)。
+- 断点:瓦片 18/232843/103242 解码 maxH≈10.8-11.5(仅道路),无
+  200m 墙——**shadow-casters 层要素未到达 tile 解码**。候选断点:
+  a)geojson extra 瓦片请求未发起(该层未触发 extra fetch);
+  b)GeoJSONDataProvider 瓦片化边界过滤把墙划出;
+  c)层路由(sourceId=shadow-casters)未匹配到 extra 数据。
+- 下一刀:decoder 逐层 feature 计数探针(layer×sourceId→feature 数),
+  一次运行定位 a/b/c。
