@@ -4851,3 +4851,14 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 结论:保留 extended casters + 禁用 elevation-plane(gate=false),
   净状态为历史最优;后继若重启 elevation-plane 需先解 attribute
   传递链验证(帧级)。
+
+**㊵补13 终三十九g36(elevation-plane 回归根因实锤——GLSL 编译失败)**:
+- elevvis 可视化探针(vMBElev 灰度染色):deck 整体消失 + 日志
+  "THREE.WebGLProgram: Shader Error 1281 VALIDATE_STATUS false /
+  Fragment shader is not compiled (MeshBasicMaterial)"。
+- **g34 的 160k 回退根因实锤**:elevation-plane 接收器 GLSL 编译
+  失败 → program 失效 → deck 材质整体不渲染(视觉=大片背景洞),
+  与自阴影无关。历史最优 41,333(elevation-plane 禁用)保持。
+- 后续修复入口:捕获真实 getShaderInfoLog(或在独立最小工程中
+  复现该 GLSL),定位编译错误后 elevation-plane 才可重启。
+- 旋钮入库:elevplane/elevvis(runner+test 解析,默认关闭)。

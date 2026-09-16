@@ -116,6 +116,15 @@ function discoverTests(): TestEntry[] {
     const rl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("raillift="))?.slice("raillift=".length);
     if (rl !== undefined) (globalThis as any).__mbRailLift = Number(rl) || 0;
+    // §885 终三十九g36: elevation-plane + elevation visualization knobs.
+    {
+        const ep = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("elevplane="))?.slice("elevplane=".length);
+        if (ep !== undefined) (globalThis as any).__mbElevPlane = ep === "1";
+        const ev = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("elevvis="))?.slice("elevvis=".length);
+        if (ev === "1") (globalThis as any).__mbElevVis = true;
+    }
     // nodeck=1 — hide road-base deck fills (a3b4c8 / painted red) so the
     // rails can be inspected alone (buried-vs-broken bisection).
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "nodeck=1")) {

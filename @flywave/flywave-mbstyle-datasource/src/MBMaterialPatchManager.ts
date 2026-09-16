@@ -1909,7 +1909,13 @@ export class MBMaterialPatchManager {
                 && !(technique as any)._isHeatmap) {
                 // g34 experiment disabled: elevation-plane ray-cast regressed
                 // no-cross-beams 42,206→160,639 (see 终三十九g34 notes).
-                (material as any).__mbElevPlane = false;
+                // g36: re-enable via elevplane=1; elevvis=1 paints vMBElev as
+                // a grayscale gradient (attribute chain verification).
+                (material as any).__mbElevPlane =
+                    (globalThis as any).__mbElevPlane === true;
+                (material as any).__mbElevVis =
+                    (globalThis as any).__mbElevPlane &&
+                    (globalThis as any).__mbElevVis === true;
                 this.injectGroundShadow(material as any);
             }
         }
@@ -3340,6 +3346,11 @@ export class MBMaterialPatchManager {
                     `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n`
                     + shader.fragmentShader;
             }
+            // §885 终三十九g36: elevation visualization define.
+            if ((material as any).__mbElevVis
+                && !shader.fragmentShader.includes('#define MB_SH_ELEVVIS')) {
+                shader.fragmentShader = '#define MB_SH_ELEVVIS 1\n' + shader.fragmentShader;
+            }
             // §885 终三十九g34: HD elevated receivers read the fragment
             // elevation (aMBElev attribute) as the sample-plane height.
             if ((material as any).__mbElevPlane) {
@@ -3408,7 +3419,10 @@ export class MBMaterialPatchManager {
                         // sample ABOVE the surface plane so the surface's own
                         // depth entry never self-shadows it.
                         float mbRayT = (vMBElev + 3.0 - mbNearW.z) / mbRayDir.z;
-                        vec3 mbWP = mbNearW + mbRayDir * mbRayT;`
+                        vec3 mbWP = mbNearW + mbRayDir * mbRayT;
+                        #if MB_SH_ELEVVIS
+                        gl_FragColor.rgb = vec3(clamp(vMBElev / 6.0, 0.0, 1.0));
+                        #endif`
                 : `
                         vec2 mbSUV2 = gl_FragCoord.xy / max(uMBRes, vec2(1.0)) * 2.0 - 1.0;
                         vec4 mbRayFar = uMBInvViewProj * vec4(mbSUV2, 1.0, 1.0);

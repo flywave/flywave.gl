@@ -106,6 +106,8 @@ function main() {
             ...(process.env.MBSTYLE_WALLSIDE ? ["wallside=1"] : []),
             ...(process.env.MBSTYLE_NODECK ? ["nodeck=1"] : []),
             ...(process.env.MBSTYLE_RAILLIFT ? [`raillift=${process.env.MBSTYLE_RAILLIFT}`] : []),
+            ...(process.env.MBSTYLE_ELEVPLANE ? ["elevplane=1"] : []),
+            ...(process.env.MBSTYLE_ELEVVIS ? ["elevvis=1"] : []),
             ...(process.env.MBSTYLE_LITEDBG ? ["liteldbg=1"] : []),
             ...(process.env.MBSTYLE_RASUVDBG ? ["rasuvdbg=1"] : []),
             ...(process.env.MBSTYLE_DECODEDBG ? ["decodedbg=1"] : []),
