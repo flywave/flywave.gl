@@ -4500,3 +4500,21 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   奶油肩部带缺失(挡墙/肩部 L4 分层)+ 阴影带。白线位置/宽度已
   基本对齐。下一刀=肩部带渲染(f1ece1 层覆盖范围 vs expected 肩部
   几何)与 deck 边缘侵蚀,均为多轮 L4 工程。
+
+**㉚ 终三一九g10(肩部带归因:挡墙几何覆盖缺口,非剔除/排序)**:
+- 奶油像素统计:expected 17,856 vs ours 2,471,重叠仅 21px——**系统性
+  覆盖缺口(1/7 可见量)**,全图 16 个行带均匀缺失(非局部)。
+- 排除:wallside=1(struct 材质 DoubleSide)A/B 无效果(42,710≈基线)
+  ——不是绕向剔除;也不是深度排序(缺带处是背景非被盖)。
+- mgl 源码对照(vendored elevated_structures.ts):bridge 结构=per-edge
+  **guard rail**,截面 scale=0.5·metersToTile(≈0.5m 高,deck 顶之上),
+  仅在 `edge.featureInfo.guardRailEnabled` 时生成;band 5-10px 与
+  expected 吻合。我们只有 2 个 f1ece1 wall 网格(各 300 verts),可见
+  条带 ~1px——**护栏段大量缺失和/或截面高度/锚定不对**(rail 应
+  骑在 deck 顶 0..0.5m,我们的 z 5→6 是 1m 且顶面与上层层级齐平)。
+- f1ece1 来源=fill-tunnel-structure-color 默认值;本 fixture 未启用
+  guard-rail 样式属性,疑 per-feature data 属性(hd_road_elevation
+  点层/guardRailEnabled flag)驱动不足——对应 L4 缺口清单的
+  "护栏 per-feature flag"。
+- 下一刀:①对照 mgl guardRailEnabled 判定链(featureInfo 属性来源);
+  ②护栏截面几何(0.5m骑顶)逐顶点对照;③deck 洞(Portal Graph)。

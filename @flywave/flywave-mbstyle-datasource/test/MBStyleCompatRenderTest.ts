@@ -107,6 +107,11 @@ function discoverTests(): TestEntry[] {
     const es = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("edgestep="))?.slice("edgestep=".length);
     if (es !== undefined) (globalThis as any).__mbEdgeStep = Number(es) || 0;
+    // §885 终三一九g10: wallside=1 — force DoubleSide on structure (wall)
+    // materials; winding-cull bisection for the missing cream bands.
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "wallside=1")) {
+        (globalThis as any).__mbWallDS = true;
+    }
 }
 // §499 LITE bake probe: ONE console line per bakeAll (no readbacks, no
 // traverses) — diagnostics with negligible frame-timing distortion.
@@ -1016,6 +1021,10 @@ async function renderFrames(
                             m.color.setHex(0xff0000);
                             m.side = THREE.DoubleSide;
                             painted.push(o.geometry?.attributes?.position?.count ?? '?');
+                        }
+                        // §885 终三一九g10: wallside=1 — walls DoubleSide.
+                        if ((globalThis as any).__mbWallDS && (m as any)?.__mbStructLit) {
+                            m.side = THREE.DoubleSide;
                         }
                         // §885 终三一九b: hide the suspected 1089-vert grey
                         // ground plate (v0 at the eye) — if the decks appear,
