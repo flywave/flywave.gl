@@ -4363,3 +4363,13 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 下轮：①deck 内部精细层逐层对照（白边缘线 double-lines 的宽度/位置——
   expected 3px vs 我们 ?px 的 ribbon 宽度域校准）；②阴影带渲染路径对照
   （expected 对角阴影带 vs 我们的阴影渲染）；③全族 75 件协议精度重基线。
+
+**㉓ 终三一九h（收尾状态）**：
+- 已确认修复有效：绕向翻转 + 全族零回归；no-cross-beams 35,503 残余 =
+  线渲染细节（线宽求值域/标线位置）+ deck 洞/挡墙区域的部分覆盖差异。
+- 工具链完备：decodedbg 门控的 [MBPlace]/[MBGeoBox]/[MBSkip]/[MBPaintRed]/
+  [MBFillHD]/[MBFillHD-bounds]/双相机 NDC/fogdbg/nopatch/markupbias。
+- 下轮：①double-lines/solid-lines 层的 ribbon 宽度求值域校准（解码 zoom
+  vs 显示 zoom 19.94——线宽 2.6× 差异=发丝线主因）；②lighting 族
+  fill-extrusion 方向光调制专项；③全族 75 件协议精度重基线（dsfix 配置 +
+  同批配对 N≥2）。
