@@ -4469,3 +4469,22 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - **②白线位置域**:markupbias 无效、全局旋转无效——错位为逐要素
   位置/宽度差,~8% 缩放信号未定位到单因;下一刀=白线逐要素对照
   (double-lines gap/offset 几何 vs expected 逐线位置)。
+
+**㉘ 终三一九g8(②白线逐要素对照完成——归因反转:线位基本对,缺的是肩部带)**:
+- MVT 解剖(fixture 单瓦片,解析器直读):extent=8192(512px 源语义);
+  hd_road_centerlines 仅 3 要素(白线全部来源)、hd_road_line 29、
+  hd_road_polygon 11(deck 填充)、hd_road_elevation 35;坐标跨
+  [-8192..16384]=3×3 瓦片邻域(HD 路网瓦片携带越界几何,含 elevation
+  点在 ±2 瓦片外)。
+- deck 相对坐标对照(y=250 行 run-length,以对齐的 deck 为参照系):
+  ①白线位置基本正确(右半区每条线 Δ≤4px,无系统性压缩——此前
+  "0.92 压缩/8% 缩放"系左右不同要素对的误配);②**我们的白线宽
+  ~1px(W3-4 vs exp W2-3)**——AA dilation/hard-step 域;③
+  **奶油肩部带缺失**:expected deck 与背景间的 C8/B81(cream 肩部+
+  间隙)我们画成 B96 背景——f1ece1 挡墙网格存在但 shoulder 带未画,
+  即"挡墙/肩部分层"L4 缺口的主体;④deck 段窄 ~8%(D47 vs D43,
+  边缘侵蚀);⑤左侧多画一条线(2 vs 1)。
+- 结论:no-cross-beams 剩余 43k 的主力构成=deck 洞+肩部/挡墙带缺失,
+  白线本身已接近对齐(位置±4px、宽度差 1px)。下一刀=①白线宽度域
+  (AA dilation 校准,~1px/线×全线网=数千 px);②shoulder 带渲染
+  (f1ece1 层的覆盖范围 vs expected 肩部几何);③deck 边缘侵蚀。
