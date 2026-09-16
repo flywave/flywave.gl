@@ -4651,3 +4651,14 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 本轮定性完成:回退=护栏显形暴露的边分类第二层缺陷,非 g17 修复
   错误;影响量 ~+8k(qkey-border/ortho-camera/viewport-aligned),
   远小于修复收益 −27k(g17 −19,124 + 结构域改善件)。
+
+**㊴补 终三一九g19b(portal 维度审计完成——同维全等,残余=跨瓦片注册表)**:
+- 逐行对照结论:addPortalCandidates(type 赋值 entrance/border/
+  unevaluated、onGround 阈值、isOnBorder)、connection id(plan.feature.id
+  = 高程特征 id,与 mgl 一致)、prepareEdges 剪枝——**全等**。
+- qkey 件实测(MBRailZ/MBFeatH):护栏逐点高度正确(h±0.5),
+  多 level 叠加(ringH 0..5 多段)下行为正常;单瓦片路径无异常。
+- 边抑制差异的剩余唯一维度=**跨瓦片高程注册表**(qkey 关联):
+  mgl registry 带 tileId 且精确 tileId.key 匹配优先,我们的注册表
+  构建/合并(mergeElevationFeatures)在跨 quadkey 场景的行为需
+  专项 trace(下一轮,配合 qkey 件双瓦片 dump)。
