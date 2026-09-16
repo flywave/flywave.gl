@@ -4448,3 +4448,24 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   camdist=0.96 的收益说明 zoom/距离映射存在亚像素级系统差(与 8% 缩放
   信号方向一致但幅度不符,疑 pitch/中心偏移耦合);③下一刀=瓦片选层
   稳定化(overzoom 请求路径),而非继续微调相机。
+
+**㉗ 终三一九g7(①选层诊断定论 + ③两件回退归因 + ④族结果补齐)**:
+- **①选层**:camdist 悬崖实为 zoom 整数跨界伪影——0.955 时
+  distance↔zoom 往返把 zoomLevel 推过 20(floor 跨界→cell level 17→18),
+  直取 z18 路径渲染 164k(内容 2× 过大;MVT extent 实测 8192 非 4096,
+  512px 源语义,疑直取路径 extent/frame 域错位)。fixture 本身
+  (mapbox 18.94→flywave 19.94)稳定走 z17-cell+child-merge 路径
+  (35,780)。选层稳定化工作项=直取 z18 路径的 extent/frame 校准
+  (zoom≥20 域),对本 fixture 非阻塞。
+- **③回退归因**(均为 deck 洞/阴影域,非白线绕向修复直接因果):
+  shadows-roads-depth 1,209→6,436:expected 阴影蓝 (174,192,213) 我们画
+  近白(5.4k px)——路面阴影覆盖缺失/偏移(阴影域);
+  road-extend-tilecover-tunnel 5,897→19,538:expected 阴影 deck
+  (162,179,199) 我们露背景(13.1k px)——deck 洞在阴影区(L4 Portal
+  Graph 域)。
+- **④族结果补齐**:74/75 件全(1 件仍缺,疑 leaf fixture 列表差异);
+  全族 pass 1(depth-segments-undefined-crash-geometry-pass 0),
+  no-cross-beams 43,090,最优 camdist=0.96 时 35,780。
+- **②白线位置域**:markupbias 无效、全局旋转无效——错位为逐要素
+  位置/宽度差,~8% 缩放信号未定位到单因;下一刀=白线逐要素对照
+  (double-lines gap/offset 几何 vs expected 逐线位置)。
