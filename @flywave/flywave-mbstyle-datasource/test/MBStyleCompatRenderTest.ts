@@ -98,6 +98,10 @@ function discoverTests(): TestEntry[] {
     const dbg = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("rasred="))?.slice("rasred=".length);
     if (dbg === "1") (globalThis as any).__mbRasRed = true;
+    // §885 终三一九g3: raswhite=1 — isolation frame, ribbons only.
+    const rsw = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("raswhite="))?.slice("raswhite=".length);
+    if (rsw === "1") (globalThis as any).__mbRasWhite = true;
 }
 // §499 LITE bake probe: ONE console line per bakeAll (no readbacks, no
 // traverses) — diagnostics with negligible frame-timing distortion.
@@ -1026,6 +1030,33 @@ async function renderFrames(
                         let redFrames = 0;
                         const repaint = (root: any) => {
                             root?.traverse?.((o: any) => {
+                                // §885 终三一九g3 isolation: RASWHITE=1 hides
+                                // EVERYTHING except the white solid ribbons —
+                                // if the frame is blank, the ribbons never
+                                // rasterize; if they show, something covers
+                                // them in the full scene.
+                                if ((globalThis as any).__mbRasWhite) {
+                                    const keep =
+                                        o.geometry?.attributes?.aRibbonEdge !== undefined;
+                                    o.visible = keep;
+                                    if (keep) {
+                                        const kc: any = (redHook as any)._keptCnt ?? ((redHook as any)._keptCnt = new Set());
+                                        const kk = o.uuid;
+                                        if (!kc.has(kk) && kc.size < 40) {
+                                            kc.add(kk);
+                                            const mm: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                                            const g: any = o.geometry;
+                                            console.log(`[MBRasWhite] kept n=${g?.attributes?.position?.count} c=${mm?.color?.getHexString?.() ?? '?'} type=${mm?.type} idx=${g?.index?.count} bsR=${g?.boundingSphere?.radius?.toFixed?.(1)} pos0=(${g?.attributes?.position?.getX?.(0)?.toFixed?.(1)},${g?.attributes?.position?.getY?.(0)?.toFixed?.(1)},${g?.attributes?.position?.getZ?.(0)?.toFixed?.(1)}) edge0=${g?.attributes?.aRibbonEdge?.getX?.(0)}`);
+                                        }
+                                    }
+                                    // raswhite=2 additionally forces DoubleSide
+                                    // (winding/cull bisection).
+                                    if ((globalThis as any).__mbRasWhite === 2) {
+                                        const mm: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                                        if (mm) mm.side = THREE.DoubleSide;
+                                    }
+                                    return;
+                                }
                                 const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
                                 if (m?.color?.getHexString?.() === 'a3b4c8') m.color.setHex(0xff0000);
                                 // §885 终三一九g: paint the SolidLineMaterial
@@ -1099,6 +1130,27 @@ async function renderFrames(
                                     if (v > omax) omax = v;
                                 }
                                 samples.push(`RIBBON ${key} n=${o.geometry?.attributes?.position?.count} aRibbonEdge=${ae ? 'yes' : 'MISSING'} edgeRange=[${ae ? amin.toFixed(2) : '?'}..${ae ? amax.toFixed(2) : '?'}] offs=${ao ? 'yes' : 'MISSING'} offsRange=[${ao ? omin.toFixed(2) : '?'}..${ao ? omax.toFixed(2) : '?'}] ro=${o.renderOrder}`);
+                                // §885 终三一九g3: why zero fragments — is the
+                                // mesh drawn at all (cull/drawRange/index) and
+                                // where does it sit in NDC?
+                                try {
+                                    o.updateWorldMatrix?.(true, false);
+                                    const g: any = o.geometry;
+                                    const bs = g.boundingSphere;
+                                    const pa = g.attributes.position;
+                                    let smin = Infinity;
+                                    let smax = -Infinity;
+                                    for (let vi = 0; vi < pa.count; vi++) smin = Math.min(smin, pa.getX(vi)), smax = Math.max(smax, pa.getX(vi));
+                                    const ctr = new THREE.Vector3();
+                                    bs?.getCenter?.(ctr);
+                                    const ctrW = ctr.clone().applyMatrix4(o.matrixWorld);
+                                    const cam = (mapView as any).camera;
+                                    const ndc = ctrW.clone().project(cam);
+                                    const mw = o.matrixWorld.elements;
+                                    samples.push(`RIBBON2 vis=${o.visible} fc=${o.frustumCulled} bsR=${bs ? bs.radius.toFixed(1) : '?'} bsC=(${bs ? ctr.x.toFixed(1) : '?'},${bs ? ctr.y.toFixed(1) : '?'},${bs ? ctr.z.toFixed(1) : '?'}) idx=${g.index?.count ?? 'none'} gr=[${g.drawRange?.start ?? 0},${g.drawRange?.count ?? -1}] groups=${JSON.stringify((g.groups ?? o.geometry?.groups ?? []).map?.((gr: any) => [gr.start, gr.count, gr.materialIndex]) ?? (o as any).geometry?.constructor?.name)} xr=[${smin.toFixed(1)}..${smax.toFixed(1)}] mwT=(${mw[12]?.toFixed?.(1)},${mw[13]?.toFixed?.(1)},${mw[14]?.toFixed?.(1)}) ndc=(${ndc.x.toFixed(3)},${ndc.y.toFixed(3)},${ndc.z.toFixed(4)})`);
+                                } catch (e2) {
+                                    samples.push('RIBBON2 dump fail: ' + String(e2));
+                                }
                             }
                             // §885 终三一九: full forensic dump for the
                             // suspected occluder (the 1089-vert grey plate).

@@ -4277,8 +4277,9 @@ export class MBTileDataEmitter {
                     geo.len!.push(lenAt(s0), lenAt(e), lenAt(e), lenAt(s0));
                 }
                 geo.offs!.push(oS[0], oS[1], oE[0], oE[1], oE[0], oE[1], oS[0], oS[1]);
-                // CCW (viewed from +Z) for the FrontSide fill material.
-                geo.indices.push(base, base + 3, base + 2, base, base + 2, base + 1);
+                // §885 终三一九g3: winding flipped to the fill domain (see
+                // emitRibbonBody pushTri) — the old CCW quads were culled.
+                geo.indices.push(base, base + 2, base + 3, base, base + 1, base + 2);
             }
             return;
         }
@@ -4328,8 +4329,13 @@ export class MBTileDataEmitter {
             const area2 =
                 (p3[j * 3] - p3[i * 3]) * (p3[k * 3 + 1] - p3[i * 3 + 1]) -
                 (p3[j * 3 + 1] - p3[i * 3 + 1]) * (p3[k * 3] - p3[i * 3]);
-            if (area2 >= 0) geo.indices.push(i, j, k);
-            else geo.indices.push(i, k, j);
+            // §885 终三一九g3: same winding domain as the fill flip (终三一九)
+            // — the MVT y-flip inverts the projected winding, so the
+            // xy-CCW convention lands back-facing and FrontSide ribbon
+            // materials cull every fragment (solid-line ribbons rendered 0
+            // pixels; isolation: FrontSide blank vs DoubleSide visible).
+            if (area2 >= 0) geo.indices.push(i, k, j);
+            else geo.indices.push(i, j, k);
         };
 
         // 1) Per-segment rectangles (butt ends; overlaps at corners are
@@ -4448,14 +4454,16 @@ export class MBTileDataEmitter {
             geo.offs!.push(o[0], o[1]);
             return geo.positions.length / 3 - 1;
         };
-        // CCW (viewed from +Z) triangles only — the fill material is FrontSide.
+        // §885 终三一九g3: winding flipped to match the fill domain (see
+        // emitRibbonBody pushTri) — the MVT y-flip inverts the projected
+        // winding; FrontSide ribbon materials culled the old CCW triangles.
         const pushTri = (i: number, j: number, k: number) => {
             const px = geo.positions;
             const area2 =
                 (px[j * 3] - px[i * 3]) * (px[k * 3 + 1] - px[i * 3 + 1]) -
                 (px[j * 3 + 1] - px[i * 3 + 1]) * (px[k * 3] - px[i * 3]);
-            if (area2 >= 0) geo.indices.push(i, j, k);
-            else geo.indices.push(i, k, j);
+            if (area2 >= 0) geo.indices.push(i, k, j);
+            else geo.indices.push(i, j, k);
         };
 
         for (const end of [0, 1]) {

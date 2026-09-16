@@ -4387,3 +4387,34 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   在 technique 构造时未正确设置。
 - 下轮：dump ribbon geometry 的 attributes 完整性（aRibbonEdge/Offs/Len
   是否都在）+ offs 数组的实际值域；若 offs 全 0 则带材塌缩成中线。
+
+**㉔ 终三一九g4（白色 solid-line ribbon 根因实锤+修复：绕向被 FrontSide 剔除）**：
+- 属性完整性排查（g3 下轮动作执行）：ribbon census 实测 aRibbonEdge=[-1..1]
+  完整、aRibbonOffs 存在（值域全 0=无 line-offset,合法）、idx/groups 正常、
+  mesh visible/frustumCulled=false——**属性/场景层级假设全部排除**。
+- **隔离实验定位（新工具 raswhite=1/2,decodedbg 门控）**：隐藏除
+  aRibbonEdge 网格外的一切——FrontSide=全黑帧（0 片元）,DoubleSide=
+  全部显现。**根因=ribbon 三角形绕向落在被剔除的背面**。
+- 根因机理:终三一九的 fill 绕向翻转(MVT y-flip 使投影绕向反向,earcut
+  (a,c,b) 修复了 fill)未覆盖 ribbon 发射路径——emitRibbonBody/emitRibbonCaps
+  的 pushTri 仍强制 xy-CCW,join=none 路径的固定绕向同病。dashed"部分可见"
+  系其它渲染管线,造成"dashes ✓ solids ✗"的长期误判。
+- 修复：三处绕向翻转(body pushTri/caps pushTri/join-none 固定 quads)。
+- 验证：no-cross-beams 白像素 0→14,438（expected 8,062）,白色实线全族
+  渲染;3d-intersections 族重跑(66/75,9 件 ENOSPC 中断缺失):
+  guard-rail-qkey-border 183,837→31,534(−83%),stacked-underground-roads
+  150,475→95,527,no-cross-beams 167,916→43,090。
+- **代价**:no-cross-beams 相对 35,503 微升→43,090（白线画出但位置/宽度
+  域仍有偏差,net 新增白线错位边缘）;road-extend-tilecover-tunnel 5,897→
+  19,538、shadows-roads-depth 1,209→6,436 回退(待归因:疑 fill-outline/
+  caps 类细 ribbon 翻转后显形或遮挡)。
+- 剩余缺口分级:①白线位置/宽度域(deck→white 11k + white→deck 6.2k,
+  白线重叠率仅 17%=错位非位移);②dashed 仍细如发丝/部分缺失(线宽求值域
+  解码zoom vs 显示zoom,老问题与绕向无关——修复前即缺失);③奶油挡墙/
+  road-case 层缺失(cream→deck 7.2k);④deck 洞 12.3k;⑤lighting 族
+  elevated-symbols-lighting* 160-196k(方向光调制,未动)。
+- 基建:raswhite 隔离门控(runner MBSTYLE_RASWHITE + test 解析)、RIBBON2
+  逐网格 forensic dump(bsR/idx/groups/NDC)、磁盘 ENOSPC 清理
+  (~/.cache/puppeteer/chrome 379M 系文档确认的错误浏览器,已删)。
+- 下轮:①白线错位归因(double-lines gap/offset 几何 vs mgl)→收敛
+  no-cross-beams;②两件回退归因;③dashed 线宽域专项;④补齐 9 件缺失结果。

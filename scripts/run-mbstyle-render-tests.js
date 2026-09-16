@@ -100,6 +100,7 @@ function main() {
             ...(process.env.MBSTYLE_LITDBG ? ["litdbg=1"] : []),
             ...(process.env.MBSTYLE_OCCDBG ? ["occdbg=1"] : []),
             ...(process.env.MBSTYLE_RASRED ? ["rasred=1"] : []),
+            ...(process.env.MBSTYLE_RASWHITE ? [`raswhite=${process.env.MBSTYLE_RASWHITE}`] : []),
             ...(process.env.MBSTYLE_LITEDBG ? ["liteldbg=1"] : []),
             ...(process.env.MBSTYLE_RASUVDBG ? ["rasuvdbg=1"] : []),
             ...(process.env.MBSTYLE_DECODEDBG ? ["decodedbg=1"] : []),
