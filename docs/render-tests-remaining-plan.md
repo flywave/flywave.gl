@@ -4769,3 +4769,12 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 修正后的优先级:①no-cross-beams 最大单项杠杆=相机/zoom 映射校准
   (camdist=0.96 已证 −7.4k);②deck 碎片化的周长+13%(细分 piece
   接缝 AA)次之;③Portal 终端(坡道端缺失)范围有限。
+
+**㊵补7 终三十九g28(camdist=0.96 跨件验证——非系统性)**:
+- road-markups:74,690(基线)→ 77,810(camdist=0.96,**+3.1k 变差**);
+  对比 no-cross-beams 同参数 −7.4k 改善。
+- 结论:camdist=0.96 的收益为本件特异(边界搅动方向巧合),**全局
+  相机距离补偿不可用**;相机/zoom 域的系统差不存在单一标量解,
+  需逐域归因(疑 focalLength/fov 约定或 per-fixture 高度差)。
+- deck 洞战役定性完成:主体=边界搅动(相机域),非几何内缩;
+  下一刀回到 lighting 地形影子管线与 Portal 端点连接。
