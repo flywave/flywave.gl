@@ -4901,3 +4901,18 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   遮挡语义)。
 - 后续战役入口不变:lighting 地形影子管线(需确认 occluder 源)、
   qkey 配对、护栏带宽。
+
+**㊵补17 终三十九g40(lighting occluder 源确认——GeoJSON shadow-casters 层被丢弃)**:
+- occluder 源实锤:elevated-symbols-lighting 的 style 含第二个源
+  `shadow-casters`(type=geojson, 内联 FeatureCollection, 东京
+  139.76E/35.66N 多边形足迹)+ 同名 fill-extrusion 层
+  (fill-extrusion-height=200)——**200m 高遮挡墙**,把全场遮成
+  expected 的近全影形态(仅楔形受光)。
+- 我们的管线:MBStyleDataSource 只挑 best vector source(hd-roads),
+  **geojson 源被整体丢弃** → 遮挡墙从未渲染/从未进影子深度通道 →
+  地面无影、场景亮度与 expected 差 160-196k。
+- 修复方案(战役):①解析 geojson 源(内联 FeatureCollection);
+  ②构建 200m fill-extrusion 遮挡体;③注册为 shadow caster 并按
+  mgl 语义决定是否可见渲染(mgl render-tests 的 shadow-caster 层
+  惯例:深度通道 only);④验证 lighting 四件收敛。
+- 这是 lighting 族的正确主攻方向;预期收益 100k+(四件总和)。
