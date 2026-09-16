@@ -4613,3 +4613,18 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   (left±up·scale),若我们 left 方向/符号错,截面陷入路体。
 - 下一刀:raillateral 旋钮(截面 left 分量符号/幅度扫描);
   或逐顶点 dump rail 四角 xy vs 环边界 xy(内外侧判定)。
+
+**㊲ 终三一九g17(metersToTile 量纲修复全族验证——净改善)**:
+- 3d-intersections 族重跑(71 件可比):总 mismatch 5,648,423 →
+  **5,629,299(−19,124)**;25 件改善(>500px)vs 7 件回退。
+- 改善主力:bridge-to-tunnel-transition −4,589、guard-rail-color-
+  feature-dependent −4,377、road-islands −2,152、guard-rail-color
+  −1,628、elevated-symbols-mixed* −1.4~1.5k——护栏/结构域全面恢复。
+- 回退件:guard-rail-qkey-border +3,334(护栏显形后位置差暴露,
+  旧状态护栏不可见反而"侥幸"对齐)、elevated-symbols-viewport-
+  aligned-terrain-enabled +5,734、ortho-camera +1,542(待归因)。
+- no-cross-beams 43,090→42,206;奶油像素 2,471→4,868,与 expected
+  重叠 21→712(34×)——修复方向实锤,残余=带宽仍 2px vs 6px
+  (疑截面 left 偏移或 z 残差)与横向对位。
+- 下一刀:①回归件归因(qkey-border/viewport-aligned);②护栏残余
+  带宽/对位;③deck 洞(Portal Graph);④lighting 族。
