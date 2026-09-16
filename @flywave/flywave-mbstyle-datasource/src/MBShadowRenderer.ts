@@ -639,6 +639,13 @@ export class MBShadowRenderer {
             if (!obj.parent) shadowCasters.delete(obj);
         }
         if (shadowCasters.size === 0) return;
+        // §885 终三十九g30: depth-pass caster census (decodedbg gated).
+        if (typeof globalThis !== 'undefined' && (globalThis as any).__mbDecodeDbg
+            && ((this as any)._castLogN ?? ((this as any)._castLogN = 0)) < 3) {
+            (this as any)._castLogN = ((this as any)._castLogN ?? 0) + 1;
+            // eslint-disable-next-line no-console
+            console.log(`[MBShadowCast] casters=${shadowCasters.size} enabled=${this.m_enabled} intensity=${this.m_intensity} ortho=${this.m_orthoStyle}`);
+        }
         // §885 终五: meshes instantiated AFTER the group registered (async
         // placement clones) miss the layer-1 enable done at build time and
         // silently drop out of the depth pass (3 of 8 landmark meshes).

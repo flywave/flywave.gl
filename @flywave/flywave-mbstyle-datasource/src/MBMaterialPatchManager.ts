@@ -809,9 +809,17 @@ export class MBMaterialPatchManager {
      * Extruded polygons cast shadows into the MBShadowRenderer depth pass
      * (mgl shadow pass renders every extrusion bucket). Opt-in via layer 1 —
      * the shadow camera renders that layer mask only.
+     * §885 终三十九g30: HD elevated techniques (fills/structures) are ALSO
+     * shadow casters — mgl's depth segment contains ALL elevated triangles
+     * (elevated_structures.ts construct: "depth segment: [everything]").
+     * Without them the elevated decks cast no shadows and the lighting
+     * family renders the ground fully lit (expected: mostly shadowed).
      */
     private registerShadowCaster(obj: THREE.Object3D, technique: any): void {
-        if (technique?.name !== 'extruded-polygon') return;
+        const isExtrusion = technique?.name === 'extruded-polygon';
+        const isHdElevated = technique?._hdElevation !== undefined
+            || (technique as any)?.__elev === true;
+        if (!isExtrusion && !isHdElevated) return;
         if (!(obj as any).isMesh) return;
         if (shadowCasters.has(obj)) return;
         obj.layers.enable(1);
@@ -1914,6 +1922,8 @@ export class MBMaterialPatchManager {
         }
         switch (techName) {
             case 'fill':
+                // §885 终三十九g30: HD elevated fills are shadow casters.
+                this.registerShadowCaster(obj as THREE.Object3D, technique);
                 if (technique._isLineRibbon) {
                     // Line ribbons always go through the ribbon patcher —
                     // even patterned ones (their sampler lives there; routing

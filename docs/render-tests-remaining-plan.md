@@ -4788,3 +4788,14 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   focalLength 运行时对照;③qkey 跨瓦片数据精度配对。
 - 后续会话不再有"低成本代码对照"收益,转向=战役实施或
   mgl 运行时数据采集。
+
+**㊵补9 终三十九g31(投射体登记修复落地——深度通道已含 elevated fills)**:
+- 根因实锤:registerShadowCaster 只登记 extruded-polygon——HD elevated
+  fills/structures 从未进入影子深度通道。已扩展登记(_hdElevation/
+  __elev 技法,fill 分支补调用),census 实测 casters 25→73、
+  enabled/intensity=1 正常。
+- 接收端暂未变化(mismatch 持平 191,129):影子回流 CanvasTexture
+  →接收端采样链路的对位问题(或地面接收器 uMBShadowIntensity 帧态)
+  为下一刀;注意 DECODEDBG 的涂红钩子会污染该族视觉对比帧
+  (诊断时改用采样探针)。
+- 诊断资产:MBShadowCast census 探针入库。
