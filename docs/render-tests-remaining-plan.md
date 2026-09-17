@@ -5006,3 +5006,47 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   [MBExtraEntry]/[MBMergeOut]/[MBWallPoly]/[MBGeoJsonDec]/
   [SCAST]/[WALL200](WALL200 含矩阵世界顶点);catch 栈打印扩展。
   复现资产 test/MBXtraWall.tmp.test.ts(FLIP=0 env 切换)。
+
+**㊵补23 终三十九g46(lighting 校准战役诊断——墙影未落地定量+接收链失效实锤)**:
+- **WALL200 v0 x≈0 疑云结案:探针矩阵帧假象**。v0 读的是 RTE
+  (相机相对)坐标:mwT=(55.6,−26.7,−71.8)+local(0.1,+26.7,0)——
+  墙局部坐标正常,世界位置无缺陷。此前"x≈0/y=15.78M"是把 RTE
+  坐标当绝对世界反投影的读数错误。
+- **像素级定量(rmstyle=shadow-casters A/B)**:墙净贡献
+  190,928(有墙) vs 189,638(无墙) = **+1,290px/件,净负贡献**;
+  墙面画 7,346px,颜色 (100,110,123) vs expected 同位 (57,63,70)。
+- **expected 暗区本体定性**:右上暗区 (57,63,70) 占全帧 44%
+  (S 类 116,221px)+ (82,85,84) 33%(G 类 86,889px)= **地面全影**
+  ——(57,63,70) ≈ deck albedo hsl(212,25%,71%)×纯环境光 0.1
+  (linear→sRGB 计算值 (53,60,68) 吻合),非墙面本色
+  (技术色 #000000,mocha WALL-TECH dump 确认)。
+  墙影几何:方位 3.5°/天顶角 50°→影长 200·tan50°≈238m 向南,
+  覆盖整个视场 ✓ expected 吻合。
+- **我们的渲染 S 类=0**:全帧无一块全影地面。影子管线逐环:
+  墙已入深度图([MBShadowFit] darkBox 全图+深度画布目检左上大块
+  =墙)✓;shadow camera 视锥已框住 caster 盒(boxS 664×612×272m,
+  ortho 宽 781m)✓;**但 NDC 角点 x∈[−1.41,2.23] y∈[−1.60,3.23]
+  溢出 [−1,1]**——caster 盒(含远处道路件)超出视锥球,墙的
+  上半部/部分地面深度被裁;courtyard-audit 读回 caster 自身
+  UV 深度=1.0039(空/初始化值)——深度写入或比较链存在缺陷。
+- **接收链失效实锤**:shrad=2.2(正交半径 ×2.2)A/B →
+  逐像素完全同值(190,928 等)——影子视锥缩放对最终图像零影响,
+  地面接收器的 shadow-map 采样对输出无贡献(g32"int=1 活跃但
+  输出不变"的复现;非 knob 未生效,MBShadowRad 读点已核)。
+- **定性(与 g23/g25 结论合流)**:lighting 四件的残余 15-19 万
+  = 地面全影缺失,需影子接收管线级移植(mgl shadow_renderer.ts
+  逐行对照:depth pack/unpack 约定、receiver uv 矩阵帧、
+  near=−780 负 near 的 packed depth 语义),非点状实验可收敛。
+  墙面着色 (100,110,123) vs 墙本体该为近黑,同属接收/光照链。
+- 本轮净产出:两个管线缺陷修复(fa6e186d)+墙入场景+诊断闭环
+  (expected 暗区=地面全影的定量证明);全族 71 件重跑
+  6,020,621 总 mismatch(其余件不含 geojson extras,不受本轮
+  修复影响,与 g17 录制基线的差异为多战役累计漂移)。
+- **下轮实施建议(次序)**:①解析法地面全影(中间态):geojson
+  extrusion occluder 的 footprint 沿 lightDir 投影到地面平面成
+  影多边形,shader 内 point-in-polygon(或预烘 Texture)对地面
+  fills 施加 amb-only 调制——绕开失效的 shadow-map 采样,单一
+  已知遮挡体族(render-tests 惯例)即可覆盖 lighting 四件;
+  ②移植 mgl shadow_receiver 完整链(depth pack 约定+receiver
+  uv 帧+near=−780 packed depth 语义)作为终态;③墙面本体着色
+  (extrusion 3D-lighting 链,ext3d flag 未挂到该材质)。

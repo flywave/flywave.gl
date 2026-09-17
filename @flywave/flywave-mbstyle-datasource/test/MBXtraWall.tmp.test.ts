@@ -85,6 +85,10 @@ describe('MBXtraWall repro: shadow-casters geojson wall routing', () => {
         for (const t of decoded.techniques) {
             // eslint-disable-next-line no-console
             console.log(`  tech name=${(t as any).name} layerId=${(t as any)._layerId} height=${(t as any).height}`);
+            if ((t as any).name === 'extruded-polygon') {
+                // eslint-disable-next-line no-console
+                console.log(`  WALL-TECH ${JSON.stringify(t)}`);
+            }
         }
         // World-position audit for the wall geometry: take every geometry
         // whose group references the extruded-polygon technique, add the

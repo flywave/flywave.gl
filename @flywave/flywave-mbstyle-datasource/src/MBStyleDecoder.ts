@@ -1323,7 +1323,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                     // §885 终三十九g45 A/B knob: geojsonflip=0 disables the
                     // MVT-style y flip for this branch (browser A/B decides).
                     // NOTE: identity is null — offset 0 would negate y.
-                    if ((window as any).__karma__?.config?.args?.some?.((a: string) =>
+                    // globalThis (not window): the mocha repro runs this path
+                    // in Node where `window` is undefined.
+                    if ((globalThis as any).__karma__?.config?.args?.some?.((a: string) =>
                         a === 'geojsonflip=0')) {
                         processor.setMvtYOffset(null);
                         (globalThis as any).__mbGeoFlipStamp = 'identity';
