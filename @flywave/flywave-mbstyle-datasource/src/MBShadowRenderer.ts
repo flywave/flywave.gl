@@ -1107,6 +1107,26 @@ export class MBShadowRenderer {
         }
         this.m_shadowCamera.updateProjectionMatrix();
         this.m_shadowCamera.updateMatrixWorld();
+        // §885 终三十九g49: re-center the ortho frustum on the caster box's
+        // light-space projection (Bug B). The view-sphere center can sit
+        // ~1.5 ortho-half-widths from the asymmetric caster-box center — the
+        // wall/ground clipped out of the depth map (box-center NDC x=1.5).
+        // Moving the camera along its own right/up by the box center's
+        // view-space XY lands the box center at NDC (0,0). Static fixtures
+        // converge in one frame; the m_matrix below recomposes from the
+        // updated camera.
+        if (!casterBox.isEmpty()) {
+            const bcView = casterBox.getCenter(new THREE.Vector3())
+                .applyMatrix4(this.m_shadowCamera.matrixWorldInverse);
+            const rightL = new THREE.Vector3(1, 0, 0)
+                .applyQuaternion(this.m_shadowCamera.quaternion);
+            const upL = new THREE.Vector3(0, 1, 0)
+                .applyQuaternion(this.m_shadowCamera.quaternion);
+            this.m_shadowCamera.position
+                .addScaledVector(rightL, bcView.x)
+                .addScaledVector(upL, bcView.y);
+            this.m_shadowCamera.updateMatrixWorld();
+        }
         }
         // §885 终五十五: the mgl frustum-sphere fit already clamps [near,far]
         // around the light axis (near = −2r covers the sphere from behind the

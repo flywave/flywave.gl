@@ -5114,6 +5114,27 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 旋钮/资产:shadowbias(手动覆盖)>__mbShadowBiasAuto(自动);
   recv-mat-audit/depth-matrix 对拍通道;g47 band 已撤(RTE 下
   原门语义自洽)。
+
+**㊵补26 终三十九g49(Bug B 重定心实验+DIAG5 深度比较读数——收敛进入标定期)**:
+- **Bug B 重定心实验**:legacy 分支相机定姿后沿自身 right/up 把
+  caster 盒心投到 NDC(0,0)——lighting 四件**逐像素零变化**。
+  结论:RTE 帧修复(g48)后墙已入深度图足迹带(DIAG8 地面
+  uv.y 0.04-0.06 与墙块重叠),框心不再是约束;重定心保留
+  (无害,可能利好其它件)。
+- **DIAG5 深度比较读数(shdiag=5)**:deck 区画 (0.39,0.43,0.48)
+  = R<0.5 → stored < uv.z → **遮挡判定在工作**;背景区无 paint
+  (无注入)——接收链功能完整。
+- **bias=0.2 视觉对照**:构图与 expected 对齐(deck 斜向/标线/
+  护栏就位),墙影落地。残余两项:①expected 左上受光楔形区
+  我们涂黑=影长超延伸(κ 各向异性使有效天顶角偏陡,影长偏长
+  ——终三一一 κ=1/cos(lat) 同源);②边界/标线级精度。
+- **下一步**:①light view 建 κ 校正(mgl mercator 帧等价:对
+  lightDir 的水平分量除以 cos(lat) 或按 arrefFrame 仿射);
+  ②bias 精调(0.2 附近二分);③受光楔形区=影长标定的
+  直接 A/B 通道。
+- 本轮数值(bias=0.2):lighting 139,876 / -text 140,509 /
+  -terrain 137,526 / -text-terrain 138,671(对 g45 前基线
+  −133k);薄板件回归同 g48(待 κ 校正后复测)。
 - **下轮实施建议(次序)**:①解析法地面全影(中间态):geojson
   extrusion occluder 的 footprint 沿 lightDir 投影到地面平面成
   影多边形,shader 内 point-in-polygon(或预烘 Texture)对地面
