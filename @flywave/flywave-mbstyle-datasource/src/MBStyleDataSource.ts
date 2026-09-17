@@ -1924,6 +1924,13 @@ export class MBStyleDataSource extends TileDataSource {
             const hasPointSortKeyLayerV = ((style.layers ?? []) as any[]).some(l =>
                 l?.layout?.['circle-sort-key'] !== undefined ||
                 l?.layout?.['symbol-sort-key'] !== undefined);
+            // §885 终三十九g50b: pre-seed the auto compare-bias BEFORE any
+            // tile can decode+inject — the MB_SH_BIAS define bakes at each
+            // material's first injection and must never race the renderer's
+            // first shadow fit (which refines this value per frame).
+            if ((globalThis as any).__mbShadowBiasAuto === undefined) {
+                (globalThis as any).__mbShadowBiasAuto = 0.002;
+            }
             for (const [extraId, extraSource] of sources) {
                 if (extraId === bestVectorSourceId) continue;
                 // §644: GeoJSON sources ride the same extras-stash beside a
@@ -1939,6 +1946,17 @@ export class MBStyleDataSource extends TileDataSource {
                             const resp = await fetch(url);
                             data = await resp.json();
                         } catch { data = null; }
+                    }
+                    // §885 终三十九g50b: pre-seed the auto compare-bias from
+                    // the occluder height at WIRE time — the baked MB_SH_BIAS
+                    // define is fixed at each material's first injection and
+                    // must not race the renderer's first shadow fit.
+                    const castLayer = (style.layers ?? []).find((l: any) =>
+                        l?.type === 'fill-extrusion' && l?.source === extraId);
+                    const hRaw = castLayer?.paint?.['fill-extrusion-height'];
+                    if (castLayer && typeof hRaw === 'number' && hRaw > 100
+                        && (globalThis as any).__mbShadowBiasAuto === undefined) {
+                        (globalThis as any).__mbShadowBiasAuto = 0.124;
                     }
                     if (data) {
                         extras.push({

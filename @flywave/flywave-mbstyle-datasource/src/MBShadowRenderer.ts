@@ -59,6 +59,8 @@ export interface ShadowUniformState {
     /** §885 终一百四十六: matrixWorld·projectionMatrixInverse — the receiver
      * ray-cast's NDC→world unproject matrix (uMBInvViewProj). */
     invViewProj?: THREE.Matrix4;
+    /** §885 终三十九g50b: live auto compare-bias (box z-span ramp). */
+    biasAuto?: number;
     /** §717: shadow-camera far (world units) — the fade-out envelope. */
     far: number;
 }
@@ -118,6 +120,10 @@ export class MBShadowRenderer {
     private m_matrix = new THREE.Matrix4();
     private m_enabled = false;
     private m_intensity = 0;
+    /** §885 终三十九g50b: live auto depth-compare bias (box z-span ramp),
+     * refreshed per fit and shipped to receivers as a uniform — the baked
+     * compile-time define raced the first fit nondeterministically. */
+    private m_biasAuto = 0.0002;
     private m_orthoStyle = false;
     // §560: ground shadow receiver — mgl shades the BACKGROUND as a ground
     // layer (`background × groundRadiance × groundShadow`); our background is
@@ -227,6 +233,8 @@ export class MBShadowRenderer {
             eye: this.m_eye,
             res: this.m_res,
             invViewProj: (this as any).__mbInvViewProj as THREE.Matrix4,
+            // §885 终三十九g50b: live compare-bias window for receivers.
+            biasAuto: this.m_biasAuto,
             // §717: mgl u_fade_range = [lastCascade.far×0.75, lastCascade.far]
             // (shadow_renderer.ts:363) — receiver shadows fade to lit across
             // the far quarter of the coverage; single-cascade far stands in.
@@ -929,15 +937,19 @@ export class MBShadowRenderer {
         // shadow-casters wall, span 272-318) need ~0.12-0.2. The ramp
         // (span−100)/range interpolates: 0 below 100 m of span, ~0.124 at
         // the wall. The manual shadowbias knob still overrides.
-        if (!casterBox.isEmpty() && !(globalThis as any).__mbShadowBias) {
+        // §885 终三十九g50b: stored on the renderer (not a global) and read
+        // LIVE per frame — the receiver bias is now a uniform (baked-at-
+        // injection defines raced the first fit nondeterministically).
+        if (!casterBox.isEmpty()) {
             const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
             const spanZ = casterBox.max.z - casterBox.min.z;
-            // floor at the legacy 0.0002: an explicit 0 collapses the
-            // smoothstep window (binary compare) and regresses flat fixtures.
-            (globalThis as any).__mbShadowBiasAuto = Math.max(
-                0.0002, Math.min(0.3, (spanZ - 100) / range));
-        }
-        // §885 终七十二: shoff=<x>,<y> — world-XY calibration offset of the
+            this.m_biasAuto = Math.max(
+                0.002, Math.min(0.3, (spanZ - 100) / range));
+            // The injection-time bake (MB_SH_BIAS define) reads the global —
+            // keep it fed (the live uMBShadowBiasW uniform supersedes it for
+            // already-compiled materials).
+            (globalThis as any).__mbShadowBiasAuto = this.m_biasAuto;
+        }        // §885 终七十二: shoff=<x>,<y> — world-XY calibration offset of the
         // shadow sphere center (dark-centroid A/B against expected).
         {
             const off = String((globalThis as any).__mbShadowOff ?? '');
@@ -1107,26 +1119,11 @@ export class MBShadowRenderer {
         }
         this.m_shadowCamera.updateProjectionMatrix();
         this.m_shadowCamera.updateMatrixWorld();
-        // §885 终三十九g49: re-center the ortho frustum on the caster box's
-        // light-space projection (Bug B). The view-sphere center can sit
-        // ~1.5 ortho-half-widths from the asymmetric caster-box center — the
-        // wall/ground clipped out of the depth map (box-center NDC x=1.5).
-        // Moving the camera along its own right/up by the box center's
-        // view-space XY lands the box center at NDC (0,0). Static fixtures
-        // converge in one frame; the m_matrix below recomposes from the
-        // updated camera.
-        if (!casterBox.isEmpty()) {
-            const bcView = casterBox.getCenter(new THREE.Vector3())
-                .applyMatrix4(this.m_shadowCamera.matrixWorldInverse);
-            const rightL = new THREE.Vector3(1, 0, 0)
-                .applyQuaternion(this.m_shadowCamera.quaternion);
-            const upL = new THREE.Vector3(0, 1, 0)
-                .applyQuaternion(this.m_shadowCamera.quaternion);
-            this.m_shadowCamera.position
-                .addScaledVector(rightL, bcView.x)
-                .addScaledVector(upL, bcView.y);
-            this.m_shadowCamera.updateMatrixWorld();
-        }
+        // §885 终三十九g49b REVERTED: the caster-box re-center (box center →
+        // NDC 0,0 along the light-camera right/up) was tested here and made
+        // the lighting fixtures return pixel-exact to the no-shadow baseline
+        // — the shifted light frame no longer overlaps the ground's sample
+        // band. The view-sphere-centered framing stays.
         }
         // §885 终五十五: the mgl frustum-sphere fit already clamps [near,far]
         // around the light axis (near = −2r covers the sphere from behind the

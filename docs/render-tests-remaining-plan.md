@@ -5153,9 +5153,36 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   刀锋式薄对齐,对 shaz/shoff/shrad 全部敏感。
 - **移植入口(下轮)**:depth pass 对象变换帧审计(caster 的
   matrixWorld 在 depth-pass 时刻的值 vs 主渲染放置值);
-  mgl createLightMatrix 的 getWorldToCamera(ws, ppm) 等
-  效物(场景帧→mercator 的 zUnit 换算)在 shadow camera
+  mgl createLightMatrix 的 getWorldToCamera(ws, ppm) 等效物
+  (场景帧→mercator 的 zUnit 换算)在 shadow camera
   构建中的补齐;完成后撤薄板回归并收敛 lighting 残余。
+
+**㊵补28 终三十九g50b(bias 活体 uniform 化+烘焙竞态修复——最终态固化)**:
+- **发现 bias 烘焙竞态**:MB_SH_BIAS 系编译期 define,烘焙于材质
+  首次注入时刻;__mbShadowBiasAuto 由 shadow fit 每帧计算——
+  注入与首次 fit 的先后顺序不定,同一代码在 139,876(有影,
+  fit 先行)与 190,928(无影,注入先行)间摇摆。
+- **修复三件套**:①renderer 的 fit 结果同时写成员 m_biasAuto
+  与全局 __mbShadowBiasAuto(注入烘焙点读全局);②wire 早期
+  无条件预种 __mbShadowBiasAuto=0.002(先于任何 tile 解码);
+  ③接收器比较窗口改活体 uniform uMBShadowBiasW(±bias 对称,
+  随帧刷新;首版误设 (bv,bv) 相同边=smoothstep 未定义行为,
+  已改 (−bv,+bv))。
+- **bias 下限 0.0002→0.002**:shadows-roads-depth 在 0.0002 下
+  自影痤疮 25,070,0.002 → 7,095(痤疮清除,仅比基线 +692);
+  该件存在 7k/25k 双稳态(帧时序敏感,标注开放)。
+- **最终态(12 件 cast-shadows 对照)**:lighting 四件
+  **139,876/140,509/137,526/138,671**(稳定复现,−133k);
+  shadows-tunnel 137,083 / shadows-roads-depth 25,070(双稳态
+  7-25k)/ road-extend-tilecover 187,097 / shadows-underpass
+  168,642 / stacked-underground-roads 101,587(薄板回归合计
+  ~+96k);其余件零变化。
+- **收敛公式**:净改善依赖 lighting(−133k)与薄板回归(+96k)
+  的权衡;两者同源于深度图帧错位——薄板件的旧"对齐"是绝对帧
+  ray-cast 与 RTE 矩阵两错抵消的产物。彻底消除=完成
+  mercator 归一化帧的光视图重建(g49/g50 已立项),届时
+  薄板回归随帧统一而消失,lighting 残余(受光楔形/边界)
+  随影长校正收敛。
 - **下轮实施建议(次序)**:①解析法地面全影(中间态):geojson
   extrusion occluder 的 footprint 沿 lightDir 投影到地面平面成
   影多边形,shader 内 point-in-polygon(或预烘 Texture)对地面

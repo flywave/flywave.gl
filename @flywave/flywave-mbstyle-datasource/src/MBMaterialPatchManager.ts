@@ -360,6 +360,13 @@ export class MBMaterialPatchManager {
                             if (u.uMBInvViewProj && (shadowState as any)?.invViewProj) {
                                 (u.uMBInvViewProj.value as THREE.Matrix4).copy((shadowState as any).invViewProj);
                             }
+                            // §885 终三十九g50b: live compare-bias window.
+                            if (u.uMBShadowBiasW) {
+                                const bA = (shadowState as any).biasAuto ?? 0.002;
+                                const bM = (globalThis as any).__mbShadowBias;
+                                const bv = bM ?? bA;
+                                (u.uMBShadowBiasW.value as THREE.Vector2).set(-bv, bv);
+                            }
                         } else if (identity) {
                             if (u.uMBShadowMatrix) u.uMBShadowMatrix.value = identity;
                         }
@@ -3426,6 +3433,11 @@ export class MBMaterialPatchManager {
             // first shadow frame — the intensity=0 seed keeps it inert).
             shader.uniforms.uMBInvViewProj = { value: new THREE.Matrix4() };
             shader.uniforms.uMBShadowIntensity = { value: shSeed ? 1 : 0 };
+            // §885 终三十九g50b: live compare-bias window (seeded here,
+            // refreshed per frame from the renderer's box-span ramp — the
+            // baked MB_SH_BIAS define raced the first fit).
+            const bW0 = Math.max(0.002, bVd);
+            shader.uniforms.uMBShadowBiasW = { value: new THREE.Vector2(-bW0, bW0) };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
             // §885 终三一九g21: mgl apply_lighting_ground — draped fills are
             // lit as `color * u_ground_radiance` (sRGB), refreshed per frame.
@@ -3461,7 +3473,13 @@ export class MBMaterialPatchManager {
             // getShadowUniforms invViewProj switched to the rteCamera) — the
             // sample planes are ALTITUDE − eye.z: ground ≈ −eye.z, elevated
             // fills at their own vMBElev. uMBEye = the absolute eye (z =
-            // camera altitude).
+            // camera altitude). NOTE (g49b): a +0.5 normal-offset lift was
+            // tested and REVERTED — it cleared the deck's coplanar halftone
+            // but with it the lighting fixtures returned pixel-exact to the
+            // no-shadow baseline, proving the wall's depth footprint does not
+            // yet cover the deck's UV band (Bug B coverage gap); the g48
+            // halftone darkening is the current best state until the light
+            // frame is ported.
             const mbRayPlane = (material as any).__mbElevPlane
                 ? '(vMBElev - uMBEye.z)'
                 : '(-uMBEye.z)';
@@ -3541,7 +3559,10 @@ export class MBMaterialPatchManager {
                             // 16-bit depth quantum tiny — the old 0.002 bias
                             // (≈6-60m of scene depth) ATE the entire building
                             // shadow footprint (0.001-of-range signature).
-                            float mbLit = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, mbShadowUv.z - mbShadowDepth);
+                            // §885 终三十九g50b: the compare window is a LIVE
+                            // uniform (box-span ramp, refreshed per frame) —
+                            // the baked define raced the first fit.
+                            float mbLit = smoothstep(uMBShadowBiasW.x, uMBShadowBiasW.y, mbShadowUv.z - mbShadowDepth);
                             // §702: mgl shadowed_light_factor = 1 − intensity·occ
                             // (_prelude_shadow.fragment.glsl) — intensity<1
                             // lightens the shadow; ours previously ignored
@@ -3584,6 +3605,7 @@ export class MBMaterialPatchManager {
                 // the receiver failed to compile (lines/ground fills vanished).
                 'uniform mat4 uMBInvViewProj;\n',
                 'uniform float uMBShadowIntensity;\n',
+                'uniform vec2 uMBShadowBiasW;\n',
                 'uniform vec3 uMBGroundShadowFactor;\n',
                 'uniform vec3 uMBGroundRadiance;\n',
                 'uniform vec3 uMBGC[4];\n',
