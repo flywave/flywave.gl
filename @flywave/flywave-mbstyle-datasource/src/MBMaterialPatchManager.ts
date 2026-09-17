@@ -417,12 +417,16 @@ export class MBMaterialPatchManager {
                                     // linearVec3TosRGB = pow(v, 1/2.2). The shader
                                     // multiplies the sRGB-encoded output by this
                                     // factor directly (exponent knob stays 1.0).
-                                    // shadowmglrgb=1 opt-in only — g50g: with it
-                                    // ON the lighting four regressed +33k (our
-                                    // darkening chain is not yet mgl's
-                                    // post-fragment multiply), tunnel improved;
-                                    // deferred until the chain is mgl-aligned.
-                                    if ((globalThis as any).__mbShadowMglRgb === 1) {
+                                    // §885 终三十九g50h: on the colorspace-tail
+                                    // chain the multiply runs on the sRGB-encoded
+                                    // output — mgl semantics (shadow_utils.ts:59
+                                    // linearVec3TosRGB, pow 1/2.2) apply, default
+                                    // ON (shadowmglrgb=0 opts out). Legacy-chain
+                                    // materials keep the linear factor (the
+                                    // colorspace encode after their multiply
+                                    // already lands the factor at f^(1/2.2)).
+                                    if ((u as any).__mbTail
+                                        && (globalThis as any).__mbShadowMglRgb !== 0) {
                                         ratio = Math.pow(ratio, 1 / 2.2);
                                     }
                                     f.setComponent(i, ratio);
@@ -1515,6 +1519,14 @@ export class MBMaterialPatchManager {
                              #ifdef MB_SH_HW
                              float mbShBiasV = MB_SH_BIAS;
                              #else
+                             // §885 终三十九g50h: mgl's vector-tile NORMAL_OFFSET
+                             // bias (0.5·0.00010) was A/B'd post-g48-frame —
+                             // zero change on the lighting four but
+                             // road-extend-tilecover +16.7k (self-shadow acne at
+                             // the 16-bit packed-depth quantum; mgl's DEPTH16 HW
+                             // compare has different quantization). The window
+                             // constant stays; the domain difference is recorded
+                             // in the ledger (§713 confirmed twice).
                              float mbShBiasV = 0.0002;
                              #endif
                              // §696/§702: smoothstep edge + (1−intensity·occ)
@@ -3637,15 +3649,16 @@ export class MBMaterialPatchManager {
                             // (sRGB scalar for horizontal surfaces) BEFORE the
                             // shadow mix; default (1,1,1) when lights are off.
                             gl_FragColor.rgb *= uMBGroundRadiance;
-                            // mgl: out(sRGB) *= mix(u_ground_shadow_factor, 1, light)
-                            // with the factor = linear-strengths ratio. The
-                            // exponent is a LIVE uniform: the injection-point
-                            // color space (post opaque_fragment = sRGB-encoded
-                            // on this pipeline) and the actual lighting state
-                            // determine the effective value — gshade=<e>
-                            // sweeps it (2.2 = linear-theory, ~0.65 = the
-                            // empirically matching sRGB-space ratio).
+                            // §885 终三十九g50h: with the colorspace-tail chain
+                            // (MB_SH_MGL_TAIL) the ground-factor multiply runs
+                            // AFTER colorspace_fragment (mgl: on the sRGB-encoded
+                            // output, ground_shadow.frag) — export the light
+                            // factor; otherwise multiply here (pre-encode).
+                        #if MB_SH_MGL_TAIL
+                            mbShadowLightOut = mbLight;
+                        #else
                             gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(uMBGSExp)), vec3(1.0), mbLight);
+                        #endif
                         }`;
             let mbShadowInserted = false;
             const tryInsert = (src: string, anchor: string, block: string): string => {
@@ -3710,7 +3723,15 @@ export class MBMaterialPatchManager {
             // 71.9/73.6/81.9/83.0k (−20k each vs the box-span window,
             // new best), tunnel neutral. shadowmgl=0 reverts.
             const mbShMgl = (globalThis as any).__mbShadowMgl === 0 ? 0 : 1;
-            shader.fragmentShader = `#define MB_SH_MGL ${mbShMgl}\n` + shader.fragmentShader;
+            // §885 终三十九g50h: relocate the ground-factor multiply to after
+            // colorspace_fragment (mgl ground_shadow.frag semantics — the
+            // mix runs on the sRGB-encoded output, before fog) when the
+            // flavor carries the chunk.
+            const mbShTail = mbShMgl && shader.fragmentShader.includes('#include <colorspace_fragment>') ? 1 : 0;
+            shader.fragmentShader = `#define MB_SH_MGL ${mbShMgl}\n#define MB_SH_MGL_TAIL ${mbShTail}\n` + shader.fragmentShader;
+            if (mbShTail) {
+                shader.fragmentShader = `float mbShadowLightOut = 1.0;\n` + shader.fragmentShader;
+            }
             const mbShadowDbg4 = !!(globalThis as any).__mbShadowDbg4;
             shader.fragmentShader = tryInsert(
                 shader.fragmentShader, '#include <opaque_fragment>',
@@ -3722,6 +3743,20 @@ export class MBMaterialPatchManager {
                         }
                     }`);
             if (mbShadowInserted) material.__mbShadowAnchor = 'opaque_fragment';
+            // §885 终三十九g50h: mgl tail-chain — the ground-factor multiply
+            // after colorspace_fragment (sRGB-encoded output, pre-fog).
+            if (mbShTail && mbShadowInserted) {
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <colorspace_fragment>',
+                    `#include <colorspace_fragment>
+                    #if MB_SH_MGL_TAIL
+                    if (uMBShadowIntensity > 0.0) {
+                        gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(uMBGSExp)), vec3(1.0), mbShadowLightOut);
+                    }
+                    #endif`);
+                (shader.uniforms as any).__mbTail = true;
+                material.__mbShadowAnchor = 'colorspace_tail';
+            }
             if (mbShadowDbg4) {
                 // §692: raw-uv field readout — bypass the output color-space
                 // transform entirely so the PNG shows the RAW shadow uv

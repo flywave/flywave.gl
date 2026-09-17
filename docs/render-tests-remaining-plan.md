@@ -5297,3 +5297,34 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   注入点/fog 序不同);②墙体路径 shadowed_light_factor_normal
   的 mgl bias 向量 [0.00036,0.0012,0.012] 斜率公式;③light
   matrix 的 mgl 1e-6 mercator XY 量化(对齐 shimmer 语义)。
+
+**㊵补33 终三十九g50h(暗化链对齐 mgl——colorspace-tail 乘法+sRGB 因子默认启用)**:
+- **链路对齐落地**:three chunk 序=opaque→tonemapping→colorspace
+  (sRGB 编码)→fog;原 ground-factor 乘法在 opaque 后=编码前。
+  mgl ground_shadow.frag 的乘法在 sRGB 编码输出上(fog 前)。
+  新增 MB_SH_MGL_TAIL 链:乘法搬到 `#include <colorspace_fragment>`
+  之后(经 mbShadowLightOut 全局变量传递 mbLight),CPU 侧对 tail
+  材质按 mgl linearVec3TosRGB(pow 1/2.2)转换因子
+  (shadowmglrgb=0 退回;非 tail 材质保持线性因子——编码在乘法
+  之后,数学等价)。
+- **效果(默认无参)**:lighting 四件
+  **71,135/72,868/81,651/82,705**(对 g50g 再 −200~800/件,稳定
+  收敛);tunnel 136,850(中性)。数学上 tail×f_srgb ≡ 前置×f_lin
+  (幂次可分配),−800 的小改善来自 tonemapping/编码序的残差。
+- **墙体 bias 复测(负结果,二次确认)**:mgl vector-tile
+  NORMAL_OFFSET 分支 bias(0.5·0.00010,_prelude_shadow.frag:70+
+  shadow_renderer.ts:547)在 g48 帧对齐后重测:lighting 四件零
+  变化,road-extend-tilecover +16.7k——16-bit packed 域与 mgl
+  DEPTH16 硬比较的量化域不同,常数不迁移(§713 第二次确认)。
+  已回退,窗口常数 0.0002 保留,域差异记录在案。
+- **tilecover 203,010 开放项**:g50d 基线 186,274→现三连跑稳定
+  203,010,且 shadowmgl=0(全 bundle 关闭)同值——回归与 mgl
+  bundle 无关,属该夹具族时序双稳态(同 roads-depth 7k/25k
+  先例)或批次构成敏感;待专项(独立录制帧时序)归因。
+- **1e-6 mercator XY 量化(shadow_renderer.ts:780)暂缓**:仅影响
+  光相机平移 shimmer(时序抖动),render-tests 静态单帧夹具零
+  效果;待动态场景专项。
+- **下轮**:①tail 链已通,下一步对齐 mgl 的 fog 序细节
+  (mgl ground quad: shadow mix→fog mix 同色域);②tilecover
+  双稳态归因;③薄板件结构性失配(134k 平台)仍是最大块,
+  入口=shdiag 同像素 uv/texel 直测。
