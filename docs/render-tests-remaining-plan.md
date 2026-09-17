@@ -5355,3 +5355,29 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   (shadowdisable=1)跑基线,把 134k 分解为影子项 vs 基线项;
   ②基线项按 mgl draw_fill/road 着色链逐项对照(新对齐表);
   ③修 recv-mat-audit 采集时序。
+
+**㊵补35 终三十九g50j(影子项 vs 基线项精确分解——tunnel 影子项=+39.8k 净回归)**:
+- **分解(shadowdisable=1,参数管道补全:测试文件此前未解析该
+  arg,首跑无效)**:tunnel 关影子基线=**97,083**(恰为 g48 前
+  巧合值),开影子 136,850→**影子项净回归 +39.8k**;lighting 关
+  影子基线=191,129(≈g45 前基线),开影子 71,135→影子项
+  **−120k 净收益**。影子质量分裂:lighting(墙 occluder)已
+  大幅正贡献,薄板(桥面/隧道)仍负贡献。
+- **影子像素隔离(current_with vs current_without)**:tunnel
+  影子项=42,369 px 全部变暗(零变亮),质心 (303,255),bbox 全
+  图;expected 真影质心 (436,391) 12.8k px。**仅 6,275 px 落在
+  expected 影区内(且不够暗:128 vs 86.5),36,094 px 是区外
+  伪影**——影子图案方位性错位+真影欠暗。
+- **方向 A/B(shdiralt=1/2)**:图案确实移动(各 ~33k px 变化)
+  但 mismatch 恒 ~136.9k(±68)——**图案在任意方位角下都不
+  匹配**,排除单纯方位角镜像;失配在抬路结构几何层面。mgl
+  fill.fragment.glsl 有专用机制:`#ifdef ELEVATED_ROADS in
+  float v_road_z_offset`+draw_fill_extrusion 的 elevated 路径
+  ——本夹具的桥面/隧道正是 elevated roads,下轮对齐表入口=
+  mgl ELEVATED_ROADS 链(depth 排除语义/z_offset/ground shadow
+  tile 相交裁剪)。
+- **基线项**:tunnel 97k 基线=剩余最大块(fill/line 着色/AA),
+  对齐表首行已备(mgl fill.fragment: out=color→×ground_rad→
+  ×mix(factor_sRGB,1,light)→fog→×opacity,opacity 在 fog 后)。
+- 顺带:recv-mat-audit 帧I invViewProj 退化=审计采集时序问题
+  (live 正常),待修。
