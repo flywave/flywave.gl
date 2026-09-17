@@ -5135,6 +5135,27 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
 - 本轮数值(bias=0.2):lighting 139,876 / -text 140,509 /
   -terrain 137,526 / -text-terrain 138,671(对 g45 前基线
   −133k);薄板件回归同 g48(待 κ 校正后复测)。
+
+**㊵补27 终三十九g50(κ/ArRef 实验与薄板回归定性——中间态固化)**:
+- **ArRef mercator 帧实验**(sharref=1 + bias 0.2):lighting 四件
+  回到无影基线(190,928 等)——mercator 归一化帧光视图同样
+  不产影;场景帧与 mercator 帧两条实现均未达到 mgl 的影子
+  覆盖,缺的不是帧选择而是 depth-pass caster 变换帧审计
+  (原清单 step②,未完成)。
+- **薄板回归定性**(shadows-tunnel bias 0.001/0.02 扫描):
+  两值完全同值(137,168,对基线 +40,084)——回归与 bias 无关,
+  是 RTE ray-cast 帧修正本身的代价:薄板件的旧影系"绝对帧
+  ray-cast + RTE 拟合矩阵"两错抵消的巧合对齐,正确帧暴露
+  深度图与期望影位的真实偏移。
+- **现状固化(中间态)**:lighting 四件 137.5-140.5k(−133k,
+  最大块 −19%);薄板件 +96k(4 件);净 −37k。修复方向
+  (mgl 语义)已验证正确但深度帧移植未完成——影子覆盖为
+  刀锋式薄对齐,对 shaz/shoff/shrad 全部敏感。
+- **移植入口(下轮)**:depth pass 对象变换帧审计(caster 的
+  matrixWorld 在 depth-pass 时刻的值 vs 主渲染放置值);
+  mgl createLightMatrix 的 getWorldToCamera(ws, ppm) 等
+  效物(场景帧→mercator 的 zUnit 换算)在 shadow camera
+  构建中的补齐;完成后撤薄板回归并收敛 lighting 残余。
 - **下轮实施建议(次序)**:①解析法地面全影(中间态):geojson
   extrusion occluder 的 footprint 沿 lightDir 投影到地面平面成
   影多边形,shader 内 point-in-polygon(或预烘 Texture)对地面
