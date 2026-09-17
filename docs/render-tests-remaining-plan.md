@@ -5258,3 +5258,42 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   对同一像素同时读深度图内容与 m_matrix 投影 uv,直测
   uv↔texel 映射偏差;②或按 g50c 建议走解析法地面全影
   (footprint 沿 lightDir 投影,绕开 shadow-map 采样)。
+
+**㊵补32 终三十九g50g(mgl 源码忠实对齐立项——plane-bias/snap 落地,−20k/件新最优)**:
+- **路线转向(用户指令)**:停止盲扫旋钮,以 vendored mbgl 源码为
+  唯一基准逐行对齐。参照文件:mapbox-gl-js/3d-style/render/
+  shadow_renderer.ts(createLightMatrix 全文+setupShadows bias 向量)、
+  shadow_utils.ts(shadowDirectionFromProperties+calculateGround
+  ShadowFactor)、3d-style/shaders/_prelude_shadow.fragment.glsl
+  (shadow_occlusion/shadow_sample/calculate_shadow_bias)、
+  ground_shadow.{vertex,fragment}.glsl(地面接收=mgl 用
+  shadowed_light_factor_plane_bias+ColorMode.multiply 独立 tile quad)。
+- **对齐表(ground/fill 接收路径)**:①bias: mgl plane-bias
+  (GDC2006 Isidoro,dFdx/dFdy 平面拟合)·texel_size+0.0001 →
+  已替换 box-span auto window(#if MB_SH_MGL,默认 1);
+  ②texel snap: mgl 无条件执行 → 已默认开(shadowmgl=0 回退);
+  ③ground factor: mgl linearVec3TosRGB(pow 1/2.2) → **已实现但
+  opt-in 关闭(shadowmglrgb=1)**:bundle A/B 中该单项致 lighting
+  四件 +33k——我们的暗化链尚非 mgl 的 post-fragment multiply,
+  因子空间等价性不迁移,待链路对齐后再启用;④occlusion:
+  mgl GREATER sampler2DShadow 硬比较 vs 我们 packed smoothstep
+  窗口(仿真等价,保留);⑤cascade: mgl 单 cascade abs≥1 → lit
+  (我们 uv∈[0,1] 门同义);⑥light matrix: mgl mercator 帧
+  FreeCamera+ppm zUnit,fit 球/近远面参数已逐项核对一致
+  (near=h/50, far=ctcd×1.5, lxjk 球, far=r/dir.z),帧由 g50e
+  审计证明场景帧自洽;⑦地面接收形态: mgl 独立 multiply tile
+  quad vs 我们 fill 片元注入(混合序差异,暂等价保留)。
+- **g50g A/B(shadowmgl bundle)**:全 bundle(含 sRGB):lighting
+  126.7/128.2/132.4/133.4k(恶化);分解后 plane-bias+snap
+  (无 sRGB):**71,918/73,649/81,883/82,955(对 g50d 基线
+  91.7/93.6/99.1/100.7k 各 −20k,历史最优,首次破 8 万)**;
+  tunnel 136,853(中性,+15);默认无参冒烟逐像素复现。
+- **g50f 解析法归档**:shadowanalytic=1 首跑与基线逐像素同值
+  =未激活,根因=ls.dir 指向光源约定(z>0),光行进方向需取反
+  (已修 buildAnalyticMask);旋钮保留但路线让位 mgl 忠实移植
+  (mgl 本身就是 shadow-map 采样)。
+- **下轮(继续 mgl 对齐表)**:①sRGB factor 启用前置=暗化链对齐
+  (mgl: out=mix(factor_sRGB,1,light) 在 fragment 末尾乘,我们
+  注入点/fog 序不同);②墙体路径 shadowed_light_factor_normal
+  的 mgl bias 向量 [0.00036,0.0012,0.012] 斜率公式;③light
+  matrix 的 mgl 1e-6 mercator XY 量化(对齐 shimmer 语义)。

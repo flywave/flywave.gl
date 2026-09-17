@@ -350,6 +350,7 @@ export class MBMaterialPatchManager {
                             if (u.uMBShadowMatrix) u.uMBShadowMatrix.value = shadowState.matrix;
                             if (u.uMBShadowMap1) u.uMBShadowMap1.value = shadowState.map1 ?? null;
                             if (u.uMBShadowTexel1) u.uMBShadowTexel1.value = (shadowState as any)?.texel1 ?? u.uMBShadowTexel1.value;
+                            if (u.uMBShadowTexel) u.uMBShadowTexel.value = 1 / ((shadowState as any)?.res ?? 2048);
                             if (u.uMBShadowMatrix1) u.uMBShadowMatrix1.value = shadowState.matrix1 ?? null;
                             if (u.uMBGC) u.uMBGC.value = shadowState.corners;
                             if (u.uMBEye) u.uMBEye.value = shadowState.eye;
@@ -366,6 +367,11 @@ export class MBMaterialPatchManager {
                                 const bM = (globalThis as any).__mbShadowBias;
                                 const bv = bM ?? bA;
                                 (u.uMBShadowBiasW.value as THREE.Vector2).set(-bv, bv);
+                            }
+                            // §885 终三十九g50f: analytic mask path flag.
+                            if (u.uMBShAnalytic) {
+                                u.uMBShAnalytic.value =
+                                    (globalThis as any).__mbShadowAnalyticOn ? 1 : 0;
                             }
                         } else if (identity) {
                             if (u.uMBShadowMatrix) u.uMBShadowMatrix.value = identity;
@@ -404,7 +410,22 @@ export class MBMaterialPatchManager {
                                 for (let i = 0; i < 3; i++) {
                                     const a = ls.ambientColorLinear[i];
                                     const d = ls.directionalColorLinear[i] * ndl;
-                                    f.setComponent(i, a > 0 ? a / (a + d) : 0);
+                                    let ratio = a > 0 ? a / (a + d) : 0;
+                                    // §885 终三十九g50g (mgl shadow_utils.ts:59):
+                                    // "Because blending will happen in sRGB space,
+                                    // convert the shadow factor to sRGB" —
+                                    // linearVec3TosRGB = pow(v, 1/2.2). The shader
+                                    // multiplies the sRGB-encoded output by this
+                                    // factor directly (exponent knob stays 1.0).
+                                    // shadowmglrgb=1 opt-in only — g50g: with it
+                                    // ON the lighting four regressed +33k (our
+                                    // darkening chain is not yet mgl's
+                                    // post-fragment multiply), tunnel improved;
+                                    // deferred until the chain is mgl-aligned.
+                                    if ((globalThis as any).__mbShadowMglRgb === 1) {
+                                        ratio = Math.pow(ratio, 1 / 2.2);
+                                    }
+                                    f.setComponent(i, ratio);
                                 }
                                 // §885 终三一九g21: mgl apply_lighting_ground —
                                 // the always-on `color * u_ground_radiance`
@@ -1283,6 +1304,9 @@ export class MBMaterialPatchManager {
             // §717: mgl u_fade_range far bound — refreshed per frame.
             shader.uniforms.uMBShadowFar = { value: 0 };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
+            // §885 终三十九g50f: analytic shadow-mask path flag (refreshed
+            // per frame from the renderer's global).
+            shader.uniforms.uMBShAnalytic = { value: 0 };
             (material as any).__mbShadowUniforms = shader.uniforms;
             // §664: bind the engine's mgl-fog uniforms (fog_fragment override)
             // BY REFERENCE to the live UniformsLib.fog template the env feeds
@@ -3427,6 +3451,9 @@ export class MBMaterialPatchManager {
             // §885 终一百一十九: cascade-1 far-field uniforms.
             shader.uniforms.uMBShadowMap1 = { value: shSeed?.map1 ?? null };
             shader.uniforms.uMBShadowTexel1 = { value: (2.0 * (shSeed ? 470 : 470)) / mbShadowRes() };
+            // §885 终三十九g50g: mgl u_shadow_texel_size = 1/resolution
+            // (shadow_renderer.ts:366) — feeds the receiver-plane depth bias.
+            shader.uniforms.uMBShadowTexel = { value: 1 / mbShadowRes() };
             shader.uniforms.uMBShadowMatrix1 = { value: shSeed ? (shSeed.matrix1 ? shSeed.matrix1.clone() : new THREE.Matrix4()) : new THREE.Matrix4() };
             // §885 终一百四十六: seed the ray-cast unproject matrix (the
             // refresh copies the live matrix every frame; identity until the
@@ -3445,6 +3472,9 @@ export class MBMaterialPatchManager {
             const gsExp0 = Number((globalThis as any).__mbGSExp ?? 1.0);
             shader.uniforms.uMBGSExp = { value: gsExp0 };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
+            // §885 终三十九g50f: analytic shadow-mask path flag (refreshed
+            // per frame from the renderer's global).
+            shader.uniforms.uMBShAnalytic = { value: 0 };
             // §885 终三一九g21: mgl apply_lighting_ground — draped fills are
             // lit as `color * u_ground_radiance` (sRGB), refreshed per frame.
             shader.uniforms.uMBGroundRadiance = { value: new THREE.Vector3(1, 1, 1) };
@@ -3568,7 +3598,35 @@ export class MBMaterialPatchManager {
                             // §885 终三十九g50b: the compare window is a LIVE
                             // uniform (box-span ramp, refreshed per frame) —
                             // the baked define raced the first fit.
-                            float mbLit = smoothstep(uMBShadowBiasW.x, uMBShadowBiasW.y, mbShadowUv.z - mbShadowDepth);
+                            // §885 终三十九g50f: analytic mask path — the map
+                            // holds a white=lit shadow-footprint mask drawn in
+                            // this same m_matrix frame; sample .r directly,
+                            // no depth compare, no bias window.
+                            float mbLit;
+                            if (uMBShAnalytic > 0.5) {
+                                mbLit = texture2D(uMBShadowMap, mbShadowUv.xy).r;
+                            } else {
+                            #if MB_SH_MGL
+                                // §885 终三十九g50g (mgl _prelude_shadow.frag:106
+                                // + ground_shadow.frag:17): receiver-plane depth
+                                // bias — GDC2006 Isidoro. The dFdx/dFdy plane fit
+                                // of the light-view sample position replaces the
+                                // box-span bias window; final +0.0001 matches
+                                // shadowed_light_factor_plane_bias.
+                                vec3 mbSS = vec3(mbShadowUv.xy, mbShadowUv.z);
+                                vec3 mbDx = dFdx(mbSS);
+                                vec3 mbDy = dFdy(mbSS);
+                                vec2 mbBiasUV = vec2(
+                                    mbDy.y * mbDx.z - mbDx.y * mbDy.z,
+                                    mbDx.x * mbDy.z - mbDy.x * mbDx.z)
+                                    / ((mbDx.x * mbDy.y) - (mbDx.y * mbDy.x));
+                                float mbPBias = dot(vec2(uMBShadowTexel, uMBShadowTexel), mbBiasUV) + 0.0001;
+                                mbLit = smoothstep(-1e-4, 1e-4,
+                                    mbShadowUv.z - mbPBias - mbShadowDepth);
+                            #else
+                                mbLit = smoothstep(uMBShadowBiasW.x, uMBShadowBiasW.y, mbShadowUv.z - mbShadowDepth);
+                            #endif
+                            }
                             // §702: mgl shadowed_light_factor = 1 − intensity·occ
                             // (_prelude_shadow.fragment.glsl) — intensity<1
                             // lightens the shadow; ours previously ignored
@@ -3609,6 +3667,7 @@ export class MBMaterialPatchManager {
                 'uniform sampler2D uMBShadowMap1;\n',
                 'uniform mat4 uMBShadowMatrix1;\n',
                 'uniform float uMBShadowTexel1;\n',
+                'uniform float uMBShadowTexel;\n',
                 'uniform mat4 uMBShadowMatrix;\n',
                 // §885 终一百四十六: the 终一百三十四 ray-cast rewrite reads
                 // this matrix but never declared it — every program carrying
@@ -3623,6 +3682,7 @@ export class MBMaterialPatchManager {
                 'uniform vec3 uMBEye;\n',
                 'uniform vec2 uMBRes;\n',
                 'uniform float uMBShadowDbg;\n',
+                'uniform float uMBShAnalytic;\n',
             ]) {
                 const name = decl.replace(/^uniform [a-zA-Z0-9]+ /, '').replace(/[;\n]/g, '');
                 if (!shader.fragmentShader.includes(name)) mbShadowOwn.push(decl);
@@ -3644,6 +3704,13 @@ export class MBMaterialPatchManager {
             if ((globalThis as any).__mbShadowHW) {
                 shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;
             }
+            // §885 终三十九g50g: mgl-faithful receiver semantics
+            // (_prelude_shadow.fragment.glsl) DEFAULT-ON after the g50g
+            // attribution — plane-bias receivers: lighting four
+            // 71.9/73.6/81.9/83.0k (−20k each vs the box-span window,
+            // new best), tunnel neutral. shadowmgl=0 reverts.
+            const mbShMgl = (globalThis as any).__mbShadowMgl === 0 ? 0 : 1;
+            shader.fragmentShader = `#define MB_SH_MGL ${mbShMgl}\n` + shader.fragmentShader;
             const mbShadowDbg4 = !!(globalThis as any).__mbShadowDbg4;
             shader.fragmentShader = tryInsert(
                 shader.fragmentShader, '#include <opaque_fragment>',

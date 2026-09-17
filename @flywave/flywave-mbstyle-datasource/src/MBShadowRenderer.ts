@@ -65,6 +65,28 @@ export interface ShadowUniformState {
     far: number;
 }
 
+// §885 终三十九g50f: Andrew monotone-chain convex hull (analytic shadow
+// footprint per caster).
+function mbConvexHull(pts: [number, number][]): [number, number][] {
+    if (pts.length < 3) return pts;
+    const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cross = (o: [number, number], a: [number, number], b: [number, number]) =>
+        (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo: [number, number][] = [];
+    for (const q of p) {
+        while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop();
+        lo.push(q);
+    }
+    const up: [number, number][] = [];
+    for (let i = p.length - 1; i >= 0; i--) {
+        const q = p[i];
+        while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop();
+        up.push(q);
+    }
+    lo.pop(); up.pop();
+    return lo.concat(up);
+}
+
 export class MBShadowRenderer {
     // §530: independent-context depth pass renderer + CanvasTexture回流.
     private m_shRenderer: THREE.WebGLRenderer | null = null;
@@ -500,6 +522,85 @@ export class MBShadowRenderer {
         }
     }
 
+    /**
+     * §885 终三十九g50f: CPU-rasterized analytic ground-shadow mask.
+     * Every caster vertex v casts to ground = v + t·lightDir with
+     * t = (groundZ − v.z)/lightDir.z (>0); the caster's shadow footprint is
+     * the convex hull of {v, shadow(v)} projected through m_matrix. White
+     * background (lit), black hulls (shadowed) — receivers sample .r
+     * directly as the lit factor. Rebuilt every ~120 frames (fixtures are
+     * static; the first frames matter for the idle-poke windows).
+     */
+    private buildAnalyticMask(eye: THREE.Vector3, size: number): void {
+        const dirRaw = (this as any).__mbShLightDir as THREE.Vector3 | undefined;
+        // §885 终三十九g50g fix: ls.dir points TOWARD the light (z>0,
+        // NdotL convention) — the light TRAVEL direction is its negation.
+        const dir = dirRaw ? (dirRaw.z < 0 ? dirRaw : dirRaw.clone().negate()) : undefined;
+        if (!dir || dir.z >= -1e-4) return;
+        const tick = ((this as any).__mbAnaTick = ((this as any).__mbAnaTick ?? 0) + 1);
+        if (this.m_analyticTex && tick % 120 !== 1) return;
+        const groundZ = -eye.z;
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = size;
+        const ctx = cv.getContext('2d');
+        if (!ctx) return;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, size, size);
+        ctx.fillStyle = '#000000';
+        const v = new THREE.Vector3();
+        const u4 = new THREE.Vector4();
+        let meshN = 0;
+        for (const obj of shadowCasters) {
+            obj.updateWorldMatrix?.(true, false);
+            obj.traverse((o: any) => {
+                const g = o.geometry;
+                const pos = g?.attributes?.position;
+                if (!pos) return;
+                meshN++;
+                const stride = Math.max(1, Math.floor(pos.count / 4000));
+                const pv: [number, number][] = [];
+                for (let i = 0; i < pos.count; i += stride) {
+                    v.set(pos.array[3 * i], pos.array[3 * i + 1], pos.array[3 * i + 2])
+                        .applyMatrix4(o.matrixWorld);
+                    pv.push(...this.analyticProject(v, dir, groundZ, u4, size));
+                    const t = (groundZ - v.z) / dir.z;
+                    if (t > 0) {
+                        v.x += t * dir.x; v.y += t * dir.y; v.z = groundZ;
+                        pv.push(...this.analyticProject(v, dir, groundZ, u4, size));
+                    }
+                }
+                if (pv.length < 3) return;
+                const hull = mbConvexHull(pv);
+                if (hull.length < 3) return;
+                ctx.beginPath();
+                hull.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+                ctx.closePath();
+                ctx.fill();
+            });
+        }
+        const img = ctx.getImageData(0, 0, size, size);
+        const tex = new THREE.DataTexture(
+            new Uint8Array(img.data), size, size, THREE.RGBAFormat);
+        tex.magFilter = THREE.LinearFilter;
+        tex.minFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        tex.flipY = false;
+        tex.needsUpdate = true;
+        this.m_shTex = tex;
+        this.m_shTex1 = null;
+        (globalThis as any).__mbShadowAnalyticOn = 1;
+        (globalThis as any).__mbShadowAnalyticInfo = { meshes: meshN, groundZ: +groundZ.toFixed(2) };
+    }
+
+    /** world point → m_matrix uv → canvas pixels (GL orientation, y flipped). */
+    private analyticProject(
+        v: THREE.Vector3, _dir: THREE.Vector3, _groundZ: number,
+        u4: THREE.Vector4, size: number): [number, number][] {
+        u4.set(v.x, v.y, v.z, 1).applyMatrix4(this.m_matrix);
+        if (!Number.isFinite(u4.w) || Math.abs(u4.w) < 1e-9) return [];
+        return [[(u4.x / u4.w) * size, (1 - u4.y / u4.w) * size]];
+    }
+
     private prepGroundQuad(center: THREE.Vector3, radius: number, eye: THREE.Vector3): void {
         this.ensureGroundQuad();
         // 终五十八: m_groundUniforms appears only after the quad's first
@@ -881,6 +982,9 @@ export class MBShadowRenderer {
         {
             // §885 终二百二十三: feed the depth-pass normal-offset uniforms.
         const depthMat = (this.m_depthMaterial as THREE.ShaderMaterial);
+        // §885 终三十九g50f: the analytic ground-shadow mask needs the final
+        // (post κ/shaz/clamp) light axis — store it for buildAnalyticMask.
+        (this as any).__mbShLightDir = lightDir.clone();
         if (depthMat.uniforms?.uMBLightDir) {
             depthMat.uniforms.uMBLightDir.value.copy(lightDir).normalize();
         }
@@ -1587,16 +1691,35 @@ export class MBShadowRenderer {
             // av=F is SCALAR multiply): Mtexel = clip·(res/2); F=floor(Mtexel);
             // z_clip = −fract(Mtexel)·(2/res); L' = translate(z_clip)·L.
             // Aligns the light-space center to texel boundaries (no shimmer).
-            if ((globalThis as any).__mbShTexelSnap) {
-                const O = mbShadowRes() / 2;
-                const Mc = new THREE.Vector4(sphereCenter.x, sphereCenter.y, sphereCenter.z, 1)
-                    .applyMatrix4(this.m_matrix);
+            // §885 终三十九g50g: mgl ALWAYS snaps (shadow_renderer.ts:779
+            // "Move light camera in discrete steps") — default-on with the
+            // plane-bias bundle (−20k/fixture, g50g attribution);
+            // shadowmgl=0 reverts both.
+            if ((globalThis as any).__mbShTexelSnap
+                || (globalThis as any).__mbShadowMgl !== 0) {
+            const O = mbShadowRes() / 2;
+            const Mc = new THREE.Vector4(sphereCenter.x, sphereCenter.y, sphereCenter.z, 1)
+                .applyMatrix4(this.m_matrix);
                 const zx = -(Mc.x * O - Math.floor(Mc.x * O)) / O;
                 const zy = -(Mc.y * O - Math.floor(Mc.y * O)) / O;
                 const zz = -(Mc.z * O - Math.floor(Mc.z * O)) / O;
                 this.m_matrix.premultiply(new THREE.Matrix4().makeTranslation(zx, zy, zz));
             }
         }
+        // §885 终三十九g50f: analytic ground-shadow mask (shadowanalytic=1)
+        // — project every caster vertex along the light axis onto the
+        // receiver ground plane, hull per caster, fill black over white in
+        // the SAME m_matrix frame the receivers sample. Replaces the
+        // shadow-map depth compare entirely (no 16-bit pack, no bias, no
+        // acne); the mask bakes the geometrically-true shadow footprint.
+        if ((globalThis as any).__mbShadowAnalytic) {
+            try {
+                this.buildAnalyticMask(eye, size);
+            } catch (e) {
+                (globalThis as any).__mbShadowAnalyticErr = String(e);
+            }
+        }
+
         // §885 终二六七: one-shot composition probe — the model receivers see
         // a ZERO-LINEAR m_matrix (uv constant out-of-bounds ⇒ everything lit).
         {
@@ -1762,7 +1885,8 @@ export class MBShadowRenderer {
                 }
                 // §885 终三〇八: texel snap for the RAW cascade-0 (the model
                 // tail's primary map) — same formula, own matrix.
-                if ((globalThis as any).__mbShTexelSnap) {
+                if ((globalThis as any).__mbShTexelSnap
+                    || (globalThis as any).__mbShadowMgl !== 0) {
                     const OR = mbShadowRes() / 2;
                     const McR = new THREE.Vector4(sphereCenter.x, sphereCenter.y, sphereCenter.z, 1)
                         .applyMatrix4(this.m_matrixR0);

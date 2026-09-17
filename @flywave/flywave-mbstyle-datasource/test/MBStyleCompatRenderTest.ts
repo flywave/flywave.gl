@@ -303,6 +303,19 @@ function discoverTests(): TestEntry[] {
     const shk = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shkappa="))?.slice("shkappa=".length);
     if (shk) (globalThis as any).__mbShadowKappa = Number(shk);
+    // §885 终三十九g50f: shadowanalytic=1 → analytic ground-shadow mask
+    // (CPU footprint projection, replaces shadow-map depth compare).
+    if ((window as any).__karma__?.config?.args?.includes?.("shadowanalytic=1")) {
+        (globalThis as any).__mbShadowAnalytic = 1;
+    }
+    // §885 终三十九g50g: shadowmgl=1 → mgl-faithful semantics bundle
+    // (plane-bias receivers + sRGB ground factor + always texel snap).
+    if ((window as any).__karma__?.config?.args?.includes?.("shadowmgl=1")) {
+        (globalThis as any).__mbShadowMgl = 1;
+    }
+    const msr = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shadowmglrgb="))?.slice("shadowmglrgb=".length);
+    if (msr) (globalThis as any).__mbShadowMglRgb = Number(msr);
     // §885 终一百三十六: fogshift=<x>,<y> → fogMglRange.x/y calibration offsets.
     const fs = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogshift="))?.slice("fogshift=".length);
