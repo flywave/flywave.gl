@@ -5042,6 +5042,32 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   (expected 暗区=地面全影的定量证明);全族 71 件重跑
   6,020,621 总 mismatch(其余件不含 geojson extras,不受本轮
   修复影响,与 g17 录制基线的差异为多战役累计漂移)。
+
+**㊵补24 终三十九g47(z 门修复+DIAG8——接收失效的最终形态定位)**:
+- **z 门 bug 修复**:injectGroundShadow 的采样门 `mbWP.z <= 1.0`
+  系 §692 地面平面(z=0)时代的遗产——g34 高程平面路径的采样面
+  = vMBElev+3 ≈ 8m **恒被拒绝**,g34-g39 全部"elevation-plane
+  无效/计数不随平面高度变化"之谜的真正根源。修复:海拔带
+  `mbWP.z ∈ [-1,64]`(退化射线 |z|→∞ 仍被拒)。
+- **新仪表 DIAG8**(shdiag=8):在 UV 门之前画 mbShadowUv.xyz
+  ——UV 门之前/之后的区分仪(DIAG7=block 是否执行,DIAG8=
+  uv 场,DIAG5=门后比较输入)。
+- **最终形态定位**:DIAG7 证明 block 在可见几何上执行;z 门修复
+  后 mismatch 仍逐像素同值;DIAG8 空间化:**地面 uv.y ∈ [0.62,1.00]
+  (离散台地,块状边界≈瓦片界)与墙深度足迹 uv.y∈[0,0.15]
+  永不重叠**——深度通道的墙投影与接收端地面重建在光空间存在
+  系统性偏移(帧错位/每瓦片 uniform 差异),影子深度比较永假。
+  DIAG5(z 门后)仍无像素进入=uv.x/y 越界占主导。
+- **结论固化**:lighting 四件的地面全影缺失 = 接收端光空间帧
+  错位,修复需 mgl shadow_renderer.ts 逐行移植
+  (createLightMatrix 的 light view 构建与 our ortho fit 的差异、
+  receiver ray-cast 帧、caster depth-pass 对象变换帧三者对齐)。
+  z 门修复+DIAG8 为前置基建(已入库),移植时直接复用。
+- 下一步(立项级):①对照 mgl shadow_renderer.ts createLightMatrix
+  的 light view 矩阵推导(方位/极角→基向量);②审计 depth pass
+  的对象变换帧(tile.center RTE vs absolute);③receiver 的
+  uMBShadowMatrix 与 depth pass 的 viewProj 逐元素对拍
+  (courtyard-audit 已具备读回通道)。
 - **下轮实施建议(次序)**:①解析法地面全影(中间态):geojson
   extrusion occluder 的 footprint 沿 lightDir 投影到地面平面成
   影多边形,shader 内 point-in-polygon(或预烘 Texture)对地面

@@ -3358,9 +3358,10 @@ export class MBMaterialPatchManager {
             const bVd = Number((globalThis as any).__mbShadowBias ?? 0.0002);
             const d5d = (globalThis as any).__mbShadowDiag === '5' ? 1 : 0;
             const d7d = (globalThis as any).__mbShadowDiag === '7' ? 1 : 0;
+            const d8d = (globalThis as any).__mbShadowDiag === '8' ? 1 : 0;
             if (!shader.fragmentShader.includes('#define MB_SH_BIAS')) {
                 shader.fragmentShader =
-                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n`
+                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n#define MB_SH_DIAG8 ${d8d}\n`
                     + shader.fragmentShader;
             }
             // §885 终三十九g37: MB_SH_ELEVVIS must ALWAYS be defined for
@@ -3450,7 +3451,22 @@ export class MBMaterialPatchManager {
                         bool mbUse1 = !(abs(mbShadowUv0.x) <= 1.0 && abs(mbShadowUv0.y) <= 1.0 && mbShadowUv0.z <= 1.0);
                         vec4 mbShadowUv = mbUse1 ? mbShadowUv1 : mbShadowUv0;
                         float mbShadowDepth = 1.0;
-                        if (mbWP.z <= 1.0 &&
+                        #if MB_SH_DIAG8
+                        gl_FragColor = vec4(
+                            clamp(mbShadowUv.x, 0.0, 1.0),
+                            clamp(mbShadowUv.y, 0.0, 1.0),
+                            clamp(mbShadowUv.z, 0.0, 1.0), 1.0);
+                        #endif
+                        // §885 终三十九g47: the sample-plane gate was
+                        // 'mbWP.z <= 1.0' — written for the z=0 ground-plane
+                        // ray-cast, it silently rejected EVERY elevation-plane
+                        // receiver (g34's sample plane = vMBElev+3 ≈ 8 m > 1),
+                        // which is why the plane height never changed any
+                        // pixel (g37/g39 'vMBElev 无效' mystery). A sane
+                        // altitude band keeps the degenerate-ray rejection
+                        // (|z| → ∞ when mbRayDir.z → 0) while admitting both
+                        // ground (z=0) and elevated (z≈3-9) receivers.
+                        if (mbWP.z >= -1.0 && mbWP.z <= 64.0 &&
                             mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
                             mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
                             // §885 终一百四十六: sampler2D is an opaque type —
@@ -3552,12 +3568,13 @@ export class MBMaterialPatchManager {
                 const hwOn = (globalThis as any).__mbShadowHW ? 1 : 0;
                 const d5 = (globalThis as any).__mbShadowDiag === '5' ? 1 : 0;
                 const d7 = (globalThis as any).__mbShadowDiag === '7' ? 1 : 0;
+                const d8 = (globalThis as any).__mbShadowDiag === '8' ? 1 : 0;
                 // §885 终一百四十六: emit MB_SH_HW only when ON (an
                 // unconditional `#define MB_SH_HW 0` makes `#ifdef MB_SH_HW`
                 // TRUE — the R-only HW decode branch compiled in the default
                 // SW path). DIAG5/DIAG7 stay value-emitted and are selected
                 // with `#if`.
-                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n` + shader.fragmentShader;
+                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n#define MB_SH_DIAG8 ${d8}\n` + shader.fragmentShader;
             }
             if ((globalThis as any).__mbShadowHW) {
                 shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;
