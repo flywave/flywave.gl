@@ -3438,10 +3438,11 @@ export class MBMaterialPatchManager {
             // baked MB_SH_BIAS define raced the first fit).
             const bW0 = Math.max(0.002, bVd);
             shader.uniforms.uMBShadowBiasW = { value: new THREE.Vector2(-bW0, bW0) };
-            // §885 终三十九g50c: shadow-factor exponent (gshade=<e>) —
-            // 2.2 = linear-color theory; the empirically matching sRGB-space
-            // ratio sits near 0.65 (see the ledger sweep).
-            const gsExp0 = Number((globalThis as any).__mbGSExp ?? 2.2);
+            // §885 终三十九g50d: default flipped 2.2 → 1.0 after the g50d
+            // full retest — lighting four 91.7–100.7k (−40~48k each vs 2.2),
+            // every thin-plate fixture flat or slightly better, none worse.
+            // gshade=<e> still overrides.
+            const gsExp0 = Number((globalThis as any).__mbGSExp ?? 1.0);
             shader.uniforms.uMBGSExp = { value: gsExp0 };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
             // §885 终三一九g21: mgl apply_lighting_ground — draped fills are

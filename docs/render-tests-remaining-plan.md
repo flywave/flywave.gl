@@ -5206,3 +5206,25 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   ②移植 mgl shadow_receiver 完整链(depth pack 约定+receiver
   uv 帧+near=−780 packed depth 语义)作为终态;③墙面本体着色
   (extrusion 3D-lighting 链,ext3d flag 未挂到该材质)。
+
+**㊵补30 终三十九g50d(默认指数翻转 2.2→1.0——薄板件复测通过)**:
+- **g50c 待办兑现**:全部 cast-shadows 十件在 gshade=1.0 下复测
+  (runner 补 MBSTYLE_GSHEXP 管道):lighting 四件
+  **91,741/93,565/99,149/100,743**(复现 g50c 曲线最优段,对
+  默认 2.2 的 139,876/140,509/137,526/138,671 再降 40~48k/件);
+  薄板件**零回归**:shadows-tunnel 136,838(2.2:137,083)、
+  shadows-roads-depth 7,086(2.2:7,095)、road-extend-tilecover
+  186,274(2.2:187,097)、shadows-underpass 161,245(2.2:
+  168,642)、stacked-underground-roads 98,916(2.2:101,587)
+  ——全线持平或小改善。
+- **默认翻转落地**:MBMaterialPatchManager 注入种子
+  `__mbGSExp ?? 2.2` → `?? 1.0`(gshade=<e> 旋钮仍可覆盖);
+  单件冒烟(无 gshade 环境变量)验证默认路径。
+- 运维注:shadows-underpass/stacked-underground-roads 在
+  默认 180s 单测超时下必挂(SwiftShader 慢),需
+  MBSTYLE_TESTTIMEOUT=600000 才能出数(g50b"未收到结果"同因)。
+- **残余**:薄板件回归(+96k 族)与受光楔形超延伸未随指数
+  翻转消失——同源深度图帧错位,归 g50 立项的 mercator 帧
+  移植(depth-pass caster 变换帧审计+getWorldToCamera zUnit);
+  影长/帧对齐收敛后薄板件才有真修复。下一步入口=原清单
+  step②。

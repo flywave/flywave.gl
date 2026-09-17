@@ -168,6 +168,8 @@ function main() {
             ...(process.env.MBSTYLE_SHADOWOVERLAY === "0" ? ["shadowoverlay=0"] : []),
             ...(process.env.MBSTYLE_FOGMGLHEIGHT === "0" ? ["fogmglheight=0"] : []),
             ...(process.env.MBSTYLE_SHADOWBIAS ? [`shadowbias=${process.env.MBSTYLE_SHADOWBIAS}`] : []),
+            // §885 终三十九g50c: gshade=<e> → ground shadow-factor exponent.
+            ...(process.env.MBSTYLE_GSHEXP ? [`gshade=${process.env.MBSTYLE_GSHEXP}`] : []),
             ...(process.env.MBSTYLE_MODELDIRALT ? ["modeldiralt=1"] : []),
             ...(process.env.MBSTYLE_EXTDIRFLIP ? [`extdirflip=${process.env.MBSTYLE_EXTDIRFLIP}`] : []),
             ...(process.env.MBSTYLE_SPHDEG ? [`sphdeg=${process.env.MBSTYLE_SPHDEG}`] : []),
