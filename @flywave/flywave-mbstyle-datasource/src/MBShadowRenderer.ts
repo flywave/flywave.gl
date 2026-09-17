@@ -673,6 +673,40 @@ export class MBShadowRenderer {
             obj.traverse((o: any) => o.layers.enable(1));
         }
 
+        // §885 终三十九g50e (ledger g50 step②): depth-pass caster frame
+        // audit — dump each caster's matrixWorld translation + world AABB
+        // AT DEPTH-PASS TIME. Answers the frame question with numbers: are
+        // casters placed near the RTE origin (where the shadow camera and
+        // the receivers sample) or at absolute world coords (~1e7, where
+        // the ortho fit + float32 vertex precision both break)? Gate:
+        // shcastaudit=1.
+        if ((globalThis as any).__mbShCastAudit
+            && ((this as any).__mbCastAuditN ?? 0) < 3) {
+            (this as any).__mbCastAuditN = ((this as any).__mbCastAuditN ?? 0) + 1;
+            const rows: any[] = [];
+            for (const obj of shadowCasters) {
+                obj.updateWorldMatrix?.(true, false);
+                const p = new THREE.Vector3().setFromMatrixPosition(obj.matrixWorld);
+                const b = new THREE.Box3().setFromObject(obj);
+                rows.push({
+                    type: (obj as any).type, kids: obj.children.length,
+                    pos: [+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)],
+                    min: b.isEmpty() ? null : [+b.min.x.toFixed(2), +b.min.y.toFixed(2), +b.min.z.toFixed(2)],
+                    max: b.isEmpty() ? null : [+b.max.x.toFixed(2), +b.max.y.toFixed(2), +b.max.z.toFixed(2)],
+                    posArr: +(obj as any).position?.x?.toFixed(2),
+                    matAuto: (obj as any).matrixAutoUpdate,
+                });
+                if (rows.length >= 8) break;
+            }
+            const rteA = (this.m_mapView as any).getRteCamera?.();
+            // eslint-disable-next-line no-console
+            console.log('[MBCastAudit] n=' + (this as any).__mbCastAuditN
+                + ' casters=' + shadowCasters.size
+                + ' rteEye=' + (rteA ? Array.from(rteA.position.toArray()).map((x: number) => +x.toFixed(2)).join(',') : 'none')
+                + ' ' + JSON.stringify(rows));
+            (globalThis as any).__mbShCastAuditData = rows;
+        }
+
         // §530: independent WebGL CONTEXT for the depth pass. Rendering into
         // an RT of the main context — even just bind+clear — deterministically
         // darkens the subsequent main render on SwiftShader (§522–§529
@@ -792,7 +826,21 @@ export class MBShadowRenderer {
         // the per-degree sweep argmin centers the scene in the map and
         // calibrates the shadow-camera azimuth convention in one batch.
         {
-            // §885 终二七二: under shbfix the shadow light axis carries a
+            // §885 终三十九g50e (ledger g50 step②): shkappa=<k> → scale the
+        // shadow light axis's horizontal components. The scene frame is
+        // anisotropic (1 horizontal unit = cos(lat) ground meters, Munich
+        // ≈0.669) while ls.dir's meter-frame geometry projects shadows κ
+        // times too long when sampled in scene units (g49: lit wedge
+        // over-blacked, thin-plate offsets). k=cos(lat) shortens, 1/cos(lat)
+        // lengthens — A/B decides the sign.
+        {
+            const sk = Number((globalThis as any).__mbShadowKappa ?? 1);
+            if (Number.isFinite(sk) && sk !== 1 && lightDir) {
+                lightDir = new THREE.Vector3(
+                    lightDir.x * sk, lightDir.y * sk, lightDir.z).normalize();
+            }
+        }
+        // §885 终二七二: under shbfix the shadow light axis carries a
             // fixed +90° world-Z rotation (empirically centers the scene in
             // the light frustum: fragZ 0.47-0.79 mid-range) plus the sweep
             // delta. Legacy path stays unrotated.

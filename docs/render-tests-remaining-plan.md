@@ -5228,3 +5228,33 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   移植(depth-pass caster 变换帧审计+getWorldToCamera zUnit);
   影长/帧对齐收敛后薄板件才有真修复。下一步入口=原清单
   step②。
+
+**㊵补31 终三十九g50e(step② 审计落地:caster 帧排除+κ 旋钮渐近定性)**:
+- **caster 帧审计(shcastaudit=1 新旋钮)**:shadows-tunnel 73 casters
+  在深度 pass 时刻逐帧导出 matrixWorld 平移+世界 AABB:全部
+  近 RTE 原点(pos≈(169,149,−25.6),rteEye=(0,0,0),AABB z
+  [−51.2,−25.5]),三帧读数逐位相同——**depth-pass caster 帧
+  与主渲染放置值一致,绝对帧/时序错位排除**(g50 step② 审计
+  项关闭:问题不在 caster 侧帧)。
+- **κ 校正 A/B(shkappa=<k> 新旋钮,lightDir 水平分量×k)**:
+  shadows-tunnel + elevated-symbols-lighting 族扫描(默认仍 1,
+  零默认变化):
+  | k | lighting(3件) | tunnel |
+  | 1.0(基线) | 91,741/93,565/99,149 | 136,838 |
+  | 0.669 | 86,801/88,793/97,043 | 136,262 |
+  | 0.45 | 83,596/85,535/93,786 | 135,199 |
+  | 0.3 | 80,976/82,788/91,168 | 134,768 |
+  | 0.15 | 78,326/80,079/87,949 | 134,595 |
+- **定性**:κ 响应真实(方向=缩短影长,与 g49 楔形超延伸
+  判断一致)但**渐进无锁定**——每档 −2~5k 衰减,无极小值;
+  tunnel 在 ~134.6k 平台化。κ 不是对齐机制,只是次级调制。
+  k→cos(lat)=0.669 的几何假设被否定(若是真帧换算应在
+  0.669 处出现突变/锁定)。
+- **排除法收敛(g50 残余定位)**:caster 帧✓(本轮)、bias✓
+  (g50)、调制指数✓(g50c)、帧选择✓(g50 两帧同败)、κ✗
+  (本轮渐近)——剩余失配在**接收/深度图投影几何本身**
+  (m_matrix uv↔正交 extent 映射,或 expected 影图案与我们
+  shadow-map 图案结构性不同)。下轮入口:①用 shdiag 通道
+  对同一像素同时读深度图内容与 m_matrix 投影 uv,直测
+  uv↔texel 映射偏差;②或按 g50c 建议走解析法地面全影
+  (footprint 沿 lightDir 投影,绕开 shadow-map 采样)。

@@ -295,6 +295,14 @@ function discoverTests(): TestEntry[] {
     const gse = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("gshade="))?.slice("gshade=".length);
     if (gse) (globalThis as any).__mbGSExp = Number(gse);
+    // §885 终三十九g50e: shcastaudit=1 → depth-pass caster frame audit dump.
+    if ((window as any).__karma__?.config?.args?.includes?.("shcastaudit=1")) {
+        (globalThis as any).__mbShCastAudit = 1;
+    }
+    // §885 终三十九g50e: shkappa=<k> → shadow light-axis horizontal κ scale.
+    const shk = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shkappa="))?.slice("shkappa=".length);
+    if (shk) (globalThis as any).__mbShadowKappa = Number(shk);
     // §885 终一百三十六: fogshift=<x>,<y> → fogMglRange.x/y calibration offsets.
     const fs = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogshift="))?.slice("fogshift=".length);
