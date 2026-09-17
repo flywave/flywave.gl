@@ -1251,6 +1251,13 @@ class MBExtraVectorSourcesProvider extends DataProvider {
             sourceId: string;
             provider: DataProvider;
             maxzoom: number;
+            /** §885 终三十九g45: keep the §613 model-dedup semantics (neighbor
+             * tiles contribute modelInstances only) for vector extras; GeoJSON
+             * extras pass false — their per-tile payloads are CLIPPED per tile
+             * (filterFeaturesToTile), so the shadow-casters wall pieces that
+             * fall in neighbor tiles must merge their geometry or the 200m
+             * occluder never reaches the scene. */
+            neighborsInstancesOnly?: boolean;
         }>,
         /** True when the PRIMARY source is 512px (cell level = mgl level −1). */
         private m_primary512: boolean,
@@ -1312,13 +1319,16 @@ class MBExtraVectorSourcesProvider extends DataProvider {
                     };
                     push(bytes, x, y, false);
                     const n = 1 << lvl;
+                    // §885 终三十九g45: GeoJSON neighbors merge their clipped
+                    // geometry (see neighborsInstancesOnly above).
+                    const neighborInst = ex.neighborsInstancesOnly !== false;
                     await Promise.all([[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]].map(async ([dx,dy]) => {
                         const nx = x+dx, ny = y+dy;
                         if (nx<0||ny<0||nx>=n||ny>=n) return;
                         try {
                             const nb = await ex.provider.getTile(TileKey.fromRowColumnLevel(ny,nx,lvl), abortSignal);
                             if (typeof nb === 'string' || nb instanceof ArrayBuffer || nb instanceof Uint8Array) {
-                                push(nb, nx, ny, true);
+                                push(nb, nx, ny, neighborInst);
                             }
                         } catch {}
                     }));
@@ -1328,6 +1338,10 @@ class MBExtraVectorSourcesProvider extends DataProvider {
             }
         }));
         if (stash.length > 0) {
+            if ((globalThis as any).__mbDecodeDbg) {
+                // eslint-disable-next-line no-console
+                console.log(`[MBSrcPut] cell=${mbCellTileKeyString(tileKey)} entries=${stash.map(e => `${e.z}/${e.x}/${e.y}${e.instancesOnly ? 'i' : ''}:${e.payload ? e.payload.length : e.bytes?.byteLength}b`).join(',')}`);
+            }
             mbPendingSourceTilesPut(mbCellTileKeyString(tileKey), stash);
         }
         return await primary;
@@ -1905,6 +1919,7 @@ export class MBStyleDataSource extends TileDataSource {
                 sourceId: string;
                 provider: DataProvider;
                 maxzoom: number;
+                neighborsInstancesOnly?: boolean;
             }> = [];
             const hasPointSortKeyLayerV = ((style.layers ?? []) as any[]).some(l =>
                 l?.layout?.['circle-sort-key'] !== undefined ||
@@ -1937,6 +1952,10 @@ export class MBStyleDataSource extends TileDataSource {
                             }),
                             // GeoJSON serves every zoom (tile-bounds filtered).
                             maxzoom: 22,
+                            // §885 终三十九g45: per-tile clipped payloads must
+                            // merge geometry from neighbor tiles (shadow-casters
+                            // walls live there).
+                            neighborsInstancesOnly: false,
                         });
                     }
                     continue;

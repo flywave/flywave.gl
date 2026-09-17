@@ -1204,6 +1204,51 @@ async function renderFrames(
                                 const grandName = o.parent?.parent?.type ?? '?';
                                 samples.push(`PLATE1089 parent=${parentName}/${grandName} mwT=(${e2[12]?.toFixed?.(1)},${e2[13]?.toFixed?.(1)},${e2[14]?.toFixed?.(1)}) v0..3=${corners.join('')} bsR=${o.geometry?.boundingSphere?.radius?.toFixed?.(1)} bsC=(${o.geometry?.boundingSphere?.center?.x?.toFixed?.(1)},${o.geometry?.boundingSphere?.center?.y?.toFixed?.(1)},${o.geometry?.boundingSphere?.center?.z?.toFixed?.(1)})`);
                             }
+                            // §885 终三十九g45: full forensic for the 200m
+                            // shadow-casters wall meshes (local z span ≥150m).
+                            try {
+                                const paW = o.geometry?.attributes?.position;
+                                if (paW && paW.count > 0 && samples.length < 240) {
+                                    let zmin = Infinity;
+                                    let zmax = -Infinity;
+                                    for (let vi = 0; vi < paW.count; vi++) {
+                                        const z = paW.getZ(vi);
+                                        if (z < zmin) zmin = z;
+                                        if (z > zmax) zmax = z;
+                                    }
+                                    if (zmax - zmin > 150) {
+                                        o.updateWorldMatrix?.(true, false);
+                                        const bsW = o.geometry?.boundingSphere;
+                                        const ctrB = new THREE.Vector3();
+                                        bsW?.getCenter?.(ctrB);
+                                        const ctrA = ctrB.clone().applyMatrix4(o.matrixWorld);
+                                        const cam2 = (mapView as any).camera;
+                                        const ndc2 = ctrA.clone().project(cam2);
+                                        const e3 = o.matrixWorld?.elements ?? [];
+                                        // §885 终三十九g45: unproject the four
+                                        // corners to lng/lat (mercator frame).
+                                        const paW2 = o.geometry.attributes.position;
+                                        const Vw = new THREE.Vector3();
+                                        const R2 = 40075016.7;
+                                        const ll: string[] = [];
+                                        for (let vi = 0; vi < Math.min(2, paW2.count); vi++) {
+                                            Vw.set(paW2.getX(vi), paW2.getY(vi), paW2.getZ(vi)).applyMatrix4(o.matrixWorld);
+                                            const lng2 = (Vw.x / R2) * 360 - 180;
+                                            const nrm = Math.min(0.9999999, Math.max(0.0000001, Vw.y / R2));
+                                            const lat2 = (Math.atan(Math.tanh(Math.PI * (1 - 2 * nrm))) * 180) / Math.PI;
+                                            ll.push(`v${vi}(${lng2.toFixed(5)},${lat2.toFixed(5)},${Vw.z.toFixed(1)})`);
+                                        }
+                                        samples.push(`WALL200 vis=${o.visible} fc=${o.frustumCulled} n=${paW.count} zr=[${zmin.toFixed(1)}..${zmax.toFixed(1)}] mwT=(${e3[12]?.toFixed?.(1)},${e3[13]?.toFixed?.(1)},${e3[14]?.toFixed?.(1)}) bsR=${bsW?.radius?.toFixed?.(1)} bsC=(${ctrB.x?.toFixed?.(1)},${ctrB.y?.toFixed?.(1)},${ctrB.z?.toFixed?.(1)}) ctrW=(${ctrA.x.toFixed(1)},${ctrA.y.toFixed(1)},${ctrA.z.toFixed(1)}) ndc=(${ndc2.x.toFixed(2)},${ndc2.y.toFixed(2)},${ndc2.z.toFixed(4)}) mat=${Array.isArray(o.material) ? o.material.map((m: any) => m?.type).join('+') : o.material?.type} ro=${o.renderOrder} flip=${(globalThis as any).__mbGeoFlipStamp ?? '?'} ${ll.join(' ')}`);
+                                    }
+                                }
+                            } catch { /* probe only */ }
+                            // §885 终三十九g45: every object of the
+                            // shadow-casters layer — where is the wall MESH?
+                            const swTech: any = o.userData?.technique;
+                            if (swTech?._layerId === 'shadow-casters' && samples.length < 260) {
+                                const paS = o.geometry?.attributes?.position;
+                                samples.push(`SCAST type=${o.type} vis=${o.visible} inScene=${o.parent !== null} ro=${o.renderOrder} n=${paS?.count ?? '?'} tech=${swTech.name} enabled=${swTech.enabled} mat=${Array.isArray(o.material) ? o.material.map((m: any) => m?.type).join('+') : o.material?.type} idx=${o.geometry?.index?.count ?? 'none'} mwT=(${o.matrixWorld?.elements?.[12]?.toFixed?.(1)},${o.matrixWorld?.elements?.[13]?.toFixed?.(1)},${o.matrixWorld?.elements?.[14]?.toFixed?.(1)})`);
+                            }
                             if (samples.length < 16) {
                                 o.updateWorldMatrix?.(true, false);
                                 const e = o.matrixWorld?.elements ?? [0, 0, 0];

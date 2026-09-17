@@ -4965,3 +4965,44 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   (visible/matched 逻辑与 sourceId 匹配);②fill-extrusion 技法
   对 geojson feature 的发射(height=200);③墙渲染+caster;
   ④lighting 四件收敛验证。
+
+**㊵补22 终三十九g45(g44 断点证伪+双根因修复——邻居 instancesOnly 丢弃与 stash 64 上限逐出;墙已入场景)**:
+- **g44 的"解码未路由"结论证伪**:mocha 复现(真实 style+真实
+  MVT cell+stash 全链)证明 evaluate→fill-extrusion→
+  emitExtrudedPolygon 全通(childMaxH=200)。浏览器探针
+  ([MBWallPoly]/[MBExtraEntry])证实 3 片墙裁剪全部 matched=1。
+- **根因①(主):邻居 extras 的 instancesOnly 丢弃几何**。§613 为
+  model 源设计的语义(邻居瓦片只并 modelInstances,防重复实例)
+  被 §644 无差别应用到 geojson extras——而 GeoJSONDataProvider
+  的 payload 按 geojson-vt 语义**逐瓦片裁剪**,墙的 4 片裁剪有 3 片
+  落在请求 cell 的邻居瓦片(中心片为空)→全部被
+  decodeTileWithSources 的 instancesOnly 分支丢弃。
+  修复:extras 增加 neighborsInstancesOnly 标志,geojson extras 的
+  邻居 inst=false(vector extras 保持 true 不变;geojson 的
+  点要素 filterFeaturesToTile 单瓦片归属无重复风险)。
+- **根因②:sticky-stash 64 上限逐出**。高 pitch 视锥每轮请求
+  ~72 个 cell(§终三一七 R4 的请求面),每 cell 一次 put;Map 按
+  插入序逐出最老——恰是**最先 put 的贴目标 cell**(最贴近片
+  18/232843/103242-3),其 stash 在解码时已被逐光
+  ([MBSrcTake] cell=18-232843-103243 stash=none 实锤)。
+  修复:上限 64→256 + take 命中时重插刷新 insertion order
+  (持续解码的 cell 永不为逐出受害者)。
+- 修复后([MBMergeOut]):三个 cell 全部 merge 且
+  wallTechIdx≥0;[SCAST] 探针实证 **extruded-polygon 墙 Mesh
+  (MeshStandardMaterial,vis=true,inScene,idx=27..54)已入场景**,
+  outline LineSegments 按 patcher 惯例隐藏(edge-radius=0)。
+- **lighting 四件**:208,659/206,475/192,702/191,211(带探针污染)
+  →190,928/189,490/154,569/154,062(净修复,−110k 总量);
+  对照干净基线 191,129/189,685/154,724/154,187 ≈ −125~−201/件。
+  墙上屏但像素贡献 ~0 的残余=着色语义(墙 MeshStandardMaterial
+  受方向光调制,expected 为近黑自阴影面)——与 g22b 的
+  "桥面全影=纯环境光"同族,属 lighting 校准战役。
+- **frame 考古存档(不影响修复)**:mocha 复现传
+  webMercatorTilingScheme.projection(15.78M 帧)而浏览器 decode
+  用 mercatorProjection(24.29M 帧)→flip 的 mocha A/B 符号与
+  浏览器相反;浏览器 flip=mvt 维持正确(xworld≈35.6M/RTE 合理)。
+  geojsonflip=0 旋钮入库(identity=null 非 0,0 是取负)。
+- 探针入库(全部 decodedbg=1 门控):[MBSrcPut]/[MBSrcTake]/
+  [MBExtraEntry]/[MBMergeOut]/[MBWallPoly]/[MBGeoJsonDec]/
+  [SCAST]/[WALL200](WALL200 含矩阵世界顶点);catch 栈打印扩展。
+  复现资产 test/MBXtraWall.tmp.test.ts(FLIP=0 env 切换)。

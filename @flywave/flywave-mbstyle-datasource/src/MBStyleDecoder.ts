@@ -94,7 +94,12 @@ const s_pendingSourceTiles = new Map<string, MBPendingSourceTile[]>();
 const s_activeSourceMergeKeys = new Set<string>();
 
 export function mbPendingSourceTilesPut(key: string, tiles: MBPendingSourceTile[]): void {
-    if (s_pendingSourceTiles.size > 64) {
+    // §885 终三十九g45: cap 64 → 256. The high-pitch 3d-intersections frustum
+    // fetches ~72 cells per camera placement; each put re-keys the same cell,
+    // but the flood STILL evicted the oldest entries — exactly the cells that
+    // decode first (nearest the camera target), so their sticky stash was
+    // gone by decode time (shadow-casters wall cell took `stash=none`).
+    if (s_pendingSourceTiles.size > 256) {
         const oldest = s_pendingSourceTiles.keys().next().value;
         if (oldest !== undefined) s_pendingSourceTiles.delete(oldest);
     }
@@ -112,7 +117,14 @@ export function mbPendingSourceTilesPut(key: string, tiles: MBPendingSourceTile[
  * mbPendingSourceTilesClear() when a style (re)wires its sources.
  */
 export function mbPendingSourceTilesTake(key: string): MBPendingSourceTile[] | undefined {
-    return s_pendingSourceTiles.get(key);
+    const hit = s_pendingSourceTiles.get(key);
+    if (hit !== undefined) {
+        // §885 终三十九g45: refresh insertion order on every hit — a cell
+        // that keeps decoding must never be the cap's oldest victim.
+        s_pendingSourceTiles.delete(key);
+        s_pendingSourceTiles.set(key, hit);
+    }
+    return hit;
 }
 
 /** §643: epoch reset — called when a datasource (re)wires its extras so a
@@ -609,6 +621,10 @@ class MBStyleDataProcessor implements IGeometryProcessor {
             this.m_zoom, 'polygon', this.getFeatureState(featureId), this.m_pitch, this.m_brightness,
             this.m_worldview, this.m_center,
         );
+        if ((globalThis as any).__mbDecodeDbg && effectiveSourceId === 'shadow-casters') {
+            // eslint-disable-next-line no-console
+            console.log(`[MBWallPoly] layer=${layer} src=${effectiveSourceId} matched=${matched.length} types=[${matched.map(l => l.type).join(',')}] coords0=${JSON.stringify(coords)} geom0rings=${geometry[0]?.rings?.length} ring0n=${geometry[0]?.rings?.[0]?.length}`);
+        }
         if (matched.length === 0 || !this.m_emitter) return;
         // §841b one-shot: why do z6 overscale fill features match nothing?
         if (layer === 'country_boundaries' && !(globalThis as any).__mbCbProbe) {
@@ -1150,6 +1166,10 @@ export class MBStyleDecoder extends ThemedTileDecoder {
         const cellKeyStr = mbCellTileKeyString(tileKey);
         if (mergeDepth < 2 && !s_activeSourceMergeKeys.has(cellKeyStr)) {
             const pendingSources = mbPendingSourceTilesTake(cellKeyStr);
+            if ((globalThis as any).__mbDecodeDbg) {
+                // eslint-disable-next-line no-console
+                console.log(`[MBSrcTake] cell=${cellKeyStr} depth=${mergeDepth} stash=${pendingSources?.length ?? 'none'}`);
+            }
             if (pendingSources && pendingSources.length > 0) {
                 s_activeSourceMergeKeys.add(cellKeyStr);
                 try {
@@ -1295,7 +1315,21 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 processor.setMvtYOffset(scale - 2 * top);
                 const geoJson = JSON.parse(data);
                 const normalized = MBStyleDecoder.normalizeGeoJson(geoJson);
+                if ((globalThis as any).__mbDecodeDbg) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBGeoJsonDec] tile=${tileKey.level}/${tileKey.column}/${tileKey.row} bytes=${data.length} feats=${normalized?.features?.length ?? '?'} canProcess=${this.m_geoJsonAdapter.canProcess(normalized)} src=${this.m_currentSourceId} zoom=${zoom} hd=${this.m_styleUsesHdElevation}`);
+                }
                 if (this.m_geoJsonAdapter.canProcess(normalized)) {
+                    // §885 终三十九g45 A/B knob: geojsonflip=0 disables the
+                    // MVT-style y flip for this branch (browser A/B decides).
+                    // NOTE: identity is null — offset 0 would negate y.
+                    if ((window as any).__karma__?.config?.args?.some?.((a: string) =>
+                        a === 'geojsonflip=0')) {
+                        processor.setMvtYOffset(null);
+                        (globalThis as any).__mbGeoFlipStamp = 'identity';
+                    } else {
+                        (globalThis as any).__mbGeoFlipStamp = 'mvt';
+                    }
                     if (this.m_styleUsesHdElevation) {
                         this.prepareElevationPass(tileKey, zoom, processor, emitter);
                         this.m_geoJsonAdapter.process(normalized, decodeInfo, this.m_elevationPassProcessor!);
@@ -1319,9 +1353,9 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 }
             }
         } catch (e) {
-            if ((globalThis as any).__mbDecodeErr) {
+            if ((globalThis as any).__mbDecodeErr || (globalThis as any).__mbDecodeDbg) {
                 // eslint-disable-next-line no-console
-                console.error('[MBDecodeErr]', tileKey.level, tileKey.column, tileKey.row, String((e as any)?.message ?? e));
+                console.error('[MBDecodeErr]', tileKey.level, tileKey.column, tileKey.row, String((e as any)?.message ?? e), (e as any)?.stack?.split('\n').slice(0, 4).join(' | '));
             }
             injectBackground();
             return emitter.getDecodedTile();
@@ -1443,6 +1477,10 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                         (ex.payload ?? ex.bytes) as any, exKey, undefined as any,
                         projection, zoom, mergeDepth + 1);
                     if (!child) continue;
+                    if ((globalThis as any).__mbDecodeDbg) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBExtraEntry] src=${ex.sourceId} z=${ex.z} x=${ex.x} y=${ex.y} inst=${ex.instancesOnly} pl=${ex.payload?.length ?? 'bin'} childTechs=${child.techniques.length} childGeos=${child.geometries?.length ?? 0} childMaxH=${(child.maxGeometryHeight ?? 0).toFixed(1)} techNames=${child.techniques.map(t => (t as any).name).join('|')}`);
+                    }
                     if (ex.instancesOnly) {
                         const childAny0 = child as any;
                         if (childAny0.modelInstances?.length) {
@@ -1515,6 +1553,11 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                 } finally {
                     this.m_currentSourceId = savedSourceId;
                 }
+            }
+            if ((globalThis as any).__mbDecodeDbg) {
+                const wallTech = out.techniques.findIndex(t => (t as any).name === 'extruded-polygon' && (t as any)._layerId === 'shadow-casters');
+                // eslint-disable-next-line no-console
+                console.log(`[MBMergeOut] cell=${tileKey.level}-${tileKey.column}-${tileKey.row} outGeos=${out.geometries.length} outTechs=${out.techniques.length} outMaxH=${(out.maxGeometryHeight ?? 0).toFixed(1)} wallTechIdx=${wallTech}`);
             }
         } finally {
             this.m_currentSourceId = savedSourceId;
