@@ -1998,8 +1998,16 @@ export class MBMaterialPatchManager {
                 // no-cross-beams 42,206→160,639 (see 终三十九g34 notes).
                 // g36: re-enable via elevplane=1; elevvis=1 paints vMBElev as
                 // a grayscale gradient (attribute chain verification).
+                // §885 终三十九g50k (mgl ELEVATED_ROADS port, fill.vertex.glsl:
+                // 35-53): the light-space sample position MUST come from the
+                // fragment's true per-vertex z (v_pos_light_view = light_matrix
+                // · vec4(a_pos, z_offset)) — ray-casting a single ground plane
+                // misplaces every elevated fragment's shadow sample (the
+                // shadows-tunnel trench sits 25 units below the assumed
+                // ground). DEFAULT ON now; mathematically identical for flat
+                // data (vMBElev − eye.z == −eye.z). elevplane=0 reverts.
                 (material as any).__mbElevPlane =
-                    (globalThis as any).__mbElevPlane === true;
+                    (globalThis as any).__mbElevPlane !== false;
                 (material as any).__mbElevVis =
                     (globalThis as any).__mbElevPlane &&
                     (globalThis as any).__mbElevVis === true;
