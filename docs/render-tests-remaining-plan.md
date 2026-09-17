@@ -5328,3 +5328,30 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   (mgl ground quad: shadow mix→fog mix 同色域);②tilecover
   双稳态归因;③薄板件结构性失配(134k 平台)仍是最大块,
   入口=shdiag 同像素 uv/texel 直测。
+
+**㊵补34 终三十九g50i(shdiag 直测定性——薄板件 134k 平台主要是非影子基线失配)**:
+- **方法**:shadows-tunnel + shdumpseries 采集 shadow-depth-canvas
+  (frame 60,1024²)+shmat-compose(mMatrix/proj/viewInv/lr)+
+  recv-mat-audit+courtyard-audit;离线做像素级闭合:expected
+  影区像素→NDC→(uMBInvViewProj)RTE 世界→(mMatrix)uv→深度图
+  texel,以及暗区符号化分解。
+- **发现①(定性改写)**:期望暗区(<120)仅 12,866 px(质心
+  443,397 右下),我们全图散布 74,073 px 过暗+75,742 px 过亮
+  ——失配不是 texel 级偏移,是图案+颜色结构性差异。关键对照:
+  **road-extend-tilecover-no-shadows 基线=163,814**——本夹具族
+  关影子都有 16 万级 mismatch,tunnel 的 134k 平台大部分是
+  **非影子基线失配**(fill/road 着色、fog、构图),影子路径的
+  残余贡献只有 ~1-2 万级。**"完全对齐"3d-intersections 的
+  主矛盾从此转移到族基线渲染,影子对齐已接近其贡献下限。**
+- **发现②(覆盖几何)**:光相机正交半径 ±43.02 场景单位
+  (lr 读数),caster 联合 AABB 跨 490 单位、可见地图 ~500 单位
+  ——深度图只覆盖中心 ~17% 窗口;窗外 uv 出界→门拒绝→lit
+  (与 mgl 单 cascade 语义一致)。窗口内地板/桥面自身在
+  polar50° 下投影大面积本影=74k 过暗的来源之一。
+- **发现③(工具缺陷)**:recv-mat-audit 的 uMBInvViewProj 快照
+  在帧 1 采集时第三列全零(退化)——审计通道需改采后期帧
+  (live 值正常,影子在渲染);待修。
+- **下轮(按新主矛盾)**:①族基线失配拆解:tunnel 关影子
+  (shadowdisable=1)跑基线,把 134k 分解为影子项 vs 基线项;
+  ②基线项按 mgl draw_fill/road 着色链逐项对照(新对齐表);
+  ③修 recv-mat-audit 采集时序。
