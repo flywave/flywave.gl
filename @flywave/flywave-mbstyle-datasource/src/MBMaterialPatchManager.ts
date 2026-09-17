@@ -307,6 +307,33 @@ export class MBMaterialPatchManager {
                                 // eslint-disable-next-line no-console
                                 console.log(`[MBRf2] inst=${inst} n=${cnt} int=${u.uMBShadowIntensity.value} gc0=(${g0.x.toFixed(1)},${g0.y.toFixed(1)},${g0.z.toFixed(1)}) m00=${(u.uMBShadowMatrix.value as THREE.Matrix4)?.elements[0]?.toExponential(2)}`);
                             }
+                            // §885 终三十九g48: one-shot receiver-matrix dump —
+                            // the exact uMBShadowMatrix/uMBInvViewProj the
+                            // ground receiver samples with, for the g48 对拍
+                            // against the depth-pass m_matrix.
+                            if (cnt === 60 && !(MBMaterialPatchManager as any).__mbRecvMatDumped) {
+                                (MBMaterialPatchManager as any).__mbRecvMatDumped = true;
+                                try {
+                                    const f8 = (m: any) => m ? Array.from(m.elements).map((v: number) => +v.toPrecision(9)) : null;
+                                    const fb8 = (globalThis as any).__mbShadowFeedbackUrl
+                                        ?? (window as any).__karma__?.config?.args
+                                            ?.find?.((a: string) => a.startsWith('feedback-url='))
+                                            ?.slice('feedback-url='.length);
+                                    if (fb8) {
+                                        fetch(`${fb8}/mb-probe-dump`, {
+                                            method: 'POST',
+                                            headers: { 'content-type': 'application/json' },
+                                            body: JSON.stringify({
+                                                probe: 'recv-mat-audit',
+                                                uMBShadowMatrix: f8(u.uMBShadowMatrix?.value),
+                                                uMBInvViewProj: f8(u.uMBInvViewProj?.value),
+                                                intensity: u.uMBShadowIntensity?.value,
+                                                factor: u.uMBGroundShadowFactor?.value ? Array.from(u.uMBGroundShadowFactor.value.toArray ? u.uMBGroundShadowFactor.value.toArray() : []) : null,
+                                            }),
+                                        }).catch(() => { });
+                                    }
+                                } catch { /* probe only */ }
+                            }
                         }
                         u.uMBShadowMap.value = shadowState?.map ?? null;
                         if (shadowState) {
@@ -3355,7 +3382,7 @@ export class MBMaterialPatchManager {
             // carries MB_SH_BIAS/DIAG5/DIAG7 (their absence failed compilation
             // wholesale: lines/ground fills vanished). Identical-text
             // redefinition (when the fill path also emitted them) is benign.
-            const bVd = Number((globalThis as any).__mbShadowBias ?? 0.0002);
+            const bVd = Number((globalThis as any).__mbShadowBias ?? (globalThis as any).__mbShadowBiasAuto ?? 0.0002);
             const d5d = (globalThis as any).__mbShadowDiag === '5' ? 1 : 0;
             const d7d = (globalThis as any).__mbShadowDiag === '7' ? 1 : 0;
             const d8d = (globalThis as any).__mbShadowDiag === '8' ? 1 : 0;
@@ -3430,7 +3457,14 @@ export class MBMaterialPatchManager {
             // FRAGMENT'S OWN ELEVATION (aMBElev) instead of the ground plane
             // z=0 — decks at 5-6 m sample the shadow map where the upper
             // structures actually occlude the sun.
-            const mbRayPlane = (material as any).__mbElevPlane ? 'vMBElev + 3.0' : '0.0';
+            // §885 终三十九g48: the ray-cast now runs in the RTE frame (the
+            // getShadowUniforms invViewProj switched to the rteCamera) — the
+            // sample planes are ALTITUDE − eye.z: ground ≈ −eye.z, elevated
+            // fills at their own vMBElev. uMBEye = the absolute eye (z =
+            // camera altitude).
+            const mbRayPlane = (material as any).__mbElevPlane
+                ? '(vMBElev - uMBEye.z)'
+                : '(-uMBEye.z)';
             const mbShadowSample = `
                         vec2 mbSUV2 = gl_FragCoord.xy / max(uMBRes, vec2(1.0)) * 2.0 - 1.0;
                         vec4 mbRayFar = uMBInvViewProj * vec4(mbSUV2, 1.0, 1.0);
@@ -3457,16 +3491,14 @@ export class MBMaterialPatchManager {
                             clamp(mbShadowUv.y, 0.0, 1.0),
                             clamp(mbShadowUv.z, 0.0, 1.0), 1.0);
                         #endif
-                        // §885 终三十九g47: the sample-plane gate was
-                        // 'mbWP.z <= 1.0' — written for the z=0 ground-plane
-                        // ray-cast, it silently rejected EVERY elevation-plane
-                        // receiver (g34's sample plane = vMBElev+3 ≈ 8 m > 1),
-                        // which is why the plane height never changed any
-                        // pixel (g37/g39 'vMBElev 无效' mystery). A sane
-                        // altitude band keeps the degenerate-ray rejection
-                        // (|z| → ∞ when mbRayDir.z → 0) while admitting both
-                        // ground (z=0) and elevated (z≈3-9) receivers.
-                        if (mbWP.z >= -1.0 && mbWP.z <= 64.0 &&
+                        // §885 终三十九g47→g48: in the RTE frame every
+                        // receiver plane sits at negative z (ground =
+                        // -uMBEye.z); the gate only rejects degenerate rays
+                        // (mbWP.z → ±∞ when mbRayDir.z → 0). The interim g47
+                        // band [-1,64] was derived in the absolute frame and
+                        // rejected the whole RTE ground — reverted to the
+                        // original guard.
+                        if (mbWP.z <= 1.0 &&
                             mbShadowUv.x >= 0.0 && mbShadowUv.x <= 1.0 &&
                             mbShadowUv.y >= 0.0 && mbShadowUv.y <= 1.0 && mbShadowUv.z <= 1.0) {
                             // §885 终一百四十六: sampler2D is an opaque type —
@@ -3564,7 +3596,7 @@ export class MBMaterialPatchManager {
             }
             shader.fragmentShader = mbShadowOwn.join('') + shader.fragmentShader;
             {
-                const bV = Number((globalThis as any).__mbShadowBias ?? 0.0002);
+                const bV = Number((globalThis as any).__mbShadowBias ?? (globalThis as any).__mbShadowBiasAuto ?? 0.0002);
                 const hwOn = (globalThis as any).__mbShadowHW ? 1 : 0;
                 const d5 = (globalThis as any).__mbShadowDiag === '5' ? 1 : 0;
                 const d7 = (globalThis as any).__mbShadowDiag === '7' ? 1 : 0;

@@ -5068,6 +5068,52 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   的对象变换帧(tile.center RTE vs absolute);③receiver 的
   uMBShadowMatrix 与 depth pass 的 viewProj 逐元素对拍
   (courtyard-audit 已具备读回通道)。
+
+**㊵补25 终三十九g48(三步清单实施——对拍实锤 Bug A/B,RTE 修复落地,墙影首次上屏)**:
+- **step1 createLightMatrix 对照**(vendored 3d-style/render/
+  shadow_renderer.ts:678):球拟合公式逐行一致(k/centerDepth/
+  lxjk);差异=mgl 在 mercator 归一化帧构光视图
+  (cameraToWorldMercator + getWorldToCamera(ws, pixelsPerMeter)),
+  我们在引擎场景帧(κ≈1/cos(lat) 各向异性);near 语义 ours
+  缺 zoom17 min 项(次要);shadowDirection=指向太阳
+  (sphericalPositionToCartesian a=az+90°),[3.5,50]→
+  (−0.047,+0.765,+0.643)=光从北 → 影向南 ✓ 与 expected 吻合。
+- **step3 对拍实锤(courtyard-audit+recv-mat-audit 双通道)**:
+  ①uMBShadowMatrix(接收器)与 m_matrix(depth pass)逐元素
+  **相同**(共享活对象)——矩阵无分歧;②**uMBInvViewProj 第
+  3/4 列含 −17.8M/+17.8M = 绝对世界帧**!ray-cast 重建的
+  mbWP≈35.6M 坐标,m_matrix(RTE 拟合,平移列 0.316/0.964)
+  映射后 uv 全越界→门全拒→接收器恒亮。**Bug A=接收帧错位**
+  实锤;③m_matrix 投影 box-center uv.x=1.503(出界),wall-top
+  uv=(1.45,2.63,0.91)——**Bug B=正交框偏心**,caster 盒大部分
+  在深度图外。
+- **修复落地**:①getShadowUniforms 的 invViewProj 改用
+  rteCamera(+projectionMatrixInverse 现场重算,终三十一先例)
+  →mbWP 进 RTE 帧;②ray 采样面改 RTE 语义
+  (elev: vMBElev−uMBEye.z / 非 elev: −uMBEye.z);③DIAG8 证实
+  修复后地面 UV 场连续且落入墙足迹带(uv.y 0.04-0.06 与深度图
+  左上墙块重叠)——**影子首次真正落地**。
+- **自动 bias(Bug C=深度精度痤疮)**:16-bit 量子
+  =(far−near)/65536≈0.021,legacy 0.0002 远低于 1 量子→全表面
+  自影痤疮。bias 扫描:0.03/0.06/0.12/0.2/0.35 → lighting 对
+  单调改善至 137.7-140.4k(0.2 最优,−50k/件)。**自动 bias=
+  clamp((boxSpanZ−100)/range, 0.0002, 0.3)**:200m 墙件
+  span 272-318→0.12+,薄板件(span≤76)→legacy 0.0002。
+- **效果与代价(12 件 cast-shadows 全量对照)**:lighting 四件
+  190,928/189,490/154,569/154,062 → **139,876/140,509/137,526/
+  138,671(−133k,−50k/件 −15~−17k terrain 对)**;但薄板件回归:
+  road-extend-tilecover +9.4k / shadows-roads-depth +18.7k /
+  shadows-tunnel +40.0k(shadows-underpass/stacked 本轮未收到
+  结果,预计 +10~30k)——其旧影系绝对帧错位下的"巧合对齐",
+  RTE 修正暴露深度图帧真实偏移。净 −40k±20。
+- **残余定性**:墙影已落地但深度图帧对齐仍欠(墙足迹 uv.y
+  [0,0.15] vs 地面影带理论位置;薄板件回归同源)——即
+  Bug B(正交框偏心)与深度 pass 帧的最终移植。方向已验证
+  (RTE 帧落地即影子出现),移植完成预期 lighting 四件再收敛
+  50-80k/件,薄板件回归同步消除。
+- 旋钮/资产:shadowbias(手动覆盖)>__mbShadowBiasAuto(自动);
+  recv-mat-audit/depth-matrix 对拍通道;g47 band 已撤(RTE 下
+  原门语义自洽)。
 - **下轮实施建议(次序)**:①解析法地面全影(中间态):geojson
   extrusion occluder 的 footprint 沿 lightDir 投影到地面平面成
   影多边形,shader 内 point-in-polygon(或预烘 Texture)对地面

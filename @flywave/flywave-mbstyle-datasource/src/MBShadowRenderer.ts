@@ -195,8 +195,19 @@ export class MBShadowRenderer {
         // ray-cast (uMBInvViewProj). matrixWorld·projectionMatrixInverse maps
         // NDC (±1) back to world; recomputed each read so the per-frame
         // camera move never desynchronizes the receivers.
-        const cam = this.m_mapView?.camera as THREE.PerspectiveCamera | undefined;
+        // §885 终三十九g48: MUST be the RTE camera — the shadow m_matrix is
+        // fitted in the RTE frame (translation ~±1), so a ray-cast through
+        // the ABSOLUTE logical camera produced mbWP ≈ 3.5e7-world coordinates
+        // that m_matrix mapped far outside [0,1] (every receiver gate
+        // rejected; shrad sweeps changed nothing). Same disease the ground
+        // quad already fixed at 终二十七 (its comment block below).
+        const rteCamU = (this.m_mapView as any).getRteCamera?.() as THREE.PerspectiveCamera | undefined;
+        const cam = rteCamU ?? this.m_mapView?.camera as THREE.PerspectiveCamera | undefined;
         if (cam) {
+            cam.updateMatrixWorld?.();
+            // §885 终三十一 lesson: the rteCam's projectionMatrixInverse is
+            // stale (copied without recompute) — derive it here.
+            cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
             (this as any).__mbInvViewProj =
                 ((this as any).__mbInvViewProj as THREE.Matrix4) ??
                 new THREE.Matrix4();
@@ -908,6 +919,24 @@ export class MBShadowRenderer {
         this.m_shadowCamera.bottom = -radius;
         this.m_shadowCamera.near = -2 * radius;
         this.m_shadowCamera.far = radius / Math.max(lightDir.z, 0.1);
+        // §885 终三十九g49: auto depth-compare bias, ramped by the caster
+        // box's z span. The 16-bit packed light-depth quantum is
+        // (far−near)/65536 — the legacy 0.0002 bias is ~1/100 of one quantum
+        // at this fixture's range, so every elevated surface self-shadowed
+        // (acne). Flat-deck fixtures (span ≤ ~40 m) must keep the legacy bias
+        // (a large one erases their legit thin shadows — shadows-tunnel
+        // +39k at a flat 0.2); tall-occluder fixtures (the 200m
+        // shadow-casters wall, span 272-318) need ~0.12-0.2. The ramp
+        // (span−100)/range interpolates: 0 below 100 m of span, ~0.124 at
+        // the wall. The manual shadowbias knob still overrides.
+        if (!casterBox.isEmpty() && !(globalThis as any).__mbShadowBias) {
+            const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
+            const spanZ = casterBox.max.z - casterBox.min.z;
+            // floor at the legacy 0.0002: an explicit 0 collapses the
+            // smoothstep window (binary compare) and regresses flat fixtures.
+            (globalThis as any).__mbShadowBiasAuto = Math.max(
+                0.0002, Math.min(0.3, (spanZ - 100) / range));
+        }
         // §885 终七十二: shoff=<x>,<y> — world-XY calibration offset of the
         // shadow sphere center (dark-centroid A/B against expected).
         {
@@ -1340,6 +1369,32 @@ export class MBShadowRenderer {
                                 auditM('cascade1', this.m_matrix1, this.m_shTex1);
                                 const v4chk = new THREE.Vector4(wp.x, wp.y, wp.z, 1).applyMatrix4(this.m_shadowCamera.matrixWorldInverse).applyMatrix4(this.m_shadowCamera.projectionMatrix);
                                 audits.push({ tag: 'wp', world: [wp.x, wp.y, wp.z].map(x => +x.toFixed(1)), castInfo });
+                                // §885 终三十九g48: receiver-vs-depth-pass 对拍 —
+                                // dump the depth-pass matrix and project the box
+                                // center + a south ground probe through it; the
+                                // sweep side POSTs the receiver's own
+                                // uMBShadowMatrix for offline comparison.
+                                audits.push({
+                                    tag: 'depth-matrix',
+                                    m: Array.from(this.m_matrix.elements).map(v => +v.toPrecision(9)),
+                                    proj: Array.from(this.m_shadowCamera.projectionMatrix.elements).map(v => +v.toPrecision(9)),
+                                    view: Array.from(this.m_shadowCamera.matrixWorldInverse.elements).map(v => +v.toPrecision(9)),
+                                });
+                                {
+                                    const bc2 = casterBox.getCenter(new THREE.Vector3());
+                                    for (const [tag2, pt2] of [
+                                        ['box-center', bc2],
+                                        ['ground-south', new THREE.Vector3(bc2.x, bc2.y - casterBox.getSize(new THREE.Vector3()).y * 0.4, bc2.z)],
+                                        ['wall-top', new THREE.Vector3(bc2.x, bc2.y + casterBox.getSize(new THREE.Vector3()).y * 0.3, casterBox.max.z)],
+                                    ] as const) {
+                                        const u5 = new THREE.Vector4(pt2.x, pt2.y, pt2.z, 1).applyMatrix4(this.m_matrix);
+                                        audits.push({
+                                            tag: `proj-${tag2}`,
+                                            world: [pt2.x, pt2.y, pt2.z].map(v => +v.toFixed(1)),
+                                            uv: [+(u5.x).toFixed(4), +(u5.y).toFixed(4), +(u5.z).toFixed(4)],
+                                        });
+                                    }
+                                }
                                 fetch(`${fb}/mb-probe-dump`, {
                                     method: 'POST',
                                     headers: { 'content-type': 'application/json' },
