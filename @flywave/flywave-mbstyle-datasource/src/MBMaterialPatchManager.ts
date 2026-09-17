@@ -3438,6 +3438,11 @@ export class MBMaterialPatchManager {
             // baked MB_SH_BIAS define raced the first fit).
             const bW0 = Math.max(0.002, bVd);
             shader.uniforms.uMBShadowBiasW = { value: new THREE.Vector2(-bW0, bW0) };
+            // §885 终三十九g50c: shadow-factor exponent (gshade=<e>) —
+            // 2.2 = linear-color theory; the empirically matching sRGB-space
+            // ratio sits near 0.65 (see the ledger sweep).
+            const gsExp0 = Number((globalThis as any).__mbGSExp ?? 2.2);
+            shader.uniforms.uMBGSExp = { value: gsExp0 };
             shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3(0, 0, 0) };
             // §885 终三一九g21: mgl apply_lighting_ground — draped fills are
             // lit as `color * u_ground_radiance` (sRGB), refreshed per frame.
@@ -3574,10 +3579,14 @@ export class MBMaterialPatchManager {
                             // shadow mix; default (1,1,1) when lights are off.
                             gl_FragColor.rgb *= uMBGroundRadiance;
                             // mgl: out(sRGB) *= mix(u_ground_shadow_factor, 1, light)
-                            // with the factor = linear-strengths ratio. Our
-                            // fragment is linear: multiplying it by ratio^2.2
-                            // encodes to exactly sRGB × ratio.
-                            gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(2.2)), vec3(1.0), mbLight);
+                            // with the factor = linear-strengths ratio. The
+                            // exponent is a LIVE uniform: the injection-point
+                            // color space (post opaque_fragment = sRGB-encoded
+                            // on this pipeline) and the actual lighting state
+                            // determine the effective value — gshade=<e>
+                            // sweeps it (2.2 = linear-theory, ~0.65 = the
+                            // empirically matching sRGB-space ratio).
+                            gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(uMBGSExp)), vec3(1.0), mbLight);
                         }`;
             let mbShadowInserted = false;
             const tryInsert = (src: string, anchor: string, block: string): string => {
@@ -3606,6 +3615,7 @@ export class MBMaterialPatchManager {
                 'uniform mat4 uMBInvViewProj;\n',
                 'uniform float uMBShadowIntensity;\n',
                 'uniform vec2 uMBShadowBiasW;\n',
+                'uniform float uMBGSExp;\n',
                 'uniform vec3 uMBGroundShadowFactor;\n',
                 'uniform vec3 uMBGroundRadiance;\n',
                 'uniform vec3 uMBGC[4];\n',

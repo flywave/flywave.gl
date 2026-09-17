@@ -290,6 +290,11 @@ function discoverTests(): TestEntry[] {
     const shb = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shadowbias="))?.slice("shadowbias=".length);
     if (shb) (globalThis as any).__mbShadowBias = Number(shb);
+    // §885 终三十九g50c: gshade=<e> → ground shadow-factor exponent
+    // (pow(GSF, e); 2.2 = linear-color theory, ~0.65 = the sRGB-space ratio).
+    const gse = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("gshade="))?.slice("gshade=".length);
+    if (gse) (globalThis as any).__mbGSExp = Number(gse);
     // §885 终一百三十六: fogshift=<x>,<y> → fogMglRange.x/y calibration offsets.
     const fs = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogshift="))?.slice("fogshift=".length);
