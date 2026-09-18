@@ -5597,3 +5597,28 @@ symbols/nonelevated ±0、**ortho-camera +0**——小净赢、mgl 忠实单链�
 于 d>60 阈值，非其根因；其主体=**位移/重影**（目视双边路缘=§662 重复 tile
 对象双锚定的直取变体），下轮=对 ortho-camera 跑 [MBPlace]/[MBSceneObj] 对
 拍重复对象的锚差（正交相机 zoom19 直取 z18 的重解码锚漂移）。
+
+### §885 终三十九g50s: ortho-camera 根因终定位——正交相机缺失（透视放大高程路面），修复方案定型（2026-09-18）
+
+**① 双锚定假说否定**：[MBPlace]/[MBSceneObj] 遥测（decodedbg）——四个 z18
+tile（232843/232844 × 103242/103243）anchor 全部自洽（=tileCenter−eye，四角
+(−46,86.7)/(106.9,±66.1) 线性一致）；mwScale=(1,1,1)；无重复对象锚差。§662
+双锚定变体排除。
+
+**② 旋转假说否定（复核）**：实际路面色 (190,209,233) 重测主轴 expected
+0.83° vs ours 0.82°（−0.01°）。
+
+**③ 根因终定位**：style `camera: {camera-projection: orthographic}` +
+pitch 0 + cast-shadows。引擎 MapView 硬编码 THREE.PerspectiveCamera（无正
+交支持）→ 高程 z=5.4~13.4m 的 HD 路面被透视放大 eyeZ/(eyeZ−h)
+=114.7/101.3≈×1.13 并沿 nadir 径向位移 → 路缘外扩（红边）、lane gap 被盖、
+右侧楔形缺失（蓝）。road mask IoU 仅 0.458 与此吻合。场景内另见 ff0000
+tunnel 入口填充在 z=−6/+13 两层（透视位移的直观证据）。
+
+**④ 修复方案定型（下轮，独立工程）**：
+- 方案 A（正解）：引擎实现正交相机（MapView 硬编码 PerspectiveCamera 三处
+  + zoom↔distance 映射 + tile 选层距离 + RTE 相机 + 阴影正交 pass 联动）。
+- 方案 B（pitch-0 限定）：geometry 径向收缩补偿——ortho style 且 pitch 0
+  时，emitter 对 elevated 顶点按 (eyeZ−h)/eyeZ 向 nadir 收缩；难点=阴影接
+  收射线（invViewProj 透视重建）需同步校正，否则高程面阴影错位。
+- 方案 C：接受现状，ortho 簇 ~240k 挂账。
