@@ -112,10 +112,23 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "wallside=1")) {
         (globalThis as any).__mbWallDS = true;
     }
-    // §885 终三十九g50n: fsds=1 — force DoubleSide on every fill material
-    // (Munich deck culling bisection).
-    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "fsds=1")) {
-        (globalThis as any).__mbFsds = true;
+    // §885 终三十九g50o: fsds=1/0 — mercator fill DoubleSide default is ON;
+    // fsds=0 opts out (A/B for the default flip).
+    {
+        const fv = (window as any).__karma__?.config?.args
+            ?.find?.((a: string) => a.startsWith("fsds="))?.slice("fsds=".length);
+        if (fv === "0") (globalThis as any).__mbFsds = false;
+        else if (fv === "1") (globalThis as any).__mbFsds = true;
+    }
+    // §885 终三十九g50o: faceprobe=1 — per-mesh facing dump (needs decodedbg).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "faceprobe=1")) {
+        (globalThis as any).__mbFaceProbe = true;
+    }
+    // §885 终三十九g50o: windnorev=1 — drop the children-merge index
+    // reversal for this run (Munich/Tokyo merged-deck recovery A/B; Turku
+    // MUST NOT set it — its merged content requires the reversal).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "windnorev=1")) {
+        (globalThis as any).__mbWindNoRev = true;
     }
     // §885 终三一九g15: raillift=<m> — diagnostic rail z lift.
     const rl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
@@ -1100,6 +1113,46 @@ async function renderFrames(
                         // and capture the 3rd rendered frame — the red decks
                         // either show up (rasterized) or the frame proves
                         // they are skipped. One-shot hook.
+                        // §885 终三十九g50o: faceprobe=1 — per-mesh facing
+                        // forensics. For every FrontSide indexed mesh, dump
+                        // matrixWorld determinant + the first triangle's
+                        // WORLD-space normal z (nz<0 = top face points down =
+                        // culled from a top-down camera) + first-vertex
+                        // position. Directly answers WHERE the winding
+                        // inverts (geometry vs mirrored transform).
+                        if ((globalThis as any).__mbFaceProbe) {
+                            try {
+                                let fpN = 0;
+                                const seen = new Set<string>();
+                                mapView.scene?.traverse?.((o: any) => {
+                                    if (fpN >= 40) return;
+                                    const g = o.geometry;
+                                    const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                                    if (!g?.attributes?.position || !m) return;
+                                    const dup = seen.has(o.uuid);
+                                    if (dup) return;
+                                    seen.add(o.uuid);
+                                    o.updateWorldMatrix?.(true, false);
+                                    const det = o.matrixWorld.determinant();
+                                    const pa = g.attributes.position;
+                                    const tri = (i0: number, i1: number, i2: number) => {
+                                        const v = (i: number) => new THREE.Vector3(
+                                            pa.getX(i), pa.getY(i), pa.getZ(i)).applyMatrix4(o.matrixWorld);
+                                        const a = v(i0), b = v(i1), c = v(i2);
+                                        const n = new THREE.Vector3()
+                                            .crossVectors(b.clone().sub(a), c.clone().sub(a)).normalize();
+                                        return `nz=${n.z.toFixed(3)} nxy=(${n.x.toFixed(2)},${n.y.toFixed(2)})`;
+                                    };
+                                    const face = g.index
+                                        ? tri(g.index.getX(0), g.index.getX(1), g.index.getX(2))
+                                        : tri(0, 1, 2);
+                                    fpN++;
+                                    console.log(`[MBFace] n=${pa.count} idx=${g.index?.count ?? 0} det=${det.toExponential(2)} ${face} col=${m.color?.getHexString?.() ?? '?'} vis=${o.visible} side=${m.side} v0=(${pa.getX(0).toFixed(1)},${pa.getY(0).toFixed(1)},${pa.getZ(0).toFixed(1)}) u=${o.uuid.slice(0, 6)}/${m.uuid?.slice?.(0, 6)}`);
+                                });
+                            } catch (e: any) {
+                                console.log('[MBFace] probe fail ' + e?.message);
+                            }
+                        }
                         const mvR: any = mapView;
                         let redFrames = 0;
                         const repaint = (root: any) => {
@@ -3733,6 +3786,51 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                 }),
                             });
                         }
+                    } catch { /* probe is best-effort */ }
+                }
+
+                // §885 终三十九g50o: faceprobe=1 — per-mesh facing dump at
+                // CAPTURE TIME (the settled frame; the early AfterRender dump
+                // runs before the road fills arrive through re-decode churn).
+                // nz is the first triangle's WORLD normal z; det=matrixWorld
+                // determinant. Under the flywave camera the FrontSide-facing
+                // fills carry nz<0 (the engine projection mirrors winding).
+                if ((globalThis as any).__mbFaceProbe) {
+                    try {
+                        const seen2 = new Set<string>();
+                        let fpN2 = 0;
+                        mapView.scene?.traverse?.((o: any) => {
+                            if (fpN2 >= 400) return;
+                            const g = o.geometry;
+                            const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                            if (!g?.attributes?.position || !m) return;
+                            if (seen2.has(o.uuid)) return;
+                            seen2.add(o.uuid);
+                            o.updateWorldMatrix?.(true, false);
+                            const pa = g.attributes.position;
+                            // §885 终三十九g50o: AREA-WEIGHTED facing — sum of
+                            // world-space z of cross products over ALL indexed
+                            // triangles (sign = up/down facing; magnitude =
+                            // projected-to-horizontal area). The first-triangle
+                            // sample was unreliable (sliver triangles).
+                            const v = (i: number) => new THREE.Vector3(
+                                pa.getX(i), pa.getY(i), pa.getZ(i)).applyMatrix4(o.matrixWorld);
+                            const e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+                            let zSum = 0;
+                            const nIdx = g.index ? g.index.count : pa.count;
+                            for (let ti = 0; ti < nIdx; ti += 3) {
+                                const i0 = g.index ? g.index.getX(ti) : ti;
+                                const i1 = g.index ? g.index.getX(ti + 1) : ti + 1;
+                                const i2 = g.index ? g.index.getX(ti + 2) : ti + 2;
+                                const a = v(i0);
+                                e1.subVectors(v(i1), a);
+                                e2.subVectors(v(i2), a);
+                                zSum += (e1.x * e2.y - e1.y * e2.x);
+                            }
+                            const a0 = v(0);
+                            fpN2++;
+                            console.log(`[MBFace2] n=${pa.count} det=${o.matrixWorld.determinant().toExponential(1)} zSum=${zSum.toFixed(0)} col=${m.color?.getHexString?.() ?? '?'} vis=${o.visible} side=${m.side} z0=${a0.z.toFixed(1)} u=${o.uuid.slice(0, 6)}`);
+                        });
                     } catch { /* probe is best-effort */ }
                 }
 

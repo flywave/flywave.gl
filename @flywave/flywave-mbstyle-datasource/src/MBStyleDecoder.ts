@@ -1650,9 +1650,17 @@ export class MBStyleDecoder extends ThemedTileDecoder {
                         }
                         vertexAttributes = vertexAttributes.map((a, ai) =>
                             ai === posIdx ? { ...a, buffer: arr.buffer } : a);
-                        // The y mirror flips triangle winding — reverse the
-                        // index triplets or backface culling eats the fills.
-                        if (index) {
+                        // §885 终三十九g50o: the children-merge index
+                        // reversal — DEFAULT ON (Turku no-cross-beams
+                        // REQUIRES it: reversal-off regressed 41,264→164,159,
+                        // its whole content is merged children). But the same
+                        // reversal CULLS Munich/Tokyo merged far-field decks
+                        // (elevated-circles-nonelevated 81,135→31,492 with it
+                        // off; measured via the faceprobe zSum signature).
+                        // The two corpora have opposite screen-facing
+                        // conventions for merged geometry (root cause open —
+                        // see ledger g50o). windnorev=1 opts OUT per run.
+                        if (index && (globalThis as any).__mbWindNoRev !== true) {
                             const idx = new Uint32Array(index.buffer);
                             for (let ti = 0; ti < idx.length; ti += 3) {
                                 const tmp = idx[ti + 1];

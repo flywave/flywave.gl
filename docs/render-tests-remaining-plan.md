@@ -5450,3 +5450,54 @@ flip 配置全部一致。下轮取证入口：①逐网格 matrixWorld 行列�
 chunked runner 支持）——诊断 A/B 必须走 chunked runner；单位测试 309 passing
 （emitter 改动零破坏）；lib 构建含全部改动（mapview 既有 tsc 报错与本包
 无关）。
+
+### §885 终三十九g50o: 背面剔除根因闭合与默认翻转落地——merge 子瓦片索引反转系双重翻转；mercator 不透明 fill 默认 DoubleSide（全族 −40.5%，N=2 逐位复现）（2026-09-18）
+
+**① 逐网格取证工具（faceprobe=1，捕获帧触发）**：早期 AfterRender dump 时
+路网网格尚未入场景（重解码 churn），改为 assertCanvasMatchesReference 前
+dump；首三角形法线采样被细长三角形污染（同网格 ±1 随机），升级为**面积加权
+zSum**（全部索引三角形世界叉积 z 求和，符号=主导朝向）。
+
+**② 根因锁定（Munich elevated-circles-nonelevated 81,135 主体）**：
+emitElevatedFillPiece 逐 piece 审计（[MBWind]，decodedbg 门控）证明输出绕向
+恒定（areaIn<0→rev=false→earcut 恒 CCW[离线实测：CW/CCW 输入输出均 +2]→
+emitted=-earcutOut 全部 CW）。渲染态面积加权探针（faceprobe）却测出**同夹具
+内 a3b4c8 网格两群朝向相反**（22v deck zSum=+9249 被剔；85v ground
+zSum=−11658 可见；fsds=1 时两群全部可见且 −91.6%）。分歧点=
+**MBStyleDecoder.decodeTileWithChildren 的子瓦片索引反转**（§512 初版合并时
+加入，早于 终三一八补8 的 emit 侧翻转；注释称"y 镜像翻转弯向"，但 §511 后
+子瓦片与直取同帧、rebase 纯平移不改绕向）——合并子瓦片=双重翻转=背面被剔；
+近场直取 z18 cell 不过合并路径=正面可见。
+
+**③ 修复的边界（windnorev 全族 A/B，N=1，72 件可比）**：整体默认移除反转
+**不可行**——5,781,577→5,927,584（+146,007）：改善集 road-markups-no-
+elevation −85%/nonelevated −61%/las-vegas −19%/versioning −46%/tunnel-ortho
+−55% 等约 −160k，被全合并内容夹具的回归集抵消（guard-rail-qkey-border
++373%、no-cross-beams ×4（41,264→164,159）、tile-border +95%、palo-alto
++43%、debug-elevation-ids +48% 等 +306k）。两族夹具对合并绕向的要求相反，
+分层判据未定位（开放项）。反转保留为默认，windnorev=1 退出旋钮入库。
+
+**④ 默认翻转落地（正解）**：绕向约定分裂对"剔除正确性"无解，但 DoubleSide
+对不透明无光照 fill 视觉等价（两面同像素同色）且对约定分裂免疫。落地=
+MBMaterialPatchManager：**mercator 投影 + techName fill + 非透明材质默认
+DoubleSide**（sphere 保持 §808 FrontCull 远面剔除；透明 fill 保持现 side 防
+双混合；fsds=0 退出）。**全族 A/B（3di-fsds-n1，75 件）**：5,709,452→
+3,395,290（**−2,314,162，−40.5%**）；改善 66 件（road-markups −77%、
+road-islands −75%、guard-rail-color-feature-dependent −72%、circles-tunnel
+−69%、oriented −68%、fog −65%、no-light −50%、versioning −81%、
+tilecover-tunnel −89%、guard-rail-split −98% 等），回归 6 件共 ~58k
+（shadows-tunnel +14%＝背面叠影、elevated-wireframe +21%、tooling-support
++62%、tilecover +4% 等，已知代价）。
+
+**⑤ N=2 配对复现（3di-fsds-n2，默认无参路径，70 件可比）**：与 N=1
+（fsds=1 显式 arg 路径）**全族逐位一致**（3,365,162=3,365,162，零漂移，
+无单件 |Δ|>500）——默认翻转与 A/B 旋钮同一路径，结果稳定。跨族冒烟：
+fill-antialias/fill-color/fill-opacity 8 件全部 0 px PASS（含透明度变体，
+透明排除生效）。单位测试 309 passing。
+
+**⑥ 下轮入口**：①回归 6 件归因（shadows-tunnel 背面叠影疑=deck 背面画进
+trench 阴影区——可试 renderOrder/材质级 BackSide 局部化）；②两族绕向约定
+相反的分层判据（Turku 全合并需反转 vs Munich/Tokyo 合并需不反——疑与瓦片
+锚定帧/geoBox 有关，跨 fixture 变量仅 lat/bearing/直取覆盖比）；③icons
+~2.5× 放大（icon-size 求值域）与车道线 2-3px 位移（symbols 簇剩余）；④
+tunnel 薄板影子 +39.8k 回归与 road-extend-tilecover 203k 双稳态维持开放。

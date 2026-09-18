@@ -2192,6 +2192,13 @@ export class MBTileDataEmitter {
         }
         if (allVerts.length < 6) return;
 
+        // §885 终三十九g50o: per-piece winding audit — signed area BEFORE the
+        // ring normalization, whether the ring got reversed, and the OUTPUT
+        // triangle orientation after earcut+flip. Locates where culled
+        // (up-facing) vs visible (down-facing) decks diverge.
+        const wdbg = (globalThis as any).__mbDecodeDbg
+            && ((globalThis as any).__mbWdbgCnt = ((globalThis as any).__mbWdbgCnt ?? 0) + 1) <= 80;
+
         // §885 终三一八补5/终三一九: the MVT y-flip inverts the winding on
         // screen — the deck triangles must be CW in extent space (CCW on
         // screen after the flip) to survive FrontSide culling. Reverse when
@@ -2203,6 +2210,8 @@ export class MBTileDataEmitter {
             const j = (i + 1) % extCount;
             signedArea += allVerts[i * 2] * allVerts[j * 2 + 1] - allVerts[j * 2] * allVerts[i * 2 + 1];
         }
+        const areaIn = signedArea;
+        const h0 = allHeights[0];
         if (signedArea > 0) {
             const tmp2: number[] = new Array(extCount * 2);
             const tmpH: number[] = new Array(extCount);
@@ -2242,6 +2251,15 @@ export class MBTileDataEmitter {
                 triIndices[i + 2] + startIdx,
                 triIndices[i + 1] + startIdx,
             );
+        }
+        if (wdbg) {
+            const i0 = triIndices[0], i1 = triIndices[1], i2 = triIndices[2];
+            const tArea = (allVerts[i0 * 2] * (allVerts[i1 * 2 + 1] - allVerts[i2 * 2 + 1])
+                + allVerts[i1 * 2] * (allVerts[i2 * 2 + 1] - allVerts[i0 * 2 + 1])
+                + allVerts[i2 * 2] * (allVerts[i0 * 2 + 1] - allVerts[i1 * 2 + 1])) / 2;
+            // eslint-disable-next-line no-console
+            // pushed order is (i0,i2,i1): the emitted orientation is -tArea.
+            console.log(`[MBWind] areaIn=${areaIn.toFixed(0)} rev=${areaIn > 0} earcutOut=${tArea.toFixed(0)} emitted=-earcutOut h=${h0.toFixed(2)} n=${allVerts.length / 2}`);
         }
     }
 

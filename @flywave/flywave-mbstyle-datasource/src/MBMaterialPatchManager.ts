@@ -1966,10 +1966,23 @@ export class MBMaterialPatchManager {
             (techName === 'fill' || techName === 'circles')) {
             (material as any).side = THREE.FrontSide;
         }
-        // §885 终三十九g50n: fsds=1 — force DoubleSide on every fill
-        // material (culling bisection for the Munich deck meshes; the
-        // a3b4c8 red-paint hook only covers Turku-colored decks).
-        if ((globalThis as any).__mbFsds && techName === 'fill') {
+        // §885 终三十九g50o: DoubleSide for OPAQUE fill materials on the
+        // mercator projection — DEFAULT ON (fsds=0 opts out). The family-wide
+        // A/B (3di-fsds-n1, 75 fixtures): 5,709,452→3,395,290 (−40.5%); the
+        // fill meshes reach the renderer in BOTH windings (direct z18 cells
+        // vs children-merge rebased — the merge carries a historical index
+        // reversal that flips every merged child, see MBStyleDecoder g50o
+        // note), so FrontSide culls a fixture-dependent half of the road
+        // network. DoubleSide is visually neutral for unlit opaque fills
+        // (both faces occupy the same pixels) and immune to the convention
+        // split. SPHERE keeps FrontSide (§808: far-side fills must cull or
+        // they paint over the dome glow). TRANSPARENT fills keep the current
+        // side (DoubleSide would double-blend back+front).
+        const mercFillDs = (globalThis as any).__mbFsds !== false
+            && (this.m_dataSource as any).mapView?.projection?.type !== 1
+            && techName === 'fill'
+            && (material as any).transparent !== true;
+        if (mercFillDs) {
             (material as any).side = THREE.DoubleSide;
         }
         const paint = technique._paint ?? {};
