@@ -5644,3 +5644,13 @@ double-lines 的 gap/offset 逐要素对照（mgl line_solid 的双线偏移方�
 错位=要素几何→绘制位置的关联问题（虚线要素画在实线要素位置），下轮=逐要
 素 geometry 位置对拍（emitter 的 feature→geometry 关联审计，疑 bucket 索
 引错位）。nodash 状态 29,840 仍含 legit 虚线缺失与实线位移残差。
+
+**⑦ g50s 补3（分层隔离实验）**：rmstyle=solid-lines（dashed-only 渲染）与
+expected 逐区域对拍：**我们的虚线画在 mgl 为连续实线的位置**（expected 该
+crop 仅 4 条实线+箭头，无虚线；dashed-only 却有两组虚线段+箭头）——虚线/实
+线要素的层路由或属性关联存在逐要素错位（虚线要素画在实线要素位置）。MVT 属
+性解码已验证无误（补2），错位在 evaluator 路由之后的 feature→technique/
+geometry 关联层。dashed-only mismatch=26,249（全渲染 32,735）。下轮=逐要素
+投影对拍（离线相机投影管线：vendored transform + style 相机，把每个
+hd_road_line 要素按 line_type 投到屏幕，与 expected/current 白线位置逐一对
+拍，定位错位要素对）。
