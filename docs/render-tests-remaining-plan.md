@@ -5563,3 +5563,28 @@ mapbox 测试 sprite 多为 pr=1 不受影响）。A/B：**elevated-symbols-orie
 差）、ortho-camera 74,728（pitch-0 直取 z18，正交相机旋转/斜切目视，引擎
 相机域）、shadows 系过暗（97k 基线暗区+影子项，g50j 分解维持）、两族绕向
 分层判据（g50o）。
+
+### §885 终三十九g50r: ortho-camera 重新归因——地面光照双重施加（×1.171），旋转假说否定（2026-09-18）
+
+**① 旋转假说否定**：目视"路网倾斜"系颜色 mask 失配误导（我们路面色
+(190,209,233) 不在 (162,179,199)±28 窗内，PCA 量到白线噪声）。用实际色重测：
+expected 主轴 0.83° vs ours 0.82°——**旋转差 −0.01°，bearing/相机旋转正确**
+（heading=34.46 已施加，[MBCamDump] 扩展 bearing/heading/pitch/camProj 字
+段）。正交相机 style（camera-projection: orthographic）引擎无实现，当前以
+perspective+pitch0 渲染，透视收敛差在此尺度可忽略。
+
+**② 真实根因=地面光照双重施加**：ortho-camera 有 cast-shadows（dir 0.5、
+[180,40]）+ zoom19 外推 fill-color。实测 ours = raw×1.171（raw=hsl(212,
+25%,71%)=(162,179,199)）；mgl expected = raw×1.0794 = raw×sRGB(linear
+radiance 1.183)（amb 0.8+dir 0.5·cos40，linearVec3TosRGB 后 ×1.0794 ✓）。
+1.171 ≈ 1.0794² —— **g22 的两处注入（injectGroundLighting 的 uMBGroundRad
++ per-frame 的 uMBGroundRadiance）对 cast-shadows 夹具同时生效**，调制被平
+方。[MBGrRad]/[MBShadowRecv]/[MBRf2] 遥测在该件 0 输出=阴影接收 refresh 块
+未激活（光照调制走 uMBGroundRad 链），与 lighting 四件（refresh 激活、单链
+生效、颜色匹配）路径分叉吻合。
+
+**③ 下轮首刀**：两链去重——injectGroundLighting（uMBGroundRad）与
+uMBGroundRadiance 互斥（一份保留，倾向保留 per-frame uMBGroundRadiance——
+lighting 四件已用其配平）。A/B=ortho-camera（预期 −74k 的大部分）+ lighting
+四件（确认不回归）+ shadows-tunnel。诊断入库：[MBCamDump] 扩展字段、
+[MBGrRad] uniform dump（decodedbg/阴影 refresh 门控内）。

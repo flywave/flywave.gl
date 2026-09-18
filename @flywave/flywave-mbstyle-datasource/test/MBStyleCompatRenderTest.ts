@@ -1228,7 +1228,7 @@ async function renderFrames(
                         mvR.addEventListener?.(MapViewEventNames.AfterRender, redHook);
                     }
                     // eslint-disable-next-line no-console
-                    console.log(`[MBCamDump] zoomLevel=${(mapView as any).zoomLevel} cameraZ=${(mapView as any).camera?.position?.z?.toFixed?.(1)} canvas=${mapView.canvas?.width}x${mapView.canvas?.height} pr=${(mapView as any).pixelRatio}`);
+                    console.log(`[MBCamDump] zoomLevel=${(mapView as any).zoomLevel} cameraZ=${(mapView as any).camera?.position?.z?.toFixed?.(1)} canvas=${mapView.canvas?.width}x${mapView.canvas?.height} pr=${(mapView as any).pixelRatio} bearing=${(mapView as any).bearing?.toFixed?.(2)} heading=${(mapView as any).heading?.toFixed?.(2)} pitch=${(mapView as any).pitch?.toFixed?.(2)} camProj=${(mapView as any).projection?.type}`);
                     const counts: Record<string, number> = {};
                     const samples: string[] = [];
                     const walk = (root: any, tag: string) => {

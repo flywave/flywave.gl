@@ -436,6 +436,11 @@ export class MBMaterialPatchManager {
                                 // modulation (sRGB vec3 from the environment).
                                 const gr = u.uMBGroundRadiance?.value as THREE.Vector3 | undefined;
                                 if (gr) gr.set(ls.groundRadiance[0], ls.groundRadiance[1], ls.groundRadiance[2]);
+                                { const gB = (globalThis as any); gB.__mbGrLog = (gB.__mbGrLog ?? 0) + 1;
+                                  if (gB.__mbGrLog <= 4) {
+                                    // eslint-disable-next-line no-console
+                                    console.log(`[MBGrRad] gr=(${gr ? gr.x.toFixed(4) : '?'},${gr ? gr.y.toFixed(4) : '?'},${gr ? gr.z.toFixed(4) : '?'}) ls=(${ls.groundRadiance[0].toFixed(4)},${ls.groundRadiance[1].toFixed(4)},${ls.groundRadiance[2].toFixed(4)}) tail=${(u as any).__mbTail ? 1 : 0} amb=${JSON.stringify(ls.ambientColorLinear)} dir=${JSON.stringify(ls.dir)}`);
+                                  } }
                             } else {
                                 f.set(0, 0, 0);
                             }
