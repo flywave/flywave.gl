@@ -3676,11 +3676,17 @@ export class MBMaterialPatchManager {
                             // lightens the shadow; ours previously ignored
                             // uMBShadowIntensity (identical at intensity=1).
                             float mbLight = mix(1.0 - uMBShadowIntensity, 1.0, mbLit);
-                            // §885 终三一九g21: mgl apply_lighting_ground —
-                            // draped fills are lit as color × u_ground_radiance
-                            // (sRGB scalar for horizontal surfaces) BEFORE the
-                            // shadow mix; default (1,1,1) when lights are off.
+                            // §885 终三十九g50r: the ground-LIGHT multiply is
+                            // owned by injectGroundLighting (uMBGroundRad,
+                            // linear domain + encode = mgl apply_lighting_
+                            // ground). Multiplying uMBGroundRadiance here as
+                            // well double-applied the radiance on every
+                            // cast-shadows fixture (ortho-camera rendered
+                            // ×1.171 ≈ mgl ×1.0794 ²). groundlitdual=1
+                            // restores the historical dual-multiply for A/B.
+                        #if MB_SH_GROUNDDUAL
                             gl_FragColor.rgb *= uMBGroundRadiance;
+                        #endif
                             // §885 终三十九g50h: with the colorspace-tail chain
                             // (MB_SH_MGL_TAIL) the ground-factor multiply runs
                             // AFTER colorspace_fragment (mgl: on the sRGB-encoded
@@ -3769,7 +3775,8 @@ export class MBMaterialPatchManager {
             // mix runs on the sRGB-encoded output, before fog) when the
             // flavor carries the chunk.
             const mbShTail = mbShMgl && shader.fragmentShader.includes('#include <colorspace_fragment>') ? 1 : 0;
-            shader.fragmentShader = `#define MB_SH_MGL ${mbShMgl}\n#define MB_SH_MGL_TAIL ${mbShTail}\n#define MB_SH_FRONTSKIP ${mbShFront}\n` + shader.fragmentShader;
+const mbGroundDual = (globalThis as any).__mbGroundLitDual === true ? 1 : 0;
+            shader.fragmentShader = `#define MB_SH_MGL ${mbShMgl}\n#define MB_SH_MGL_TAIL ${mbShTail}\n#define MB_SH_FRONTSKIP ${mbShFront}\n#define MB_SH_GROUNDDUAL ${mbGroundDual}\n` + shader.fragmentShader;
             if (mbShTail) {
                 shader.fragmentShader = `float mbShadowLightOut = 1.0;\n` + shader.fragmentShader;
             }

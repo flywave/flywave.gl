@@ -5588,3 +5588,12 @@ uMBGroundRadiance 互斥（一份保留，倾向保留 per-frame uMBGroundRadian
 lighting 四件已用其配平）。A/B=ortho-camera（预期 −74k 的大部分）+ lighting
 四件（确认不回归）+ shadows-tunnel。诊断入库：[MBCamDump] 扩展字段、
 [MBGrRad] uniform dump（decodedbg/阴影 refresh 门控内）。
+
+**④ g50r 补（去重 A/B 结果与 ortho-camera 再排除）**：地面光去重（移除
+mbShadowSample 内的 uMBGroundRadiance 乘法，groundlitdual=1 可恢复）A/B：
+lighting −1,489/−1,531、lighting-terrain −303/−138、shadows-tunnel +1、
+symbols/nonelevated ±0、**ortho-camera +0**——小净赢、mgl 忠实单链，落地。
+**ortho-camera 74,728 再排除**：地面调制差（×1.085 vs ×1.0794≈1/255）远低
+于 d>60 阈值，非其根因；其主体=**位移/重影**（目视双边路缘=§662 重复 tile
+对象双锚定的直取变体），下轮=对 ortho-camera 跑 [MBPlace]/[MBSceneObj] 对
+拍重复对象的锚差（正交相机 zoom19 直取 z18 的重解码锚漂移）。
