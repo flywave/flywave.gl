@@ -3585,8 +3585,13 @@ export class MBMaterialPatchManager {
             // run()); the per-frame refresh otherwise never re-runs after the
             // static fixture idles and every receiver stays all-lit forever
             // (ortho-camera bands missing, 57,230).
-            const slNow = (this.m_dataSource as any).m_environment?.shadowLightState;
-            shader.uniforms.uMBShadowIntensity = { value: (shSeed || slNow) ? 1 : 0 };
+            // §885 终四十八g51b: slNow seed REVERTED — seeding intensity=1
+            // before the renderer's first depth pass armed the chunk against
+            // an IDENTITY uMBShadowMatrix (random darkening, +150k). With the
+            // m_groundUniforms gate removed (g50y) getShadowUniforms() turns
+            // non-null as soon as the depth pass exists and the per-frame
+            // refresh sets intensity then — activation order is now correct.
+            shader.uniforms.uMBShadowIntensity = { value: shSeed ? 1 : 0 };
             shader.uniforms.uMBShadowMap = { value: shSeed?.map ?? null };
             shader.uniforms.uMBShadowMatrix = { value: shSeed ? shSeed.matrix.clone() : new THREE.Matrix4() };
             // §885 终一百一十九: cascade-1 far-field uniforms.

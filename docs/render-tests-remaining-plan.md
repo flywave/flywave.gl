@@ -5985,3 +5985,19 @@ shadowState 非空后显式置位（移除 slNow seed，避免 identity 期激�
 **④ 默认态零回归**：VLIGHT/NOFF 默认关 → ortho-camera 57,255、lighting
 四件 39,334/42,028/59,427/60,710、shadows-tunnel 154,397、road-islands
 34,609 —— 与 g50y 提交态逐位一致。
+
+**g51a 补（同日二）**：逐顶点+NOFF 组合实验的精化定性——shvlight=1 时
+暗带像素 (300,250) 精准呈现 (147,162,180)✓，但 **lit 甲板大面积同色误暗**
+（(150,100) exp 176,194,216 → cur 147,162,180），delta 直方图 bucket-3
+（90~120）聚集 165k px——即自采样误暗（甲板自身 texel z≈stored →
+smoothstep(0)→mbLit=0.5 半暗，叠加 mbLight 混合后全暗），normal offset
+h=1.33（SHNOFF=1）未能消除（位移 0.0029 uv 单位被 plane-bias 窗口外的
+非线性吃掉，或 mbWP.z 位移方向/量级仍差）。shadowdbg 端到端（g50z 补）
+stored 0.694 > z 0.545 的读数与"自采样"定性一致：band 像素与 lit 像素在
+我们的深度图中 stored 相同（0.694 疑为甲板自身面深度）——**mgl 中该
+stored 应为上层甲板（更小深度）**，指向上层甲板 caster 在带位 texel 的
+缺席（g50z 初判回归有效）。默认态已恢复零回归（VLIGHT/NOFF 默认关，
+57,255/154,397/lighting 四件逐位一致）。下轮：①逐 caster dump 上层甲板
+瓦片是否进入 depth pass（[MBShadowCast] census + shadow-depth-canvas 分
+层着色）；②若缺席，查 fill-elevation-reference 层的 layers.enable(1)
+注册条件；③自采样误暗的 h 量纲核对（0.03125 系数适用性）。
