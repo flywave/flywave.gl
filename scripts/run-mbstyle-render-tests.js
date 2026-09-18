@@ -173,6 +173,7 @@ function main() {
             ...(process.env.MBSTYLE_SHCASTAUDIT ? ["shcastaudit=1"] : []),
             ...(process.env.MBSTYLE_SHKAPPA ? [`shkappa=${process.env.MBSTYLE_SHKAPPA}`] : []),
             ...(process.env.MBSTYLE_SHADOWANALYTIC ? ["shadowanalytic=1"] : []),
+            ...(process.env.MBSTYLE_BANDLINE ? ["shbandline=1"] : []),
             ...(process.env.MBSTYLE_SHADOWMGL ? ["shadowmgl=1"] : []),
             ...(process.env.MBSTYLE_SHADOWMGLRGB ? [`shadowmglrgb=${process.env.MBSTYLE_SHADOWMGLRGB}`] : []),
             ...(process.env.MBSTYLE_MODELDIRALT ? ["modeldiralt=1"] : []),

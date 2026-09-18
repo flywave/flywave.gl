@@ -336,6 +336,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.includes?.("shadowanalytic=1")) {
         (globalThis as any).__mbShadowAnalytic = 1;
     }
+    // §885 终四十四g50x: shbandline=1 → depth-vs-receiver scanline forensics
+    // (readPixels stored depth vs m_matrix z along the expected band line).
+    if ((window as any).__karma__?.config?.args?.includes?.("shbandline=1")) {
+        (globalThis as any).__mbBandLine = 1;
+    }
     // §885 终三十九g50g: shadowmgl=1 → mgl-faithful semantics bundle
     // (plane-bias receivers + sRGB ground factor + always texel snap).
     if ((window as any).__karma__?.config?.args?.includes?.("shadowmgl=1")) {
@@ -3542,11 +3547,26 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         ?.find?.((a: string) => a.startsWith("feedback-url="))
                         ?.slice("feedback-url=".length);
                     if (fbC && canvas) {
+                        // §885 终四十四g50x: receiver census — how many
+                        // materials actually carry the shadow-receiver chunk
+                        // (injected) vs skipped (e.g. background, or
+                        // patch-time shadowLightState race).
+                        let injected = 0, groundLit = 0;
+                        try {
+                            (mapView as any).m_scene?.traverse?.((o: any) => {
+                                const ms = Array.isArray(o?.material) ? o.material : (o?.material ? [o.material] : []);
+                                for (const m of ms) {
+                                    if ((m as any)?.__mbShadowInjected) injected++;
+                                    if ((m as any)?.__mbGroundLitHandler) groundLit++;
+                                }
+                            });
+                        } catch { /* census best-effort */ }
                         await fetch(`${fbC}/mb-probe-dump`, {
                             method: "POST",
                             headers: { "content-type": "application/json" },
                             body: JSON.stringify({ probe: "main-canvas",
-                                dataUrl: canvas.toDataURL('image/png') }),
+                                dataUrl: canvas.toDataURL('image/png'),
+                                recvInjected: injected, groundLit }),
                         });
                     }
                 } catch { /* probe only */ }

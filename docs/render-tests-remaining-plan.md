@@ -5858,3 +5858,33 @@ shmat-compose 手工验算发现 **m_matrix 与 m_shadowCamera proj·viewInv 的
 （m_shadowCamera fit → proj·view → bias·ndc2uv）与 depth pass 实际写入值
 （readPixels 采样已知 caster 角点），定位 0.04 的来源；修复后接收链即可在
 正交呈现真影暗带（预期收益 ≈45.8k px，ortho-camera < 57,255 转正）。
+
+### §885 终四十四g50x: band-forensics 探针——深度配准无恙，问题收敛到 fill 材质的 intensity 刷新覆盖（2026-09-19）
+
+**① 新探针（已提交）**：①`shbandline=1`（band-forensics）：depth readback
+后沿期望暗带扫描线（sx 250..380×dz 0/5/10/15m 候选接收面）逐点计算
+m_matrix uv/z + readPixels 存储深度 + occluded 判定，POST mb-probe-dump
+（须放在 m_matrix 全 compose（bias+snap）之后——首版放 depth pass 处读到
+上一帧 identity 矩阵作废）；②recv-mat-audit 扩展 nOffZ 字段；③main-canvas
+探针扩展 recvInjected/groundLit 普收普查（traverse scene 统计
+__mbShadowInjected / __mbGroundLitHandler 材质数）。
+
+**② 定量结论（ortho-camera，shadows on）**：
+- 深度配准正常：地面面（dz=0）扫描线 14 样本中 7 个 occluded（stored
+  0.639~0.643 < z 0.622~0.625），甲板面（dz=10）4/14 occluded，dz=15
+  （高于全部 caster）0/14 全 lit——**存储深度与 m_matrix 在 occluded 语义
+  上完全自洽**，g50w 补的"~0.04 不一致"假说否定；
+- normal offset h=1.325（1/8·radius 量级）数值合理；
+- **接收注入普查：133 材质带 chunk（injected=133 groundLit=133）**——注入
+  也没有缺失。
+
+**③ 收敛点**：注入 133、深度配准正常、occluded 样本存在，但渲染可见输出
+无调制（57,230 ≈ 关影 57,255，差异仅 25px）→ 只剩一环：**fill 材质的
+uMBShadowIntensity 停在创建 seed 0**（patchMaterial 时 shadowState 尚未
+就绪 → shSeed 空 → seed 0；chunk 门控 `uMBShadowIntensity > 0.0` 直接
+短路），且逐帧 refresh（uMBShadowBiasW 同层）未覆盖到这批材质——refresh
+注册表与 inject 注册表不重合。下轮首刀：dump refresh 注册表 vs injected
+材质集合的差集（recv-mat-audit 的 cnt===60 one-shot 因静态夹具 3 帧即停
+永不可达，改 census POST），把 fill 材质补进 refresh（或 seed 后置
+refresh 首帧置位），ortho-camera 阴影即应呈现真影暗带（预期 < 57,255
+转正，收益 ≈45.8k px 中的大部分）。

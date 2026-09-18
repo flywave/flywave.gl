@@ -1779,6 +1779,68 @@ export class MBShadowRenderer {
                 const zz = -(Mc.z * O - Math.floor(Mc.z * O)) / O;
                 this.m_matrix.premultiply(new THREE.Matrix4().makeTranslation(zx, zy, zz));
             }
+            // §885 终四十四g50x: band-line forensics (shbandline=1) — after
+            // the FULL compose (bias + snap): walk a scanline of screen
+            // pixels across candidate receiver planes (ground + deck-height
+            // steps), compute m_matrix uv/z and the STORED depth at that uv
+            // from this frame's readback, and POST the table. Numerically
+            // answers whether occluded (z > stored) samples exist along the
+            // expected band line.
+            if ((globalThis as any).__mbBandLine && size > 0) {
+                try {
+                    const rteCamB: any = (this.m_mapView as any).getRteCamera?.()
+                        ?? this.m_mapView?.camera;
+                    rteCamB.updateMatrixWorld?.();
+                    const ivpB = new THREE.Matrix4()
+                        .multiplyMatrices(rteCamB.matrixWorld, rteCamB.projectionMatrixInverse.clone());
+                    const groundZB = -(eye ? eye.z : 0);
+                    const mmB = this.m_matrix;
+                    const samples: any[] = [];
+                    for (let sx = 250; sx <= 380; sx += 10) {
+                        for (const dz of [0, 5, 10, 15]) {
+                            const ndcX = (sx / 512) * 2 - 1;
+                            const ndcY = 1 - (250 / 512) * 2;
+                            const vFar = new THREE.Vector4(ndcX, ndcY, 1, 1).applyMatrix4(ivpB);
+                            const vNear = new THREE.Vector4(ndcX, ndcY, -1, 1).applyMatrix4(ivpB);
+                            const pFar = new THREE.Vector3(vFar.x / vFar.w, vFar.y / vFar.w, vFar.z / vFar.w);
+                            const pNear = new THREE.Vector3(vNear.x / vNear.w, vNear.y / vNear.w, vNear.z / vNear.w);
+                            const dir = pFar.sub(pNear).normalize();
+                            const t = dir.z < -1e-6 ? (groundZB + dz - pNear.z) / dir.z : NaN;
+                            const W = pNear.addScaledVector(dir, t);
+                            const uv4 = new THREE.Vector4(W.x, W.y, W.z, 1).applyMatrix4(mmB);
+                            const uu = uv4.x / uv4.w, vv = uv4.y / uv4.w, zz = uv4.z / uv4.w;
+                            const tx = Math.min(size - 1, Math.max(0, Math.round(uu * size)));
+                            const ty = Math.min(size - 1, Math.max(0, Math.round((1 - vv) * size)));
+                            const o = (ty * size + tx) * 4;
+                            const stored = this.m_depthPixels[o] / 255
+                                + this.m_depthPixels[o + 1] / 255 / 255;
+                            samples.push({
+                                sx, dz, w: [+W.x.toFixed(1), +W.y.toFixed(1), +W.z.toFixed(1)],
+                                uv: [+uu.toFixed(4), +vv.toFixed(4), +zz.toFixed(4)],
+                                stored: +stored.toFixed(4), occ: +(zz - 0.0001 > stored),
+                            });
+                        }
+                    }
+                    const fbB = (globalThis as any).__mbShadowFeedbackUrl
+                        ?? (window as any).__karma__?.config?.args
+                            ?.find?.((a: string) => a.startsWith('feedback-url='))
+                            ?.slice('feedback-url='.length);
+                    if (fbB) {
+                        fetch(`${fbB}/mb-probe-dump`, {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify({
+                                probe: 'band-forensics', groundZ: groundZB, size,
+                                nOffZ: this.m_normalOffsetZ,
+                                mMatrix: Array.from(mmB.elements).map(v => +v.toPrecision(9)),
+                                samples,
+                            }),
+                        }).catch(() => { });
+                    }
+                } catch (e) {
+                    (globalThis as any).__mbBandLineErr = String(e).slice(0, 160);
+                }
+            }
         }
         // §885 终三十九g50f: analytic ground-shadow mask (shadowanalytic=1)
         // — project every caster vertex along the light axis onto the
