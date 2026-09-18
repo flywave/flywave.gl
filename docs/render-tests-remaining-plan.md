@@ -5771,3 +5771,46 @@ orthoshadowon=1 / groundquadoff=1（runner env 通道接通）。
 **⑤ 默认路径零回归**：ortho-camera 57,255、lighting 四件
 39,334/42,028/59,427/60,710、shadows-tunnel 154,397（quad 射线修正小赢
 −1.3k）、oriented 簇不变——本轮全部 mgl 语义修正对已提交状态无扰动。
+
+### §885 终四十二g50v: 正交接收链对拍 mgl ground_shadow/shadow_occlusion——quad 正交自动门控，ortho-camera 57,230（真暗带保留）（2026-09-19）
+
+**① mbgl 源码对拍结论（3d-style）**：
+- `_prelude_shadow.fragment.glsl:33-40`：sampler2DShadow **GREATER** 比较，
+  occluded ⇔ receiver z > stored；cascade 外 return 0 = lit（g50u 已对齐）。
+- `fill_style_layer.ts:123`：fill 层 `hasShadowPass` =
+  `fill-elevation-reference !== 'none'`——**HD 路面在 mgl 中确实投影** ✓
+  （我们 caster 集合方向正确）。
+- `shadow_renderer.ts:530-546`：fill 走 `setupShadows(..., 'vector-tile')`
+  → NORMAL_OFFSET 开（u_shadow_bias=[0.00010,0.0012,0.012]，model-tile 才
+  ×3）；非 normalOffset 时 bias=[0.00036,...]。
+- `ground_shadow.frag`：地面影子是 mgl 的**独立 pass**（drawGroundShadows，
+  画在 background 之上），非 background 自身接收——我们 ground-quad 复刻的
+  就是它，透视下成立。
+- `background.fragment.glsl`：背景自身不采样 shadow（g50u 结论维持）。
+
+**② 根因闭合：190,479 的真凶 = ground-quad 正交错帧，而非接收链**：
+shdiag=5 定量（背景 depth=0.835 > z=0.643，路面 depth≈z=0.729）+ 三组
+门控实验：quad 真正关掉后 ortho-camera 190,479→57,230（背景恢复白、
+路面真暗带保留）；此前"quad off 无效"是因为 overlay 直绘块（AfterRender
+通道）绕过了 drawGroundQuad 的门控——本修把两处绘制点统一门控。
+
+**③ 落地**：ground-quad 两处绘制点（preSceneHook underlay + AfterRender
+overlay）均加 `m_orthoStyle` 自动门控（正交下 quad 关、接收交给
+per-material 链）；`setOrthographicStyle` 默认保持阴影链开启
+（orthoshadowoff=1 旋钮可回退）；背景 fill mesh 打 `_isBackground` 旗标
+跳过 injectGroundShadow（mgl 语义）。
+
+**④ 结果**：ortho-camera **57,230**（较 g50t 的 57,255 微降且真暗带
+mgl 忠实呈现；"净收益转正"未达成——路面 lit 区存在自采样 acne
+（road-lit 均值 168 vs 176，缺 normal offset 侧移所致，量级与暗带收益
+相抵）；shadows-tunnel 60,231（quad 关）证明透视 overlay 存在双重施加
+（quad 与 per-material 接收对同一地面双重变暗）——但 lighting 四件
+39,334/42,028/59,427/60,710 依赖 quad（其地面图案无 fill 接收），quad
+全局关闭会 +150k 回归，故维持透视开启；lighting 四件/shadows-tunnel/
+shadows-junction 19,487 与已提交态逐位一致（零回归）。
+
+**⑤ 下轮**：①quad 与 per-material 接收的 mgl 式分层（quad 只画
+background/无接收地面，fill 由自身 shader 接收——可解 shadows-tunnel
+60k 且不伤 lighting）；②fill 接收链补 mgl normal offset（vector-tile
+×1.0，u_shadow_normal_offset=[meterInTiles, offset0, offset1]）消 self-acne，
+ortho 阴影净收益转正；③elevated-wireframe +4.1k（双重光照曝光）。

@@ -2035,7 +2035,12 @@ export class MBMaterialPatchManager {
                 (material as any).__mbElevVis =
                     (globalThis as any).__mbElevPlane &&
                     (globalThis as any).__mbElevVis === true;
-                this.injectGroundShadow(material as any);
+                // §885 终四十一g50v: mgl background never receives cast-
+                // shadows (background.fragment.glsl has no shadow sampling);
+                // the fullscreen background fill mesh must stay unlit-lit.
+                if (!(technique as any)._isBackground) {
+                    this.injectGroundShadow(material as any);
+                }
             }
         }
         if ((globalThis as any).__mbNoCull) {

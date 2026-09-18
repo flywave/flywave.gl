@@ -204,13 +204,11 @@ export class MBShadowRenderer {
      */
     setOrthographicStyle(ortho: boolean): void {
         this.m_orthoStyle = ortho;
-        // §885 终四十g50t A/B: with MapView.orthographicProjection live the
-        // full shadow chain (depth pass + ground quad + receivers) renders
-        // but lands grossly wrong (ortho-camera 57,230 → 190,479; shadow
-        // pattern covers the whole deck). Keep the historical disable as the
-        // default; orthoshadowon=1 (__mbOrthoShadowOn) re-enables the chain
-        // for the follow-up framing forensic.
-        if (ortho && !(globalThis as any).__mbOrthoShadowOn) this.setLightState(false, 0);
+        // §885 终四十一g50v: under ortho the shadow chain stays ON (the
+        // per-material receivers render the correct deck bands; the ground
+        // quad self-disables via m_orthoStyle above). orthoshadowoff=1
+        // restores the historical full disable for A/B.
+        if (ortho && (globalThis as any).__mbOrthoShadowOff) this.setLightState(false, 0);
     }
 
     /** §572b gate retired with the AfterRender overlay channel (§643). */
@@ -529,6 +527,12 @@ export class MBShadowRenderer {
         }
         if (!this.m_enabled || this.m_intensity <= 0) return;
         if (!this.m_groundQuad) return;
+        // §885 终四十一g50v: under ORTHOGRAPHIC camera-projection the quad's
+        // ground-plane pattern is misframed (darkens the whole deck; the
+        // per-material receivers carry the correct bands instead) — skip.
+        // groundquadoff=1 disables it in every projection for A/B.
+        if ((globalThis as any).__mbGroundQuadOff) return;
+        if (this.m_orthoStyle) return;
         // §885 终四十g50u: groundquadoff=1 → kill the quad channel. mgl
         // background.fragment.glsl has NO shadow sampling (background never
         // receives cast-shadows; only fill/line/circle/symbol/extrusion do),
@@ -2188,6 +2192,8 @@ export class MBShadowRenderer {
         // meshes, so the on-top darkening must ride the AfterRender channel
         // (the same bypass the atmosphere/fog/star quads use).
         if ((globalThis as any).__mbShadowOverlay !== false
+            && !(globalThis as any).__mbGroundQuadOff
+            && !this.m_orthoStyle
             && this.m_groundQuad && this.m_groundScene) {
             const prevAuto = renderer.autoClear;
             const prevRT2 = renderer.getRenderTarget();

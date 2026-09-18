@@ -1175,6 +1175,13 @@ export class MBTileDataEmitter {
                 props.color = p['background-color'] ?? '#000000';
                 props.opacity = p['background-opacity'] ?? 1;
                 props.renderOrder = -Infinity;
+                // §885 终四十一g50v: mgl background.fragment.glsl carries NO
+                // shadow sampling (only CPU-prefiltered ground-radiance
+                // v_color) — the background never receives cast-shadows.
+                // Emitted as a fullscreen fill technique it must be excluded
+                // from the shadow-receiver injection or it darkens the whole
+                // ground (ortho-camera shadows-on 190k regression).
+                props._isBackground = true;
                 break;
             case 'fill':
                 props.technique = 'fill';
