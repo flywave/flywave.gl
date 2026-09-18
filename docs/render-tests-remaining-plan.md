@@ -5945,3 +5945,15 @@ reference ≠ none → hasShadowPass ✓ mgl fill_style_layer.ts:123）投影到
 **③ 默认态**：ortho-camera 57,255 / lighting 四件
 39,334/42,028/59,427/60,710 / shadows-tunnel 154,397 / tunnel 1,271 ——
 零回归（本轮仅探针读数，无行为改动）。
+
+**g50z 补（同日）**：首次 shadowdbg=1 读数无效（<3 不置位 paint，采样到的是
+普通渲染色 176,194,216——恰好被误读为深度数据）。shadowdbg=3 正确读数：
+接收链 uv.z **饱和在 0/1/0.976**（视锥外/clamp），stored=1.0（clear）——
+而 CPU 侧 band-forensics 用同公式同矩阵算出 uv z≈0.62（在域内）。两者矛盾
+指向：材质上的 uMBInvViewProj/uMBShadowMatrix 为陈旧帧或符号差（逐帧
+refresh 时序 vs 逐像素重建），而非"caster 覆盖缺席"（g50z 初判修正）。
+下轮首刀（也是 mgl 正解）：放弃逐像素射线重建，改 port mgl fill.vertex
+逐顶点路径——v_pos_light_view = u_light_matrix · vec4(a_pos, z_offset)
+随顶点插值，天然无平面假设/无帧间矩阵错位；我们已有 per-vertex 管线
+（vMBElev），把光空间 uv 改为顶点属性即可。此改动同时是 mgl 分层
+（elevated fill 自接收 vs ground quad）的正解基础。
