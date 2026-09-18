@@ -5633,3 +5633,14 @@ nadir 的距离成正比=透视径向位移残差，与 elevated z=5-6m 一致�
 多出 (72,20) 蓝带（EXP 同位置为背景/白）。y=200/400 同签名。下一刀：
 double-lines 的 gap/offset 逐要素对照（mgl line_solid 的双线偏移方向）+透视
 径向位移的校正评估（同 g50s 方案 B）。
+
+**⑥ g50s 补2（dashed 二分 + MVT 属性验证）**：rmstyle=dashed-lines 二分
+（elevated-symbols 32,735→29,840，改善）确认错位白线确系 dashed-lines 层所
+画（移除后该区域变连续实线）。MVT 手写 parser 全量解剖
+18-232843-103243.mvt 的 hd_road_line：63 要素 = lanes/solid 25、dashed 族
+17（dashed 7+long_dashed 6+short_dash 2+short_dash_solid 1+arrow_dashed
+1）、非 lanes 21（bridge 12/edge 3/hatched_area 3/road_island
+2/stopline 1，两侧 filter 均正确排除）——**属性解码与过滤路由无误**。白线
+错位=要素几何→绘制位置的关联问题（虚线要素画在实线要素位置），下轮=逐要
+素 geometry 位置对拍（emitter 的 feature→geometry 关联审计，疑 bucket 索
+引错位）。nodash 状态 29,840 仍含 legit 虚线缺失与实线位移残差。
