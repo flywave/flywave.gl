@@ -6001,3 +6001,36 @@ stored 应为上层甲板（更小深度）**，指向上层甲板 caster 在带
 瓦片是否进入 depth pass（[MBShadowCast] census + shadow-depth-canvas 分
 层着色）；②若缺席，查 fill-elevation-reference 层的 layers.enable(1)
 注册条件；③自采样误暗的 h 量纲核对（0.03125 系数适用性）。
+
+### §885 终四十八g51c: 接收链激活时序 forensics 中断点快照（2026-09-19）
+
+**① 已完成实验（本轮）**：
+- band-forensics 扩展 5×5 邻域最小深度（nbMin）——用于区分"遮挡体真缺席"
+  与"亚 texel 配准偏移"。实测（ortho-camera 扫描线 sx 250..380 × dz
+  0/5/10/15）：地面面 occluded 样本存在（如 sx=300 stored 0.628 < z 0.630），
+  邻域 min 与逐点 stored 一致（0.608~0.647 连续分布）——**深度图内容与
+  m_matrix 配准在采样级自洽，遮挡体并未缺席**（g50z"上层甲板缺席"假说
+  亦被弱化：存储深度连续、无跳变空洞）；
+- 逐顶点 vMBLightWPos 路径 + NOFF 组合：band 色精准呈现但 lit 甲板自采样
+  半暗铺满（mbLit=0.5@z==depth），normal offset h=1.33 未能消除；
+- **关键未解现象**：shadows-on 与 shadows-off 渲染逐位相同（diff=0），
+  接收调制在可见输出上完全失效——与 forensics 的 occluded 样本存在矛盾。
+- **待完成**：main-canvas census 已扩展 matReal/matDegenerate 字段（可见
+  fill 材质的 uMBShadowMatrix 是否仍为 identity/退化阵）——探针代码已就
+  绪，运行被中断，下轮首刀即跑该 census：若 matDegenerate≈48 → 逐帧
+  refresh 未覆盖可见 fill 材质（refreshTargets 注册表问题）；若 matReal
+  ≈48 → 问题在 chunk 采样/比较内部。
+
+**② 中间教训（已固化在代码注释）**：
+- 探针插桩作用域错误（qActive/gQ 块内声明块外引用）→ ReferenceError
+  中断整条 patch 链，曾致 ortho 短暂 74,693——插桩后必须 tsc --noEmit +
+  小批 A/B 验证；
+- shadowdbg=1 不置位 paint（需 ≥3），首版读数误把普通渲染色当作深度数据
+  ——读数前先确认采样像素是 debug 输出；
+- sed 对含 `?`/`${` 的 TS 模板串替换静默失败，改用 python 精确替换。
+
+**③ 当前安全态（已提交，零回归）**：ortho-camera 57,255（与关影等效）、
+lighting 四件 39,334/42,028/59,427/60,710、shadows-tunnel 154,397、
+shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset 均
+默认关（shvlight=1 / shnoff=1 选入），下轮跑 matReal/matDegenerate census
+即可二选一定位正交接收链断点。

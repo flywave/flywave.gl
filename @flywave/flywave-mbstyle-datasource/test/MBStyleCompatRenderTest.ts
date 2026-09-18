@@ -3563,6 +3563,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         // (injected) vs skipped (e.g. background, or
                         // patch-time shadowLightState race).
                         let injected = 0, groundLit = 0, intOne = 0, intZero = 0;
+                        let matReal = 0, matDegenerate = 0;
                         try {
                             (mapView as any).m_scene?.traverse?.((o: any) => {
                                 const ms = Array.isArray(o?.material) ? o.material : (o?.material ? [o.material] : []);
@@ -3573,6 +3574,12 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                     if (su?.uMBShadowIntensity) {
                                         if (su.uMBShadowIntensity.value === 1) intOne++;
                                         else intZero++;
+                                        const mEl = su.uMBShadowMatrix?.value?.elements;
+                                        // identity/stale matrix detection: a real
+                                        // light matrix has uv.x scale ~ 1e-3..1e-1
+                                        const e0 = mEl ? Math.abs(mEl[0]) : -1;
+                                        if (e0 > 1e-4 && e0 < 1) matReal++;
+                                        else matDegenerate++;
                                     }
                                 }
                             });
@@ -3583,7 +3590,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                             body: JSON.stringify({ probe: "main-canvas",
                                 dataUrl: canvas.toDataURL('image/png'),
                                 recvInjected: injected, groundLit,
-                                intOne, intZero }),
+                                intOne, intZero, matReal, matDegenerate }),
                         });
                     }
                 } catch { /* probe only */ }

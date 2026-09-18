@@ -1827,10 +1827,28 @@ export class MBShadowRenderer {
                             const o = (ty * size + tx) * 4;
                             const stored = this.m_depthPixels[o] / 255
                                 + this.m_depthPixels[o + 1] / 255 / 255;
+                            // §885 终四十八g51c: 5×5 neighborhood minimum —
+                            // distinguishes "occluder truly absent from the
+                            // map" (nbMin ≈ stored ≈ clear/own) from
+                            // "sub-texel registration shift" (nbMin < stored
+                            // nearby: the occluder is there, just offset).
+                            let nbMin = stored;
+                            for (let ddy = -2; ddy <= 2; ddy++) {
+                                for (let ddx = -2; ddx <= 2; ddx++) {
+                                    const nx = Math.min(size - 1, Math.max(0, tx + ddx));
+                                    const ny = Math.min(size - 1, Math.max(0, ty + ddy));
+                                    const no = (ny * size + nx) * 4;
+                                    const v = this.m_depthPixels[no] / 255
+                                        + this.m_depthPixels[no + 1] / 255 / 255;
+                                    if (v < nbMin) nbMin = v;
+                                }
+                            }
                             samples.push({
                                 sx, dz, w: [+W.x.toFixed(1), +W.y.toFixed(1), +W.z.toFixed(1)],
                                 uv: [+uu.toFixed(4), +vv.toFixed(4), +zz.toFixed(4)],
-                                stored: +stored.toFixed(4), occ: +(zz - 0.0001 > stored),
+                                stored: +stored.toFixed(4), nbMin: +nbMin.toFixed(4),
+                                occ: +(zz - 0.0001 > stored),
+                                occNb: +(zz - 0.0001 > nbMin),
                             });
                         }
                     }
