@@ -130,6 +130,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "windnorev=1")) {
         (globalThis as any).__mbWindNoRev = true;
     }
+    // §885 终三十九g50q: shadowfront=1 — skip ground-shadow modulation on
+    // back-facing fragments (shadows-tunnel trench back-face cost A/B).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shadowfront=1")) {
+        (globalThis as any).__mbShadowFrontSkip = true;
+    }
     // §885 终三一九g15: raillift=<m> — diagnostic rail z lift.
     const rl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("raillift="))?.slice("raillift=".length);

@@ -5535,3 +5535,31 @@ trench 视角 deck 背面/阴影调制面覆盖路面——候选=对 shadow 接
 gl_FrontFacing 跳过背面片元，或 trench 域 renderOrder）；②ortho-camera
 74,728（pitch-0 直取 z18 的独立帧/内容问题）；③两族绕向约定相反的分层判据
 （g50o 开放项）；④icons ~2.5× 放大与车道线位移（symbols 簇剩余 ~600k）。
+
+### §885 终三十九g50q: shadowfront 背面调制跳过（分裂，不默认）+ icons pixelRatio 修复（oriented −21%）（2026-09-18）
+
+**① shadowfront=1（gl_FrontFacing 跳过背面地面阴影调制，DEFAULT OFF）**：
+机理=DoubleSide 下背面片元被阴影调制覆盖路面（shadows-tunnel trench 视
+角）。A/B：shadows-tunnel 156,072→**107,127（−48,945，−31%）大赚**，但
+lighting 四件 **+26k~+68k 大回归**——它们的可见阴影接收面本身是合并反转面
+（gl_FrontFacing=false），跳过=关掉其影子。同一机制两类夹具效果相反（哪个
+背面可见由内容决定），**不可全局默认**，旋钮保留（默认关）。根治仍=绕向分
+层判据+逐网格归一化（g50o 开放项）。
+
+**② icons pixelRatio 修复（落地）**：[MBFace] 时代测得 symbols 箭头
+~2.5× 放大。sprite 解剖：3d_intersections 箭头 130×362 **pixelRatio 2**；
+mgl sizedIcon 显示尺寸=物理 px/pixelRatio × icon-size（362/2×0.047≈
+8.5px=expected ~10px ✓），引擎 PoiRenderer computedWidth=纹理物理宽 ×
+iconScale（362×0.058≈21px=ours ✓）。修复=emit 边界把 sprite pixelRatio 折进
+iconScale（MBTileDataEmitter s_spriteInfos 查询；pr=1 sprite 不变；标准
+mapbox 测试 sprite 多为 pr=1 不受影响）。A/B：**elevated-symbols-oriented
+54,125→42,957（−11,168，−21%）**、symbols −2,430、mixed −1,502、lighting
+零变化、icons-and-text −1,631、icons-and-text-terrain −1,965、pitched
++1,192（该件已知多稳态抖动域）。运维：iconfix 首跑撞上前轮泄漏的
+8096 结果服务器（结果串目录），杀进程换 8097 重跑干净——**跑测前必须确认
+无残留 RenderingTestResultServer 进程**。
+
+**③ 剩余（按量）**：symbols 簇残余 ~500k（icons 尺寸对齐后的位置/相位
+差）、ortho-camera 74,728（pitch-0 直取 z18，正交相机旋转/斜切目视，引擎
+相机域）、shadows 系过暗（97k 基线暗区+影子项，g50j 分解维持）、两族绕向
+分层判据（g50o）。

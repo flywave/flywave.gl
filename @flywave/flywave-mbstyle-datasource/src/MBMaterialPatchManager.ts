@@ -3750,19 +3750,28 @@ export class MBMaterialPatchManager {
             // 71.9/73.6/81.9/83.0k (−20k each vs the box-span window,
             // new best), tunnel neutral. shadowmgl=0 reverts.
             const mbShMgl = (globalThis as any).__mbShadowMgl === 0 ? 0 : 1;
+            // §885 终三十九g50q: shadowfront=1 — skip the ground-shadow
+            // modulation on BACK-facing fragments (gl_FrontFacing). With the
+            // mercator DoubleSide default (g50o) the trench view of
+            // shadows-tunnel shows shadow-modulated back faces covering the
+            // (partially shadowed) road — full-bright beats dark there.
+            // Lighting-four regression risk: reversed meshes' visible faces
+            // carry gl_FrontFacing=false and would lose modulation — paired
+            // A/B mandatory. DEFAULT OFF.
+            const mbShFront = (globalThis as any).__mbShadowFrontSkip === true ? 1 : 0;
             // §885 终三十九g50h: relocate the ground-factor multiply to after
             // colorspace_fragment (mgl ground_shadow.frag semantics — the
             // mix runs on the sRGB-encoded output, before fog) when the
             // flavor carries the chunk.
             const mbShTail = mbShMgl && shader.fragmentShader.includes('#include <colorspace_fragment>') ? 1 : 0;
-            shader.fragmentShader = `#define MB_SH_MGL ${mbShMgl}\n#define MB_SH_MGL_TAIL ${mbShTail}\n` + shader.fragmentShader;
+            shader.fragmentShader = `#define MB_SH_MGL ${mbShMgl}\n#define MB_SH_MGL_TAIL ${mbShTail}\n#define MB_SH_FRONTSKIP ${mbShFront}\n` + shader.fragmentShader;
             if (mbShTail) {
                 shader.fragmentShader = `float mbShadowLightOut = 1.0;\n` + shader.fragmentShader;
             }
             const mbShadowDbg4 = !!(globalThis as any).__mbShadowDbg4;
             shader.fragmentShader = tryInsert(
                 shader.fragmentShader, '#include <opaque_fragment>',
-                `\nif (uMBShadowIntensity > 0.0) {${mbShadowSample}
+                `\nif (uMBShadowIntensity > 0.0 && (MB_SH_FRONTSKIP == 0 || gl_FrontFacing)) {${mbShadowSample}
                         // §525 debug readout (baked 1.0/0.0 at compile time when
                         // shadowdbg=1): R=intensity, G=depth sample, B=uv.z.
                         if (uMBShadowDbg > 0.5) {
@@ -3777,7 +3786,7 @@ export class MBMaterialPatchManager {
                     '#include <colorspace_fragment>',
                     `#include <colorspace_fragment>
                     #if MB_SH_MGL_TAIL
-                    if (uMBShadowIntensity > 0.0) {
+                    if (uMBShadowIntensity > 0.0 && (MB_SH_FRONTSKIP == 0 || gl_FrontFacing)) {
                         gl_FragColor.rgb *= mix(pow(uMBGroundShadowFactor, vec3(uMBGSExp)), vec3(1.0), mbShadowLightOut);
                     }
                     #endif`);

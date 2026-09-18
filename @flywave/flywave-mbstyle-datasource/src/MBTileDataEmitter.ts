@@ -1336,7 +1336,20 @@ export class MBTileDataEmitter {
                     // PoiBuilder reads `iconColor` (it ignores `color`).
                     props.iconColor = p['icon-color'] ?? '#000000';
                     props.opacity = p['icon-opacity'] ?? 1;
-                    props.iconScale = l['icon-size'] ?? 1;
+                    // §885 终三十九g50q: mgl sizedIcon display size =
+                    // sprite PHYSICAL px / pixelRatio × icon-size. The engine
+                    // computes computedWidth = texture px × iconScale, so the
+                    // sprite pixelRatio folds into the scale (the 3d-
+                    // intersections arrows are 130×362 @pr2 — without this
+                    // they render ~2× oversized). pr=1 sprites unaffected.
+                    {
+                        let iconScaleVal = Number(l['icon-size'] ?? 1);
+                        const sprInfo = MBTileDataEmitter.s_spriteInfos?.get(
+                            String(props.imageTexture ?? ''));
+                        const sprPr = Number(sprInfo?.pixelRatio ?? 1);
+                        if (Number.isFinite(sprPr) && sprPr > 1) iconScaleVal /= sprPr;
+                        props.iconScale = iconScaleVal;
+                    }
                     props._iconTranslate = p['icon-translate'] ?? [0, 0];
                     props._iconTranslateAnchor = p['icon-translate-anchor'] ?? 'map';
                     // Mapbox `icon-anchor` — the native PoiRenderer shifts the
