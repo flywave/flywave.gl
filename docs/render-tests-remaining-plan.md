@@ -5381,3 +5381,72 @@ z-fighting 噪声（标线/randomly 被吞）+ 渲染成本 ×10 + 35 份状态�
   ×mix(factor_sRGB,1,light)→fog→×opacity,opacity 在 fog 后)。
 - 顺带:recv-mat-audit 帧I invViewProj 退化=审计采集时序问题
   (live 正常),待修。
+
+### §885 终三十九g50l/m/n: 3d-intersections 族专项对齐轮——全族 75 件新鲜基线 + circle-elevation-reference 落地 + 瓦片抓取集合假设否定 + Munich 桥面剔除实锤（fsds −91.6%）（2026-09-18）
+
+**① 全族新鲜基线（3di-g50k-base，chrome-headless-shell 131 指纹，75 件分批协议）**：
+71 件收齐（shadows-double-shading-{regression,ramps-regression}/shadows-junction/zLevel
+4 件缺，疑 leaf 清单差异），总 mismatch 5,709,452。g50k（elevplane 默认开）对
+g50j 台账值验证：lighting 四件 71,056/72,802/81,453/82,507（对 g50h
+71,135/72,868/81,651/82,705 各 −80~200，中性偏好）；shadows-tunnel 136,802
+（中性，薄板影子项 +39.8k 回归维持）；shadows-underpass 146,932（对 g50d
+161,245 −14k，疑双稳态）；shadows-roads-depth 24,204（7k/25k 双稳态的高位）；
+road-extend-tilecover 202,964（203k 双稳态位）。**主簇分诊**：elevated-symbols
+非光照簇 ~1.48M/16 件=族内最大块；guard-rail 系 ~0.65M；tunnel 系 ~0.55M；
+road-markups 系 ~0.35M；elevated-circles 系 ~0.27M。
+
+**② g50l（circle-elevation-reference 落地，零回归）**：mgl
+circle_hd_extension 语义移植——`circle-elevation-reference: 'hd-road-markup'`
+把每个圆心抬到 HD 高程曲线上（processPointFeature 发射循环内逐点
+sampleHeightCanonical + markup bias；terrainActive 门控=mgl draw_circle 仅非
+terrain 绑 elevated buffer；yDelta 校正同 resolveZOffset HD 支路）。此前 circle
+层完全不解析高程（resolveZOffset 类型联合无 'circle'，emitter 亦无）。A/B
+（5 件 + 6 件对照）：circles-tunnel 73,621→72,009（−1,612）、tiled −102、
+mixed −35、*terrain-enabled/nonelevated 位级不变；lighting 四件 + ncb + tunnel
+**全部逐位不变** → 零回归。收益小的原因见④（这些夹具主体失配是桥面缺失，
+非圆点高程）。
+
+**③ g50m（瓦片抓取集合假设否定 + 主线程遥测）**：worker 侧遥测
+（[MBTileDec]/[MBMergeChild]）进不了 karma 控制台 → 新增 [MBTileReq]
+provider 请求遥测（MBStyleDataSource，decodedbg 门控，主线程可见）+
+tileblock=<x-y,...> 诊断旋钮（屏蔽指定 mgl 级瓦片）。新工具
+scripts/mgl-cover-hd-probe.ts：tsx 直驱 vendored Transform（零移植漂移），
+按夹具相机离线计算 mgl 最终抓取集合（coveringTiles +
+extendTileCoverToNearPlane + extendTileCoverForTunnels，即 source_cache.ts
+elevatedLayers 分支）。elevated-symbols 实测：**mgl 最终集合=6 块，仅 2 块
+命中语料库**（232841-103245/103246）——mgl 靠这 2 块的 ±1 瓦片越界几何渲染
+整个视场；我们 z17-cell+children-merge 抓到 4 块内容瓦片（mgl 的 2 块+北块
+232843/232844-103242/103243）。tileblock A/B（屏蔽北块）：**全簇恶化**
+（lighting +192%、mixed +89%、symbols +4%，icons-and-text 0%）——北块越界
+几何是净正贡献（同一批路面在多瓦片间冗余）→ **抓取集合对齐不是主矛盾**，
+开放项关闭。
+
+**④ g50n（Munich 桥面剔除实锤——elevated-circles-nonelevated 主失配根因
++ 族级签名）**：该件 81,135 的主体 = 期望路蓝→我们画背景（84.0k/85.5k），
+即上层桥面网格整体不可见（车道线/圆点位置正确）。取证链：①涂红+DoubleSide
+（decodedbg 现有钩子）→ 桥面完整渲染，与 expected 路网 IoU=0.881；②rmstyle=
+background 无效（−260，非背景遮挡）；③**fsds=1 新旋钮**（全 fill
+DoubleSide，MBMaterialPatchManager + test 参数管道）→ **81,135→6,846
+（−91.6%）**——桥面被 FrontSide 剔除实锤，且下层内容近乎像素级对齐。
+**族级推广（fsds=1 扫描）**：elevated-symbols-icons-and-text 106,880→39,220
+（−63%）、*-terrain-enabled 111,547→58,296（−48%）、elevated-symbols
+45,358→35,165（−22%）、circles-tiled 45,638→32,899（−28%）——**族内大簇的
+"缺失路面"主体 = 被剔除的背面填充网格**（mgl 语义为 CullFace.backCW，正面
+应可见）。受测 5 件全部改善、无一回退（ncb 41,264→37,632 −8.8% 亦改善
+——Turku 也有背面网格），fsds 当前是净赢旋钮；默认翻转前的门槛=全族 75 件
+配对 A/B + sphere 投影域核查（§808 白带：globe 远侧 fill 靠 FrontSide 剔除）+
+跨族（fog/terrain/model-layer）抽查。
+**矛盾（下轮首案）**：emitElevatedFillPiece 的绕向链（signed-area 归一化 +
+earcut 恒 CCW 输出[离线实测验证：CW/CCW 输入输出均 +2] + (a,c,b) 三角翻转）
+对所有 piece 数学上输出恒定朝向，但同夹具内 road-base（85v，细分路径，z
+0.05..0.94）可见而 road-base-bridge（22v，平地捷径，z=6.00 恒平）被剔除；
+Munich 与 Tokyo 的 MVT extent（8192）/源数据首环绕向（均 CCW-in-y-down）/
+flip 配置全部一致。下轮取证入口：①逐网格 matrixWorld 行列式（负缩放/镜像
+变换翻转会翻转屏幕绕向——一次 run 可定）；②uMB3DDbg 逐 draw 对拍两网格的
+材质/属性态（aMBElev 属性链 g50k 默认开后 22v 网格的 attribute 完整性）；
+③flat-shortcut 专测（平地捷径 piece 与细分 piece 的逐顶点绕向 dump）。
+
+**⑤ 其余记录**：simple runner 不转发自定义 karma arg（MBSTYLE_EXTRA_ARGS 仅
+chunked runner 支持）——诊断 A/B 必须走 chunked runner；单位测试 309 passing
+（emitter 改动零破坏）；lib 构建含全部改动（mapview 既有 tsc 报错与本包
+无关）。

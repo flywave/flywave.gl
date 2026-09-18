@@ -112,6 +112,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "wallside=1")) {
         (globalThis as any).__mbWallDS = true;
     }
+    // §885 终三十九g50n: fsds=1 — force DoubleSide on every fill material
+    // (Munich deck culling bisection).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "fsds=1")) {
+        (globalThis as any).__mbFsds = true;
+    }
     // §885 终三一九g15: raillift=<m> — diagnostic rail z lift.
     const rl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("raillift="))?.slice("raillift=".length);

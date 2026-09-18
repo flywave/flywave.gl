@@ -1966,6 +1966,12 @@ export class MBMaterialPatchManager {
             (techName === 'fill' || techName === 'circles')) {
             (material as any).side = THREE.FrontSide;
         }
+        // §885 终三十九g50n: fsds=1 — force DoubleSide on every fill
+        // material (culling bisection for the Munich deck meshes; the
+        // a3b4c8 red-paint hook only covers Turku-colored decks).
+        if ((globalThis as any).__mbFsds && techName === 'fill') {
+            (material as any).side = THREE.DoubleSide;
+        }
         const paint = technique._paint ?? {};
         const layout = technique._layout ?? {};
         // §244: injected background tiles use the exact mgl fog formula.

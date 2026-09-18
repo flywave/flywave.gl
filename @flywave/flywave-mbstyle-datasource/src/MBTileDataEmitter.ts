@@ -5333,6 +5333,29 @@ export class MBTileDataEmitter {
                     if (this.m_terrainSampler && tech.name === 'circles') {
                         w.z += this.m_terrainSampler(ww.x, ww.y);
                     }
+                    // §885 终三十九g50l: mgl circle_hd_extension —
+                    // `circle-elevation-reference: 'hd-road-markup'` lifts each
+                    // circle center onto the HD road elevation curve (per-point
+                    // pointElevation + ELEVATION_BIAS). draw_circle binds the
+                    // elevated buffer only when terrain is OFF; under terrain
+                    // the sampler lift above owns z (the mgl terrainFlat gate).
+                    if (tech.name === 'circles' && !this.terrainActive &&
+                        layer.layout['circle-elevation-reference'] === 'hd-road-markup' &&
+                        this.m_elevationStructures && !this.m_elevationStructures.isEmpty) {
+                        const yDelta = this.elevationYDelta(this.m_extents);
+                        const h = this.m_elevationStructures.sampleHeightCanonical(
+                            properties,
+                            pt.x * (4096 / this.m_extents),
+                            yDelta === 0
+                                ? pt.y * (4096 / this.m_extents)
+                                : (pt.y - yDelta) * (4096 / this.m_extents),
+                            true);
+                        if (h !== undefined) {
+                            w.z += h;
+                            if (useW !== w) useW.z += h;
+                            useWW.z += h;
+                        }
+                    }
                     geo.positions.push(useW.x, useW.y, useW.z);
                     if (twx !== 0 || twy !== 0) {
                         useWW.x += twx;

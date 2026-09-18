@@ -528,8 +528,41 @@ class MglMaxZoomAncestorProvider extends DataProvider {
         const x = tileKey.column >> shift;
         const y = tileKey.row >> shift;
         const parentKey = TileKey.fromRowColumnLevel(y, x, this.m_maxzoom);
+        if (mbTileReqDbg()) {
+            // eslint-disable-next-line no-console
+            console.log(`[MBTileReq] ancestor cell=z${lvl}/${tileKey.column}/${tileKey.row} -> z${this.m_maxzoom}/${x}/${y}`);
+        }
         return this.m_inner.getTile(parentKey, abortSignal);
     }
+}
+
+// §885 终三十九g50m: main-thread tile-request telemetry (decodedbg gated) —
+// the worker-side [MBTileDec]/[MBMergeChild] lines never reach the karma
+// console, leaving the cell-level selection opaque. One line per request:
+// requested cell key, the provider's response class, and any shifted key.
+// tileblock=232843-103242,232844-103243 → diagnostic: drop specific mgl-level
+// tiles from the fetch (A/B for the mgl fetch-set alignment).
+let mbTileReqLogCount = 0;
+function mbTileReqDbg(): boolean {
+    // decodedbg-gated; the providers run on the main thread (the decoder is
+    // constructed in-process by the render test), so the karma-arg global is
+    // visible here — the earlier zero-output was the simple runner not
+    // forwarding the karma arg at all.
+    if ((globalThis as any).__mbDecodeDbg !== true) return false;
+    return mbTileReqLogCount++ < 2000;
+}
+
+const s_mglTileBlock = (() => {
+    const arg = typeof window !== 'undefined'
+        ? (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith('tileblock='))
+        : undefined;
+    if (!arg) return null;
+    return new Set(arg.slice('tileblock='.length).split(',').filter(Boolean));
+})();
+
+function mglTileBlocked(z: number, x: number, y: number): boolean {
+    return s_mglTileBlock !== null && s_mglTileBlock.has(`${x}-${y}`);
 }
 
 class BoundsFilteredDataProvider extends DataProvider {
@@ -1190,7 +1223,19 @@ class MglChildFallbackProvider extends DataProvider {
         } catch {
             data = {};
         }
-        if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+        const hit = data instanceof ArrayBuffer || data instanceof Uint8Array;
+        if (mbTileReqDbg()) {
+            // eslint-disable-next-line no-console
+            console.log(`[MBTileReq] childfallback cell=z${tileKey.level}/${tileKey.column}/${tileKey.row} ${hit ? "HIT" : "MISS"}`);
+        }
+        if (hit) {
+            if (mglTileBlocked(tileKey.level, tileKey.column, tileKey.row)) {
+                if (mbTileReqDbg()) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBTileReq] BLOCKED direct z${tileKey.level}/${tileKey.column}/${tileKey.row}`);
+                }
+                return {};
+            }
             return data;
         }
         // Miss (sparse tileset 404): try the four mgl-level children.
@@ -1208,7 +1253,14 @@ class MglChildFallbackProvider extends DataProvider {
                         await this.m_inner.getTile(
                             TileKey.fromRowColumnLevel(cy, cx, L + 1), abortSignal);
                     if (cb instanceof ArrayBuffer || cb instanceof Uint8Array) {
-                        children.push({ z: L + 1, x: cx, y: cy, bytes: cb });
+                        if (mglTileBlocked(L + 1, cx, cy)) {
+                            if (mbTileReqDbg()) {
+                                // eslint-disable-next-line no-console
+                                console.log(`[MBTileReq] BLOCKED child z${L + 1}/${cx}/${cy}`);
+                            }
+                        } else {
+                            children.push({ z: L + 1, x: cx, y: cy, bytes: cb });
+                        }
                     }
                 } catch {
                     // Missing quarter → renders empty (pre-fallback behavior).
@@ -1216,6 +1268,10 @@ class MglChildFallbackProvider extends DataProvider {
             }
         }
         if (children.length === 0) return data;
+        if (mbTileReqDbg()) {
+            // eslint-disable-next-line no-console
+            console.log(`[MBTileReq] children z${L + 1}: ${children.map(c => `${c.x}/${c.y}`).join(" ")}`);
+        }
         mbPendingChildrenPut(mbCellTileKeyString(tileKey), children);
         // Non-empty marker so TileLoader doesn't short-circuit the decode
         // (§265) — the geojson branch ignores it and the merge runs.
