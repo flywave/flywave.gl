@@ -61,6 +61,9 @@ export interface ShadowUniformState {
     invViewProj?: THREE.Matrix4;
     /** §885 终三十九g50b: live auto compare-bias (box z-span ramp). */
     biasAuto?: number;
+    /** §885 终四十二g50w: mgl u_shadow_normal_offset world-up displacement
+     * (meters) — kills receiver self-sampling acne on coplanar surfaces. */
+    normalOffsetZ?: number;
     /** §717: shadow-camera far (world units) — the fade-out envelope. */
     far: number;
 }
@@ -146,6 +149,8 @@ export class MBShadowRenderer {
      * refreshed per fit and shipped to receivers as a uniform — the baked
      * compile-time define raced the first fit nondeterministically. */
     private m_biasAuto = 0.0002;
+    /** §885 终四十二g50w: mgl u_shadow_normal_offset world-up displacement. */
+    private m_normalOffsetZ = 0;
     private m_orthoStyle = false;
     // §560: ground shadow receiver — mgl shades the BACKGROUND as a ground
     // layer (`background × groundRadiance × groundShadow`); our background is
@@ -261,6 +266,7 @@ export class MBShadowRenderer {
             invViewProj: (this as any).__mbInvViewProj as THREE.Matrix4,
             // §885 终三十九g50b: live compare-bias window for receivers.
             biasAuto: this.m_biasAuto,
+            normalOffsetZ: this.m_normalOffsetZ,
             // §717: mgl u_fade_range = [lastCascade.far×0.75, lastCascade.far]
             // (shadow_renderer.ts:363) — receiver shadows fade to lit across
             // the far quarter of the coverage; single-cascade far stands in.
@@ -1146,6 +1152,29 @@ export class MBShadowRenderer {
             // keep it fed (the live uMBShadowBiasW uniform supersedes it for
             // already-compiled materials).
             (globalThis as any).__mbShadowBiasAuto = this.m_biasAuto;
+
+            // §885 终四十二g50w: mgl u_shadow_normal_offset port
+            // (shadow_renderer.ts:530-546 + _prelude_shadow.vertex.glsl:6-14).
+            // Fill receivers displace the sample point along world-up by
+            // h = texelInTileCoords · radius · scale · dotScale so a coplanar
+            // surface samples IN FRONT of its own stored depth (acne fix).
+            // texelInTileCoords = 2/tileSize·EXTENT/res = 0.03125 (tile coords
+            // per shadow texel); scale = 1.0 (vector-tile) ·
+            // lerpClamp(zoom, 22→0.125, 0→4); dotScale = (1−NdotL)/2+0.5 with
+            // NdotL = shadow-direction z (surface normal = up).
+            const lsN = (this.m_dataSource as any).m_environment?.lighting3DState;
+            const ndl = Math.min(Math.max(lsN ? lsN.dir[2] : 0, 0), 1);
+            const dotScale = (1 - ndl) * 0.5 + 0.5;
+            const mbZoom = Math.max(0, (this.m_mapView?.zoomLevel ?? 20) - 1);
+            const tC = Math.min(1, Math.max(0, (22 - mbZoom) / 22));
+            const offScale = 0.125 + (4 - 0.125) * tC;
+            // The ortho fit half-extent = m_shadowCamera.right (world units =
+            // meters here). h = 0.03125·radius·scale·dotScale meters —
+            // texelScale(2/512·8192/1024)·radius(tile)·scale·dotScale·
+            // tileInMeters collapses to this in world meters. Guard against
+            // non-finite inputs poisoning the receivers.
+            const h = 0.03125 * this.m_shadowCamera.right * offScale * dotScale;
+            this.m_normalOffsetZ = Number.isFinite(h) ? h : 0;
         }        // §885 终七十二: shoff=<x>,<y> — world-XY calibration offset of the
         // shadow sphere center (dark-centroid A/B against expected).
         {

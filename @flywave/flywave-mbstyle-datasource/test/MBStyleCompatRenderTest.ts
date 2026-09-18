@@ -360,6 +360,12 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.includes?.("groundquadoff=1")) {
         (globalThis as any).__mbGroundQuadOff = 1;
     }
+    // §885 终四十二g50w: shnoff=1 → enable the mgl normal-offset receiver
+    // displacement (u_shadow_normal_offset port; plumbing live, default off
+    // pending the ortho band forensics — see ledger g50w).
+    if ((window as any).__karma__?.config?.args?.includes?.("shnoff=1")) {
+        (globalThis as any).__mbShadowNOff = true;
+    }
     // §885 终一百三十六: fogshift=<x>,<y> → fogMglRange.x/y calibration offsets.
     const fs = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogshift="))?.slice("fogshift=".length);

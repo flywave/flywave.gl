@@ -328,6 +328,7 @@ export class MBMaterialPatchManager {
                                                 uMBShadowMatrix: f8(u.uMBShadowMatrix?.value),
                                                 uMBInvViewProj: f8(u.uMBInvViewProj?.value),
                                                 intensity: u.uMBShadowIntensity?.value,
+                                                nOffZ: u.uMBNOffZ ? { present: true, value: u.uMBNOffZ.value } : { present: false },
                                                 factor: u.uMBGroundShadowFactor?.value ? Array.from(u.uMBGroundShadowFactor.value.toArray ? u.uMBGroundShadowFactor.value.toArray() : []) : null,
                                             }),
                                         }).catch(() => { });
@@ -367,6 +368,11 @@ export class MBMaterialPatchManager {
                                 const bM = (globalThis as any).__mbShadowBias;
                                 const bv = bM ?? bA;
                                 (u.uMBShadowBiasW.value as THREE.Vector2).set(-bv, bv);
+                            }
+                            // §885 终四十二g50w: mgl normal-offset world-up
+                            // displacement (kills coplanar self-sampling acne).
+                            if (u.uMBNOffZ) {
+                                u.uMBNOffZ.value = (shadowState as any).normalOffsetZ ?? 0;
                             }
                             // §885 终三十九g50f: analytic mask path flag.
                             if (u.uMBShAnalytic) {
@@ -3475,7 +3481,7 @@ export class MBMaterialPatchManager {
             const d8d = (globalThis as any).__mbShadowDiag === '8' ? 1 : 0;
             if (!shader.fragmentShader.includes('#define MB_SH_BIAS')) {
                 shader.fragmentShader =
-                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n#define MB_SH_DIAG8 ${d8d}\n`
+                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n#define MB_SH_DIAG8 ${d8d}\n#define MB_SH_NOFF ${(globalThis as any).__mbShadowNOff === true ? 1 : 0}\n`
                     + shader.fragmentShader;
             }
             // §885 终三十九g37: MB_SH_ELEVVIS must ALWAYS be defined for
@@ -3521,6 +3527,9 @@ export class MBMaterialPatchManager {
             // baked MB_SH_BIAS define raced the first fit).
             const bW0 = Math.max(0.002, bVd);
             shader.uniforms.uMBShadowBiasW = { value: new THREE.Vector2(-bW0, bW0) };
+            // §885 终四十二g50w: mgl u_shadow_normal_offset world-up
+            // displacement (meters), refreshed per frame from the renderer.
+            shader.uniforms.uMBNOffZ = { value: 0 };
             // §885 终三十九g50d: default flipped 2.2 → 1.0 after the g50d
             // full retest — lighting four 91.7–100.7k (−40~48k each vs 2.2),
             // every thin-plate fixture flat or slightly better, none worse.
@@ -3584,6 +3593,16 @@ export class MBMaterialPatchManager {
                         vec3 mbRayDir = normalize(mbFarW - mbNearW);
                         float mbRayT = (${mbRayPlane} - mbNearW.z) / mbRayDir.z;
                         vec3 mbWP = mbNearW + mbRayDir * mbRayT;
+                        #if MB_SH_NOFF
+                        // §885 终四十二g50w: mgl NORMAL_OFFSET port
+                        // (fill.vertex.glsl:46-48 + _prelude_shadow.vertex.glsl:
+                        // 6-14) — displace the receiver sample point along
+                        // world-up so a coplanar surface reads IN FRONT of its
+                        // own stored depth (kills self-sampling acne; mgl
+                        // vector-tile mode, multiplier 1.0). Live magnitude in
+                        // uMBNOffZ (renderer: texel·0.03125·scale·dotScale).
+                        mbWP.z += uMBNOffZ;
+                        #endif
                         #if MB_SH_ELEVVIS
                         gl_FragColor.rgb = vec3(clamp(vMBElev / 6.0, 0.0, 1.0));
                         #endif
@@ -3746,6 +3765,7 @@ export class MBMaterialPatchManager {
                 'uniform vec2 uMBRes;\n',
                 'uniform float uMBShadowDbg;\n',
                 'uniform float uMBShAnalytic;\n',
+                'uniform float uMBNOffZ;\n',
             ]) {
                 const name = decl.replace(/^uniform [a-zA-Z0-9]+ /, '').replace(/[;\n]/g, '');
                 if (!shader.fragmentShader.includes(name)) mbShadowOwn.push(decl);
@@ -3762,7 +3782,7 @@ export class MBMaterialPatchManager {
                 // TRUE — the R-only HW decode branch compiled in the default
                 // SW path). DIAG5/DIAG7 stay value-emitted and are selected
                 // with `#if`.
-                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n#define MB_SH_DIAG8 ${d8}\n` + shader.fragmentShader;
+                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n#define MB_SH_DIAG8 ${d8}\n#define MB_SH_NOFF ${(globalThis as any).__mbShadowNOff === true ? 1 : 0}\n` + shader.fragmentShader;
             }
             if ((globalThis as any).__mbShadowHW) {
                 shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;

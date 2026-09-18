@@ -5814,3 +5814,38 @@ background/无接收地面，fill 由自身 shader 接收——可解 shadows-tu
 60k 且不伤 lighting）；②fill 接收链补 mgl normal offset（vector-tile
 ×1.0，u_shadow_normal_offset=[meterInTiles, offset0, offset1]）消 self-acne，
 ortho 阴影净收益转正；③elevated-wireframe +4.1k（双重光照曝光）。
+
+### §885 终四十三g50w: fill 接收链 mgl normal offset 移植（管道就绪，默认关）——ortho 暗带定性修正（2026-09-19）
+
+**① mgl 源码对拍（3d-style/shaders/_prelude_shadow.vertex.glsl:6-14 +
+shadow_renderer.ts:530-546）**：fill 接收 `shadow_normal_offset((0,0,1))`：
+n=(0,0,tileInMeters)，dotScale=min(1−NdotL,1)/2+0.5，位移 h =
+texelScale(=2/512·8192/res=0.03125)·radius(tile)·scale·dotScale·tileInMeters
+≡ 0.03125·radius_meters·scale·dotScale；scale=1.0(vector-tile)·
+lerpClamp(zoom,22→0.125,0→4)；NORMAL_OFFSET 开时 u_shadow_bias.x=0.00010
+（ground_shadow plane-bias 变体不含 normal offset，二者是不同接收路径）。
+
+**② 移植落地**：渲染器 run() 内（casterBox fit 后）算 h →
+ShadowUniformState.normalOffsetZ → 接收 chunk 新增
+`#if MB_SH_NOFF  mbWP.z += uMBNOffZ  #endif`（uMBNOffZ 逐帧刷新，decl 去重
+列表/两处 define 前缀均已接入）。修复过程中发现并修掉一个潜在 NaN 源
+（m_shadRadius 字段从未赋值，改用拟合后 m_shadowCamera.right +
+Number.isFinite 防护）。
+
+**③ 探针实证（本轮最重要定性）**：shdiag=5 + 常量 50m 判别实验证明
+normal offset 管道已编译生效（z 通道被抬高）；但同时证明——
+**正交下 per-material 接收链对全部可见路面 fragment 输出 lit≈1**（阴影
+开/关的可见差异≈0：57,230 vs 57,255），即 g50u 观察到的"暗带对准"
+(solo2) 其实是 ground-quad 图案（错帧）的贡献；接收链本身在正交下从未
+产出过暗带。当前接收链 ortho 深度诊断（shdiag=5）：路自面 z≈depth
+（自采样正确 lit），(300,250) 带位 z=0.760 < depth=0.847 → 判 lit
+（mgl 同式同输入也应 lit）——**mgl 的暗带来源需要重新归因**（疑 v_depth
+视深淡出 / cascade1 / 或 fill.vertex 的 v_pos_light_view 逐顶点路径与
+我们逐像素射线重建的系统性差异），此为下轮首刀。
+
+**④ 旋钮与默认**：normal offset 默认关（shnoff=1 选入）——h=1.33m 时
+shadows-tunnel 154,397→155,684（+1.3k），ortho-camera 不动；h 微小时全部
+与已提交态逐位一致。默认路径零回归验证：ortho-camera 57,230 /
+lighting 四件 39,334/42,028/59,427/60,710 / shadows-tunnel 154,397 ✓。
+运维：karma-worker.bundle.js 是 8/2 的预构建产物（与主线程 TS 无关，主
+线程 karma webpack 直编 TS 实时生效——本轮全部实验均据此判读）。
