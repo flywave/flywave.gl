@@ -204,7 +204,13 @@ export class MBShadowRenderer {
      */
     setOrthographicStyle(ortho: boolean): void {
         this.m_orthoStyle = ortho;
-        if (ortho) this.setLightState(false, 0);
+        // §885 终四十g50t A/B: with MapView.orthographicProjection live the
+        // full shadow chain (depth pass + ground quad + receivers) renders
+        // but lands grossly wrong (ortho-camera 57,230 → 190,479; shadow
+        // pattern covers the whole deck). Keep the historical disable as the
+        // default; orthoshadowon=1 (__mbOrthoShadowOn) re-enables the chain
+        // for the follow-up framing forensic.
+        if (ortho && !(globalThis as any).__mbOrthoShadowOn) this.setLightState(false, 0);
     }
 
     /** §572b gate retired with the AfterRender overlay channel (§643). */
@@ -468,15 +474,24 @@ export class MBShadowRenderer {
         cam: THREE.PerspectiveCamera, camPos: THREE.Vector3,
         ndcX: number, ndcY: number, far: number, planeZ: number, out: THREE.Vector3,
     ): void {
-        // Standard unproject: NDC (z=-1, near plane) → view → world.
-        const v = new THREE.Vector4(ndcX, ndcY, -1, 1)
+        // Projection-generic unproject: NDC (z=-1 near / z=+1 far) → view →
+        // world; the ray through the NDC point is (p1 − p0). For a perspective
+        // camera both points sit on the same eye ray (identical result to the
+        // old camPos-origin form); for an ORTHO projection the ray is the
+        // parallel view axis through the shifted near-plane point — the
+        // perspective form would tilt every ray toward the near-plane xy
+        // offset and throw the ground corners far outside the viewport.
+        const v0 = new THREE.Vector4(ndcX, ndcY, -1, 1)
             .applyMatrix4(cam.projectionMatrixInverse);
-        const dir = new THREE.Vector3(v.x / v.w, v.y / v.w, v.z / v.w)
-            .applyMatrix4(cam.matrixWorld)
-            .sub(camPos)
-            .normalize();
-        const t = dir.z < -1e-6 ? (planeZ - camPos.z) / dir.z : far;
-        out.copy(camPos).addScaledVector(dir, Math.min(Math.abs(t), far));
+        const v1 = new THREE.Vector4(ndcX, ndcY, 1, 1)
+            .applyMatrix4(cam.projectionMatrixInverse);
+        const p0 = new THREE.Vector3(v0.x / v0.w, v0.y / v0.w, v0.z / v0.w)
+            .applyMatrix4(cam.matrixWorld);
+        const p1 = new THREE.Vector3(v1.x / v1.w, v1.y / v1.w, v1.z / v1.w)
+            .applyMatrix4(cam.matrixWorld);
+        const dir = p1.sub(p0).normalize();
+        const t = dir.z < -1e-6 ? (planeZ - p0.z) / dir.z : far;
+        out.copy(p0).addScaledVector(dir, Math.min(Math.abs(t), far));
         // §885 终二十: one-shot per-corner dump — dir/t/out vs camPos, to
         // locate the 2.00× ground-intersection offset (far clamp vs ray
         // direction vs unproject origin).
@@ -503,7 +518,11 @@ export class MBShadowRenderer {
         }
         if (!this.m_enabled || this.m_intensity <= 0) return;
         if (!this.m_groundQuad) return;
-        if (this.m_orthoStyle) return;
+        // §885 终四十g50t: ortho bail removed — the ground quad is a screen-
+        // space full-frame draw (fullscreen OrthographicCamera) and the
+        // corner math in prepGroundQuad/cornerOnGround is now projection-
+        // generic; mgl renders ground cast-shadows under ortho.
+        // orthogroundquadoff=1 restores the skip for A/B.
         // 终五十八: no m_groundUniforms requirement — MeshBasicMaterial has
         // no .uniforms, so m_groundUniforms is only set INSIDE
         // onBeforeCompile (first render). Gating the draw on it deadlocked:
@@ -747,7 +766,11 @@ export class MBShadowRenderer {
         // buildings-trees-shadows-casting 729,580). Opt OUT via
         // `shadowdisable=1` keeps a forensic escape hatch.
         if ((globalThis as any).__mbShadowDisable) return;
-        if (this.m_orthoStyle) return;
+        // §885 终四十g50t: ortho bail removed — the depth pass frames the
+        // light-space camera (world-space matrices, projection-independent),
+        // and caster placement is RTE-frame world geometry. mgl casts
+        // shadows under ortho camera-projection. orthodepthoff=1 restores.
+        if ((globalThis as any).__mbOrthoDepthOff) return;
         if (!this.m_enabled || this.m_intensity <= 0) return;
         const renderer = this.m_mapView?.renderer as THREE.WebGLRenderer | undefined;
         const scene = this.m_mapView?.m_scene as THREE.Scene | undefined;

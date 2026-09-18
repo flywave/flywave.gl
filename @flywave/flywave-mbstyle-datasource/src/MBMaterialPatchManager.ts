@@ -3390,8 +3390,15 @@ export class MBMaterialPatchManager {
         // Applied SHADER-side (order-independent of paint color assignment).
         if (!technique?._isRaster && !technique?._isHillshade) {
             const ls = (this.m_dataSource as any).m_environment?.lighting3DState;
-            if (ls && !(material as any).__mbGroundRadApplied) {
-                (material as any).__mbGroundRadApplied = true;
+            // §885 终四十g50t: single-chain dedup — injectGroundLighting
+            // (uMBGroundRad, linear-domain rad^2.2) computes the SAME mgl
+            // apply_lighting_ground product as this block (sRGB rad after
+            // colorspace_fragment). Both applying squares the radiance
+            // (ortho-camera road rendered raw×1.0794² = (190,209,233) vs
+            // expected raw×1.0794 = (176,194,216)). Share the
+            // __mbGroundLitHandler flag so exactly one chain applies.
+            if (ls && !(material as any).__mbGroundLitHandler) {
+                (material as any).__mbGroundLitHandler = true;
                 const gr = ls.groundRadiance;
                 const origCompile = material.onBeforeCompile;
                 const keySuffix = `mbgr:${gr.map((c: number) => c.toFixed(4)).join(',')}`;

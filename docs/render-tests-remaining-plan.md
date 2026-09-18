@@ -5662,3 +5662,72 @@ hd_road_line 要素按 line_type 投到屏幕，与 expected/current 白线位�
 expected 重合）。**要素路由基本正确**；symbols 残余主体回到已知域：deck 洞
 （Portal Graph L4）+标线被 deck 覆盖（7.7k）+透视径向位移残差（g50s 方案
 B 域）+虚线相位噪声（~7k）。dashed 关联审计关闭。
+
+### §885 终四十g50t: 正交相机方案 A 落地（MapView 投影覆写）+ 地面光双链去重——ortho 簇 −23~−94%，lighting 四件 −40~45%（2026-09-18）
+
+**① mbgl 源码参照（本轮方法论：先读源再动手，不盲跑）**：
+- 正交：geo/transform.ts:2543 `isOrthographic` = 非 globe &&
+  `_orthographicProjectionAtLowPitch` && pitch < 15（OrthographicPitchTranstionValue）。
+  正交视域半高 = `0.5·height`（CSS px 域），near = height/50 px，far = farZ；
+  与透视矩阵按 `lerpMatrix(ortho, persp, easeIn(pitch/15))` 插值
+  （easeIn = t^5，util.ts:830）；getCameraToCenterDistance 同款插值（:2956）。
+- line.vertex.glsl（g50s 期间已对照）：gapwidth/2、inset/outset 公式与我们
+  §518 几何实现一致；dash 相位链（a_linesofar·tile_units_to_pixels/
+  totalLength/floorwidth·floor_width_scale）此前已对齐。
+
+**② MapView 正交相机（方案 A，最小侵入投影覆写）**：MapView.ts 新增
+`orthographicProjection` 开关 + `m_orthoHelperCamera`；updateCameras 在
+`updateProjectionMatrix()` 后覆写 projectionMatrix（含 inverse）：半高 =
+height/2 × mpp（引擎逻辑 px 与 mgl CSS px 同标：world/px = CIRC/(256·2^flyZoom)），
+near/far 取 viewRanges 收敛到 targetDistance±20000 保线性深度精度，
+pitch easeIn(t^5) 混合 mgl 语义；RTE 相机 copy 链自动继承。相机对象仍是
+PerspectiveCamera（三类硬编码不改签名）。MBStyleDataSource.applyCameraSettings
+按 `(style.camera ?? style)['camera-projection']==='orthographic' && pitch<15`
+置位。
+- 结果：ortho-camera 74,728→57,255（−23%，透视 ×1.13 径向位移/路缘外扩
+  目视消失，路网结构与 expected 逐段对齐）；ortho-camera-tunnel
+  19,838→1,271（−94%）；ortho-tunnel-small-viewport 1,308。
+
+**③ 地面光双重施加第二对去重（终三一九g21 块 vs injectGroundLighting）**：
+逐像素采样实锤 ours=(190,209,233)=raw×1.0794²，expected lit=(176,194,216)
+=raw×1.0794——`injectGroundLighting`（uMBGroundRad，线性域 rad^2.2，等价
+mgl sRGB 乘）与 终三一九g21 块（colorspace_fragment 后 ×sRGB rad）数学等价
+但同时施加=平方；两链共享 `__mbGroundLitHandler` 互斥旗标（g50r 去重的
+uMBGroundRadiance 链是第三处，与本对无关）。
+- 结果（单链落地）：lit 路面色逐位精确落位；**lighting 四件
+  71,135/72,868/81,651/82,705 → 39,334/42,028/59,427/60,710（−40~45%）**；
+  shadows-tunnel 156,079（stash 去重基线）→155,684（中性）；
+  elevated-symbols-oriented 43,445（中性）。
+
+**④ ortho 阴影链启用尝试（回归，回退）**：撤除 MBShadowRenderer 三处
+ortho 提前返回（depth pass/ground quad/setLightState(false)）+
+cornerOnGround 改投影通用两点 unproject（透视等价、正交修正近平面点方向）
+后，ortho-camera 57,230→**190,479 大回归**——阴影图案整幅错位（覆盖整个
+deck），shadow 相机取景/ground-quad 采样在正交下仍错帧。回退为默认关
+（`__mbOrthoShadowOn` 旋钮留 forensics；cornerOnGround 通用化保留）。
+ortho-camera 残余 57,255 主体=缺失 cast-shadow 暗带（expected (147,163,181)
+vs 我们 lit 色）+ 护栏内容差。下轮=正交 shadow 光空间取景 forensics
+（[MBFrameProbe] 通道可复用）。
+
+**⑤ 运维**：karma 走 webpack 直编 TS 无需全仓 tsc（全仓 build 8GB heap
+仍 OOM，绕过）；MBSTYLE_PORT 需换端口避免残留 result server 串目录。
+
+**⑥ 全族回归与逐件对照（75 件闭合）**：chunked runner（MBSTYLE_BATCH=4）
+全族 75 件 = 3,500,487（68 件 3,159,093 + 补 7 件 341,394）。改动前对照
+（stash 四文件，同机同日）：
+- ortho-camera 75,014→57,255；ortho-camera-tunnel 19,840→1,271；
+- lighting 四件 71,135/72,868/81,651/82,705 → 39,334/42,028/59,427/60,710；
+- shadows-tunnel 156,079→155,684、road-extend-tilecover 210,581→210,170、
+  shadows-roads-depth 24,013→24,184（均持平）；
+- elevated-wireframe 63,437→67,500（+4.1k，唯一副作用：带灯 wireframe 此前
+  吃双重光照的偏差曝光，属向 mgl 忠实方向暴露的既有失配）；
+- tooling-support 改动前即 26.5k（ribfix 16.5k 系过时基线，非回归）；
+- tail 7 件（shadows-underpass/stacked/terrain-x/tile-border/tooling/zLevel）
+  全部较 mtfix-3di 基线改善。
+运维确认：karma 连续跑 ~57 件浏览器崩（ChromeHeadless 149/SwiftShader），
+全族必须 chunked；filter= 为 OR 子串匹配，注意 "terrain-enabled" 这类公共
+子串会误匹配 *-terrain-enabled 全族。
+
+**⑦ 下轮**：正交 shadow 光空间取景 forensics（`__mbOrthoShadowOn=1` 旋钮
+已留，ortho-camera 残余 57,255 主体=缺失 cast-shadow 暗带）；deck 洞
+（Portal Graph L4）与 symbols 残余（~500k→已减，见②）继续。

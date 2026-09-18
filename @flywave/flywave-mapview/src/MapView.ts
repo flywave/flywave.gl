@@ -811,6 +811,13 @@ export class MapView extends EventDispatcher {
      */
     private readonly m_rteCamera = new THREE.PerspectiveCamera();
 
+    // mgl geo/transform.ts isOrthographic — style `camera-projection:
+    // orthographic` with pitch below OrthographicPitchTranstionValue (15°).
+    // While enabled, updateCameras overwrites the perspective projection
+    // matrix with the mgl orthographic one (half-height = height/2 px).
+    private m_orthographicProjection = false;
+    private readonly m_orthoHelperCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
+
     private m_yaw = 0;
     private m_pitch = 0;
     private m_roll = 0;
@@ -3390,6 +3397,53 @@ export class MapView extends EventDispatcher {
 
         this.m_camera.updateProjectionMatrix();
 
+        // mgl geo/transform.ts:2543 — orthographic projection. Ortho frustum
+        // bounds in mgl pixel space: top = cameraToCenterDistance·tan(fov/2)
+        // = height/2 CSS px, right = top·aspect, near = height/50 px. Engine
+        // logical px share mgl's CSS px scale (one world unit per px =
+        // CIRC/(256·2^flyZoom)), so the vertical world extent is
+        // height·CIRC/(256·2^zoomLevel) — independent of camera distance.
+        // mgl blends ortho→perspective by easeIn(pitch/15) for the pitch
+        // transition (OrthographicPitchTranstionValue = 15).
+        if (this.m_orthographicProjection) {
+            const wpp =
+                EarthConstants.EQUATORIAL_CIRCUMFERENCE / (256 * Math.pow(2, this.m_zoomLevel));
+            const orthoTop = (height * wpp) / 2;
+            const orthoRight = orthoTop * this.m_camera.aspect;
+            // mbgl near = height/50 px, far = farthest pixel distance. Keep the
+            // engine's world-unit view range but bound it around the target so
+            // the linear ortho depth curve keeps precision on road z-offsets.
+            const orthoNear = Math.max(this.m_viewRanges.near, this.m_targetDistance - 20000);
+            const orthoFar = Math.min(this.m_viewRanges.far, this.m_targetDistance + 20000);
+            const cam = this.m_orthoHelperCamera;
+            cam.left = -orthoRight;
+            cam.right = orthoRight;
+            cam.top = orthoTop;
+            cam.bottom = -orthoTop;
+            cam.near = orthoNear;
+            cam.far = orthoFar;
+            cam.updateProjectionMatrix();
+
+            // mgl lerpMatrix(ortho, persp, easeIn(pitch/15)) — camera pitch is
+            // radians here; blend between the two projection matrices.
+            const mixValue = Math.min(
+                1,
+                Math.max(0, this.m_pitch / (15 * (Math.PI / 180)))
+            );
+            const e = mixValue * mixValue * mixValue * mixValue * mixValue; // easeIn
+            if (e > 0) {
+                const o = cam.projectionMatrix.elements;
+                const p = this.m_camera.projectionMatrix.elements;
+                for (let i = 0; i < 16; i++) {
+                    o[i] = o[i] + (p[i] - o[i]) * e;
+                }
+            }
+            this.m_camera.projectionMatrix.copy(cam.projectionMatrix);
+            this.m_camera.projectionMatrixInverse.copy(this.m_camera.projectionMatrix).invert();
+            this.m_camera.near = orthoNear;
+            this.m_camera.far = orthoFar;
+        }
+
         // Update the "relative to eye" camera. Copy the public camera parameters
         // and place the "relative to eye" at the world's origin.
         this.m_rteCamera.copy(this.m_camera);
@@ -3413,6 +3467,24 @@ export class MapView extends EventDispatcher {
 
     public getRteCamera(): THREE.PerspectiveCamera {
         return this.m_rteCamera;
+    }
+
+    /**
+     * mgl-style orthographic projection override (style `camera-projection:
+     * orthographic`). While enabled, every camera update rebuilds the
+     * projection matrix per mgl geo/transform.ts isOrthographic semantics
+     * (fixed half-height = height/2 px, pitch-blended below 15°). The camera
+     * object stays a PerspectiveCamera; only the matrices change.
+     */
+    get orthographicProjection(): boolean {
+        return this.m_orthographicProjection;
+    }
+
+    set orthographicProjection(value: boolean) {
+        if (this.m_orthographicProjection === value) return;
+        this.m_orthographicProjection = value;
+        this.m_pixelToWorld = undefined;
+        this.update();
     }
 
     /**

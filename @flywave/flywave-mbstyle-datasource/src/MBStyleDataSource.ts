@@ -5743,6 +5743,17 @@ export class MBStyleDataSource extends TileDataSource {
         // No pitch compensation: setCameraGeolocationAndZoom now orbits the
         // target (lookAt semantics), so the reported zoom is pitch-independent.
         const pitch = style.pitch ?? 0;
+        // §885 终四十g50t: ortho-camera 方案 A — mgl geo/transform.ts
+        // isOrthographic = style camera-projection orthographic && pitch <
+        // 15 (OrthographicPitchTranstionValue); MapView rebuilds the
+        // projection matrix per mgl (half-height = height/2 px, pitch
+        // easeIn blend). Camera object stays perspective; matrices change.
+        const camSpecOrtho: any = (style as any).camera ?? style;
+        const orthoWanted =
+            camSpecOrtho['camera-projection'] === 'orthographic' && pitch < 15;
+        try {
+            (this.mapView as any).orthographicProjection = orthoWanted;
+        } catch { /* older MapView without ortho support */ }
         const zoom = (typeof style.zoom === 'number' ? style.zoom : 0) + 1
             + Number((globalThis as any).__mbZoomAB ?? 0);
         // Mapbox `bearing` is clockwise (bearing 90 → up faces east). flywave's
