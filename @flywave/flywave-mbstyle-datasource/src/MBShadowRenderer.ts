@@ -189,12 +189,19 @@ export class MBShadowRenderer {
 
     /** Update enable/intensity from the current 3D-lights state. */
     setLightState(enabled: boolean, intensity: number): void {
-        // §885 终五十八: state-transition probe — who clears the quad.
-        // eslint-disable-next-line no-console
-        console.log(`[MBGQLight] enabled=${enabled} int=${intensity} hadQuad=${!!this.m_groundQuad} id=${(this as any).__mbId ?? ((this as any).__mbId = Math.floor(Math.random() * 1e6))}`);
+        // §885 终四十四g50y: poke on the FALSE→TRUE transition — static
+        // fixtures idle ~3 frames after load, often BEFORE the style lights
+        // resolve; without extra frames the post-activation receiver refresh
+        // never runs and intensity stays 0 (all-lit, no bands).
+        const wasEnabled = this.enabled;
         this.m_enabled = enabled;
         this.m_intensity = intensity;
-        if (!this.enabled && this.m_groundQuad) {
+        if (enabled && !wasEnabled && this.m_mapView) {
+            for (const d of [80, 300, 800, 1500, 2500]) {
+                setTimeout(() => { try { this.m_mapView?.update?.(); } catch { /* idle */ } }, d);
+            }
+        }
+        if (!enabled && this.m_groundQuad) {
             this.m_groundScene.remove(this.m_groundQuad);
             this.m_groundQuad = null;
             this.m_groundUniforms = null;
@@ -226,7 +233,13 @@ export class MBShadowRenderer {
     /** Uniform state for receiving-material injection; null when inactive. */
     getShadowUniforms(): ShadowUniformState | null {
         if (!this.enabled || !this.m_shTex) return null;
-        if (!this.m_groundUniforms) return null;
+        // §885 终四十四g50y: m_groundUniforms gate REMOVED — it only existed
+        // to signal "the quad compiled", but the returned state (map/matrices
+        // /intensity) is renderer-owned and independent of the quad. With the
+        // quad disabled under ortho (m_orthoStyle gate) this gate kept the
+        // whole receiver refresh dead: getShadowUniforms() null → per-frame
+        // intensity reset to 0 → every receiver all-lit (ortho-camera
+        // 57,230 with no bands).
         const cv = this.m_mapView?.canvas as HTMLCanvasElement | undefined;
         // §885 终一百四十六: view→world unproject matrix for the receiver
         // ray-cast (uMBInvViewProj). matrixWorld·projectionMatrixInverse maps

@@ -5888,3 +5888,34 @@ uMBShadowIntensity 停在创建 seed 0**（patchMaterial 时 shadowState 尚未
 永不可达，改 census POST），把 fill 材质补进 refresh（或 seed 后置
 refresh 首帧置位），ortho-camera 阴影即应呈现真影暗带（预期 < 57,255
 转正，收益 ≈45.8k px 中的大部分）。
+
+### §885 终四十五g50y: refresh 注册表差集定位——m_groundUniforms 门移除（真实修复）+ 残余定性（2026-09-19）
+
+**① 量化铁证（refresh-quantifier 探针）**：patchTileMaterials 逐帧
+shadowState=false（帧 1-3），census intOne=0/intZero=48/133——接收链
+intensity 全程 0。注意：quantifier 初版插桩把 `qActive/gQ` 声明进了
+`if (shadowState||m_lastShadowActive)` 块内而 POST 在块外——
+ReferenceError 每帧中断整条 patch 链（ortho 曾短暂 74,693），已修正作用域
+（教训：插桩也会引入回归，TS2304 编译检查可提前发现）。
+
+**② 真实根因（已修复）**：getShadowUniforms() 的
+`if (!this.m_groundUniforms) return null;` 门——m_groundUniforms 只在
+ground-quad 首次渲染编译时创建，而 g50v 将 quad 在正交下自动关闭后该状态
+永不创建 → getShadowUniforms 恒 null → 逐帧 refresh 把 intensity 重置 0
+→ 全部接收材质恒 lit。门已移除（返回字段均为 renderer 自有，与 quad 无
+关）；uMBShadowIntensity seed 补 `|| shadowLightState`（style 声明
+cast-shadows 即置 1）；setLightState 增加 false→true 转变时的 5 档激活
+poke（80/300/800/1500/2500ms，静态夹具 idle 后仍能完成激活）。
+
+**③ 结果与残余**：ortho-camera 57,255 = 与关影逐位等效（较 57,230 持平）
+——接收链已激活（intensity=1、shadowState 非空）但可见调制仍为全 lit：
+逐像素射线重建的 mbWP（vMBElev 平面 / invViewProj）与 depth map 的配准在
+**片元级**仍不对（band-forensics 的扫描线级配准自洽与片元级全 lit 并存，
+疑 vMBElev 属性值/invViewProj 逐帧矩阵/uv 翻转中一处符号或量纲差）。
+下轮首刀：对单个 band 像素 dump 完整 mbShadowSample 输入
+（vMBElev、uMBEye.z、invViewProj 行、mbWP、uv、stored）做端到端数值
+对拍（shadowdbg 通道已有 R/G/B 三元组可复用）。
+
+**④ 默认态**：ortho-camera 57,255 / lighting 四件
+39,334/42,028/59,427/60,710 / shadows-tunnel 154,397 / shadows-junction
+19,487 —— 与 g50v 提交态一致（零回归）。

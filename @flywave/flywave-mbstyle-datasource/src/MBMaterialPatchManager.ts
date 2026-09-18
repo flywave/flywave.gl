@@ -118,6 +118,13 @@ export class MBMaterialPatchManager {
         // shadow): refreshed from MBShadowRenderer's latest depth pass.
         const shadowState = (this.m_dataSource as any).m_shadowRenderer
             ?.getShadowUniforms?.() ?? null;
+        // §885 终四十四g50y: refresh-loop quantifier — did the per-frame
+        // receiver refresh run with a live shadowState, and how many chunk
+        // uniforms did it visit? POSTed via mb-probe-dump.
+        const gQ = (globalThis as any);
+        gQ.__mbRfQuant = gQ.__mbRfQuant ?? { frame: 0 };
+        const qActive = gQ.__mbRfQuant.frame < 5;
+        let qVisited = 0, qChunk = 0, qIntOne = 0;
         if (shadowState || this.m_lastShadowActive) {
             // §530: tiles can patch BEFORE the style lights resolve — retry
             // the receiver injection per frame for not-yet-injected eligible
@@ -219,6 +226,9 @@ export class MBMaterialPatchManager {
             }
             const identity = shadowState ? null : new THREE.Matrix4();
             const refreshTargets: any[] = [];
+            // §885 终四十四g50y: refresh-loop quantifier — did the per-frame
+            // receiver refresh run with a live shadowState, and how many
+            // chunk uniforms did it visit? POSTed via mb-probe-dump.
             for (const tile of allTiles) {
                 for (const obj of tile.objects ?? []) refreshTargets.push(obj);
             }
@@ -265,7 +275,9 @@ export class MBMaterialPatchManager {
                         ? raw.map((m: any) => m?.__mbShadowUniforms).filter(Boolean)
                         : (raw?.__mbShadowUniforms ? [raw.__mbShadowUniforms] : []);
                     if (uList.length === 0) continue;
+                    if (qActive) { qVisited++; qChunk += uList.length; }
                     for (const u of uList) {
+                        if (qActive && u.uMBShadowIntensity?.value === 1) qIntOne++;
                         // §885 终九十八: per-flavor refresh probe — which
                         // material flavors actually receive the refresh, and
                         // whether their corners/res are live.
@@ -507,6 +519,38 @@ export class MBMaterialPatchManager {
             }
         }
         this.m_lastShadowActive = !!shadowState;
+        // §885 终四十四g50y: POST the quantifier for the first frames.
+        if (qActive) {
+            gQ.__mbRfQuant.frame++;
+            gQ.__mbRfQuant.last = {
+                frame: gQ.__mbRfQuant.frame,
+                shadowState: !!shadowState,
+                visitedTargets: qVisited, chunkUniforms: qChunk, intOne: qIntOne,
+            };
+            try {
+                const fbQ = (globalThis as any).__mbShadowFeedbackUrl
+                    ?? (window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith('feedback-url='))
+                        ?.slice('feedback-url='.length);
+                if (fbQ && gQ.__mbRfQuant.frame <= 3) {
+                    fetch(`${fbQ}/mb-probe-dump`, {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({
+                            probe: 'refresh-quantifier',
+                            frame: gQ.__mbRfQuant.frame,
+                            shadowState: !!shadowState,
+                            sl: !!(this.m_dataSource as any).m_environment?.shadowLightState,
+                            use3D: !!(this.m_dataSource as any).m_environment?.use3DLights,
+                            intensity: (this.m_dataSource as any).m_environment?.shadowLightState?.intensity ?? null,
+                            visitedTargets: qVisited,
+                            chunkUniforms: qChunk,
+                            intOne: qIntOne,
+                        }),
+                    }).catch(() => { });
+                }
+            } catch { /* probe only */ }
+        }
 
         // Runtime `setLights` (render-test operations) changes the 3D-lights
         // state after materials were patched; force a recompile so the ground-
@@ -3508,6 +3552,15 @@ export class MBMaterialPatchManager {
             // refresh's int=1 (the map stops before frame N+1).
             const shSeed = (this.m_dataSource as any).m_shadowRenderer
                 ?.getShadowUniforms?.() ?? null;
+            // §885 终四十四g50y: intensity seed — when the style DECLARES
+            // cast-shadows lights (shadowLightState truthy) the receivers
+            // must arm immediately, even though getShadowUniforms() is still
+            // null before the renderer's first depth pass (m_shTex null until
+            // run()); the per-frame refresh otherwise never re-runs after the
+            // static fixture idles and every receiver stays all-lit forever
+            // (ortho-camera bands missing, 57,230).
+            const slNow = (this.m_dataSource as any).m_environment?.shadowLightState;
+            shader.uniforms.uMBShadowIntensity = { value: (shSeed || slNow) ? 1 : 0 };
             shader.uniforms.uMBShadowMap = { value: shSeed?.map ?? null };
             shader.uniforms.uMBShadowMatrix = { value: shSeed ? shSeed.matrix.clone() : new THREE.Matrix4() };
             // §885 终一百一十九: cascade-1 far-field uniforms.

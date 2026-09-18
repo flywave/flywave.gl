@@ -371,6 +371,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.includes?.("shnoff=1")) {
         (globalThis as any).__mbShadowNOff = true;
     }
+    // §885 终四十四g50x: orthoshadowoff=1 → disable the whole shadow chain
+    // under orthographic style (baseline decomposition for the band audit).
+    if ((window as any).__karma__?.config?.args?.includes?.("orthoshadowoff=1")) {
+        (globalThis as any).__mbOrthoShadowOff = true;
+    }
     // §885 终一百三十六: fogshift=<x>,<y> → fogMglRange.x/y calibration offsets.
     const fs = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogshift="))?.slice("fogshift=".length);
@@ -3551,13 +3556,18 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         // materials actually carry the shadow-receiver chunk
                         // (injected) vs skipped (e.g. background, or
                         // patch-time shadowLightState race).
-                        let injected = 0, groundLit = 0;
+                        let injected = 0, groundLit = 0, intOne = 0, intZero = 0;
                         try {
                             (mapView as any).m_scene?.traverse?.((o: any) => {
                                 const ms = Array.isArray(o?.material) ? o.material : (o?.material ? [o.material] : []);
                                 for (const m of ms) {
                                     if ((m as any)?.__mbShadowInjected) injected++;
                                     if ((m as any)?.__mbGroundLitHandler) groundLit++;
+                                    const su = (m as any)?.__mbShadowUniforms;
+                                    if (su?.uMBShadowIntensity) {
+                                        if (su.uMBShadowIntensity.value === 1) intOne++;
+                                        else intZero++;
+                                    }
                                 }
                             });
                         } catch { /* census best-effort */ }
@@ -3566,7 +3576,8 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                             headers: { "content-type": "application/json" },
                             body: JSON.stringify({ probe: "main-canvas",
                                 dataUrl: canvas.toDataURL('image/png'),
-                                recvInjected: injected, groundLit }),
+                                recvInjected: injected, groundLit,
+                                intOne, intZero }),
                         });
                     }
                 } catch { /* probe only */ }
