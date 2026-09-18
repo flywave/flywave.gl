@@ -532,7 +532,28 @@ class MglMaxZoomAncestorProvider extends DataProvider {
             // eslint-disable-next-line no-console
             console.log(`[MBTileReq] ancestor cell=z${lvl}/${tileKey.column}/${tileKey.row} -> z${this.m_maxzoom}/${x}/${y}`);
         }
-        return this.m_inner.getTile(parentKey, abortSignal);
+        // §885 终三十九g50p: mgl overscaled-tile semantics. The ancestor's
+        // MVT content lives in the ANCESTOR's tile frame — decoding it under
+        // the requested (deeper) cell key compressed the z18 tile into the
+        // z19 cell frame and displaced the whole road network (the ortho
+        // camera cluster: ortho-camera-tunnel 156k, ortho-camera 75k). Stash
+        // the ancestor as a pending child instead: the decoder decodes it
+        // under the ANCESTOR key (frame-correct) and rebases onto the cell
+        // center, exactly like the §511 children fallback. The extra area
+        // outside the cell is harmless (frustum-culled).
+        const bytes: ArrayBufferLike | {} = await this.m_inner.getTile(parentKey, abortSignal);
+        if (bytes instanceof ArrayBuffer || bytes instanceof Uint8Array) {
+            if (mglTileBlocked(this.m_maxzoom, x, y)) {
+                return {};
+            }
+            mbPendingChildrenPut(mbCellTileKeyString(tileKey), [
+                { z: this.m_maxzoom, x, y, bytes },
+            ]);
+            // Non-empty marker so TileLoader doesn't short-circuit the decode
+            // (§265) — the merge runs in the decoder.
+            return JSON.stringify({ type: 'FeatureCollection', features: [] });
+        }
+        return bytes;
     }
 }
 

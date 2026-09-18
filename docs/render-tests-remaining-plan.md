@@ -5501,3 +5501,37 @@ trench 阴影区——可试 renderOrder/材质级 BackSide 局部化）；②�
 锚定帧/geoBox 有关，跨 fixture 变量仅 lat/bearing/直取覆盖比）；③icons
 ~2.5× 放大（icon-size 求值域）与车道线 2-3px 位移（symbols 簇剩余）；④
 tunnel 薄板影子 +39.8k 回归与 road-extend-tilecover 203k 双稳态维持开放。
+
+### §885 终三十九g50p: ortho 簇修复——祖先钳制走 stash+merge（mgl overscaled 语义），ortho-camera-tunnel −87%（2026-09-18）
+
+**① 分诊**：DoubleSide 默认态（g50o 后全族 3,395,290）的 top 失配里，
+ortho-camera-tunnel 156,311 的签名=期望路蓝→我们画背景 139k（路网整体缺
+失）+ 内容整体错位（目视右移半幅）。shadows-tunnel 152,309（d>60）的主体=
+我们过暗（ours (32,64,64) 106,941 px vs expected (153,165,177)）＝trench 视
+角下 DoubleSide 放进了 deck 背面/阴影调制面（mgl FrontSide 剔除），属 g50o
+默认翻转的已知代价（+19,270），与基线期 97k 暗区并存。
+
+**② ortho 簇根因（[MBTileReq]/[MBPlace]/[MBGeoBox] 遥测实锤）**：ortho-
+camera-tunnel 为 zoom 20.0 → cell level 19 > 源 maxzoom 18 →
+MglMaxZoomAncestorProvider 祖先钳制（z19/84264/203289 → z18/42132/101644）
+——但祖先 z18 瓦片的字节被用 **z19 cell key** 解码：z18 瓦片内容（跨 4 个
+z19 cell）被压进 z19 cell 的 geoBox/flip 帧 → 路网错位+部分缺失。mgl 语义=
+overscaled tile：几何帧用瓦片自身层级（z18），请求层级只影响缓存/绘制。
+
+**③ 修复**：MglMaxZoomAncestorProvider 钳制命中时改走 §511 同款 stash+
+merge——mbPendingChildrenPut(cellKey, [ancestor]) + 返回 GeoJSON marker，
+解码器以祖先 key 帧解码后 rebase 到 cell 中心（帧正确；cell 外多余区域被视
+锥剔除无害；tileblock 屏蔽同样生效；z19/z18 等任意深度差通用）。
+
+**④ A/B（4 件 + 对照）**：ortho-camera-tunnel 156,311→**19,838（−136,473，
+−87%）**；ortho-tunnel-small-viewport 3,286→1,283（−61%）；tunnel-ortho
+5,559→5,255（−5%）；对照 no-cross-beams 37,632 逐位不变。ortho-camera
+（zoom 19.0 → cell z18 直取，无钳制）+0 不适用，其 74,728 为独立问题（下
+轮：pitch-0 直取帧审计）。全族影响面=cell level>maxzoom 的夹具（zoom≥19.5
+域），旧渲染本就错位，无依赖风险。
+
+**⑤ 下轮入口**：①shadows-tunnel 背面叠影的局部化（~19k：DoubleSide 下
+trench 视角 deck 背面/阴影调制面覆盖路面——候选=对 shadow 接收材质用
+gl_FrontFacing 跳过背面片元，或 trench 域 renderOrder）；②ortho-camera
+74,728（pitch-0 直取 z18 的独立帧/内容问题）；③两族绕向约定相反的分层判据
+（g50o 开放项）；④icons ~2.5× 放大与车道线位移（symbols 簇剩余 ~600k）。
