@@ -5731,3 +5731,43 @@ vs 我们 lit 色）+ 护栏内容差。下轮=正交 shadow 光空间取景 for
 **⑦ 下轮**：正交 shadow 光空间取景 forensics（`__mbOrthoShadowOn=1` 旋钮
 已留，ortho-camera 残余 57,255 主体=缺失 cast-shadow 暗带）；deck 洞
 （Portal Graph L4）与 symbols 残余（~500k→已减，见②）继续。
+
+### §885 终四十一g50u: 正交 shadow forensics——暗带已对准，接收域过暗定性；ground-quad 与 lit 语义按 mgl 源码修正（2026-09-19）
+
+**① mbgl 源码两条权威语义（3d-style/shaders/_prelude_shadow.fragment.glsl）**：
+- `shadow_occlusion:42-68`：cascade0 内→采样 c0；c0 外 c1 内→采样 c1
+  （带 u_fade_range 视深淡出）；**两者都外→return 0.0 = 无遮蔽 = 照亮**。
+  我们 ground-quad 的"cascade 外=shadowed"（终一百四十七历史行为）与 mgl
+  相反，已改为 lit=1.0 默认。
+- `background.fragment.glsl`：**背景完全不采样 shadow**（只有 CPU 预乘
+  groundRadiance 的 v_color）——接收面仅 fill/line/circle/symbol/
+  extrusion/terrain。即 mgl 中 ortho-camera 的白色背景不接收投影。
+
+**② 修复落地**：ground-quad shader 射线重建改投影通用两点 unproject
+（透视等价/正交精确；旧 `invProj*(ndc,-1,0)` 单点方向式在正交下把 ndc.xy
+偏移当方向）；cornerOnGround 同款（g50t 已改）；新增旋钮
+orthoshadowon=1 / groundquadoff=1（runner env 通道接通）。
+
+**③ 探针定量化（shfrmprobe/shcastaudit + mb-probe-dump 通道）**：
+- shadow 深度图本身正确（82 casters，路网清晰可辨，ortho 光空间正交投影）；
+- shuv-corner-depth：caster 盒角点 NDC 越界至 ±3.5（取景窗 ~±105 < caster
+  域）——正常，mgl 亦不覆盖全 caster 域，依赖 cascade 外=lit 语义；
+- solo 正交+阴影渲染：**真影暗带逐位对准**（(300,250) exp(147,163,181) /
+  cur(147,162,180)），接收链 invViewProj 已正交一致（recv-mat-audit 实锤
+  w 行=0001）。
+
+**④ ortho 阴影仍净亏（维持默认关）**：shadow-on 190,479 vs off 57,255。
+分类统计（全图 512²）：期望 shadow-band 18.3k px 已 68% 对准；但 bg-white
+121k px 被压暗（ourmean 214,221,220 vs exp 253,255,255）+ road-lit 均值
+偏暗（168,181,190 vs 176,194,216）。ground quad 对该夹具零贡献
+（solo2 vs solo3 逐位 0 差异；quad-off shadows-tunnel 还小赢 −1.3k）→
+过暗来自 **per-material 接收链对地面平面 fragment 的深度判定**：正交下
+光仰角 20°、路面高程 5.4~13.4m，1/tan20°≈2.75 的横向影距让大部分地面落
+ caster 影内，但 mgl 同域为 lit——嫌疑=偏差窗（uMBShadowBiasW 盒跨 ramp）
+或 m_matrix 帧下的 u_shadow_normal_offset 侧移缺失，导致深度比较系统性
+偏 occluded。下轮=正交接收偏差窗/normal-offset 逐项对拍 mgl
+（shadow_renderer.ts:546 normalOffset 3）。
+
+**⑤ 默认路径零回归**：ortho-camera 57,255、lighting 四件
+39,334/42,028/59,427/60,710、shadows-tunnel 154,397（quad 射线修正小赢
+−1.3k）、oriented 簇不变——本轮全部 mgl 语义修正对已提交状态无扰动。

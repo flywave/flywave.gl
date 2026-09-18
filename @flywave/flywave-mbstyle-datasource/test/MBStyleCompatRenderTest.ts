@@ -349,6 +349,17 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.includes?.("shadowdisable=1")) {
         (globalThis as any).__mbShadowDisable = 1;
     }
+    // §885 终四十g50t: orthoshadowon=1 → re-enable the shadow chain under
+    // orthographic camera-projection (default off after the 190k A/B
+    // regression; knob drives the light-space framing forensic).
+    if ((window as any).__karma__?.config?.args?.includes?.("orthoshadowon=1")) {
+        (globalThis as any).__mbOrthoShadowOn = 1;
+    }
+    // §885 终四十g50u: groundquadoff=1 → disable the full-screen ground-quad
+    // shadow composite (mgl backgrounds never receive cast-shadows).
+    if ((window as any).__karma__?.config?.args?.includes?.("groundquadoff=1")) {
+        (globalThis as any).__mbGroundQuadOff = 1;
+    }
     // §885 终一百三十六: fogshift=<x>,<y> → fogMglRange.x/y calibration offsets.
     const fs = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("fogshift="))?.slice("fogshift=".length);

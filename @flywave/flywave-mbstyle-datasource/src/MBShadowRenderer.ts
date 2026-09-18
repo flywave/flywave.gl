@@ -349,10 +349,20 @@ export class MBShadowRenderer {
                 '#include <opaque_fragment>',
                 `#include <opaque_fragment>
                 {
-                    vec4 v4 = uMBInvProj * vec4(vNdc, -1.0, 0.0);
-                    vec3 dir = normalize(mat3(uMBCamWorld) * v4.xyz);
+                    // §885 终四十g50t: projection-generic ground ray — two-point
+                    // unproject of the NDC through near/far. Perspective: the
+                    // points sit on the same eye ray (identical intersection to
+                    // the old near-dir form). Ortho: the ray is the parallel
+                    // view axis through the shifted xy — the old dir-only form
+                    // tilted every ray and misframed the whole shadow quad
+                    // (ortho-camera 57,230 → 190,479 with shadows on).
+                    vec4 va = uMBInvProj * vec4(vNdc, -1.0, 1.0);
+                    vec4 vb = uMBInvProj * vec4(vNdc, 1.0, 1.0);
+                    vec3 pa = mat3(uMBCamWorld) * (va.xyz / va.w);
+                    vec3 pb = mat3(uMBCamWorld) * (vb.xyz / vb.w);
+                    vec3 dir = normalize(pb - pa);
                     if (dir.z < -1e-6 && uMBShadowIntensity > 0.5) {
-                        vec3 mbWP = dir * (uMBGroundZ / dir.z);
+                        vec3 mbWP = pa + dir * ((uMBGroundZ - pa.z) / dir.z);
                         // §885 终二百二十一: mgl u_shadow_normal_offset —
                         // offset the receiver sample point along its normal
                         // (ground = z-up) by normalOffset meters; the lateral
@@ -362,12 +372,13 @@ export class MBShadowRenderer {
                         mbWP.z += 10;
                         vec4 uv4 = uMBShadowMatrix * vec4(mbWP, 1.0);
                         vec4 uv4b = uMBShadowMatrix1 * vec4(mbWP, 1.0);
-                        // §885 终一百四十七: lit semantics under
-                        // investigation — outside-cascade fragments read as
-                        // shadowed here (historical behavior; the anchors
-                        // 10,138/457,874 were measured with it). Revisit with
-                        // the mgl cascade-fallback calibration.
-                        float lit = 0.0;
+                        // §885 终四十g50u: mgl _prelude_shadow.fragment.glsl
+                        // shadow_occlusion:42-68 — outside BOTH cascades
+                        // returns occlusion 0.0 → lit=1. The historical
+                        // lit=0.0 default (终一百四十七) shadowed everything
+                        // beyond the tight shadow-frustum fit and turned the
+                        // whole ortho deck dark (190,479 with shadows on).
+                        float lit = 1.0;
                         float sampD = 1.004;
                         bool inC0 = uv4.x >= 0.0 && uv4.x <= 1.0 &&
                             uv4.y >= 0.0 && uv4.y <= 1.0 && uv4.z >= 0.0 && uv4.z <= 1.0;
@@ -518,6 +529,13 @@ export class MBShadowRenderer {
         }
         if (!this.m_enabled || this.m_intensity <= 0) return;
         if (!this.m_groundQuad) return;
+        // §885 终四十g50u: groundquadoff=1 → kill the quad channel. mgl
+        // background.fragment.glsl has NO shadow sampling (background never
+        // receives cast-shadows; only fill/line/circle/symbol/extrusion do),
+        // so the full-screen quad multiply darkening the background is
+        // un-mgl (ortho-camera background rendered ×0.823 shadow factor,
+        // expected plain radiance). Per-material receivers stay live.
+        if ((globalThis as any).__mbGroundQuadOff) return;
         // §885 终四十g50t: ortho bail removed — the ground quad is a screen-
         // space full-frame draw (fullscreen OrthographicCamera) and the
         // corner math in prepGroundQuad/cornerOnGround is now projection-

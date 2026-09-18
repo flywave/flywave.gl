@@ -207,6 +207,8 @@ function main() {
             ...(process.env.MBSTYLE_FRONTCULL ? ["frontcull=1"] : []),
             ...(process.env.MBSTYLE_EXTNOLUT ? ["extnolut=1"] : []),
             ...(process.env.MBSTYLE_SHADOWDISABLE ? ["shadowdisable=1"] : []),
+            ...(process.env.MBSTYLE_ORTHOSHADOWON ? ["orthoshadowon=1"] : []),
+            ...(process.env.MBSTYLE_GROUNDQUADOFF ? ["groundquadoff=1"] : []),
             ...(process.env.MBSTYLE_SPHERE ? [`spherescale=${process.env.MBSTYLE_SPHERE}`] : []),
             ...(process.env.MBSTYLE_COVERDUMP ? ["coverdump=1"] : []),
             ...(process.env.MBSTYLE_ROUNDZOOM ? ["roundzoom=1"] : []),
