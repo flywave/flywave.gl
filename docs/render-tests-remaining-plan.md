@@ -5849,3 +5849,12 @@ shadows-tunnel 154,397→155,684（+1.3k），ortho-camera 不动；h 微小时�
 lighting 四件 39,334/42,028/59,427/60,710 / shadows-tunnel 154,397 ✓。
 运维：karma-worker.bundle.js 是 8/2 的预构建产物（与主线程 TS 无关，主
 线程 karma webpack 直编 TS 实时生效——本轮全部实验均据此判读）。
+
+**g50w 补（同日续）**：shadowanalytic=1（几何真投影 mask，绕开深度比较）
+在正交下 ortho-camera 仍恒 57,230——排除"深度比较符号/偏差窗"单因；结合
+shmat-compose 手工验算发现 **m_matrix 与 m_shadowCamera proj·viewInv 的
+深度分量存在 ~0.04 量级系统性不一致**（该链在透视夹具经多轮调参收敛故未
+暴露，正交下表现为全 lit）。下轮首刀改为：逐分量对拍 m_matrix 组装链
+（m_shadowCamera fit → proj·view → bias·ndc2uv）与 depth pass 实际写入值
+（readPixels 采样已知 caster 角点），定位 0.04 的来源；修复后接收链即可在
+正交呈现真影暗带（预期收益 ≈45.8k px，ortho-camera < 57,255 转正）。
