@@ -5957,3 +5957,31 @@ refresh 时序 vs 逐像素重建），而非"caster 覆盖缺席"（g50z 初判
 随顶点插值，天然无平面假设/无帧间矩阵错位；我们已有 per-vertex 管线
 （vMBElev），把光空间 uv 改为顶点属性即可。此改动同时是 mgl 分层
 （elevated fill 自接收 vs ground quad）的正解基础。
+
+### §885 终四十七g51a: 逐顶点 v_pos_light_view 路径移植（管道就绪默认关）——正交恒 lit 根因升级为逐帧刷新注册表问题（2026-09-19）
+
+**① 移植落地**：injectGroundShadow onBeforeCompile 顶部注入 vertex 侧
+`varying vec3 vMBLightWPos = (modelMatrix·vec4(transformed,1)).xyz`
+（project_vertex 锚点），fragment chunk `#if MB_SH_VLIGHT  mbWP =
+vMBLightWPos  #else  (射线重建)  #endif`——mgl fill.vertex 的
+v_pos_light_view 逐顶点等价物；两处 define 前缀 + decl 去重列表接入；
+shvlight=1 选入（默认关，见④）。
+
+**② A/B 实测（shvlight=1）**：ortho-camera 57,255→**190,479**（暗带
+(147,162,180)@300,250 正确呈现！但背景/ ground 区大面积误暗）→ 接收链
+per-vertex 配准正确（band 色精准），但 intensity=1 seed + 逐帧 refresh 在
+**identity 矩阵窗口期**（m_scene 空/光未解析的前几帧）以单位阵采样深度图
+→ 随机暗化。sweep 场景重注入路径也已加背景豁免（renderOrder<-1000 +
+__mbBackgroundMesh 旗标）——背景排除在 sweep 生效后 ortho 仍 190,479，
+证明误暗非背景 mesh 而是路网 fill 自身在 identity 窗口期的采样。
+
+**③ 收敛点升级**：问题不再是"公式/配准"而是**激活时序与矩阵生命期**——
+接收材质必须在 shadowState 非空（m_matrix 已 compose、m_shTex 已建）之后
+才开始调制。候选方案：①intensity seed 改由 renderer 在首次
+shadowState 非空后显式置位（移除 slNow seed，避免 identity 期激活）；
+②材质缓存首帧矩阵为 identity 时不调制（脏标记）；③refresh 注册表持久化。
+逐顶点路径本身已验证（band 色精准），只待时序修复即可转正。
+
+**④ 默认态零回归**：VLIGHT/NOFF 默认关 → ortho-camera 57,255、lighting
+四件 39,334/42,028/59,427/60,710、shadows-tunnel 154,397、road-islands
+34,609 —— 与 g50y 提交态逐位一致。

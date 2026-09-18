@@ -202,6 +202,15 @@ export class MBMaterialPatchManager {
                             if (/sky|atmosphere|star|pole|dome/i.test(String(o.name ?? '') + ' ' + String(m.name ?? ''))) {
                                 m.__mbShadowSkipped = true; continue;
                             }
+                            // §885 终四十四g50y: mgl background never receives
+                            // cast-shadows (background.fragment.glsl) — the
+                            // fullscreen background mesh must stay exempt or
+                            // the whole ground outside road polygons darkens.
+                            if (m.__mbBackgroundMesh) continue;
+                            if ((o as any).renderOrder === -Infinity
+                                || (o as any).renderOrder < -1000) {
+                                m.__mbBackgroundMesh = true; continue;
+                            }
                             this.injectGroundShadow(m);
                         }
                         // §715: procedural extrusion walls must CAST into the
@@ -2090,6 +2099,10 @@ export class MBMaterialPatchManager {
                 // the fullscreen background fill mesh must stay unlit-lit.
                 if (!(technique as any)._isBackground) {
                     this.injectGroundShadow(material as any);
+                } else {
+                    // §885 终四十四g50y: tag so the per-frame scene sweep
+                    // skips the background mesh as well.
+                    (material as any).__mbBackgroundMesh = true;
                 }
             }
         }
@@ -3513,6 +3526,19 @@ export class MBMaterialPatchManager {
         const orig = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
             if (orig) orig.call(material, shader);
+            // §885 终四十七g51a: mgl fill.vertex port — per-vertex light-space
+            // position (v_pos_light_view = u_light_matrix·vec4(a_pos, z_offset)
+            // equivalent). vMBLightWPos is the fragment's world (RTE) point:
+            // no ground-plane assumption, no frame-stale matrices — the exact
+            // mechanism mgl receivers sample with. shvlight=0 reverts.
+            let vLightOk = false;
+            if ((globalThis as any).__mbShadowVLightsOff !== true
+                && shader.vertexShader.includes('#include <project_vertex>')) {
+                shader.vertexShader = ('varying vec3 vMBLightWPos;\n' + shader.vertexShader)
+                    .replace('#include <project_vertex>',
+                        '#include <project_vertex>\n vMBLightWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+                vLightOk = true;
+            }
             // §885 终一百四十六: guarantee the receiver GLSL's compile-time
             // defines on EVERY injected material — sweep-injected engine
             // materials never pass through the patchFillMaterial prepend that
@@ -3525,7 +3551,7 @@ export class MBMaterialPatchManager {
             const d8d = (globalThis as any).__mbShadowDiag === '8' ? 1 : 0;
             if (!shader.fragmentShader.includes('#define MB_SH_BIAS')) {
                 shader.fragmentShader =
-                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n#define MB_SH_DIAG8 ${d8d}\n#define MB_SH_NOFF ${(globalThis as any).__mbShadowNOff === true ? 1 : 0}\n`
+                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n#define MB_SH_DIAG8 ${d8d}\n#define MB_SH_NOFF ${(globalThis as any).__mbShadowNOff === true ? 1 : 0}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n`
                     + shader.fragmentShader;
             }
             // §885 终三十九g37: MB_SH_ELEVVIS must ALWAYS be defined for
@@ -3645,7 +3671,11 @@ export class MBMaterialPatchManager {
                         vec3 mbNearW = mbRayNear.xyz / mbRayNear.w;
                         vec3 mbRayDir = normalize(mbFarW - mbNearW);
                         float mbRayT = (${mbRayPlane} - mbNearW.z) / mbRayDir.z;
+                        #if MB_SH_VLIGHT
+                        vec3 mbWP = vMBLightWPos;
+                        #else
                         vec3 mbWP = mbNearW + mbRayDir * mbRayT;
+                        #endif
                         #if MB_SH_NOFF
                         // §885 终四十二g50w: mgl NORMAL_OFFSET port
                         // (fill.vertex.glsl:46-48 + _prelude_shadow.vertex.glsl:
@@ -3819,6 +3849,7 @@ export class MBMaterialPatchManager {
                 'uniform float uMBShadowDbg;\n',
                 'uniform float uMBShAnalytic;\n',
                 'uniform float uMBNOffZ;\n',
+                'varying vec3 vMBLightWPos;\n',
             ]) {
                 const name = decl.replace(/^uniform [a-zA-Z0-9]+ /, '').replace(/[;\n]/g, '');
                 if (!shader.fragmentShader.includes(name)) mbShadowOwn.push(decl);
@@ -3835,7 +3866,7 @@ export class MBMaterialPatchManager {
                 // TRUE — the R-only HW decode branch compiled in the default
                 // SW path). DIAG5/DIAG7 stay value-emitted and are selected
                 // with `#if`.
-                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n#define MB_SH_DIAG8 ${d8}\n#define MB_SH_NOFF ${(globalThis as any).__mbShadowNOff === true ? 1 : 0}\n` + shader.fragmentShader;
+                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n#define MB_SH_DIAG8 ${d8}\n#define MB_SH_NOFF ${(globalThis as any).__mbShadowNOff === true ? 1 : 0}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n` + shader.fragmentShader;
             }
             if ((globalThis as any).__mbShadowHW) {
                 shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;
