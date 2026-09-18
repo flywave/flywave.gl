@@ -5919,3 +5919,29 @@ poke（80/300/800/1500/2500ms，静态夹具 idle 后仍能完成激活）。
 **④ 默认态**：ortho-camera 57,255 / lighting 四件
 39,334/42,028/59,427/60,710 / shadows-tunnel 154,397 / shadows-junction
 19,487 —— 与 g50v 提交态一致（零回归）。
+
+### §885 终四十六g50z: shadowdbg 端到端读数——接收链公式正常，缺的是 caster 覆盖（2026-09-19）
+
+**① 端到端读数（shadowdbg=1，chunk 逐像素 R=intensity G=stored B=uv.z，
+注意 PNG 为 sRGB 编码需 ^2.2 还原线性）**：
+- band 像素 (300,250)：G_display 0.761 → 线性 stored 0.694；B_display
+  0.847 → 线性 uv.z 0.545。stored(0.694) > z(0.545) → **该 uv 沿光轴无
+  caster 在接收面之前 → 比较判 lit**——接收链公式（GREATER 语义、plane
+  bias、intensity）全部按设计工作；
+- 背景/护栏像素：z=stored=1.0（clear）→ lit ✓；
+- 另一 road 采样 (137,300)：stored 0.882^(2.2)=0.758? 与 z 0.753^(2.2)
+  同量级——自采样带。
+
+**② 归因收口**：mgl expected 的暗带 = 上层甲板 fill（fill-elevation-
+reference ≠ none → hasShadowPass ✓ mgl fill_style_layer.ts:123）投影到
+下层甲板。我们的 depth map 在该 uv 的最近 caster 深度 = 0.694（下层自己
+或更远面），**上层甲板缺席**——caster 注册（82）或其沿光轴的投影覆盖
+（正交 light fit 窗口 vs caster 域）在带位 texel 上缺失，而非接收链公式
+错误。下轮首刀：对 ortho-camera 逐 caster dump（[MBShadowCast] census 已
+有）比对 mgl shadow pass 的 layer 列表（hasShadowPass 的 fill 层 + 模型），
+找出缺席的上层甲板层/瓦片；并核对 depth 16-bit 打包在 stored=0.694 处的
+量化（0.694 疑为 z-fighting 自体值）。
+
+**③ 默认态**：ortho-camera 57,255 / lighting 四件
+39,334/42,028/59,427/60,710 / shadows-tunnel 154,397 / tunnel 1,271 ——
+零回归（本轮仅探针读数，无行为改动）。
