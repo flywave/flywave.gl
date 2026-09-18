@@ -5654,3 +5654,11 @@ geometry 关联层。dashed-only mismatch=26,249（全渲染 32,735）。下轮=
 投影对拍（离线相机投影管线：vendored transform + style 相机，把每个
 hd_road_line 要素按 line_type 投到屏幕，与 expected/current 白线位置逐一对
 拍，定位错位要素对）。
+
+**⑧ g50s 补4（重要修正：路由错位假说否定）**：dashed-only 白像素逐点重合
+分析——122,476 白 px 中 **114,997（94%）与 expected 白像素重合**，错位仅
+7,479（6%，散布全图=虚线相位/沿线位置噪声，无大簇）。补3 的"虚线画在实线
+位置"系目视误读（dashed-only 白像素主体=double-lines 边线对+虚线，均与
+expected 重合）。**要素路由基本正确**；symbols 残余主体回到已知域：deck 洞
+（Portal Graph L4）+标线被 deck 覆盖（7.7k）+透视径向位移残差（g50s 方案
+B 域）+虚线相位噪声（~7k）。dashed 关联审计关闭。
