@@ -6146,3 +6146,7 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **② terrain-enabled 挂起签名定位**：SHST n=300 时 `sl=null`（shadowLightState 未解析——地形夹具的 lights 形态/解析路径差异）且 `map=no-su`；n=300 后主线程静默 >600s（karma no-message timeout）。嫌疑：地形渲染路径主线程死等（terrain tile 解码/几何生成）或测试捕获循环。需地形管线专项（非阴影链——shadowLightState null 下阴影链完全惰性，不影响挂起）。
 
 **③ lighting 四件残余（73,184/75,458/92,108/93,072）**：阴影已真实落地；残余 = expected 构图的反推缺口——mgl 填充甲板阴影公式 `shadowed_light_factor_normal = (1−intensity·occ)·NDotL` + `apply_lighting` 全链（含 ambient_directional_factor 与 NDotL 扩展 Lambert）与我们 mbLight=×factor 链的逐项校准，加上 fake-road-shade 层叠顺序。属甲板光照公式的精化迭代。
+
+### §885 终六十g51q补: lighting 残余构图定界（2026-09-19）
+
+expected/current 并排对照（elevated-symbols-lighting）明确残余构成：①甲板本体与标线已对齐（暗色路面+白色标线均在）；②**甲板侧墙**：expected 为浅色受光面（ambient 照射的垂直墙），ours 黑色/缺失——墙体光照注入未覆盖 fill 甲板的侧立面；③**地面阴影浓度/范围**：ours 阴影区过度覆盖（大面积黑），expected 阴影边界更紧、地面保持中灰——200m 挤出物阴影的落位/浓度校准。两者均为墙体光照注入扩展 + 地面阴影浓度校准的独立迭代项，非阴影链结构性缺陷。探针与对照图已就绪（/tmp/esl_compare.png 模式可复现）。
