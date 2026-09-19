@@ -6184,3 +6184,11 @@ generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑�
 **实现**：①测试侧按 style.metadata.test.showLayers3DWireframe/showElevatedStructuresWireframe 置位 `__mbWireframe3D`（逐夹具重置）；②patchTile 对 _hdElevation>0/__elev 且非 markup（renderOrder<9.75）的网格生成**三角形边线框 LineSegments**（边去重、暗红 (0.7,0,0)·α0.7、onBeforeCompile 注入 `gl_FragDepth = gl_FragCoord.z − 0.0001` 消 z-fighting——镜像 mgl HANDLE_WIREFRAME_DEBUG）；③颜色空间 0.7 sRGB→线性换算。
 
 **结果**：elevated-wireframe 67,504（无线框）→ 76,206（线框落地，+8.7k）。**语义达成**（红色三角剖分调试线渲染），数值残余 = 三角剖分奇偶性（mgl 结构化条带 vs earcut 对角线，线框密度/方向不同）——归入三角剖分奇偶性工作流。仅此夹具受影响（metadata 门控），其余 75 件零影响。
+
+### §885 终六十七g51q4: 挤出物阴影带投影审计（2026-09-19）
+
+**探针增强（已提交）**：raw-shadow-footprint 增加镜像 m_matrix 投影（fill 接收采样用）——dump 最高 caster（=挤出物，246.2 单位高 ✓ 注册且栅格化）的 bbox 角 uv 矩形：x [0.364, 0.739]、y [0.091, 1.118]（顶部出界 y>1）。
+
+**读数**：挤出物足迹矩形与 deck uv 区（x 0.47-0.50, y 0.47-0.53）部分重叠但 deck 仍 lit——**覆盖错位的精确定界需逐 texel 足迹栅格化叠合**（CPU 栅格化挤出物足迹 ∩ deck uv 分布），超出本会话预算。方向/高度/窗口三参数的候选：①光方向已 mgl 权威（az+90）②高度 246 单位（=200m×mercator 系数 ✓）③窗口扩窗已做（+4k lighting 副作用——扩窗改变 16-bit 深度精度）。
+
+**下轮**：①逐 texel 足迹叠合分析（CPU 栅格化 shadow-casters 足迹 vs deck uv 采样点）②near/far 扩展量与 16-bit 精度的折衷实验③方向微扫掠（±5°）。

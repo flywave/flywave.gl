@@ -2222,9 +2222,23 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                                         uv: [+v2.x.toFixed(3), +v2.y.toFixed(3), +v2.z.toFixed(3)],
                                         inb, depth: dep });
                                 }
+                                // §885 终六十八g51q4: also project via the
+                                // MIRROR m_matrix (what fill receivers
+                                // sample with) for the shadow-band coverage
+                                // audit.
+                                const mPts: any[] = [];
+                                for (const w of corners) {
+                                    const vM = w.clone().applyMatrix4(this.m_matrix);
+                                    mPts.push({ uv: [+vM.x.toFixed(3), +vM.y.toFixed(3), +vM.z.toFixed(3)] });
+                                }
+                                const xs = mPts.map(p => p.uv[0]);
+                                const ys = mPts.map(p => p.uv[1]);
+                                const mRect = { x: [Math.min(...xs), Math.max(...xs)],
+                                    y: [Math.min(...ys), Math.max(...ys)] };
                                 const fbR = (globalThis as any).__mbShadowFeedbackUrl;
                                 const payload: any = { probe: 'raw-shadow-footprint',
-                                    tallestHeight: +tallH.toFixed(1), points: pts };
+                                    tallestHeight: +tallH.toFixed(1), points: pts,
+                                    mirrorRect: mRect };
                                 if (fbR) {
                                     fetch(`${fbR}/mb-probe-dump`, {
                                         method: 'POST',
