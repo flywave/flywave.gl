@@ -6224,3 +6224,11 @@ generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑�
 - 大额收益（building 族）：measure-light-bright −10.8 万、skillion −4.6 万、ground-ao −3.7 万
 
 **结论**：g51 系列跨家族影响结构性分化——building 族净收益显著，conflation/landmark 模型族回归 ~33 万（模型阴影落位专项覆盖）。3d-intersections 目标族 −50.6% 收益完整保留。全量 340 件的前后对照需在 1edcafc5 基线上跑完整 before 轮（~10 小时），列下轮。
+
+### §885 终七十二g51t2: building/tile-border +8.1 万隔离定界（2026-09-20）
+
+**隔离矩阵**：base 135,072 / shadowlegacy 135,895（比较器排除）/ shnoff=0 135,941（NOFF 排除）/ shcastnormal=3 137,489（caster 偏移排除）/ shdiralt=0 135,072（方向排除——该夹具无方向依赖）/ **1edcafc5 基线 65,416**（g50k 参考 54,564，g50t..g51c 期间已漂移 +10.9k）。
+
+**结论**：四旋钮均非主因——回归源 = **raw XY 扩窗、layer-2 选择性投影（无 normal mesh 迁移 DoubleSide）、NaN 防护（新增投影几何）三者之一的代码级交互**，需 checkout 二分（g51d-g51g 的 7e745261 与 g51n/g51o/g51p2 各中间态）。building 族整体净收益（其余件 −10.8 万/−4.6 万/−3.7 万）远大于此单件 +8 万。
+
+**下轮**：①该夹具 checkout 二分定位（7e745261 / g51n / g51o / g51p2 中间态）②landmark 落位浓度迭代 ③lighting 甲板光照合成器升级 ④wireframe 奇偶性 ⑤terrain-enabled。
