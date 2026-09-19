@@ -6120,3 +6120,5 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **g51n 补（同日）**：caster 盒并集扩窗落地后足迹探针复测——9 点 uv 全部入界（x 0.0-0.185）但 **depth 全 256=clear**：landmark 模型网格在 raw 深度 pass 中完全未被栅格化（非视锥/近平面裁剪）。窗口扩窗保留（mgl 忠实且无副作用，conflation 三件 mismatch ±噪声）。下轮解剖方向：①landmark GLB 几何 attribute 完整性（normal 缺失 → override 顶点着色器 normalize(0)=NaN → 三角形丢弃）；②模型 mesh 的 matrixWorld 在深度 pass 帧内的实际值（shcastaudit 已有通道）；③Scissor/layer 交互。conflation 三件 +32.9 万挂账维持。
 
 **g51o 补（同日）**：①深度顶点着色器零法线 NaN 防护落地（normalize(0)→NaN 链路消除，landmark 298,398 持平——NaN 假说证伪，模型未栅格化另有原因）；②足迹探针 y 翻转修正（readPixels 为 GL 底起坐标，此前 (1−v) 镜像读数有误）——修正后 landmark 足迹 9 点中 1 点读到内容（depth 1.439），raw 覆盖开始生效但稀疏；③conflation 复测：buckingham 298,361 持平、buckingham-lod 310,054（较 g51g 276k 恶化 +34k，raw 窗扩窗对 lod 夹具的副作用待查）、promoted_id 180,809 持平。**模型资源/override 交互解剖（GLB attribute census、深度帧 matrixWorld dump、扩窗对 lod 的副作用回退评估）列入下轮**。
+
+**g51l2 补（同日）**：扩窗回退后 lod 仍 310,054——+34k 实为 **NaN 防护的行为修正**：原本因零法线 NaN 被丢三角的几何现在正确参与深度投影（mgl 忠实：所有几何都投影），lod 夹具的新增阴影落位与 expected 尚有偏差（模型阴影方向/位置校准域）。防护保留（正确性），模型阴影落位校准并入 §终五十四③ 的模型资源解剖工作流。

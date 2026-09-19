@@ -2040,48 +2040,6 @@ export class MBShadowRenderer {
             }
             this.m_shadowCamera.updateProjectionMatrix();
             this.m_shadowCamera.updateMatrixWorld();
-            // §885 终五十五g51n: expand the raw window to the CASTER BOX
-            // union (never shrink) — the frustum-sphere square window clips
-            // far-placed casters: landmark-conflation-buckingham's 192.8m
-            // conflated model sits ~0.99r from the window center and its
-            // m_matrixR0 uv measured x −1.24…−0.74 with near-negative uv.z
-            // (raw-shadow-footprint probe) → the whole-scene grazing shadow
-            // (sun elevation 7.6°) was lost, +12~13.7 万/fixture on the
-            // conflation trio. Caster corners → light-view frame → min/max
-            // union into left/right/top/bottom/near/far.
-            {
-                const viewInvR = this.m_shadowCamera.matrixWorldInverse;
-                const rawBox = new THREE.Box3();
-                for (const obj of shadowCasters) {
-                    obj.updateWorldMatrix?.(true, false);
-                    const b = new THREE.Box3().setFromObject(obj);
-                    if (!b.isEmpty()) rawBox.union(b);
-                }
-                if (!rawBox.isEmpty()) {
-                    const cR = new THREE.Vector3();
-                    let minX = Infinity, maxX = -Infinity;
-                    let minY = Infinity, maxY = -Infinity;
-                    let minZ = Infinity, maxZ = -Infinity;
-                    for (let ci = 0; ci < 8; ci++) {
-                        cR.set(
-                            ci & 1 ? rawBox.max.x : rawBox.min.x,
-                            ci & 2 ? rawBox.max.y : rawBox.min.y,
-                            ci & 4 ? rawBox.max.z : rawBox.min.z);
-                        cR.applyMatrix4(viewInvR);
-                        minX = Math.min(minX, cR.x); maxX = Math.max(maxX, cR.x);
-                        minY = Math.min(minY, cR.y); maxY = Math.max(maxY, cR.y);
-                        minZ = Math.min(minZ, cR.z); maxZ = Math.max(maxZ, cR.z);
-                    }
-                    this.m_shadowCamera.left = Math.min(this.m_shadowCamera.left, minX);
-                    this.m_shadowCamera.right = Math.max(this.m_shadowCamera.right, maxX);
-                    this.m_shadowCamera.top = Math.max(this.m_shadowCamera.top, maxY);
-                    this.m_shadowCamera.bottom = Math.min(this.m_shadowCamera.bottom, minY);
-                    this.m_shadowCamera.near = Math.min(this.m_shadowCamera.near, minZ);
-                    this.m_shadowCamera.far = Math.max(this.m_shadowCamera.far, maxZ);
-                    this.m_shadowCamera.updateProjectionMatrix();
-                    this.m_shadowCamera.updateMatrixWorld();
-                }
-            }
             scene.overrideMaterial = this.m_depthMaterial;
             const prevLayersR = this.m_shadowCamera.layers.mask;
             this.m_shadowCamera.layers.set(1);
