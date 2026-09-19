@@ -6248,3 +6248,20 @@ generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑�
 **残余 = 阴影浓度差**：ours 遮挡甲板 ×0.72 vs expected ×0.35（相对暗度差 2 倍）。mgl 的 shadowed_light_factor 公式反推 ≈×0.82 也达不到 ×0.35——expected 的额外暗度来自其多层合成（fill-extrusion 黑墙可见性、fake-road-shade、ground shadow pass 叠加次序）。
 
 **收复路径**：以 mgl 本体渲染同夹具（`mgl-shot`/debug 页 + DEBUG_WIREFRAME 定位）逐层 dump 中间值，反向实现甲板光照合成器（ambient 恒定 + directional·shadow 双项 + 层叠次序）。探针与对照图就绪，独立专项。
+
+### §885 会话收束（2026-09-20）
+
+**本会话（g51c→g51t4，40 次提交 7e745261→f9341adb）交付**：
+- 3d-intersections 家族 −50.6%（68 件同框 5,558,794→2,746,449，59 胜）
+- 十项修复（详见 §终四十九~终七十四 各条）
+- 八个持久探针 + wireframe 调试特性 + guardrail 墙体光照
+- 跨家族 340/385 件全量回归（结果：cross-g51j-full，building 族净 −19 万）
+- texel-overlay 探针实证阴影链分类正确（{clear:4,self:6,occl:6}）
+
+**遗留工作流（按台账定界，探针就绪）**：
+1. lighting 四件阴影浓度 ×0.72→×0.35：需 mgl 本体渲染对拍后反向实现甲板光照合成器（ambient 恒定 + directional·shadow 双项）——多个分析路径（参数扫掠/公式反推/composer 读数）均无法远程闭合，需 mgl 本体插桩
+2. conflation/landmark 落位浓度迭代（raw 级联近平面已修）
+3. elevated-wireframe 三角剖分奇偶性（线框已落地）
+4. terrain-enabled 地形管线挂起（SHST 签名已录）
+5. cast-shadows 239 style 全量 before 轮（~10h）
+6. 45 件跳过夹具 resume 补测（cross-g51j-full 目录，chunked runner 自动跳过已测件）
