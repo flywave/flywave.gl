@@ -6070,3 +6070,17 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **⑤ 记分牌收口**：全族 76 件中 71 件实测 + shadows-underpass 139,516 + terrain-enabled 挂账。同框 69 件 5,498,105 → 3,047,639（**−44.6%**）。shadows-underpass 修复后 family 总量（71 件口径）≈ 3,187,155。
 
 **⑥ 下轮**：①fill apply_lighting 方向项移植（lighting 四件 +143k/件回归的收复路径，预期 −60 万）；②ortho-camera 甲板洞（Portal Graph L4，剩余 63k 主体）；③shadows-tunnel g51h +4k 复核；④terrain-enabled 环境崩溃排查。
+
+### §885 终五十一g51j: 阴影光方向去镜像（默认原始 mgl 转换）——lighting 四件收复 −8~−11 万/件，ortho-camera 首破基线，全族 −50.6%（2026-09-19）
+
+**① 根因实锤（elevated-symbols-lighting 的 200m 影子）**：样式的 `shadow-casters` fill-extrusion（height 200，默认黑色）注册正常（shcastaudit z-span 85.8 在册）、深度图也有其栅格化足迹（rmstyle=shadow-casters 对照：移除后深度图大三角消失，casters 82→73）——但足迹落在地图角落、背离甲板 uv 区：**§683 lighting3DState.dir 的 y 镜像使 200m 高遮挡物的整场阴影投向镜像侧**。旋转扫掠（shaz ±6/±12/150/165/195/210 均 18.1-18.5 万）无法修复镜像——只有 az=180 时 y 镜像恰与 180° 旋转重合（shaz=180 → 63,972），暴露镜像本质。
+
+**② 修复**：阴影光方向默认改为原始 mgl 转换（sphericalDirectionToCartesian az+90，无 §686 y 镜像，即原 shdiralt=1 路径；shdiralt=0 退回镜像、=2 tosun 保留）。A/B：lighting 182,862→73,184（raw）/63,972（shaz180），tunnel +4.4k、junction/road-extend 逐位不变。
+
+**③ 结果（默认态）**：lighting 四件 183,016/182,298/172,871/172,952 → **73,184/75,458/92,108/93,072**（−8.0~−11.0 万/件）；**ortho-camera 63,414 → 55,670，首次低于 HEAD 基线 57,239**（镜像同样影响其暗带）；tunnel 60,318、junction 19,487、road-extend 81,756 持平。
+
+**④ 全族终版记分牌（g50k 参考同框）**：68 件 5,558,794 → 2,746,449（**−2,812,345，−50.6%**），59 胜；对比上一提交（g51g，66 件）2,977,038 → 2,592,901（**−384,137**）。尾部补测：tile-border 14,547（g50k 28,600，−14k）、terrain-toggle-on-off 29,401（−40k）、tooling-support 26,653（与 HEAD 26.5k 持平）。残余小回归：elevated-wireframe +14,941（带灯曝光，既有）、lighting-terrain 两件 +10.6k（vs g50k 意外基线）、labels-tunnel +1.1k、munich-overview +911。
+
+**⑤ terrain-enabled 挂账确认**：`[SHST] n=300 sl=null map=no-su` 后主线程静默 >600s（地形瓦片等待死等，karma ping timeout）——非本轮回归（同日 g50k 时代可测），留签名待查。
+
+**⑥ 下轮**：①lighting 四件残余 ~7-9 万/件的阴影边缘/浓度校准（现已是真实投影，剩余为 200m 挤出物阴影浓度与 fake-road-shade 层叠顺序）；②ortho-camera 55,670 的甲板洞（Portal Graph L4）；③elevated-wireframe +14,941；④terrain-enabled 挂起排查；⑤跨家族回归（cast-shadows 239 style）。

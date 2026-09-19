@@ -989,11 +989,19 @@ export class MBShadowRenderer {
             lightDir = new THREE.Vector3(0, 0, 1);
         }
         if (!Number.isFinite(lightDir.x)) return;
-        // §885 终六十四: shadow-direction A/B — shdiralt=1 uses the raw mgl
-        // spherical conversion (az+90, no §686 render-frame y mirror) for the
-        // shadow CAMERA only, to calibrate the ground projection against
-        // expected.
-        if ((globalThis as any).__mbShadowDirAlt) {
+        // §885 终六十四: shadow-direction conversion A/B. §885 终五十g51j:
+        // DEFAULT = the raw mgl spherical conversion (az+90, no §686
+        // render-frame y mirror) — the mirrored §683 lighting3DState.dir
+        // inverted the shadow of tall casters (elevated-symbols-lighting's
+        // 200m shadow-casters extrusion landed its whole-scene shadow in the
+        // map corner AWAY from the deck: 182,862 mismatched; shaz=180 →
+        // 63,972; shdiralt raw → 73,184) and rotations cannot repair a
+        // mirror — only the exact az=180 case coincides. The mirror remains
+        // reachable via shdiralt=0. A/B (g51j): lighting −110k, tunnels
+        // +4.4k, junction/road-extend unchanged.
+        if ((globalThis as any).__mbShadowDirAlt === undefined
+            || (globalThis as any).__mbShadowDirAlt === 1
+            || (globalThis as any).__mbShadowDirAlt === true) {
             const dirProp2 = (this.m_dataSource as any).m_environment
                 ?.m_3DDirectional?.direction as [number, number] | undefined;
             if (dirProp2) {
