@@ -6116,3 +6116,5 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **② landmark-conflation-buckingham 读数**：最高 caster = 192.8m 地标模型，RTE bbox x[1788,2028] y[−800,−319] z[−521,−328]；**m_matrixR0 投影 uv.x −1.24~−0.74、uv.z −0.126~+0.050 全部出界**（含近平面负值）→ landmark 不在 raw cascade 覆盖窗内，其投影阴影丢失；模型接收按设计回退镜像级联。光源方位 az=311.9/仰角 7.6°（掠射）——1800m 水平偏移 × sin(7.6°) ≈ 238m 深度展开 + 侧向位移远超 ±r 窗。
 
 **③ 结论与定界**：conflation 三件 +32.9 万回归的主结构 = raw cascade 视锥球拟合窗不含远置 conflated 地标（其阴影需近平面前伸 + 侧向覆盖）。修复 = raw cascade 拟合窗并入 caster 盒并集（shadow 族已有 casterBox 先例）并重校模型族（quantization-shadows/castro 等 calibrated 会话联动）——独立工作流。landmark 隔离矩阵（g51l）证明四 g51 变更单独非主因，本项为第二独立根因。
+
+**g51n 补（同日）**：caster 盒并集扩窗落地后足迹探针复测——9 点 uv 全部入界（x 0.0-0.185）但 **depth 全 256=clear**：landmark 模型网格在 raw 深度 pass 中完全未被栅格化（非视锥/近平面裁剪）。窗口扩窗保留（mgl 忠实且无副作用，conflation 三件 mismatch ±噪声）。下轮解剖方向：①landmark GLB 几何 attribute 完整性（normal 缺失 → override 顶点着色器 normalize(0)=NaN → 三角形丢弃）；②模型 mesh 的 matrixWorld 在深度 pass 帧内的实际值（shcastaudit 已有通道）；③Scissor/layer 交互。conflation 三件 +32.9 万挂账维持。
