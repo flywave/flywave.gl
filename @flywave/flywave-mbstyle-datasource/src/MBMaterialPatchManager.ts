@@ -1049,6 +1049,17 @@ export class MBMaterialPatchManager {
         if (!wallMesh) return;
 
         (obj as any).__mbGuardrails = true;
+        // §885 终六十八g51r2: light the guardrail walls — mgl elevated
+        // structures shade their side walls with apply_lighting (ambient +
+        // directional·NdotL); the default MeshStandardMaterial renders BLACK
+        // here (the engine has no scene lights — all lighting is injected).
+        // 1) copy the road deck's fill color so the walls read as the road's
+        // own side surface; 2) inject the screen-space-normal structure
+        // lighting (the same chain the road deck uses).
+        const wallMat = wallMesh.material as THREE.MeshStandardMaterial;
+        const roadMat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshBasicMaterial;
+        if (roadMat?.color) wallMat.color.copy(roadMat.color);
+        this.injectStructure3DLighting(wallMat);
         // Add guardrails as a child so they inherit the tile's transform.
         obj.add(wallMesh);
     }

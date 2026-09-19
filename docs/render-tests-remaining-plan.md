@@ -6174,3 +6174,7 @@ expected/current 并排对照（elevated-symbols-lighting）明确残余构成�
 ### §885 终六十七g51q3: lighting 残余最终构图定界（2026-09-19）
 
 expected 构成解析（elevated-symbols-lighting）：①甲板（暗蓝灰+标线）已对齐 ✓；②甲板侧墙薄条（浅色受光）ours 缺失（fill 无侧壁几何，g51r 定界）；③右上暗灰三角 = 200m shadow-casters 挤出物投在**地面**的阴影（锐利直边），ours 该区过暗/边界发散；④地面 lit 区两者一致。**收复路径 = ②侧壁几何生成 + ③挤出物阴影带投影审计（shadow-casters GeoJSON bbox 经 m_matrix 投影 vs 地面接收 uv 叠合，方向/高度/窗口三参数）**。阴影链语义（g51d-g51j）已全部 mgl 忠实，残余均为独立特性/校准工作流。
+
+### §885 终六十三g51r2: guardrail 墙体光照注入（2026-09-19）
+
+generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑色）修复：①墙体颜色拷贝道路 deck 的 fill color（侧墙读作路面自身侧表面）；②注入 injectStructure3DLighting（屏幕空间法线 apply_lighting 链）。结果：elevated-symbols-lighting 73,498→73,533（±噪声）、elevated-wireframe 67,504→66,767（−737）。**墙体光照正确性修复保留**；lighting/wireframe 的主体残余为构图级（侧墙几何形态、wireframe 调试特性），需特性级工作流。
