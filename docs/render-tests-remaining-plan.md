@@ -6084,3 +6084,17 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **⑤ terrain-enabled 挂账确认**：`[SHST] n=300 sl=null map=no-su` 后主线程静默 >600s（地形瓦片等待死等，karma ping timeout）——非本轮回归（同日 g50k 时代可测），留签名待查。
 
 **⑥ 下轮**：①lighting 四件残余 ~7-9 万/件的阴影边缘/浓度校准（现已是真实投影，剩余为 200m 挤出物阴影浓度与 fake-road-shade 层叠顺序）；②ortho-camera 55,670 的甲板洞（Portal Graph L4）；③elevated-wireframe +14,941；④terrain-enabled 挂起排查；⑤跨家族回归（cast-shadows 239 style）。
+
+### §885 终五十二g51k: 跨家族抽检回归——building 族大赚、conflation/landmark 三件 +33 万挂账（2026-09-19）
+
+**① 方法**：model-layer/building/lighting-3d-mode 三族各 6 件 cast-shadows 夹具，git checkout 1edcafc5（g51d 前）四文件跑基线 vs 当前 HEAD 跑对照（跨家族 19 件全对比）。运维教训：zsh 不做词分割，循环变量需 `${=var}`，否则 6 个 filter 只跑第一个。
+
+**② 记分牌（19 件全对比）**：2,301,952 → 2,456,548（**+154,596，+6.7%**）——轻度净回归，结构性分化：
+- **building 族净 −19 万**：measure-light-bright 217,369→109,101（−108k）、skillion 63,842→17,997（−46k）、ground-ao 60,189→23,678（−37k）——墙体遮挡物阴影在去镜像方向下首次正确落地；
+- **model-layer/state 五件逐位不变**（无阴影依赖）；
+- **lighting-3d-mode 六件 ≈ 中性**（+2.4 万，其中 with-disabled-shadows +2.4 万——shadows disabled 夹具仍受影响，疑 NOFF 默认开经 model 接收路径生效，待查）；
+- **回归集中三件 +32.9 万**：landmark-conflation-buckingham +137k、-lod +129k、building/conflation_promoted_id +63k——全部是 conflation/landmark 模型族。
+
+**③ conflation 回归定性**：mgl 权威转换已核实（src/util/util.js sphericalDirectionToCartesian = az+90 无镜像，即 g51j 默认）——方向本身无错。三件回归的旧基线是镜像方向下的意外贴合（与 lighting 四件历史同构）；conflation 的地标模型阴影走 MBModelRenderer 原始级联（m_matrixR0/rawDir 独立相机），其帧内方向约定与 g51j 默认的交互需单独解剖。**下轮首刀：landmark-conflation-buckingham 的模型阴影足迹 dump（m_matrixR0 vs 模型接收 uv）**。
+
+**④ 结论**：3d-intersections 目标族 −50.6% 的收益远大于跨家族 +15.5 万净回归；g51j 默认保持 mgl 权威转换不回退。全族记分牌含尾部补测：68 件同框 5,558,794 → 2,746,449（−50.6%）+ 三件尾部补测（tile-border 14,547/terrain-toggle 29,401/tooling 26,653）。
