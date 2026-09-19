@@ -701,14 +701,6 @@ export class MBMaterialPatchManager {
             this.patchIconObject(obj, tech);
             this.patchSymbolOcclusion(obj, tech);
             this.generateGuardrails(obj, tech, tile);
-            // §885 终六十八g51s: mgl metadata.test.showLayers3DWireframe /
-            // showElevatedStructuresWireframe → triangle-edge wireframe debug
-            // view (dark-red LINES over the solid deck).
-            if ((globalThis as any).__mbWireframe3D
-                && ((tech as any)._hdElevation > 0 || (tech as any).__elev)
-                && !((tech as any).renderOrder >= 9.75)) {
-                this.addWireframeDebug(obj);
-            }
             this.registerAdditiveRibbon(obj, tech);
             this.setupTranslucentExtrusionDualPass(obj, tech);
             this.registerShadowCaster(obj, tech);
@@ -1036,40 +1028,6 @@ export class MBMaterialPatchManager {
         if ((obj as any).__mbAdditiveRegistered) return;
         (obj as any).__mbAdditiveRegistered = true;
         additiveRibbons.push({ mesh: obj as THREE.Mesh, technique });
-    }
-
-    /**
-     * §885 终六十八g51s: triangle-edge wireframe debug view — a LineSegments
-     * child (dark red, alpha 0.7, gl_FragDepth pulled 1e-4 closer) mirroring
-     * mgl HANDLE_WIREFRAME_DEBUG on the elevated-structures program.
-     */
-    private addWireframeDebug(obj: THREE.Object3D): void {
-        if (!(obj as any).isMesh) return;
-        if ((obj as any).__mbWireframeDebug) return;
-        (obj as any).__mbWireframeDebug = true;
-        const mesh = obj as THREE.Mesh;
-        const geom = mesh.geometry as THREE.BufferGeometry;
-        if (!geom || !geom.attributes.position || !geom.index) return;
-        const lineGeom = buildWireframeSegments(
-            geom.attributes.position.array as Float32Array,
-            geom.index.array as Uint32Array);
-        if (!lineGeom) return;
-        const lin = Math.pow(0.7, 2.2); // 0.7 sRGB output → working (linear) space
-        const mat = new THREE.LineBasicMaterial({
-            color: new THREE.Color().setRGB(lin, 0.0, 0.0),
-            transparent: true,
-            opacity: 0.7,
-            depthTest: true,
-        });
-        mat.onBeforeCompile = (shader: any) => {
-            shader.fragmentShader = shader.fragmentShader.replace(
-                '#include <dithering_fragment>',
-                `#include <dithering_fragment>
-                 gl_FragDepth = gl_FragCoord.z - 0.0001;`);
-        };
-        const lines = new THREE.LineSegments(lineGeom, mat);
-        lines.renderOrder = mesh.renderOrder + 1;
-        obj.add(lines);
     }
 
     /**

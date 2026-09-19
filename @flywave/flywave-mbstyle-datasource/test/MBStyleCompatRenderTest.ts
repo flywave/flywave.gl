@@ -2844,12 +2844,6 @@ describe("MBStyleDataSource render-tests compatibility", function () {
 
     for (const entry of SUBSET) {
         const metadata = entry.style.metadata?.test ?? {};
-        // §885 终六十八g51s: mgl metadata.test.showLayers3DWireframe /
-        // showElevatedStructuresWireframe → the engine renders elevated
-        // structures twice — solid + dark-red LINES wireframe (triangulation
-        // debug; elevated-wireframe fixture family).
-        (globalThis as any).__mbWireframe3D = !!(
-            metadata["showLayers3DWireframe"] || metadata["showElevatedStructuresWireframe"]);
         const skipReasons = metadata["skip-test"] ?? [];
         // Determine current platform once.
         let platformTag = "";
@@ -3771,6 +3765,71 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         }
                     }
                 } catch { /* probe only */ }
+
+                // §885 终六十八g51q5: per-texel footprint overlay — CPU-
+                // replicate the receiver sampling: uv = m_matrix·worldPos,
+                // then read the packed depth bytes from m_depthPixels at that
+                // texel. Classify occluded/self/clear per caster sample.
+                try {
+                    const sr: any = (dataSource as any).m_shadowRenderer;
+                    const mm: any = sr?.m_matrix;
+                    const dpx: any = sr?.m_depthPixels;
+                    if (mm && dpx && dpx.length) {
+                        const sz2: number = (sr as any).m_shTex?.image?.width ?? 1024;
+                        const eM = mm.elements;
+                        const samples: any[] = [];
+                        (mapView as any).m_scene?.traverse?.((o: any) => {
+                            if (!o.isMesh || samples.length >= 16) return;
+                            try {
+                            const g = o.geometry;
+                            const pa = g?.attributes?.position;
+                            if (!pa || typeof pa.getX !== 'function') return;
+                            o.updateWorldMatrix?.(true, false);
+                            const mw = o.matrixWorld.elements;
+                            const step = Math.max(1, Math.floor(pa.count / 8));
+                            for (let i = 0; i < pa.count && samples.length < 16; i += step) {
+                                const px = pa.getX(i), py = pa.getY(i), pz = pa.getZ(i);
+                                const wx = mw[0] * px + mw[4] * py + mw[8] * pz + mw[12];
+                                const wy = mw[1] * px + mw[5] * py + mw[9] * pz + mw[13];
+                                const wz = mw[2] * px + mw[6] * py + mw[10] * pz + mw[14];
+                                const cw = eM[3] * wx + eM[7] * wy + eM[11] * wz + eM[15];
+                                if (!(Math.abs(cw) > 1e-9)) continue;
+                                const uvx = (eM[0] * wx + eM[4] * wy + eM[8] * wz + eM[12]) / cw;
+                                const uvy = (eM[1] * wx + eM[5] * wy + eM[9] * wz + eM[13]) / cw;
+                                const uvz = (eM[2] * wx + eM[6] * wy + eM[10] * wz + eM[14]) / cw;
+                                if (uvx < 0 || uvx > 1 || uvy < 0 || uvy > 1) continue;
+                                const tx = Math.min(sz2 - 1, Math.max(0, Math.round(uvx * (sz2 - 1))));
+                                const ty = Math.min(sz2 - 1, Math.max(0, Math.round(uvy * (sz2 - 1))));
+                                const ob = (ty * sz2 + tx) * 4;
+                                const stored = (dpx[ob] + dpx[ob + 1] / 255) / 255;
+                                const cls = stored < uvz - 1e-3 ? 'occl'
+                                    : Math.abs(stored - uvz) <= 1e-3 ? 'self' : 'clear';
+                                samples.push({ cls, uvz: +uvz.toFixed(4),
+                                    stored: +stored.toFixed(4),
+                                    w: [+wx.toFixed(0), +wy.toFixed(0), +wz.toFixed(0)] });
+                            }
+                            } catch { /* skip mesh */ }
+                        });
+                        const clsCnt: any = {};
+                        for (const s of samples) clsCnt[s.cls] = (clsCnt[s.cls] ?? 0) + 1;
+                        void clsCnt;
+                        await fetch(`${fbC}/mb-probe-dump`, {
+                            method: "POST",
+                            headers: { "content-type": "application/json" },
+                            body: JSON.stringify({ probe: "texel-overlay",
+                                clsCnt, samples: samples.slice(0, 16) }),
+                        });
+                    }
+                } catch (eT2: any) {
+                    try {
+                        await fetch(`${fbC}/mb-probe-dump`, {
+                            method: "POST",
+                            headers: { "content-type": "application/json" },
+                            body: JSON.stringify({ probe: "texel-overlay-err",
+                                err: String(eT2?.stack ?? eT2).slice(0, 500) }),
+                        });
+                    } catch { /* probe only */ }
+                }
 
                 // §885 终二五七: per-mesh WORLD-space normal dump for the
                 // batched pipeline — resolves the mirror(az+180) vs raw

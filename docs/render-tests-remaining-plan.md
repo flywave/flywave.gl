@@ -6192,3 +6192,11 @@ generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑�
 **读数**：挤出物足迹矩形与 deck uv 区（x 0.47-0.50, y 0.47-0.53）部分重叠但 deck 仍 lit——**覆盖错位的精确定界需逐 texel 足迹栅格化叠合**（CPU 栅格化挤出物足迹 ∩ deck uv 分布），超出本会话预算。方向/高度/窗口三参数的候选：①光方向已 mgl 权威（az+90）②高度 246 单位（=200m×mercator 系数 ✓）③窗口扩窗已做（+4k lighting 副作用——扩窗改变 16-bit 深度精度）。
 
 **下轮**：①逐 texel 足迹叠合分析（CPU 栅格化 shadow-casters 足迹 vs deck uv 采样点）②near/far 扩展量与 16-bit 精度的折衷实验③方向微扫掠（±5°）。
+
+### §885 终七十g51s3: 重复 wireframe 注入回退 + texel 叠合探针固化（2026-09-19）
+
+**① 重复机制发现与回退**：引擎已有原生线框管线（`dataSource.setLayers3DWireframe(true)`，metadata.showLayers3DWireframe 驱动，测试 3423 行）——g51s2 新增的 `__mbWireframe3D` patcher 注入与其**重复叠加**（双层红线框）→ elevated-wireframe 76,206。回退 patcher 注入与测试重复解析后：wireframe 66,767、lighting 73,533（恢复稳定态）。buildWireframeSegments 工具函数保留（ElevatedStructures.ts）。
+
+**② texel-overlay 探针**：CPU 复现接收采样（m_matrix·世界坐标→uv→m_depthPixels 读包深度→occl/self/clear 分类）已固化（含 per-mesh try 与错误 POST 通道）；因 fetch 未达（疑 traverse 内属性访问异常静默中断）尚未产出读数，下轮沿用。
+
+**③ 结果**：elevated-wireframe 66,767（较 g51s2 的 76,206 改善 −9,439，vs g50k 67,504 噪声级）；lighting 73,533 持平。
