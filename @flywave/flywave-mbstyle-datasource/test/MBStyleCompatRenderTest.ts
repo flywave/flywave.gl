@@ -3774,6 +3774,8 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     const sr: any = (dataSource as any).m_shadowRenderer;
                     const mm: any = sr?.m_matrix;
                     const dpx: any = sr?.m_depthPixels;
+                    // eslint-disable-next-line no-console
+                    console.log('[MBTexel] sr=', !!sr, 'mm=', !!mm, 'dpxLen=', dpx?.length ?? 'null');
                     if (mm && dpx && dpx.length) {
                         const sz2: number = (sr as any).m_shTex?.image?.width ?? 1024;
                         const eM = mm.elements;
@@ -3812,7 +3814,8 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         });
                         const clsCnt: any = {};
                         for (const s of samples) clsCnt[s.cls] = (clsCnt[s.cls] ?? 0) + 1;
-                        void clsCnt;
+                        // eslint-disable-next-line no-console
+                        console.log('[MBTexel] samples=', samples.length, 'clsCnt=', JSON.stringify(clsCnt), 'posting...');
                         await fetch(`${fbC}/mb-probe-dump`, {
                             method: "POST",
                             headers: { "content-type": "application/json" },

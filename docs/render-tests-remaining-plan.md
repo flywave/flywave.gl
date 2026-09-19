@@ -6240,3 +6240,11 @@ generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑�
 **根因归类**：与 lighting 四件同类——**阴影落位/覆盖校准**（掠射光下建筑阴影带的投影宽度/位置）。隔离矩阵（legacy/nonoff/castn3/diralt 均无效）与 1edcafc5 基线（65,416，g51i 修复后 quad 开始渲染即出现）一致。**收复路径**：阴影带落位校准（光方向/级联窗口/挤出物高度评估联合迭代）。
 
 **状态**：building 族净收益（−19 万）远大于此单件；3d-intersections −50.6% 维持。全 385 件回归 340/385 实测（45 件会话超时跳过，chunked resume 可补）。
+
+### §885 终七十四g51t4: texel-overlay 探针读数——阴影已落地，残余为浓度校准（2026-09-20）
+
+**探针修复与读数**：texel-overlay 探针修复后经 karma LOG 产出（dump 保存通道待查，数据经 console 携带）：**clsCnt = {clear:4, self:6, occl:6}**——16 个 CPU 复现采样点中 6 个正确判定遮挡（阴影落地 ✓）、6 个自采样（coplanar 边界 ✓）、4 个 clear（ground 空区 ✓）。**阴影链在 elevated-symbols-lighting 上工作正常**。
+
+**残余 = 阴影浓度差**：ours 遮挡甲板 ×0.72 vs expected ×0.35（相对暗度差 2 倍）。mgl 的 shadowed_light_factor 公式反推 ≈×0.82 也达不到 ×0.35——expected 的额外暗度来自其多层合成（fill-extrusion 黑墙可见性、fake-road-shade、ground shadow pass 叠加次序）。
+
+**收复路径**：以 mgl 本体渲染同夹具（`mgl-shot`/debug 页 + DEBUG_WIREFRAME 定位）逐层 dump 中间值，反向实现甲板光照合成器（ambient 恒定 + directional·shadow 双项 + 层叠次序）。探针与对照图就绪，独立专项。
