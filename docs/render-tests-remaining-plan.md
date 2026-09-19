@@ -6138,3 +6138,11 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **③ 运维**：zsh 双重补丁去重（16/12 空格两版字符串都被匹配）；renderDepthLayer2 内层 finally 恢复 override/layers/autoClear。
 
 **④ 下轮**：①lighting 四件残余浓度校准（现 7.3-9.3 万，阴影已落地为真实投影）；②elevated-wireframe +14,941；③terrain-enabled SHST 挂起排查；④cast-shadows 239 style 全量回归。
+
+### §885 终五十八g51q: 挂账项复核收尾——elevated-wireframe 非新回归、terrain-enabled 挂起定位（2026-09-19）
+
+**① elevated-wireframe 复测 = 67,504**：与 g50t 时代 67,500 一致（±4 噪声）——非本轮 g51d-g51j 回归。g50k 参考 52,563 系带灯双重光照曝光前的过时基线（g50t 台账已记录 +4.1k 曝光），维持既有定性。
+
+**② terrain-enabled 挂起签名定位**：SHST n=300 时 `sl=null`（shadowLightState 未解析——地形夹具的 lights 形态/解析路径差异）且 `map=no-su`；n=300 后主线程静默 >600s（karma no-message timeout）。嫌疑：地形渲染路径主线程死等（terrain tile 解码/几何生成）或测试捕获循环。需地形管线专项（非阴影链——shadowLightState null 下阴影链完全惰性，不影响挂起）。
+
+**③ lighting 四件残余（73,184/75,458/92,108/93,072）**：阴影已真实落地；残余 = expected 构图的反推缺口——mgl 填充甲板阴影公式 `shadowed_light_factor_normal = (1−intensity·occ)·NDotL` + `apply_lighting` 全链（含 ambient_directional_factor 与 NDotL 扩展 Lambert）与我们 mbLight=×factor 链的逐项校准，加上 fake-road-shade 层叠顺序。属甲板光照公式的精化迭代。
