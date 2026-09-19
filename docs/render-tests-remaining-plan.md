@@ -6200,3 +6200,11 @@ generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑�
 **② texel-overlay 探针**：CPU 复现接收采样（m_matrix·世界坐标→uv→m_depthPixels 读包深度→occl/self/clear 分类）已固化（含 per-mesh try 与错误 POST 通道）；因 fetch 未达（疑 traverse 内属性访问异常静默中断）尚未产出读数，下轮沿用。
 
 **③ 结果**：elevated-wireframe 66,767（较 g51s2 的 76,206 改善 −9,439，vs g50k 67,504 噪声级）；lighting 73,533 持平。
+
+### §885 终六十八g51q5: lighting 残余浓度量化与收尾定界（2026-09-19）
+
+**浓度量化**：elevated-symbols-lighting 的 deck 阴影浓度差实测——expected 阴影甲板 (57,63,70) = 基色 hsl(212,25%,71%)→(163,183,203) 的 **×0.35**；ours (127,141,157) = **×0.72**（差 2 倍）。反推 mgl 公式：`shadowed_light_factor_normal = (1−0.8·occ)·NDotL_ext`（NDotL_ext = 扩展 Lambert ≈0.863）→ `k = amb_linear·amb_factor + dir_linear·light` ≈ 0.612·0.97 + 0.217·0.173 = 0.66 → 预期 ×0.66^0.4545 = ×0.83（sRGB 域）——仍达不到 ×0.35。**mgl expected 的 ×0.35 需要其完整光照/阴影合成（含 fill-extrusion 黑墙可见性、fake-road-shade 层叠、ground shadow pass 与 per-vertex 阴影采样的合成次序）逐层复刻**——超出参数扫掠范畴，属甲板光照合成器专项。
+
+**阴影浓度差的可能构成**：mgl 的 deck 阴影 = (ambient 恒定) + (directional × shadow) 双项合成，而 ours = 单一 factor 乘——两项合成的阴影浓度天然更深。复刻 = receiver chunk 从"乘 ground factor"升级为"ambient + directional·shadow 双项合成"（g51 系列阴影链语义已就绪，此为光照合成结构升级）。
+
+**结论**：lighting 四件残余 7.3-9.3 万/件的收复路径已定界为**甲板光照合成器结构升级**（双项合成替代单乘），需独立会话实施。
