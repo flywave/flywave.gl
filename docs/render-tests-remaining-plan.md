@@ -6118,3 +6118,5 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **③ 结论与定界**：conflation 三件 +32.9 万回归的主结构 = raw cascade 视锥球拟合窗不含远置 conflated 地标（其阴影需近平面前伸 + 侧向覆盖）。修复 = raw cascade 拟合窗并入 caster 盒并集（shadow 族已有 casterBox 先例）并重校模型族（quantization-shadows/castro 等 calibrated 会话联动）——独立工作流。landmark 隔离矩阵（g51l）证明四 g51 变更单独非主因，本项为第二独立根因。
 
 **g51n 补（同日）**：caster 盒并集扩窗落地后足迹探针复测——9 点 uv 全部入界（x 0.0-0.185）但 **depth 全 256=clear**：landmark 模型网格在 raw 深度 pass 中完全未被栅格化（非视锥/近平面裁剪）。窗口扩窗保留（mgl 忠实且无副作用，conflation 三件 mismatch ±噪声）。下轮解剖方向：①landmark GLB 几何 attribute 完整性（normal 缺失 → override 顶点着色器 normalize(0)=NaN → 三角形丢弃）；②模型 mesh 的 matrixWorld 在深度 pass 帧内的实际值（shcastaudit 已有通道）；③Scissor/layer 交互。conflation 三件 +32.9 万挂账维持。
+
+**g51o 补（同日）**：①深度顶点着色器零法线 NaN 防护落地（normalize(0)→NaN 链路消除，landmark 298,398 持平——NaN 假说证伪，模型未栅格化另有原因）；②足迹探针 y 翻转修正（readPixels 为 GL 底起坐标，此前 (1−v) 镜像读数有误）——修正后 landmark 足迹 9 点中 1 点读到内容（depth 1.439），raw 覆盖开始生效但稀疏；③conflation 复测：buckingham 298,361 持平、buckingham-lod 310,054（较 g51g 276k 恶化 +34k，raw 窗扩窗对 lod 夹具的副作用待查）、promoted_id 180,809 持平。**模型资源/override 交互解剖（GLB attribute census、深度帧 matrixWorld dump、扩窗对 lod 的副作用回退评估）列入下轮**。

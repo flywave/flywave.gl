@@ -117,7 +117,14 @@ export class MBShadowRenderer {
             uniform float uMBNormalOffset;
             uniform vec3 uMBLightDir;
             void main(){
-                vec3 wN = normalize(mat3(modelMatrix) * normal);
+                // §885 终五十五g51o: NaN-proof the normal — geometries without
+                // a normal attribute bind (0,0,0), normalize → NaN, and the
+                // NaN·0 offset poisons wp → every triangle of such models is
+                // silently dropped from the depth pass (landmark shadow lost).
+                vec3 nAttr = normal;
+                vec3 wN = mat3(modelMatrix) * nAttr;
+                if (!(dot(wN, wN) > 0.0)) { wN = vec3(0.0, 0.0, 1.0); }
+                wN = normalize(wN);
                 float dotScale = min(1.0 - dot(wN, uMBLightDir), 1.0) * 0.5 + 0.5;
                 vec3 wp = (modelMatrix * vec4(position, 1.0)).xyz
                     + wN * uMBNormalOffset * dotScale;
@@ -2158,8 +2165,10 @@ export class MBShadowRenderer {
                                 corners.push(b2.getCenter(new THREE.Vector3()));
                                 for (const w of corners) {
                                     v2.copy(w).applyMatrix4(this.m_matrixR0);
+                                    // gl.readPixels rows are BOTTOM-up: texture
+                                    // v (flipY=false) maps directly, no flip.
                                     const ux = Math.round(v2.x * (szR - 1));
-                                    const uy = Math.round((1 - v2.y) * (szR - 1));
+                                    const uy = Math.round(v2.y * (szR - 1));
                                     const inb = ux >= 0 && ux < szR && uy >= 0 && uy < szR;
                                     let dep = -1;
                                     if (inb) {
