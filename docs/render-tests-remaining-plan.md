@@ -6208,3 +6208,9 @@ generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑�
 **阴影浓度差的可能构成**：mgl 的 deck 阴影 = (ambient 恒定) + (directional × shadow) 双项合成，而 ours = 单一 factor 乘——两项合成的阴影浓度天然更深。复刻 = receiver chunk 从"乘 ground factor"升级为"ambient + directional·shadow 双项合成"（g51 系列阴影链语义已就绪，此为光照合成结构升级）。
 
 **结论**：lighting 四件残余 7.3-9.3 万/件的收复路径已定界为**甲板光照合成器结构升级**（双项合成替代单乘），需独立会话实施。
+
+### §885 终六十九g51q6: lighting 阴影浓度量化定界（2026-09-19）
+
+**实测**（elevated-symbols-lighting expected）：地面 lit (183,190,188)/阴影 (82,85,84) = **×0.447**；deck 阴影 (57,63,70) = 基色 ×0.35。ours：地面阴影过暗（黑块）而 deck 阴影过亮（×0.72）——两者都不匹配 mgl。
+
+**结论**：mgl 地面阴影浓度 = lit×0.447、deck 阴影 = albedo×0.35，其精确合成需要以 mgl 本体渲染 + 管线插桩对拍（light color 线性化路径、ground_shadow.frag 与 fill 阴影采样的合成次序、extrusion 墙可见性）——参数扫掠不可达。**收复 lighting 四件的正确路径 = 以 mgl 本体（`mgl-shot` 或 debug 页）渲染同夹具，逐层 dump 其 ground_shadow/fill 光照中间值，再反向实现**。探针与对照基础设施已就绪。
