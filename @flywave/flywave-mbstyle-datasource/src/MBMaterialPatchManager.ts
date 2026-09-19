@@ -306,17 +306,31 @@ export class MBMaterialPatchManager {
                         // §885 终三十九g37: capture REAL shader compile
                         // diagnostics (program cache holds per-program
                         // diagnostics with the GLSL error line) — one shot.
+                        // §885 终四十九g51i: POST the FULL prefix (the console
+                        // channel truncates at 3000 chars and hides the error
+                        // line's context — shadows-underpass 0:501).
                         if ((globalThis as any).__mbElevPlane
                             && !(MBMaterialPatchManager as any).__mbDiagDumped) {
                             const progs = (this.m_dataSource as any).mapView?.renderer
                                 ?.info?.programs ?? [];
+                            const allDiag: any[] = [];
                             for (const pr of progs) {
                                 const dg = pr?.diagnostics;
                                 if (dg && Object.keys(dg).length > 0) {
-                                    (MBMaterialPatchManager as any).__mbDiagDumped = true;
-                                    // eslint-disable-next-line no-console
-                                    console.log('[MBProgDiag] ' + JSON.stringify(dg).slice(0, 3000));
-                                    break;
+                                    allDiag.push(dg);
+                                }
+                            }
+                            if (allDiag.length > 0) {
+                                (MBMaterialPatchManager as any).__mbDiagDumped = true;
+                                // eslint-disable-next-line no-console
+                                console.log('[MBProgDiag] count=' + allDiag.length);
+                                const fbD = (globalThis as any).__mbShadowFeedbackUrl;
+                                if (fbD) {
+                                    fetch(`${fbD}/mb-probe-dump`, {
+                                        method: 'POST',
+                                        headers: { 'content-type': 'application/json' },
+                                        body: JSON.stringify({ probe: 'prog-diag', allDiag }),
+                                    }).catch(() => { });
                                 }
                             }
                         }
@@ -1581,7 +1595,7 @@ export class MBMaterialPatchManager {
                              float mbShD = mbShPk.r + mbShPk.g / 255.0;
                              #endif
                              #ifdef MB_SH_HW
-                             float mbShBiasV = MB_SH_BIAS;
+                             float mbShBiasV = float(MB_SH_BIAS);
                              #else
                              // §885 终三十九g50h: mgl's vector-tile NORMAL_OFFSET
                              // bias (0.5·0.00010) was A/B'd post-g48-frame —

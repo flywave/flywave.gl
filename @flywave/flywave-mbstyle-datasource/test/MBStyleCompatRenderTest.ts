@@ -382,6 +382,36 @@ function discoverTests(): TestEntry[] {
         ?.find?.((a: string) => a.startsWith("shcastnormal="))
         ?.slice("shcastnormal=".length);
     if (scn !== undefined && scn !== "") (globalThis as any).__mbShCastNormal = Number(scn);
+    // §885 终四十九g51i: elevplane=1 also arms the shaderSource/compileShader
+    // hook — on a GLSL compile failure, log the failing source around the
+    // reported line (shadows-underpass 0:501 int→float class).
+    if ((window as any).__karma__?.config?.args?.includes?.("elevplane=1")) {
+        (globalThis as any).__mbElevPlane = true;
+        const P2: any = (globalThis as any).WebGL2RenderingContext?.prototype;
+        if (P2 && !P2.__mbShaderHook) {
+            P2.__mbShaderHook = true;
+            const origCompile = P2.compileShader;
+            P2.compileShader = function (this: any, shader: any) {
+                origCompile.apply(this, arguments as any);
+                try {
+                    const log: string = this.getShaderInfoLog(shader) ?? '';
+                    if (log.includes('ERROR')) {
+                        const src: string = shader.__mbSrc ?? '';
+                        const lines = src.split('\n');
+                        // eslint-disable-next-line no-console
+                        console.log('[MBShaderErr] ' + log.slice(0, 160).replace(/\n/g, ' | ')
+                            + ' total=' + lines.length
+                            + ' ctx=' + JSON.stringify(lines.slice(495, 508)));
+                    }
+                } catch { /* probe only */ }
+            };
+            const origSource = P2.shaderSource;
+            P2.shaderSource = function (this: any, shader: any, source: string) {
+                try { shader.__mbSrc = source; } catch { /* probe only */ }
+                return origSource.call(this, shader, source);
+            };
+        }
+    }
     // §885 终四十四g50x: orthoshadowoff=1 → disable the whole shadow chain
     // under orthographic style (baseline decomposition for the band audit).
     if ((window as any).__karma__?.config?.args?.includes?.("orthoshadowoff=1")) {

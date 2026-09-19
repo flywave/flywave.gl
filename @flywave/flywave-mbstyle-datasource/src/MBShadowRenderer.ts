@@ -116,12 +116,25 @@ export class MBShadowRenderer {
         vertexShader: `
             uniform float uMBNormalOffset;
             uniform vec3 uMBLightDir;
+            uniform mat4 uMBRecvMatrix;
             void main(){
                 vec3 wN = normalize(mat3(modelMatrix) * normal);
                 float dotScale = min(1.0 - dot(wN, uMBLightDir), 1.0) * 0.5 + 0.5;
                 vec3 wp = (modelMatrix * vec4(position, 1.0)).xyz
                     + wN * uMBNormalOffset * dotScale;
-                gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+                // §885 终四十九g51h: project through the RECEIVER's own matrix
+                // (m_matrix, uv-space) instead of m_shadowCamera's
+                // projection·view — band-forensics measured a ~47-texel
+                // systematic offset between where this pass rasterized a
+                // surface and where receivers computed their uv for the same
+                // world point (the compose-vs-camera desync ghost of
+                // g50w-补). Emitting ndc = 2·uv − 1 makes gl_FragCoord.z ≡
+                // receiver uv.z BY CONSTRUCTION (both ortho-affine, w=1),
+                // so self-samples compare bit-consistently and occluder
+                // footprints land exactly where receivers look.
+                vec4 rp = uMBRecvMatrix * vec4(wp, 1.0);
+                gl_Position = vec4(rp.x * 2.0 - rp.w, rp.y * 2.0 - rp.w,
+                    rp.z * 2.0 - rp.w, rp.w);
             }`,
         uniforms: {
             // §885 终四十九g51f: DEFAULT 0 — mgl displaces RECEIVERS along the
@@ -136,6 +149,8 @@ export class MBShadowRenderer {
             // plateau at 135,328 on ground-shadow-fog — the residual there
             // is dominated by non-shadow differences.)
             uMBLightDir: { value: new THREE.Vector3(0, 0, 1) },
+            // §885 终四十九g51h: bound to the renderer's live m_matrix.
+            uMBRecvMatrix: { value: new THREE.Matrix4() },
         },
         fragmentShader: `
             void main(){
@@ -393,7 +408,12 @@ export class MBShadowRenderer {
                         // shift (offset/tan(elevation)) recovers street texels
                         // at wall bases (mgl shadow_renderer.ts:546, default
                         // normalOffset 3).
-                        mbWP.z += 10;
+                        // §885 终四十九g51i: 10.0 (was bare 10 — an int literal
+                        // assigned to a float component is a hard GLSL ES
+                        // compile error; it killed every perspective ground
+                        // quad program since the g50u-era normal-offset
+                        // experiment landed — shadows-underpass 0:501).
+                        mbWP.z += 10.0;
                         vec4 uv4 = uMBShadowMatrix * vec4(mbWP, 1.0);
                         vec4 uv4b = uMBShadowMatrix1 * vec4(mbWP, 1.0);
                         // §885 终四十g50u: mgl _prelude_shadow.fragment.glsl
@@ -424,11 +444,11 @@ export class MBShadowRenderer {
                                         #else
                                         float sd = pk.r + pk.g / 255.0;
                                         #endif
-                                        l = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sd - uv4.z);
+                                        l = smoothstep(-float(MB_SH_BIAS), float(MB_SH_BIAS), sd - uv4.z);
                                     } else {
                                         vec4 pk = texture2D(uMBShadowMap1, uv4b.xy + off);
                                         float sd = pk.r + pk.g / 255.0;
-                                        l = smoothstep(-MB_SH_BIAS, MB_SH_BIAS, sd - uv4b.z);
+                                        l = smoothstep(-float(MB_SH_BIAS), float(MB_SH_BIAS), sd - uv4b.z);
                                     }
                                     litSum += l;
                                 }
@@ -1398,6 +1418,12 @@ export class MBShadowRenderer {
         // override material, aborting the whole render (white canvas).
         this.m_shadowCamera.layers.set(1);
         scene.overrideMaterial = this.m_depthMaterial;
+        // §885 终四十九g51h: bind the receiver matrix BY REFERENCE — the
+        // depth pass projects casters through the same m_matrix the receivers
+        // sample with (g51h vertex rewrite), so last frame's compose drives
+        // this frame's rasterization; static fixtures settle on frame 2.
+        (this.m_depthMaterial as THREE.ShaderMaterial).uniforms.uMBRecvMatrix.value =
+            this.m_matrix;
         try {
             if (mainRenderer) {
                 if (!this.m_hwRT) {
@@ -2017,6 +2043,11 @@ export class MBShadowRenderer {
             this.m_shadowCamera.updateMatrixWorld();
             }
             scene.overrideMaterial = this.m_depthMaterial;
+            // §885 终四十九g51h: raw cascade rasterizes through ITS receiver
+            // matrix (m_matrixR0, last frame's compose) — same-registration
+            // rule as the mirror cascade-0 pass.
+            (this.m_depthMaterial as THREE.ShaderMaterial).uniforms.uMBRecvMatrix.value =
+                this.m_matrixR0;
             const prevLayersR = this.m_shadowCamera.layers.mask;
             this.m_shadowCamera.layers.set(1);
             try {
@@ -2140,6 +2171,9 @@ export class MBShadowRenderer {
             }
         }
         scene.overrideMaterial = this.m_depthMaterial;
+        // §885 终四十九g51h: cascade-1 rasterizes through ITS receiver matrix.
+        (this.m_depthMaterial as THREE.ShaderMaterial).uniforms.uMBRecvMatrix.value =
+            this.m_matrix1;
         const prevLayers1 = this.m_shadowCamera.layers.mask;
         this.m_shadowCamera.layers.set(1);
         try {

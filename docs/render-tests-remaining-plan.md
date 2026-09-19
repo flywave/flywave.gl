@@ -6056,3 +6056,17 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **⑦ 下轮**：①⑤的 caster 覆盖修复（统一根因，预期 lighting 四件 + ortho-camera 同刀 −60 万）；②elevated-wireframe +14,941 复核（带灯 wireframe 曝光）；③跨家族回归（cast-shadows 波及 model-layer 102/building 46/lighting-3d-mode 32 等 239 个 style，本次 caster-offset 归零 + 比较器重写对墙体/建筑族的影响未测）。
 
 **⑧ 补测补充（同日）**：全族实测落定 69/76 件，同框对照 5,498,105 → 3,047,639（**−2,450,466，−44.6%**）。terrain-toggle-on-off 69,815→29,401（−40k）；tooling-support 26,653 与 HEAD 26.5k 一致（g50k 参考值 16,428 系过时基线，非回归）。shadows-underpass 在新旧两态均**无法完成**：`0:501 'assign': cannot convert from 'const int' to 'highp float'` GLSL 编译错误 → 180s 超时——git stash 对照实证**该错误在 HEAD（g51c 提交态）即存在，非本轮引入**（嫌疑：某 flavor 的 defines 以整数字面量落入 float 上下文，如 `float x = MB_SH_BIAS` 处 bV 恰为整数串；g50t..g51c 间引入，下轮与 caster 覆盖一并修）。terrain-enabled（无后缀件）未测得（filter 子串碰撞大量 *-terrain-enabled 变体，timeout）。
+
+### §885 终五十g51h–g51i: 深度 pass 接收矩阵投影统一 + shadows-underpass 编译错误修复 + lighting 回归再定性（2026-09-19）
+
+**① g51h 深度 pass 三处统一走接收侧矩阵**：band-forensics 实测暗带 uv 列（sx 290-310×dz 0-15）stored 全 clear 且 nbMin 也 clear——深度内容系统性偏离接收 uv。修复：m_depthMaterial 顶点着色器改由 `uMBRecvMatrix`（= m_matrix/m_matrixR0/m_matrix1，按 pass 引用绑定，上一帧 compose）投影：`gl_Position = vec4(rp.xy*2−rp.w, rp.z*2−rp.w, rp.w)`，构造性保证 `gl_FragCoord.z ≡ 接收 uv.z`（同矩阵、同 snap、同 bias）。**结果：中性**（oriented/no-light/road-extend 逐位一致，tunnel 60,220→64,322 +4k 栅格对齐位移，ortho 63,298→63,414）——47-texel 偏移并非暗带主因，保留该修复作为投影单一事实源。
+
+**② lighting 四件回归再定性（修正 g51g⑤ 的 caster 覆盖假说）**：对照 expected/current 图像，expected 的暗色大区域 = **fill 甲板的 apply_lighting 方向着色（NdotL 背光面变暗）+ 右上角亮三角形 = 受光地面**，并非投影阴影。我们渲染甲板均匀亮色 → 缺失的是 **fill 的 apply_lighting 方向项**（现有 injectGroundLighting 只做 radiance 乘、injectStructure3DLighting 只覆盖 extrusion）——旧比较器幕罩 ×0.49 恰好补偿了这一缺失（39,334 基线 = 幕罩冒充光照着色的假对齐）。**真修 = port mgl apply_lighting 的 fill 分量**（新工作流，非阴影链）；caster 覆盖假说降级。
+
+**③ g51i shadows-underpass 编译错误修复（g51c 遗留 + HEAD 既有）**：新增 shaderSource/compileShader 原型钩子（elevplane=1 门控）抓到 0:501 实锤——quad chunk 内 `mbWP.z += 10;`（g50u 时代 forensics 残留，整数字面量赋 float 分量 = GLSL ES 硬错误），透视下 quad 编译即炸 → 夹具 180s 超时。修复为 `10.0`，另对 `MB_SH_BIAS` 的三处 float 上下文用点包 `float()` 防再发。**结果：shadows-underpass 139,516**（旧 g50k 参考 146,932，−7,416），tunnel-enterance 54,585 / tunnel-enterance-color 57,144 同批复测一致。
+
+**④ terrain-enabled 无法测量**：精确 filter 下浏览器 4 次 DISCONNECTED（SwiftShader 崩溃，重载地形夹具），与代码无关的環境问题（g50k 时代可测）。挂账。
+
+**⑤ 记分牌收口**：全族 76 件中 71 件实测 + shadows-underpass 139,516 + terrain-enabled 挂账。同框 69 件 5,498,105 → 3,047,639（**−44.6%**）。shadows-underpass 修复后 family 总量（71 件口径）≈ 3,187,155。
+
+**⑥ 下轮**：①fill apply_lighting 方向项移植（lighting 四件 +143k/件回归的收复路径，预期 −60 万）；②ortho-camera 甲板洞（Portal Graph L4，剩余 63k 主体）；③shadows-tunnel g51h +4k 复核；④terrain-enabled 环境崩溃排查。
