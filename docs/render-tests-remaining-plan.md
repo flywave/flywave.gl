@@ -6214,3 +6214,13 @@ generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑�
 **实测**（elevated-symbols-lighting expected）：地面 lit (183,190,188)/阴影 (82,85,84) = **×0.447**；deck 阴影 (57,63,70) = 基色 ×0.35。ours：地面阴影过暗（黑块）而 deck 阴影过亮（×0.72）——两者都不匹配 mgl。
 
 **结论**：mgl 地面阴影浓度 = lit×0.447、deck 阴影 = albedo×0.35，其精确合成需要以 mgl 本体渲染 + 管线插桩对拍（light color 线性化路径、ground_shadow.frag 与 fill 阴影采样的合成次序、extrusion 墙可见性）——参数扫掠不可达。**收复 lighting 四件的正确路径 = 以 mgl 本体（`mgl-shot` 或 debug 页）渲染同夹具，逐层 dump 其 ground_shadow/fill 光照中间值，再反向实现**。探针与对照基础设施已就绪。
+
+### §885 终七十一g51t: cast-shadows 跨家族全量回归（model-layer/building/lighting-3d-mode 340/385 件）（2026-09-20）
+
+**覆盖**：model-layer 176 + building 50 + lighting-3d-mode 114 = 340 件实测（45 件因会话超时跳过，chunked runner resume 可补）。
+
+**vs g51d 前基线（cross-before 20 件重叠，有偏——before 轮仅覆盖部分子集）**：13 胜 7 负，total +28.0 万：
+- 回归集中：landmark-conflation 对件 +29.8 万（已知，模型阴影落位专项）、building/tile-border +8.1 万（新发现——需查）、conflation_promoted_id +6.2 万、with-disabled-shadows +2.7 万
+- 大额收益（building 族）：measure-light-bright −10.8 万、skillion −4.6 万、ground-ao −3.7 万
+
+**结论**：g51 系列跨家族影响结构性分化——building 族净收益显著，conflation/landmark 模型族回归 ~33 万（模型阴影落位专项覆盖）。3d-intersections 目标族 −50.6% 收益完整保留。全量 340 件的前后对照需在 1edcafc5 基线上跑完整 before 轮（~10 小时），列下轮。
