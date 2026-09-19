@@ -6108,3 +6108,11 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **③ landmark 残余 +11.9 万（297,538 vs 1edcafc5 178,524）定性**：隔离矩阵证明非单一 g51 变更所致，系旧全局校准（老比较器+offset+镜像+无 NOFF 的组合态）对该模型夹具的耦合调谐——与 lighting 四件历史同构，需在 mgl 忠实新基线下按模型接收路径（MBModelRenderer mbShDepth 采样 + 原始级联）重新校准。**下轮首刀：landmark 模型阴影足迹 dump（m_matrixR0 投影 vs 模型接收 uv readPixels）**。
 
 **④ 记分牌口径**：3d-intersections 68 件同框 −50.6% 维持；跨家族 19 件抽检回归收窄至 +12 万级（conflation 三件为主）。
+
+### §885 终五十四g51m: landmark 模型阴影足迹 dump 实锤——raw cascade 视锥窗不覆盖远置地标（2026-09-19）
+
+**① 新探针（已提交）**：raw-shadow-footprint——raw pass 内把最高 caster 的 bbox 8 角+中心经 m_matrixR0 投影，并从 m_depthPixelsR0 数组按 uv readPixels 存储深度（shcastaudit 门控，frame 30 一次性）。
+
+**② landmark-conflation-buckingham 读数**：最高 caster = 192.8m 地标模型，RTE bbox x[1788,2028] y[−800,−319] z[−521,−328]；**m_matrixR0 投影 uv.x −1.24~−0.74、uv.z −0.126~+0.050 全部出界**（含近平面负值）→ landmark 不在 raw cascade 覆盖窗内，其投影阴影丢失；模型接收按设计回退镜像级联。光源方位 az=311.9/仰角 7.6°（掠射）——1800m 水平偏移 × sin(7.6°) ≈ 238m 深度展开 + 侧向位移远超 ±r 窗。
+
+**③ 结论与定界**：conflation 三件 +32.9 万回归的主结构 = raw cascade 视锥球拟合窗不含远置 conflated 地标（其阴影需近平面前伸 + 侧向覆盖）。修复 = raw cascade 拟合窗并入 caster 盒并集（shadow 族已有 casterBox 先例）并重校模型族（quantization-shadows/castro 等 calibrated 会话联动）——独立工作流。landmark 隔离矩阵（g51l）证明四 g51 变更单独非主因，本项为第二独立根因。

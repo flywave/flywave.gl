@@ -2081,6 +2081,73 @@ export class MBShadowRenderer {
                 } else {
                     this.m_matrixR0.premultiply(mbBiasR);
                 }
+                // §885 终五十四g51m: raw-shadow footprint dump — project the
+                // TALLEST caster's bbox corners + center through m_matrixR0
+                // and readPixels m_depthPixelsR0 at those uvs. Answers whether
+                // the model shadow footprint covers the receiver uv region
+                // (landmark-conflation +12 万 residual vs 1edcafc5). Gate:
+                // shcastaudit=1. One-shot at frame ≥ 30 (map settled).
+                if ((globalThis as any).__mbShCastAudit) {
+                    const fpN2 = ((globalThis as any).__mbRawFpN =
+                        ((globalThis as any).__mbRawFpN ?? 0) + 1);
+                    if (fpN2 === 30 && this.m_depthPixelsR0) {
+                        try {
+                            let tallest: any = null;
+                            let tallH = -1;
+                            for (const obj of shadowCasters) {
+                                obj.updateWorldMatrix?.(true, false);
+                                const b = new THREE.Box3().setFromObject(obj);
+                                if (b.isEmpty()) continue;
+                                const h = b.max.z - b.min.z;
+                                if (h > tallH) { tallH = h; tallest = { obj, b }; }
+                            }
+                            if (tallest) {
+                                const szR = size;
+                                const v2 = new THREE.Vector3();
+                                const px2 = new Uint8Array(4);
+                                const pts: any[] = [];
+                                const b2 = tallest.b;
+                                const corners: any[] = [];
+                                for (let ci = 0; ci < 8; ci++) {
+                                    corners.push(new THREE.Vector3(
+                                        ci & 1 ? b2.max.x : b2.min.x,
+                                        ci & 2 ? b2.max.y : b2.min.y,
+                                        ci & 4 ? b2.max.z : b2.min.z));
+                                }
+                                corners.push(b2.getCenter(new THREE.Vector3()));
+                                for (const w of corners) {
+                                    v2.copy(w).applyMatrix4(this.m_matrixR0);
+                                    const ux = Math.round(v2.x * (szR - 1));
+                                    const uy = Math.round((1 - v2.y) * (szR - 1));
+                                    const inb = ux >= 0 && ux < szR && uy >= 0 && uy < szR;
+                                    let dep = -1;
+                                    if (inb) {
+                                        const o = (uy * szR + ux) * 4;
+                                        dep = +((this.m_depthPixelsR0[o] +
+                                            this.m_depthPixelsR0[o + 1] / 255)).toFixed(3);
+                                    }
+                                    pts.push({ w: [+w.x.toFixed(1), +w.y.toFixed(1), +w.z.toFixed(1)],
+                                        uv: [+v2.x.toFixed(3), +v2.y.toFixed(3), +v2.z.toFixed(3)],
+                                        inb, depth: dep });
+                                }
+                                const fbR = (globalThis as any).__mbShadowFeedbackUrl;
+                                const payload: any = { probe: 'raw-shadow-footprint',
+                                    tallestHeight: +tallH.toFixed(1), points: pts };
+                                if (fbR) {
+                                    fetch(`${fbR}/mb-probe-dump`, {
+                                        method: 'POST',
+                                        headers: { 'content-type': 'application/json' },
+                                        body: JSON.stringify(payload),
+                                    }).catch(() => { });
+                                }
+                                // eslint-disable-next-line no-console
+                                console.log('[MBRawFp] ' + JSON.stringify(payload).slice(0, 1200));
+                            }
+                        } catch (e) {
+                            (globalThis as any).__mbRawFpErr = String(e);
+                        }
+                    }
+                }
                 // §885 终三〇八: texel snap for the RAW cascade-0 (the model
                 // tail's primary map) — same formula, own matrix.
                 if ((globalThis as any).__mbShTexelSnap
