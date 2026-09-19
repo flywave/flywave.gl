@@ -6178,3 +6178,9 @@ expected 构成解析（elevated-symbols-lighting）：①甲板（暗蓝灰+标
 ### §885 终六十三g51r2: guardrail 墙体光照注入（2026-09-19）
 
 generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑色）修复：①墙体颜色拷贝道路 deck 的 fill color（侧墙读作路面自身侧表面）；②注入 injectStructure3DLighting（屏幕空间法线 apply_lighting 链）。结果：elevated-symbols-lighting 73,498→73,533（±噪声）、elevated-wireframe 67,504→66,767（−737）。**墙体光照正确性修复保留**；lighting/wireframe 的主体残余为构图级（侧墙几何形态、wireframe 调试特性），需特性级工作流。
+
+### §885 终六十九g51s2: wireframe 调试特性实现（2026-09-19）
+
+**实现**：①测试侧按 style.metadata.test.showLayers3DWireframe/showElevatedStructuresWireframe 置位 `__mbWireframe3D`（逐夹具重置）；②patchTile 对 _hdElevation>0/__elev 且非 markup（renderOrder<9.75）的网格生成**三角形边线框 LineSegments**（边去重、暗红 (0.7,0,0)·α0.7、onBeforeCompile 注入 `gl_FragDepth = gl_FragCoord.z − 0.0001` 消 z-fighting——镜像 mgl HANDLE_WIREFRAME_DEBUG）；③颜色空间 0.7 sRGB→线性换算。
+
+**结果**：elevated-wireframe 67,504（无线框）→ 76,206（线框落地，+8.7k）。**语义达成**（红色三角剖分调试线渲染），数值残余 = 三角剖分奇偶性（mgl 结构化条带 vs earcut 对角线，线框密度/方向不同）——归入三角剖分奇偶性工作流。仅此夹具受影响（metadata 门控），其余 75 件零影响。

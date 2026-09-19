@@ -146,3 +146,35 @@ export function createGuardrailMesh(
     wallMesh.renderOrder = mesh.renderOrder + 1;
     return wallMesh;
 }
+
+/**
+ * §885 终六十八g51s: build a triangle-edge wireframe geometry (each edge
+ * once) for the DEBUG_WIREFRAME-style elevated-structures debug view —
+ * mgl renders the tile mesh a second time as LINES with dark-red
+ * fragments (HANDLE_WIREFRAME_DEBUG: vec4(0.7, 0, 0, 0.7), gl_FragDepth
+ * −0.0001). Returned geometry feeds a LineSegments child.
+ */
+export function buildWireframeSegments(
+    positions: Float32Array | ArrayLike<number>,
+    index: Uint32Array | ArrayLike<number> | null,
+): THREE.BufferGeometry | null {
+    if (!index || (index as any).length === 0) return null;
+    const segs: number[] = [];
+    const seen = new Set<string>();
+    const idxArr = index as ArrayLike<number>;
+    for (let t = 0; t + 2 < idxArr.length; t += 3) {
+        const tri = [idxArr[t], idxArr[t + 1], idxArr[t + 2]];
+        for (const [a, b] of [[tri[0], tri[1]], [tri[1], tri[2]], [tri[2], tri[0]]] as const) {
+            const key = a < b ? `${a}_${b}` : `${b}_${a}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            segs.push(
+                positions[a * 3], positions[a * 3 + 1], positions[a * 3 + 2],
+                positions[b * 3], positions[b * 3 + 1], positions[b * 3 + 2]);
+        }
+    }
+    if (segs.length === 0) return null;
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(segs, 3));
+    return geom;
+}

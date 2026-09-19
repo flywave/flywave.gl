@@ -2844,6 +2844,12 @@ describe("MBStyleDataSource render-tests compatibility", function () {
 
     for (const entry of SUBSET) {
         const metadata = entry.style.metadata?.test ?? {};
+        // §885 终六十八g51s: mgl metadata.test.showLayers3DWireframe /
+        // showElevatedStructuresWireframe → the engine renders elevated
+        // structures twice — solid + dark-red LINES wireframe (triangulation
+        // debug; elevated-wireframe fixture family).
+        (globalThis as any).__mbWireframe3D = !!(
+            metadata["showLayers3DWireframe"] || metadata["showElevatedStructuresWireframe"]);
         const skipReasons = metadata["skip-test"] ?? [];
         // Determine current platform once.
         let platformTag = "";
