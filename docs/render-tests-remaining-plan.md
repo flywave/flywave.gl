@@ -6164,3 +6164,9 @@ expected/current 并排对照（elevated-symbols-lighting）明确残余构成�
 **② 结果**：landmark 297,693（−190 噪声级）——模型已正确进 raw 图，剩余 29.8 万 = 构图差（roof/wall 材质着色、标注、阴影浓度），属模型资源级校准迭代，非投影/裁剪缺陷。conflation 三件收复需在该基线上做阴影落位浓度迭代。
 
 **③ 下轮**：①landmark 阴影浓度/落位校准迭代（探针就绪）；②lighting 甲板光照公式精化；③wireframe 调试特性；④terrain-enabled 地形管线；⑤cast-shadows 239 style 全量回归。
+
+### §885 终六十六g51q2: lighting 残余定界收束——deck 在挤出物阴影带之外（2026-09-19）
+
+高倍对照（expected 暗区边界）：暗区边界为**锐利直线**（200m shadow-casters 挤出物的阴影带边缘），deck 整体位于带内（全暗 (57,63,70)），带外地面 lit (183,190,188)。ours：deck lit（阴影带未覆盖 deck uv）。挤出物本体已确认入 raw 图（rmstyle 对照三角消失）——**残余根因 = 挤出物阴影带与 deck 接收 uv 的覆盖错位**（掠射/高挑遮挡物的阴影带宽度对光方向、fit 窗口、挤出物高度评估敏感）。校准路径：挤出物阴影带投影审计（将 shadow-casters 挤出物 bbox 角经 m_matrix 投影，与 deck uv 分布叠合），方向/高度/窗口三参数扫掠。收复后 lighting 四件预期大幅下降。
+
+**状态收束**：3d-intersections 家族 −50.6% 维持（阴影链语义已 mgl 忠实）；lighting 四件残余为挤出物阴影带覆盖校准（独立迭代）；landmark 残余为 raw 级联近平面/落位浓度迭代；elevated-wireframe 为 wireframe 调试特性实现；terrain-enabled 为地形管线挂起；239 style 全量回归待跑。全部探针与台账就绪。
