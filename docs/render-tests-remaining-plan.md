@@ -6305,3 +6305,7 @@ shdiag=5 于 tile-border：quad 输出灰阶场 17-191 分布（暗区 17-53 占
 **lighting 四件维持 7.3-9.3 万（与 g50k 基线持平 ±噪声）**——阴影已真实落地但浓度/构图与 expected 的差异需要 mgl 本体対拍后反向实现甲板光照合成器结构升级，属独立专项。
 
 **移交优先级**：①mgl 本体対拍→合成器升级 ②conflation/landmark 落位浓度 ③wireframe 奇偶性 ④terrain-enabled ⑤全量 before 轮+resume。
+
+### §885 终八十二g51t10: shres=2048 验证（2026-09-20）
+
+shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,648（+330）——影响微小。mgl 用 shadowMapResolution 2048（shadow_renderer.ts:215），我们默认 1024。分辨率翻倍仅带来边沿锐化改善，核心残余仍为光照合成结构差。建议 shres=2048 作为默认（与 mgl 一致）。
