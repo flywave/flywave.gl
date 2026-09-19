@@ -25,7 +25,7 @@
         const res = await fetch(`/mapbox-gl-js/test/integration/render-tests/${fixture}/style.json`);
         const style = await res.json();
         const INT = '/mapbox-gl-js/test/integration';
-        const localize = (u) => String(u).replace(/^local:\/\//, `${INT}/`);
+        const localize = (u) => location.origin + INT + '/' + String(u).replace(/^local:\/\//, '');
         if (style.glyphs) style.glyphs = localize(style.glyphs);
         if (style.sprite) style.sprite = localize(style.sprite);
         for (const [, src] of Object.entries(style.sources ?? {})) {
