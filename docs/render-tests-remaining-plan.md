@@ -6277,3 +6277,11 @@ generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑�
 ### §885 终七十七g51t6: GSHEXP 扫掠定界收束——lighting 浓度已最优（2026-09-20）
 
 GSHEXP 扫掠（2.0/2.5/2.7/3.0）：全部 ≥190k（vs 默认 73,498）——增大阴影浓度使 mismatch 恶化。**浓度参数已最优（gsexp=1），残余 7.3 万为构图级差异（甲板/地面/标线的着色与层次），非阴影浓度可调**。收复唯一路径确认：mgl 本体渲染对拍 → 反向实现甲板光照合成器结构升级（ambient 恒定 + directional·shadow 双项 + 层叠次序）。独立专项。
+
+### §885 终七十八g51t7: tile-border 回归二分定位——quad 编译修复暴露地面阴影图案错误（2026-09-20）
+
+**checkout 二分**：1edcafc5 65,416 → 7e745261（g51d-g51g）**64,659** → 4f60257a（g51h-i）**126,198** → HEAD 135,072。回归引入点 = **g51h-i 的 shadows-underpass 修复**（quad chunk `mbWP.z += 10` int→float 修正使 quad 程序首次编译成功）——**quad 的地面阴影图案开始渲染**，其在 building/tile-border 上的图案错误（建筑阴影覆盖全地面而非紧凑贴建筑）+61k。
+
+**根因归类**：quad 图案错误 = 与 lighting 四件同类的阴影落位/覆盖校准（掠射光下建筑阴影带的投影宽度/位置）——此前 quad 编译失败静默隐藏了该问题（g50u 时代引入的 int 字面量恰使 quad 恒不渲染，返回了"偶然正确"的全亮地面）。
+
+**下轮**：①quad 图案校准（建筑阴影带落位——探针就绪）②landmark 落位浓度迭代 ③lighting 甲板光照合成器升级 ④wireframe 奇偶性 ⑤terrain-enabled。
