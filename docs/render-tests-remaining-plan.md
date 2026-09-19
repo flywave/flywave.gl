@@ -6150,3 +6150,5 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 ### §885 终六十g51q补: lighting 残余构图定界（2026-09-19）
 
 expected/current 并排对照（elevated-symbols-lighting）明确残余构成：①甲板本体与标线已对齐（暗色路面+白色标线均在）；②**甲板侧墙**：expected 为浅色受光面（ambient 照射的垂直墙），ours 黑色/缺失——墙体光照注入未覆盖 fill 甲板的侧立面；③**地面阴影浓度/范围**：ours 阴影区过度覆盖（大面积黑），expected 阴影边界更紧、地面保持中灰——200m 挤出物阴影的落位/浓度校准。两者均为墙体光照注入扩展 + 地面阴影浓度校准的独立迭代项，非阴影链结构性缺陷。探针与对照图已就绪（/tmp/esl_compare.png 模式可复现）。
+
+**g51r 定界补充（同日）**：elevated fill 侧墙缺失为**几何生成层缺口**——datasource 无任何 fill 侧墙/skirt 发射代码（仅地形有 skirt），mgl expected 的浅色侧墙是其 elevated structures 管线的侧壁面几何。修复路径 = tile 解码/emitter 为 elevated fill 增加 200m... 实为高差侧壁几何生成（顶点翻倍+法线），再叠加墙体光照注入——两段式特性开发，非本会话阴影链范围。lighting 四件残余维持 7.3-9.3 万（甲板顶面+标线+阴影已对齐，缺侧墙几何与地面阴影浓度两项）。
