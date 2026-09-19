@@ -6098,3 +6098,13 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **③ conflation 回归定性**：mgl 权威转换已核实（src/util/util.js sphericalDirectionToCartesian = az+90 无镜像，即 g51j 默认）——方向本身无错。三件回归的旧基线是镜像方向下的意外贴合（与 lighting 四件历史同构）；conflation 的地标模型阴影走 MBModelRenderer 原始级联（m_matrixR0/rawDir 独立相机），其帧内方向约定与 g51j 默认的交互需单独解剖。**下轮首刀：landmark-conflation-buckingham 的模型阴影足迹 dump（m_matrixR0 vs 模型接收 uv）**。
 
 **④ 结论**：3d-intersections 目标族 −50.6% 的收益远大于跨家族 +15.5 万净回归；g51j 默认保持 mgl 权威转换不回退。全族记分牌含尾部补测：68 件同框 5,558,794 → 2,746,449（−50.6%）+ 三件尾部补测（tile-border 14,547/terrain-toggle 29,401/tooling 26,653）。
+
+### §885 终五十三g51l: g51h 回退（接收矩阵深度投影无收益且伤模型夹具）+ landmark 隔离矩阵（2026-09-19）
+
+**① landmark-conflation-buckingham 旋钮隔离矩阵（当前 HEAD 态）**：base 331,473 / shnoff=0 331,936 / shcastnormal=3 339,771 / shadowlegacy=1 333,297 / shmodelraw=0 331,473（原始级联对该夹具惰性）/ shdiralt=0 313,906——**四个 g51 变更单独均非主因**，方向翻转反而 +1.7 万收益。禁用 g51h uMBRecvMatrix（回退相机投影）：331,473→**297,538（−34k）**——接收矩阵深度投影无实测收益（3d-intersections 各件 ±噪声）且对模型重载夹具 +3.4~5 万，**已回退**（恢复 `projectionMatrix·viewMatrix` 顶点投影，删除 uMBRecvMatrix uniform 与三处绑定）。
+
+**② 回退后验证**：ortho-camera 55,528（保持破基线）、shadows-tunnel 60,363、lighting 四件 73,498/75,768/92,407/93,371（±300 噪声）——3d-intersections 收益完整保留。
+
+**③ landmark 残余 +11.9 万（297,538 vs 1edcafc5 178,524）定性**：隔离矩阵证明非单一 g51 变更所致，系旧全局校准（老比较器+offset+镜像+无 NOFF 的组合态）对该模型夹具的耦合调谐——与 lighting 四件历史同构，需在 mgl 忠实新基线下按模型接收路径（MBModelRenderer mbShDepth 采样 + 原始级联）重新校准。**下轮首刀：landmark 模型阴影足迹 dump（m_matrixR0 投影 vs 模型接收 uv readPixels）**。
+
+**④ 记分牌口径**：3d-intersections 68 件同框 −50.6% 维持；跨家族 19 件抽检回归收窄至 +12 万级（conflation 三件为主）。
