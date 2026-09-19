@@ -108,13 +108,11 @@ export class MBShadowRenderer {
     // §532 bisect: ShaderMaterial vs Basic — is the ctx2 blank a silent
     // shader-compile failure or something else? (Basic draws white geometry.)
     private m_depthMaterial: THREE.Material = new THREE.ShaderMaterial({
-        // §885 终五十六g51o2: DoubleSide — building/model meshes may carry
-        // inconsistent winding (their main materials render DoubleSide), and
-        // the FrontSide default culled light-facing wall triangles in the
-        // depth pass: landmark-conflation's whole-scene grazing shadow
-        // rasterized sparse (footprint probe depth=256 clear at 8/9 caster
-        // bbox corners).
-        side: THREE.DoubleSide,
+        // §885 终五十六g51o2补: side stays FrontSide — global DoubleSide
+        // regressed ortho-camera +44k (fills' back faces re-store depth at
+        // grazing views) with no conflation benefit; the no-normal prims
+        // already rasterize via the g51o NaN guard. Per-model DoubleSide is
+        // a model-resource-level follow-up.
         // §885 终二百二十三: caster-side normal-offset (mgl model.vertex
         // RENDER_SHADOWS path): shadow-space position is offset along the
         // world normal by uMBNormalOffset meters · dotScale, so the depth

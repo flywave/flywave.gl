@@ -6126,3 +6126,5 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **g51p 补（同日）**：①架构排查——m_sceneRoot 每帧清空重填（MapView.ts:3712/4112），深度 pass 时 tile 对象（含模型）已在 m_scene 内，"模型在 m_sceneRoot 之外"假说排除；②足迹探针 y 翻转修正后复测：raw 图在 landmark 足迹区已有部分内容（1/9 采样点 depth 1.439，其余 clear）——阴影开始落地但覆盖稀疏/落位偏差（掠射 7.6° 下 193m 模型的墙面条带极窄 + 近平面负 z 角点裁剪）；③当前渲染整体比 expected 暗 6.6 万 lum 均值、偏暗 >60 有 20.2 万 px、偏亮 2.1 万 px——多层叠差（模型墙自阴影过暗 + 长影位置/浓度 + 标注），非单一阴影链问题。**定界：landmark/conflation 工作流需独立校准会话（模型接收落位 + 浓度 + 构图）**，已具备全部探针（raw-shadow-footprint/shcastaudit/shbandline/recv-mat-audit）。
 
 **g51o2 补（同日）**：DoubleSide + 扩窗叠加验证——足迹出现首个真实内容（角点 depth=0.345，此前全 256），4 角点 uv.z 负值系近平面边界（caster 盒角恰在近边界）。mismatch 298,820（±600 噪声）：**landmark 阴影仍未有效落地，模型资源级解剖（GLB attribute census + 深度帧 matrixWorld + 模型可见性状态）确认为必要路径**。DoubleSide/扩窗/NaN 防护均为 mgl 忠实正确性修复保留。
+
+**g51o5c 终态（同日）**：DoubleSide 回退验证通过——ortho-camera 55,528（保持破基线）、lighting 73,498/75,768/92,407/93,371、landmark 298,361 持平。**终态配置 = g51d-g51g 六根因修复 + 扩窗 + NaN 防护 + 原始方向转换 + FrontSide 深度材质**；no-normal primitive 的逐模型 DoubleSide 列为模型资源级下轮项。3d-intersections 家族 −50.6% 收益完整保留。
