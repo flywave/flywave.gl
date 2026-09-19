@@ -6154,3 +6154,5 @@ expected/current 并排对照（elevated-symbols-lighting）明确残余构成�
 **g51r 定界补充（同日）**：elevated fill 侧墙缺失为**几何生成层缺口**——datasource 无任何 fill 侧墙/skirt 发射代码（仅地形有 skirt），mgl expected 的浅色侧墙是其 elevated structures 管线的侧壁面几何。修复路径 = tile 解码/emitter 为 elevated fill 增加 200m... 实为高差侧壁几何生成（顶点翻倍+法线），再叠加墙体光照注入——两段式特性开发，非本会话阴影链范围。lighting 四件残余维持 7.3-9.3 万（甲板顶面+标线+阴影已对齐，缺侧墙几何与地面阴影浓度两项）。
 
 **g51s 补（同日）**：elevated-wireframe 差异构成定界——expected 显示红色 wireframe 三角剖分调试图（该夹具测试 wireframe 调试渲染特性）+ 探视下穿墙体红框；ours 无红线框（wireframe 调试特性未实现/差异），且车道/多边形构图差异大。**+14,941 主体为 wireframe 调试特性差异（非阴影/光照链）**，67,504 自 g50t 稳定。修复 = wireframe 调试渲染特性实现（独立特性工作流）。阴影链 g51 系列变更对该夹具无可见影响（67,504→67,504 噪声级）。
+
+**g51p3 补（同日）**：layer-2 落地后足迹复测——9 点 uv x 0.0-0.185 全入界（对比 g51m 扩窗前 −1.24~−0.74 全出界）→ **扩窗生效、模型已部分进 raw 图**（1/9 点 depth 1.439 有内容）；mismatch 297,882 与 g51g 的 297,538 持平——阴影落位/浓度未达 expected（剩余为：掠射 7.6° 下墙面条带极窄的栅格覆盖、近平面负 z 角点、落位浓度）。**landmark/conflation 校准路径确认：模型已投影，剩余为 raw 级联近平面扩展量与浓度校准**，独立迭代。
