@@ -6170,3 +6170,7 @@ expected/current 并排对照（elevated-symbols-lighting）明确残余构成�
 高倍对照（expected 暗区边界）：暗区边界为**锐利直线**（200m shadow-casters 挤出物的阴影带边缘），deck 整体位于带内（全暗 (57,63,70)），带外地面 lit (183,190,188)。ours：deck lit（阴影带未覆盖 deck uv）。挤出物本体已确认入 raw 图（rmstyle 对照三角消失）——**残余根因 = 挤出物阴影带与 deck 接收 uv 的覆盖错位**（掠射/高挑遮挡物的阴影带宽度对光方向、fit 窗口、挤出物高度评估敏感）。校准路径：挤出物阴影带投影审计（将 shadow-casters 挤出物 bbox 角经 m_matrix 投影，与 deck uv 分布叠合），方向/高度/窗口三参数扫掠。收复后 lighting 四件预期大幅下降。
 
 **状态收束**：3d-intersections 家族 −50.6% 维持（阴影链语义已 mgl 忠实）；lighting 四件残余为挤出物阴影带覆盖校准（独立迭代）；landmark 残余为 raw 级联近平面/落位浓度迭代；elevated-wireframe 为 wireframe 调试特性实现；terrain-enabled 为地形管线挂起；239 style 全量回归待跑。全部探针与台账就绪。
+
+### §885 终六十七g51q3: lighting 残余最终构图定界（2026-09-19）
+
+expected 构成解析（elevated-symbols-lighting）：①甲板（暗蓝灰+标线）已对齐 ✓；②甲板侧墙薄条（浅色受光）ours 缺失（fill 无侧壁几何，g51r 定界）；③右上暗灰三角 = 200m shadow-casters 挤出物投在**地面**的阴影（锐利直边），ours 该区过暗/边界发散；④地面 lit 区两者一致。**收复路径 = ②侧壁几何生成 + ③挤出物阴影带投影审计（shadow-casters GeoJSON bbox 经 m_matrix 投影 vs 地面接收 uv 叠合，方向/高度/窗口三参数）**。阴影链语义（g51d-g51j）已全部 mgl 忠实，残余均为独立特性/校准工作流。
