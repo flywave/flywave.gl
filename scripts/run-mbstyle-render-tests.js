@@ -138,6 +138,8 @@ function main() {
             ...(process.env.MBSTYLE_SHAZ ? [`shaz=${process.env.MBSTYLE_SHAZ}`] : []),
             ...(process.env.MBSTYLE_SHBFIX ? ["shbfix=1"] : []),
             ...(process.env.MBSTYLE_SHNOFF ? [`shnoff=${process.env.MBSTYLE_SHNOFF}`] : []),
+            ...(process.env.MBSTYLE_SHADOWLEGACY ? ["shadowlegacy=1"] : []),
+            ...(process.env.MBSTYLE_SHCASTNORMAL ? [`shcastnormal=${process.env.MBSTYLE_SHCASTNORMAL}`] : []),
             ...(process.env.MBSTYLE_SHPCF ? [`shpcf=${process.env.MBSTYLE_SHPCF}`] : []),
             ...(process.env.MBSTYLE_SHRAWAZ ? [`shrawaz=${process.env.MBSTYLE_SHRAWAZ}`] : []),
             ...(process.env.MBSTYLE_SHMODELRAW ? [`shmodelraw=${process.env.MBSTYLE_SHMODELRAW}`] : []),

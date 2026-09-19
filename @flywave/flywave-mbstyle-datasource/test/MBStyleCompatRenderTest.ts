@@ -371,6 +371,17 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.includes?.("shnoff=1")) {
         (globalThis as any).__mbShadowNOff = true;
     }
+    // §885 终四十九g51e: shadowlegacy=1 → pre-g51e inverted comparator
+    // (smoothstep over z − depth) for A/B against the mgl GREATER semantics.
+    if ((window as any).__karma__?.config?.args?.includes?.("shadowlegacy=1")) {
+        (globalThis as any).__mbShadowCmpLegacy = true;
+    }
+    // §885 终四十九g51f: shcastnormal=<v> → caster-side normal offset value
+    // (default 0, mgl-faithful; g51f replaced the boolean shcastoff knob).
+    const scn = (window as any).__karma__?.config?.args
+        ?.find?.((a: string) => a.startsWith("shcastnormal="))
+        ?.slice("shcastnormal=".length);
+    if (scn !== undefined && scn !== "") (globalThis as any).__mbShCastNormal = Number(scn);
     // §885 终四十四g50x: orthoshadowoff=1 → disable the whole shadow chain
     // under orthographic style (baseline decomposition for the band audit).
     if ((window as any).__karma__?.config?.args?.includes?.("orthoshadowoff=1")) {
@@ -3564,6 +3575,16 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         // patch-time shadowLightState race).
                         let injected = 0, groundLit = 0, intOne = 0, intZero = 0;
                         let matReal = 0, matDegenerate = 0;
+                        // §885 g51d: the g51c census proved every receiver
+                        // matrix is REAL (matReal=172), yet the GPU-side
+                        // inner gate still rejects at the band (diag5 paints
+                        // nothing on the road) — the ray-rebuild INPUTS
+                        // uMBEye / uMBInvViewProj / uMBRes were never audited
+                        // per material. Count empty-seed vs real values and
+                        // keep a small sample of offenders for the dump.
+                        let eyeReal = 0, eyeZero = 0, ivpReal = 0, ivpZero = 0;
+                        let resReal = 0, resBad = 0;
+                        const offenders: any[] = [];
                         try {
                             (mapView as any).m_scene?.traverse?.((o: any) => {
                                 const ms = Array.isArray(o?.material) ? o.material : (o?.material ? [o.material] : []);
@@ -3580,6 +3601,26 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                         const e0 = mEl ? Math.abs(mEl[0]) : -1;
                                         if (e0 > 1e-4 && e0 < 1) matReal++;
                                         else matDegenerate++;
+                                        const eyeZ = su.uMBEye?.value?.z;
+                                        const ivp0 = su.uMBInvViewProj?.value?.elements?.[0];
+                                        const resX = su.uMBRes?.value?.x;
+                                        const eyeOk = Number.isFinite(eyeZ) && Math.abs(eyeZ) > 1;
+                                        const ivpOk = Number.isFinite(ivp0) && Math.abs(ivp0) > 1e-3;
+                                        const resOk = Number.isFinite(resX) && resX > 8;
+                                        if (eyeOk) eyeReal++; else eyeZero++;
+                                        if (ivpOk) ivpReal++; else ivpZero++;
+                                        if (resOk) resReal++; else resBad++;
+                                        if ((!eyeOk || !ivpOk) && offenders.length < 8) {
+                                            offenders.push({
+                                                anchor: (m as any)?.__mbShadowAnchor,
+                                                eyeZ: eyeZ ?? null,
+                                                ivp0: ivp0 ?? null,
+                                                resX: resX ?? null,
+                                                int: su.uMBShadowIntensity.value,
+                                                m00: mEl ? mEl[0] : null,
+                                                type: m?.type,
+                                            });
+                                        }
                                     }
                                 }
                             });
@@ -3590,8 +3631,108 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                             body: JSON.stringify({ probe: "main-canvas",
                                 dataUrl: canvas.toDataURL('image/png'),
                                 recvInjected: injected, groundLit,
-                                intOne, intZero, matReal, matDegenerate }),
+                                intOne, intZero, matReal, matDegenerate,
+                                eyeReal, eyeZero, ivpReal, ivpZero,
+                                resReal, resBad, offenders,
+                                // §885 g51f: knob + uniform liveness snapshot.
+                                knobNOff: (globalThis as any).__mbShadowNOff ?? null,
+                                knobCastOff: (globalThis as any).__mbShCastOff ?? null,
+                                knobLegacy: (globalThis as any).__mbShadowCmpLegacy ?? null,
+                                knobVL: (globalThis as any).__mbShadowVLightsOn ?? null }),
                         });
+                        // §885 g51f: sample ONE live receiver's actual uniform
+                        // values (nOffZ, biasW, intensity) + the depth-pass
+                        // caster normal offset, POSTed separately.
+                        try {
+                            let sample: any = null;
+                            (mapView as any).m_scene?.traverse?.((o: any) => {
+                                if (sample) return;
+                                const ms = Array.isArray(o?.material) ? o.material : (o?.material ? [o.material] : []);
+                                for (const m of ms) {
+                                    const su = (m as any)?.__mbShadowUniforms;
+                                    if (su?.uMBNOffZ && su?.uMBShadowMatrix) {
+                                        sample = {
+                                            nOffZ: su.uMBNOffZ?.value,
+                                            int: su.uMBShadowIntensity?.value,
+                                            biasW: su.uMBShadowBiasW?.value ?
+                                                [su.uMBShadowBiasW.value.x, su.uMBShadowBiasW.value.y] : null,
+                                            eyeZ: su.uMBEye?.value?.z,
+                                            resX: su.uMBRes?.value?.x,
+                                            analytic: su.uMBShAnalytic?.value,
+                                        };
+                                        return;
+                                    }
+                                }
+                            });
+                            const depthMat = ((mapView as any).m_shadowRenderer ??
+                                (mapView as any).mMBShadowRenderer ?? null);
+                            await fetch(`${fbC}/mb-probe-dump`, {
+                                method: "POST",
+                                headers: { "content-type": "application/json" },
+                                body: JSON.stringify({ probe: "recv-uniform-sample",
+                                    sample, hasDepthMatRef: !!depthMat }),
+                            });
+                        } catch { /* probe only */ }
+                        // §885 g51f: dump the ACTUAL GPU-executed receiver
+                        // shader source via raw WebGL (getAttachedShaders) —
+                        // comparator/step/analytic edits leave the render
+                        // byte-identical, so read what the driver really runs.
+                        try {
+                            const glG = canvas.getContext('webgl2') ??
+                                canvas.getContext('webgl');
+                            const progs2 = (mapView as any).renderer?.info?.programs ?? [];
+                            let dumped2 = 0;
+                            const fps: any[] = [];
+                            for (const pr of progs2) {
+                                const glProg = (pr as any)?.program?.program ?? (pr as any)?.program;
+                                if (!glProg || !glG) continue;
+                                const shs = glG.getAttachedShaders(glProg) ?? [];
+                                for (const sh of shs) {
+                                    const src2 = glG.getShaderSource(sh);
+                                    if (!src2) continue;
+                                    const hasFac = src2.includes('uMBGroundShadowFactor');
+                                    const hasMat = src2.includes('uMBShadowMatrix');
+                                    if (!hasFac && !hasMat) continue;
+                                    dumped2++;
+                                    fps.push({
+                                        id: (pr as any)?.id,
+                                        used: (pr as any)?.usedTimes,
+                                        hasFac, hasMat,
+                                        leg: src2.match(/#define MB_SH_LEGACYCMP \d/)?.[0] ?? 'ABSENT',
+                                        noff: src2.match(/#define MB_SH_NOFF \d/)?.[0] ?? 'ABSENT',
+                                        hasStep: /mbLit = step\(/.test(src2),
+                                        smoothWin: (src2.match(/smoothstep\(-1e-4, 1e-4,/g) ?? []).length,
+                                        facMul: (src2.match(/uMBGroundShadowFactor[^;]{0,60};/g) ?? [])
+                                            .slice(0, 3).map((s: string) => s.slice(0, 55)),
+                                        len: src2.length,
+                                    });
+                                    if (dumped2 <= 2 && !hasMat) {
+                                        await fetch(`${fbC}/mb-probe-dump`, {
+                                            method: "POST",
+                                            headers: { "content-type": "application/json" },
+                                            body: JSON.stringify({ probe: "gpu-shader-src",
+                                                id: (pr as any)?.id, full: src2, len: src2.length }),
+                                        });
+                                    }
+                                    break;
+                                }
+                            }
+                            await fetch(`${fbC}/mb-probe-dump`, {
+                                method: "POST",
+                                headers: { "content-type": "application/json" },
+                                body: JSON.stringify({ probe: "gpu-shader-census",
+                                    total: progs2.length, receivers: dumped2, fps }),
+                            });
+                        } catch (e2) {
+                            try {
+                                await fetch(`${fbC}/mb-probe-dump`, {
+                                    method: "POST",
+                                    headers: { "content-type": "application/json" },
+                                    body: JSON.stringify({ probe: "gpu-shader-census",
+                                        err: String(e2) }),
+                                });
+                            } catch { /* probe only */ }
+                        }
                     }
                 } catch { /* probe only */ }
 

@@ -6034,3 +6034,25 @@ lighting 四件 39,334/42,028/59,427/60,710、shadows-tunnel 154,397、
 shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset 均
 默认关（shvlight=1 / shnoff=1 选入），下轮跑 matReal/matDegenerate census
 即可二选一定位正交接收链断点。
+
+### §885 终四十九g51d–g51g: 正交接收链双断点闭合 + 接收比较器对齐 vendored mgl 源码——3d-intersections 全族 −45%（2026-09-19）
+
+**① g51d census 落锤（上轮遗留首刀）**：matReal/matDegenerate census 二选一分歧定案——ortho-camera 全部 172 接收材质 `matReal=172/matDegenerate=0`（落入"问题在 chunk 采样内部"分支），但扩展 census（新增 eyeReal/eyeZero/ivpReal/resReal 逐材质审计）揪出真凶：**`uMBEye.z=0`、`uMBRes=(1,1)` 全军覆没（eyeReal=0/resReal=0）**，而 uMBShadowMatrix/uMBInvViewProj 是实值。根因：`m_eye.copy()`/`m_res.set()` 的唯一写入点在 `prepGroundQuad` 内、且位于 `if (!this.m_groundUniforms) return` 早退之后——g50v 把正交下 ground-quad 关闭后该函数永不推进，`getShadowUniforms()` 把死种子广播给全部接收材质 → 射线重建平面 `(vMBElev − 0)=+5.4`（应为 −109）+ NDC `gl_FragCoord·2−1` 在 512px 画布上爆到 1023 → uv 门控全拒 → 恒 lit。**修复**：m_eye/m_res 写入提升至 run() 主流程（prepGroundQuad 之前，双投影生效；透视路径值幂等）。修复后 ortho-camera 57,239→190,484——接收链首次真正点亮，暴露下一层病灶。
+
+**② g51e/g51g 接收比较器对齐 vendored mgl 源码（本轮最重要语义修正）**：本轮三次改着色器（比较方向翻转/二值 step/analytic）渲染**字节级不变**（md5 423fefd388），用原生 WebGL `getAttachedShaders+getShaderSource` 抓 GPU 实际执行源码自证新鲜后收敛：**自采样面上 Isidoro 平面偏移精确抵消深度差 → x≡0 → 旧对称窗 `smoothstep(-1e-4,1e-4,x)` 恒给 0.5 → 全幅 ×0.49 半暗幕罩**（245k px），且对比较符号天然免疫。对照 vendored 源码（`mapbox-gl-js/3d-style/shaders/_prelude_shadow.fragment.glsl`）发现**移植错变体**：vector-tile fill 编译期定义 `NORMAL_OFFSET`，`calculate_shadow_bias` 返回常数 `0.5·u_shadow_bias.x=5e-5`、接收顶点由 shadow_normal_offset 抬升、硬件 GREATER 比较为**二值**——plane-bias 变体根本不用于 fill。**修复**：比较器改为 `mbLit = step(mbShadowUv.z − 5e-5, stored)`（mgl GREATER 语义：lit ⇔ stored ≥ z−bias；空 texel stored=1.0 → lit；真遮挡物 → occluded）。`shadowlegacy=1` 保留旧窗口 A/B。
+
+**③ g51f caster 侧法线偏移归零 + g51d 补 NOFF 使能 bug**：(a) 深度 pass 的 caster 侧 `uMBNormalOffset=3`（终六十一为墙体遮挡物加）在 mgl 中不存在——它把每块存储深度向光侧推 ~0.006 uv，旧反向比较器时代自采样靠它"碰巧读 lit"，新比较器下则把所有共面自采样判遮挡；**默认归零**（`shcastnormal=<v>` 可恢复）。(b) 抓 GPU define 时发现 `MB_SH_NOFF` 恒 0：测试文件对 `shnoff` 有两处解析，744 行 `Number("1")=1` 覆盖 371 行的布尔 `true`，而发射模板 `${__mbShadowNOff === true ? 1 : 0}` 严格相等拒绝数字 1——**历史 g50w/g51a"NOFF 未消除自采样"的结论全部是在 NOFF 实际未编译的状态下测得的，作废**。修复并按 mgl 语义改为**默认开启**（`shnoff=0` 显式退出）。
+
+**④ 全族记分牌（76 件，new=71 件实测 + 5 件尾部补测中；对照 3di-g50k-base 同框 66 件）**：
+- 同框 66 件：5,383,262 → 2,977,038（**−2,406,224，−45%**）。
+- 对 HEAD 精确基线的代表件：shadows-tunnel 154,397→60,220（−61%）、road-extend-tilecover 210,170→81,176（−62%）、road-islands −1（34,609→34,608）、shadows-junction 19,487 持平、ortho-camera-tunnel 1,271 持平、ortho-camera 57,239→63,298（+6,059，见⑥）。
+- 相对 g50k 的 top wins：ortho-camera-tunnel −183k、oriented 三件 −127k×3、road-extend-no-shadows −126k、road-islands −101k、guard-rail-color-feature-dependent −98k、guard-rail-split-feature-geometry −75k、elevated-circles-nonelevated −74k。
+- **唯一实质回归：lighting 四件** 39,334/42,028/59,427/60,710 → 183,016/182,298/172,871/172,952（+~143k/件）；elevated-wireframe +14,941（旧双重光照曝光的延续）、elevated-line-labels-tunnel +1,104（噪声级）。
+
+**⑤ lighting 四件回归定性（= 全族统一残余根因）**：diff 像素回归区 62,138 px 的 expected 亮度均值 229（深暗 ~(57,63,70)=真实阴影），我们新态 (127,141,157)=半 lit——**深度图缺少上方遮挡体**（caster 缺席）与 ortho-camera 暗带变 lit（18k px）同根因：旧系统该暗来自"空 texel 判暗"的 accident（×0.49 幕罩），新系统语义正确但遮挡体确实缺席 → 深度表无内容可挡。旧基线 39,334 本质是幕罩意外贴合 expected 的暗色直方图，非真实对齐。**下轮首刀：逐 caster dump（shcastaudit 通道已有）比对 mgl hasShadowPass 层清单，定位上层结构/桥面（road-base-bridge、symbols 夹具的上方结构）缺席原因**——修好后 lighting 四件与 ortho-camera 应同刀转正（合计预期 −60 万量级）。
+
+**⑥ 运维与探针固化**：(a) `getAttachedShaders/getShaderSource` GPU 源码 dump 探针（main-canvas census 扩展，gpu-shader-src/gpu-shader-census 两通道）——判定"着色器是否真的编进 GPU"的终极手段，本轮多次字节不变之谜靠它终结；(b) DIAG9（涂 mbLit/mbLight）加入；(c) mbstyle 全套探针参数 shcastnormal/shadowlegacy 接入 runner；(d) karma 固定 9876 端口 + 共享浏览器缓存的嫌疑已排除（换端口复测字节不变）；(e) chunked runner 按 filter 子串分类失效（"0 categories"），尾部补测用单跑 runner 串行。
+
+**⑦ 下轮**：①⑤的 caster 覆盖修复（统一根因，预期 lighting 四件 + ortho-camera 同刀 −60 万）；②elevated-wireframe +14,941 复核（带灯 wireframe 曝光）；③跨家族回归（cast-shadows 波及 model-layer 102/building 46/lighting-3d-mode 32 等 239 个 style，本次 caster-offset 归零 + 比较器重写对墙体/建筑族的影响未测）。
+
+**⑧ 补测补充（同日）**：全族实测落定 69/76 件，同框对照 5,498,105 → 3,047,639（**−2,450,466，−44.6%**）。terrain-toggle-on-off 69,815→29,401（−40k）；tooling-support 26,653 与 HEAD 26.5k 一致（g50k 参考值 16,428 系过时基线，非回归）。shadows-underpass 在新旧两态均**无法完成**：`0:501 'assign': cannot convert from 'const int' to 'highp float'` GLSL 编译错误 → 180s 超时——git stash 对照实证**该错误在 HEAD（g51c 提交态）即存在，非本轮引入**（嫌疑：某 flavor 的 defines 以整数字面量落入 float 上下文，如 `float x = MB_SH_BIAS` 处 bV 恰为整数串；g50t..g51c 间引入，下轮与 caster 覆盖一并修）。terrain-enabled（无后缀件）未测得（filter 子串碰撞大量 *-terrain-enabled 变体，timeout）。

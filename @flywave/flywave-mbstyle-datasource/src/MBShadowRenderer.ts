@@ -124,7 +124,14 @@ export class MBShadowRenderer {
                 gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
             }`,
         uniforms: {
-            uMBNormalOffset: { value: 3 },
+            // §885 终四十九g51f: DEFAULT 0 — mgl displaces RECEIVERS along the
+            // surface normal (shadow_normal_offset, _prelude_shadow.vertex.glsl)
+            // and never displaces casters. The historical +3 caster-side push
+            // shifted every stored depth toward the light by ~0.006 uv, which
+            // the pre-g51e inverted comparator needed (self-samples read lit)
+            // but under the mgl GREATER comparator it marks every coplanar
+            // self-sample occluded. shcastnormal=<v> restores a value for A/B.
+            uMBNormalOffset: { value: 0 },
             // (mgl _shadowParameters.normalOffset default; sweep 3/10/30 all
             // plateau at 135,328 on ground-shadow-fog — the residual there
             // is dominated by non-shadow differences.)
@@ -1051,6 +1058,12 @@ export class MBShadowRenderer {
         (this as any).__mbShLightDir = lightDir.clone();
         if (depthMat.uniforms?.uMBLightDir) {
             depthMat.uniforms.uMBLightDir.value.copy(lightDir).normalize();
+        }
+        // §885 终四十九g51f: shcastnormal=<v> → restore a CASTER-side normal
+        // offset for A/B (default 0 — mgl-faithful; see the uniform comment).
+        if (depthMat.uniforms?.uMBNormalOffset) {
+            const cn = (globalThis as any).__mbShCastNormal;
+            if (Number.isFinite(cn)) depthMat.uniforms.uMBNormalOffset.value = cn;
         }
         const maxPolar = 75 * Math.PI / 180;
             const pol = Math.acos(THREE.MathUtils.clamp(lightDir.z, -1, 1));
@@ -2268,6 +2281,23 @@ export class MBShadowRenderer {
                     (globalThis as any).__mbFrameProbeErr = String(e);
                 }
             }
+        }
+
+        // §885 终四十九g51d: m_eye/m_res feed EVERY receiver's ray rebuild
+        // (getShadowUniforms → patchTileMaterials refresh → uMBEye/uMBRes),
+        // but their only writers lived inside prepGroundQuad behind the
+        // `if (!this.m_groundUniforms) return` bail — under the ortho style
+        // the quad never compiles, so every fill receiver sampled with
+        // uMBEye=(0,0,0)/uMBRes=(1,1) seeds: the ray plane (vMBElev − 0) and
+        // the NDC (gl_FragCoord·2−1 on a 512px buffer) were both garbage,
+        // the uv gate rejected on every fragment, and the whole receiver
+        // chain rendered shadows-off bit-exact (ortho-camera 57,255 恒 lit).
+        // Refresh them here, in the pass that runs in both projections; the
+        // quad path keeps writing the same values (idempotent).
+        this.m_eye.copy(eye);
+        {
+            const cvR = this.m_mapView?.canvas as HTMLCanvasElement | undefined;
+            if (cvR) this.m_res.set(cvR.width, cvR.height);
         }
 
         this.prepGroundQuad(center, radius, eye);

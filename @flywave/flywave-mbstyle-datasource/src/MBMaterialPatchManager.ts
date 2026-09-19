@@ -3549,9 +3549,10 @@ export class MBMaterialPatchManager {
             const d5d = (globalThis as any).__mbShadowDiag === '5' ? 1 : 0;
             const d7d = (globalThis as any).__mbShadowDiag === '7' ? 1 : 0;
             const d8d = (globalThis as any).__mbShadowDiag === '8' ? 1 : 0;
+            const d9d = (globalThis as any).__mbShadowDiag === '9' ? 1 : 0;
             if (!shader.fragmentShader.includes('#define MB_SH_BIAS')) {
                 shader.fragmentShader =
-                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n#define MB_SH_DIAG8 ${d8d}\n#define MB_SH_NOFF ${(globalThis as any).__mbShadowNOff === true ? 1 : 0}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n`
+                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n#define MB_SH_DIAG8 ${d8d}\n#define MB_SH_DIAG9 ${d9d}\n#define MB_SH_NOFF ${((globalThis as any).__mbShadowNOff === false || (globalThis as any).__mbShadowNOff === 0) ? 0 : 1}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n`
                     + shader.fragmentShader;
             }
             // §885 终三十九g37: MB_SH_ELEVVIS must ALWAYS be defined for
@@ -3784,16 +3785,47 @@ export class MBMaterialPatchManager {
                                     mbDx.x * mbDy.z - mbDy.x * mbDx.z)
                                     / ((mbDx.x * mbDy.y) - (mbDx.y * mbDy.x));
                                 float mbPBias = dot(vec2(uMBShadowTexel, uMBShadowTexel), mbBiasUV) + 0.0001;
+                                // §885 终四十九g51g: comparator rewritten against
+                                // the VENDORED mgl source (3d-style/shaders/
+                                // _prelude_shadow.fragment.glsl). Vector-tile
+                                // fills compile with NORMAL_OFFSET defined:
+                                // calculate_shadow_bias returns the CONSTANT
+                                // 0.5·u_shadow_bias.x (=5e-5) and the receiver
+                                // is DISPLACED along its normal by
+                                // shadow_normal_offset (our MB_SH_NOFF/uMBNOffZ
+                                // port) — the receiver-plane-bias variant we
+                                // previously ported is NOT used by fills. With
+                                // the receiver lifted, a coplanar self-sample
+                                // reads stored(=true surface) > z_lifted − 5e-5
+                                // → FULL LIT: the hardware GREATER compare is
+                                // BINARY, while our smoothstep(-1e-4,1e-4,·)
+                                // window turned every boundary case into
+                                // mbLit=0.5 → a ×factor/2 veil over all
+                                // self-sampled surfaces (ortho-camera 245k px),
+                                // INVARIANT to the compare sign because the
+                                // plane fit kept x pinned at 0.
+                                // shadowlegacy=1 restores the pre-g51e window.
+                                #if MB_SH_LEGACYCMP
                                 mbLit = smoothstep(-1e-4, 1e-4,
                                     mbShadowUv.z - mbPBias - mbShadowDepth);
+                                #else
+                                mbLit = step(mbShadowUv.z - 0.00005, mbShadowDepth);
+                                #endif
                             #else
+                            #if MB_SH_LEGACYCMP
                                 mbLit = smoothstep(uMBShadowBiasW.x, uMBShadowBiasW.y, mbShadowUv.z - mbShadowDepth);
+                            #else
+                                mbLit = smoothstep(uMBShadowBiasW.x, uMBShadowBiasW.y, mbShadowDepth - mbShadowUv.z);
+                            #endif
                             #endif
                             }
                             // §702: mgl shadowed_light_factor = 1 − intensity·occ
                             // (_prelude_shadow.fragment.glsl) — intensity<1
                             // lightens the shadow; ours previously ignored
                             // uMBShadowIntensity (identical at intensity=1).
+                            #if MB_SH_DIAG9
+                            gl_FragColor = vec4(mbLit, mix(1.0 - uMBShadowIntensity, 1.0, mbLit), 0.0, 1.0);
+                            #endif
                             float mbLight = mix(1.0 - uMBShadowIntensity, 1.0, mbLit);
                             // §885 终三十九g50r: the ground-LIGHT multiply is
                             // owned by injectGroundLighting (uMBGroundRad,
@@ -3866,12 +3898,13 @@ export class MBMaterialPatchManager {
                 const d5 = (globalThis as any).__mbShadowDiag === '5' ? 1 : 0;
                 const d7 = (globalThis as any).__mbShadowDiag === '7' ? 1 : 0;
                 const d8 = (globalThis as any).__mbShadowDiag === '8' ? 1 : 0;
+                const d9 = (globalThis as any).__mbShadowDiag === '9' ? 1 : 0;
                 // §885 终一百四十六: emit MB_SH_HW only when ON (an
                 // unconditional `#define MB_SH_HW 0` makes `#ifdef MB_SH_HW`
                 // TRUE — the R-only HW decode branch compiled in the default
                 // SW path). DIAG5/DIAG7 stay value-emitted and are selected
                 // with `#if`.
-                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n#define MB_SH_DIAG8 ${d8}\n#define MB_SH_NOFF ${(globalThis as any).__mbShadowNOff === true ? 1 : 0}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n` + shader.fragmentShader;
+                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n#define MB_SH_DIAG8 ${d8}\n#define MB_SH_DIAG9 ${d9}\n#define MB_SH_NOFF ${((globalThis as any).__mbShadowNOff === false || (globalThis as any).__mbShadowNOff === 0) ? 0 : 1}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n#define MB_SH_LEGACYCMP ${(globalThis as any).__mbShadowCmpLegacy ? 1 : 0}\n` + shader.fragmentShader;
             }
             if ((globalThis as any).__mbShadowHW) {
                 shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;
