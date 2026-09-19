@@ -6122,3 +6122,5 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **g51o 补（同日）**：①深度顶点着色器零法线 NaN 防护落地（normalize(0)→NaN 链路消除，landmark 298,398 持平——NaN 假说证伪，模型未栅格化另有原因）；②足迹探针 y 翻转修正（readPixels 为 GL 底起坐标，此前 (1−v) 镜像读数有误）——修正后 landmark 足迹 9 点中 1 点读到内容（depth 1.439），raw 覆盖开始生效但稀疏；③conflation 复测：buckingham 298,361 持平、buckingham-lod 310,054（较 g51g 276k 恶化 +34k，raw 窗扩窗对 lod 夹具的副作用待查）、promoted_id 180,809 持平。**模型资源/override 交互解剖（GLB attribute census、深度帧 matrixWorld dump、扩窗对 lod 的副作用回退评估）列入下轮**。
 
 **g51l2 补（同日）**：扩窗回退后 lod 仍 310,054——+34k 实为 **NaN 防护的行为修正**：原本因零法线 NaN 被丢三角的几何现在正确参与深度投影（mgl 忠实：所有几何都投影），lod 夹具的新增阴影落位与 expected 尚有偏差（模型阴影方向/位置校准域）。防护保留（正确性），模型阴影落位校准并入 §终五十四③ 的模型资源解剖工作流。
+
+**g51p 补（同日）**：①架构排查——m_sceneRoot 每帧清空重填（MapView.ts:3712/4112），深度 pass 时 tile 对象（含模型）已在 m_scene 内，"模型在 m_sceneRoot 之外"假说排除；②足迹探针 y 翻转修正后复测：raw 图在 landmark 足迹区已有部分内容（1/9 采样点 depth 1.439，其余 clear）——阴影开始落地但覆盖稀疏/落位偏差（掠射 7.6° 下 193m 模型的墙面条带极窄 + 近平面负 z 角点裁剪）；③当前渲染整体比 expected 暗 6.6 万 lum 均值、偏暗 >60 有 20.2 万 px、偏亮 2.1 万 px——多层叠差（模型墙自阴影过暗 + 长影位置/浓度 + 标注），非单一阴影链问题。**定界：landmark/conflation 工作流需独立校准会话（模型接收落位 + 浓度 + 构图）**，已具备全部探针（raw-shadow-footprint/shcastaudit/shbandline/recv-mat-audit）。
