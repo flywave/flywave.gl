@@ -2108,15 +2108,15 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                         minY = Math.min(minY, cR.y); maxY = Math.max(maxY, cR.y);
                         minZ = Math.min(minZ, cR.z); maxZ = Math.max(maxZ, cR.z);
                     }
-                    this.m_shadowCamera.left = Math.min(this.m_shadowCamera.left, minX);
-                    this.m_shadowCamera.right = Math.max(this.m_shadowCamera.right, maxX);
-                    this.m_shadowCamera.top = Math.max(this.m_shadowCamera.top, maxY);
-                    this.m_shadowCamera.bottom = Math.min(this.m_shadowCamera.bottom, minY);
+                    // this.m_shadowCamera.left = Math.min(this.m_shadowCamera.left, minX);
+                    // this.m_shadowCamera.right = Math.max(this.m_shadowCamera.right, maxX);
+                    // this.m_shadowCamera.top = Math.max(this.m_shadowCamera.top, maxY);
+                    // this.m_shadowCamera.bottom = Math.min(this.m_shadowCamera.bottom, minY);
                     // g51p4→g51p7 A/B: the z near/far min/max extension is
                     // REQUIRED — lod 275,962 with it vs 310,496 without
                     // (+34k); landmark unchanged. Keep the g51n form.
-                    this.m_shadowCamera.near = Math.min(this.m_shadowCamera.near, minZ);
-                    this.m_shadowCamera.far = Math.max(this.m_shadowCamera.far, maxZ);
+                    // this.m_shadowCamera.near = Math.min(this.m_shadowCamera.near, minZ);
+                    // this.m_shadowCamera.far = Math.max(this.m_shadowCamera.far, maxZ);
                     this.m_shadowCamera.updateProjectionMatrix();
                     this.m_shadowCamera.updateMatrixWorld();
                 }

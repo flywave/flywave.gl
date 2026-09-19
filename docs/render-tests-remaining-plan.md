@@ -6232,3 +6232,11 @@ generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑�
 **结论**：四旋钮均非主因——回归源 = **raw XY 扩窗、layer-2 选择性投影（无 normal mesh 迁移 DoubleSide）、NaN 防护（新增投影几何）三者之一的代码级交互**，需 checkout 二分（g51d-g51g 的 7e745261 与 g51n/g51o/g51p2 各中间态）。building 族整体净收益（其余件 −10.8 万/−4.6 万/−3.7 万）远大于此单件 +8 万。
 
 **下轮**：①该夹具 checkout 二分定位（7e745261 / g51n / g51o / g51p2 中间态）②landmark 落位浓度迭代 ③lighting 甲板光照合成器升级 ④wireframe 奇偶性 ⑤terrain-enabled。
+
+### §885 终七十三g51t3: building/tile-border 回归根因实锤（2026-09-20）
+
+**深度图取证**：tile-border 的 mirror 深度图显示全城建筑的栅格化足迹（掠射光下建筑墙体投影成长条带）覆盖了大量地面 uv——quad 的地面采样处处命中建筑墙体深度（stored < 地面 z）→ 阴影因子 ≈ 0 → **地面全黑（+8.1 万）**。expected 的街道亮 = mgl 的建筑阴影紧凑（阴影带仅贴建筑）。
+
+**根因归类**：与 lighting 四件同类——**阴影落位/覆盖校准**（掠射光下建筑阴影带的投影宽度/位置）。隔离矩阵（legacy/nonoff/castn3/diralt 均无效）与 1edcafc5 基线（65,416，g51i 修复后 quad 开始渲染即出现）一致。**收复路径**：阴影带落位校准（光方向/级联窗口/挤出物高度评估联合迭代）。
+
+**状态**：building 族净收益（−19 万）远大于此单件；3d-intersections −50.6% 维持。全 385 件回归 340/385 实测（45 件会话超时跳过，chunked resume 可补）。
