@@ -6265,3 +6265,11 @@ generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑�
 4. terrain-enabled 地形管线挂起（SHST 签名已录）
 5. cast-shadows 239 style 全量 before 轮（~10h）
 6. 45 件跳过夹具 resume 补测（cross-g51j-full 目录，chunked runner 自动跳过已测件）
+
+### §885 终七十六g51t5: 方向扫掠定界——lighting 残余对阴影方向零敏感（2026-09-20）
+
+**扫掠**（当前修复后状态）：elevated-symbols-lighting 于 shaz 0/±15/±30 全部 **73,533**（逐像素一致）——阴影带方向对该夹具 mismatch **零影响**。结合 texel-overlay 分类（6 occl/6 self/4 clear 正确），**阴影落位/方向参数完全排除**。
+
+**残余定性收束**：lighting 四件 7.3-9.3 万 = **阴影浓度/合成结构差**（ours 遮挡 ×0.72 vs expected ×0.35）——与方向/落位无关。收复路径唯一：以 mgl 本体渲染同夹具插桩 ground_shadow/fill 光照中间值，反向实现甲板光照合成器（ambient 恒定 + directional·shadow 双项 + 层叠次序），独立专项。
+
+**状态收束**：3d-intersections −50.6% 维持；全部 g51 系列修复已提交（41 次提交至 5ceed6d4+收束台账 a3548614/2897fe79）。
