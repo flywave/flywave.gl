@@ -6293,3 +6293,15 @@ shdiag=5 于 tile-border：quad 输出灰阶场 17-191 分布（暗区 17-53 占
 ### §885 终八十g51u: shres 扫掠定界（2026-09-20）
 
 阴影分辨率 2048→131,357、4096→130,176（vs 1024 的 135,072，仅 −5k）——分辨率非 tile-border 过覆盖主因。quad 阴影带覆盖范围校准（需 mgl 本体对拍）维持为独立专项。
+
+### §885 会话终态确认（2026-09-20）
+
+**核心交付确认**：3d-intersections 家族 68 件同框 −50.6%（5,558,794→2,746,449，59 胜）。
+
+**g51 系列修复清单（十项，全部已提交）**：接收链死种子、比较器 NORMAL_OFFSET 对齐、caster 偏移归零、shnoff bug、阴影方向去镜像、逐模型 DoubleSide、shadows-underpass 编译错误、NaN 防护、扩窗+near/far 符号、guardrail 墙体光照。
+
+**基础资产**：八个持久探针、wireframe 调试特性、mgl-shot 本体渲染対拍、cross-g51j-full 340/385 件全量回归数据。
+
+**lighting 四件维持 7.3-9.3 万（与 g50k 基线持平 ±噪声）**——阴影已真实落地但浓度/构图与 expected 的差异需要 mgl 本体対拍后反向实现甲板光照合成器结构升级，属独立专项。
+
+**移交优先级**：①mgl 本体対拍→合成器升级 ②conflation/landmark 落位浓度 ③wireframe 奇偶性 ④terrain-enabled ⑤全量 before 轮+resume。
