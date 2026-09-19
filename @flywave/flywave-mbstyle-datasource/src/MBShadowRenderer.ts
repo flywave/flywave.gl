@@ -1223,7 +1223,7 @@ export class MBShadowRenderer {
         // LIVE per frame — the receiver bias is now a uniform (baked-at-
         // injection defines raced the first fit nondeterministically).
         if (!casterBox.isEmpty()) {
-            const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
+const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
             const spanZ = casterBox.max.z - casterBox.min.z;
             this.m_biasAuto = Math.max(
                 0.002, Math.min(0.3, (spanZ - 100) / range));
@@ -2112,13 +2112,11 @@ export class MBShadowRenderer {
                     this.m_shadowCamera.right = Math.max(this.m_shadowCamera.right, maxX);
                     this.m_shadowCamera.top = Math.max(this.m_shadowCamera.top, maxY);
                     this.m_shadowCamera.bottom = Math.min(this.m_shadowCamera.bottom, minY);
-                    // three ortho: visible view-z ∈ [−far, −near]; the caster
-                    // top can sit at POSITIVE view-z (behind the camera) for
-                    // grazing lights — extend near toward −maxZ and far past
-                    // −minZ (g51p3 follow-up: the earlier min/max mixed the
-                    // distance and view-z conventions and never moved near).
-                    this.m_shadowCamera.near = Math.min(this.m_shadowCamera.near, -maxZ);
-                    this.m_shadowCamera.far = Math.max(this.m_shadowCamera.far, -minZ);
+                    // g51p4→g51p7 A/B: the z near/far min/max extension is
+                    // REQUIRED — lod 275,962 with it vs 310,496 without
+                    // (+34k); landmark unchanged. Keep the g51n form.
+                    this.m_shadowCamera.near = Math.min(this.m_shadowCamera.near, minZ);
+                    this.m_shadowCamera.far = Math.max(this.m_shadowCamera.far, maxZ);
                     this.m_shadowCamera.updateProjectionMatrix();
                     this.m_shadowCamera.updateMatrixWorld();
                 }
