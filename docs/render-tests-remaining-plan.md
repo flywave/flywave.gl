@@ -6273,3 +6273,7 @@ generateGuardrails 的墙体网格（MeshStandardMaterial 无场景灯 → 黑�
 **残余定性收束**：lighting 四件 7.3-9.3 万 = **阴影浓度/合成结构差**（ours 遮挡 ×0.72 vs expected ×0.35）——与方向/落位无关。收复路径唯一：以 mgl 本体渲染同夹具插桩 ground_shadow/fill 光照中间值，反向实现甲板光照合成器（ambient 恒定 + directional·shadow 双项 + 层叠次序），独立专项。
 
 **状态收束**：3d-intersections −50.6% 维持；全部 g51 系列修复已提交（41 次提交至 5ceed6d4+收束台账 a3548614/2897fe79）。
+
+### §885 终七十七g51t6: GSHEXP 扫掠定界收束——lighting 浓度已最优（2026-09-20）
+
+GSHEXP 扫掠（2.0/2.5/2.7/3.0）：全部 ≥190k（vs 默认 73,498）——增大阴影浓度使 mismatch 恶化。**浓度参数已最优（gsexp=1），残余 7.3 万为构图级差异（甲板/地面/标线的着色与层次），非阴影浓度可调**。收复唯一路径确认：mgl 本体渲染对拍 → 反向实现甲板光照合成器结构升级（ambient 恒定 + directional·shadow 双项 + 层叠次序）。独立专项。
