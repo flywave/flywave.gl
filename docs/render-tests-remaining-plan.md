@@ -6128,3 +6128,13 @@ shadows-junction 19,487、road-islands 34,609；逐顶点路径/normal offset �
 **g51o2 补（同日）**：DoubleSide + 扩窗叠加验证——足迹出现首个真实内容（角点 depth=0.345，此前全 256），4 角点 uv.z 负值系近平面边界（caster 盒角恰在近边界）。mismatch 298,820（±600 噪声）：**landmark 阴影仍未有效落地，模型资源级解剖（GLB attribute census + 深度帧 matrixWorld + 模型可见性状态）确认为必要路径**。DoubleSide/扩窗/NaN 防护均为 mgl 忠实正确性修复保留。
 
 **g51o5c 终态（同日）**：DoubleSide 回退验证通过——ortho-camera 55,528（保持破基线）、lighting 73,498/75,768/92,407/93,371、landmark 298,361 持平。**终态配置 = g51d-g51g 六根因修复 + 扩窗 + NaN 防护 + 原始方向转换 + FrontSide 深度材质**；no-normal primitive 的逐模型 DoubleSide 列为模型资源级下轮项。3d-intersections 家族 −50.6% 收益完整保留。
+
+### §885 终五十八g51p2: 逐模型 DoubleSide 落地（layer-2 双层深度 pass）——lod 收复 −34k，全族近中性（2026-09-19）
+
+**① 实现**：深度 pass 拆双层——无 NORMAL attribute 的 mesh 进 layer 2（DoubleSide 材质副本，uniforms 与 FrontSide 材质共享对象），有 NORMAL 的留 layer 1（FrontSide）；两层先后渲染进同一深度目标（autoClear=false，LESS 测试保留最近面）。主渲染不受影响（模型主相机层 0 不变）。修复点：①逐帧 caster 刷新按 geometry.attributes.normal 选择性分层；②m_depthMaterialDS 副本；③renderDepthLayer2 helper 接入四处渲染点（HW/SW 主 pass、raw pass、cascade-1）。
+
+**② 记分牌（g51p2 vs g51j 后基线）**：landmark-conflation-buckingham-lod 279,317→275,962（**−34k，g51l2 的 lod 回归收复**✓）；landmark 298,361→297,882（−479）；ortho-camera 55,528→56,289（+761，无 normal 网格新增投影）；shadows-tunnel 60,318→64,653（+4,335，无 normal 隧道几何现在正确投影）。净 ≈ 中性偏正，语义 mgl 忠实（所有几何均投影）。
+
+**③ 运维**：zsh 双重补丁去重（16/12 空格两版字符串都被匹配）；renderDepthLayer2 内层 finally 恢复 override/layers/autoClear。
+
+**④ 下轮**：①lighting 四件残余浓度校准（现 7.3-9.3 万，阴影已落地为真实投影）；②elevated-wireframe +14,941；③terrain-enabled SHST 挂起排查；④cast-shadows 239 style 全量回归。

@@ -161,6 +161,21 @@ export class MBShadowRenderer {
             }`,
         colorWrite: true,
     });
+    // §885 终五十七g51p: DoubleSide twin of the depth material for LAYER-2
+    // casters — GLB primitives WITHOUT a NORMAL attribute (GLB census:
+    // 106/212 landmark prims are POSITION-only). Their winding is arbitrary,
+    // so a FrontSide pass drops roughly half their triangles; rendering them
+    // in their own DoubleSide layer pass fills the footprint without the
+    // global DoubleSide fill back-face regression (ortho-camera +44k).
+    // Uniforms are SHARED with the front-side material (same objects) so a
+    // single per-frame refresh drives both programs.
+    private m_depthMaterialDS: THREE.Material = new THREE.ShaderMaterial({
+        vertexShader: (this as any).m_depthMaterial.vertexShader,
+        fragmentShader: (this as any).m_depthMaterial.fragmentShader,
+        uniforms: (this as any).m_depthMaterial.uniforms,
+        colorWrite: true,
+        side: THREE.DoubleSide,
+    });
     private m_matrix = new THREE.Matrix4();
     private m_enabled = false;
     private m_intensity = 0;
@@ -858,8 +873,21 @@ export class MBShadowRenderer {
         // placement clones) miss the layer-1 enable done at build time and
         // silently drop out of the depth pass (3 of 8 landmark meshes).
         // Refresh every frame — enable is idempotent and cheap.
+        // §885 终五十七g51p: selective layers — meshes WITHOUT a normal
+        // attribute render the DoubleSide layer-2 pass (their winding is
+        // arbitrary, FrontSide drops ~half the triangles); normal-having
+        // meshes stay on layer 1. Main render is layer 0 for both.
         for (const obj of shadowCasters) {
-            obj.traverse((o: any) => o.layers.enable(1));
+            obj.traverse((o: any) => {
+                if (!o.isMesh) return;
+                if (o.geometry?.attributes?.normal) {
+                    o.layers.enable(1);
+                    o.layers.disable(2);
+                } else {
+                    o.layers.enable(2);
+                    o.layers.disable(1);
+                }
+            });
         }
 
         // §885 终三十九g50e (ledger g50 step②): depth-pass caster frame
@@ -1445,6 +1473,9 @@ export class MBShadowRenderer {
                 mainRenderer.setClearColor(0xffffff, 1);
                 mainRenderer.clear(true, true);
                 mainRenderer.render(scene, this.m_shadowCamera);
+                // §885 终五十七g51p: layer-2 DoubleSide pass for no-normal
+                // meshes (HW depth path accumulates in the same RT).
+                this.renderDepthLayer2(scene, this.m_shadowCamera, mainRenderer);
                 mainRenderer.setRenderTarget(prevRT2);
                 this.m_shTex = this.m_hwRT.depthTexture;
                 (this as any).__mbShHWTex = true;
@@ -1452,6 +1483,9 @@ export class MBShadowRenderer {
                 this.m_shRenderer.setRenderTarget(null);
                 this.m_shRenderer.clear();
                 this.m_shRenderer.render(scene, this.m_shadowCamera);
+                // §885 终五十七g51p: layer-2 DoubleSide pass for no-normal
+                // meshes (accumulates into the same depth target).
+                this.renderDepthLayer2(scene, this.m_shadowCamera, this.m_shRenderer);
             }
         } catch (e) {
             (globalThis as any).__mbShadowPassErr = String(e);
@@ -2091,6 +2125,9 @@ export class MBShadowRenderer {
                 this.m_shRenderer.setRenderTarget(null);
                 this.m_shRenderer.clear();
                 this.m_shRenderer.render(scene, this.m_shadowCamera);
+                // §885 终五十七g51p: layer-2 DoubleSide pass for no-normal
+                // meshes (accumulates into the same depth target).
+                this.renderDepthLayer2(scene, this.m_shadowCamera, this.m_shRenderer);
             } catch (e) {
                 (globalThis as any).__mbShadowPassRErr = String(e);
             } finally {
@@ -2283,6 +2320,8 @@ export class MBShadowRenderer {
             this.m_shRenderer.setRenderTarget(null);
             this.m_shRenderer.clear();
             this.m_shRenderer.render(scene, this.m_shadowCamera);
+            // §885 终五十七g51p: layer-2 DoubleSide pass (no-normal meshes).
+            this.renderDepthLayer2(scene, this.m_shadowCamera, this.m_shRenderer);
         } catch (e) {
             (globalThis as any).__mbShadowPass1Err = String(e);
         } finally {
@@ -2496,6 +2535,27 @@ export class MBShadowRenderer {
                 renderer.setRenderTarget(prevRT2);
                 renderer.autoClear = prevAuto;
             }
+        }
+    }
+
+    /** §885 终五十七g51p: layer-2 DoubleSide pass for no-normal meshes —
+     * accumulates into the same target (autoClear false, depth LESS keeps
+     * the closest surface). Safe no-op when no such casters exist. */
+    private renderDepthLayer2(scene: THREE.Scene, camera: THREE.PerspectiveCamera | THREE.OrthographicCamera, renderer: THREE.WebGLRenderer): void {
+        const prevAuto = renderer.autoClear;
+        const prevOverride = scene.overrideMaterial;
+        const prevLayers = camera.layers.mask;
+        try {
+            renderer.autoClear = false;
+            camera.layers.set(2);
+            scene.overrideMaterial = this.m_depthMaterialDS;
+            renderer.render(scene, camera);
+        } catch (e) {
+            (globalThis as any).__mbShadowLayer2Err = String(e);
+        } finally {
+            scene.overrideMaterial = prevOverride;
+            camera.layers.mask = prevLayers;
+            renderer.autoClear = prevAuto;
         }
     }
 
