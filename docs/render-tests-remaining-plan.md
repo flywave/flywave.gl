@@ -6156,3 +6156,11 @@ expected/current 并排对照（elevated-symbols-lighting）明确残余构成�
 **g51s 补（同日）**：elevated-wireframe 差异构成定界——expected 显示红色 wireframe 三角剖分调试图（该夹具测试 wireframe 调试渲染特性）+ 探视下穿墙体红框；ours 无红线框（wireframe 调试特性未实现/差异），且车道/多边形构图差异大。**+14,941 主体为 wireframe 调试特性差异（非阴影/光照链）**，67,504 自 g50t 稳定。修复 = wireframe 调试渲染特性实现（独立特性工作流）。阴影链 g51 系列变更对该夹具无可见影响（67,504→67,504 噪声级）。
 
 **g51p3 补（同日）**：layer-2 落地后足迹复测——9 点 uv x 0.0-0.185 全入界（对比 g51m 扩窗前 −1.24~−0.74 全出界）→ **扩窗生效、模型已部分进 raw 图**（1/9 点 depth 1.439 有内容）；mismatch 297,882 与 g51g 的 297,538 持平——阴影落位/浓度未达 expected（剩余为：掠射 7.6° 下墙面条带极窄的栅格覆盖、近平面负 z 角点、落位浓度）。**landmark/conflation 校准路径确认：模型已投影，剩余为 raw 级联近平面扩展量与浓度校准**，独立迭代。
+
+### §885 终六十四g51p4: raw 级联 near/far 符号约定修正——模型不再近平面裁剪（2026-09-19）
+
+**① 实锤与修复**：caster 盒最高角 uv.z −0.126（越界）根因 = 扩窗的 `near=min(near,minZ)` 混用距离与 view-z 约定——three 正交相机可视 view-z ∈ [−far, −near]，caster 顶点可坐落 view-z 正值区（相机后侧），需 `near=min(near, −maxZ)`、`far=max(far, −minZ)`。修正后足迹 9 点 uv.z 全部转正（0.133-0.268），模型不再近平面裁剪；footprint 探针的 dep 公式缺 /255（显示放大 255 倍）已记录。
+
+**② 结果**：landmark 297,693（−190 噪声级）——模型已正确进 raw 图，剩余 29.8 万 = 构图差（roof/wall 材质着色、标注、阴影浓度），属模型资源级校准迭代，非投影/裁剪缺陷。conflation 三件收复需在该基线上做阴影落位浓度迭代。
+
+**③ 下轮**：①landmark 阴影浓度/落位校准迭代（探针就绪）；②lighting 甲板光照公式精化；③wireframe 调试特性；④terrain-enabled 地形管线；⑤cast-shadows 239 style 全量回归。

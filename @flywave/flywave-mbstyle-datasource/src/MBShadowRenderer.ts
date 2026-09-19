@@ -2112,8 +2112,13 @@ export class MBShadowRenderer {
                     this.m_shadowCamera.right = Math.max(this.m_shadowCamera.right, maxX);
                     this.m_shadowCamera.top = Math.max(this.m_shadowCamera.top, maxY);
                     this.m_shadowCamera.bottom = Math.min(this.m_shadowCamera.bottom, minY);
-                    this.m_shadowCamera.near = Math.min(this.m_shadowCamera.near, minZ);
-                    this.m_shadowCamera.far = Math.max(this.m_shadowCamera.far, maxZ);
+                    // three ortho: visible view-z ∈ [−far, −near]; the caster
+                    // top can sit at POSITIVE view-z (behind the camera) for
+                    // grazing lights — extend near toward −maxZ and far past
+                    // −minZ (g51p3 follow-up: the earlier min/max mixed the
+                    // distance and view-z conventions and never moved near).
+                    this.m_shadowCamera.near = Math.min(this.m_shadowCamera.near, -maxZ);
+                    this.m_shadowCamera.far = Math.max(this.m_shadowCamera.far, -minZ);
                     this.m_shadowCamera.updateProjectionMatrix();
                     this.m_shadowCamera.updateMatrixWorld();
                 }
