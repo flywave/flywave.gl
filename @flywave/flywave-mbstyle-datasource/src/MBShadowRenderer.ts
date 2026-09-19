@@ -34,7 +34,7 @@ export const shadowCasters = new Set<THREE.Object3D>();
  * use/compile time, so a single global flip re-scales the whole pipeline.
  */
 export function mbShadowRes(): number {
-    return (globalThis as any).__mbShadowRes ?? 1024;
+    return (globalThis as any).__mbShadowRes ?? 2048; // §885 g51t10: match mgl shadowMapResolution
 }
 
 export interface ShadowUniformState {
