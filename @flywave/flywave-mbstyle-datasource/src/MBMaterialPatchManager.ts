@@ -1364,12 +1364,13 @@ export class MBMaterialPatchManager {
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
                 `attribute vec3 extrusionNormal;
-                 attribute float aMBElev;
+                 ${(material as any).__mbElevPlane ? '' : 'attribute float aMBElev;'}
                  varying vec3 vMbAttrN;
                  varying vec3 vMBViewPos;
                  varying float vMBHeight;
                  void main() {`
             );
+            const structVOk = shader.vertexShader.includes('vMbAttrN = mat3(modelMatrix)');
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 `#include <begin_vertex>
@@ -1377,7 +1378,13 @@ export class MBMaterialPatchManager {
                  vMbAttrN = mat3(modelMatrix) * extrusionNormal;
                  vMBHeight = aMBElev;`
             );
-            shader.fragmentShader = shader.fragmentShader.replace(
+            // §885 g58: the fragment side references vMbAttrN/vMBHeight — if
+            // the vertex patch anchor was missing (foreign shader template),
+            // the declarations never land and the program fails wholesale.
+            // Compile a flag instead and strip the fragment dependency.
+            shader.fragmentShader = `#define MB_STRUCTLIT_V ${structVOk ? 1 : 0}
+` + shader.fragmentShader;
+            if (structVOk) shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
                 `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
                  varying vec3 vMBViewPos;
@@ -1385,7 +1392,7 @@ export class MBMaterialPatchManager {
                  vec3 mbBaseColor = vec3(1.0);
                  void main() {`
             );
-                     shader.fragmentShader = shader.fragmentShader.replace(
+                     if (structVOk) shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <color_fragment>',
                 `#include <color_fragment>
                  mbBaseColor = diffuseColor.rgb;
@@ -1399,7 +1406,7 @@ export class MBMaterialPatchManager {
                      mbBaseColor *= 1.0 - pow(occlusion, 2.0) * 0.3;
                  }`
             );
-            shader.fragmentShader = shader.fragmentShader.replace(
+            if (structVOk) shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <opaque_fragment>',
                 `#include <opaque_fragment>
                  {
@@ -3763,7 +3770,7 @@ export class MBMaterialPatchManager {
             }
             if (!shader.fragmentShader.includes('#define MB_SH_BIAS')) {
                 shader.fragmentShader =
-                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n#define MB_SH_DIAG8 ${d8d}\n#define MB_SH_DIAG9 ${d9d}\n#define MB_SH_DIAG10 ${d10d}\n#define MB_SH_NOFF ${((globalThis as any).__mbShadowNOff === false || (globalThis as any).__mbShadowNOff === 0) ? 0 : 1}\n#define MB_SH_NOFFMODE ${((globalThis as any).__mbNOffMode === 0) ? 0 : 1}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n`
+                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n#define MB_SH_DIAG8 ${d8d}\n#define MB_SH_DIAG9 ${d9d}\n#define MB_SH_DIAG10 ${d10d}\n#define MB_SH_NOFF ${((globalThis as any).__mbShadowNOff === false || (globalThis as any).__mbShadowNOff === 0) ? 0 : 1}\n#define MB_SH_NOFFMODE ${((globalThis as any).__mbNOffMode === 0) ? 0 : 1}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n#define MB_SH_VOK ${vLightOk ? 1 : 0}\n`
                     + shader.fragmentShader;
             }
             // §885 终三十九g37: MB_SH_ELEVVIS must ALWAYS be defined for
@@ -3897,6 +3904,10 @@ export class MBMaterialPatchManager {
                         #else
                         vec3 mbWP = mbNearW + mbRayDir * mbRayT;
                         #endif
+                        // §885 g58 fix: mbWP0/mbWP1 declared unconditionally
+                        // (the cascade uv assembly below reads them even when
+                        // NOFF is compiled out).
+                        vec3 mbWP0 = mbWP; vec3 mbWP1 = mbWP;
                         #if MB_SH_NOFF
                         // §885 终四十二g50w: mgl NORMAL_OFFSET port.
                         // §885 g56 (audit S11): mgl literal — full-normal
@@ -3904,15 +3915,17 @@ export class MBMaterialPatchManager {
                         // matrix (elevated_structures_model.vertex.glsl:37-39):
                         // n·(min(1−dot(n,shadowDir),1)·0.5+0.5)·multiplier_i.
                         // noffmode=0 keeps the legacy world-up z-only port.
-                        #if MB_SH_NOFFMODE
+                        // MB_SH_VOK: the normal varying exists ONLY when the
+                        // vertex patch actually injected it — materials whose
+                        // vertex shader lacks project_vertex must fall back.
+                        #if MB_SH_VOK && MB_SH_NOFFMODE
                         vec3 mbNWn = normalize(vMBOffN);
                         float mbDotS = clamp(1.0 - dot(mbNWn, uMBShadowDirW), 0.0, 1.0) * 0.5 + 0.5;
                         vec3 mbOff = mbNWn * mbDotS;
-                        vec3 mbWP0 = mbWP + mbOff * uMBNOff0;
-                        vec3 mbWP1 = mbWP + mbOff * uMBNOff1;
+                        mbWP0 += mbOff * uMBNOff0;
+                        mbWP1 += mbOff * uMBNOff1;
                         #else
                         mbWP.z += uMBNOffZ;
-                        vec3 mbWP0 = mbWP; vec3 mbWP1 = mbWP;
                         #endif
                         #endif
                         #if MB_SH_ELEVVIS
@@ -4147,7 +4160,7 @@ export class MBMaterialPatchManager {
                 // TRUE — the R-only HW decode branch compiled in the default
                 // SW path). DIAG5/DIAG7 stay value-emitted and are selected
                 // with `#if`.
-                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n#define MB_SH_DIAG8 ${d8}\n#define MB_SH_DIAG9 ${d9}\n#define MB_SH_DIAG10 ${d10}\n#define MB_SH_NOFF ${((globalThis as any).__mbShadowNOff === false || (globalThis as any).__mbShadowNOff === 0) ? 0 : 1}\n#define MB_SH_NOFFMODE ${((globalThis as any).__mbNOffMode === 0) ? 0 : 1}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n#define MB_SH_LEGACYCMP ${(globalThis as any).__mbShadowCmpLegacy ? 1 : 0}\n` + shader.fragmentShader;
+                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n#define MB_SH_DIAG8 ${d8}\n#define MB_SH_DIAG9 ${d9}\n#define MB_SH_DIAG10 ${d10}\n#define MB_SH_NOFF ${((globalThis as any).__mbShadowNOff === false || (globalThis as any).__mbShadowNOff === 0) ? 0 : 1}\n#define MB_SH_NOFFMODE ${((globalThis as any).__mbNOffMode === 0) ? 0 : 1}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n#define MB_SH_VOK ${vLightOk ? 1 : 0}\n#define MB_SH_LEGACYCMP ${(globalThis as any).__mbShadowCmpLegacy ? 1 : 0}\n` + shader.fragmentShader;
             }
             if ((globalThis as any).__mbShadowHW) {
                 shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;

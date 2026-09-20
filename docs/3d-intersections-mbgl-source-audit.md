@@ -110,8 +110,14 @@
 - **HW+2D 组合挂账**：shadowhw=1+shadow2d=1 时 HW 覆盖物路径（scene.overrideMaterial=m_depthMaterial）下 vMBOffN/vMbAttrN varying 声明缺失 → 编译失败。默认态（两者皆关）已验证无害。
 - **S10 实测**：tunnel shadow2d 开/关均 56,195（默认 HW 关 → mapS0=null → 管线未激活，符合设计）；激活态（hw+2d）修复上述注入问题后才有意义。
 
+## g59 实测结论（2026-09-21 第五轮）
+
+- **HW+2D 组合可编译**。三处修复：①S11 块以 `MB_SH_VOK`（顶点注入成功标志，区别于 VLIGHT）门控，材质缺 project_vertex 时回退 z-only；②`mbWP0/1` 无条件声明（NOFF 编译外仍被 cascade uv 装配引用）；③结构光照注入原子化——顶点补丁失败（anchor 缺失）时置 `MB_STRUCTLIT_V=0` 跳过片段依赖，`aMBElev` 声明与 elev-plane 注入去重。
+- **hw+2d 激活态 A/B（testtimeout=900s）**：junction **18,167**（历史最优，−3 vs 默认）；tunnel **168,919**（+112k 域不匹配退步）——硬件 DEPTH16 比较域与校准的 packed-16bit 窗口域量化不同（§716 账本早有记录），隧道内腔/地下链最敏感。**默认保持 shadow2d 关**；激活管线保留供 GPU 环境与域校准后复用。
+- 度量基建：karma webpack 缓存在 /tmp/_karma_webpack_*（排查时清过）；testtimeout 参数已接 MBSTYLE_TESTTIMEOUT。
+
 ## 下一轮主攻（按 mgl 源码字面）
 
-- **S10 续**：修复 HW 覆盖物路径下的 varying 注入顺序（vMBOffN/vMbAttrN 需在 overrideMaterial 之外的主材质注入中保证声明），随后 hw+2d 激活态 A/B。
+- **S10 续**：激活态 tunnel 域校准（硬件比较 ref 的 bias/缩放对齐 packed→raw 域迁移，重点隧道内腔），或以 GPU 环境重测。
 - **S8** 级联矩阵 mercator 球心/Ti(pitch,bearing) roll/texel-snap（遗留主项，依赖 geo↔RTE 帧桥）。
 - **G10** SUBDIVISION_EDGE_EXTENSION 生效化（MBPolygonClippingHD 当前 void 丢弃）。
