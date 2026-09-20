@@ -1601,6 +1601,7 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                 // TEXTURE_COMPARE_MODE binding poisons every sampler2D read.
                 if ((globalThis as any).__mbShadow2D === true
                     && (globalThis as any).__mbShadow2DQuad !== false) {
+                    if (true) { (this as any).__mbShTexS0 = null; } else
                     if (!this.m_hwRTS || this.m_hwRTS.width !== size) {
                         const dts = new THREE.DepthTexture(size, size);
                         dts.type = THREE.UnsignedIntType;

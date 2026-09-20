@@ -123,9 +123,15 @@
 - **S10 激活态域校准排查**：干净基线上二分（noext/quadsw/双关/结构 define 关四组配置）—— tunnel 全部 **169,209** 恒定，与 tap 开关无关；排除 extrusion GLSL3（shadow2d 不开 hw 时 54,488 正常）。回归源收敛为 HW 上下文中的**双渲染/GL 状态副作用**（SwiftShader 下 sampler2DShadow 绑定 + 场景二次栅格化的状态干扰），非比较语义本身——需 GPU 环境或对 hw 渲染路径做状态隔离审计后才能收敛。默认 shadow2d 维持关闭。
 - S8/G10 未动（见下）。
 
+## g61 实测结论（2026-09-21 第七轮）
+
+- **HW+2D 之谜破案**：169,209 与 shadow2d 完全无关——它是 **shadowhw=1 在结构光照修复后（g60）的真实值**。历史 56,195 是"结构光照静默缺失"掩盖下的 shadowhw 值。`shadowbias=0.002` 十倍 bias 不动它（169,209 恒定）→ 非 bias 敏感，而是 **hw raw-DEPTH24 域的接收端窗口校准问题**：uMBShadowBiasW 的 box-span ramp 是按 packed-16bit 量化校准的，raw 高精度域下窗口语义失效，隧道内腔（掠射光自采样）全域误判。extrusion GLSL3/双渲染/各 tap 均被隔离实验逐一洗清。
+- **本轮修复**（默认态验证 54,224/18,284 保持）：①aMBElev 声明按 includes 双向去重（elev-plane 与结构光照注入并发时的 redefinition）；②isoA 实验确认 extrusion GLSL3+HW 交互无害；③noext 门控语义收紧（GLSL3 与 tap 同门控）。
+- **结论**：shadowhw（raw 深度域）与 shadow2d（硬件比较）管线完好，但其接收端 bias 窗口需要按 raw 域重新校准（mgl 路线=NORMAL_OFFSET 位移 + binary GREATER + slope bias，不含平滑窗）后才能超越默认 packed 路径。默认配置（shadowhw=0/shadow2d=0，packed-16bit + 校准窗口）维持最优。
+
 ## 下一轮主攻（按 mgl 源码字面）
 
-- **S10 续**：GPU 环境复测 hw+2d；或审计 SwiftShader 双渲染的 GL 状态隔离（独立 context/渲染顺序）。
+- **S10 续**：raw 域接收窗口校准专项——方案 A：按 mgl NORMAL_OFFSET 全语义（接收位移已有）+ binary GREATER（g51g step 形态已有）+ 移除 smoothstep 窗（回归 169,209 的主嫌疑）；方案 B：GPU 环境直接复测。
 - **S8** 级联矩阵 mercator 球心/Ti(pitch,bearing) roll/texel-snap（遗留主项，依赖 geo↔RTE 帧桥）。
 - **G10** SUBDIVISION_EDGE_EXTENSION 生效化（MBPolygonClippingHD 当前 void 丢弃）。
 - 遗留：MBEnvironmentManager/mapview/MBModelRenderer 的 TS 类型错误（HEAD 既有）。

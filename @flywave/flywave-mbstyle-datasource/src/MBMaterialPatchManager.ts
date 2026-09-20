@@ -1455,10 +1455,11 @@ export class MBMaterialPatchManager {
         // ambient intensity 0 (ground-shadow-fog family).
         const origKey = material.customProgramCacheKey?.bind(material);
         const mbS2d = (globalThis as any).__mbShadow2D === true;
-        if (mbS2d) (material as any).glslVersion = THREE.GLSL3;
+        const mbS2dActive = mbS2d && (globalThis as any).__mbShadow2DNoExt !== true;
+        if (mbS2dActive) (material as any).glslVersion = THREE.GLSL3;
         material.customProgramCacheKey = (): string =>
             (origKey ? origKey() : 'mb') + '-mbext3d' + ((globalThis as any).__mbShadowHW ? '-hw' : '')
-            + (mbS2d ? '-s2d' : '');
+            + (mbS2dActive ? '-s2d' : '');
         material.needsUpdate = true;
 
         const origOnCompile = material.onBeforeCompile;
@@ -1647,7 +1648,7 @@ export class MBMaterialPatchManager {
                  varying vec3 vMbWorldPos;
                  varying vec3 vMbAttrN;
                  ${(globalThis as any).__mbShadowHW ? `#define MB_SH_HW 1\n#define MB_SH_BIAS ${Number((globalThis as any).__mbShadowBias ?? 0.0002)}` : ''}
-                 ${mbS2d ? `#define MB_SH_SHADOW2D 1\n${(globalThis as any).__mbShadow2DNoExt ? '#define MB_SH_SHADOW2D_NOEXT 1\n' : ''}uniform mediump sampler2DShadow uMBShadowS0;\nlayout(location = 0) out highp vec4 pc_fragColor;\n#define gl_FragColor pc_fragColor` : ''}
+                 ${mbS2dActive ? `#define MB_SH_SHADOW2D 1\nuniform mediump sampler2DShadow uMBShadowS0;\nlayout(location = 0) out highp vec4 pc_fragColor;\n#define gl_FragColor pc_fragColor` : ''}
                  ${shader.fragmentShader.includes('uMBShadowMap') ? '' :
                  `uniform sampler2D uMBShadowMap;
                  uniform mat4 uMBShadowMatrix;
