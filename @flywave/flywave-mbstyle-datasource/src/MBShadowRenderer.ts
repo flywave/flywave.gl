@@ -64,6 +64,9 @@ export interface ShadowUniformState {
     /** §885 终四十二g50w: mgl u_shadow_normal_offset world-up displacement
      * (meters) — kills receiver self-sampling acne on coplanar surfaces. */
     normalOffsetZ?: number;
+    /** §885 g56 (audit S11): mgl per-cascade normal-offset multipliers (m). */
+    normalOffset0?: number;
+    normalOffset1?: number;
     /** §717: shadow-camera far (world units) — the fade-out envelope. */
     far: number;
 }
@@ -185,6 +188,13 @@ export class MBShadowRenderer {
     private m_biasAuto = 0.0002;
     /** §885 终四十二g50w: mgl u_shadow_normal_offset world-up displacement. */
     private m_normalOffsetZ = 0;
+    /** §885 g56: latent-field declarations surfaced by the TS1128 fix —
+     * getShadowUniforms' texel1 and the analytic-throttle tick read these. */
+    private m_shadRadius = 1;
+    private m_analyticTex: THREE.Texture | null = null;
+    /** §885 g56: mgl per-cascade normal-offset multipliers (meters). */
+    private m_noffLerpClamp = 1;
+    private m_normalOffsetRR = 1;
     private m_orthoStyle = false;
     // §560: ground shadow receiver — mgl shades the BACKGROUND as a ground
     // layer (`background × groundRadiance × groundShadow`); our background is
@@ -314,10 +324,26 @@ export class MBShadowRenderer {
             // §885 终三十九g50b: live compare-bias window for receivers.
             biasAuto: this.m_biasAuto,
             normalOffsetZ: this.m_normalOffsetZ,
+            // §885 g56 (audit S11): mgl u_shadow_normal_offset[1]/[2] —
+            // per-cascade vertex normal-offset multipliers, meters:
+            // texel_i = 2·radius_m(i)/res (ortho window ±radius over res
+            // texels; collapses mgl's 2/tileSize·EXTENT/res·radius_px·
+            // tileInMeters), × lerpClamp(zoom, 22→0.125, 0→4), vector-tile
+            // multiplier 1.0. cascade1 uses the far-field half-extent rr.
+            normalOffset0: (2 * this.m_shadowCamera.right / mbShadowRes())
+                * this.m_noffLerpClamp,
+            normalOffset1: (2 * this.m_normalOffsetRR / mbShadowRes())
+                * this.m_noffLerpClamp,
             // §717: mgl u_fade_range = [lastCascade.far×0.75, lastCascade.far]
             // (shadow_renderer.ts:363) — receiver shadows fade to lit across
             // the far quarter of the coverage; single-cascade far stands in.
             far: this.m_shadowCamera.far,
+            // §885 g56 (audit S9): mgl cascade-1 far = shadowCutoutDist =
+            // 3 × cascadeSplitDist(=1.5×cameraToCenterDistance) — in PIXELS
+            // (mgl light/clip space is pixel-uniform). Our metric frame:
+            // ctcd_px/ppm == targetDistance (metres), so the literal
+            // far1 = 4.5 × ctcd is 4.5 × targetDistance metres.
+            fadeFar: 4.5 * Math.max(1, (this.m_mapView as any).targetDistance ?? 500),
         };
     }
 
@@ -368,7 +394,8 @@ export class MBShadowRenderer {
             // range ([0.75·far1, far1], mgl shadow_renderer.ts:362-363).
             shader.uniforms.uMBShadowTexel = { value: 1 / mbShadowRes() };
             shader.uniforms.uMBFadeRange = { value: new THREE.Vector2(
-                (this.m_shadowCamera.far) * 0.75, (this.m_shadowCamera.far)) };
+                4.5 * Math.max(1, (this.m_mapView as any).targetDistance ?? 500) * 0.75,
+                4.5 * Math.max(1, (this.m_mapView as any).targetDistance ?? 500)) };
             shader.uniforms.uMBInvProj = { value: new THREE.Matrix4() };
             shader.uniforms.uMBCamWorld = { value: new THREE.Matrix4() };
             shader.uniforms.uMBGroundZ = { value: -80 };
@@ -1277,6 +1304,11 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
             // non-finite inputs poisoning the receivers.
             const h = 0.03125 * this.m_shadowCamera.right * offScale * dotScale;
             this.m_normalOffsetZ = Number.isFinite(h) ? h : 0;
+            // §885 g56: mgl lerpClamp(zoom, 22, 0, 0.125, 4) — same ramp the
+            // z-only port used (offScale), shared by both cascades.
+            this.m_noffLerpClamp = Number.isFinite(offScale) ? offScale : 1;
+            this.m_normalOffsetRR = Number.isFinite((this as any).__mbCascade1HalfExtent)
+                ? (this as any).__mbCascade1HalfExtent : this.m_shadowCamera.right;
         }        // §885 终七十二: shoff=<x>,<y> — world-XY calibration offset of the
         // shadow sphere center (dark-centroid A/B against expected).
         {
@@ -1306,6 +1338,7 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
             sphereCenter.copy(c2);
             const sz = casterBox.getSize(new THREE.Vector3());
             const rr = 0.6 * Math.max(sz.x, sz.y, sz.z);
+            (this as any).__mbCascade1HalfExtent = rr;
             this.m_shadowCamera.left = -rr; this.m_shadowCamera.right = rr;
             this.m_shadowCamera.top = rr; this.m_shadowCamera.bottom = -rr;
             this.m_shadowCamera.near = -2 * rr;

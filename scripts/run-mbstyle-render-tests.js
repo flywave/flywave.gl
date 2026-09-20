@@ -119,6 +119,7 @@ function main() {
             ...(process.env.MBSTYLE_G7OFF ? ["g7off=1"] : []),
             ...(process.env.MBSTYLE_G8OFF ? ["g8off=1"] : []),
             ...(process.env.MBSTYLE_NOOCC ? ["noocc=1"] : []),
+            ...(process.env.MBSTYLE_NOFFMODE ? [`noffmode=${process.env.MBSTYLE_NOFFMODE}`] : []),
             ...(process.env.MBSTYLE_SEA ? ["structelevattr=0"] : []),
             ...(process.env.MBSTYLE_UNEVALDROP ? ["unevaldrop=1"] : []),
             ...(process.env.MBSTYLE_NOLIFT ? ["nolift=1"] : []),

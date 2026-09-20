@@ -178,6 +178,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "structelevattr=0")) {
         (globalThis as any).__mbStructElevAttr = false;
     }
+    {
+        const nm = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("noffmode="))?.slice("noffmode=".length);
+        if (nm !== undefined) (globalThis as any).__mbNOffMode = Number(nm);
+    }
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "unevaldrop=1")) {
         (globalThis as any).__mbUnevalDrop = false;
     }

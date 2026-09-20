@@ -86,9 +86,17 @@
 - **S9 未盲改**：mgl u_fade_range 语义在像素空间（cascade far=cameraToCenterDistance 的倍数，mgl 光矩阵工作在 pixel 空间），我们 uMBFadeRange 在世界米制（shadowCamera.far=radius/dir.z）——直接套 4.5×ctcd 需先做 ppm（≈20.65）单位换算分析，盲改风险高，留待下轮专项。
 - 遗留类型错误（MBModelRenderer texel1/map1、MBEnvironmentManager atmosphereTail 等）确认为 HEAD 既有（文件未改动，--force 全量检查才浮现），不影响 lib emit 与 karma（transpileOnly）。
 
+## g56 实测结论（2026-09-21 第二轮）
+
+- **S9 落地（单位分析完成）**：mgl ctcd 为像素（光/clip 空间 pixel-uniform），ctcd_px/ppm == targetDistance（米）——故 mgl `u_fade_range far = 4.5×ctcd_px` 的米制等价即 **4.5×targetDistance**，无需逐帧 ppm 换算。shadowState 新增 `fadeFar`，ground quad `uMBFadeRange` 与接收端 `uMBShadowFar` 两处消费者均切换到该语义（原值 m_shadowCamera.far 为光正交 far，与 mgl cascade far 不同源）。
+- **S11 落地**：渲染端暴露 per-cascade 乘数 `normalOffset0/1 = 2·radius_m(i)/res × lerpClamp(zoom,22→0.125,0→4)`（mgl `2/tileSize·EXTENT/res·radius_px·tileInMeters` 在米制系的坍缩形；vector-tile multiplier 1.0）；接收端片元改为 mgl 字面全法线偏移 `n·(clamp(1−dot(n,shadowDir),0,1)·0.5+0.5)·multiplier_i`，且**逐 cascade 先偏移再投影**（model.vertex.glsl:37-39 结构），uv0/uv1 各用各的偏移位置；法线经 vMBOffN varying 与 vMBLightWPos 同条件注入（缺法线几何回退 up）。`noffmode=0` 旋钮保留 z-only 旧径。
+- **S10 未盲动**：真硬件比较需 DEPTH_COMPONENT16 深度纹理 + sampler2DShadow 全链替换（MBShadowRenderer 深度打包格式 + 全部接收端采样 + three 无原生 sampler2DShadow 暴露），软件 PCF 目前近似硬件 GREATER 比较；列为独立专项（渲染器级重做），不与本轮混合。
+- **护栏深度语义核查（S14 部分）**：mgl 主 pass renderable 段 LEQUAL/**ReadOnly**（护栏不写深度）、backCCW 剔除；我们结构材质 DoubleSide+depthTest=true+depthWrite 默认开。差异在静态渲染器约束内（renderOrder 序列替代 mgl 帧内分相），完整对齐需 depthWrite=false 验证——未盲改，挂账。
+- **实测（mtime 验证）**：junction 18,170 持平；tunnel 50,866 → **50,630**；全量 3d-intersections 58 例总计 **1,958,110 px**（对照历史全量 407 万/600 万档）。TS1128 修复后 TS 全量检查暴露 MBShadowRenderer 两个潜伏未声明字段（m_shadRadius/m_analyticTex）已补声明。
+- 遗留类型错误（MBModelRenderer/MBEnvironmentManager/mapview）均为 HEAD 既有、文件未动。
+
 ## 下一轮主攻（按 mgl 源码字面）
 
-- **S9** u_fade_range 单位分析后对齐（cascade far 像素空间 ↔ 我们米制，ppm 换算）。
-- **S11** 顶点级 normal offset（_prelude_shadow.vertex.glsl:6-14 + shadow_renderer.ts:533-546 per-cascade multiplier）。
-- **S10** DEPTH_COMPONENT16 + sampler2DShadow 硬件比较（three 侧可近似）。
-- 遗留：MBEnvironmentManager/mapview 的 TS2339/TS2353 类型错误（早于本会话）。
+- **S10** 硬件深度比较专项（DEPTH_COMPONENT16 + sampler2DShadow 全链，渲染器级）。
+- **S14** 护栏材质 depthWrite=false 对齐 ReadOnly + backCCW 绕序核查（需护栏渲染次序先于 deck 深度写入的保障）。
+- **S8** 级联矩阵 mercator 球心/Ti(pitch,bearing) roll/texel-snap（遗留主项，依赖 geo↔RTE 帧桥）。

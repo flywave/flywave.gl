@@ -412,6 +412,20 @@ export class MBMaterialPatchManager {
                             if (u.uMBNOffZ) {
                                 u.uMBNOffZ.value = (shadowState as any).normalOffsetZ ?? 0;
                             }
+                            // §885 g56 (audit S11): per-cascade multipliers
+                            // + world shadow direction for the mgl normal
+                            // offset (refreshed in the same guarded pass).
+                            if (u.uMBNOff0) {
+                                u.uMBNOff0.value = (shadowState as any).normalOffset0 ?? 0;
+                            }
+                            if (u.uMBNOff1) {
+                                u.uMBNOff1.value = (shadowState as any).normalOffset1 ?? 0;
+                            }
+                            if (u.uMBShadowDirW) {
+                                const dW = (this.m_dataSource as any).m_environment
+                                    ?.lighting3DState?.dir;
+                                if (dW) (u.uMBShadowDirW.value as THREE.Vector3).set(dW[0], dW[1], dW[2]);
+                            }
                             // §885 终三十九g50f: analytic mask path flag.
                             if (u.uMBShAnalytic) {
                                 u.uMBShAnalytic.value =
@@ -441,9 +455,13 @@ export class MBMaterialPatchManager {
                         } else if (!shadowState) {
                             u.uMBShadowIntensity.value = 0;
                         }
-                        // §717: fade-envelope far bound (shadow camera far).
+                        // §885 g56 (audit S9): mgl u_fade_range far =
+                        // cascade-1 far = 4.5×ctcd (mgl px space; our metric
+                        // equivalent via targetDistance), NOT the shadow
+                        // camera's ortho far.
                         if (u.uMBShadowFar) {
-                            u.uMBShadowFar.value = (shadowState as any)?.far ?? 0;
+                            u.uMBShadowFar.value = (shadowState as any)?.fadeFar
+                                ?? (shadowState as any)?.far ?? 0;
                         }
                         if (shadowState) {
                             const ls = (this.m_dataSource as any).m_environment
@@ -3686,9 +3704,13 @@ export class MBMaterialPatchManager {
             let vLightOk = false;
             if ((globalThis as any).__mbShadowVLightsOff !== true
                 && shader.vertexShader.includes('#include <project_vertex>')) {
-                shader.vertexShader = ('varying vec3 vMBLightWPos;\n' + shader.vertexShader)
+                shader.vertexShader = ('varying vec3 vMBLightWPos;\nvarying vec3 vMBOffN;\n' + shader.vertexShader)
                     .replace('#include <project_vertex>',
-                        '#include <project_vertex>\n vMBLightWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+                        `#include <project_vertex>
+ vMBLightWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+ // §885 g56 (audit S11): world normal for the mgl vertex normal offset.
+ vec3 mbNw = mat3(modelMatrix) * normal;
+ vMBOffN = dot(mbNw, mbNw) > 1e-6 ? mbNw : vec3(0.0, 0.0, 1.0);`);
                 vLightOk = true;
             }
             // §885 终一百四十六: guarantee the receiver GLSL's compile-time
@@ -3703,9 +3725,12 @@ export class MBMaterialPatchManager {
             const d8d = (globalThis as any).__mbShadowDiag === '8' ? 1 : 0;
             const d9d = (globalThis as any).__mbShadowDiag === '9' ? 1 : 0;
             const d10d = (globalThis as any).__mbShadowDiag === '10' ? 1 : 0;
+            if (vLightOk && !shader.fragmentShader.includes('varying vec3 vMBOffN')) {
+                shader.fragmentShader = 'varying vec3 vMBOffN;\n' + shader.fragmentShader;
+            }
             if (!shader.fragmentShader.includes('#define MB_SH_BIAS')) {
                 shader.fragmentShader =
-                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n#define MB_SH_DIAG8 ${d8d}\n#define MB_SH_DIAG9 ${d9d}\n#define MB_SH_DIAG10 ${d10d}\n#define MB_SH_NOFF ${((globalThis as any).__mbShadowNOff === false || (globalThis as any).__mbShadowNOff === 0) ? 0 : 1}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n`
+                    `#define MB_SH_BIAS ${bVd}\n#define MB_SH_DIAG5 ${d5d}\n#define MB_SH_DIAG7 ${d7d}\n#define MB_SH_DIAG8 ${d8d}\n#define MB_SH_DIAG9 ${d9d}\n#define MB_SH_DIAG10 ${d10d}\n#define MB_SH_NOFF ${((globalThis as any).__mbShadowNOff === false || (globalThis as any).__mbShadowNOff === 0) ? 0 : 1}\n#define MB_SH_NOFFMODE ${((globalThis as any).__mbNOffMode === 0) ? 0 : 1}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n`
                     + shader.fragmentShader;
             }
             // §885 终三十九g37: MB_SH_ELEVVIS must ALWAYS be defined for
@@ -3768,6 +3793,10 @@ export class MBMaterialPatchManager {
             // §885 终四十二g50w: mgl u_shadow_normal_offset world-up
             // displacement (meters), refreshed per frame from the renderer.
             shader.uniforms.uMBNOffZ = { value: 0 };
+            // §885 g56 (audit S11): mgl per-cascade multipliers + shadow dir.
+            shader.uniforms.uMBNOff0 = { value: shSeed ? (shSeed.normalOffset0 ?? 0) : 0 };
+            shader.uniforms.uMBNOff1 = { value: shSeed ? (shSeed.normalOffset1 ?? 0) : 0 };
+            shader.uniforms.uMBShadowDirW = { value: new THREE.Vector3(0, 0, 1) };
             // §885 终三十九g50d: default flipped 2.2 → 1.0 after the g50d
             // full retest — lighting four 91.7–100.7k (−40~48k each vs 2.2),
             // every thin-plate fixture flat or slightly better, none worse.
@@ -3836,14 +3865,22 @@ export class MBMaterialPatchManager {
                         vec3 mbWP = mbNearW + mbRayDir * mbRayT;
                         #endif
                         #if MB_SH_NOFF
-                        // §885 终四十二g50w: mgl NORMAL_OFFSET port
-                        // (fill.vertex.glsl:46-48 + _prelude_shadow.vertex.glsl:
-                        // 6-14) — displace the receiver sample point along
-                        // world-up so a coplanar surface reads IN FRONT of its
-                        // own stored depth (kills self-sampling acne; mgl
-                        // vector-tile mode, multiplier 1.0). Live magnitude in
-                        // uMBNOffZ (renderer: texel·0.03125·scale·dotScale).
+                        // §885 终四十二g50w: mgl NORMAL_OFFSET port.
+                        // §885 g56 (audit S11): mgl literal — full-normal
+                        // offset, PER CASCADE, applied before each light
+                        // matrix (elevated_structures_model.vertex.glsl:37-39):
+                        // n·(min(1−dot(n,shadowDir),1)·0.5+0.5)·multiplier_i.
+                        // noffmode=0 keeps the legacy world-up z-only port.
+                        #if MB_SH_NOFFMODE
+                        vec3 mbNWn = normalize(vMBOffN);
+                        float mbDotS = clamp(1.0 - dot(mbNWn, uMBShadowDirW), 0.0, 1.0) * 0.5 + 0.5;
+                        vec3 mbOff = mbNWn * mbDotS;
+                        vec3 mbWP0 = mbWP + mbOff * uMBNOff0;
+                        vec3 mbWP1 = mbWP + mbOff * uMBNOff1;
+                        #else
                         mbWP.z += uMBNOffZ;
+                        vec3 mbWP0 = mbWP; vec3 mbWP1 = mbWP;
+                        #endif
                         #endif
                         #if MB_SH_ELEVVIS
                         gl_FragColor.rgb = vec3(clamp(vMBElev / 6.0, 0.0, 1.0));
@@ -3851,8 +3888,8 @@ export class MBMaterialPatchManager {
                         #if MB_SH_DIAG7
                         gl_FragColor = vec4(mbSUV2.x, mbSUV2.y, 0.5, 1.0);
                         #endif
-                        vec4 mbShadowUv0 = uMBShadowMatrix * vec4(mbWP, 1.0);
-                        vec4 mbShadowUv1 = uMBShadowMatrix1 * vec4(mbWP, 1.0);
+                        vec4 mbShadowUv0 = uMBShadowMatrix * vec4(mbWP0, 1.0);
+                        vec4 mbShadowUv1 = uMBShadowMatrix1 * vec4(mbWP1, 1.0);
                         bool mbUse1 = !(abs(mbShadowUv0.x) <= 1.0 && abs(mbShadowUv0.y) <= 1.0 && mbShadowUv0.z <= 1.0);
                         vec4 mbShadowUv = mbUse1 ? mbShadowUv1 : mbShadowUv0;
                         float mbShadowDepth = 1.0;
@@ -4046,6 +4083,9 @@ export class MBMaterialPatchManager {
                 'uniform float uMBShadowDbg;\n',
                 'uniform float uMBShAnalytic;\n',
                 'uniform float uMBNOffZ;\n',
+                'uniform float uMBNOff0;\n',
+                'uniform float uMBNOff1;\n',
+                'uniform vec3 uMBShadowDirW;\n',
                 'varying vec3 vMBLightWPos;\n',
             ]) {
                 const name = decl.replace(/^uniform [a-zA-Z0-9]+ /, '').replace(/[;\n]/g, '');
@@ -4065,7 +4105,7 @@ export class MBMaterialPatchManager {
                 // TRUE — the R-only HW decode branch compiled in the default
                 // SW path). DIAG5/DIAG7 stay value-emitted and are selected
                 // with `#if`.
-                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n#define MB_SH_DIAG8 ${d8}\n#define MB_SH_DIAG9 ${d9}\n#define MB_SH_DIAG10 ${d10}\n#define MB_SH_NOFF ${((globalThis as any).__mbShadowNOff === false || (globalThis as any).__mbShadowNOff === 0) ? 0 : 1}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n#define MB_SH_LEGACYCMP ${(globalThis as any).__mbShadowCmpLegacy ? 1 : 0}\n` + shader.fragmentShader;
+                shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n#define MB_SH_DIAG8 ${d8}\n#define MB_SH_DIAG9 ${d9}\n#define MB_SH_DIAG10 ${d10}\n#define MB_SH_NOFF ${((globalThis as any).__mbShadowNOff === false || (globalThis as any).__mbShadowNOff === 0) ? 0 : 1}\n#define MB_SH_NOFFMODE ${((globalThis as any).__mbNOffMode === 0) ? 0 : 1}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n#define MB_SH_LEGACYCMP ${(globalThis as any).__mbShadowCmpLegacy ? 1 : 0}\n` + shader.fragmentShader;
             }
             if ((globalThis as any).__mbShadowHW) {
                 shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;
