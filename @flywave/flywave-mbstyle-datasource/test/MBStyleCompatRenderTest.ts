@@ -150,6 +150,11 @@ function discoverTests(): TestEntry[] {
         (globalThis as any).__mbPrepassOff = true;
     }
     {
+        const pm = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("patternmul="))?.slice("patternmul=".length);
+        if (pm !== undefined) (globalThis as any).__mbPatternMul = Number(pm) || 1;
+    }
+    {
         const pz = (window as any).__karma__?.config?.args?.find?.((a: string) =>
             a.startsWith("prepassz="))?.slice("prepassz=".length);
         if (pz !== undefined) (globalThis as any).__mbPrepassZ = Number(pz) || 0;

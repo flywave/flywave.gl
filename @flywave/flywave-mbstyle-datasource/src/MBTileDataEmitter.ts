@@ -5619,6 +5619,18 @@ export class MBTileDataEmitter {
 
     getDecodedTile(): DecodedTile {
         if ((this as any).__feats) { console.log('MB_FEATS', (this as any).__feats); (this as any).__feats = ''; } // FEAT-PROBE (temp)
+        // §885 g52w: per-tile pattern phase anchor — the tile's extent
+        // origin (0,0) projected into the same center-relative frame as the
+        // geometry positions. Pattern uvs subtract it so the tiling anchors
+        // at the tile corner exactly like mgl's a_pos-based pattern
+        // coordinates (mgl fill_pattern vertex: uv = a_pos·scale, a_pos
+        // tile-local).
+        {
+            const oW = this.project(new THREE.Vector2(0, 0));
+            for (const t of this.m_techniques) {
+                (t as any)._mbTileOrigin = [oW.x, oW.y];
+            }
+        }
         if ((globalThis as any).__mbDecodeDbg) {
             try {
                 const techs = this.m_techniques.map((t: any) =>

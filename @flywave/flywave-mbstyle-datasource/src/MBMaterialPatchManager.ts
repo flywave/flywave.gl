@@ -6250,7 +6250,10 @@ const mbGroundDual = (globalThis as any).__mbGroundLitDual === true ? 1 : 0;
         const dZoomP = mapViewP?.zoomLevel ?? 1;
         const mppP = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
             (256 * Math.pow(2, dZoomP));
-        const tileScale = spritePr /
+        // §885 g52x: patterndbg=<mult> — empirical scale calibration for the
+        // engine zoom convention (zoomLevel = mgl zoom + 1).
+        const patMul = Number((globalThis as any).__mbPatternMul ?? 1) || 1;
+        const tileScale = patMul * spritePr /
             (Math.max(1, (tex.image?.width ?? 32)) * Math.max(mppP, 1e-9));
         const origOnCompile = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
@@ -6269,9 +6272,14 @@ const mbGroundDual = (globalThis as any).__mbGroundLitDual === true ? 1 : 0;
             shader.uniforms.uMBPatternScale = { value: tileScale };
             shader.uniforms.uMBPatternCrossFade = { value: crossFade };
             if (tex2) shader.uniforms.uMBPatternTex2 = { value: tex2 };
+            // §885 g52w: tile-origin phase anchor (mgl a_pos tile-local uv).
+            const tileOrigin2 = (technique as any)._mbTileOrigin as number[] | undefined;
+            shader.uniforms.uMBPatOrigin = {
+                value: tileOrigin2 ? new THREE.Vector2(tileOrigin2[0], tileOrigin2[1]) : new THREE.Vector2(),
+            };
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
-                'uniform float uMBPatternScale;\nvarying vec2 vMBPatternUv;\nvoid main() {'
+                'uniform float uMBPatternScale;\nuniform vec2 uMBPatOrigin;\nvarying vec2 vMBPatternUv;\nvoid main() {'
             );
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
@@ -6281,7 +6289,9 @@ const mbGroundDual = (globalThis as any).__mbGroundLitDual === true ? 1 : 0;
                     // vertices (perimeter edge distance, z height)
                     // (fill_extrusion_pattern.vertex.glsl pos branch).
                     ? '#include <begin_vertex>\nvMBPatternUv = uv * uMBPatternScale;'
-                    : '#include <begin_vertex>\nvMBPatternUv = position.xy * uMBPatternScale;'
+                    // §885 g52w: anchor at the tile origin and flip y (scene
+                    // y-north vs mgl's tile y-down) so the phase matches mgl.
+                    : '#include <begin_vertex>\nvec2 mbPatD = position.xy - uMBPatOrigin;\nvMBPatternUv = vec2(mbPatD.x, -mbPatD.y) * uMBPatternScale;'
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
