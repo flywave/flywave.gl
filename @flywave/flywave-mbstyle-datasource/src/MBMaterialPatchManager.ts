@@ -728,8 +728,8 @@ export class MBMaterialPatchManager {
                     // on buries them (hollow ring again), off shows their
                     // top bands. Full chain (frame parity + depth + edge
                     // selection) is a single future landing.
-                    if (material.depthTest === true) {
-                        material.depthTest = false;
+                    if (material.depthTest !== true) {
+                        material.depthTest = true;
                         material.needsUpdate = true;
                     }
                     this.injectStructure3DLighting(material);

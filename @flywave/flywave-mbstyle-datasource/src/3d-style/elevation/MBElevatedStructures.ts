@@ -891,6 +891,28 @@ export class MBElevatedStructures {
         const metersToTile = this.m_metersToTile;
         const scale = 0.5 * metersToTile;
 
+        // §885 g52u: tolerant shared-edge suppression — adjacent road
+        // pieces' shared boundary vertices differ by ~1 extent unit between
+        // features (independent clipping), so exact edge hashes never
+        // collide. Quantize endpoints to an 8-unit (~5 m at z14) grid: a
+        // coarse edge seen twice = shared interior boundary → NO rail (mgl
+        // expected junction shows one curb on the outer edge, plain deck at
+        // every interior junction, although mgl also BUILDS those rails —
+        // its depth reconstruction hides them; we suppress at build time).
+        const coarse = (v: number): number => Math.round(v / 8);
+        const coarseCounts = new Map<string, number>();
+        for (const e of this.m_unevalEdges) {
+            const ax = coarse(this.m_unevalVertices[e.a * 2]);
+            const ay = coarse(this.m_unevalVertices[e.a * 2 + 1]);
+            const bx = coarse(this.m_unevalVertices[e.b * 2]);
+            const by = coarse(this.m_unevalVertices[e.b * 2 + 1]);
+            const h = ax < bx || (ax === bx && ay <= by)
+                ? `${ax}_${ay}_${bx}_${by}` : `${bx}_${by}_${ax}_${ay}`;
+            coarseCounts.set(h, (coarseCounts.get(h) ?? 0) + 1);
+        }
+        const sharedCoarse = new Set(
+            [...coarseCounts.entries()].filter(([, n]) => n > 1).map(([h]) => h));
+
         // §885 g52h (mgl-probe live evidence, scripts/mgl-shot/mgl-probe.cjs):
         // mgl BUILDS a rail for EVERY unevaluated edge — shadows-junction
         // live: road-base 817 + road-base-bridge 134 edges, zero duplicate
@@ -909,6 +931,15 @@ export class MBElevatedStructures {
 
         for (const edge of range) {
             if (!edge.guardRailEnabled) continue;
+            {
+                const ax = coarse(this.m_unevalVertices[edge.a * 2]);
+                const ay = coarse(this.m_unevalVertices[edge.a * 2 + 1]);
+                const bx = coarse(this.m_unevalVertices[edge.b * 2]);
+                const by = coarse(this.m_unevalVertices[edge.b * 2 + 1]);
+                const h = ax < bx || (ax === bx && ay <= by)
+                    ? `${ax}_${ay}_${bx}_${by}` : `${bx}_${by}_${ax}_${ay}`;
+                if (sharedCoarse.has(h)) continue;
+            }
 
             const pts = prepareEdgePoints(vertices, heights, edge, (a, b) => a > b);
             if (!pts) continue;

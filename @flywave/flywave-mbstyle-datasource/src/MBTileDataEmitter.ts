@@ -2087,7 +2087,7 @@ export class MBTileDataEmitter {
                                 // not-worse precondition everything stays
                                 // off; land the split-win pair together with
                                 // the interior-rail hide mechanism.
-                                zOffset: 0,
+                                zOffset: this.m_currentZOffset,
                             });
                         }
                         let maxH = 0;
