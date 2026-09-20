@@ -2069,17 +2069,15 @@ export class MBTileDataEmitter {
                                 pieces: plan.piecesCanonical,
                                 // §885 g52f/g52g: frame-parity investigated —
                                 // passing m_currentZOffset here raises the
-                                // rails onto the deck plane and reveals the
-                                // true 3D curb shape (beige top + dark side
-                                // wall at ro 9.55-with-depth), but the rails
-                                // also appear along edges mgl never rails
-                                // (junction interior, ground-side deck edges
-                                // — expected shows ONE curb on the SE edge
-                                // only), netting junction 18,833 → 32,398.
-                                // The rail EXTENT/selection rule needs the
-                                // per-feature bridge semantics before this
-                                // can land. 0 keeps the calibrated sunk-rail
-                                // state.
+                                // rails onto the deck plane and renders the
+                                // true 3D curb (top + dark side wall), but
+                                // netted junction 18,833 → 32,398 because the
+                                // rails' SHADING/composite (not their extent —
+                                // mgl builds ALL 950 edges as rails, g52h
+                                // probe) still differs from mgl. 0 keeps the
+                                // calibrated sunk-rail state until the
+                                // structure lighting/composite is mgl-like at
+                                // the shared frame.
                                 zOffset: 0,
                             });
                         }

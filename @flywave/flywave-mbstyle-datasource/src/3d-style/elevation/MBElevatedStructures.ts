@@ -172,9 +172,6 @@ export class MBElevatedStructures {
     private m_unevalTriangles: number[] = [];
     private m_unevalTunnelTriangles: number[] = [];
     private m_unevalEdges: ElevatedEdge[] = [];
-    // §885 g52g: lazily-computed shared (interior) edge hashes — rails skip
-    // these (see constructBridgeStructures).
-    private m_sharedEdgeHashes: Set<string> | null = null;
     /** Any sampled road height dips to/below the ground plane (mgl heightRange). */
     private m_underground = false;
     /** §516: consumer key of this tile (for the deferred-curve report). */
@@ -894,22 +891,15 @@ export class MBElevatedStructures {
         const metersToTile = this.m_metersToTile;
         const scale = 0.5 * metersToTile;
 
-        // §885 g52g: rails live ONLY on non-shared road edges (the port's own
-        // doc, mgl constructBridgeStructures). Interior boundaries between two
-        // adjacent road pieces appear TWICE in m_unevalEdges (once per
-        // feature's ring, identical coordinates) — an edge hash seen more
-        // than once marks a shared edge. mgl never shows rails there
-        // (shadows-junction expected: one curb on the deck/ground boundary,
-        // plain deck at every interior junction), and our depth compositing
-        // cannot hide a rail that stands 0.5 m proud of BOTH neighbours.
-        if (this.m_sharedEdgeHashes === null) {
-            const counts = new Map<string, number>();
-            for (const e of this.m_unevalEdges) {
-                counts.set(e.hash, (counts.get(e.hash) ?? 0) + 1);
-            }
-            this.m_sharedEdgeHashes = new Set(
-                [...counts.entries()].filter(([, n]) => n > 1).map(([h]) => h));
-        }
+        // §885 g52h (mgl-probe live evidence, scripts/mgl-shot/mgl-probe.cjs):
+        // mgl BUILDS a rail for EVERY unevaluated edge — shadows-junction
+        // live: road-base 817 + road-base-bridge 134 edges, zero duplicate
+        // edge hashes, and expected.png still shows ONE visible curb. The
+        // difference vs our render is therefore RENDER-TIME compositing
+        // (depth + per-face lighting: lit top, dark shaded side) and the
+        // sunk-frame zOffset parity, NOT rail selection. Suppressing edges
+        // here is the wrong lever; do not re-add edge filters without
+        // re-running the mgl-probe.
 
         let lastFeatureIndex = Number.POSITIVE_INFINITY;
 
@@ -919,7 +909,6 @@ export class MBElevatedStructures {
 
         for (const edge of range) {
             if (!edge.guardRailEnabled) continue;
-            if (this.m_sharedEdgeHashes?.has(edge.hash)) continue;
 
             const pts = prepareEdgePoints(vertices, heights, edge, (a, b) => a > b);
             if (!pts) continue;
