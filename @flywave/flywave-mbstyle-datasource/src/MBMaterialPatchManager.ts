@@ -6250,9 +6250,10 @@ const mbGroundDual = (globalThis as any).__mbGroundLitDual === true ? 1 : 0;
         const dZoomP = mapViewP?.zoomLevel ?? 1;
         const mppP = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
             (256 * Math.pow(2, dZoomP));
-        // §885 g52x: patterndbg=<mult> — empirical scale calibration for the
-        // engine zoom convention (zoomLevel = mgl zoom + 1).
-        const patMul = Number((globalThis as any).__mbPatternMul ?? 1) || 1;
+        // §885 g52x/g52y: DEFAULT 2.0 — the mpp-at-engine-zoomLevel formula
+        // leaves the tile 2× fine vs mgl (junction weave visual match at
+        // ×2; 18,161 vs 18,152 counts are noise). patternmul recalibrates.
+        const patMul = Number((globalThis as any).__mbPatternMul ?? 2) || 2;
         const tileScale = patMul * spritePr /
             (Math.max(1, (tex.image?.width ?? 32)) * Math.max(mppP, 1e-9));
         const origOnCompile = material.onBeforeCompile;
