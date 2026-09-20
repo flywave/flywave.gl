@@ -898,12 +898,33 @@ export class MBElevatedStructures {
             const vb: Vec3 = [pb.x, pb.y, metersToTile * pb.h];
             if (va[0] === vb[0] && va[1] === vb[1] && va[2] === vb[2]) continue;
 
+            // §885 g52d: rail-height telemetry — the parapet z comes from the
+            // RAW curve vertex heights (m_unevalHeights) while the deck
+            // pieces sample pointElevation; the shadows-junction deckdbg
+            // probe measured the band ~0.5 m high. Log the first edges' rail
+            // heights so they can be compared against the deck's 6.00.
+            if ((globalThis as any).__mbDecodeDbg) {
+                const n3 = ((globalThis as any).__mbRailH = ((globalThis as any).__mbRailH ?? 0) + 1);
+                if (n3 <= 10) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBRailH] edge=${n3} pa=(${pa.x.toFixed(1)},${pa.y.toFixed(1)}) h=${pa.h.toFixed(3)} pb=(${pb.x.toFixed(1)},${pb.y.toFixed(1)}) h=${pb.h.toFixed(3)}`);
+                }
+            }
+
             const dir = norm3(sub3(vb, va));
             const aFwd = this.computeFwd(connectivity, vertices, heights, edge.a, metersToTile) || dir;
             const bFwd = this.computeFwd(connectivity, vertices, heights, edge.b, metersToTile) || dir;
 
-            const aLeft = norm3([aFwd[1], -aFwd[0], 0]);
-            const bLeft = norm3([bFwd[1], -bFwd[0], 0]);
+            // §885 g52d: railflip=1 → negate the cross-section horizontal —
+            // the shadows-junction deckdbg probe measured our top band
+            // translated ~0.5 m INWARD of the polygon boundary (deck sliver
+            // beyond the band; expected band straddles the edge) with no
+            // outer wall. The port is character-identical to mgl, so the
+            // mirror is suspected in the frame hand-off (MVT y-down → scene
+            // y-north flip) — A/B empirically.
+            const flip = (globalThis as any).__mbRailFlip ? -1 : 1;
+            const aLeft = norm3([aFwd[1] * flip, -aFwd[0] * flip, 0]);
+            const bLeft = norm3([bFwd[1] * flip, -bFwd[0] * flip, 0]);
             const aUp = norm3(cross3(aLeft, aFwd));
             const bUp = norm3(cross3(bLeft, bFwd));
 

@@ -2319,6 +2319,19 @@ export class MBTileDataEmitter {
             projected[i + 2] = w.z + mesh.positions[i + 2];
             if (mesh.positions[i + 2] > 0) this.noteGeometryHeight(mesh.positions[i + 2]);
         }
+        // §885 g52d: structure world-vertex dump — pairs with the deck
+        // [MBFillHD-bounds] dump. The rails use RAW curve heights
+        // ([MBRailH] 5.000) while deck pieces render at 6.00 (g13 +1 level
+        // compensation) — this dump puts both in the same world frame.
+        if ((globalThis as any).__mbDecodeDbg) {
+            const nS = Math.min(6, Math.floor(projected.length / 3));
+            const rowsS: string[] = [];
+            for (let i = 0; i < nS; i++) {
+                rowsS.push(`(${projected[i * 3].toFixed(1)},${projected[i * 3 + 1].toFixed(1)},${projected[i * 3 + 2].toFixed(2)})`);
+            }
+            // eslint-disable-next-line no-console
+            console.log(`[MBElevVerts] n=${Math.floor(projected.length / 3)} first=${rowsS.join(' ')}`);
+        }
 
         const segments: Array<{
             from: number; to: number;

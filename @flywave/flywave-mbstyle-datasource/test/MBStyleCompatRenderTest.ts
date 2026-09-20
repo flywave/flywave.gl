@@ -144,6 +144,11 @@ function discoverTests(): TestEntry[] {
     const rl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("raillift="))?.slice("raillift=".length);
     if (rl !== undefined) (globalThis as any).__mbRailLift = Number(rl) || 0;
+    // §885 g52d: railflip=1 — negate the guard-rail cross-section
+    // horizontal (inward/outward A/B for the inset-band defect).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "railflip=1")) {
+        (globalThis as any).__mbRailFlip = true;
+    }
     // §885 终三十九g36: elevation-plane + elevation visualization knobs.
     {
         const ep = (window as any).__karma__?.config?.args?.find?.((a: string) =>
@@ -1054,6 +1059,29 @@ async function renderUntilSettled(
             }
             for (const sp of ((globalThis as any).__mbPatternDecision ?? []) as any[]) {
                 rows.push('PATDEC=' + JSON.stringify(sp));
+            }
+            // §885 g52c: deckdbg=1 — paint elevated structures RED and
+            // road-base-bridge deck fills GREEN so the deck-vs-parapet
+            // edge offset (the ~1.5m guard-rail inset question) reads
+            // directly off the frame. Re-arms on an interval: the first
+            // count>0 frame precedes the late bridge tiles.
+            if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "deckdbg=1")
+                && !(globalThis as any).__mbDeckDbgTimer) {
+                const repaint = () => {
+                    (mapView as any).scene?.traverse?.((o: any) => {
+                        if (!o.isMesh) return;
+                        const m: any = Array.isArray(o.material) ? o.material[0] : o.material;
+                        if (!m?.color) return;
+                        if ((o.userData?.technique as any)?.__elev) {
+                            m.color.setHex(0xff0000);
+                        } else if ((o.userData?.technique as any)?._layerId === 'road-base-bridge') {
+                            m.color.setHex(0x00ff00);
+                        }
+                    });
+                };
+                repaint();
+                (globalThis as any).__mbDeckDbgTimer = setInterval(repaint, 500);
+                setTimeout(() => clearInterval((globalThis as any).__mbDeckDbgTimer), 30000);
             }
             (mapView as any).scene?.traverse?.((o: any) => {
                 if (!o.isMesh) return;

@@ -117,6 +117,8 @@ function main() {
             ...(process.env.MBSTYLE_FIXRED ? ["fixred=1"] : []),
             ...(process.env.MBSTYLE_GLYPHDBG ? ["glyphdbg=1"] : []),
             ...(process.env.MBSTYLE_EDBG ? ["extdbg=1"] : []),
+            ...(process.env.MBSTYLE_DECKDBG ? ["deckdbg=1"] : []),
+            ...(process.env.MBSTYLE_RAILFLIP ? ["railflip=1"] : []),
             ...(process.env.MBSTYLE_RTDUMP ? ["rtdump=1"] : []),
             ...(process.env.MBSTYLE_RTDISABLE ? ["rtdisable=1"] : []),
             ...(process.env.MBSTYLE_UVTDBG ? ["uvtdbg=1"] : []),
