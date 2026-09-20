@@ -129,9 +129,15 @@
 - **本轮修复**（默认态验证 54,224/18,284 保持）：①aMBElev 声明按 includes 双向去重（elev-plane 与结构光照注入并发时的 redefinition）；②isoA 实验确认 extrusion GLSL3+HW 交互无害；③noext 门控语义收紧（GLSL3 与 tap 同门控）。
 - **结论**：shadowhw（raw 深度域）与 shadow2d（硬件比较）管线完好，但其接收端 bias 窗口需要按 raw 域重新校准（mgl 路线=NORMAL_OFFSET 位移 + binary GREATER + slope bias，不含平滑窗）后才能超越默认 packed 路径。默认配置（shadowhw=0/shadow2d=0，packed-16bit + 校准窗口）维持最优。
 
+## g62 实测结论（2026-09-22）
+
+- **方案 A 验证完成（决定性否定）**：extrusion 接收端 smoothstep 窗 → mgl 字面 binary `step(z−5e-5, depth)`（MB_SH_HWBIN，随 shadowhw 发射）后，tunnel 仍 **169,209 逐位不变**。至此比较语义（窗/二值）、bias 幅值（×10）、tap 配置（四组）、GLSL3（开/关）全部排除——**shadowhw 的隧道回归与接收端比较语义完全无关**。
+- 169,209 的不变性指向：shadowhw 深度图**内容或 shadow 相机状态**本身（默认 packed 路径 54,224 同 fixture 同灯光）。下一步=用现有 DIAG 探针（shadowdbg 系）直接 dump shadowhw 深度图内容对拍（验证深度图是否为空/错域），或审计 m_hwRT 渲染时 mainRenderer 的 clear color(0xffffff)/viewport 与 depth-texture 采样的交互。
+- 本轮落地：MB_SH_HWBIN 二值比较（extrusion；结构接收端 g51g 已是同形 step，无需改）——shadowhw 激活语义进一步向 mgl 字面靠拢。
+
 ## 下一轮主攻（按 mgl 源码字面）
 
-- **S10 续**：raw 域接收窗口校准专项——方案 A：按 mgl NORMAL_OFFSET 全语义（接收位移已有）+ binary GREATER（g51g step 形态已有）+ 移除 smoothstep 窗（回归 169,209 的主嫌疑）；方案 B：GPU 环境直接复测。
+- **S10 续**：shadowhw 深度图内容直接取证（shadowdbg DIAG 系 dump），定位内容/相机状态差异。
 - **S8** 级联矩阵 mercator 球心/Ti(pitch,bearing) roll/texel-snap（遗留主项，依赖 geo↔RTE 帧桥）。
 - **G10** SUBDIVISION_EDGE_EXTENSION 生效化（MBPolygonClippingHD 当前 void 丢弃）。
 - 遗留：MBEnvironmentManager/mapview/MBModelRenderer 的 TS 类型错误（HEAD 既有）。

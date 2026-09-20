@@ -1647,7 +1647,7 @@ export class MBMaterialPatchManager {
                  varying float vMbWallH;
                  varying vec3 vMbWorldPos;
                  varying vec3 vMbAttrN;
-                 ${(globalThis as any).__mbShadowHW ? `#define MB_SH_HW 1\n#define MB_SH_BIAS ${Number((globalThis as any).__mbShadowBias ?? 0.0002)}` : ''}
+                 ${(globalThis as any).__mbShadowHW ? `#define MB_SH_HW 1\n#define MB_SH_HWBIN 1\n#define MB_SH_BIAS ${Number((globalThis as any).__mbShadowBias ?? 0.0002)}` : ''}
                  ${mbS2dActive ? `#define MB_SH_SHADOW2D 1\nuniform mediump sampler2DShadow uMBShadowS0;\nlayout(location = 0) out highp vec4 pc_fragColor;\n#define gl_FragColor pc_fragColor` : ''}
                  ${shader.fragmentShader.includes('uMBShadowMap') ? '' :
                  `uniform sampler2D uMBShadowMap;
@@ -1807,7 +1807,14 @@ export class MBMaterialPatchManager {
                              // 172,541, z-offset-scale 281,197→331,486) and
                              // were reverted; correct scaling needs the
                              // window-depth-per-metre mapping probed first.
-                             #if defined(MB_SH_SHADOW2D) && !defined(MB_SH_SHADOW2D_NOEXT)
+                             #ifdef MB_SH_HWBIN
+                             // §885 g62 (audit S10 方案 A): mgl literal —
+                             // hardware compare is BINARY GREATER; the
+                             // smoothstep window was a packed-16bit-domain
+                             // approximation. Receiver lifted by
+                             // NORMAL_OFFSET (mbShPos) + 5e-5 ref bias.
+                             float mbShLit = step(mbShUv.z - 0.00005, mbShD);
+                             #elif defined(MB_SH_SHADOW2D) && !defined(MB_SH_SHADOW2D_NOEXT)
                              float mbShLit = mbShLitHw;
                              #else
                              float mbShLit = smoothstep(-mbShBiasV, mbShBiasV, mbShUv.z - mbShD);
@@ -4169,7 +4176,7 @@ export class MBMaterialPatchManager {
                 shader.fragmentShader = `#define MB_SH_BIAS ${bV}\n#define MB_SH_DIAG5 ${d5}\n#define MB_SH_DIAG7 ${d7}\n#define MB_SH_DIAG8 ${d8}\n#define MB_SH_DIAG9 ${d9}\n#define MB_SH_DIAG10 ${d10}\n#define MB_SH_NOFF ${((globalThis as any).__mbShadowNOff === false || (globalThis as any).__mbShadowNOff === 0) ? 0 : 1}\n#define MB_SH_NOFFMODE ${((globalThis as any).__mbNOffMode === 0) ? 0 : 1}\n#define MB_SH_VLIGHT ${vLightOk && (globalThis as any).__mbShadowVLightsOn ? 1 : 0}\n#define MB_SH_VOK ${vLightOk ? 1 : 0}\n#define MB_SH_LEGACYCMP ${(globalThis as any).__mbShadowCmpLegacy ? 1 : 0}\n` + shader.fragmentShader;
             }
             if ((globalThis as any).__mbShadowHW) {
-                shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;
+                shader.fragmentShader = '#define MB_SH_HW 1\n#define MB_SH_HWBIN 1\n' + shader.fragmentShader;
             }
             // §885 g58 (audit S10): hardware compare path — active only when
             // the compare-mode depth texture actually exists.
