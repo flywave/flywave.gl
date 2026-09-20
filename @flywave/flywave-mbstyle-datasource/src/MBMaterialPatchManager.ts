@@ -707,8 +707,31 @@ export class MBMaterialPatchManager {
             }
             // §518: mgl shades structures with LIGHTING_3D_MODE apply_lighting
             // when the style declares lights (73/75 3d-intersections fixtures).
+            // §885 g52: DoubleSide — the parapet TOP faces rendered hollow
+            // (shadows-junction curb: expected solid wide beige top + dark
+            // side wall; ours a beige ring of the two side walls with the
+            // deck showing through) — the construct() top-face winding is
+            // culled under FrontSide; mgl draws elevated structures
+            // double-sided (CullFaceMode.disabled in the elevated passes).
             if ((tech as any).__elev) {
                 for (const material of materials) {
+                    if (material.side !== THREE.DoubleSide) {
+                        material.side = THREE.DoubleSide;
+                        material.needsUpdate = true;
+                    }
+                    // §885 g52 补: depthTest OFF — the §515 block arms
+                    // depthTest on HD-elevated TECHNIQUES via _hdElevation,
+                    // but the structure techniques carry only __elev and the
+                    // engine's fill default is depth-tested against a depth
+                    // buffer written by the 9.6 deck: the parapet TOP
+                    // (coplanar-ish with the road surface) loses the depth
+                    // compare and the curb renders as a hollow ring of side
+                    // walls (expected: solid wide beige top + dark side).
+                    // Fills composite by renderOrder, not depth — match that.
+                    if (material.depthTest === true) {
+                        material.depthTest = false;
+                        material.needsUpdate = true;
+                    }
                     this.injectStructure3DLighting(material);
                 }
             }
