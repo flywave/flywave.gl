@@ -77,9 +77,18 @@
 - **S6 实测**：junction 22,897 / tunnel 54,413 / ortho-camera-tunnel 1,271（g53 态持平或微改善）——S6 语义是地下遮挡，与"内部护栏可见"是两个问题。内部护栏的 mgl 隐藏机制（g52h 悬案）不是 S6，归入下一轮绘制顺序/深度写入专项（mgl 主 pass 的 depth segment LEQUAL 语义 vs 我们 renderOrder 序列）。
 - ortho-camera 用例在 SwiftShader 下浏览器崩溃无法取新值（g53 全量值 64,131 供参考，属于"护栏真实构建"的既有差异）。
 
+## g55 实测结论（2026-09-21）
+
+- **G3 safeArea 环过滤落地 = junction 悬案收敛**：`addRenderableRing` 增加 mgl 字面过滤（es.ts:240-252：两端点均不在 elevation.safeArea 内且边不与 bounds 盒相交则剪除；edgeIntersectsBox/isCounterClockwise 逐行移植），emitter 传入 `plan.feature.safeArea`。实测：
+  - **shadows-junction 22,897 → 18,170**（回到历史最优值，且首次以 mbgl 字面机制达成——此前同数值是构建崩溃的假象）。g52h"mgl 全建护栏却只见外缘"的悬案大部分由 safeArea 裁剪解释：junction 夹具的内部边大多在 safeArea 之外。
+  - **shadows-tunnel 54,413 → 50,866**（−3.5k，校准态 56,530 → 累计 −9.3%）。
+- mgl 主 pass 结构确认（draw_elevated_fill.ts:41-131）：renderable 段只含护栏/隧道墙（道路三角形走普通 fill 路径+depth prepass），LEQUAL/**ReadOnly**，CullFaceMode.backCCW；护栏不写深度。我们护栏材质 DoubleSide+depthTest=true 与 ReadOnly 语义的对应关系留待下轮核。
+- **S9 未盲改**：mgl u_fade_range 语义在像素空间（cascade far=cameraToCenterDistance 的倍数，mgl 光矩阵工作在 pixel 空间），我们 uMBFadeRange 在世界米制（shadowCamera.far=radius/dir.z）——直接套 4.5×ctcd 需先做 ppm（≈20.65）单位换算分析，盲改风险高，留待下轮专项。
+- 遗留类型错误（MBModelRenderer texel1/map1、MBEnvironmentManager atmosphereTail 等）确认为 HEAD 既有（文件未改动，--force 全量检查才浮现），不影响 lib emit 与 karma（transpileOnly）。
+
 ## 下一轮主攻（按 mgl 源码字面）
 
-- **内部护栏隐藏机制**：mgl draw_elevated_fill 主 pass 的 depth segment（LEQUAL, ReadWrite）+ mask/depth segment 绘制次序——我们的 renderOrder 序列近似与 mgl 语义仍有差异（draw_elevated_fill.ts:51,114-170）。g52h 悬案的正攻。
-- **G3** safeArea/edgeIntersectsBox 环过滤（未落地）。
-- **S9/S10/S11** 阴影级联 far、硬件深度比较、顶点级 normal offset。
-- 遗留：MBEnvironmentManager/mapview 的 TS2339/TS2353 类型错误（早于本会话，与 karma transpileOnly 无碍但污染 tsc --build）。
+- **S9** u_fade_range 单位分析后对齐（cascade far 像素空间 ↔ 我们米制，ppm 换算）。
+- **S11** 顶点级 normal offset（_prelude_shadow.vertex.glsl:6-14 + shadow_renderer.ts:533-546 per-cascade multiplier）。
+- **S10** DEPTH_COMPONENT16 + sampler2DShadow 硬件比较（three 侧可近似）。
+- 遗留：MBEnvironmentManager/mapview 的 TS2339/TS2353 类型错误（早于本会话）。

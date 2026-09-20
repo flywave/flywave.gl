@@ -662,8 +662,10 @@ export class MBElevatedStructures {
         isTunnel: boolean;
         pieces: CanonicalPiece[];
         zOffset?: number;
+        /** mgl addRenderableRing's `area` (elevation.safeArea) — G3. */
+        safeArea?: { minX: number; minY: number; maxX: number; maxY: number };
     }): void {
-        const { featureIndex, guardRailEnabled, isTunnel, pieces } = params;
+        const { featureIndex, guardRailEnabled, isTunnel, pieces, safeArea } = params;
         // §885 g52f: the deck geometry renders at project() + zOffset +
         // sampledHeight — project() folds m_currentZOffset (the g13
         // properties.level compensation, +1.0 for these bridges) into EVERY
@@ -724,7 +726,7 @@ export class MBElevatedStructures {
 
             for (const [offset, count] of ringRanges) {
                 this.addRenderableRing(
-                    featureIndex, vOffset + offset, count, isTunnel, guardRailEnabled);
+                    featureIndex, vOffset + offset, count, isTunnel, guardRailEnabled, safeArea);
             }
         }
     }
@@ -1158,6 +1160,7 @@ export class MBElevatedStructures {
     private addRenderableRing(
         polygonIdx: number, vertexOffset: number, count: number,
         isTunnel: boolean, guardRailEnabled: boolean,
+        area?: { minX: number; minY: number; maxX: number; maxY: number },
     ): void {
         const vertices = this.m_unevalPositions;
         // The stored ring is OPEN (closing duplicate stripped) — all count
@@ -1168,6 +1171,16 @@ export class MBElevatedStructures {
             const vax = vertices[ai * 2], vay = vertices[ai * 2 + 1];
             const vbx = vertices[bi * 2], vby = vertices[bi * 2 + 1];
 
+            // mgl literal (es.ts:240-252, audit G3): keep the edge when
+            // either endpoint is inside the safeArea bounds, or when the
+            // edge intersects the bounds box; otherwise prune.
+            if (area) {
+                const insideBounds =
+                    (vax >= area.minX && vax <= area.maxX && vay >= area.minY && vay <= area.maxY) ||
+                    (vbx >= area.minX && vbx <= area.maxX && vby >= area.minY && vby <= area.maxY);
+                if (!insideBounds && !edgeIntersectsBox(
+                    { x: vax, y: vay }, { x: vbx, y: vby }, area)) continue;
+            }
             if (this.isOnBorder(vax, vbx) || this.isOnBorder(vay, vby)) continue;
 
             const va = { x: vax, y: vay };
@@ -1276,6 +1289,34 @@ function posHashOf(p: ClipPoint): number {
         return ((x << 16) | y) >>> 0;
     }
     return mbPosHash(p.x, p.y);
+}
+
+/** mgl util.isCounterClockwise (src/util/util.ts:511). */
+function isCounterClockwise(a: ClipPoint, b: ClipPoint, c: ClipPoint): boolean {
+    return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
+}
+
+/** mgl intersection_tests.edgeIntersectsBox (src/util/intersection_tests.ts:216). */
+function edgeIntersectsBox(
+    e1: ClipPoint, e2: ClipPoint,
+    area: { minX: number; minY: number; maxX: number; maxY: number },
+): boolean {
+    const tl = { x: area.minX, y: area.minY };
+    const br = { x: area.maxX, y: area.maxY };
+    if (((e1.x < tl.x) && (e2.x < tl.x)) ||
+        ((e1.x > br.x) && (e2.x > br.x)) ||
+        ((e1.y < tl.y) && (e2.y < tl.y)) ||
+        ((e1.y > br.y) && (e2.y > br.y))) return false;
+    const corners = [
+        tl,
+        { x: area.maxX, y: area.minY },
+        br,
+        { x: area.minX, y: area.maxY },
+    ];
+    const dir = isCounterClockwise(e1, e2, corners[0]);
+    return dir !== isCounterClockwise(e1, e2, corners[1]) ||
+        dir !== isCounterClockwise(e1, e2, corners[2]) ||
+        dir !== isCounterClockwise(e1, e2, corners[3]);
 }
 
 /** mgl computeEdgeHash: order-independent pair hash, string form. */

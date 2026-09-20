@@ -2067,6 +2067,9 @@ export class MBTileDataEmitter {
                                 guardRailEnabled: guardRail !== false,
                                 isTunnel: plan.isTunnel,
                                 pieces: plan.piecesCanonical,
+                                // §885 g55 (audit G3): mgl addRenderableRing's
+                                // `area` = the feature elevation's safeArea.
+                                safeArea: plan.feature.safeArea,
                                 // §885 g52f/g52t: frame-parity bisect (all
                                 // numbers = shadows-junction/shadows-tunnel
                                 // mismatched pixels, face normals on):
