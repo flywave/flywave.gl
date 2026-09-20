@@ -2067,17 +2067,26 @@ export class MBTileDataEmitter {
                                 guardRailEnabled: guardRail !== false,
                                 isTunnel: plan.isTunnel,
                                 pieces: plan.piecesCanonical,
-                                // §885 g52f/g52g: frame-parity investigated —
-                                // passing m_currentZOffset here raises the
-                                // rails onto the deck plane and renders the
-                                // true 3D curb (top + dark side wall), but
-                                // netted junction 18,833 → 32,398 because the
-                                // rails' SHADING/composite (not their extent —
-                                // mgl builds ALL 950 edges as rails, g52h
-                                // probe) still differs from mgl. 0 keeps the
-                                // calibrated sunk-rail state until the
-                                // structure lighting/composite is mgl-like at
-                                // the shared frame.
+                                // §885 g52f/g52t: frame-parity bisect (all
+                                // numbers = shadows-junction/shadows-tunnel
+                                // mismatched pixels, face normals on):
+                                //
+                                //  factors                    junction  tunnel
+                                //  none (calibrated)           18,537   64,210
+                                //  +zOffset                    27,137   56,706
+                                //  +depthTest                  24,997   51,539
+                                //  +ro 9.55 (rails first)     144,219  123,605
+                                //
+                                // ro 9.55 is the EXPLOSIVE factor (rails
+                                // before decks unbalance the depth/order
+                                // composite); zOffset+depthTest is a SPLIT
+                                // win (tunnel −12.7k, junction +6.5k — the
+                                // interior rails stand proud of the deck
+                                // where mgl hides them behind its depth-
+                                // reconstruction pass). Per the junction-
+                                // not-worse precondition everything stays
+                                // off; land the split-win pair together with
+                                // the interior-rail hide mechanism.
                                 zOffset: 0,
                             });
                         }
