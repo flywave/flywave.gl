@@ -2549,6 +2549,28 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                 } else {
                     out.push('gz=undef');
                 }
+                // §885 g52z: also print the WORLD points so the offline
+                // mgl-frame comparison (mgl-mat cascade0.matrix) can consume
+                // exact (world, uv) pairs.
+                const ctcdW = (this.m_mapView as any).targetDistance ?? 500;
+                for (const [sx, sy] of [[128, 224], [384, 224], [256, 288], [256, 160], [120, 300], [128, 320]]) {
+                    const ndcX = (sx / 512) * 2 - 1;
+                    const ndcY = 1 - (sy / 512) * 2;
+                    const v4 = new THREE.Vector4(ndcX, ndcY, -1, 1)
+                        .applyMatrix4(cam.projectionMatrixInverse);
+                    v4.multiplyScalar(1 / v4.w);
+                    const dirW = new THREE.Vector3(v4.x, v4.y, v4.z)
+                        .applyMatrix4(new THREE.Matrix4().extractRotation(cam.matrixWorld))
+                        .normalize();
+                    const W = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld)
+                        .addScaledVector(dirW, ctcdW);
+                    const u4 = new THREE.Vector4(W.x, W.y, W.z, 1).applyMatrix4(this.m_matrix);
+                    out.push(`W(${sx},${sy})=(${W.x.toFixed(2)},${W.y.toFixed(2)},${W.z.toFixed(2)}) uv0(${(u4.x / u4.w).toFixed(5)},${(u4.y / u4.w).toFixed(5)},${(u4.z / u4.w).toFixed(5)})`);
+                }
+                // m_matrix elements (column-major) for the offline mgl
+                // cascade comparison.
+                const me = this.m_matrix.elements;
+                out.push('M=[' + Array.from(me).map((x2: number) => x2.toExponential(8)).join(',') + ']');
                 // eslint-disable-next-line no-console
                 console.log('[MBUvProbe] frame=', gU.__mbUvN, 'gz=', gZ, out.join('  '));
             }
