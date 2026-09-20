@@ -146,6 +146,8 @@ export interface ElevatedStructuresMesh {
     shadowCasterIndices: number[];
     /** Any contributed feature samples below the ground plane. */
     underground: boolean;
+    /** mgl heightRange.min (meters): gates initialize (<1.0) vs reset (<0.0). */
+    minHeight: number;
 }
 
 export class MBElevatedStructures {
@@ -848,6 +850,7 @@ export class MBElevatedStructures {
         return {
             positions, normals, indices, tunnelStart, bridgeSections, tunnelSections,
             depthIndices, maskIndices, shadowCasterIndices, underground: this.m_underground,
+            minHeight: this.m_unevalHeights.length ? Math.min(...this.m_unevalHeights.slice(0, 4096)) : 0,
         };
     }
 

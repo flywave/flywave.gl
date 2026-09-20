@@ -660,10 +660,13 @@ export class MBMaterialPatchManager {
                     material.depthWrite = true;
                     material.depthTest = true;
                     material.transparent = false;
+                    // mgl CullFaceMode.disabled for both prepass programs.
                     material.side = THREE.DoubleSide;
+                    // mgl: initialize/geometry LEQUAL (ReadWrite), reset GREATER.
                     material.depthFunc = prepass === 'mask'
                         ? THREE.GreaterDepth
                         : THREE.LessEqualDepth;
+                    this.patchElevPrepassDepth(material, prepass);
                     material.needsUpdate = true;
                     (material as any).__mbPatched = true;
                 }
@@ -1262,6 +1265,52 @@ export class MBMaterialPatchManager {
      * through plain (unlit) fill materials, and MeshBasicMaterial has no
      * vViewPosition varying — derive the view position in our own varying.
      */
+    /**
+     * §885 g53 S6 (audit): mgl elevated_structures_depth_reconstruct
+     * vertex shader, literal —
+     *   initialize ('ground', DEPTH_RECONSTRUCTION): project each vertex
+     *     along the camera ray onto the z=0 ground plane (only when the
+     *     camera is above it), LEQUAL, clip-space z += u_depth_bias;
+     *   reset ('mask'): same projection, then gl_Position.z = gl_Position.w
+     *     (far) drawn with GREATER — carves see-through holes.
+     * u_depth_bias = computeDepthBias (draw_elevated_fill.ts:180-193):
+     * 0.01, ortho lerp(0.0001, 0.01, easeIn(min(pitch/15,1))) (easeIn=x^5),
+     * ×2 for the OpenGL depth range.
+     */
+    private patchElevPrepassDepth(material: THREE.Material, kind: 'ground' | 'mask'): void {
+        if ((material as any).__mbPrepassDepth) return;
+        (material as any).__mbPrepassDepth = true;
+        const origKey = material.customProgramCacheKey?.bind(material);
+        material.customProgramCacheKey = (): string =>
+            (origKey ? origKey() : 'mb') + '-mbprepass-' + kind;
+        const mapView = (this.m_dataSource as any).mapView;
+        const isOrtho = !!((mapView as any)?.camera instanceof THREE.OrthographicCamera);
+        const pitchDeg = Number((mapView as any)?.getPitch?.() ?? (mapView as any)?.pitch ?? 60);
+        const mixV = Math.min(pitchDeg / 15, 1);
+        const biasRaw = isOrtho ? 0.0001 + (0.01 - 0.0001) * Math.pow(mixV, 5) : 0.01;
+        const depthBias = 2.0 * biasRaw;
+        const seedEye = (this.m_dataSource as any).m_shadowRenderer
+            ?.getShadowUniforms?.()?.eye?.clone?.() ?? new THREE.Vector3();
+        const origOnCompile = material.onBeforeCompile;
+        material.onBeforeCompile = (shader: any) => {
+            if (origOnCompile) origOnCompile.call(material, shader);
+            shader.uniforms.uMBEye = { value: seedEye };
+            shader.uniforms.uMBDepthBias = { value: depthBias };
+            shader.vertexShader = ('uniform vec3 uMBEye;\nuniform float uMBDepthBias;\n' + shader.vertexShader)
+                .replace(
+                    '#include <project_vertex>',
+                    `// mgl elevated_structures_depth_reconstruct.vertex.glsl
+                     vec3 mbpW = (modelMatrix * vec4(transformed, 1.0)).xyz;
+                     if (uMBEye.z > mbpW.z) {
+                         mbpW -= (uMBEye - mbpW) * (mbpW.z / (uMBEye.z - mbpW.z));
+                     }
+                     gl_Position = projectionMatrix * viewMatrix * vec4(mbpW, 1.0);`
+                        + (kind === 'mask'
+                            ? '\n gl_Position.z = gl_Position.w;'
+                            : '\n gl_Position.z += uMBDepthBias;'));
+        };
+    }
+
     private injectStructure3DLighting(material: THREE.Material): boolean {
         const ls = (this.m_dataSource as any).m_environment?.lighting3DState;
         if (!ls) return false;
@@ -1451,7 +1500,7 @@ export class MBMaterialPatchManager {
                                     amb: shader.uniforms.uMB3DAmb?.value,
                                     dirColor: shader.uniforms.uMB3DDirColor?.value,
                                     int: shader.uniforms.uMBShadowIntensity?.value,
-                                    hasShadowU: !!material.__mbShadowUniforms,
+                                    hasShadowU: !!(material as any).__mbShadowUniforms,
                                 },
                             }),
                         }).catch(() => { });

@@ -2534,17 +2534,22 @@ export class MBTileDataEmitter {
         // prepassz=<m> lifts the ground occluder to test whether its depth
         // participates in the composite at all (dsr underground roads stay
         // visible although the occluder meshes exist and precede them).
+        // §885 g53 S6 (mgl drawDepthPrepass literal): emit the REAL 3D world
+        // geometry — the camera-to-ground projection happens per-vertex in
+        // the shader (elevated_structures_depth_reconstruct.vertex.glsl),
+        // NOT analytically at emit time. Pass gates are mgl's:
+        //   initialize ('ground'): heightRange.min < 1.0 (heightMargin);
+        //   reset ('mask'):        heightRange.min < 0.0 (underground only).
         const prepassOff = (globalThis as any).__mbPrepassOff === true;
-        const prepassZ = Number((globalThis as any).__mbPrepassZ ?? 0);
         if (!prepassOff && mesh.underground && (mesh.depthIndices.length > 0 || mesh.maskIndices.length > 0)) {
-            const flat: number[] = new Array(mesh.positions.length);
+            const world: number[] = new Array(mesh.positions.length);
             for (let i = 0; i < mesh.positions.length; i += 3) {
                 const w = this.project(new THREE.Vector2(
                     mesh.positions[i] * scale, mesh.positions[i + 1] * scale + yDelta));
-                flat[i] = w.x; flat[i + 1] = w.y; flat[i + 2] = w.z + prepassZ;
+                world[i] = w.x; world[i + 1] = w.y; world[i + 2] = w.z + mesh.positions[i + 2];
             }
-            this.emitElevPrepass('ground', mesh.depthIndices, flat);
-            this.emitElevPrepass('mask', mesh.maskIndices, flat);
+            if (mesh.minHeight < 1.0) this.emitElevPrepass('ground', mesh.depthIndices, world);
+            if (mesh.minHeight < 0.0) this.emitElevPrepass('mask', mesh.maskIndices, world);
         }
     }
 

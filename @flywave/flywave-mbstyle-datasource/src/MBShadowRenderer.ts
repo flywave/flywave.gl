@@ -2575,6 +2575,9 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                 console.log('[MBUvProbe] frame=', gU.__mbUvN, 'gz=', gZ, out.join('  '));
             }
         }
+        // §885 g53 fix: the model-raw shadow block's then-brace was lost when
+        // the g52ab2 uv-probe block was spliced in (TS1128 at renderDepthLayer2).
+        }
 
 
         // §885 终二百一十五: overlay-mode ground quad draws HERE — the

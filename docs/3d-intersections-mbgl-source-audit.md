@@ -69,8 +69,17 @@
 - 结构光照注入（injectStructure3DLighting）对 junction 夹具无像素贡献（structpow=0 零变化）——junction 结构材质疑似走 injectExtrusion3DLighting 路径，待核。
 - 渲染度量基础设施陷阱：karma 结果文件可能陈旧（Executed 0 / SwiftShader 断连时不覆写），一切 A/B 必须以 mtime 新鲜度为准。
 
+## g54 实测结论（2026-09-20 第二轮）
+
+- **TS1128 已修复**：根因是 g52ab2 在 run() 的 model-raw 阴影块内拼接 uv-probe 块时，吞掉了 if 的 then 块收尾 `}`（与 g51p2 同期区域的编辑混淆所致），run() 体吞掉后续成员声明，`private renderDepthLayer2` 处报"Declaration or statement expected"。补回该花括号后 tsc TS1128 清零（karma webpack 不再带错 emit）。
+- **S6 深度重建已按 mgl 字面落地**：①emitter 发射真实 3D 世界坐标 prepass 几何（弃用发射期解析拍平）；②ground(initialize) 顶点着色器做相机→地面 z=0 投影（`uMBEye.z > mbpW.z` 门控，mgl 字面）+ clip 空间 `z += u_depth_bias`；③mask(reset) 同投影后 `gl_Position.z = gl_Position.w` + GREATER；④u_depth_bias = computeDepthBias 字面（0.01；ortho lerp(0.0001,0.01,x^5) ×2）；⑤发射门控改 mgl heightRange.min 语义（initialize<1.0 / reset<0.0）。uMBEye 走既有 patchTileMaterials 逐帧刷新链。
+- **注入路径核查结论**：护栏/隧道墙材质确实走 injectStructure3DLighting(:746)；deck 走 injectExtrusion3DLighting。junction 对结构光照公式旋钮（structpow）零像素响应的原因：mismatch 语义是"护栏存在 vs 不存在"的二元差异，明暗微调不改变 mismatch 计数。
+- **S6 实测**：junction 22,897 / tunnel 54,413 / ortho-camera-tunnel 1,271（g53 态持平或微改善）——S6 语义是地下遮挡，与"内部护栏可见"是两个问题。内部护栏的 mgl 隐藏机制（g52h 悬案）不是 S6，归入下一轮绘制顺序/深度写入专项（mgl 主 pass 的 depth segment LEQUAL 语义 vs 我们 renderOrder 序列）。
+- ortho-camera 用例在 SwiftShader 下浏览器崩溃无法取新值（g53 全量值 64,131 供参考，属于"护栏真实构建"的既有差异）。
+
 ## 下一轮主攻（按 mgl 源码字面）
 
-- **S6 深度重建三 pass**（ds_reconstruct vertex 相机投影 + reset `gl_Position.z=w` GREATER + u_depth_bias lerp(easeIn)/×2）：这是 mgl"构建全部护栏但只显外缘"的合成机制，G2 修复后的 junction 收敛依赖它。
-- 结构材质注入路径核查（junction 结构是否真的走了 injectStructure3DLighting）。
-- TS1128（MBShadowRenderer:2606，g51p2 引入的类成员花括号失衡）应修复——transpileOnly 下 karma 仍带错 emit，但它污染一切编译输出。
+- **内部护栏隐藏机制**：mgl draw_elevated_fill 主 pass 的 depth segment（LEQUAL, ReadWrite）+ mask/depth segment 绘制次序——我们的 renderOrder 序列近似与 mgl 语义仍有差异（draw_elevated_fill.ts:51,114-170）。g52h 悬案的正攻。
+- **G3** safeArea/edgeIntersectsBox 环过滤（未落地）。
+- **S9/S10/S11** 阴影级联 far、硬件深度比较、顶点级 normal offset。
+- 遗留：MBEnvironmentManager/mapview 的 TS2339/TS2353 类型错误（早于本会话，与 karma transpileOnly 无碍但污染 tsc --build）。
