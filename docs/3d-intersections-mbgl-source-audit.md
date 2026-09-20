@@ -141,9 +141,15 @@
 - 这解释了此前所有不变性：比较语义/bias/tap 怎么改都无意义——cascade-0 采样根本没有发生。
 - 下一轮：对比 shadowhw=0/1 两种模式下 dump 的 uMBShadowMatrix 与接收端 uv（MBShadowMat 探针/MBUvProbe 已有）定位 m_matrix 在 HW 分支中的失效点（嫌疑：m_matrix 更新时序被 HW 早退跳过，或 m_shadowCamera 正交范围在 HW 分支内不同步）。
 
+## g64 实测结论（2026-09-22 第三轮）
+
+- **shadowhw 失效点定位（MBShadowMat 双模式对拍）**：f=1 帧 `casters=21`（默认 70）——shadowhw 分支中 caster 注册表/视锥拟合坍缩至 1/3（boxS 322 vs 628），级联拟合窗只覆盖少量 casters → 接收端 cascade-0 uv 整体越界（DIAG9 黄色）→ 回退 cascade-1 全暗 → 169,209。矩阵公式本身（p00/nrfr/dir/cam）两模式一致。
+- 嫌疑收敛：g51p2 的 layer1/2 法线分流（`geometry.attributes.normal` 有无）在 HW mainRenderer 路径下的行为，或 caster 注册时序（f=1 注册数即分叉）。
+- 下一轮：dump 两模式 shadowCasters 集合差集（哪些 49 个 casters 缺席），回溯注册/分流分支。
+
 ## 下一轮主攻（按 mgl 源码字面）
 
-- **S10 续**：shadowhw 模式 m_matrix/uv 失效点定位（MBShadowMat/MBUvProbe 双模式对拍）。
+- **S10 续**：shadowhw casters 集合差集定位（21 vs 70）→ 回溯 g51p2 layer 分流/注册时序。
 - **S8** 级联矩阵 mercator 球心/Ti(pitch,bearing) roll/texel-snap（遗留主项，依赖 geo↔RTE 帧桥）。
 - **G10** SUBDIVISION_EDGE_EXTENSION 生效化（MBPolygonClippingHD 当前 void 丢弃）。
 - 遗留：MBEnvironmentManager/mapview/MBModelRenderer 的 TS 类型错误（HEAD 既有）。
