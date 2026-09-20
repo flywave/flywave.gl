@@ -123,6 +123,7 @@ function main() {
             ...(process.env.MBSTYLE_PREPASSOFF ? ["prepassoff=1"] : []),
             ...(process.env.MBSTYLE_PATTERNMUL ? [`patternmul=${process.env.MBSTYLE_PATTERNMUL}`] : []),
             ...(process.env.MBSTYLE_SHADOWKAPPA ? [`shadowkappa=${process.env.MBSTYLE_SHADOWKAPPA}`] : []),
+            ...(process.env.MBSTYLE_SHARREF ? ["sharref=1"] : []),
             ...(process.env.MBSTYLE_PREPASSZ ? [`prepassz=${process.env.MBSTYLE_PREPASSZ}`] : []),
             ...(process.env.MBSTYLE_RTDUMP ? ["rtdump=1"] : []),
             ...(process.env.MBSTYLE_RTDISABLE ? ["rtdisable=1"] : []),
