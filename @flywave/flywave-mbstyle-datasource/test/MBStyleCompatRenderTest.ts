@@ -1083,6 +1083,37 @@ async function renderUntilSettled(
                 (globalThis as any).__mbDeckDbgTimer = setInterval(repaint, 500);
                 setTimeout(() => clearInterval((globalThis as any).__mbDeckDbgTimer), 30000);
             }
+            // §885 g52n: prepassdbg=1 — late-interval sampling of the scene
+            // for __mb-elev-prepass meshes. The once-early census predates
+            // the late-decoding tunnel tiles, so "prepass missing" needed a
+            // time series before any fix.
+            if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "prepassdbg=1")
+                && !(globalThis as any).__mbPrepassDbgTimer) {
+                const sample = (tag: string) => {
+                    let prep = 0, deckElev = 0, struct = 0;
+                    (mapView as any).scene?.traverse?.((o: any) => {
+                        if (!o.isMesh) return;
+                        const t: any = o.userData?.technique;
+                        if (!t) return;
+                        if (t._mbElevPrepass) prep++;
+                        else if (t._hdElevation !== undefined) deckElev++;
+                        else if (t.__elev) struct++;
+                    });
+                    const fb = (window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith("feedback-url="))?.slice("feedback-url=".length);
+                    if (fb) {
+                        fetch(`${fb}/mb-probe-dump`, {
+                            method: "POST",
+                            headers: { "content-type": "application/json" },
+                            body: JSON.stringify({ probe: "prepass-series", tag, prep, deckElev, struct }),
+                        }).catch(() => { });
+                    }
+                };
+                sample("t0");
+                setTimeout(() => sample("t3s"), 3000);
+                setTimeout(() => sample("t8s"), 8000);
+                setTimeout(() => sample("t15s"), 15000);
+            }
             (mapView as any).scene?.traverse?.((o: any) => {
                 if (!o.isMesh) return;
                 const mat: any = Array.isArray(o.material) ? o.material[0] : o.material;
