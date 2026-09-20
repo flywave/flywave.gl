@@ -2466,6 +2466,12 @@ export class MBTileDataEmitter {
         // underground footprint flattened onto the ground plane builds
         // implicit ground occlusion; the mask (tunnel structures + non-
         // tunnel roads) re-clears depth to far so entrances stay see-through.
+        // §885 g52m: prepass chain audit — why the z=0 ground occluder
+        // doesn't hide the negative-height decks in the dsr family.
+        if ((globalThis as any).__mbDecodeDbg) {
+            // eslint-disable-next-line no-console
+            console.log(`[MBPrepass] underground=${mesh.underground} depthN=${mesh.depthIndices.length} maskN=${mesh.maskIndices.length} triN=${mesh.indices.length} tunnelStart=${mesh.tunnelStart}`);
+        }
         if (mesh.underground && (mesh.depthIndices.length > 0 || mesh.maskIndices.length > 0)) {
             const flat: number[] = new Array(mesh.positions.length);
             for (let i = 0; i < mesh.positions.length; i += 3) {

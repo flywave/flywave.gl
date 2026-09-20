@@ -1089,7 +1089,7 @@ async function renderUntilSettled(
                 const g = o.geometry;
                 g.computeBoundingSphere?.();
                 const bs = g.boundingSphere;
-                rows.push(`mat=${mat?.type} col=#${mat?.color?.getHexString?.() ?? '?'} map=${!!mat?.map} ro=${o.renderOrder} vis=${o.visible} n=${g.attributes?.position?.count} bsR=${bs?.radius?.toExponential(2)} bsC=(${bs?.center?.x?.toExponential(1)},${bs?.center?.y?.toExponential(1)},${bs?.center?.z?.toExponential(1)})`);
+                rows.push(`mat=${mat?.type} col=#${mat?.color?.getHexString?.() ?? '?'} map=${!!mat?.map} ro=${o.renderOrder} vis=${o.visible} n=${g.attributes?.position?.count} bsR=${bs?.radius?.toExponential(2)} bsC=(${bs?.center?.x?.toExponential(1)},${bs?.center?.y?.toExponential(1)},${bs?.center?.z?.toExponential(1)}) dt=${mat?.depthTest} dw=${mat?.depthWrite} cw=${mat?.colorWrite} df=${mat?.depthFunc} layer1=${o.layers?.test?.(1) ? 1 : 0}`);
             });
             const fb = (window as any).__karma__?.config?.args?.find?.((a: string) =>
                 a.startsWith("feedback-url="))?.slice("feedback-url=".length);

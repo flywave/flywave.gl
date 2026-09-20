@@ -23,8 +23,11 @@ function mbExtRoutePush(line: string): void {
     const buf: string[] = (g.__mbExtRouteLog ??= []);
     if (buf.length < 800) buf.push(line);
     if (g.__mbExtRouteTimer) return;
-    g.__mbExtRouteTimer = setTimeout(() => {
-        g.__mbExtRouteTimer = undefined;
+    // §885 g52m: recurring re-arm — late tile patches (tunnel/underground
+    // tiles decode seconds after the first 2s flush) were never re-posted,
+    // so the route log undersampled exactly the late-decoding fixtures this
+    // probe exists to diagnose.
+    g.__mbExtRouteTimer = setInterval(() => {
         const fb = (window as any).__karma__?.config?.args
             ?.find?.((a: string) => a.startsWith('feedback-url='))
             ?.slice('feedback-url='.length);
