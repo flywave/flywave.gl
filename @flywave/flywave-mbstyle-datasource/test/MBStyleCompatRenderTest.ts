@@ -160,6 +160,11 @@ function discoverTests(): TestEntry[] {
         if (sk !== undefined) (globalThis as any).__mbShadowKappa = Number(sk) || 1;
     }
     {
+        const rs = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("railsuppress="))?.slice("railsuppress=".length);
+        if (rs === "0") (globalThis as any).__mbRailSuppress = false;
+    }
+    {
         const pz = (window as any).__karma__?.config?.args?.find?.((a: string) =>
             a.startsWith("prepassz="))?.slice("prepassz=".length);
         if (pz !== undefined) (globalThis as any).__mbPrepassZ = Number(pz) || 0;

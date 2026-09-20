@@ -914,8 +914,10 @@ export class MBElevatedStructures {
                 ? `${ax}_${ay}_${bx}_${by}` : `${bx}_${by}_${ax}_${ay}`;
             coarseCounts.set(h, (coarseCounts.get(h) ?? 0) + 1);
         }
-        const sharedCoarse = new Set(
-            [...coarseCounts.entries()].filter(([, n]) => n > 1).map(([h]) => h));
+        // railsuppress=0 → disable (A/B for the over-suppression triage).
+        const suppressOn = (globalThis as any).__mbRailSuppress !== false;
+        const sharedCoarse = suppressOn ? new Set(
+            [...coarseCounts.entries()].filter(([, n]) => n > 1).map(([h]) => h)) : new Set();
 
         // §885 g52h (mgl-probe live evidence, scripts/mgl-shot/mgl-probe.cjs):
         // mgl BUILDS a rail for EVERY unevaluated edge — shadows-junction
