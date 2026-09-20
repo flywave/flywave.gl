@@ -2346,6 +2346,18 @@ export class MBTileDataEmitter {
             projected[i + 2] = w.z + mesh.positions[i + 2];
             if (mesh.positions[i + 2] > 0) this.noteGeometryHeight(mesh.positions[i + 2]);
         }
+        // §885 g52s: per-face normals for the structure mesh — the builder
+        // emits OUTER/TOP/INNER face normals per rail edge; carry them
+        // through the frame flip (tile y-down → scene y-north negates the
+        // y component) into the generic extrusionNormal attribute so
+        // injectStructure3DLighting shades tunnel ceilings/walls with real
+        // face orientations instead of screen-space derivative guesses.
+        const projectedNormals: number[] = new Array(mesh.normals.length);
+        for (let i = 0; i < mesh.normals.length; i += 3) {
+            projectedNormals[i] = mesh.normals[i];
+            projectedNormals[i + 1] = -mesh.normals[i + 1];
+            projectedNormals[i + 2] = mesh.normals[i + 2];
+        }
         // §885 g52d: structure world-vertex dump — pairs with the deck
         // [MBFillHD-bounds] dump. The rails use RAW curve heights
         // ([MBRailH] 5.000) while deck pieces render at 6.00 (g13 +1 level
@@ -2447,6 +2459,7 @@ export class MBTileDataEmitter {
                 const geo = this.getOrCreateGeometry(`__mb-elevated-${seg.key}:${colorKey}`);
                 if (geo.positions.length === 0) {
                     for (let i = 0; i < projected.length; i++) geo.positions.push(projected[i]);
+                    for (let i = 0; i < projectedNormals.length; i++) geo.extrusionNormals.push(projectedNormals[i]);
                 }
                 const groupStart = geo.indices.length;
                 for (let i = 0; i < bucket.indices.length; i++) {

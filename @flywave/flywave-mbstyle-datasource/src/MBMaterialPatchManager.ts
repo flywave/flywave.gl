@@ -1276,13 +1276,16 @@ export class MBMaterialPatchManager {
             shader.uniforms.uMB3DDir = { value: dir3S };
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
-                `varying vec3 vMBViewPos;
+                `attribute vec3 extrusionNormal;
+                 varying vec3 vMbAttrN;
+                 varying vec3 vMBViewPos;
                  void main() {`
             );
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 `#include <begin_vertex>
-                 vMBViewPos = (modelViewMatrix * vec4(position, 1.0)).xyz;`
+                 vMBViewPos = (modelViewMatrix * vec4(position, 1.0)).xyz;
+                 vMbAttrN = mat3(modelMatrix) * extrusionNormal;`
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
@@ -1300,16 +1303,20 @@ export class MBMaterialPatchManager {
                 '#include <opaque_fragment>',
                 `#include <opaque_fragment>
                  {
-                     // §885 g52i: mgl _prelude_lighting parity. Screen-space
-                     // derivative normal sign-stabilized to face the camera
-                     // (closed cross-sections), then rotated into the WORLD
-                     // frame so NdotL/ambient anisotropy use world up and the
-                     // world toSun — matching mgl apply_lighting whose
-                     // normal/u_lighting_directional_dir are world-space.
-                     vec3 mbN3 = normalize(cross(dFdx(vMBViewPos), dFdy(vMBViewPos)));
-                     vec3 mbRay = normalize(vMBViewPos);
-                     if (dot(mbN3, mbRay) > 0.0) mbN3 = -mbN3;
-                     vec3 mbNW = normalize(transpose(mat3(viewMatrix)) * mbN3);
+                     // §885 g52s: face-normal preferred (g52r emitted the
+                     // builder's OUTER/TOP/INNER normals through the frame
+                     // flip) — tunnel ceilings read ambient-dark, walls take
+                     // the toSun dot. Derivative fallback keeps the sign
+                     // stabilization + world rotation of g52i.
+                     vec3 mbNW;
+                     if (dot(vMbAttrN, vMbAttrN) > 0.25) {
+                         mbNW = normalize(vMbAttrN);
+                     } else {
+                         vec3 mbN3 = normalize(cross(dFdx(vMBViewPos), dFdy(vMBViewPos)));
+                         vec3 mbRay = normalize(vMBViewPos);
+                         if (dot(mbN3, mbRay) > 0.0) mbN3 = -mbN3;
+                         mbNW = normalize(transpose(mat3(viewMatrix)) * mbN3);
+                     }
                      float mbNdotL = dot(mbNW, uMB3DDir);
                      float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
                      float mbDirFactorMin = 1.0 - 0.3 * min(mbDirLum, 1.0);
