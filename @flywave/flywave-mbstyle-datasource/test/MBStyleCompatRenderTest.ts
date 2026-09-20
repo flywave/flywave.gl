@@ -375,11 +375,14 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.includes?.("orthoshadowon=1")) {
         (globalThis as any).__mbOrthoShadowOn = 1;
     }
-    // §885 终四十g50u: groundquadoff=1 → disable the full-screen ground-quad
-    // shadow composite (mgl backgrounds never receive cast-shadows).
-    if ((window as any).__karma__?.config?.args?.includes?.("groundquadoff=1")) {
-        (globalThis as any).__mbGroundQuadOff = 1;
-    }
+    // §885 g52v: the full-screen ground-quad shadow overlay is RETIRED by
+    // default — the fill self-shadowing injection provides correct
+    // per-fragment cast shadows, while the overlay's ground-plane pattern
+    // projected onto elevated decks (lighting family: −47k~−50k each with
+    // it off) and its ×0.3 black approximation were pure liabilities.
+    // groundquad=1 restores the legacy overlay for forensics.
+    (globalThis as any).__mbGroundQuadOff =
+        !(window as any).__karma__?.config?.args?.includes?.("groundquad=1");
     // §885 终四十二g50w: shnoff=1 → enable the mgl normal-offset receiver
     // displacement (u_shadow_normal_offset port; plumbing live, default off
     // pending the ortho band forensics — see ledger g50w).
