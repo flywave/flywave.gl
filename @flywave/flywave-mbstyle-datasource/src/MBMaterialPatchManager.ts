@@ -6178,14 +6178,23 @@ const mbGroundDual = (globalThis as any).__mbGroundLitDual === true ? 1 : 0;
             ? this.extractPatternTexture(technique._patternName2)
             : undefined;
 
-        // Pattern tile size in world units. The sprite pixel size is mapped to
-        // meters at roughly the sprite's pixelRatio; 1px ≈ 1 world unit scaled.
-        // @2x sprites carry double-resolution pixels — divide by the sprite's
-        // pixelRatio so the tile matches the sprite's logical display size
-        // (mgl `displaySize`, same as the line-ribbon patternWorld path).
+        // Pattern tile size in world units. mgl tiles fill patterns at a
+        // SCREEN-CONSTANT size (displaySize = sprite px / pixelRatio in CSS
+        // px at every zoom — fill_pattern.vertex.glsl scales the pattern by
+        // the current zoom's pixels-per-tile-unit). The old
+        // spritePr/width uv (tile = displaySize in raw local units ≈ meters)
+        // was zoom-invariant: at z21 the hatch markup tile rendered ~27×
+        // oversize — the fine crosshatch smeared into broad white streaks.
+        // Convert displaySize px → meters with the current zoom's
+        // meters-per-pixel (same formula as the line-translate path).
         const spriteInfo = (this.m_dataSource as any).spriteAtlas?.icons?.get(technique._patternName);
         const spritePr = Math.max(1, Number(spriteInfo?.pixelRatio ?? 1) || 1);
-        const tileScale = spritePr / Math.max(1, (tex.image?.width ?? 32));
+        const mapViewP = (this.m_dataSource as any).mapView;
+        const dZoomP = mapViewP?.zoomLevel ?? 1;
+        const mppP = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
+            (256 * Math.pow(2, dZoomP));
+        const tileScale = spritePr /
+            (Math.max(1, (tex.image?.width ?? 32)) * Math.max(mppP, 1e-9));
         const origOnCompile = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
             if (origOnCompile) origOnCompile.call(material, shader);
@@ -6259,9 +6268,44 @@ const mbGroundDual = (globalThis as any).__mbGroundLitDual === true ? 1 : 0;
                     : `#include <opaque_fragment>
                  vec4 mbPat = texture2D(uMBPatternTex, vMBPatternUv);${tex2 ? `
                  mbPat = mix(mbPat, texture2D(uMBPatternTex2, vMBPatternUv), uMBPatternCrossFade);` : ''}
-                 float mbPatAlpha = mbPat.a * opacity * uMBPatternCrossFade;
-                 gl_FragColor = vec4(mix(diffuse, mbPat.rgb, uMBPatternCrossFade), mbPatAlpha);`
+                 // §885 终三一六: the fade factor mixes the two TILES (mgl
+                 // FILL_PATTERN_TRANSITION out = A·(1−t) + B·t, t=0 → A fully
+                 // visible) — it must NOT scale the alpha. The old extra
+                 // multiply by uMBPatternCrossFade zeroed every single-pattern
+                 // fill at the default fade 0 (shadows-junction hatch markup
+                 // rendered fully transparent: mesh present, map bound,
+                 // alpha 0 on every fragment).
+                 gl_FragColor = vec4(mix(diffuse, mbPat.rgb, uMBPatternCrossFade), mbPat.a * opacity);`
             );
+            // §885 终三一六: post-injection decision snapshot — the invisible
+            // hatch-markup defect (mesh visible+map=true but zero pixels)
+            // needed the FINAL depth/composite state and the local-position
+            // magnitude the pattern uv derives from, not just pre-replace
+            // probes.
+            try {
+                const mesh: any = undefined;
+                const gU2 = globalThis as any;
+                const arr2 = (gU2.__mbPatternDecision ??= []);
+                if (arr2.length < 24) {
+                    let posMax = 0;
+                    const pos = (material as any).__mbPatPosSample;
+                    if (pos) posMax = pos;
+                    arr2.push({
+                        pat: technique._patternName,
+                        tileScale, crossFade,
+                        transparent: material.transparent,
+                        depthWrite: material.depthWrite,
+                        depthTest: material.depthTest,
+                        depthFunc: material.depthFunc,
+                        side: material.side,
+                        visible: material.visible,
+                        opacity: (material as any).opacity,
+                        renderOrder: (technique as any).renderOrder,
+                        posMax,
+                        fsPostOK: shader.fragmentShader.includes('mbPat.a * opacity'),
+                    });
+                }
+            } catch {}
         };
         material.needsUpdate = true;
     }

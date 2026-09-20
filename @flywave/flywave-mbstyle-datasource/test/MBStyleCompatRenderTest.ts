@@ -1044,6 +1044,17 @@ async function renderUntilSettled(
             && !(globalThis as any).__mbCensusDone) {
             (globalThis as any).__mbCensusDone = true;
             const rows: string[] = [];
+            // §885 终三一六: pattern shader-injection probe — the fill-pattern
+            // patcher records per-compile injection results in __mbShaderProbe;
+            // without this census attachment the invisible-pattern failure
+            // (mesh visible+map=true but fragment replace never landed → base
+            // map_fragment samples uv(0,0) = transparent texel) had no window.
+            for (const sp of ((globalThis as any).__mbShaderProbe ?? []) as any[]) {
+                rows.push('PAT=' + JSON.stringify(sp));
+            }
+            for (const sp of ((globalThis as any).__mbPatternDecision ?? []) as any[]) {
+                rows.push('PATDEC=' + JSON.stringify(sp));
+            }
             (mapView as any).scene?.traverse?.((o: any) => {
                 if (!o.isMesh) return;
                 const mat: any = Array.isArray(o.material) ? o.material[0] : o.material;
