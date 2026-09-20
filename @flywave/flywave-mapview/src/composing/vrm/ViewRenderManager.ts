@@ -128,7 +128,13 @@ export class ViewRenderManager implements IViewRenderManager {
             intensity: 1,
             debug: 0
         },
-        outline: { enabled: false, thickness: 2, color: "#ffffff", xray: true },
+        outline: {
+            enabled: false,
+            thickness: 2,
+            color: "#ffffff",
+            xray: true,
+            keepPassAlive: true
+        },
         taa: { enabled: false },
         clouds: { enabled: false },
         antialiasing: "taa",
@@ -323,7 +329,9 @@ export class ViewRenderManager implements IViewRenderManager {
         const taaEnabled = this.config.antialiasing === "taa";
         const bloomEnabled = this.config.bloom.enabled;
         const ssrEnabled = this.config.ssr.enabled;
-        const outlineEnabled = this.config.outline.enabled && this.outlineObjects.size > 0;
+        const outlineEnabled =
+            this.config.outline.enabled &&
+            (this.outlineObjects.size > 0 || this.config.outline.keepPassAlive === true);
         const aerialEnabled = this.config.aerialPerspective.enabled;
         const hasCSM = this.csmShadowNode != null;
         // God rays (the epipolar shadow-length chain) are skipped on the WebGL

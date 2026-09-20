@@ -186,18 +186,23 @@ export class MapRenderingManager implements IMapRenderingManager {
 
     /**
      * Selective outline config. `enabled` is selection-driven: any
-     * `addOutlineObject` call turns the effect on, the last
-     * `removeOutlineObject` turns it off. `xray: true` (default) outlines
-     * the FULL silhouette including geometry hidden behind occluders
-     * (outline-only mask prepass in ViewRenderManager); `hiddenColor`
-     * optionally recolors those occluded ring sections.
+     * `addOutlineObject` call arms the mask pass, and it then STAYS in the
+     * node graph (default `keepPassAlive: true`) so toggling selections never
+     * recompiles the post-processing pipeline — the empty mask reads as "no
+     * silhouette" and the effect is a visual no-op. Set `keepPassAlive:
+     * false` to tear the pass down when the last outlined object is removed
+     * (idle scenes pay nothing, but every 0↔1 selection change rebuilds the
+     * whole chain). `xray: true` (default) outlines the FULL silhouette
+     * including geometry hidden behind occluders; `hiddenColor` optionally
+     * recolors those occluded ring sections.
      */
     outline: IOutlineEffect = {
         enabled: false,
         thickness: 2,
         color: "#ffffff",
         xray: true,
-        hiddenColor: undefined
+        hiddenColor: undefined,
+        keepPassAlive: true
     };
 
     vignette = {
@@ -328,6 +333,44 @@ export class MapRenderingManager implements IMapRenderingManager {
         const vrm = this.viewRenderManager;
         if (vrm == null) return;
 
+        // Graph-structural fingerprint: the fields baked into the node graph
+        // at build time. A re-sync with identical values must stay
+        // rebuild-free — a whole-chain dispose+recompile is a visible stall —
+        // so `needsUpdate` is only set when this fingerprint actually
+        // changes. Uniform-fed fields (fogLight intensity/density) and the
+        // async-swapped LUT url are excluded on purpose.
+        const signature = () => {
+            const c = vrm.config;
+            return JSON.stringify([
+                c.antialiasing,
+                c.taa.enabled,
+                c.bloom,
+                c.outline,
+                c.vignette,
+                c.brightnessContrast,
+                c.hueSaturation,
+                c.sepia,
+                c.colorGradingLUT.enabled,
+                c.colorGradingLUT.opacity,
+                c.fogLight.enabled,
+                c.ssr
+            ]);
+        };
+        const before = signature();
+
+        // Reconcile the selection-driven `enabled` flag with what the VRM
+        // gate will actually build (enabled && (selection || keepPassAlive)).
+        // This keeps the flag truthful after e.g. un-arming keepPassAlive
+        // while idle (pass drops, flag must drop too), while pending
+        // pre-VRM selections count as "about to exist" so the flag survives
+        // the VRM-creation sync. Runs BEFORE the copy below so the VRM
+        // config gets the reconciled value.
+        this.outline.enabled =
+            this.outline.enabled &&
+            (vrm.outlineObjects.size > 0 ||
+                this.m_pendingOutlineObjects.length > 0 ||
+                this.outline.keepPassAlive === true);
+
         vrm.config.bloom.enabled = this.bloom.enabled;
         vrm.config.bloom.intensity = this.bloom.strength;
         vrm.config.bloom.radius = this.bloom.radius;
@@ -338,6 +381,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         vrm.config.outline.color = this.outline.color;
         vrm.config.outline.xray = this.outline.xray !== false;
         vrm.config.outline.hiddenColor = this.outline.hiddenColor;
+        vrm.config.outline.keepPassAlive = this.outline.keepPassAlive === true;
 
         vrm.config.vignette.enabled = this.vignette.enabled;
         vrm.config.vignette.offset = this.vignette.offset;
@@ -358,12 +402,8 @@ export class MapRenderingManager implements IMapRenderingManager {
         vrm.config.colorGradingLUT.url = this.colorGradingLUT.url;
         vrm.config.colorGradingLUT.opacity = this.colorGradingLUT.opacity ?? 1;
 
-        // `enabled` toggling needs a graph rebuild (the fog node is built or
-        // dropped); intensity/density are uniforms the node reads per frame.
-        if (vrm.config.fogLight.enabled !== this.fogLight.enabled) {
-            vrm.config.fogLight.enabled = this.fogLight.enabled;
-            vrm.needsUpdate = true;
-        }
+        vrm.config.fogLight.enabled = this.fogLight.enabled;
+        // intensity/density are uniforms the fog node reads per frame.
         vrm.config.fogLight.intensity = this.fogLight.intensity ?? 1;
         vrm.config.fogLight.density = this.fogLight.density ?? 0.002;
 
@@ -375,7 +415,9 @@ export class MapRenderingManager implements IMapRenderingManager {
         vrm.config.antialiasing =
             this.antialiasing !== "none" ? this.antialiasing : this.taaEnabled ? "taa" : "none";
 
-        vrm.needsUpdate = true;
+        if (signature() !== before) {
+            vrm.needsUpdate = true;
+        }
     }
 
     syncPostEffectsToVRM(): void {
@@ -596,11 +638,23 @@ export class MapRenderingManager implements IMapRenderingManager {
 
     addOutlineObject(object: THREE.Object3D): void {
         this.m_pendingOutlineObjects.push(object);
+        // `enabled` doubles as the "mask pass is in the graph" flag: it is
+        // only false after a teardown (or before the first arming). While it
+        // is armed — including the keepPassAlive idle state — selection is a
+        // draw-time layer-bit toggle and must not recompile the pipeline.
+        const passAppears = !this.outline.enabled;
         this.outline.enabled = true;
         const vrm = this.viewRenderManager;
         if (vrm == null) return;
+        // Flip the VRM config copy too: theme sync never carries `enabled`
+        // (updateOutline drops it as selection-driven), so without this a
+        // runtime first selection would rebuild the graph still without the
+        // mask pass.
+        vrm.config.outline.enabled = true;
         vrm.outlineObjects.add(object);
-        vrm.needsUpdate = true;
+        if (passAppears) {
+            vrm.needsUpdate = true;
+        }
         this.applyOutlineLayer(object, true);
     }
 
@@ -611,9 +665,13 @@ export class MapRenderingManager implements IMapRenderingManager {
         if (!vrm.outlineObjects.has(object)) return;
         vrm.outlineObjects.delete(object);
         this.applyOutlineLayer(object, false);
-        if (vrm.outlineObjects.size === 0) {
-            // Last selection gone: drop the outline pass on the next node
-            // graph rebuild.
+        if (vrm.outlineObjects.size === 0 && this.outline.keepPassAlive !== true) {
+            // Last selection gone and the pass is not kept alive: drop the
+            // outline pass on the next node graph rebuild, so idle scenes pay
+            // nothing for it. With keepPassAlive the empty mask renders only
+            // the background, which in the reversed-depth buffer reads as
+            // "no silhouette" — the effect is a visual no-op and re-selection
+            // stays a pure layer-bit toggle.
             this.outline.enabled = false;
             vrm.needsUpdate = true;
         }

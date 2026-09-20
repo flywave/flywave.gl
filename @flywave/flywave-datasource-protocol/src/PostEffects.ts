@@ -50,6 +50,17 @@ export interface IOutlineEffect {
      * "bright visible / dim hidden" look.
      */
     hiddenColor?: string;
+    /**
+     * Keep the outline mask pass in the node graph while nothing is selected
+     * (default `true`): toggling selections stays a draw-time layer-bit
+     * toggle — no pipeline rebuild, no flicker. The empty mask reads as "no
+     * silhouette", so the idle effect is a visual no-op that only costs the
+     * background redraw of the mask pass. Set `false` to tear the pass down
+     * when the last outlined object is removed: idle scenes then pay nothing,
+     * but every 0↔1 selection change recompiles the whole post-processing
+     * chain — only worth it for rarely used, battery-sensitive highlights.
+     */
+    keepPassAlive?: boolean;
 }
 
 export interface IBloomEffect {

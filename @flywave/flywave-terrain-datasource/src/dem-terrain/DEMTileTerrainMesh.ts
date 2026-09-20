@@ -348,11 +348,7 @@ export class HeightMapTerrainMesh extends Mesh {
         }
     }
 
-    setHeightMap(
-        texture: THREE.Texture,
-        demTileKey: TileKey,
-        demUnpack?: THREE.Vector4
-    ) {
+    setHeightMap(texture: THREE.Texture, demTileKey: TileKey, demUnpack?: THREE.Vector4) {
         this.m_uHeightMapPos = computeHeightMapPos(
             this.m_tile.tileKey,
             demTileKey,

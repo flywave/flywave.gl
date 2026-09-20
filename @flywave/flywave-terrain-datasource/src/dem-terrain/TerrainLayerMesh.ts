@@ -141,11 +141,7 @@ export class TerrainTileState {
         this.m_frameDirty = true;
     }
 
-    setHeightMap(
-        texture: THREE.Texture,
-        demTileKey: TileKey,
-        demUnpack?: THREE.Vector4
-    ): void {
+    setHeightMap(texture: THREE.Texture, demTileKey: TileKey, demUnpack?: THREE.Vector4): void {
         const pos = computeHeightMapPos(
             this.m_tileKey,
             demTileKey,

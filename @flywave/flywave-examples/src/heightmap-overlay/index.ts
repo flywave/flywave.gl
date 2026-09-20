@@ -160,12 +160,12 @@ const configureDEMTerrainSource = async (mapView: MapView) => {
     const demTerrain = new DEMTerrainSource({
         source: {
             tiles: [],
-            scheme: 'xyz' as const,
+            scheme: "xyz" as const,
             bounds: [-180, -85.0511, 180, 85.0511] as [number, number, number, number],
             minzoom: 0,
             maxzoom: 15,
             tileSize: 256,
-            type: 'raster-dem' as const
+            type: "raster-dem" as const
         }
     });
 
@@ -173,9 +173,7 @@ const configureDEMTerrainSource = async (mapView: MapView) => {
 
     mapView.setElevationSource(demTerrain);
 
-    demTerrain.addWebTileDataSource(
-        new ArcGISTileProvider({ minDataLevel: 0, maxDataLevel: 18 })
-    );
+    demTerrain.addWebTileDataSource(new ArcGISTileProvider({ minDataLevel: 0, maxDataLevel: 18 }));
 
     return { demTerrain, modifierIds };
 };

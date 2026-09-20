@@ -99,7 +99,7 @@
             "color": "#FFFFFF",
             "name": "ambientLight",
             "intensity": 0.9
-        } 
+        }
     ],
     "defaultTextStyle": {
         "name": "defaultTextStyle",

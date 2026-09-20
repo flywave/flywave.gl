@@ -206,12 +206,13 @@ mapView.removeFogLight(def); // 同一对象身份
 
 ## 选择性描边（outline，X-ray 完整轮廓）
 
-架构（2025-08 重做，替换旧的 `outlineMask` MRT 通道方案）：
+架构（2025-08 重做，替换旧的 `outlineMask` MRT 通道方案；2026-09 加
+`keepPassAlive` 默认常驻）：
 
 1. **打标**：`mapRenderingManager.addOutlineObject(obj)` 给子树开
    `OUTLINE_LAYER_BIT`（bit 11，`TranslucentLayerEffect.ts`；bit 10 =
    translucent，bit 12 = splat 深度/surface capture）。**不动材质**。
-2. **mask 预 pass**：`ViewRenderManager.buildNodeGraph` 在有选中对象时建
+2. **mask 预 pass**：`ViewRenderManager.buildNodeGraph` 首次选中时建
    第二个 `pass(scene, camera)`，`setLayers(bit 11)` +
    `overrideMaterial`（共享干净 MeshBasicNodeMaterial）。只有选中物体
    参与该 pass → 其深度 footprint 就是**完整投影剪影（含被遮挡部分）**，
@@ -222,7 +223,26 @@ mapView.removeFogLight(def); // 同一对象身份
    `hiddenColor` 把环的被遮挡段涂成另一色。
 4. 配置面：`IOutlineEffect`（PostEffects.ts），全局
    `mapView.postEffects.outline` / `patchTheme` / 运行时
-   `mapRenderingManager.updateOutline(部分字段)`（会触发管线重建）。
+   `mapRenderingManager.updateOutline(部分字段)`（thickness/color 等
+   build 期常量，改动会触发管线重建）。
+5. **重建语义（2026-09）**：mask pass 一旦武装就**默认常驻**（
+   `keepPassAlive: true`）——`enabled` 兼作"pass 在图里"的 armed 标志，
+   add/remove 只切 layer bit（绘制期），**零重建零闪烁**；空 mask 只有
+   背景写入，反转深度下读出全 0 → 形态学天然直通。`addOutlineObject`
+   只在 armed 标志为 false 时置 `needsUpdate`（首次武装/拆掉后重武装）；
+   `removeOutlineObject` 仅在 `keepPassAlive: false` 且最后一个对象移除时
+   拆 pass（省空转开销，代价是每次 0↔1 全链重编译——低频高敏场景才用）。
+   `syncConfigToViewRenderManager` 会用 VRM 门控（`enabled && (选中 ||
+   keepPassAlive)`）对齐 armed 标志，防止"卸载 keepPassAlive 后标志失真
+   导致下次 add 不重建、描边静默丢失"。
+
+### 坑：hidden 标签页会积压 needsUpdate
+
+rAF 冻结的标签页里，启动期异步完成（云 onReady、LUT 加载等）置位的
+`needsUpdate` 永远等不到消费；恢复渲染后的**第一帧**才补一次全量重建。
+用 `renderSync()` 做同步测试时，先空跑一帧再计数，否则会把这笔启动账
+算到被测操作头上（2026-09 实测踩过：以为是 outline 触发，判别实验证明
+纯 renderSync 也 +1）。
 
 ## 坑：pass/深度采样三条硬规则（全部实测踩过）
 

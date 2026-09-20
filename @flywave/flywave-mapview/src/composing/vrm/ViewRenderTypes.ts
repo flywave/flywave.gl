@@ -78,6 +78,12 @@ export interface IOutlineConfig {
     xray: boolean;
     /** Ring color for occluded silhouette sections; undefined = same as color. */
     hiddenColor?: string;
+    /**
+     * Keep the mask pass in the node graph while no object is selected
+     * (default true; see IOutlineEffect.keepPassAlive). Mirrored from
+     * MapRenderingManager.
+     */
+    keepPassAlive?: boolean;
 }
 
 export interface ITemporalAntialiasConfig {
