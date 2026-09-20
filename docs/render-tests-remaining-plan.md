@@ -6309,3 +6309,22 @@ shdiag=5 于 tile-border：quad 输出灰阶场 17-191 分布（暗区 17-53 占
 ### §885 终八十二g51t10: shres=2048 验证（2026-09-20）
 
 shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,648（+330）——影响微小。mgl 用 shadowMapResolution 2048（shadow_renderer.ts:215），我们默认 1024。分辨率翻倍仅带来边沿锐化改善，核心残余仍为光照合成结构差。建议 shres=2048 作为默认（与 mgl 一致）。
+
+### §885 会话最终确认（2026-09-20）
+
+本会话（g51c→g51t10+）交付了 44 次提交。核心改进：
+- 3d-intersections 家族 −50.4%（70 件实测，61 件改善）
+- 十项修复全部落地
+- 八个持久探针就绪
+- mgl 本体渲染対拍基础设施就绪（mgl 本体渲染与 expected 仅 3.3% 差异）
+
+### 阴影浓度校准路径（下轮首刀）
+
+1. **fill receiver chunk 的阴影浓度校准**：阴影乘法的浓度需要匹配 mgl 的 ground_shadow 输出（×0.45 相对于 lit ground），当前过暗或过亮取决于 pixelmatch 阈值下的具体区域
+2. **甲板光照合成器结构升级**：ambient 恒定项 + directional·shadow 项的双项合成替代单一 ground-factor 乘法
+3. **tile-border quad 图案校准**：quad 的阴影浓度需要与 fill receiver 的阴影浓度一致
+
+### 移交清单
+- 45 件跳过夹具 resume 补测（chunked runner 自动跳过已测件）
+- terrain-enabled SHST 挂起排查
+- cast-shadows 239 style 全量 before 基线轮
