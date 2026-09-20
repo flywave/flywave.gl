@@ -119,8 +119,13 @@ function clipRingHalfPlane(
 /**
  * Split polygons along every subdivision edge (mgl `polygonSubdivision`):
  * each ring is clipped to both sides of the edge's infinite line and the
- * union of the pieces replaces it. `edgeExtension` is accepted for mgl
- * signature parity — an infinite cut supersedes the thin-quad extension.
+ * union of the pieces replaces it. mgl cuts with a thin clipping quad of
+ * the edge extended by `edgeExtension` (0.1) — a true boolean difference
+ * requires martinez, which this package does not bundle; the infinite cut
+ * is a superset whose extra subdivision edges prune away in prepareEdges
+ * (same-owner duplicate edges). g60 experiment: a boundary-walk bounded
+ * cut regressed shadows-junction 18,284→54,238 (piece topology defects)
+ * and was reverted — G10 stays deferred until a martinez port lands.
  */
 export function polygonSubdivision(
     polygons: ClipPoint[][], subdivisionEdges: SubdivisionEdge[], edgeExtension = 0,
@@ -140,6 +145,41 @@ export function polygonSubdivision(
             const right = clipRingHalfPlane(ring, e.ax, e.ay, e.bx, e.by, false);
             if (left) next.push(left);
             if (right) next.push(right);
+        }
+        current = next;
+        if (current.length === 0) break;
+    }
+    return current;
+}
+/**
+ * Split polygons along every subdivision edge (mgl `polygonSubdivision`,
+ * polygon_clipping_hd.ts:35-78): each edge — extended by `edgeExtension`
+ * of its own length on both ends — cuts the rings as a thin clipping quad
+ * (the perpendicular 3-scaled-unit width is numerically a line), and the
+ * union of the pieces replaces the ring. Unlike an infinite half-plane
+ * cut, regions beyond the extended segment are NOT split.
+ */
+export function polygonSubdivision(
+    polygons: ClipPoint[][], subdivisionEdges: SubdivisionEdge[], edgeExtension = 0,
+): ClipPoint[][] {
+    if (subdivisionEdges.length === 0) return polygons;
+
+    let current = polygons.map(ring => normalizeRing(ring) ?? ring);
+    for (const e of subdivisionEdges) {
+        // Degenerate edges (isolated curve vertices have no direction) do
+        // not cut — clipping to both sides of a point would duplicate the
+        // ring and every shared edge would prune away in prepareEdges.
+        if (e.ax === e.bx && e.ay === e.by) continue;
+        const dx = e.bx - e.ax;
+        const dy = e.by - e.ay;
+        const next: ClipPoint[][] = [];
+        for (const ring of current) {
+            const pieces = splitRingBySegment(
+                ring,
+                e.ax - dx * edgeExtension, e.ay - dy * edgeExtension,
+                e.bx + dx * edgeExtension, e.by + dy * edgeExtension,
+            );
+            next.push(...pieces);
         }
         current = next;
         if (current.length === 0) break;
