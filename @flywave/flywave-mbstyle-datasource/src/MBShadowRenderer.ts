@@ -2538,6 +2538,15 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                 const bs = casterBox.getSize(new THREE.Vector3());
                 // eslint-disable-next-line no-console
                 console.log(`[MBShadowMat] f=${__rc} casters=${shadowCasters.size} cam=(${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}) r=${radius.toFixed(0)} nrfr=${this.m_shadowCamera.near.toFixed(0)}/${this.m_shadowCamera.far.toFixed(0)} p00=${pj[0].toExponential(2)} boxC=(${bc.x.toFixed(0)},${bc.y.toFixed(0)},${bc.z.toFixed(0)}) boxS=(${bs.x.toFixed(0)},${bs.y.toFixed(0)},${bs.z.toFixed(0)}) sc=(${sphereCenter.x.toFixed(0)},${sphereCenter.y.toFixed(0)},${sphereCenter.z.toFixed(0)}) eyeZ=${eye.z.toFixed(0)} dir=(${lightDir.x.toFixed(3)},${lightDir.y.toFixed(3)},${lightDir.z.toFixed(3)})`);
+                // §885 g65: caster roster diff — name/layer/normal-presence
+                // per caster, to attribute the shadowhw 21-vs-70 collapse.
+                const roster: string[] = [];
+                shadowCasters.forEach((o: any) => {
+                    roster.push(`${o.name || '?'}#${o.id}@L${o.layers.mask}${o.geometry?.attributes?.normal ? 'N' : 'n'}`);
+                });
+                roster.sort();
+                // eslint-disable-next-line no-console
+                console.log(`[MBShadowRoster] f=${__rc} n=${roster.length} ${roster.join(' | ')}`);
             } catch (e) {
                 // eslint-disable-next-line no-console
                 console.log('[MBShadowMat] probe error ' + String(e));

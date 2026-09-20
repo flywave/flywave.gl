@@ -141,11 +141,12 @@
 - 这解释了此前所有不变性：比较语义/bias/tap 怎么改都无意义——cascade-0 采样根本没有发生。
 - 下一轮：对比 shadowhw=0/1 两种模式下 dump 的 uMBShadowMatrix 与接收端 uv（MBShadowMat 探针/MBUvProbe 已有）定位 m_matrix 在 HW 分支中的失效点（嫌疑：m_matrix 更新时序被 HW 早退跳过，或 m_shadowCamera 正交范围在 HW 分支内不同步）。
 
-## g64 实测结论（2026-09-22 第三轮）
+## g65 实测结论（2026-09-22 第四轮）——g64 结论修正
 
-- **shadowhw 失效点定位（MBShadowMat 双模式对拍）**：f=1 帧 `casters=21`（默认 70）——shadowhw 分支中 caster 注册表/视锥拟合坍缩至 1/3（boxS 322 vs 628），级联拟合窗只覆盖少量 casters → 接收端 cascade-0 uv 整体越界（DIAG9 黄色）→ 回退 cascade-1 全暗 → 169,209。矩阵公式本身（p00/nrfr/dir/cam）两模式一致。
-- 嫌疑收敛：g51p2 的 layer1/2 法线分流（`geometry.attributes.normal` 有无）在 HW mainRenderer 路径下的行为，或 caster 注册时序（f=1 注册数即分叉）。
-- 下一轮：dump 两模式 shadowCasters 集合差集（哪些 49 个 casters 缺席），回溯注册/分流分支。
+- **"casters=21 坍缩"是误报**：roster dump 证明两模式 f=1 稳态注册均为 **70**（21/35/53 是 karma 会话内多次重跑时注册进行中的瞬态快照；MBShadowMat f=1 完整行在 shadowhw 下同样是 casters=70/boxS=628，与默认逐项一致）。级联拟合窗无差异，g64 的"拟合坍缩"结论撤回。
+- **DIAG9 解读修正**：R=mbLit、G=light factor、B=0——黄=(1,1,0) 全亮、黑=(0,0,0) 全暗（非 cascade 状态）。shadowhw 采集的大面积黑 = **过度阴影**（raw 域自采样 acne：掠射光下墙/顶面自身深度被 binary/raw 窗口误判为遮挡），方向与 §716 账本"DEPTH16 HW compare 量化不同"一致。
+- 本轮落地：MB_SH_HWBIN 二值比较（extrusion 接收端，mgl 字面 `step(z−5e-5, depth)`；结构接收端 g51g 已是同形）——**测得与 smoothstep 窗逐位相同（169,209 不变）**，进一步证明接收端比较形态不是敏感轴。
+- 下一轮候选：normal offset 幅值/方向的 raw 域重校（uMBNOffZ 的 0.03125·right 系数是 packed 域经验值），或接受 shadowhw 为非默认实验路径。
 
 ## 下一轮主攻（按 mgl 源码字面）
 
