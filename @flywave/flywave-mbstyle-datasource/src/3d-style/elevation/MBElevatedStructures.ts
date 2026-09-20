@@ -935,8 +935,9 @@ export class MBElevatedStructures {
         const range = edges.slice(0, edgeEnd);
         range.sort((a, b) => a.featureIndex - b.featureIndex);
 
+        let stGuard = 0, stPts = 0, stSame = 0, stShared = 0;
         for (const edge of range) {
-            if (!edge.guardRailEnabled) continue;
+            if (!edge.guardRailEnabled) { stGuard++; continue; }
             {
                 const ax = coarse(this.m_unevalVertices[edge.a * 2]);
                 const ay = coarse(this.m_unevalVertices[edge.a * 2 + 1]);
@@ -944,16 +945,16 @@ export class MBElevatedStructures {
                 const by = coarse(this.m_unevalVertices[edge.b * 2 + 1]);
                 const h = ax < bx || (ax === bx && ay <= by)
                     ? `${ax}_${ay}_${bx}_${by}` : `${bx}_${by}_${ax}_${ay}`;
-                if (sharedCoarse.has(h)) continue;
+                if (sharedCoarse.has(h)) { stShared++; continue; }
             }
 
             const pts = prepareEdgePoints(vertices, heights, edge, (a, b) => a > b);
-            if (!pts) continue;
+            if (!pts) { stPts++; continue; }
             const [pa, pb] = pts;
 
             const va: Vec3 = [pa.x, pa.y, metersToTile * pa.h];
             const vb: Vec3 = [pb.x, pb.y, metersToTile * pb.h];
-            if (va[0] === vb[0] && va[1] === vb[1] && va[2] === vb[2]) continue;
+            if (va[0] === vb[0] && va[1] === vb[1] && va[2] === vb[2]) { stSame++; continue; }
 
             // §885 g52d: rail-height telemetry — the parapet z comes from the
             // RAW curve vertex heights (m_unevalHeights) while the deck
@@ -1043,6 +1044,12 @@ export class MBElevatedStructures {
                     m(bV[0], bFwd), m(bV[1], bFwd),
                     m(bV[2], bFwd), m(bV[3], bFwd));
             }
+        }
+
+        // §885 g52x2: gate-drop census
+        if (typeof globalThis !== 'undefined' && (globalThis as any).__mbDecodeDbg) {
+            // eslint-disable-next-line no-console
+            console.log(`[MBRailGates] total=${range.length} guard=${stGuard} shared=${stShared} pts=${stPts} same=${stSame} built=${range.length - stGuard - stShared - stPts - stSame}`);
         }
     }
 
