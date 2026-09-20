@@ -1220,8 +1220,14 @@ export class MBShadowRenderer {
                 (globalThis as any).__mbShMercCenterErr = String(e);
             }
         }
-        this.m_shadowCamera.left = -radius;
-        this.m_shadowCamera.right = radius;
+        // §885 g52z: shadowkappa — scale the light ortho X window by
+        // 1/cos(lat): the engine scene frame's E-W unit is cos(lat) ground m
+        // while N-S/vertical are 1:1, so an isotropic ±radius window covers
+        // 1/cos(lat)× more ground in x — the shadow pattern compresses
+        // horizontally vs mgl's conformal-px frame. shadowkappa=<f> A/B.
+        const shadowKappa = Number((globalThis as any).__mbShadowKappa ?? 1);
+        this.m_shadowCamera.left = -radius * shadowKappa;
+        this.m_shadowCamera.right = radius * shadowKappa;
         this.m_shadowCamera.top = radius;
         this.m_shadowCamera.bottom = -radius;
         this.m_shadowCamera.near = -2 * radius;
@@ -2411,7 +2417,7 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                 const bc = casterBox.getCenter(new THREE.Vector3());
                 const bs = casterBox.getSize(new THREE.Vector3());
                 // eslint-disable-next-line no-console
-                console.log(`[MBShadowMat] f=${__rc} casters=${shadowCasters.size} cam=(${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}) r=${radius.toFixed(0)} nrfr=${this.m_shadowCamera.near.toFixed(0)}/${this.m_shadowCamera.far.toFixed(0)} p00=${pj[0].toExponential(2)} boxC=(${bc.x.toFixed(0)},${bc.y.toFixed(0)},${bc.z.toFixed(0)}) boxS=(${bs.x.toFixed(0)},${bs.y.toFixed(0)},${bs.z.toFixed(0)}) sc=(${sphereCenter.x.toFixed(0)},${sphereCenter.y.toFixed(0)},${sphereCenter.z.toFixed(0)}) eyeZ=${eye.z.toFixed(0)}`);
+                console.log(`[MBShadowMat] f=${__rc} casters=${shadowCasters.size} cam=(${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}) r=${radius.toFixed(0)} nrfr=${this.m_shadowCamera.near.toFixed(0)}/${this.m_shadowCamera.far.toFixed(0)} p00=${pj[0].toExponential(2)} boxC=(${bc.x.toFixed(0)},${bc.y.toFixed(0)},${bc.z.toFixed(0)}) boxS=(${bs.x.toFixed(0)},${bs.y.toFixed(0)},${bs.z.toFixed(0)}) sc=(${sphereCenter.x.toFixed(0)},${sphereCenter.y.toFixed(0)},${sphereCenter.z.toFixed(0)}) eyeZ=${eye.z.toFixed(0)} dir=(${lightDir.x.toFixed(3)},${lightDir.y.toFixed(3)},${lightDir.z.toFixed(3)})`);
             } catch (e) {
                 // eslint-disable-next-line no-console
                 console.log('[MBShadowMat] probe error ' + String(e));

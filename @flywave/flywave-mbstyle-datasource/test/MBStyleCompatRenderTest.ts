@@ -155,6 +155,11 @@ function discoverTests(): TestEntry[] {
         if (pm !== undefined) (globalThis as any).__mbPatternMul = Number(pm) || 1;
     }
     {
+        const sk = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("shadowkappa="))?.slice("shadowkappa=".length);
+        if (sk !== undefined) (globalThis as any).__mbShadowKappa = Number(sk) || 1;
+    }
+    {
         const pz = (window as any).__karma__?.config?.args?.find?.((a: string) =>
             a.startsWith("prepassz="))?.slice("prepassz=".length);
         if (pz !== undefined) (globalThis as any).__mbPrepassZ = Number(pz) || 0;
