@@ -42,15 +42,30 @@ export interface ElevationPortalEdge {
  * Order-independent hash of an edge's two endpoints. mgl uses a bigint
  * coordinate hash; a string key serves the same grouping role here.
  */
+/**
+ * Order-independent hash of an edge's two endpoints. Mirrors mgl
+ * computeEdgeHash/computePosHash (elevated_structures.ts:905-920): the
+ * SAME 16-bit truncating position hash (`p & 0xFFFF` — ToInt32 truncates
+ * the fractional part) quantizes both portal edges and structural edges,
+ * so a shared edge groups identically on both sides.
+ */
+export function mbPosHash(x: number, y: number): number {
+    return (((x & 0xFFFF) << 16) | (y & 0xFFFF)) >>> 0;
+}
+
 export function portalEdgeHash(ax: number, ay: number, bx: number, by: number): string {
-    // Sort endpoints so a-b and b-a hash identically.
-    const forward = ax < bx || (ax === bx && ay < by);
-    const [x1, y1, x2, y2] = forward
-        ? [ax, ay, bx, by]
-        : [bx, by, ax, ay];
-    // Quantize to the extent grid to make float noise irrelevant.
-    const q = (v: number) => Math.round(v * 64);
-    return `${q(x1)},${q(y1)},${q(x2)},${q(y2)}`;
+    // Sort endpoints so a-b and b-a hash identically (mgl computeEdgeHash).
+    // §885 g53 A/B: __mbG8Off restores the pre-g53 1/64-grid string hash.
+    if ((globalThis as any).__mbG8Off === true) {
+        const q = (v: number) => Math.round(v * 64);
+        const fwd = ax < bx || (ax === bx && ay < by);
+        const [x1, y1, x2, y2] = fwd ? [ax, ay, bx, by] : [bx, by, ax, ay];
+        return `${q(x1)},${q(y1)},${q(x2)},${q(y2)}`;
+    }
+    if ((ay === by && ax > bx) || ay > by) {
+        return `${mbPosHash(bx, by)}_${mbPosHash(ax, ay)}`;
+    }
+    return `${mbPosHash(ax, ay)}_${mbPosHash(bx, by)}`;
 }
 
 function isOnBorder(a: number, b: number): boolean {
@@ -93,10 +108,13 @@ export class MBElevationPortalGraph {
         const evaluated = portals.filter(p => p.type !== 'unevaluated');
         const unevaluatedGroup = portals.filter(p => p.type === 'unevaluated');
         if (unevaluatedGroup.length === 0) {
-            // mgl returns an EMPTY graph here (elevation_graph.ts:65),
-            // dropping pre-classified entrance/border portals. Keep them —
-            // they carry the tunnel-entrance semantics the mesh pass needs.
-            out.portals = evaluated;
+            // mgl literal (elevation_graph.ts:62-65): return an EMPTY graph
+            // — pre-classified entrance/border portals are dropped too.
+            // §885 g53 A/B: __mbG7Off keeps the pre-g53 evaluated portals.
+            if ((globalThis as any).__mbG7Off === true) {
+                out.portals = evaluated;
+                return out;
+            }
             return out;
         }
 

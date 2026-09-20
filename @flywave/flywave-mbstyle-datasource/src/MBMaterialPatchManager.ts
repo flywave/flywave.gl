@@ -670,6 +670,17 @@ export class MBMaterialPatchManager {
                 continue;
             }
 
+            // §885 g53 (audit G1): mgl shadow caster segment
+            // (draw_elevated_fill.ts:126-170) renders depth-only into the
+            // SHADOW map (ColorMode.disabled) — never into the main pass.
+            // Layer 1 only: the main camera (layer 0) skips it, the shadow
+            // camera (layers.set(1)) draws it with its own depth material.
+            if ((tech as any)._mbElevCaster) {
+                (obj as THREE.Mesh).layers.set(1);
+                (obj as any).raycast = () => {};
+                continue;
+            }
+
             const rawMaterial = (obj as any).material;
             const materials: THREE.Material[] = Array.isArray(rawMaterial)
                 ? rawMaterial : (rawMaterial ? [rawMaterial] as any : []);
@@ -1260,6 +1271,8 @@ export class MBMaterialPatchManager {
         material.onBeforeCompile = (shader: any) => {
             if (origOnCompile) origOnCompile.call(material, shader);
             const ls2 = (this.m_dataSource as any).m_environment?.lighting3DState;
+            // §885 g53 A/B: structpow=0 reverts the linearProduct pow.
+            const mbStructPowOff = (globalThis as any).__mbStructPow === false;
             shader.uniforms.uMB3DAmb = { value: ls2 ? ls2.ambientColorLinear : [1, 1, 1] };
             shader.uniforms.uMB3DDirColor = { value: ls2 ? ls2.directionalColorLinear : [1, 1, 1] };
             // §885 g52i: mgl toSun semantics (终二三六, same as the extrusion
@@ -1277,27 +1290,40 @@ export class MBMaterialPatchManager {
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
                 `attribute vec3 extrusionNormal;
+                 attribute float aMBElev;
                  varying vec3 vMbAttrN;
                  varying vec3 vMBViewPos;
+                 varying float vMBHeight;
                  void main() {`
             );
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 `#include <begin_vertex>
                  vMBViewPos = (modelViewMatrix * vec4(position, 1.0)).xyz;
-                 vMbAttrN = mat3(modelMatrix) * extrusionNormal;`
+                 vMbAttrN = mat3(modelMatrix) * extrusionNormal;
+                 vMBHeight = aMBElev;`
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
                 `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
                  varying vec3 vMBViewPos;
+                 varying float vMBHeight;
                  vec3 mbBaseColor = vec3(1.0);
                  void main() {`
             );
-            shader.fragmentShader = shader.fragmentShader.replace(
+                     shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <color_fragment>',
                 `#include <color_fragment>
-                 mbBaseColor = diffuseColor.rgb;`
+                 mbBaseColor = diffuseColor.rgb;
+                 // mgl elevated_structures_model.fragment.glsl:64-70 —
+                 // HACK: compute temporary non-linear underground occlusion
+                 // down to -7.5 meters (applied to the albedo BEFORE
+                 // lighting, same as mgl).
+                 if (vMBHeight < 0.0 && ${(globalThis as any).__mbNoOcc === true ? 'false' : 'true'}) {
+                     float penetration = max(vMBHeight + 7.5, 0.0);
+                     float occlusion = 1.0 - 1.0 / 3.141592653589793 * acos(1.0 - penetration / 4.0);
+                     mbBaseColor *= 1.0 - pow(occlusion, 2.0) * 0.3;
+                 }`
             );
             shader.fragmentShader = shader.fragmentShader.replace(
                 '#include <opaque_fragment>',
@@ -1323,7 +1349,11 @@ export class MBMaterialPatchManager {
                      float mbAmbDir = mix(mbDirFactorMin, 1.0, min(mbNdotL + 1.0, 1.0));
                      float mbVert = mix(0.92, 1.0, mbNW.z * 0.5 + 0.5);
                      vec3 mbK = uMB3DAmb * (mbVert * mbAmbDir) + uMB3DDirColor * max(mbNdotL, 0.0);
-                     gl_FragColor.rgb = mbBaseColor * mbK;
+                     // mgl _prelude_lighting.glsl linearProduct —
+                     // equivalent to linearTosRGB(sRGBToLinear(color) * k):
+                     // the sRGB albedo is multiplied by the gamma-compressed
+                     // linear light factor, NOT the raw factor.
+                     gl_FragColor.rgb = ${mbStructPowOff ? 'mbBaseColor * mbK' : 'mbBaseColor * pow(mbK, vec3(1.0 / 2.2))'};
                  }`
             );
         };

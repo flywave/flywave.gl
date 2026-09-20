@@ -42,6 +42,7 @@ import {
     ElevationPortalEdge,
     ElevationPortalType,
     MBElevationPortalGraph,
+    mbPosHash,
     portalEdgeHash,
 } from './MBElevationGraph';
 import {
@@ -139,6 +140,10 @@ export interface ElevatedStructuresMesh {
     depthIndices: number[];
     /** §515 depth prepass: tunnel structures + non-tunnel roads (holes). */
     maskIndices: number[];
+    /** mgl shadow caster segment (es.ts:405-411): everything + tunnel
+     * roofs lifted by TUNNEL_ENTERANCE_HEIGHT, rendered depth-only into
+     * the shadow map. */
+    shadowCasterIndices: number[];
     /** Any contributed feature samples below the ground plane. */
     underground: boolean;
 }
@@ -781,6 +786,38 @@ export class MBElevatedStructures {
         ];
         const maskIndices = [...tunnelQuads, ...this.m_unevalTriangles];
 
+        // mgl shadow caster segment (es.ts:405-411): the caster segment
+        // opens before the bridge structures and closes AFTER a third copy
+        // of the tunnel triangles lifted by TUNNEL_ENTERANCE_HEIGHT (4 m) —
+        // "include tunnel roofs as shadow casters". Our structures mesh
+        // holds the rails/walls only, so the caster set = all mesh indices
+        // + both road triangle sets (at curve height, as mgl's mesh carries
+        // them) + the +4 m tunnel roof copy. The roof triangles join the
+        // VERTEX stream (so the shared projection covers them) but NOT the
+        // renderable `indices` — mgl keeps them out of the renderable
+        // segments the same way.
+        const roofIndices: number[] = [];
+        if (this.m_unevalTunnelTriangles.length > 0) {
+            builder.vertexLookup.clear();
+            for (let i = 0; i < this.m_unevalTunnelTriangles.length; i += 3) {
+                const base = positions.length / 3;
+                for (let k = 0; k < 3; k++) {
+                    const vi = this.m_unevalTunnelTriangles[i + k];
+                    positions.push(
+                        this.m_unevalPositions[vi * 2],
+                        this.m_unevalPositions[vi * 2 + 1],
+                        this.m_unevalHeights[vi] + TUNNEL_ENTERANCE_HEIGHT_METERS);
+                    normals.push(0, 0, 0);
+                }
+                roofIndices.push(base, base + 1, base + 2);
+            }
+        }
+        const shadowCasterIndices = [
+            ...indices, ...this.m_unevalTriangles,
+            ...this.m_unevalTunnelTriangles,
+            ...roofIndices,
+        ];
+
         if (indices.length === 0 && depthIndices.length === 0) return null;
         // §885 终三一九g12: rail anchoring audit — per bridge section, the
         // emitted rail z range in METERS vs the ring heights it was built
@@ -810,7 +847,7 @@ export class MBElevatedStructures {
         }
         return {
             positions, normals, indices, tunnelStart, bridgeSections, tunnelSections,
-            depthIndices, maskIndices, underground: this.m_underground,
+            depthIndices, maskIndices, shadowCasterIndices, underground: this.m_underground,
         };
     }
 
@@ -891,43 +928,14 @@ export class MBElevatedStructures {
         const metersToTile = this.m_metersToTile;
         const scale = 0.5 * metersToTile;
 
-        // §885 g52u: tolerant shared-edge suppression — adjacent road
-        // pieces' shared boundary vertices differ by ~1 extent unit between
-        // features (independent clipping), so exact edge hashes never
-        // collide. Quantize endpoints to an 8-unit (~5 m at z14) grid: a
-        // coarse edge seen twice = shared interior boundary → NO rail (mgl
-        // expected junction shows one curb on the outer edge, plain deck at
-        // every interior junction, although mgl also BUILDS those rails —
-        // its depth reconstruction hides them; we suppress at build time).
-        // g52v2: grid 8→2 units — the 8-unit grid over-suppressed (x=240
-        // parapet segment vanished: distinct nearby edges quantized into the
-        // same cell); 2 units (~0.6 m at z14) still bridges the ~1-unit
-        // T-junction coordinate jitter between adjacent features.
-        const coarse = (v: number): number => Math.round(v / 2);
-        const coarseCounts = new Map<string, number>();
-        for (const e of this.m_unevalEdges) {
-            const ax = coarse(this.m_unevalVertices[e.a * 2]);
-            const ay = coarse(this.m_unevalVertices[e.a * 2 + 1]);
-            const bx = coarse(this.m_unevalVertices[e.b * 2]);
-            const by = coarse(this.m_unevalVertices[e.b * 2 + 1]);
-            const h = ax < bx || (ax === bx && ay <= by)
-                ? `${ax}_${ay}_${bx}_${by}` : `${bx}_${by}_${ax}_${ay}`;
-            coarseCounts.set(h, (coarseCounts.get(h) ?? 0) + 1);
-        }
-        // railsuppress=0 → disable (A/B for the over-suppression triage).
-        const suppressOn = (globalThis as any).__mbRailSuppress !== false;
-        const sharedCoarse = suppressOn ? new Set(
-            [...coarseCounts.entries()].filter(([, n]) => n > 1).map(([h]) => h)) : new Set();
-
-        // §885 g52h (mgl-probe live evidence, scripts/mgl-shot/mgl-probe.cjs):
-        // mgl BUILDS a rail for EVERY unevaluated edge — shadows-junction
-        // live: road-base 817 + road-base-bridge 134 edges, zero duplicate
-        // edge hashes, and expected.png still shows ONE visible curb. The
-        // difference vs our render is therefore RENDER-TIME compositing
-        // (depth + per-face lighting: lit top, dark shaded side) and the
-        // sunk-frame zOffset parity, NOT rail selection. Suppressing edges
-        // here is the wrong lever; do not re-add edge filters without
-        // re-running the mgl-probe.
+        // §885 g53 (mbgl source alignment, audit G2): mgl's rail loop has a
+        // SINGLE gate — `edge.featureInfo.guardRailEnabled`
+        // (elevated_structures.ts:590-592). The coarse-grid shared-edge
+        // suppression added in g52u/g52v2 is mbgl-nonexistent logic; g52w2's
+        // ON/OFF A/B proved it contributes ZERO visible pixels (junction
+        // counts bit-identical both states), so it is removed outright to
+        // keep the build path literal. Interior rails are hidden by mgl's
+        // depth-reconstruction compositing, not by edge selection (g52h).
 
         let lastFeatureIndex = Number.POSITIVE_INFINITY;
 
@@ -935,17 +943,36 @@ export class MBElevatedStructures {
         const range = edges.slice(0, edgeEnd);
         range.sort((a, b) => a.featureIndex - b.featureIndex);
 
-        let stGuard = 0, stPts = 0, stSame = 0, stShared = 0;
+        // §885 g53 A/B: oldsupp=1 restores the g52u coarse-grid suppression
+        // (mbgl-nonexistent logic) to attribute the junction regression.
+        const sharedCoarse = new Set<string>();
+        if ((globalThis as any).__mbRailSuppress === true) {
+            const coarse = (v: number): number => Math.round(v / 2);
+            const coarseCounts = new Map<string, number>();
+            for (const e of this.m_unevalEdges) {
+                const ax = coarse(this.m_unevalPositions[e.a * 2]);
+                const ay = coarse(this.m_unevalPositions[e.a * 2 + 1]);
+                const bx = coarse(this.m_unevalPositions[e.b * 2]);
+                const by = coarse(this.m_unevalPositions[e.b * 2 + 1]);
+                const h = ax < bx || (ax === bx && ay <= by)
+                    ? `${ax}_${ay}_${bx}_${by}` : `${bx}_${by}_${ax}_${ay}`;
+                coarseCounts.set(h, (coarseCounts.get(h) ?? 0) + 1);
+            }
+            for (const [h, n] of coarseCounts) if (n > 1) sharedCoarse.add(h);
+        }
+
+        let stGuard = 0, stPts = 0, stSame = 0;
         for (const edge of range) {
             if (!edge.guardRailEnabled) { stGuard++; continue; }
             {
-                const ax = coarse(this.m_unevalVertices[edge.a * 2]);
-                const ay = coarse(this.m_unevalVertices[edge.a * 2 + 1]);
-                const bx = coarse(this.m_unevalVertices[edge.b * 2]);
-                const by = coarse(this.m_unevalVertices[edge.b * 2 + 1]);
+                const coarse = (v: number): number => Math.round(v / 2);
+                const ax = coarse(this.m_unevalPositions[edge.a * 2]);
+                const ay = coarse(this.m_unevalPositions[edge.a * 2 + 1]);
+                const bx = coarse(this.m_unevalPositions[edge.b * 2]);
+                const by = coarse(this.m_unevalPositions[edge.b * 2 + 1]);
                 const h = ax < bx || (ax === bx && ay <= by)
                     ? `${ax}_${ay}_${bx}_${by}` : `${bx}_${by}_${ax}_${ay}`;
-                if (sharedCoarse.has(h)) { stShared++; continue; }
+                if (sharedCoarse.has(h)) continue;
             }
 
             const pts = prepareEdgePoints(vertices, heights, edge, (a, b) => a > b);
@@ -1049,7 +1076,7 @@ export class MBElevatedStructures {
         // §885 g52x2: gate-drop census
         if (typeof globalThis !== 'undefined' && (globalThis as any).__mbDecodeDbg) {
             // eslint-disable-next-line no-console
-            console.log(`[MBRailGates] total=${range.length} guard=${stGuard} shared=${stShared} pts=${stPts} same=${stSame} built=${range.length - stGuard - stShared - stPts - stSame}`);
+            console.log(`[MBRailGates] total=${range.length} guard=${stGuard} pts=${stPts} same=${stSame} built=${range.length - stGuard - stPts - stSame}`);
         }
     }
 
@@ -1236,11 +1263,16 @@ function pointInRing(p: ClipPoint, ring: ClipPoint[]): boolean {
 // Structures mesh helpers (mgl ElevatedStructures statics + MeshBuilder)
 // ---------------------------------------------------------------------------
 
-/** mgl computePosHash: 16-bit truncating coordinate hash. */
+/** mgl computePosHash: 16-bit truncating coordinate hash (p & 0xFFFF —
+ * ToInt32 truncates the fraction, no rounding). Shared with the portal
+ * graph (mbPosHash) so both sides quantize identically. */
 function posHashOf(p: ClipPoint): number {
-    const x = Math.round(p.x) & 0xFFFF;
-    const y = Math.round(p.y) & 0xFFFF;
-    return ((x << 16) | y) >>> 0;
+    if ((globalThis as any).__mbG8Off === true) {
+        const x = Math.round(p.x) & 0xFFFF;
+        const y = Math.round(p.y) & 0xFFFF;
+        return ((x << 16) | y) >>> 0;
+    }
+    return mbPosHash(p.x, p.y);
 }
 
 /** mgl computeEdgeHash: order-independent pair hash, string form. */

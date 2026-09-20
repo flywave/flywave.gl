@@ -2469,6 +2469,16 @@ export class MBTileDataEmitter {
                 if (geo.positions.length === 0) {
                     for (let i = 0; i < projected.length; i++) geo.positions.push(projected[i]);
                     for (let i = 0; i < projectedNormals.length; i++) geo.extrusionNormals.push(projectedNormals[i]);
+                    // mgl elevated_structures_model vertex a_height →
+                    // fragment v_height (underground occlusion HACK): the
+                    // per-vertex curve height in meters. mesh.positions z is
+                    // already meters (addVertex's tileToMeter round-trip).
+                    // §885 g53 A/B: structelevattr=0 keeps the geometry
+                    // attribute-free (pre-g53 receiver sampling plane).
+                    if ((globalThis as any).__mbStructElevAttr !== false) {
+                        geo.elevAttr = geo.elevAttr ?? [];
+                        for (let i = 2; i < mesh.positions.length; i += 3) geo.elevAttr.push(mesh.positions[i]);
+                    }
                 }
                 const groupStart = geo.indices.length;
                 for (let i = 0; i < bucket.indices.length; i++) {
@@ -2482,6 +2492,32 @@ export class MBTileDataEmitter {
                 geo.featureStarts.push(groupStart);
                 geo.objInfos.push({ ...(bucket.info ?? {}), $id: bucket.featureId ?? null });
             }
+        }
+
+        // §885 g53 (audit G1): mgl shadow caster segment — tunnel roofs
+        // (+4 m) + walls + roads rendered depth-only into the shadow map
+        // (draw_elevated_fill.ts:126-170). Layer-1-only object: invisible
+        // to the main camera, drawn by the shadow camera.
+        if ((globalThis as any).__mbElevCaster !== false && mesh.shadowCasterIndices.length > 0) {
+            const geo = this.getOrCreateGeometry('__mb-elev-caster');
+            if (geo.positions.length === 0) {
+                for (let i = 0; i < projected.length; i++) geo.positions.push(projected[i]);
+                for (let i = 0; i < projectedNormals.length; i++) geo.extrusionNormals.push(projectedNormals[i]);
+                geo.elevAttr = geo.elevAttr ?? [];
+                for (let i = 2; i < mesh.positions.length; i += 3) geo.elevAttr.push(mesh.positions[i]);
+            }
+            const groupStart = geo.indices.length;
+            for (let i = 0; i < mesh.shadowCasterIndices.length; i++) {
+                geo.indices.push(mesh.shadowCasterIndices[i]);
+            }
+            const techIdx = this.getOrCreateElevCasterTechnique();
+            geo.groups.push({
+                start: groupStart,
+                count: geo.indices.length - groupStart,
+                materialIndex: techIdx,
+            });
+            geo.featureStarts.push(groupStart);
+            geo.objInfos.push({});
         }
 
         // §515 depth prepass (mgl drawDepthPrepass initialize/reset): the
@@ -2550,6 +2586,31 @@ export class MBTileDataEmitter {
                 opacity: 1,
             };
             this.m_techniques.push(technique as IndexedTechnique);
+        }
+        return idx;
+    }
+
+    private getOrCreateElevCasterTechnique(): number {
+        const key = '__mb-elev-caster';
+        let idx = this.m_layerToTechniqueIndex.get(key);
+        if (idx === undefined) {
+            idx = this.m_techniqueIndex++;
+            const technique: any = {
+                name: 'fill',
+                _index: idx,
+                // Shadow pass only — the patch manager moves the object to
+                // layer 1 (shadow camera), ColorMode.disabled equivalent.
+                renderOrder: 9.5,
+                _renderOrder: 9.5,
+                _layerId: '__mb-elev-caster',
+                _mbElevCaster: true,
+                __elev: true,
+                _mbGlobalLayerOrder: true,
+                color: '#000000',
+                opacity: 1,
+            };
+            this.m_techniques.push(technique as IndexedTechnique);
+            this.m_layerToTechniqueIndex.set(key, idx);
         }
         return idx;
     }

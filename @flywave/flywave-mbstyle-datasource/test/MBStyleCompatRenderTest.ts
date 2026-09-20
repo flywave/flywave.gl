@@ -149,6 +149,38 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "prepassoff=1")) {
         (globalThis as any).__mbPrepassOff = true;
     }
+    // §885 g53: elevcasteroff=1 — disable the mgl shadow-caster segment
+    // mesh (audit G1) for A/B isolation.
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "elevcasteroff=1")) {
+        (globalThis as any).__mbElevCaster = false;
+    }
+    // §885 g53: structpow=0 — revert linearProduct pow (audit S1) for A/B;
+    // unevaldrop=1 — mgl-literal drop of unpaired/all-evaluated portals
+    // (audit G7) OFF for A/B.
+    {
+        const sp = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("structpow="))?.slice("structpow=".length);
+        if (sp === "0") (globalThis as any).__mbStructPow = false;
+    }
+    // §885 g53 A/B attribution knobs.
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "oldsupp=1")) {
+        (globalThis as any).__mbRailSuppress = true;
+    }
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "g7off=1")) {
+        (globalThis as any).__mbG7Off = true;
+    }
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "g8off=1")) {
+        (globalThis as any).__mbG8Off = true;
+    }
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "noocc=1")) {
+        (globalThis as any).__mbNoOcc = true;
+    }
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "structelevattr=0")) {
+        (globalThis as any).__mbStructElevAttr = false;
+    }
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "unevaldrop=1")) {
+        (globalThis as any).__mbUnevalDrop = false;
+    }
     {
         const pm = (window as any).__karma__?.config?.args?.find?.((a: string) =>
             a.startsWith("patternmul="))?.slice("patternmul=".length);

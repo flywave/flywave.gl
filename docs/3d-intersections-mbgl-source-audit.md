@@ -1,0 +1,76 @@
+# 3d-intersections mbgl 源码级对齐审计（g53 起点）
+
+> 2026-09-20。方法变更：停止盲调 A/B 旋钮，改为以仓库内 `mapbox-gl-js/`（mbgl 参照源码）为权威逐行对齐。
+> 本文档固化两路并行审计的完整差异清单，后续每轮修复须引用条目编号，修复 = 让我方代码与 mbgl 源码字面/数值一致，而非经验调参。
+
+参照：`mapbox-gl-js/3d-style/elevation/*`、`mapbox-gl-js/3d-style/render/*`、`mapbox-gl-js/3d-style/shaders/*`、`mapbox-gl-js/src/shaders/_prelude_lighting.glsl`
+我方：`@flywave/flywave-mbstyle-datasource/src/`
+
+## A. 几何构建（elevated_structures.ts ↔ MBElevatedStructures.ts）
+
+| # | 条目 | 性质 | mbgl | 我方 | 状态 |
+|---|------|------|------|------|------|
+| G1 | shadow caster segment（隧道三角形 +TUNNEL_ENTERANCE_HEIGHT=4 抬升后第三份索引入 mesh） | 缺失 | elevated_structures.ts:165,409-411 | 无第三份索引；ElevatedStructuresMesh 无 shadowCaster 字段 | TODO |
+| G2 | 护栏边选择仅 `guardRailEnabled` 门，无共享边抑制 | 我方多出 | elevated_structures.ts:590-592 | :906-948 coarse-grid 抑制（__mbRailSuppress）+flip/lift 旋钮 | TODO（移除，g52w2 已证零像素贡献） |
+| G3 | 渲染环 safeArea bounds 过滤（`edgeIntersectsBox`） | 缺失 | elevated_structures.ts:230-252 | 仅 isOnBorder | TODO |
+| G4 | 结构高度烘焙 zOffset（m_currentZOffset level 补偿折入高度） | 刻意偏离 | 无 | :659-706 | 保留（帧对齐补偿，验收渲染测试） |
+| G5 | intersectionsAttributes：a_pos Int16 + a_height Float32；法线 quantize `trunc(n*2^14)` | 编码不同 | fill_attributes.ts:13-20; es.ts:98-100 | 全精度 float THREE attributes | 等价性可接受（渲染器不同），量化差异仅影响精度 |
+| G6 | 单 mesh 五段 [bridge\|tunnel\|非隧道道路\|隧道道路\|隧道顶盖]；道路三角形在 structures 顶点缓冲（零法线） | 结构不同 | es.ts:346-417 | 仅 [bridge\|tunnel]，deck 独立渲染 | 部分对齐（deck 分离是渲染器约束，但 caster 三角形须补，见 G1） |
+| G7 | `unevaluatedGroup` 为空 → 返回空 ElevationPortalGraph（portal 全丢弃） | 我方偏离 | elevation_graph.ts:62-65 | MBElevationGraph.ts:95-101 保留 evaluated | TODO |
+| G8 | portal 与 edge 共用单一 `computePosHash`（`p.x & 0xFFFF` int32 截断）+ bigint edgeHash | 两套量化 | es.ts:905-920 | portal `Math.round(v*64)` 字符串 vs edge `Math.round & 0xFFFF` | TODO |
+| G9 | addPortalCandidates 遍历 MultiPolygon 全部外环 | 缺失 | es.ts:283-332 | 仅 clippedRingsCanonical[0]（MBTileDataEmitter.ts:2013-2015） | TODO |
+| G10 | polygonSubdivision 用 SUBDIVISION_EDGE_EXTENSION=0.1 延伸细长裁剪四边形 | 未生效 | fill_hd_extension.ts:281; elevation_constants.ts:20 | MBPolygonClippingHD.ts:125-131 void 丢弃，无限半平面替代 | TODO（需验证等价性后替换） |
+| G11 | flat-feature 快捷路径 / hole 质心重挂 | 我方多出 | 无 | :373-381, :427-451 | 保留（clip 库差异的桥接，验收为准） |
+| G12 | depth/mask prepass 门控 `underground`（h<1.0）+ 地面拍平 mesh | 机制近似 | shader DEPTH_RECONSTRUCTION + drawDepthPrepass | 拍平 z=0 + renderOrder 9.55/9.56 | 见 S2 |
+| G13 | ProgramConfigurationSet 双套 paint + FeatureSection populate | 机制不同 | es.ts:192-196,422-475 | decode 时静态求值分桶 | 缺 feature-state 更新路径（渲染测试暂不需要） |
+| G14 | 高度米↔tile 往返（scale=0.5*metersToTile 等） | 等价 | es.ts:526-529,83-87 | :892,:955-956,:1018-1019 | 已验证一致 |
+| G15 | prepareEdgePoints/computeFwd/截面/端帽/隧道墙 | 等价 | es.ts:537-813 | :984-1330 | 已验证逐行一致 |
+| G16 | 常量表（zLevel/CLIP_MARGIN=1/MARKUP_BIAS=0.05/TUNNEL_THRESHOLD=5/ENTRANCE=4） | 等价 | elevation_constants.ts | MBElevationConstants.ts | 已验证一致（ELEVATION_EXTENT=4096 为我方补，同值） |
+| G17 | unevalEdges 原地 sortSubarray vs 副本排序 | 等价 | es.ts:572,899-903 | :935-936 | 无影响 |
+| G18 | 遗留简化实现 src/ElevatedStructures.ts（边界挤墙、#666666） | 并行旧路径 | — | 疑似废弃 | 确认无引用后删除 |
+
+## B. GLSL 与渲染路径（draw_elevated_fill / shaders ↔ MBMaterialPatchManager / MBShadowRenderer）
+
+| # | 条目 | 性质 | mbgl | 我方 | 状态 |
+|---|------|------|------|------|------|
+| S1 | linearProduct：`srgbIn * pow(k, 1/2.2)`（先加和系数再 gamma 压缩）；directional_factor_min 为 uniform | 公式不同 | _prelude_lighting.glsl:20-39,45-50 | :1382 直接线性乘；dirFactorMin=1-0.3*lum 亮度函数 | TODO |
+| S2 | 地下遮挡：`v_height<0 → penetration=max(h+7.5,0); occlusion=1-acos(1-pen/4)/PI; color *= 1-pow(occ,2)*0.3` | 缺失 | elevated_structures_model.fragment.glsl:64-70 | 无 | TODO（高优，直接关系 tunnel 家族） |
+| S3 | toSun 水平取反的校准轴折衷 | 等价性依赖校准 | 直接 u_lighting_directional_dir | :1280-1291 | 帧桥固化后再归一（遗留主项） |
+| S4 | emissive 链（strength 硬编码 0）| 等价 | :49-54 | 未实现 | 无需 |
+| S5 | INDICATOR_CUTOUT / FEATURE_CUTOUT | 缺失 | :41-44,56-57,76-82 | 无 | 渲染测试涉及 cutout 用例时再补 |
+| S6 | depth_reconstruct：`vpos -= (u_camera_pos-vpos)*(vpos.z/(u_camera_pos.z-vpos.z))` 相机投影到 z=0；reset pass `gl_Position.z=w`（GREATER）；u_depth_bias（0.01 + lerp(easeIn) + ×2 GL 补偿） | 机制不同 | ds_reconstruct vertex:14-30; draw_elevated_fill.ts:182-193 | 解析拍平 z=0，无相机项、无 bias | TODO（隧道遮挡根因） |
+| S7 | shadowDirection = 球坐标 clamp(polar,0,75°)（源向量直取 light direction） | 等价（实测一致） | shadow_utils.ts:9-25 | :1129-1136 | 已证一致 |
+| S8 | 级联矩阵：mercator 球心 `camToWorldMerc*[0,0,-centerDepth*wsInv]`、frustum padding、Ti(pitch,bearing) roll、texel-snap 1e6 | 多项偏差 | shadow_renderer.ts:678-798 | RTE 球心、无 padding、three lookAt、snap 仅 RAW | 遗留主项（geo↔RTE 帧桥） |
+| S9 | 级联 far：cascade1 far = cutout=3×cameraToCenterDistance；u_fade_range=[far1*0.75,far1] | 数值不同 | shadow_renderer.ts:333-363 | far=radius/dir.z | TODO |
+| S10 | 深度图 DEPTH_COMPONENT16 + sampler2DShadow 硬件 GREATER 比较 + vec3 bias（offset 模式 [0.00010,0.0012,0.012]） | 机制不同 | shadow_renderer.ts:298-309,519,546 | RGBA 打包 + 软件 PCF + span ramp | TODO（three 侧可做 sampler2DShadow 等价近似） |
+| S11 | normal offset：顶点级、沿法线（xy 取反+tileInMeters*n.z）、dotScale=(1-dot(n,dir))*0.5+0.5、per-cascade `2/tileSize*EXTENT/res*r*(vec?1:3)*lerpClamp(zoom)` | 公式不同 | _prelude_shadow.vertex.glsl:6-14; shadow_renderer.ts:533-546 | 接收端 world-up 0.03125 常数 + ground +10 hack | TODO |
+| S12 | ground shadow：stencil mask pass + ColorMode.multiply sRGB 域 + plane_bias dFdx/dFdy；groundShadowFactor=A/(A+D) sRGB | 机制不同 | draw_elevated_fill.ts:296-329; _prelude_shadow.frag:106-125 | 全屏 quad、linear 域、alpha 0.7 近似路径 | TODO（MB_SHADOW_OVERLAY=1 路径废弃后归一） |
+| S13 | 结构接收：逐顶点 u_light_matrix_0/1 → v_pos_light_view，v_depth=gl_Position.w，shadowed_light_factor_normal | 机制不同 | model.vertex.glsl:33-44 | fragment 反投影射线 | TODO |
+| S14 | 主 pass DepthMode(LEQUAL,ReadOnly) + CullFaceMode.backCCW（有背面剔除） | 我方 DoubleSide | draw_elevated_fill.ts:51,108 | :716-721 DoubleSide（注释误称 mgl disabled） | TODO（改 FrontSide/CCW 需绕序验证） |
+| S15 | fog v_fog_pos 注入 elevated model shader | 未证实 | model vertex:46-48; frag:72-74 | 通用 fog 链 | 待专项核 |
+
+## 本轮修复顺序（源码字面优先，逐项可回退）
+
+1. **S2** 地下遮挡公式 —— mgl 字面 GLSL，tunnel 家族直接受益。
+2. **S1** linearProduct + directional_factor_min uniform 化。
+3. **G8/G9/G7** portal hash 统一 + 多 polygon + 空组丢弃（mbgl 字面）。
+4. **G2** 移除共享边抑制（mbgl 无此逻辑，g52w2 已证零像素影响）。
+5. **G1** shadow caster 第三份索引（+4m 隧道顶盖）。
+6. **G3** safeArea/edgeIntersectsBox。
+7. S6/S9/S14 依次推进，每项落地前后跑 3d-intersections 全量 diff 对比。
+
+## g53 实测结论（2026-09-20，逐旋钮新鲜 mtime 验证）
+
+- **关键发现：g52 校准基线 18,161/18,170 是静默崩溃产物。** g52u 引入的共享边抑制代码引用了不存在的字段 `m_unevalVertices`（实际为 `m_unevalPositions`），`constructBridgeStructures` 每次抛 TypeError，被 `MBStyleDecoder.ts:1372` 的 `try { emitElevatedStructures(); } catch {}` 静默吞掉 → 护栏/隧道墙**从未被构建**。HEAD 的 18,170 = 无任何结构网格的残缺画面。g52w2 的"ON/OFF 逐位一致(18,161)"结论是同一假象（ON=崩溃）。教训：校准度量必须先验证构建路径真的执行。
+- g53 修复后（mbgl 字面构建全部 guardRailEnabled 护栏，es.ts:590-592 无任何抑制门）：
+  - shadows-junction 22,897（vs 崩溃基线 18,170，+4.7k = 内部护栏真实可见；mgl 同样构建这些护栏，靠渲染期深度重建遮挡——S6 未对齐前的预期过渡态）
+  - shadows-tunnel 54,413（vs 校准态 56,530，−2.1k 改善，隧道墙真实构建后隧道族更接近 mgl）
+- 单变量归因（junction）：G2/G7/S1/S2/G1 均非 junction 变化源（旧抑制等价重建后同样 22,897）；**G8 新 hash 反而 −2.2k**（旧 1/64 字符串 hash 25,121 → mbgl 字面 posHash 22,897）。
+- 结构光照注入（injectStructure3DLighting）对 junction 夹具无像素贡献（structpow=0 零变化）——junction 结构材质疑似走 injectExtrusion3DLighting 路径，待核。
+- 渲染度量基础设施陷阱：karma 结果文件可能陈旧（Executed 0 / SwiftShader 断连时不覆写），一切 A/B 必须以 mtime 新鲜度为准。
+
+## 下一轮主攻（按 mgl 源码字面）
+
+- **S6 深度重建三 pass**（ds_reconstruct vertex 相机投影 + reset `gl_Position.z=w` GREATER + u_depth_bias lerp(easeIn)/×2）：这是 mgl"构建全部护栏但只显外缘"的合成机制，G2 修复后的 junction 收敛依赖它。
+- 结构材质注入路径核查（junction 结构是否真的走了 injectStructure3DLighting）。
+- TS1128（MBShadowRenderer:2606，g51p2 引入的类成员花括号失衡）应修复——transpileOnly 下 karma 仍带错 emit，但它污染一切编译输出。

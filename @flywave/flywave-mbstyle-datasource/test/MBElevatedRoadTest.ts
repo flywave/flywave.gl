@@ -217,12 +217,10 @@ describe('MBElevatedStructures', () => {
         s.addPortalCandidates(1, [
             { x: 0, y: 4096 }, { x: 10, y: 4096 }, { x: 10, y: 4095 }, { x: 0, y: 4095 }, { x: 0, y: 4096 },
         ], false, feature);
+        // mgl literal (elevation_graph.ts:62-65): an all-evaluated graph —
+        // entrance/border only, nothing 'unevaluated' — evaluates EMPTY.
         const portals = s.evaluatePortals().portals;
-        expect(portals.length).to.be.greaterThan(0);
-        for (const p of portals) {
-            expect(['entrance', 'border', 'unevaluated', 'tunnel', 'polygon', 'none'])
-                .to.include(p.type);
-        }
+        expect(portals.length).to.equal(0);
     });
 
     it('portal evaluate pairs shared edges between two polygons', () => {
@@ -417,7 +415,23 @@ describe('MBElevatedStructures mesh construction', () => {
         expect(minZ).to.be.closeTo(-6, 1e-6);
     });
 
-    it('portal evaluate keeps descending hash order for prepareEdges', () => {
+    // mgl literal (elevation_graph.ts:93-104): unpaired unevaluated portals
+    // are dropped by the final compaction (`portals.splice(out)`) — only
+    // evaluated + paired (tunnel/polygon) portals survive.
+    it('portal evaluate drops unpaired unevaluated portals (mgl literal)', () => {
+        const g1 = new MBElevationPortalGraph();
+        g1.addPortal({
+            connection: { a: 1, b: undefined },
+            vaX: 2000, vaY: 2000, vbX: 2100, vbY: 2000, length: 100,
+            hash: 'aaa', isTunnel: false, type: 'unevaluated',
+        });
+        const out = MBElevationPortalGraph.evaluate([g1]);
+        expect(out.portals.length).to.equal(0);
+    });
+
+    // mgl literal (elevation_graph.ts:62-65): an all-evaluated graph
+    // evaluates to an EMPTY graph — entrance/border portals are dropped.
+    it('portal evaluate drops an all-evaluated graph (mgl literal)', () => {
         const g1 = new MBElevationPortalGraph();
         g1.addPortal({
             connection: { a: 1, b: undefined },
@@ -425,8 +439,7 @@ describe('MBElevatedStructures mesh construction', () => {
             hash: 'aaa', isTunnel: false, type: 'entrance',
         });
         const out = MBElevationPortalGraph.evaluate([g1]);
-        expect(out.portals.length).to.equal(1);
-        expect(out.portals[0].type).to.equal('entrance');
+        expect(out.portals.length).to.equal(0);
     });
 });
 
