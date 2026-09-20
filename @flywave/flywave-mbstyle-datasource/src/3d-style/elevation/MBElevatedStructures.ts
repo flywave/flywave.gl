@@ -172,6 +172,9 @@ export class MBElevatedStructures {
     private m_unevalTriangles: number[] = [];
     private m_unevalTunnelTriangles: number[] = [];
     private m_unevalEdges: ElevatedEdge[] = [];
+    // §885 g52g: lazily-computed shared (interior) edge hashes — rails skip
+    // these (see constructBridgeStructures).
+    private m_sharedEdgeHashes: Set<string> | null = null;
     /** Any sampled road height dips to/below the ground plane (mgl heightRange). */
     private m_underground = false;
     /** §516: consumer key of this tile (for the deferred-curve report). */
@@ -654,8 +657,18 @@ export class MBElevatedStructures {
         guardRailEnabled: boolean;
         isTunnel: boolean;
         pieces: CanonicalPiece[];
+        zOffset?: number;
     }): void {
         const { featureIndex, guardRailEnabled, isTunnel, pieces } = params;
+        // §885 g52f: the deck geometry renders at project() + zOffset +
+        // sampledHeight — project() folds m_currentZOffset (the g13
+        // properties.level compensation, +1.0 for these bridges) into EVERY
+        // deck vertex. The structures projected the same sampled heights
+        // WITHOUT that term, sinking the guard rails ~0.45-1.0 m below the
+        // deck surface (shadows-junction: deck 6.000 vs rail top 5.550 at
+        // the same world point — the [MBPair] probe). Bake the same offset
+        // into the structure heights so both paths share one frame.
+        const zOff = params.zOffset ?? 0;
         // §885 终三一九g13: per-feature height intake audit — did the
         // level-6 bridge feature arrive with ~6m ring heights, or already
         // flattened to level-5?
@@ -693,7 +706,7 @@ export class MBElevatedStructures {
                 for (let i = 0; i < open.length; i++) {
                     flattened.push(open[i].x, open[i].y);
                     this.m_unevalPositions.push(open[i].x, open[i].y);
-                    this.m_unevalHeights.push(heights[i] ?? 0);
+                    this.m_unevalHeights.push((heights[i] ?? 0) + zOff);
                 }
                 if (start > 0) holeIndices.push(start);
                 ringRanges.push([start, open.length]);
@@ -881,6 +894,23 @@ export class MBElevatedStructures {
         const metersToTile = this.m_metersToTile;
         const scale = 0.5 * metersToTile;
 
+        // §885 g52g: rails live ONLY on non-shared road edges (the port's own
+        // doc, mgl constructBridgeStructures). Interior boundaries between two
+        // adjacent road pieces appear TWICE in m_unevalEdges (once per
+        // feature's ring, identical coordinates) — an edge hash seen more
+        // than once marks a shared edge. mgl never shows rails there
+        // (shadows-junction expected: one curb on the deck/ground boundary,
+        // plain deck at every interior junction), and our depth compositing
+        // cannot hide a rail that stands 0.5 m proud of BOTH neighbours.
+        if (this.m_sharedEdgeHashes === null) {
+            const counts = new Map<string, number>();
+            for (const e of this.m_unevalEdges) {
+                counts.set(e.hash, (counts.get(e.hash) ?? 0) + 1);
+            }
+            this.m_sharedEdgeHashes = new Set(
+                [...counts.entries()].filter(([, n]) => n > 1).map(([h]) => h));
+        }
+
         let lastFeatureIndex = Number.POSITIVE_INFINITY;
 
         // Feature order reduces vertex-binder fragmentation (mgl sorts too).
@@ -889,6 +919,7 @@ export class MBElevatedStructures {
 
         for (const edge of range) {
             if (!edge.guardRailEnabled) continue;
+            if (this.m_sharedEdgeHashes?.has(edge.hash)) continue;
 
             const pts = prepareEdgePoints(vertices, heights, edge, (a, b) => a > b);
             if (!pts) continue;

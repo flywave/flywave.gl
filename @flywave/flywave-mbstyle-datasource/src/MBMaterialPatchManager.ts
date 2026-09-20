@@ -719,15 +719,12 @@ export class MBMaterialPatchManager {
                         material.side = THREE.DoubleSide;
                         material.needsUpdate = true;
                     }
-                    // §885 g52 补: depthTest OFF — the §515 block arms
-                    // depthTest on HD-elevated TECHNIQUES via _hdElevation,
-                    // but the structure techniques carry only __elev and the
-                    // engine's fill default is depth-tested against a depth
-                    // buffer written by the 9.6 deck: the parapet TOP
-                    // (coplanar-ish with the road surface) loses the depth
-                    // compare and the curb renders as a hollow ring of side
-                    // walls (expected: solid wide beige top + dark side).
-                    // Fills composite by renderOrder, not depth — match that.
+                    // §885 g52b/g52g: depthTest OFF with zOffset parity OFF —
+                    // the sunk rails' tops lose the depth compare against the
+                    // 9.6 deck's depth write; with the rails sunk, depthTest
+                    // on buries them (hollow ring again), off shows their
+                    // top bands. Full chain (frame parity + depth + edge
+                    // selection) is a single future landing.
                     if (material.depthTest === true) {
                         material.depthTest = false;
                         material.needsUpdate = true;

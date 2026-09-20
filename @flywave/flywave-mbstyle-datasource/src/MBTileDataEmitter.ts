@@ -2031,6 +2031,21 @@ export class MBTileDataEmitter {
                                 const c = this.m_decodeInfo.center;
                                 // eslint-disable-next-line no-console
                                 console.log(`[MBFillHD-bounds] layer=${layer.id} world=[${minx.toFixed(1)},${miny.toFixed(1)},${minz.toFixed(2)}]..[${maxx.toFixed(1)},${maxy.toFixed(1)},${maxz.toFixed(2)}] decodeCenter=[${c.x.toFixed(1)},${c.y.toFixed(1)},${c.z.toFixed(1)}]`);
+                                // §885 g52e: stash the first piece's first ring
+                                // vertex in WORLD space — emitElevatedStructures
+                                // pairs it with the nearest rail vertex (same
+                                // tile, same frame) to settle the deck-vs-rail
+                                // ground-term split.
+                                if (plan.pieces.length > 0 && plan.pieces[0].ring.length > 0) {
+                                    const p0 = plan.pieces[0].ring[0];
+                                    const w0 = this.project(new THREE.Vector2(p0.x, p0.y));
+                                    (this as any).__mbPairDeck = {
+                                        x: w0.x, y: w0.y,
+                                        zGround: w0.z,
+                                        z: w0.z + (plan.pieces[0].heights[0] ?? 0),
+                                        h: plan.pieces[0].heights[0] ?? 0,
+                                    };
+                                }
                             }
                             // fill-construct-bridge-guard-rail is a
                             // data-driven LAYOUT property (mgl default true).
@@ -2052,6 +2067,20 @@ export class MBTileDataEmitter {
                                 guardRailEnabled: guardRail !== false,
                                 isTunnel: plan.isTunnel,
                                 pieces: plan.piecesCanonical,
+                                // §885 g52f/g52g: frame-parity investigated —
+                                // passing m_currentZOffset here raises the
+                                // rails onto the deck plane and reveals the
+                                // true 3D curb shape (beige top + dark side
+                                // wall at ro 9.55-with-depth), but the rails
+                                // also appear along edges mgl never rails
+                                // (junction interior, ground-side deck edges
+                                // — expected shows ONE curb on the SE edge
+                                // only), netting junction 18,833 → 32,398.
+                                // The rail EXTENT/selection rule needs the
+                                // per-feature bridge semantics before this
+                                // can land. 0 keeps the calibrated sunk-rail
+                                // state.
+                                zOffset: 0,
                             });
                         }
                         let maxH = 0;
@@ -2331,6 +2360,31 @@ export class MBTileDataEmitter {
             }
             // eslint-disable-next-line no-console
             console.log(`[MBElevVerts] n=${Math.floor(projected.length / 3)} first=${rowsS.join(' ')}`);
+            // §885 g52e: paired same-tile comparison — find the rail vertex
+            // nearest (x,y) to the deck's first ring vertex and print both
+            // with their z split into ground + height terms.
+            const pair = (this as any).__mbPairDeck as
+                { x: number; y: number; zGround: number; z: number; h: number } | undefined;
+            if (pair) {
+                let best = -1;
+                let bestD = Infinity;
+                for (let i = 0; i < projected.length; i += 3) {
+                    const dx = projected[i] - pair.x;
+                    const dy = projected[i + 1] - pair.y;
+                    const d = dx * dx + dy * dy;
+                    if (d < bestD) { bestD = d; best = i; }
+                }
+                if (best >= 0) {
+                    const railX = projected[best];
+                    const railY = projected[best + 1];
+                    const railZ = projected[best + 2];
+                    // The rail vertex z = groundTerm + heightTerm; groundTerm
+                    // for the SAME (x,y) is recoverable from project():
+                    const railGround = this.project(new THREE.Vector2(railX, railY)).z;
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBPair] deck0=(${pair.x.toFixed(2)},${pair.y.toFixed(2)}) ground=${pair.zGround.toFixed(3)} h=${pair.h.toFixed(3)} z=${pair.z.toFixed(3)} | rail@${(Math.sqrt(bestD)).toFixed(1)}m=(${railX.toFixed(2)},${railY.toFixed(2)}) ground=${railGround.toFixed(3)} z=${railZ.toFixed(3)} hTerm=${(railZ - railGround).toFixed(3)}`);
+                }
+            }
         }
 
         const segments: Array<{
@@ -2481,8 +2535,12 @@ export class MBTileDataEmitter {
                 _index: idx,
                 // Same late-pass band as the HD road fills (§512): coverage
                 // quads occupy ro 2..9 — structures below ~9.6 get buried.
-                // Rails sit above the base surface (9.6), tunnel walls below
-                // the markup pass (9.8).
+                // §885 g52g probe: ro 9.55-before-decks + depth rendered the
+                // TRUE 3D curb (top + dark wall) but rails also appeared on
+                // edges mgl never rails — reverted to 9.65-with-sunk-rails
+                // until the rail selection rule matches mgl. Rails sit above
+                // the base surface (9.6), tunnel walls below the markup pass
+                // (9.8).
                 renderOrder: mode === 'bridge' ? 9.65 : 9.7,
                 _renderOrder: mode === 'bridge' ? 9.65 : 9.7,
                 _layerId: layer?.id ?? '__mb-elevated',
