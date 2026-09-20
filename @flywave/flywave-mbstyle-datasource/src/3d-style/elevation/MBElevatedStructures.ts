@@ -899,7 +899,11 @@ export class MBElevatedStructures {
         // expected junction shows one curb on the outer edge, plain deck at
         // every interior junction, although mgl also BUILDS those rails —
         // its depth reconstruction hides them; we suppress at build time).
-        const coarse = (v: number): number => Math.round(v / 8);
+        // g52v2: grid 8→2 units — the 8-unit grid over-suppressed (x=240
+        // parapet segment vanished: distinct nearby edges quantized into the
+        // same cell); 2 units (~0.6 m at z14) still bridges the ~1-unit
+        // T-junction coordinate jitter between adjacent features.
+        const coarse = (v: number): number => Math.round(v / 2);
         const coarseCounts = new Map<string, number>();
         for (const e of this.m_unevalEdges) {
             const ax = coarse(this.m_unevalVertices[e.a * 2]);
