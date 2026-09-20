@@ -190,6 +190,7 @@ function main() {
             ...(process.env.MBSTYLE_FOGSHIFT ? [`fogshift=${process.env.MBSTYLE_FOGSHIFT}`] : []),
             ...(process.env.MBSTYLE_SHRAD ? [`shrad=${process.env.MBSTYLE_SHRAD}`] : []),
             ...(process.env.MBSTYLE_SHADOWHW ? ["shadowhw=1"] : []),
+            ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),
             ...(process.env.MBSTYLE_TESTTIMEOUT ? [`testtimeout=${process.env.MBSTYLE_TESTTIMEOUT}`] : []),
             ...(process.env.MBSTYLE_SHADOWOVERLAY === "0" ? ["shadowoverlay=0"] : []),
             ...(process.env.MBSTYLE_FOGMGLHEIGHT === "0" ? ["fogmglheight=0"] : []),

@@ -135,9 +135,15 @@
 - 169,209 的不变性指向：shadowhw 深度图**内容或 shadow 相机状态**本身（默认 packed 路径 54,224 同 fixture 同灯光）。下一步=用现有 DIAG 探针（shadowdbg 系）直接 dump shadowhw 深度图内容对拍（验证深度图是否为空/错域），或审计 m_hwRT 渲染时 mainRenderer 的 clear color(0xffffff)/viewport 与 depth-texture 采样的交互。
 - 本轮落地：MB_SH_HWBIN 二值比较（extrusion；结构接收端 g51g 已是同形 step，无需改）——shadowhw 激活语义进一步向 mgl 字面靠拢。
 
+## g63 实测结论（2026-09-22 第二轮）
+
+- **shadowhw 隧道回归的直接证据（DIAG9 取证）**：shadowhw=1 + shdiag=9 的 tunnel 采集显示大面积**黄色**（mbUse1=1、gate=1、mbLit=0 = cascade-0 uv 越界回退 cascade-1 且全读成阴影）——对比默认路径 DIAG10 时代"全部可见甲板 mbUse1=0（cascade-0 内）"。即 **shadowhw 模式下接收端的 cascade-0 光空间坐标整体失效**（uv 越界/深度>1），回退 cascade-1 后 packed 内容又不匹配几何 → 全场误判。
+- 这解释了此前所有不变性：比较语义/bias/tap 怎么改都无意义——cascade-0 采样根本没有发生。
+- 下一轮：对比 shadowhw=0/1 两种模式下 dump 的 uMBShadowMatrix 与接收端 uv（MBShadowMat 探针/MBUvProbe 已有）定位 m_matrix 在 HW 分支中的失效点（嫌疑：m_matrix 更新时序被 HW 早退跳过，或 m_shadowCamera 正交范围在 HW 分支内不同步）。
+
 ## 下一轮主攻（按 mgl 源码字面）
 
-- **S10 续**：shadowhw 深度图内容直接取证（shadowdbg DIAG 系 dump），定位内容/相机状态差异。
+- **S10 续**：shadowhw 模式 m_matrix/uv 失效点定位（MBShadowMat/MBUvProbe 双模式对拍）。
 - **S8** 级联矩阵 mercator 球心/Ti(pitch,bearing) roll/texel-snap（遗留主项，依赖 geo↔RTE 帧桥）。
 - **G10** SUBDIVISION_EDGE_EXTENSION 生效化（MBPolygonClippingHD 当前 void 丢弃）。
 - 遗留：MBEnvironmentManager/mapview/MBModelRenderer 的 TS 类型错误（HEAD 既有）。
