@@ -749,17 +749,23 @@ export class MBMaterialPatchManager {
             // culled under FrontSide; mgl draws elevated structures
             // double-sided (CullFaceMode.disabled in the elevated passes).
             if ((tech as any).__elev) {
+                // §885 g57 (audit S14): mgl main pass = LEQUAL + ReadOnly +
+                // CullFaceMode.backCCW (draw_elevated_fill.ts:51,131). With
+                // the build-time winding flip (g57) FrontSide culls exactly
+                // mgl's back faces; ReadOnly = depthWrite false — the rails
+                // never own the depth buffer (the deck/prepass does).
+                // structwind=0 reverts both to the g52 DoubleSide+write era.
+                const structWind = (globalThis as any).__mbStructWind !== false;
                 for (const material of materials) {
-                    if (material.side !== THREE.DoubleSide) {
-                        material.side = THREE.DoubleSide;
+                    const wantSide = structWind ? THREE.FrontSide : THREE.DoubleSide;
+                    if (material.side !== wantSide) {
+                        material.side = wantSide;
                         material.needsUpdate = true;
                     }
-                    // §885 g52b/g52g: depthTest OFF with zOffset parity OFF —
-                    // the sunk rails' tops lose the depth compare against the
-                    // 9.6 deck's depth write; with the rails sunk, depthTest
-                    // on buries them (hollow ring again), off shows their
-                    // top bands. Full chain (frame parity + depth + edge
-                    // selection) is a single future landing.
+                    if (structWind && material.depthWrite !== false) {
+                        material.depthWrite = false;
+                        material.needsUpdate = true;
+                    }
                     if (material.depthTest !== true) {
                         material.depthTest = true;
                         material.needsUpdate = true;

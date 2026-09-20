@@ -175,6 +175,9 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "noocc=1")) {
         (globalThis as any).__mbNoOcc = true;
     }
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "structwind=0")) {
+        (globalThis as any).__mbStructWind = false;
+    }
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "structelevattr=0")) {
         (globalThis as any).__mbStructElevAttr = false;
     }

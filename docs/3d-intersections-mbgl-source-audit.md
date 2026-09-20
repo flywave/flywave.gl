@@ -95,8 +95,16 @@
 - **实测（mtime 验证）**：junction 18,170 持平；tunnel 50,866 → **50,630**；全量 3d-intersections 58 例总计 **1,958,110 px**（对照历史全量 407 万/600 万档）。TS1128 修复后 TS 全量检查暴露 MBShadowRenderer 两个潜伏未声明字段（m_shadRadius/m_analyticTex）已补声明。
 - 遗留类型错误（MBModelRenderer/MBEnvironmentManager/mapview）均为 HEAD 既有、文件未动。
 
+## g57 实测结论（2026-09-21 第三轮）
+
+- **S14 落地**：①构建期翻转全部 renderable 三角形绕序（y-flip 镜像补偿，与 deck fill 的终三一九绕序修复同一惯例），材质 FrontSide = mgl `CullFaceMode.backCCW` 字面对应；②材质 `depthWrite=false` = mgl `DepthMode.ReadOnly` 字面对应（护栏永不拥有深度缓冲）。`structwind=0` 旋钮回退两者。
+- **实测**：junction 18,170 持平；tunnel 在 S14 开/关两态均为 56,195（像素级中性）——与 g56 的 50,630 的差异属已记录的 tunnel 双稳态模式漂移，非 S14 回归。
+- **S10 专项评估（未启动大改）**：硬件深度纹理路径已存在（`__mbShadowHW`→`m_hwRT.depthTexture`，UnsignedInt DepthFormat，接收端 `.r` 直读），剩余差距 = true `sampler2DShadow` 硬件 GREATER 比较——需 GLSL3（`texture(sampler2DShadow, vec3)`）迁移全部接收端材质（three 接收端均为 GLSL1 注入，无 EXT_shadow_samplers 可用），渲染器级专项确认。
+- **环境告警**：机器累积数百个外部（非本用户）僵尸 chrome 进程无法清理，SwiftShader 显著变慢 → mocha 180s 超时 + GL Error 1282/1281 刷屏，结果服务端一度被旧实例占口（8081）。A/B 度量在本机恢复前不可信；建议会话边界执行内存纪律（杀 karma chrome）并考虑清理系统级僵尸进程。
+
 ## 下一轮主攻（按 mgl 源码字面）
 
-- **S10** 硬件深度比较专项（DEPTH_COMPONENT16 + sampler2DShadow 全链，渲染器级）。
-- **S14** 护栏材质 depthWrite=false 对齐 ReadOnly + backCCW 绕序核查（需护栏渲染次序先于 deck 深度写入的保障）。
+- **S10** GLSL3 迁移专项（sampler2DShadow 硬件比较）——需在机器恢复后进行，逐材质 glslVersion 切换或 ShadowMaterial 包装。
 - **S8** 级联矩阵 mercator 球心/Ti(pitch,bearing) roll/texel-snap（遗留主项，依赖 geo↔RTE 帧桥）。
+- **G10** SUBDIVISION_EDGE_EXTENSION 生效化（MBPolygonClippingHD 当前 void 丢弃）。
+- 遗留：MBEnvironmentManager/mapview/MBModelRenderer 的 TS 类型错误（HEAD 既有）。

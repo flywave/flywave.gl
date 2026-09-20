@@ -822,6 +822,19 @@ export class MBElevatedStructures {
             ...roofIndices,
         ];
 
+        // §885 g57 (audit S14): mgl renders the renderable segments with
+        // CullFaceMode.backCCW — front = CCW in mgl's frame. Our projection
+        // flips Y, mirroring orientation: flip every renderable triangle's
+        // winding at build (the same parity fix the deck fills use, 终三一九)
+        // so FrontSide culling culls exactly mgl's back faces.
+        // structwind=0 keeps the unflipped winding (DoubleSide era).
+        if ((globalThis as any).__mbStructWind !== false) {
+            for (let i = 0; i + 2 < indices.length; i += 3) {
+                const t = indices[i + 1];
+                indices[i + 1] = indices[i + 2];
+                indices[i + 2] = t;
+            }
+        }
         if (indices.length === 0 && depthIndices.length === 0) return null;
         // §885 终三一九g12: rail anchoring audit — per bridge section, the
         // emitted rail z range in METERS vs the ring heights it was built
