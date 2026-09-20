@@ -1096,6 +1096,9 @@ async function renderUntilSettled(
             const mv: any = (window as any).__mbTestMapView;
             const vr = mv?.m_viewRanges;
             rows.push(`VIEW far=${vr?.far?.toExponential(3)} near=${vr?.near?.toExponential(3)} camH=${mv?.camera?.position?.length?.().toExponential(3)} maxGeomDS=${JSON.stringify((window as any).__mbTestDS?.maxGeometryHeight)} maxGeomMV=${mv?.m_maxGeometryHeight}`);
+            // §885 g52l: camera-parity dump — mgl-probe (mgl-cam.cjs) prints
+            // the same quantities from live mgl for the diff.
+            rows.push(`CAM zoomLevel=${mv?.zoomLevel} pitch=${mv?.pitch} heading=${mv?.heading} fov=${mv?.camera?.fov} aspect=${mv?.camera?.aspect} targetDistance=${mv?.targetDistance} viewport=${JSON.stringify(mv?.canvas ? [mv.canvas.width, mv.canvas.height] : null)} camPos=${mv?.camera?.position ? [mv.camera.position.x, mv.camera.position.y, mv.camera.position.z].map(n => +n.toExponential(4)).join(',') : '?'}`);
             if (fb) {
                 fetch(`${fb}/mb-probe-dump`, {
                     method: "POST",
