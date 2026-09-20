@@ -144,6 +144,16 @@ function discoverTests(): TestEntry[] {
     const rl = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("raillift="))?.slice("raillift=".length);
     if (rl !== undefined) (globalThis as any).__mbRailLift = Number(rl) || 0;
+    // §885 g52o: prepass A/B knobs — off quantifies the occluder's
+    // contribution, z lifts it to test depth-composite participation.
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "prepassoff=1")) {
+        (globalThis as any).__mbPrepassOff = true;
+    }
+    {
+        const pz = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("prepassz="))?.slice("prepassz=".length);
+        if (pz !== undefined) (globalThis as any).__mbPrepassZ = Number(pz) || 0;
+    }
     // §885 g52d: railflip=1 — negate the guard-rail cross-section
     // horizontal (inward/outward A/B for the inset-band defect).
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "railflip=1")) {

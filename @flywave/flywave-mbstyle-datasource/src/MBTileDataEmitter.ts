@@ -2472,12 +2472,18 @@ export class MBTileDataEmitter {
             // eslint-disable-next-line no-console
             console.log(`[MBPrepass] underground=${mesh.underground} depthN=${mesh.depthIndices.length} maskN=${mesh.maskIndices.length} triN=${mesh.indices.length} tunnelStart=${mesh.tunnelStart}`);
         }
-        if (mesh.underground && (mesh.depthIndices.length > 0 || mesh.maskIndices.length > 0)) {
+        // §885 g52o: prepassoff=1 quantifies the occluder's contribution;
+        // prepassz=<m> lifts the ground occluder to test whether its depth
+        // participates in the composite at all (dsr underground roads stay
+        // visible although the occluder meshes exist and precede them).
+        const prepassOff = (globalThis as any).__mbPrepassOff === true;
+        const prepassZ = Number((globalThis as any).__mbPrepassZ ?? 0);
+        if (!prepassOff && mesh.underground && (mesh.depthIndices.length > 0 || mesh.maskIndices.length > 0)) {
             const flat: number[] = new Array(mesh.positions.length);
             for (let i = 0; i < mesh.positions.length; i += 3) {
                 const w = this.project(new THREE.Vector2(
                     mesh.positions[i] * scale, mesh.positions[i + 1] * scale + yDelta));
-                flat[i] = w.x; flat[i + 1] = w.y; flat[i + 2] = w.z;
+                flat[i] = w.x; flat[i + 1] = w.y; flat[i + 2] = w.z + prepassZ;
             }
             this.emitElevPrepass('ground', mesh.depthIndices, flat);
             this.emitElevPrepass('mask', mesh.maskIndices, flat);

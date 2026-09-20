@@ -120,6 +120,8 @@ function main() {
             ...(process.env.MBSTYLE_DECKDBG ? ["deckdbg=1"] : []),
             ...(process.env.MBSTYLE_RAILFLIP ? ["railflip=1"] : []),
             ...(process.env.MBSTYLE_PREPASSDBG ? ["prepassdbg=1"] : []),
+            ...(process.env.MBSTYLE_PREPASSOFF ? ["prepassoff=1"] : []),
+            ...(process.env.MBSTYLE_PREPASSZ ? [`prepassz=${process.env.MBSTYLE_PREPASSZ}`] : []),
             ...(process.env.MBSTYLE_RTDUMP ? ["rtdump=1"] : []),
             ...(process.env.MBSTYLE_RTDISABLE ? ["rtdisable=1"] : []),
             ...(process.env.MBSTYLE_UVTDBG ? ["uvtdbg=1"] : []),
