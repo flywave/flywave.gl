@@ -425,6 +425,12 @@ export class MBShadowRenderer {
                         // compile error; it killed every perspective ground
                         // quad program since the g50u-era normal-offset
                         // experiment landed — shadows-underpass 0:501).
+                        // §885 g52r A/B: removing this lift (mgl
+                        // ground_shadow has none) + plane-bias + 2x2 kernel
+                        // REGRESSED shadows-tunnel +8.5k — the tunnel family
+                        // leans on this overlay's calibrated darkness inside
+                        // tunnel interiors; restored until the ceiling-face
+                        // lighting lands.
                         mbWP.z += 10.0;
                         vec4 uv4 = uMBShadowMatrix * vec4(mbWP, 1.0);
                         vec4 uv4b = uMBShadowMatrix1 * vec4(mbWP, 1.0);
@@ -443,6 +449,11 @@ export class MBShadowRenderer {
                         // §885 终二百一十九: 3x3 PCF (mgl hardware sampler
                         // bilinear-compare equivalent) + cascade-1
                         // view-depth fade (u_fade_range semantics).
+                        // §885 g52r A/B: the mgl-literal plane-bias + 2x2
+                        // bilinear-compare variant was tested (g52r) and
+                        // REGRESSED shadows-tunnel +8.5k — the calibrated
+                        // smoothstep window over the 3x3 window is the
+                        // current best for this overlay approximation.
                         if (inC0 || inC1) {
                             float litSum = 0.0;
                             for (int dy = -1; dy <= 1; dy++) {
@@ -486,10 +497,16 @@ export class MBShadowRenderer {
                                 (uv4.x >= 0.0 && uv4.x <= 1.0 &&
                                  uv4.y >= 0.0 && uv4.y <= 1.0) ? 1.0 : 0.0);
                         } else if (MB_SHADOW_OVERLAY == 1) {
-                            // §885 终一百三十八: OVERLAY blend mode — the quad
-                            // draws ON TOP of all fills/roads/extrusions as a
-                            // dark overlay: transparent where lit, dark where
-                            // shadowed. Darkens ALL underlying geometry.
+                            // §885 终一百三十八: OVERLAY blend — alpha = 1−F
+                            // reproduces mgl's per-channel ground-factor
+                            // multiply on the GROUND surface (junction family
+                            // factor 0.49). Kept DARKER than the raw factor
+                            // (the g52r pure-factor 0.562 variant regressed
+                            // shadows-tunnel +8.5k: the tunnel interior's
+                            // darkness is approximated by this overlay until
+                            // the tunnel ceiling face lighting lands — mgl
+                            // gets that darkness from apply_lighting on the
+                            // ceiling faces, not from the ground quad).
                             float shadowAlpha = (1.0 - lit) * uMBShadowIntensity * 0.7;
                             gl_FragColor.rgb = vec3(0.0, 0.0, 0.0);
                             gl_FragColor.a = shadowAlpha;
