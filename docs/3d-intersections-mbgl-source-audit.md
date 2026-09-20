@@ -116,8 +116,16 @@
 - **hw+2d 激活态 A/B（testtimeout=900s）**：junction **18,167**（历史最优，−3 vs 默认）；tunnel **168,919**（+112k 域不匹配退步）——硬件 DEPTH16 比较域与校准的 packed-16bit 窗口域量化不同（§716 账本早有记录），隧道内腔/地下链最敏感。**默认保持 shadow2d 关**；激活管线保留供 GPU 环境与域校准后复用。
 - 度量基建：karma webpack 缓存在 /tmp/_karma_webpack_*（排查时清过）；testtimeout 参数已接 MBSTYLE_TESTTIMEOUT。
 
+## g60 实测结论（2026-09-21 第六轮）
+
+- **重大修复（g59 引入的默认态回归根因）**：g59 的 `structVOk` 在两次顶点 replace 之间检测（恒 false）→ 结构光照片段注入被静默整体跳过 → 隧道 168,919/172,695。已改为在 begin_vertex replace 之后检测（`vMbAttrN` 写回 + `varying float vMBHeight` 声明双条件）。同时补上片段主函数缺失的 `varying vec3 vMbAttrN;` 声明（g57 起就有 12 处编译失败的潜伏缺陷）。`aMBElev` 声明按 includes 双向去重。
+- **修复后默认态（最优）**：junction **18,284** / tunnel **54,224**（历史最优档）。
+- **S10 激活态域校准排查**：干净基线上二分（noext/quadsw/双关/结构 define 关四组配置）—— tunnel 全部 **169,209** 恒定，与 tap 开关无关；排除 extrusion GLSL3（shadow2d 不开 hw 时 54,488 正常）。回归源收敛为 HW 上下文中的**双渲染/GL 状态副作用**（SwiftShader 下 sampler2DShadow 绑定 + 场景二次栅格化的状态干扰），非比较语义本身——需 GPU 环境或对 hw 渲染路径做状态隔离审计后才能收敛。默认 shadow2d 维持关闭。
+- S8/G10 未动（见下）。
+
 ## 下一轮主攻（按 mgl 源码字面）
 
-- **S10 续**：激活态 tunnel 域校准（硬件比较 ref 的 bias/缩放对齐 packed→raw 域迁移，重点隧道内腔），或以 GPU 环境重测。
+- **S10 续**：GPU 环境复测 hw+2d；或审计 SwiftShader 双渲染的 GL 状态隔离（独立 context/渲染顺序）。
 - **S8** 级联矩阵 mercator 球心/Ti(pitch,bearing) roll/texel-snap（遗留主项，依赖 geo↔RTE 帧桥）。
 - **G10** SUBDIVISION_EDGE_EXTENSION 生效化（MBPolygonClippingHD 当前 void 丢弃）。
+- 遗留：MBEnvironmentManager/mapview/MBModelRenderer 的 TS 类型错误（HEAD 既有）。

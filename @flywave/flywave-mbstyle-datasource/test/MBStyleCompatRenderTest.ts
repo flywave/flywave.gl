@@ -184,6 +184,12 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shadow2d=1")) {
         (globalThis as any).__mbShadow2D = true;
     }
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shadow2dnoext=1")) {
+        (globalThis as any).__mbShadow2DNoExt = true;
+    }
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shadow2dquad=0")) {
+        (globalThis as any).__mbShadow2DQuad = false;
+    }
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "structelevattr=0")) {
         (globalThis as any).__mbStructElevAttr = false;
     }

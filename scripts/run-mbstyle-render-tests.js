@@ -122,6 +122,8 @@ function main() {
             ...(process.env.MBSTYLE_NOFFMODE ? [`noffmode=${process.env.MBSTYLE_NOFFMODE}`] : []),
             ...(process.env.MBSTYLE_STRUCTWIND ? [`structwind=${process.env.MBSTYLE_STRUCTWIND}`] : []),
             ...(process.env.MBSTYLE_SHADOW2D ? [`shadow2d=${process.env.MBSTYLE_SHADOW2D}`] : []),
+            ...(process.env.MBSTYLE_S2DNOEXT ? ["shadow2dnoext=1"] : []),
+            ...(process.env.MBSTYLE_S2DQUAD ? ["shadow2dquad=0"] : []),
             ...(process.env.MBSTYLE_SHADOW2D === "1" ? ["shadow2d=1"] : []),
             ...(process.env.MBSTYLE_SEA ? ["structelevattr=0"] : []),
             ...(process.env.MBSTYLE_UNEVALDROP ? ["unevaldrop=1"] : []),

@@ -1370,7 +1370,6 @@ export class MBMaterialPatchManager {
                  varying float vMBHeight;
                  void main() {`
             );
-            const structVOk = shader.vertexShader.includes('vMbAttrN = mat3(modelMatrix)');
             shader.vertexShader = shader.vertexShader.replace(
                 '#include <begin_vertex>',
                 `#include <begin_vertex>
@@ -1378,16 +1377,21 @@ export class MBMaterialPatchManager {
                  vMbAttrN = mat3(modelMatrix) * extrusionNormal;
                  vMBHeight = aMBElev;`
             );
-            // §885 g58: the fragment side references vMbAttrN/vMBHeight — if
-            // the vertex patch anchor was missing (foreign shader template),
-            // the declarations never land and the program fails wholesale.
-            // Compile a flag instead and strip the fragment dependency.
+            // §885 g59-fix→g60: the fragment side references vMbAttrN/
+            // vMBHeight — verify BOTH vertex patches landed (the anchors can
+            // be missing on foreign shader templates) BEFORE wiring the
+            // fragment dependency. The g59 version checked BETWEEN the two
+            // replaces and was always false, silently dropping ALL structure
+            // lighting (tunnel 168,919 regression root cause).
+            const structVOk = shader.vertexShader.includes('vMbAttrN = mat3(modelMatrix)')
+                && shader.vertexShader.includes('varying float vMBHeight;');
             shader.fragmentShader = `#define MB_STRUCTLIT_V ${structVOk ? 1 : 0}
 ` + shader.fragmentShader;
             if (structVOk) shader.fragmentShader = shader.fragmentShader.replace(
                 'void main() {',
                 `uniform vec3 uMB3DAmb; uniform vec3 uMB3DDirColor; uniform vec3 uMB3DDir;
                  varying vec3 vMBViewPos;
+                 varying vec3 vMbAttrN;
                  varying float vMBHeight;
                  vec3 mbBaseColor = vec3(1.0);
                  void main() {`
@@ -1643,7 +1647,7 @@ export class MBMaterialPatchManager {
                  varying vec3 vMbWorldPos;
                  varying vec3 vMbAttrN;
                  ${(globalThis as any).__mbShadowHW ? `#define MB_SH_HW 1\n#define MB_SH_BIAS ${Number((globalThis as any).__mbShadowBias ?? 0.0002)}` : ''}
-                 ${mbS2d ? `#define MB_SH_SHADOW2D 1\nuniform mediump sampler2DShadow uMBShadowS0;\nlayout(location = 0) out highp vec4 pc_fragColor;\n#define gl_FragColor pc_fragColor` : ''}
+                 ${mbS2d ? `#define MB_SH_SHADOW2D 1\n${(globalThis as any).__mbShadow2DNoExt ? '#define MB_SH_SHADOW2D_NOEXT 1\n' : ''}uniform mediump sampler2DShadow uMBShadowS0;\nlayout(location = 0) out highp vec4 pc_fragColor;\n#define gl_FragColor pc_fragColor` : ''}
                  ${shader.fragmentShader.includes('uMBShadowMap') ? '' :
                  `uniform sampler2D uMBShadowMap;
                  uniform mat4 uMBShadowMatrix;
@@ -1772,8 +1776,14 @@ export class MBMaterialPatchManager {
                              // with bilinear PCF — lit directly from the
                              // sampler (ref pulled by half the compare bias).
                              #ifdef MB_SH_SHADOW2D
+                             // §885 g60: extrusion tap gated off pending
+                             // slope-scaled bias calibration (binary compare
+                             // at 7.6° grazing light self-shadows every wall
+                             // — tunnel 168,919 experiment, g60).
+                             #ifndef MB_SH_SHADOW2D_NOEXT
                              float mbShLitHw = texture(uMBShadowS0,
                                  vec3(mbShUv.xy, mbShUv.z - 0.5 * float(MB_SH_BIAS)));
+                             #endif
                              #endif
                              #ifdef MB_SH_HW
                              float mbShBiasV = float(MB_SH_BIAS);
@@ -1796,7 +1806,7 @@ export class MBMaterialPatchManager {
                              // 172,541, z-offset-scale 281,197→331,486) and
                              // were reverted; correct scaling needs the
                              // window-depth-per-metre mapping probed first.
-                             #ifdef MB_SH_SHADOW2D
+                             #if defined(MB_SH_SHADOW2D) && !defined(MB_SH_SHADOW2D_NOEXT)
                              float mbShLit = mbShLitHw;
                              #else
                              float mbShLit = smoothstep(-mbShBiasV, mbShBiasV, mbShUv.z - mbShD);
@@ -3718,24 +3728,17 @@ export class MBMaterialPatchManager {
         // creation path previously kept the shared technique cacheKey and
         // could resolve to a sibling's unpatched program.
         const origKey = material.customProgramCacheKey?.bind(material);
-        const s2d = (globalThis as any).__mbShadow2D === true;
-        if (s2d) (material as any).glslVersion = THREE.GLSL3;
+        // §885 g60: NO GLSL3 conversion here — fill/line receivers have no
+        // hardware-compare tap (removed in g59) and batch-converting every
+        // fill/line material to GLSL3 broke exotic templates wholesale
+        // (tunnel 168,919 with all taps disabled — GLSL3 was the regressor).
         material.customProgramCacheKey = (): string =>
             (origKey ? origKey() : 'mb') + '-mbshadow' +
-            ((globalThis as any).__mbShadowHW ? '-hw' : '') +
-            (s2d ? '-s2d' : '');
+            ((globalThis as any).__mbShadowHW ? '-hw' : '');
         material.needsUpdate = true;
         const orig = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
             if (orig) orig.call(material, shader);
-            // §885 g58 (audit S10): mgl sampler2DShadow seed + GLSL3 out.
-            const shSeedS0 = (this.m_dataSource as any).m_shadowRenderer
-                ?.getShadowUniforms?.() ?? null;
-            shader.uniforms.uMBShadowS0 = { value: shSeedS0?.mapS0 ?? null };
-            if (s2d) {
-                shader.fragmentShader = 'layout(location = 0) out highp vec4 pc_fragColor;\n#define gl_FragColor pc_fragColor\n'
-                    + shader.fragmentShader;
-            }
             // §885 终四十七g51a: mgl fill.vertex port — per-vertex light-space
             // position (v_pos_light_view = u_light_matrix·vec4(a_pos, z_offset)
             // equivalent). vMBLightWPos is the fragment's world (RTE) point:
@@ -3786,7 +3789,9 @@ export class MBMaterialPatchManager {
             // §885 终三十九g34: HD elevated receivers read the fragment
             // elevation (aMBElev attribute) as the sample-plane height.
             if ((material as any).__mbElevPlane) {
-                shader.vertexShader = ('attribute float aMBElev;\nvarying float vMBElev;\n' + shader.vertexShader).replace(
+                const aMBElevDecl = shader.vertexShader.includes('attribute float aMBElev')
+                    ? '' : 'attribute float aMBElev;\n';
+                shader.vertexShader = (aMBElevDecl + 'varying float vMBElev;\n' + shader.vertexShader).replace(
                     '#include <project_vertex>',
                     '#include <project_vertex>\n    vMBElev = aMBElev;');
                 shader.fragmentShader = ('varying float vMBElev;\n' + shader.fragmentShader);
@@ -4167,9 +4172,11 @@ export class MBMaterialPatchManager {
             }
             // §885 g58 (audit S10): hardware compare path — active only when
             // the compare-mode depth texture actually exists.
-            if ((globalThis as any).__mbShadow2D === true
-                && !!(this.m_dataSource as any).m_shadowRenderer
-                    ?.getShadowUniforms?.()?.mapS0) {
+            // §885 g60: DISABLED for fill/line receivers — no tap consumes it
+            // (the g59 lit override was removed) and a sampler2DShadow bound
+            // next to the packed-depth reads perturbed the tunnel wholesale
+            // (168,919 at constant count across every tap configuration).
+            if (false) {
                 shader.fragmentShader = '#define MB_SH_SHADOW2D 1\n' + shader.fragmentShader;
             }
             // §885 终三十九g50g: mgl-faithful receiver semantics

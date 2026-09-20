@@ -335,6 +335,7 @@ export class MBShadowRenderer {
             /** §885 g58 (audit S10): sampler2DShadow binding (compare-mode
              * depth texture) — null when shadow2d is off. */
             mapS0: ((globalThis as any).__mbShadow2D === true
+                && (globalThis as any).__mbShadow2DQuad !== false
                 && (globalThis as any).__mbShadowHW)
                 ? ((globalThis as any).__mbShTexS0 ?? null) : null,
             // §885 g56 (audit S11): mgl u_shadow_normal_offset[1]/[2] —
@@ -394,7 +395,8 @@ export class MBShadowRenderer {
             const hwDef = (globalThis as any).__mbShadowHW
                 ? '#define MB_SH_HW 1\n'
                 : '';
-            const shadow2dOn = (globalThis as any).__mbShadow2D === true;
+            const shadow2dOn = (globalThis as any).__mbShadow2D === true
+                && (globalThis as any).__mbShadow2DQuad !== false;
             const s2dDef = shadow2dOn ? '#define MB_SH_SHADOW2D 1\n' : '';
             const biasDef = `#define MB_SH_BIAS ${biasV}\n#define MB_SHADOW_OVERLAY ${overlayOn ? 1 : 0}\n`;
             if (shadow2dOn) {
@@ -1597,7 +1599,8 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                 // :298-309/:519). m_hwRT's texture must stay PLAIN — the
                 // software-path receivers read it as sampler2D, and a
                 // TEXTURE_COMPARE_MODE binding poisons every sampler2D read.
-                if ((globalThis as any).__mbShadow2D === true) {
+                if ((globalThis as any).__mbShadow2D === true
+                    && (globalThis as any).__mbShadow2DQuad !== false) {
                     if (!this.m_hwRTS || this.m_hwRTS.width !== size) {
                         const dts = new THREE.DepthTexture(size, size);
                         dts.type = THREE.UnsignedIntType;
