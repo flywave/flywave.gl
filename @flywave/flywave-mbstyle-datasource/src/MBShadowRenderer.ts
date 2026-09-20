@@ -39,6 +39,9 @@ export function mbShadowRes(): number {
 
 export interface ShadowUniformState {
     map: THREE.Texture;
+    /** §885 g58 (audit S10): sampler2DShadow binding (compare-mode depth
+     * texture); null when shadow2d off. */
+    mapS0?: THREE.Texture | null;
     matrix: THREE.Matrix4;
     map1?: THREE.Texture;
     matrix1?: THREE.Matrix4;
@@ -64,6 +67,8 @@ export interface ShadowUniformState {
     /** §885 终四十二g50w: mgl u_shadow_normal_offset world-up displacement
      * (meters) — kills receiver self-sampling acne on coplanar surfaces. */
     normalOffsetZ?: number;
+    /** §885 g56 (audit S9): mgl cascade-1 far = 4.5×ctcd (metres). */
+    fadeFar?: number;
     /** §885 g56 (audit S11): mgl per-cascade normal-offset multipliers (m). */
     normalOffset0?: number;
     normalOffset1?: number;
@@ -97,6 +102,9 @@ export class MBShadowRenderer {
     // §530: independent-context depth pass renderer + CanvasTexture回流.
     private m_shRenderer: THREE.WebGLRenderer | null = null;
     private m_hwRT: THREE.WebGLRenderTarget | null = null;
+    /** §885 g58 (audit S10): compare-mode depth RT for the shadow sampler
+     * (m_hwRT's texture must stay plain for the software-path readers). */
+    private m_hwRTS: THREE.WebGLRenderTarget | null = null;
     private m_shTex: THREE.Texture | null = null;
     private m_shTex1: THREE.DataTexture | null = null;
     private m_depthPixels1: Uint8Array | null = null;
@@ -324,6 +332,11 @@ export class MBShadowRenderer {
             // §885 终三十九g50b: live compare-bias window for receivers.
             biasAuto: this.m_biasAuto,
             normalOffsetZ: this.m_normalOffsetZ,
+            /** §885 g58 (audit S10): sampler2DShadow binding (compare-mode
+             * depth texture) — null when shadow2d is off. */
+            mapS0: ((globalThis as any).__mbShadow2D === true
+                && (globalThis as any).__mbShadowHW)
+                ? ((globalThis as any).__mbShTexS0 ?? null) : null,
             // §885 g56 (audit S11): mgl u_shadow_normal_offset[1]/[2] —
             // per-cascade vertex normal-offset multipliers, meters:
             // texel_i = 2·radius_m(i)/res (ortho window ±radius over res
@@ -381,9 +394,23 @@ export class MBShadowRenderer {
             const hwDef = (globalThis as any).__mbShadowHW
                 ? '#define MB_SH_HW 1\n'
                 : '';
+            const shadow2dOn = (globalThis as any).__mbShadow2D === true;
+            const s2dDef = shadow2dOn ? '#define MB_SH_SHADOW2D 1\n' : '';
             const biasDef = `#define MB_SH_BIAS ${biasV}\n#define MB_SHADOW_OVERLAY ${overlayOn ? 1 : 0}\n`;
-            shader.fragmentShader = hwDef + biasDef + shader.fragmentShader;
+            if (shadow2dOn) {
+                // §885 g58 (audit S10): GLSL3 for sampler2DShadow. three's
+                // GLSL3 prefix defines attribute/varying/texture2D but NOT
+                // gl_FragColor — declare the out + alias here.
+                (mat as any).glslVersion = THREE.GLSL3;
+                shader.fragmentShader = 'layout(location = 0) out highp vec4 pc_fragColor;\n#define gl_FragColor pc_fragColor\n'
+                    + hwDef + s2dDef + biasDef + shader.fragmentShader;
+            } else {
+                shader.fragmentShader = hwDef + s2dDef + biasDef + shader.fragmentShader;
+            }
             shader.uniforms.uMBShadowMap = { value: this.m_shTex };
+            // §885 g58 (audit S10): mgl sampler2DShadow (compare GREATER,
+            // hardware bilinear PCF) — same texture, compare-mode binding.
+            shader.uniforms.uMBShadowS0 = { value: this.m_shTex };
             shader.uniforms.uMBShadowMatrix = { value: this.m_matrix.clone() };
             shader.uniforms.uMBShadowMap1 = { value: this.m_shTex1 };
             shader.uniforms.uMBShadowMatrix1 = { value: this.m_matrix1.clone() };
@@ -413,6 +440,12 @@ export class MBShadowRenderer {
             // lit=1.0-outside-cascades semantics, 终一百四十七).
             shader.fragmentShader = ('varying vec2 vNdc;\n' +
                 'uniform sampler2D uMBShadowMap;\n' +
+                // §885 g58 (audit S10): mgl sampler2DShadow — hardware
+                // GREATER compare with bilinear PCF (shadow_renderer.ts:298).
+                // DECLARED ONLY in GLSL3/shadow2d mode: ES 1.00 has no
+                // sampler2DShadow type, an unconditional declaration fails
+                // every GLSL1 compile of this program.
+                (shadow2dOn ? 'uniform mediump sampler2DShadow uMBShadowS0;\n' : '') +
                 'uniform sampler2D uMBShadowMap1;\n' +
                 'uniform mat4 uMBShadowMatrix1;\n' +
                 'uniform mat4 uMBShadowMatrix;\n' +
@@ -483,6 +516,24 @@ export class MBShadowRenderer {
                         // current best for this overlay approximation.
                         if (inC0 || inC1) {
                             float litSum = 0.0;
+                            #ifdef MB_SH_SHADOW2D
+                            // §885 g58 (audit S10): mgl single-tap hardware
+                            // compare — sampler2DShadow GREATER with LINEAR
+                            // filtering performs the bilinear PCF in the
+                            // sampler (_prelude_shadow.fragment.glsl:33-40).
+                            if (inC0) {
+                                litSum = texture(uMBShadowS0, vec3(uv4.xy, uv4.z)) * 9.0;
+                            } else {
+                                for (int dy = -1; dy <= 1; dy++) {
+                                    for (int dx = -1; dx <= 1; dx++) {
+                                        vec2 off = vec2(float(dx), float(dy)) * uMBShadowTexel * 1.5;
+                                        vec4 pk = texture2D(uMBShadowMap1, uv4b.xy + off);
+                                        float sd = pk.r + pk.g / 255.0;
+                                        litSum += smoothstep(-float(MB_SH_BIAS), float(MB_SH_BIAS), sd - uv4b.z);
+                                    }
+                                }
+                            }
+                            #else
                             for (int dy = -1; dy <= 1; dy++) {
                                 for (int dx = -1; dx <= 1; dx++) {
                                     vec2 off = vec2(float(dx), float(dy)) * uMBShadowTexel * 1.5;
@@ -503,6 +554,7 @@ export class MBShadowRenderer {
                                     litSum += l;
                                 }
                             }
+                            #endif
                             lit = litSum / 9.0;
                             // cascade-1 view-depth fade: fade OUT occlusion
                             // (toward lit) across uMBFadeRange.
@@ -551,7 +603,8 @@ export class MBShadowRenderer {
                 }`);
             this.m_groundUniforms = shader.uniforms;
             (mat as any).customProgramCacheKey = () =>
-                'mbgroundquad-v3' + ((globalThis as any).__mbShadowHW ? '-hw' : '');
+                'mbgroundquad-v3' + ((globalThis as any).__mbShadowHW ? '-hw' : '')
+                + ((globalThis as any).__mbShadow2D === true ? '-s2d' : '');
         };
         const quad = new THREE.Mesh(geo, mat);
         // §885 终五十八: assignment was MISSING — the quad was built, added
@@ -1518,6 +1571,9 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                     const dt = new THREE.DepthTexture(size, size);
                     dt.type = THREE.UnsignedIntType;
                     dt.format = THREE.DepthFormat;
+                    // §885 g58 (audit S10): m_hwRT's texture stays PLAIN —
+                    // software-path receivers read it as sampler2D; hardware
+                    // compare lives in the separate m_hwRTS depth texture.
                     this.m_hwRT = new THREE.WebGLRenderTarget(size, size, {
                         depthTexture: dt, depthBuffer: true, stencilBuffer: false,
                         minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
@@ -1535,6 +1591,33 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                 mainRenderer.setRenderTarget(prevRT2);
                 this.m_shTex = this.m_hwRT.depthTexture;
                 (this as any).__mbShHWTex = true;
+                // §885 g58 (audit S10): render the depth AGAIN into a
+                // compare-mode depth texture (sampler2DShadow GREATER +
+                // LINEAR = hardware bilinear PCF, mgl shadow_renderer.ts
+                // :298-309/:519). m_hwRT's texture must stay PLAIN — the
+                // software-path receivers read it as sampler2D, and a
+                // TEXTURE_COMPARE_MODE binding poisons every sampler2D read.
+                if ((globalThis as any).__mbShadow2D === true) {
+                    if (!this.m_hwRTS || this.m_hwRTS.width !== size) {
+                        const dts = new THREE.DepthTexture(size, size);
+                        dts.type = THREE.UnsignedIntType;
+                        dts.format = THREE.DepthFormat;
+                        dts.compareFunction = THREE.GreaterCompare;
+                        this.m_hwRTS = new THREE.WebGLRenderTarget(size, size, {
+                            depthTexture: dts, depthBuffer: true, stencilBuffer: false,
+                            minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+                            generateMipmaps: false,
+                        });
+                    }
+                    mainRenderer.setRenderTarget(this.m_hwRTS);
+                    mainRenderer.clear(true, true);
+                    mainRenderer.render(scene, this.m_shadowCamera);
+                    this.renderDepthLayer2(scene, this.m_shadowCamera, mainRenderer);
+                    mainRenderer.setRenderTarget(prevRT2);
+                    (this as any).__mbShTexS0 = this.m_hwRTS.depthTexture;
+                } else {
+                    (this as any).__mbShTexS0 = null;
+                }
             } else {
                 this.m_shRenderer.setRenderTarget(null);
                 this.m_shRenderer.clear();

@@ -375,6 +375,7 @@ export class MBMaterialPatchManager {
                             }
                         }
                         u.uMBShadowMap.value = shadowState?.map ?? null;
+                        if (u.uMBShadowS0) u.uMBShadowS0.value = (shadowState as any)?.mapS0 ?? null;
                         if (shadowState) {
                             // §692: share the renderer's LIVE uniform objects —
                             // prepGroundQuad mutates them in place each frame,
@@ -1442,8 +1443,11 @@ export class MBMaterialPatchManager {
         // own scene lighting, which is BLACK for 3D-lights styles with
         // ambient intensity 0 (ground-shadow-fog family).
         const origKey = material.customProgramCacheKey?.bind(material);
+        const mbS2d = (globalThis as any).__mbShadow2D === true;
+        if (mbS2d) (material as any).glslVersion = THREE.GLSL3;
         material.customProgramCacheKey = (): string =>
-            (origKey ? origKey() : 'mb') + '-mbext3d' + ((globalThis as any).__mbShadowHW ? '-hw' : '');
+            (origKey ? origKey() : 'mb') + '-mbext3d' + ((globalThis as any).__mbShadowHW ? '-hw' : '')
+            + (mbS2d ? '-s2d' : '');
         material.needsUpdate = true;
 
         const origOnCompile = material.onBeforeCompile;
@@ -1632,6 +1636,7 @@ export class MBMaterialPatchManager {
                  varying vec3 vMbWorldPos;
                  varying vec3 vMbAttrN;
                  ${(globalThis as any).__mbShadowHW ? `#define MB_SH_HW 1\n#define MB_SH_BIAS ${Number((globalThis as any).__mbShadowBias ?? 0.0002)}` : ''}
+                 ${mbS2d ? `#define MB_SH_SHADOW2D 1\nuniform mediump sampler2DShadow uMBShadowS0;\nlayout(location = 0) out highp vec4 pc_fragColor;\n#define gl_FragColor pc_fragColor` : ''}
                  ${shader.fragmentShader.includes('uMBShadowMap') ? '' :
                  `uniform sampler2D uMBShadowMap;
                  uniform mat4 uMBShadowMatrix;
@@ -1756,6 +1761,13 @@ export class MBMaterialPatchManager {
                              #else
                              float mbShD = mbShPk.r + mbShPk.g / 255.0;
                              #endif
+                             // §885 g58 (audit S10): hardware GREATER compare
+                             // with bilinear PCF — lit directly from the
+                             // sampler (ref pulled by half the compare bias).
+                             #ifdef MB_SH_SHADOW2D
+                             float mbShLitHw = texture(uMBShadowS0,
+                                 vec3(mbShUv.xy, mbShUv.z - 0.5 * float(MB_SH_BIAS)));
+                             #endif
                              #ifdef MB_SH_HW
                              float mbShBiasV = float(MB_SH_BIAS);
                              #else
@@ -1777,7 +1789,11 @@ export class MBMaterialPatchManager {
                              // 172,541, z-offset-scale 281,197→331,486) and
                              // were reverted; correct scaling needs the
                              // window-depth-per-metre mapping probed first.
+                             #ifdef MB_SH_SHADOW2D
+                             float mbShLit = mbShLitHw;
+                             #else
                              float mbShLit = smoothstep(-mbShBiasV, mbShBiasV, mbShUv.z - mbShD);
+                             #endif
                              // §717: mgl u_fade_range — shadows fade back to
                              // LIT across the far quarter of the shadow
                              // camera's coverage (mgl: mix(occlusion1, 0.0,
@@ -3695,13 +3711,24 @@ export class MBMaterialPatchManager {
         // creation path previously kept the shared technique cacheKey and
         // could resolve to a sibling's unpatched program.
         const origKey = material.customProgramCacheKey?.bind(material);
+        const s2d = (globalThis as any).__mbShadow2D === true;
+        if (s2d) (material as any).glslVersion = THREE.GLSL3;
         material.customProgramCacheKey = (): string =>
             (origKey ? origKey() : 'mb') + '-mbshadow' +
-            ((globalThis as any).__mbShadowHW ? '-hw' : '');
+            ((globalThis as any).__mbShadowHW ? '-hw' : '') +
+            (s2d ? '-s2d' : '');
         material.needsUpdate = true;
         const orig = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
             if (orig) orig.call(material, shader);
+            // §885 g58 (audit S10): mgl sampler2DShadow seed + GLSL3 out.
+            const shSeedS0 = (this.m_dataSource as any).m_shadowRenderer
+                ?.getShadowUniforms?.() ?? null;
+            shader.uniforms.uMBShadowS0 = { value: shSeedS0?.mapS0 ?? null };
+            if (s2d) {
+                shader.fragmentShader = 'layout(location = 0) out highp vec4 pc_fragColor;\n#define gl_FragColor pc_fragColor\n'
+                    + shader.fragmentShader;
+            }
             // §885 终四十七g51a: mgl fill.vertex port — per-vertex light-space
             // position (v_pos_light_view = u_light_matrix·vec4(a_pos, z_offset)
             // equivalent). vMBLightWPos is the fragment's world (RTE) point:
@@ -4097,10 +4124,19 @@ export class MBMaterialPatchManager {
                 const name = decl.replace(/^uniform [a-zA-Z0-9]+ /, '').replace(/[;\n]/g, '');
                 if (!shader.fragmentShader.includes(name)) mbShadowOwn.push(decl);
             }
+            // §885 g58 (audit S10): shadow-sampler declaration only in
+            // GLSL3/shadow2d mode (ES 1.00 has no sampler2DShadow type).
+            if ((globalThis as any).__mbShadow2D === true
+                && !shader.fragmentShader.includes('uMBShadowS0')) {
+                mbShadowOwn.push('uniform mediump sampler2DShadow uMBShadowS0;\n');
+            }
             shader.fragmentShader = mbShadowOwn.join('') + shader.fragmentShader;
             {
                 const bV = Number((globalThis as any).__mbShadowBias ?? (globalThis as any).__mbShadowBiasAuto ?? 0.0002);
                 const hwOn = (globalThis as any).__mbShadowHW ? 1 : 0;
+                const s2dOn = (globalThis as any).__mbShadow2D === true
+                    && !!(this.m_dataSource as any).m_shadowRenderer
+                        ?.getShadowUniforms?.()?.mapS0;
                 const d5 = (globalThis as any).__mbShadowDiag === '5' ? 1 : 0;
                 const d7 = (globalThis as any).__mbShadowDiag === '7' ? 1 : 0;
                 const d8 = (globalThis as any).__mbShadowDiag === '8' ? 1 : 0;
@@ -4115,6 +4151,13 @@ export class MBMaterialPatchManager {
             }
             if ((globalThis as any).__mbShadowHW) {
                 shader.fragmentShader = '#define MB_SH_HW 1\n' + shader.fragmentShader;
+            }
+            // §885 g58 (audit S10): hardware compare path — active only when
+            // the compare-mode depth texture actually exists.
+            if ((globalThis as any).__mbShadow2D === true
+                && !!(this.m_dataSource as any).m_shadowRenderer
+                    ?.getShadowUniforms?.()?.mapS0) {
+                shader.fragmentShader = '#define MB_SH_SHADOW2D 1\n' + shader.fragmentShader;
             }
             // §885 终三十九g50g: mgl-faithful receiver semantics
             // (_prelude_shadow.fragment.glsl) DEFAULT-ON after the g50g

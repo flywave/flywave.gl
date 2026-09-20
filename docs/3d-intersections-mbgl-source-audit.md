@@ -102,9 +102,16 @@
 - **S10 专项评估（未启动大改）**：硬件深度纹理路径已存在（`__mbShadowHW`→`m_hwRT.depthTexture`，UnsignedInt DepthFormat，接收端 `.r` 直读），剩余差距 = true `sampler2DShadow` 硬件 GREATER 比较——需 GLSL3（`texture(sampler2DShadow, vec3)`）迁移全部接收端材质（three 接收端均为 GLSL1 注入，无 EXT_shadow_samplers 可用），渲染器级专项确认。
 - **环境告警**：机器累积数百个外部（非本用户）僵尸 chrome 进程无法清理，SwiftShader 显著变慢 → mocha 180s 超时 + GL Error 1282/1281 刷屏，结果服务端一度被旧实例占口（8081）。A/B 度量在本机恢复前不可信；建议会话边界执行内存纪律（杀 karma chrome）并考虑清理系统级僵尸进程。
 
+## g58 实测结论（2026-09-21 第四轮）
+
+- **环境恢复**：450 个本用户僵尸 karma chrome 定位为 snap chromium 的 systemd user scope 单元，`systemctl --user stop 'snap.chromium.*.scope'` 全清（load 144→4.5）。注意 pkill 对跨会话进程 EPERM，须走 systemd。
+- **复核结论**：junction 18,170 稳定复现；tunnel 双稳态证实——g56 语义（structwind=0）两次测量 50,630/55,600，S14 开 56,195 / 关 55,600（Δ595≈1%，远小于 ~5k 的模式摆幅），S14 中性成立。
+- **S10 管线已铺设、默认关闭**（shadow2d=1 + shadowhw=1 启用）：compare-mode DepthTexture（GreaterCompare+LINEAR=硬件双线性 PCF）独立于 m_hwRT（m_hwRT 纹理保持 plain——TEXTURE_COMPARE_MODE 绑定会毒化所有 sampler2D 读），caster 场景双渲染；ground quad/extrusion 接收端 GLSL3（glslVersion+pc_fragColor out）+ sampler2DShadow 单点硬件比较。经验教训（三条 GLSL 约束）：①ES 1.00 无 sampler2DShadow 类型，uniform 声明必须与模式同门控；②`#if 宏` 文本残留即使宏未定义也在 ANGLE 触发预处理错误（已移除结构接收端第三处，回退 2 站点）；③sampler2DShadow 读取的纹理不可再作 sampler2D 读。
+- **HW+2D 组合挂账**：shadowhw=1+shadow2d=1 时 HW 覆盖物路径（scene.overrideMaterial=m_depthMaterial）下 vMBOffN/vMbAttrN varying 声明缺失 → 编译失败。默认态（两者皆关）已验证无害。
+- **S10 实测**：tunnel shadow2d 开/关均 56,195（默认 HW 关 → mapS0=null → 管线未激活，符合设计）；激活态（hw+2d）修复上述注入问题后才有意义。
+
 ## 下一轮主攻（按 mgl 源码字面）
 
-- **S10** GLSL3 迁移专项（sampler2DShadow 硬件比较）——需在机器恢复后进行，逐材质 glslVersion 切换或 ShadowMaterial 包装。
+- **S10 续**：修复 HW 覆盖物路径下的 varying 注入顺序（vMBOffN/vMbAttrN 需在 overrideMaterial 之外的主材质注入中保证声明），随后 hw+2d 激活态 A/B。
 - **S8** 级联矩阵 mercator 球心/Ti(pitch,bearing) roll/texel-snap（遗留主项，依赖 geo↔RTE 帧桥）。
 - **G10** SUBDIVISION_EDGE_EXTENSION 生效化（MBPolygonClippingHD 当前 void 丢弃）。
-- 遗留：MBEnvironmentManager/mapview/MBModelRenderer 的 TS 类型错误（HEAD 既有）。
