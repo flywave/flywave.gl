@@ -1259,7 +1259,18 @@ export class MBMaterialPatchManager {
             const ls2 = (this.m_dataSource as any).m_environment?.lighting3DState;
             shader.uniforms.uMB3DAmb = { value: ls2 ? ls2.ambientColorLinear : [1, 1, 1] };
             shader.uniforms.uMB3DDirColor = { value: ls2 ? ls2.directionalColorLinear : [1, 1, 1] };
-            shader.uniforms.uMB3DDir = { value: ls2 ? ls2.dir : [0, 0, 1] };
+            // §885 g52i: mgl toSun semantics (终二三六, same as the extrusion
+            // path) — negate the horizontal component of the shadow-chain
+            // convention so NdotL peaks when the wall faces the style
+            // azimuth. structlitflip=1/2/3 keep the legacy forensics.
+            const dirRawS: number[] = ls2 ? ls2.dir : [0, 0, 1];
+            const flipS: number = (globalThis as any).__mbStructLitFlip ?? 0;
+            const dirBaseS: number[] = !ls2 ? [0, 0, 1] : [-dirRawS[0], -dirRawS[1], dirRawS[2]];
+            const dir3S: number[] = !flipS ? dirBaseS
+                : flipS === 1 ? [dirRawS[0], -dirRawS[1], dirRawS[2]]
+                : flipS === 2 ? [-dirRawS[0], dirRawS[1], dirRawS[2]]
+                : dirRawS;
+            shader.uniforms.uMB3DDir = { value: dir3S };
             shader.vertexShader = shader.vertexShader.replace(
                 'void main() {',
                 `varying vec3 vMBViewPos;
@@ -1286,14 +1297,21 @@ export class MBMaterialPatchManager {
                 '#include <opaque_fragment>',
                 `#include <opaque_fragment>
                  {
+                     // §885 g52i: mgl _prelude_lighting parity. Screen-space
+                     // derivative normal sign-stabilized to face the camera
+                     // (closed cross-sections), then rotated into the WORLD
+                     // frame so NdotL/ambient anisotropy use world up and the
+                     // world toSun — matching mgl apply_lighting whose
+                     // normal/u_lighting_directional_dir are world-space.
                      vec3 mbN3 = normalize(cross(dFdx(vMBViewPos), dFdy(vMBViewPos)));
-                     vec3 mbDirView = normalize((viewMatrix * vec4(uMB3DDir, 0.0)).xyz);
-                     vec3 mbUpView = normalize((viewMatrix * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
-                     float mbNdotL = dot(mbN3, mbDirView);
+                     vec3 mbRay = normalize(vMBViewPos);
+                     if (dot(mbN3, mbRay) > 0.0) mbN3 = -mbN3;
+                     vec3 mbNW = normalize(transpose(mat3(viewMatrix)) * mbN3);
+                     float mbNdotL = dot(mbNW, uMB3DDir);
                      float mbDirLum = dot(uMB3DDirColor, vec3(0.2126, 0.7152, 0.0722));
                      float mbDirFactorMin = 1.0 - 0.3 * min(mbDirLum, 1.0);
                      float mbAmbDir = mix(mbDirFactorMin, 1.0, min(mbNdotL + 1.0, 1.0));
-                     float mbVert = mix(0.92, 1.0, dot(mbN3, mbUpView) * 0.5 + 0.5);
+                     float mbVert = mix(0.92, 1.0, mbNW.z * 0.5 + 0.5);
                      vec3 mbK = uMB3DAmb * (mbVert * mbAmbDir) + uMB3DDirColor * max(mbNdotL, 0.0);
                      gl_FragColor.rgb = mbBaseColor * mbK;
                  }`
