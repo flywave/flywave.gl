@@ -6432,3 +6432,18 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 像素验证（esl 楔形）**：(440,60) ours=(83,86,85) vs expected=(82,85,84) **Δ=1** ✓；(30,30)=(184,191,189) 亮区逐位 ✓；桥面带 (200,450)/(420,100)/(100,300) 逐位 ✓。剩余差 = 影子边界形状（expected 影子远缘更远，cascade-1 覆盖/形状）+ 桥洞 speckle。
 
 **④ 状态**：默认仍关（groundplane=1 显式启用），基线零风险；单测 310 passing。下轮：①shrad 1.11 默认化评估（跨夹具回归扫：fog/terrain/model-layer 抽查）②underpass 超时治理后补测 ③影子边界形状（cascade-1）细调 ④flat-fill receiver 让位评估（paint 模式下或已不必要——fills 覆写平面，双重压暗仅在平面亮于 fill 自暗时发生，实测未观察到）。
+
+### §885 g68: cascade-1 mgl 字面拟合落地（shadow_renderer.ts:336-352 逐行）——像素中性实证 + 度量基建陷阱两则（2026-09-21）
+
+**① 源码级修复（遵"不盲目对齐"）**：audit S8/S9 主项——mgl cascade-1 是**独立的最小视锥球拟合**（near=cascadeSplitDist=1.5·ctcd, far=shadowCutoutDist=4.5·ctcd，createLightMatrix 同式 → 自有 centerDepth1/radius1 与更远的球心 (0,0,−centerDepth) per cascade），我方旧实现是"4×cascade-0 半径 + 共用球心"。本轮逐行移植：radius1/centerDepth1 同式计算（含 size/(size−1) 舍入边距与 shrad 同乘）、级联-1 pass 改用 radius1（x 窗同乘 shadowKappa）、相机位置/lookAt 移至 c1Center（cascade-0 球心 + forward·(centerDepth1−centerDepth)，shcompass/biasfix 变体保留）、m_normalOffsetRR 缺省回退改 radius1（mgl texel1 = cascades.at(-1).boundingSphereRadius 字面）。回退旋钮 **shc1old=1**；审计探针 `__mbC1Fit={r0,d0,r1,d1}`。
+
+**② 实测（chromium 152 snap + headless-shell 149 双跑，mtime 新鲜度验证）**：
+- 默认态：junction 18,284 / tunnel 53,630 / esl 24,727 / esl-text 27,394 / circles-nonelevated 7,842——新旧两臂**逐位一致**（junction/tunnel 接收端全在 cascade-0 界内，mgl shadow_occlusion 语义下 cascade-1 不参与）。
+- armed 态（groundplane=1）：shrad=1.11 esl 旧 22,372≈台账 22,363 ✓ / 新 22,372 逐位同；shrad=1.0 esl 旧 24,742 / 新 24,742 逐位同——**cascade-1 窗口尺寸不是 esl 残差的敏感轴**（楔形影子内容在两窗内同质；残余"expected 影子更远"属 caster 内容范围=200m 建筑足迹 vs 桥足迹，非窗口覆盖问题）。
+- 结论：改动 mgl 字面正确、全配置零回退、像素中性；保留为语义对齐基础设施（S8 级联矩阵链的 cascade-1 半边），后续 ceiling-face lighting / underpass 主攻时使用。
+
+**③ 度量基建陷阱两则（后人必读）**：
+- **run-mbstyle-render-tests.js 会整体覆写 KARMA_ARGS（:267）**——外部 KARMA_ARGS env 全部静默丢弃！旋钮必须走 MBSTYLE_* env 白名单（本轮补 MBSTYLE_GROUNDPLANE / MBSTYLE_SHC1OLD 透传）。此前多轮"armed 跑出 off 值"类假象需排查此因。
+- **残留 karma chromium 占用默认口 9876** 会劫持新一轮的浏览器连接（Executed 计数串台、反馈丢失）；snap chromium 归 systemd user scope，pkill EPERM，须 `systemctl --user stop 'snap.chromium.*.scope'`，或 MBSTYLE_KARMA_PORT 换口。SwiftShader 重夹具（underpass/full-family）~15min 后 ping 超时断连是常态，A/B 批次宜 ≤4 夹具。
+
+**④ 状态**：单测 310 passing（mocha 直跑 lib；pretest tsc --build 被 HEAD 既有 test 文件错误阻断，未计入）。下轮主攻不变：①tunnel/ceiling-face apply_lighting（S12-相关，tunnel +36.5k 回退根因）②underpass 超时治理 ③shrad 1.11 默认化跨夹具回归扫。

@@ -189,6 +189,10 @@ function main() {
             ...(process.env.MBSTYLE_CAMDIST ? [`camdist=${process.env.MBSTYLE_CAMDIST}`] : []),
             ...(process.env.MBSTYLE_FOGSHIFT ? [`fogshift=${process.env.MBSTYLE_FOGSHIFT}`] : []),
             ...(process.env.MBSTYLE_SHRAD ? [`shrad=${process.env.MBSTYLE_SHRAD}`] : []),
+            // §885 g68: groundplane/shc1old — arm the ground-shadow plane
+            // channel / revert to the legacy 4× shared-center cascade-1 fit.
+            ...(process.env.MBSTYLE_GROUNDPLANE ? ["groundplane=1"] : []),
+            ...(process.env.MBSTYLE_SHC1OLD ? ["shc1old=1"] : []),
             ...(process.env.MBSTYLE_SHADOWHW ? ["shadowhw=1"] : []),
             ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),
             ...(process.env.MBSTYLE_TESTTIMEOUT ? [`testtimeout=${process.env.MBSTYLE_TESTTIMEOUT}`] : []),

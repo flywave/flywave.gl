@@ -1548,6 +1548,39 @@ export class MBShadowRenderer {
             const rf = Number((globalThis as any).__mbShadowRad ?? 1);
             radius *= rf;
         }
+        // §885 g68 (audit S8/S9): mgl cascade-1 is its OWN frustum-sphere fit,
+        // NOT 4× cascade-0 — shadow_renderer.ts:336-352 cascadeIndex 1:
+        // near = cascadeSplitDist (1.5·ctcd), far = shadowCutoutDist (4.5·ctcd),
+        // fed to the same createLightMatrix minimal-sphere formula → own
+        // centerDepth1/radius1 and a sphere center further along the view
+        // axis ((0,0,−centerDepth) per cascade). The legacy 4×/shared-center
+        // approximation both over-sized and misplaced the far map — the
+        // "expected shadow reaches farther" boundary residual (g67h ③).
+        // shrad applies here too (same sweep semantics as cascade-0).
+        let radius1 = radius * 4;
+        let centerDepth1 = centerDepth;
+        if (!(globalThis as any).__mbShC1Old) {
+            const frNear1 = ctcd * 1.5;
+            const frFar1 = ctcd * 4.5;
+            if (k2 > (frFar1 - frNear1) / (frFar1 + frNear1)) {
+                centerDepth1 = frFar1;
+                radius1 = frFar1 * k;
+            } else {
+                centerDepth1 = 0.5 * (frFar1 + frNear1) * (1 + k2);
+                radius1 = 0.5 * Math.sqrt(
+                    (frFar1 - frNear1) * (frFar1 - frNear1) +
+                    2 * (frFar1 * frFar1 + frNear1 * frNear1) * k2 +
+                    (frFar1 + frNear1) * (frFar1 + frNear1) * k2 * k2);
+            }
+            radius1 *= size / (size - 1);
+            radius1 *= Number((globalThis as any).__mbShadowRad ?? 1);
+        }
+        // Fit audit hook (decodedbg/probe channel): r0/d0 = cascade-0 fit,
+        // r1/d1 = cascade-1 fit (legacy arm reports the 4× approximation).
+        (this as any).__mbC1Fit = {
+            r0: +radius.toFixed(1), d0: +centerDepth.toFixed(1),
+            r1: +radius1.toFixed(1), d1: +centerDepth1.toFixed(1),
+        };
         const rteCam2 = (this.m_mapView as any).getRteCamera?.() as THREE.PerspectiveCamera | undefined;
         const rcam = (rteCam2 ?? camera);
         rcam.updateMatrixWorld();
@@ -1654,7 +1687,7 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
             // z-only port used (offScale), shared by both cascades.
             this.m_noffLerpClamp = Number.isFinite(offScale) ? offScale : 1;
             this.m_normalOffsetRR = Number.isFinite((this as any).__mbCascade1HalfExtent)
-                ? (this as any).__mbCascade1HalfExtent : this.m_shadowCamera.right;
+                ? (this as any).__mbCascade1HalfExtent : radius1;
         }        // §885 终七十二: shoff=<x>,<y> — world-XY calibration offset of the
         // shadow sphere center (dark-centroid A/B against expected).
         {
@@ -2737,6 +2770,14 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                 depthMatR.uniforms.uMBLightDir.value.copy(lightDir).normalize();
             }
             this.m_shadowCamera.up.set(0, 0, 1);
+            // §885 g68: cascade-1's own sphere center — forward·(centerDepth1 −
+            // centerDepth) beyond cascade-0's (mgl per-cascade (0,0,−centerDepth)
+            // sphere center). shc1old=1 keeps the legacy shared center.
+            const c1Center = ((globalThis as any).__mbShC1Old)
+                ? sphereCenter
+                : sphereCenter.clone().addScaledVector(new THREE.Vector3(0, 0, -1)
+                    .applyQuaternion(rcam.getWorldQuaternion(new THREE.Quaternion())), centerDepth1 - centerDepth);
+            this.m_shadowCamera.position.copy(c1Center);
             if ((globalThis as any).__mbShCompass) {
                 // §885 终三〇九: shcompass=1 → mgl compass roll (Ti(pitch,
                 // −bearing) priced as the shortest-arc quaternion from the
@@ -2748,29 +2789,33 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                     new THREE.Vector3(0, 0, -1), fwd);
                 this.m_shadowCamera.quaternion.copy(q);
                 this.m_shadowCamera.lookAt(
-                    sphereCenter.x + fwd.x, sphereCenter.y + fwd.y, sphereCenter.z + fwd.z);
+                    c1Center.x + fwd.x, c1Center.y + fwd.y, c1Center.z + fwd.z);
             } else if ((globalThis as any).__mbShadowBiasFix !== 1) {
-                this.m_shadowCamera.lookAt(sphereCenter.clone().sub(lightDir));
+                this.m_shadowCamera.lookAt(c1Center.clone().sub(lightDir));
             } else {
-                this.m_shadowCamera.lookAt(sphereCenter.clone().add(lightDir));
+                this.m_shadowCamera.lookAt(c1Center.clone().add(lightDir));
             }
             this.m_shadowCamera.updateProjectionMatrix();
             this.m_shadowCamera.updateMatrixWorld();
         }
 
-        // §885 终一百一十八: cascade-1 far-field pass — 4× extents, same
+        // §885 终一百一十八: cascade-1 far-field pass — same
         // (skipped when the HW path is active — cascade-1 uses the
         // independent-context renderer).
         if (this.m_shRenderer) {
-        // §885 终一百一十八: cascade-1 far-field pass — 4× extents, same
-        // sphere center/direction. Ground receivers outside cascade-0 fall
+        // §885 终一百一十八: cascade-1 far-field pass — same sphere
+        // center/direction. Ground receivers outside cascade-0 fall
         // back to this map (mgl shadow_occlusion cascade fallback).
-        this.m_shadowCamera.left = -radius * 4;
-        this.m_shadowCamera.right = radius * 4;
-        this.m_shadowCamera.top = radius * 4;
-        this.m_shadowCamera.bottom = -radius * 4;
-        this.m_shadowCamera.near = -2 * radius * 4;
-        this.m_shadowCamera.far = radius * 4 / Math.max(lightDir.z, 0.1);
+        // §885 g68: extents from the mgl cascade-1 fit (radius1, own
+        // centerDepth1/center — see the fit block above); shadowKappa
+        // applies to the x window like cascade-0. shc1old=1 → legacy 4×.
+        const r1x = radius1 * shadowKappa;
+        this.m_shadowCamera.left = -r1x;
+        this.m_shadowCamera.right = r1x;
+        this.m_shadowCamera.top = radius1;
+        this.m_shadowCamera.bottom = -radius1;
+        this.m_shadowCamera.near = -2 * radius1;
+        this.m_shadowCamera.far = radius1 / Math.max(lightDir.z, 0.1);
         this.m_shadowCamera.updateProjectionMatrix();
         this.m_shadowCamera.updateMatrixWorld();
         this.m_matrix1
