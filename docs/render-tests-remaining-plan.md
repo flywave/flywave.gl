@@ -6525,3 +6525,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 工具落地**：shcasteroff=extr|hd 逐类消隐旋钮（注意 extr 分支对 :232 直连路径无效——补挂账）+ MBSTYLE_SHCASTEROFF 透传；caster census 验证法（offhd 70→6）入档。
 
 **⑤ 状态**：单测 310 passing；tsc 26；esl 22,372 持平（旋钮默认惰性）。
+
+### §885 g75: 建筑底环对拍——朝向正确（0.177 vs geojson 0.178），旋转嫌疑移至顶环/挤出轴（2026-09-22）
+
+**① 底环转储（[MBBldgRing] decodedbg, g74③ 计划执行）**：5 点环主片段（NE cell 帧）可辨识真边 P3→P4 斜率 **0.177 ≈ geojson AB/CD 边斜率 0.178**——**底环世界朝向逐位正确**，其余角点为 tile 边界裁剪伪影（±38.2 钉扎）。g74"底面旋转"假设对底环不成立。
+
+**② 嫌疑收敛**：楔形左边界=建筑**顶边**影子的平行线——底环正确而顶边影子旋 14° ⇒ **顶环相对底环横移 ~50m（=200m·tan14°）**：挤出轴倾斜（up-矢量含水平分量）或高度施加路径带水平项。此量级的倾斜在渲染上即视觉所见"建筑旋转"。**下一步**：[MBBldgRing] 扩展转储顶环（base+height 后同点坐标）五点对拍底环，Δx/Δy/Δz 直接读出倾斜向量与来源（emitExtrudedPolygon 高度加法 vs project() z 链）。
+
+**③ 状态**：esl 22,372 持平；tsc 26；探针零扰动（默认惰性）。

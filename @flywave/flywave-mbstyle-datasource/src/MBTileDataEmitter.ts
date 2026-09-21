@@ -2939,8 +2939,19 @@ export class MBTileDataEmitter {
             const rings = polygon.rings;
             if (rings.length === 0) continue;
 
-            // Flatten ring vertices (tile-local 2D) and record hole offsets
-            // for earcut.
+            // §885 g74③: base-ring world dump for the shadow-casters
+            // building — offline diff vs the geojson source coords locates
+            // the ~14° footprint-orientation warp.
+            if ((globalThis as any).__mbDecodeDbg
+                && ((layer as any)._layerId === 'shadow-casters' || layer.id === 'shadow-casters')
+                && rings[0]?.length > 2) {
+                const pts = rings[0].slice(0, 8).map((p: any) => {
+                    const w = this.project(new THREE.Vector2(p.x, p.y));
+                    return `${w.x.toFixed(1)},${w.y.toFixed(1)}`;
+                });
+                // eslint-disable-next-line no-console
+                console.log(`[MBBldgRing] n=${rings[0].length} world=${pts.join(' ')}`);
+            }
             const allVerts: number[] = [];
             const holeIndices: number[] = [];
             for (const pt of rings[0]) allVerts.push(pt.x, pt.y);
