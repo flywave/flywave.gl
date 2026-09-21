@@ -198,6 +198,7 @@ function main() {
             ...("shclipunder" in process.env ? [`shclipunder=${process.env.MBSTYLE_SHCLIPUNDER}`] : []),
             ...(process.env.MBSTYLE_POLYCLIP === "0" ? ["polygonclip=0"] : []),
             ...(process.env.MBSTYLE_SHCASTEROFF ? [`shcasteroff=${process.env.MBSTYLE_SHCASTEROFF}`] : []),
+            ...(process.env.MBSTYLE_EXTSHADOWH ? ["extshadowh=1"] : []),
             ...(process.env.MBSTYLE_GPONE ? ["gpone=1"] : []),
             ...(process.env.MBSTYLE_SHADOWHW ? ["shadowhw=1"] : []),
             ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),

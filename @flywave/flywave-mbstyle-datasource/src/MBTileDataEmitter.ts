@@ -2897,7 +2897,10 @@ export class MBTileDataEmitter {
         // sec(lat) TWICE on the flat-height path (scan optimum K=1.27 =
         // secLat@37.75°) but once on the per-vertex terrain path — apply the
         // extra factor per alignment below (flat 54761→48992, terrain stays).
+        // §885 g78: extshadowh=1 drops the extra factor (A/B — the esl band
+        // points at the shadow-LENGTH effect of this scale).
         const extraScale =
+            (globalThis as any).__mbExtShadowH === true ? 1 :
             this.m_heightScaleFromTerrain
             && ((layer.paint as any)['fill-extrusion-height-alignment'] ?? 'flat') === 'flat'
                 ? this.m_terrainHeightScale

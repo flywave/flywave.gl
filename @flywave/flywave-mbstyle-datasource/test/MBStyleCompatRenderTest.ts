@@ -595,6 +595,10 @@ function discoverTests(): TestEntry[] {
     const sco = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shcasteroff="))?.slice("shcasteroff=".length);
     if (sco) (globalThis as any).__mbShCasterOff = sco;
+    // §885 g78: extshadowh=1 — drop the §294 sec(lat) extra height factor.
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "extshadowh=1")) {
+        (globalThis as any).__mbExtShadowH = true;
+    }
     // §885 终八十九: model-vector tile 404 → parent-tile fallback. The
     // vendored data covers only part of the requested tree/model tiles; a
     // 404 drops whole tree groups (green canopies vanish). mgl CI has the

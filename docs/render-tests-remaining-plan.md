@@ -6561,3 +6561,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 新首要候选：§294 高度补偿的影子长度效应**——emitExtrudedPolygon 平面路径 `rawHeight × m_terrainHeightScale × extraScale(≈sec(lat)≈1.27)`：200m 建筑我方世界高度 ≈254m → 影长 213m vs mgl 等效 168m，**我方影子更长**与全部观测方向一致（差带=我方多出的影三角形；楔形右缘"吻合"系图像边界截断无法判别长度）。§294 系 fill-extrusion-* 家族历史扫描最优（54761→48992），但该扫描不含影子语义——高度补偿与影子长度是一对未解耦的耦合项。**下轮验证**：增 `extshadowh=1`（仅深度 pass 缩放 extrusion 高度 ×1/extraScale 或等价顶点级 knob）A/B esl——若差带消失且 fill-extrusion 家族不回退，则双高度体系（渲染高度保留 1.27、影子 caster 高度用 1.0）成立；若 esl 好转但 buildings 家族回退，则需按 mgl mercator-z 单位逐字面重推 §294。
 
 **③ 状态**：esl 22,372 持平；tsc 26；单测 310。
+
+### §885 g79: §294 高度补偿假设证伪——esl 差带五轮取证收官，残余归入 S10 深度域家族（2026-09-22）
+
+**① extshadowh=1 决定性 A/B**：逐位不变——esl 无 terrain，`m_heightScaleFromTerrain` 为空 ⇒ `extraScale` 本就=1，**建筑 200m 无缩放**，g78② 假设证伪（旋钮保留，对 terrain 夹具仍可用）。
+
+**② 差带五轮取证（g74-g79）总结论**：遮挡体=200m 建筑影子；建筑底环几何（逐片段 0.1m 级对拍）、挤出垂直性、剪影边界、光方位角、cascade 拟合（g68 字面）全部验证正确——**我方影子链在字面语义层无已知偏差**，残余差带（esl ~14k px 主导结构）归因收敛至 **packed-16bit 深度域 vs mgl 硬件比较的系统性差异**（S10 家族：g59-g65 已证 raw/hw 域下隧道敏感、packed 域窗口校准是经验拟合）。差异形态（我方影子略宽/远）与 packed 域量化窗在低角掠射下的展宽一致。
+
+**③ 下轮主攻切换（建议）**：差带挂账转 S10 域专项（渲染器级：DEPTH16+sampler2DShadow 或 packed 域解析重校），或按性价比转 S8 级联矩阵 mercator 球心/Ti roll、underpass 超时治理。esl 差带不再单独开轮（五轮取证信息已穷尽，进一步需渲染器级重做）。
+
+**④ 状态**：esl 22,372 持平；tsc 26；单测 310；extshadowh 旋钮入库（terrain 夹具用）。
