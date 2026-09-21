@@ -6571,3 +6571,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮主攻切换（建议）**：差带挂账转 S10 域专项（渲染器级：DEPTH16+sampler2DShadow 或 packed 域解析重校），或按性价比转 S8 级联矩阵 mercator 球心/Ti roll、underpass 超时治理。esl 差带不再单独开轮（五轮取证信息已穷尽，进一步需渲染器级重做）。
 
 **④ 状态**：esl 22,372 持平；tsc 26；单测 310；extshadowh 旋钮入库（terrain 夹具用）。
+
+### §885 g80: underpass 武装态超时治理 + 基线首测 + 三个假设快排除（2026-09-22）
+
+**① 超时治理落地**：MBSTYLE_TESTTIMEOUT=900000 + MBSTYLE_KARMA_TIMEOUT_MS=3M 下 shadows-underpass 稳定完成——**128,622 基线首次落袋**（此前 180s 超时无数据，g67h/g79 挂账闭合）。平面 on/off：128,622/128,752（**−130 中性微赢**，平面在此夹具几乎不参与）。
+
+**② 失配形态**：整 64px 块级大面积背景差（ours 229,238,235 亮 vs exp 113 影）——expected 背景被大范围影子覆盖（光源 polar=20° 低阳，影长 2.75×高度），中心区 (250,250) 影子正确（lit=0.376）。gpred=4 诊断：失效区 sd≈0.59-0.62 有远内容但比接收点远 → 判亮。
+
+**③ 三假设快排除**：shc1old=1（旧 4× 级联1）逐位=默认 → 非 g68 重拟合回归；gplift=1 → 134,139（**+5.5k 变差**，10m 提升的 acne 补偿不能简单移除）；平面关 −130 → 非平面通道问题。失效区接收点被提至遮挡体之上的简单模型不成立（若成立 gplift=1 应大幅改善）。
+
+**④ 下轮**：identify underpass 的 caster 几何（hd 结构/embankment 高度 vs 低阳影长的定量核算——exp 影块 ~100+m 宽需 ~40m 高 caster，查瓦片数据实高）+ 中心区/角区采样链差（同图同 map 为何中心对四角错——优先 gpred=2 uv 对拍中心 vs 角区）。
+
+**⑤ 状态**：单测 310；tsc 26；MBSTYLE_GPLIFT 透传入库。
