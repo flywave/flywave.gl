@@ -120,6 +120,11 @@ function discoverTests(): TestEntry[] {
         if (fv === "0") (globalThis as any).__mbFsds = false;
         else if (fv === "1") (globalThis as any).__mbFsds = true;
     }
+    // §885 g66: polygonclip=0 — keep polygon overhang at decode (mgl renders
+    // spill into tiles that are not in the cover; see VectorTileDataEmitter).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "polygonclip=0")) {
+        (globalThis as any).__mbNoPolyClip = true;
+    }
     // §885 终三十九g50o: faceprobe=1 — per-mesh facing dump (needs decodedbg).
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "faceprobe=1")) {
         (globalThis as any).__mbFaceProbe = true;

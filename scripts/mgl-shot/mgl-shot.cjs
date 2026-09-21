@@ -31,7 +31,9 @@ const CHROME = process.env.CHROME_BIN ||
     });
     try {
         const page = await browser.newPage();
-        await page.setViewport({ width: 512, height: 512, deviceScaleFactor: 2 });
+        // MGL_SHOT_SCALE: output pixel scale (default 2 = retina; 1 matches
+        // the 512×512 render-test expected.png space for pixelmatch).
+        await page.setViewport({ width: 512, height: 512, deviceScaleFactor: Number(process.env.MGL_SHOT_SCALE) || 2 });
         page.on('console', m => { const t = m.text?.() ?? ''; if (t) (globalThis.__c ||= []).push(t); });
         await page.goto(
             `http://localhost:8130/scripts/mgl-shot/mgl-shot.html?fixture=${encodeURIComponent(fixture)}${extraQuery ? "&" + extraQuery : ""}`,

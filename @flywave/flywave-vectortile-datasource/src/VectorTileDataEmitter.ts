@@ -865,7 +865,17 @@ export class VectorTileDataEmitter {
 
             const computeTexCoords = this.getComputeTexCoordsFunc(technique, objectBounds);
 
-            const shouldClipPolygons = isPolygon && !isExtruded;
+            // §885 g66: polygonclip=0 — disable decode-time polygon clipping.
+            // mgl keeps tile geometry unclipped and masks tile edges at RENDER
+            // time only where a loaded neighbor draws the same content
+            // (source_cache tile masks). The decode-time clip also amputates
+            // geometry that spills into tiles that are NOT in the corpus/cover
+            // (404 cells) — mgl renders that spill and we rendered background
+            // there (3d-intersections missing-road signature: esl top-right
+            // wedge, shadows-underpass upper deck). Debug/A-B gate; the
+            // production form is neighbor-aware masking.
+            const shouldClipPolygons =
+                isPolygon && !isExtruded && (globalThis as any).__mbNoPolyClip !== true;
 
             for (const polygon of geometry) {
                 const rings: Ring[] = [];

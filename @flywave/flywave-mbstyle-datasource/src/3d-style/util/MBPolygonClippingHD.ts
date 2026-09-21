@@ -151,42 +151,6 @@ export function polygonSubdivision(
     }
     return current;
 }
-/**
- * Split polygons along every subdivision edge (mgl `polygonSubdivision`,
- * polygon_clipping_hd.ts:35-78): each edge — extended by `edgeExtension`
- * of its own length on both ends — cuts the rings as a thin clipping quad
- * (the perpendicular 3-scaled-unit width is numerically a line), and the
- * union of the pieces replaces the ring. Unlike an infinite half-plane
- * cut, regions beyond the extended segment are NOT split.
- */
-export function polygonSubdivision(
-    polygons: ClipPoint[][], subdivisionEdges: SubdivisionEdge[], edgeExtension = 0,
-): ClipPoint[][] {
-    if (subdivisionEdges.length === 0) return polygons;
-
-    let current = polygons.map(ring => normalizeRing(ring) ?? ring);
-    for (const e of subdivisionEdges) {
-        // Degenerate edges (isolated curve vertices have no direction) do
-        // not cut — clipping to both sides of a point would duplicate the
-        // ring and every shared edge would prune away in prepareEdges.
-        if (e.ax === e.bx && e.ay === e.by) continue;
-        const dx = e.bx - e.ax;
-        const dy = e.by - e.ay;
-        const next: ClipPoint[][] = [];
-        for (const ring of current) {
-            const pieces = splitRingBySegment(
-                ring,
-                e.ax - dx * edgeExtension, e.ay - dy * edgeExtension,
-                e.bx + dx * edgeExtension, e.by + dy * edgeExtension,
-            );
-            next.push(...pieces);
-        }
-        current = next;
-        if (current.length === 0) break;
-    }
-    return current;
-}
-
 /** Segment/segment intersection returning t along a→b and u along c→d. */
 export function segmentSegmentIntersection(
     a: ClipPoint, b: ClipPoint, c: ClipPoint, d: ClipPoint,

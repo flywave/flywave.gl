@@ -6328,3 +6328,22 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 - 45 件跳过夹具 resume 补测（chunked runner 自动跳过已测件）
 - terrain-enabled SHST 挂起排查
 - cast-shadows 239 style 全量 before 基线轮
+
+### §885 g66: 3d-intersections 全族新鲜基线 + 簇级归因（2026-09-21）
+
+**① 恢复误提交 'u'（c6eccb80）**：该提交把 `polygonSubdivision` 在 MBPolygonClippingHD.ts 里重复定义了两次（第二份引用不存在的 splitRingBySegment）——tsc 编译破坏 + lib 陈旧（单测 MBElevatedRoadTest 崩在旧产物）。已删除重复块、lib 重编译，单测 310 passing 恢复。
+
+**② 全族新鲜基线（mb-fam-align0，Chrome for Testing 131.0.0.0 指纹，75 件收齐，逐位可复现）**：
+总 mismatch **2,477,829 / 75 件 / 1 PASS**（depth-segments-undefined-crash 0）。头部：shadows-underpass 128,359、ortho-camera 81,065、elevated-wireframe 77,544、tunnel-color-feature-dependent 71,115、viewport-aligned(-text) 62-63k、guard-rail-color 62,156、elevated-symbols-pitched 62,006。**lighting 四件已从 g51 时代 73-93k 进步到 24,720/27,384/44,473/45,922**。
+
+**③ lighting 簇定性反转（esl 像素取证）**：桥面阴影带与 expected **逐位一致**（(200,450)=rgb(57,63,70) 完全相同；lit deck (82,85,84) ✓）——阴影接收链/浓度已到位。残余主项 = **右上整块路面缺失**（expected rgb(82,85,84) 路面色 vs 我们背景 rgb(184,191,189)）+ 桥洞周 speckle。DIAG9（shdiag=9）读数与正常渲染存在帧态分歧（诊断可信度待修），mgl-cover probe 的 mgl 集合 {232843-103243,232843-103244,232844-103244} vs 我们 HIT {103242,103243,232844-103242}——语料库只有 103242/103243/232844-103242 三块，**103244 两块任何一方都 404**；mgl-shot oracle（MGL_SHOT_SCALE=1 时与 expected 仅 0.17%）同样只拿到 103243 却渲染出了缺失路面 → 缺失内容的载体未定位（多边形仅 ±64 buffer，线层外溢 ±4096 但线层不经 §513 裁剪；polygonclip=0 门控 A/B 四件逐位无变化，排除解码期 clipPolygon）。**下轮首案：以 tile 屏幕映射复原（Transform 直驱）确定缺失区所属瓦片，再查该瓦片在我们管线的内容损失点。**
+
+**④ guard-rail 簇（~255k/7 件）定性**：几何与 mgl 逐字符同构（g53 审计维持）；raillift=30 实证**网格本身光栅化为实心宽带**（一切正常），名义高度处的条纹/噪声 = 与桥面 fill 的深度合成干涉（结构网格 depthWrite=false FrontSide，g57/g52t 校准态）。g52t 矩阵的 ro 9.55（rails first）爆炸性回归维持结论：收复需要 mgl 的 **depth-reconstruction 合成通道**（离屏结构 pass + 深度重建，隐藏内部栏杆），独立专项。A/B：structwind=0（DoubleSide）180,095→181,180（+1,085 否）；raillift 0.5/1.0/1.5 全部 +92~+453（否）。
+
+**⑤ ortho-camera 拆分**：shadowdisable=1 → 81,065→58,120（**阴影链贡献 22.9k**，其余 58.1k 为正交投影固有缺口——§571 接收端 unprojection/取景）。ortho-camera-tunnel 1,271 不变。
+
+**⑥ ground-quad 通道 A/B（重测）**：groundquad=1+shadowoverlay=0（underlay 模式，画于一切之下）在 lighting 四件全部 **+8.2~+8.3k 恶化**——即便 underlay 也不可收（桥洞透视+fill 缺失区复合），g52v 退役结论扩大到 underlay 形态。
+
+**⑦ 工具/基建**：mgl-shot 新增 `MGL_SHOT_SCALE` env（=1 输出 512² 与 expected 可 pixelmatch）；tmp/fam-summary.js（ibct-result 聚合表，注意 name 在 imageProps 内层）；tmp/img-diff.js（pixelmatch+均值）；polygonclip=0 调试门控（VectorTileDataEmitter + harness，本轮无效应保留备用）；shadowmgl=0 为无效 knob（harness 只解析 =1，值 0 落空）——已记档。
+
+**移交优先级**：①缺失路面载体定位（③）→ 预期回收 esl 四件 ~140k + shadows-underpass 128k 的大头 ②guard-rail depth-reconstruction 专项 ③ortho-camera 正交接收端 58.1k ④elevated-wireframe 77.5k（三角剖分奇偶性）⑤tunnel 簇 ~390k 归因（下一轮 DIYAG/内容对拍）。
