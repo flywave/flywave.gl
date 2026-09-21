@@ -2145,6 +2145,24 @@ export class MBTileDataEmitter {
                 // Triangulate with earcut
                 const triIndices = earcut(allVerts, holeIndices.length > 0 ? holeIndices : null, 2);
 
+                // §885 g72④: flat-fill spill telemetry — world bounds + how
+                // many raw ring vertices lie OUTSIDE the tile extent (the
+                // mgl unclipped-spill population). Locates the layer where
+                // the road-extend spill vanishes.
+                if ((globalThis as any).__mbDecodeDbg && !needsUv) {
+                    let outside = 0;
+                    for (const ring of rings) {
+                        for (const p of ring) {
+                            if (p.x < 0 || p.x > extents || p.y < 0 || p.y > extents) outside++;
+                        }
+                    }
+                    if (outside > 0) {
+                        const w0 = this.project(new THREE.Vector2(allVerts[0], allVerts[1]));
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBFlatSpill] layer=${layer.id} verts=${allVerts.length / 2} outside=${outside} firstWorld=${w0.x.toFixed(0)},${w0.y.toFixed(0)}`);
+                    }
+                }
+
                 // §271: globe projection — subdivide the triangulation so the
                 // fill hugs the sphere instead of cutting through it.
                 let outVerts = allVerts;

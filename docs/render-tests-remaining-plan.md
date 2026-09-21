@@ -6499,3 +6499,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 残余悬点（下轮正攻）**：flat 外溢在 processFillFeature 平面分支（无裁剪、project() 无 clamp 迹象）之后、光栅化之前消失。候选：proto 读取器几何上限/project() 深处 clamp/逐瓦片对象剔除。**下一步**：仿 [MBFillHD-bounds] 增设平面 fill 世界边界转储（含瓦片本地 x>extents 的顶点计数），一次运行即可定位消失层级。
 
 **⑤ 状态**：本轮零渲染行为改动（仅 runner MBSTYLE_POLYCLIP 透传+取证工具 mvt-extent.js）；esl 22,372 基线不变；台账更新。
+
+### §885 g73: g71/g72"缺失路面"前提修正——路面在画，差带=阴影判定差；flat 外溢遥测入库（2026-09-22）
+
+**① 前提修正（证据重读）**：无影态 (30,200)=(135,147,162)≈路色×光照（若缺失应为背景 184,191,189）——**fake-road-shade 路面我方一直在画**（含外溢：[MBFlatSpill] 遥测 960 条，fake-road-shade/road-hatched-area 外溢顶点均在流经发射器，无裁剪）。g71③/g72① 的"缺失路面段"结论撤销。
+
+**② 差带精确定性（三次取证合并）**：差带=**同一 rendered 路面上我方判影/expected 判亮**。我方深度图在差带光路上有 +11m（相对地面）遮挡体（g71 反投影），expected 无。排除已定：非地下 caster（shclipunder=0 逐位不变）、非光方位角（shaz±13 均 3× 变差）、非 elev-caster 结构段（elevcasteroff 下 (30,200) 仍暗）。剩余候选：**路fill/deck 网格作为 caster 的注册集合或高度差**（我方 deck 6.00 vs mgl 5.00, g52e 记录在案）——6m vs 5m deck + 投射几何差待逐类 caster 消隐 A/B（deck 路面网格、护栏网格、建筑）。
+
+**③ 工具落地**：MBFlatSpill 平面外溢遥测（decodedbg 门控，MBTileDataEmitter 平面分支）+ tmp/mvt-extent.js MVT 直读器；runner MBSTYLE_POLYCLIP 透传（注意：该旋钮消费者在 flywave-vectortile-datasource 包，对 mbstyle 夹具恒惰性——见 g72③）。
+
+**④ 状态**：单测 310 passing；tsc 26；esl 22,372 持平（遥测零扰动）。下轮：逐类 caster 消隐旋钮（deck/rail/building 各一）在差带像素 (30,200) 定位 +11m 遮挡体归属。
