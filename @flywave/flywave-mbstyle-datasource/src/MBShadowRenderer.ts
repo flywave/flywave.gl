@@ -225,6 +225,7 @@ export class MBShadowRenderer {
      * fullscreen overlay (g52v-retired) approximated without depth. */
     private m_groundPlane: THREE.Mesh | null = null;
     private m_groundPlaneU: any = null;
+    private m_gpLastIntensity = 0;
     private m_groundScene = new THREE.Scene();
     private m_groundCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     /** Drawing-buffer size for the §692 screen-space receivers. */
@@ -804,7 +805,14 @@ export class MBShadowRenderer {
         u.uMBShadowMap1.value = this.m_shTex1;
         u.uMBShadowMatrix.value.copy(this.m_matrix);
         u.uMBShadowMatrix1.value.copy(this.m_matrix1);
-        u.uMBShadowIntensity.value = this.m_intensity;
+        // §885 g67b: the live intensity can transiently read NaN (a
+        // mid-frame setLightState re-entry) — NaN reaches light → mix →
+        // MultiplyBlending poisons the covered pixels to black/white garbage
+        // (the gp7 wash). Keep the last FINITE value instead.
+        if (Number.isFinite(this.m_intensity)) {
+            this.m_gpLastIntensity = this.m_intensity;
+        }
+        u.uMBShadowIntensity.value = this.m_gpLastIntensity ?? 0;
         u.uMBShadowTexel.value = 1 / mbShadowRes();
         // mgl calculateGroundShadowFactor: A/(A+D·NdotL_ground) per channel,
         // linear — the fragment encodes with pow(1/2.2) (184→82 measured).
@@ -819,6 +827,10 @@ export class MBShadowRenderer {
                     f.setComponent(i, a > 0 ? a / (a + d) : 0);
                 }
             }
+            // §885 g67b: a NaN component reaches mix→MultiplyBlending and
+            // washes every covered pixel to white on SwiftShader — fall back
+            // to the no-op factor until the lights produce finite values.
+            if (![f.x, f.y, f.z].every(Number.isFinite)) f.set(1, 1, 1);
         }
         // mgl u_fade_range = [far1×0.75, far1]; our metric far1 = 4.5×ctcd.
         const fadeFar = 4.5 * Math.max(1, (this.m_mapView as any).targetDistance ?? 500);
@@ -859,7 +871,9 @@ export class MBShadowRenderer {
                 const pa: string[] = [];
                 for (let i = 0; i < 4; i++) pa.push(`(${p.getX(i).toFixed(0)},${p.getY(i).toFixed(0)},${p.getZ(i).toFixed(0)})`);
                 // eslint-disable-next-line no-console
-                console.log(`[MBGPlane] n=${n} parent=${this.m_groundPlane.parent?.type ?? 'null'} ro=${this.m_groundPlane.renderOrder} int=${this.m_intensity} u=${!!this.m_groundPlaneU} verts=${pa.join(' ')} tex=${!!this.m_shTex}`);
+                const fv = this.m_groundPlaneU?.uMBGroundShadowFactor?.value;
+                const iv = this.m_groundPlaneU?.uMBShadowIntensity?.value;
+                console.log(`[MBGPlane] n=${n} parent=${this.m_groundPlane.parent?.type ?? 'null'} ro=${this.m_groundPlane.renderOrder} int=${this.m_intensity}/${iv} u=${!!this.m_groundPlaneU} verts=${pa.join(' ')} tex=${!!this.m_shTex} fac=${fv ? `${fv.x.toFixed(3)},${fv.y.toFixed(3)},${fv.z.toFixed(3)}` : 'null'}`);
             }
         }
     }

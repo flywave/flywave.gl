@@ -6375,3 +6375,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 安全确认**：默认关=基线逐位（junction 18,275 / circles-nonelevated 7,853 复现）。配套步提醒：通道点亮后需"非 elevated fill 停用 receiver"（mgl：flat fill 无 RENDER_SHADOWS，地面由 quad 管）否则地面 fill 双重压暗（gp5 的第二回归源）。
 
 **⑤ 探针扩容**：gpred=2（uv4.xyz）/3（世界坐标梯度+lit）/4（sd+uv4.z+lit）；gplift=<m>；[MBGPlane] n=1/30/300 挂载探针。全部走 MBSTYLE_EXTRA_ARGS。
+
+### §885 g67c: 采样链修复确认+整屏发白现象定位（2026-09-21）
+
+**① 采样链修复确认（gdiag5，esl groundplane=1 gpred=4）**：楔形区 (440,60) → (R=sd 0.114, G=z 0.86, B=lit 0) = **正确判定影子**；lit 背景 (30,30) → (1.0, 0.835, 1.0) = 正确判定亮；(200,450) 桥面 = 平面被深度拒绝（底色透出）——**采样/解码/深度分离全部正确**。g67c 前半：gp5 全黑根因确认为 updateGroundPlane 从 null m_groundUniforms 拷因子（向量 (0,0,0) → pow→0 → 纯黑）+ int=NaN 瞬态（NaN≤0 骗过门控，NaN 经 light→mix→MultiplyBlending 把覆盖像素打成黑/白垃圾）→ 已修：factor 本地计算 + NaN 分量回退 (1,1,1)（乘法恒等）+ intensity 保留最近有限值（m_gpLastIntensity）。
+
+**② 剩余唯一现象：整屏发白（100,562，结构同基线但整体变亮）**。乘法混合理论上不可能提亮（src≤1），但实测背景 184→255 白、桥面同步变浅——两种可能：(a) 平面在透明 pass 被画两次且其中一次 F>1 或 blend 态被引擎改写；(b) 大气/天空球在平面之后合成（renderOrder 竞争）。下一轮：①gpred=1（纯红）在 gp9 同态下复测——红屏是否同样"发白化"可二分 blend 态 vs 平面覆盖范围；②renderOrder 9.9→2 与 symbols 后对比；③检查 MapRenderingManager 合成器对透明 pass 的 blend 状态管理。
+
+**③ 基线安全**：默认关复验 junction 18,275 / circles-nonelevated 7,853 = 基线逐位。单测 310 passing。提交 ab2a8f92（g67b）+ 本条（g67c）。
+
+**移交优先级（再更新）**：①发白现象二分（②①三步，半会话内可闭合）→ 通道点亮 → "非 elevated fill 停用 receiver" 配套 → A/B shadows-underpass+lighting 四件净改善 → ②guard-rail depth-reconstruction ③ortho-camera 58.1k ④wireframe 77.5k ⑤tunnel 簇。
