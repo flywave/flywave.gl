@@ -6475,3 +6475,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 剩余假设（下轮正攻）**：差带=我方深度图在 mgl 判亮的区域有遮挡内容，边界同锚建筑角、角差 14°——候选：我方建筑 extrusion 的顶面/棱几何与 mgl 体素有系统差（如垂直棱的斜切/顶盖多边形），或我方 caster 采集了建筑之外的第二高体。**下一步探针**：gpred=2（cascade uv）+ gpred=4（sd/z/lit）在差带像素 (30,200)/(64,200) 采样定位贡献级联与遮挡深度值，再反投影光空间 uv 到 c0/c1 深度图 dump（shadow-depth-canvas/canvas1 已随 feedback 自动落盘）找出遮挡三角形。
 
 **⑤ 状态**：esl 22,372 / tunnel 53,326 / junction 18,284 持平；单测 310 passing；tsc 26（=HEAD 基线）。工具：tmp/img-diff3.js（三图对比）、tmp/esl-xor.png（差集叠加）生成法在案。
+
+### §885 g71: esl 差带遮挡源定位闭环——非地下 caster、非方位角；残余=路面填充覆盖缺失复合低矮 caster 影（2026-09-22）
+
+**① 探针链（按 g70④ 计划执行）**：MBSTYLE_GPRED=4（sd/z/lit）→ 差带像素 (30,200)/(64,200) sd=0.235 < z=0.259（深度图确有遮挡体，PCF 部分 lit=0.28）；MBSTYLE_GPRED=2（uv）→ 光空间 uv=(0.235,0.259)；用 recv-mat-audit 的 uMBShadowMatrix 反投影遮挡点 3D 坐标。**坐标系陷阱**：接收地面点(+10m lift)反投影 z=−36.6 → 矩阵帧 z 原点有偏置；以地面为基准换算后**遮挡体高出地面 ~11m（低矮结构，非地下）**，楔形处遮挡体 +135 单位（200m 建筑中上部，合理）。
+
+**② 决定性排除实验**：新增 `shclipunder=<z>` 旋钮（深度 pass 顶点 w=0 剔除 z 下界 caster，g71 落地，默认 −1e9 惰性）——`shclipunder=0` 实测 esl **22,372 逐位不变** → 地下 caster（隧道墙/地下路）不是差带源，g70④ 的"地下几何"候选撤销。
+
+**③ 差带真面目（像素证据）**：expected 在差带 (30,200)=(127,141,156)=**亮色路面填充**，(100,220)=(57,63,70)=被影路面；我方两处均无路面几何（无影态 135,147,162=背景色）。结论：**差带=我方缺失的路面段**（edge/覆盖生成差异，g52x2 已有前科：瓦片边界带 isOnBorder 跳过 + 404 瓦片）**复合**我方低矮桥面 caster（~11m）影子投在该无路区——mgl 侧该处有路面+路面自带的 receiver 阴影判定（判亮）。即：先补路面几何覆盖，影子残差才能独立评估。
+
+**④ mgl ground shadow 机制字面入库（painter.ts:1454-1471 + shadow_renderer.ts:439-487）**：时序=clearStencil → 逐 fill 层 drawGroundShadowMask（depthSegments 以 depth-reconstruct 投到 z=0、stencil REPLACE 0xFF，LEQUAL ReadOnly）→ drawGroundShadows（per covering-tile extent quad，**stencil EQUAL 0x00**、ColorMode.multiply、shadowed_light_factor_plane_bias）——**路面像素被 mask 排除出地面影 quad**，路面阴影走 fill 自身 receiver。我方 paint 模式平面用 fills 覆写近似了该语义，S12 stencil 机制本身仍为等价近似（挂账维持）。
+
+**⑤ 状态**：esl 22,372 持平（探针零扰动）；单测 310 passing；tsc 26。工具增量：MBSTYLE_GPRED/GPONE/SHCLIPUNDER 透传 + shclipunder 旋钮。下轮正攻：**路面几何覆盖缺失**（差带内缺失段的 edge 生成/瓦片覆盖审计，关联 G10 SUBDIVISION_EDGE_EXTENSION 与 g52x2 边界带记录）。

@@ -193,6 +193,10 @@ function main() {
             // channel / revert to the legacy 4× shared-center cascade-1 fit.
             ...(process.env.MBSTYLE_GROUNDPLANE ? [`groundplane=${process.env.MBSTYLE_GROUNDPLANE}`] : []),
             ...(process.env.MBSTYLE_SHC1OLD ? ["shc1old=1"] : []),
+            // §885 g71: gpred/gpone — ground-plane DIAG probes (uv / sd-lit).
+            ...(process.env.MBSTYLE_GPRED ? [`gpred=${process.env.MBSTYLE_GPRED}`] : []),
+            ...("shclipunder" in process.env ? [`shclipunder=${process.env.MBSTYLE_SHCLIPUNDER}`] : []),
+            ...(process.env.MBSTYLE_GPONE ? ["gpone=1"] : []),
             ...(process.env.MBSTYLE_SHADOWHW ? ["shadowhw=1"] : []),
             ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),
             ...(process.env.MBSTYLE_TESTTIMEOUT ? [`testtimeout=${process.env.MBSTYLE_TESTTIMEOUT}`] : []),

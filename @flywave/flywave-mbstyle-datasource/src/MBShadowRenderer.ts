@@ -132,6 +132,7 @@ export class MBShadowRenderer {
         vertexShader: `
             uniform float uMBNormalOffset;
             uniform vec3 uMBLightDir;
+            uniform float uMBClipUnder;
             void main(){
                 // §885 终五十五g51o: NaN-proof the normal — geometries without
                 // a normal attribute bind (0,0,0), normalize → NaN, and the
@@ -144,6 +145,11 @@ export class MBShadowRenderer {
                 float dotScale = min(1.0 - dot(wN, uMBLightDir), 1.0) * 0.5 + 0.5;
                 vec3 wp = (modelMatrix * vec4(position, 1.0)).xyz
                     + wN * uMBNormalOffset * dotScale;
+                // §885 g71 A/B probe: shclipunder=<z> degenerates casters
+                // below z (w=0 → clipped) — the esl extra band's occluders
+                // unproject to z≈−25..−31 (underground); tests whether mgl's
+                // map lacks them.
+                if (wp.z < uMBClipUnder) { gl_Position = vec4(2.0, 2.0, 2.0, 0.0); return; }
                 gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
             }`,
                 uniforms: {
@@ -159,6 +165,7 @@ export class MBShadowRenderer {
             // plateau at 135,328 on ground-shadow-fog — the residual there
             // is dominated by non-shadow differences.)
             uMBLightDir: { value: new THREE.Vector3(0, 0, 1) },
+            uMBClipUnder: { value: -1e9 },
         },
         fragmentShader: `
             void main(){
@@ -1513,6 +1520,11 @@ export class MBShadowRenderer {
         (this as any).__mbShLightDir = lightDir.clone();
         if (depthMat.uniforms?.uMBLightDir) {
             depthMat.uniforms.uMBLightDir.value.copy(lightDir).normalize();
+        }
+        // §885 g71: shclipunder=<z> — underground caster clip probe.
+        if (depthMat.uniforms?.uMBClipUnder) {
+            const cu = Number((globalThis as any).__mbShClipUnder);
+            depthMat.uniforms.uMBClipUnder.value = Number.isFinite(cu) ? cu : -1e9;
         }
         // §885 终四十九g51f: shcastnormal=<v> → restore a CASTER-side normal
         // offset for A/B (default 0 — mgl-faithful; see the uniform comment).
