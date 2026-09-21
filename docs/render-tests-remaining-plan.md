@@ -6418,3 +6418,17 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 结论**：地面通道"半点亮"净效果 = lighting 四件 −1.2k + junction −125 vs tunnel +36.5k → **净负，默认关维持**。点亮前置：①tunnel 专项（ceiling-face lighting 或平面在隧道区间的 mask/stencil 排除）②(470,30) 型影子边界差（cascade-1 覆盖/形状）。完成后预期净赢：lighting −1.2k、underpass 楔形部分（若其 128k 中背景楔形占比大则收益显著）、junction −125 落袋。
 
 **④ 状态**：单测 310 passing；默认态=基线逐位（零风险）；全部 A/B 数据在 rendering-test-results/mb-gp*、mb-gs*、mb-gdiag*。
+
+### §885 g67h: 采样校准闭环——paint 模式净改善确认 + shrad 细扫（2026-09-21）
+
+**① 根因链闭合**：整屏发白 = 混合未生效（平面以不透明白覆写背景，gpone=1 对照复现）→ 放弃 dst 乘法，改为 **paint 模式**：平面直接绘制 `uMBGPBg × mix(pow(factor,1/2.2),1,light)`（uMBGPBg = 背景层色 sRGB，取自 mapView.clearColor；写入 colorspace_fragment 之后无二次编码）。绘制次序 = renderOrder **-1000**（opaque pass：背景注入 quad(-Inf) 之后、全部 tile fills(0..9.8) 之前）——fills 覆写平面，天然无双重压暗；裸背景区保留平面影子 ✓ mgl 语义。
+
+**② 实测（junction/esl/tunnel/underpass，groundplane=1）**：
+- shrad=1.0：junction −111、esl +15（≈噪声）、tunnel ±0、circles/munich/ncb 逐位不变（对照 ✓）
+- **shrad=1.11（最优）**：esl **22,363（−2,357）**、text −2,422、terrain −2,592、text-terrain −2,592、junction −111、tunnel −28 → **净 ≈ −10.1k 零回退**
+- shrad=1.125：净 ≈ −9.4k；shrad=1.15：净 ≈ −8.2k；shrad=1.2：−7.5k——趋势：1.0→1.11 单调改善，1.15 后回落
+- **shadows-underpass 武装态 180s 超时**（重型夹具，平面新增绘制负载；需 harness 超时调整后补测）
+
+**③ 像素验证（esl 楔形）**：(440,60) ours=(83,86,85) vs expected=(82,85,84) **Δ=1** ✓；(30,30)=(184,191,189) 亮区逐位 ✓；桥面带 (200,450)/(420,100)/(100,300) 逐位 ✓。剩余差 = 影子边界形状（expected 影子远缘更远，cascade-1 覆盖/形状）+ 桥洞 speckle。
+
+**④ 状态**：默认仍关（groundplane=1 显式启用），基线零风险；单测 310 passing。下轮：①shrad 1.11 默认化评估（跨夹具回归扫：fog/terrain/model-layer 抽查）②underpass 超时治理后补测 ③影子边界形状（cascade-1）细调 ④flat-fill receiver 让位评估（paint 模式下或已不必要——fills 覆写平面，双重压暗仅在平面亮于 fill 自暗时发生，实测未观察到）。

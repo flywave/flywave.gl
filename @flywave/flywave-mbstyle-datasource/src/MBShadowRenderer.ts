@@ -662,15 +662,16 @@ export class MBShadowRenderer {
         geo.setIndex([0, 1, 2, 0, 2, 3]);
         const mat = new THREE.MeshBasicMaterial({
             color: 0xffffff,
-            // §885 g67c: the plane PAINTS the shadowed background color
-            // directly (uMBGPBg × factor-mix) — an overwrite, not a dst
-            // multiply: SwiftShader's blend of the fragment proved
-            // unreliable (the F≡1 control washed the ground to white), while
-            // painting the absolute color is dst-independent. Depth-tested:
-            // elevated decks/walls (nearer, depth-written) reject the plane,
-            // ground/background pixels (cleared depth) accept it — the mgl
-            // ground_shadow LEQUAL semantics.
-            transparent: true,
+            // §885 g67c/g67h: the plane PAINTS the shadowed background color
+            // (uMBGPBg × factor-mix) as an OPAQUE early-pass draw — an
+            // overwrite, not a dst multiply: the SwiftShader blend of the
+            // fragment proved unreliable (the F≡1 control washed the ground
+            // to white). Draw order: renderOrder -1000 = after the injected
+            // background quads (-Infinity), before every tile fill (0..9.8)
+            // — the fills then overdraw the plane where geometry exists, so
+            // ground fills keep their own receiver shading (no double
+            // darkening) and the bare background shows the plane's shadow.
+            transparent: false,
             depthWrite: false,
             depthTest: true,
             side: THREE.DoubleSide,
@@ -809,7 +810,10 @@ export class MBShadowRenderer {
         mesh.name = 'MBShadowGroundPlane';
         mesh.frustumCulled = false;
         // after the tile fills (9.5-9.8), before symbols
-        mesh.renderOrder = 9.9;
+        // §885 g67h: after the background quads (-Infinity), before every
+        // tile fill (0+) — the fills overdraw the plane where geometry
+        // exists; the bare background keeps the plane's shadow paint.
+        mesh.renderOrder = -1000;
         mesh.visible = false;
         this.m_groundPlane = mesh;
     }
