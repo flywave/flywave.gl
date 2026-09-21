@@ -6389,3 +6389,14 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 ### §885 g67d: 锚点改 colorspace 后实测（2026-09-21）
 
 乘法锚点从 opaque_fragment 移到 colorspace_fragment 之后（mgl 语义：乘 sRGB 编码后的帧缓冲）。实测（groundplane=1，junction/esl/underpass/tunnel 四件）：junction 18,158（≈基线，平面基本 no-op）、esl 110,079、tunnel 219,347——仍未收敛。gdiag5/esl 证明采样本身正确（楔形 lit=0、空白 lit=1、桥面深度拒绝），故剩余为**光域拟合覆盖**（r=97 不含建筑地面影子足迹，楔形处 uv 越界→白清→lit=1）与 **flat-fill 双重压暗**的复合。gp9 楔形实测 (179,179,179) = 255(白清)×sRGB_encode(0.455) 双重编码实锤（该锚点已修，下一轮在扩拟合半径后重测即知）。通道保持默认关（groundplane=1 显式启用），基线零风险。单测 310 passing。
+
+### §885 g67e: esl 残差像素级分解——阴影链已逐位正确，残余=远区背景色与桥面范围（2026-09-21）
+
+**① 采样链最终确认（shrad=2 armed 态像素采样）**：(200,450)/(100,300)/(420,100) = (57,63,70) 与 expected **逐位一致**——深度测试地面通道的影子强度/位置完全正确；junction 18,158≈基线 18,286（通道 near-no-op 正常）；circles-nonelevated 7,853 逐位 ✓。gplift/shrad 扫参对 junction 全不变=采样稳定。
+
+**② esl 残差精确分解（79,890 的构成）**：
+- (440,60)/(470,30)：expected=(82,85,84)=**影子中的远区背景**(184×0.446)；ours=(115,115,115)=**白色清屏×0.455**(255×0.455=116)——同一影子因子、不同底色！**远区背景在我们渲染中是白色默认清屏**（背景注入 quad 只覆盖瓦片范围/远区无瓦片），expected 是背景层色(184)。修复=远区背景着色（clear 或全屏 background 需覆盖到地平线）。
+- (30,30)：ours=(255,255,255) 白，expected=(183,190,188)——同上，远区背景白斑。
+- 桥面范围：(420,100) 等桥面点逐位一致 ✓。
+
+**③ 通道现状**：默认关（groundplane=1 启用）。全部探针就绪：gpred=1/2/3/4、gplift、[MBGPlane]。下轮：①远区背景着色（clear 色应=背景色×雾，现为白）→ 与地面通道配合即点亮楔形；②shrad 联调；③flat-fill receiver 让位。
