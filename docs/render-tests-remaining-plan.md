@@ -6447,3 +6447,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 - **残留 karma chromium 占用默认口 9876** 会劫持新一轮的浏览器连接（Executed 计数串台、反馈丢失）；snap chromium 归 systemd user scope，pkill EPERM，须 `systemctl --user stop 'snap.chromium.*.scope'`，或 MBSTYLE_KARMA_PORT 换口。SwiftShader 重夹具（underpass/full-family）~15min 后 ping 超时断连是常态，A/B 批次宜 ≤4 夹具。
 
 **④ 状态**：单测 310 passing（mocha 直跑 lib；pretest tsc --build 被 HEAD 既有 test 文件错误阻断，未计入）。下轮主攻不变：①tunnel/ceiling-face apply_lighting（S12-相关，tunnel +36.5k 回退根因）②underpass 超时治理 ③shrad 1.11 默认化跨夹具回归扫。
+
+### §885 g69: 地面阴影通道默认点亮 + shrad=1.11 默认化——g67g tunnel 回退证伪为 g67h 已修复，净赢落袋（2026-09-21）
+
+**① g67g 前提证伪（像素证据）**：armed（groundplane=1 shrad=1.11）vs off 三图对比（tmp/img-diff3.js, off/on/expected）：shadows-tunnel 1,527 变更像素中 **927 更近 expected / 599 更远**，mismatch 53,630→53,326（−304）——g67g 记录的 tunnel +36.5k（90,682）回退是 g67h paint 模式校准之前的 dst-乘法病象，已不复现。台账 g67g②③ 的"tunnel 专项前置"撤销。
+
+**② 默认化回归扫（全 A/B mtime 新鲜）**：fog 33,952 / terrain-enabled 30,721 / tunnel-enterance 42,938 / road-islands 38,523 / tunnel-enterance-color 54,151 两臂**逐位一致**（平面对这些夹具零影响）；ground-shadow-fog 132,578→132,947（+369）/ hard-cutoff 132,496→132,595（+99）——亚噪声（该族基线本身 132k 级失配）。
+
+**③ 落地**：①`ensureGroundPlane`/`attachGroundPlane` 门控改默认开（`__mbGroundPlaneOn === false` 才关，groundplane=0 回退）；②`__mbShadowRad` 默认 1→**1.11**（cascade-0/1 两处，g67h 扫描最优）；③test 旋钮语义反转（groundplane=0 = opt-out）；④runner MBSTYLE_GROUNDPLANE 支持值传递。
+
+**④ 默认态验证（无旋钮）**：esl **22,372**（=校准最优, off 态 24,727）/ esl-terrain-enabled 41,876 / junction 18,284（持平）/ tunnel **53,326**（−304）。lighting 四件按 g67h 数据 −2.4~−2.6k/件落袋（esl 已实证）。单测 310 passing。
+
+**⑤ 残余**：esl 影子边界形状（(470,30) 型远缘差=200m 建筑 vs 桥足迹 caster 内容范围）+ 桥洞 speckle + underpass 武装态超时无数据。下轮候选：caster 内容差（G1 范围/高度）与 underpass harness 治理。

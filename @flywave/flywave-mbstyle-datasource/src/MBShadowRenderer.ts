@@ -656,7 +656,12 @@ export class MBShadowRenderer {
      * arms it for the next calibration session. */
     private ensureGroundPlane(): void {
         if (this.m_groundPlane) return;
-        if ((globalThis as any).__mbGroundPlaneOn !== true) return;
+        // §885 g69: DEFAULT ON — the g67h paint-mode calibration closed the
+        // loop (lighting四件 −10.1k / tunnel −304 / junction −111, pixel
+        // proof 927-closer vs 599-further on shadows-tunnel); the g67g
+        // tunnel +36.5k regression was the pre-g67h dst-multiply disease and
+        // no longer reproduces. groundplane=0 opts out.
+        if ((globalThis as any).__mbGroundPlaneOn === false) return;
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3));
         geo.setIndex([0, 1, 2, 0, 2, 3]);
@@ -889,7 +894,8 @@ export class MBShadowRenderer {
      * root. Idempotent; called from the preSceneHook (drawGroundQuad entry)
      * so the plane rides the SAME frame's render. */
     private attachGroundPlane(): void {
-        const on = (globalThis as any).__mbGroundPlaneOn === true;
+        // §885 g69: default ON (see ensureGroundPlane); groundplane=0 opts out.
+        const on = (globalThis as any).__mbGroundPlaneOn !== false;
         if (!on || !this.m_enabled || this.m_intensity <= 0 || !this.m_groundPlane) {
             if (this.m_groundPlane) this.m_groundPlane.visible = false;
             return;
@@ -1545,7 +1551,7 @@ export class MBShadowRenderer {
         // on a square viewport (aspect 1) k shrinks and casters clip at the
         // ortho edge (truncated ground shadows). A/B gate: shrad=<f>.
         {
-            const rf = Number((globalThis as any).__mbShadowRad ?? 1);
+            const rf = Number((globalThis as any).__mbShadowRad ?? 1.11); // §885 g69: calibrated default (g67h sweep optimum)
             radius *= rf;
         }
         // §885 g68 (audit S8/S9): mgl cascade-1 is its OWN frustum-sphere fit,
@@ -1573,7 +1579,7 @@ export class MBShadowRenderer {
                     (frFar1 + frNear1) * (frFar1 + frNear1) * k2 * k2);
             }
             radius1 *= size / (size - 1);
-            radius1 *= Number((globalThis as any).__mbShadowRad ?? 1);
+            radius1 *= Number((globalThis as any).__mbShadowRad ?? 1.11); // §885 g69: same calibrated default as cascade-0
         }
         // Fit audit hook (decodedbg/probe channel): r0/d0 = cascade-0 fit,
         // r1/d1 = cascade-1 fit (legacy arm reports the 4× approximation).

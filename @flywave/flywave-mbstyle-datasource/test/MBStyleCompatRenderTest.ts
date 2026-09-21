@@ -125,12 +125,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "polygonclip=0")) {
         (globalThis as any).__mbNoPolyClip = true;
     }
-    // §885 g67: groundplane=1 — arm the depth-tested ground-shadow pass
-    // (mgl ground_shadow program equivalent). DEFAULT OFF: the plane
-    // rasterizes and spares decks (gpred=1/3 proofs) but its shadow sample
-    // reads lit=0 plane-wide (gplift-invariant) — calibration pending.
-    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "groundplane=1")) {
-        (globalThis as any).__mbGroundPlaneOn = true;
+    // §885 g67→g69: groundplane=1 used to ARM the depth-tested ground-shadow
+    // pass; g69 makes it DEFAULT ON (calibration closed, net −10k) —
+    // groundplane=0 now opts OUT (regression A/B).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "groundplane=0")) {
+        (globalThis as any).__mbGroundPlaneOn = false;
     }
     // §885 g67: gpred=1 — paint the ground-shadow plane solid red (rasterizer
     // proof). gpred=2 — DIAG paint (R=sample depth, G=stored, B=lit).
