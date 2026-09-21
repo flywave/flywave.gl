@@ -6583,3 +6583,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 下轮**：identify underpass 的 caster 几何（hd 结构/embankment 高度 vs 低阳影长的定量核算——exp 影块 ~100+m 宽需 ~40m 高 caster，查瓦片数据实高）+ 中心区/角区采样链差（同图同 map 为何中心对四角错——优先 gpred=2 uv 对拍中心 vs 角区）。
 
 **⑤ 状态**：单测 310；tsc 26；MBSTYLE_GPLIFT 透传入库。
+
+### §885 g81: underpass 失效区判别——主源=语料库覆盖洞（不可代码修复项定界）（2026-09-22）
+
+**① 高度核算（g80④ 步骤一）**：直读瓦片（tmp/mvt-props.js）——underpass 慕尼黑区 hd_road_elevation curve 带 **level 2-12**（≈2-12m 桥层），polar 20° 下影长 5.5-33m/层，多 deck 并行可覆盖中等区域，量级合理但不足以独占 ~100m 宽暗块。
+
+**② uv 对拍（g80④ 步骤二）**：gpred=2 全部失效点 **cascade-0 界内**（(92,117)/(124,117)/(255,220) 等）且采样正确——非窗口/级联问题，是 map 内容缺近侧遮挡。深度图 canvas dump 与 shader 实读**帧不同步**（g71 同陷阱），交叉对拍不可靠（正式记档）。
+
+**③ 决定性判别（shadowdisable=1）**：无影态失效区我方 229 裸背景 vs expected 113 影背景，且**无影失配 168k > 有影 153k**（阴影反而在缩小差）——expected 的大范围暗背景由**我方语料库中不存在的远处/洞区 caster** 投影（慕尼黑区 z18 语料仅 18-139475-90931/32 + 139476-90932 三瓦片，mgl CI 全集）。**underpass 128k 失配的主体（~100k+）= 数据语料覆盖洞，非代码可修项**——与 g66"mgl CI 有完整集"记录互证。
+
+**④ 定界结论**：underpass 可修残差 ≈ 28k（有影 153k − 无影 168k 之外的局部结构差，如中心区 250,250 ours 159 vs exp 78 的局部光照/影差）——下轮若继续 underpass 应聚焦局部小差而非大块。**全量 mismatch 的语料洞分母首次定量**（该夹具 ~100k/188 万总量 ≈ 5%），建议对其他大失配夹具（ortho-camera 80k/elevated-wireframe 77k 等）先做同款 shadowdisable 判别再排优先级，避免对不可修项投入。
+
+**⑤ 状态**：单测 310；tsc 26；工具 mvt-props.js 入库；本轮零渲染行为改动。
