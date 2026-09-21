@@ -6509,3 +6509,19 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 工具落地**：MBFlatSpill 平面外溢遥测（decodedbg 门控，MBTileDataEmitter 平面分支）+ tmp/mvt-extent.js MVT 直读器；runner MBSTYLE_POLYCLIP 透传（注意：该旋钮消费者在 flywave-vectortile-datasource 包，对 mbstyle 夹具恒惰性——见 g72③）。
 
 **④ 状态**：单测 310 passing；tsc 26；esl 22,372 持平（遥测零扰动）。下轮：逐类 caster 消隐旋钮（deck/rail/building 各一）在差带像素 (30,200) 定位 +11m 遮挡体归属。
+
+### §885 g74: 差带遮挡体归属定位——= 200m 建筑，且建筑底面朝向差 ~14°（数值+视觉双确认）（2026-09-22）
+
+**① 消隐矩阵（shcasteroff=extr|hd 新旋钮 + elevcasteroff 组合，全部 mtime 新鲜）**：
+- offextr 单独：逐位不变——**假象**：建筑挤出件经 MBMaterialPatchManager:232 的 `__mbExtrusion3DLit` 路径**直接 layers.enable(1)**，不经 registerShadowCaster，旋钮打不中；
+- offhd 单独：casters 70→6-9（census 实证生效），esl 仅 −14px，(30,200)/(470,30) 仍暗 ⇒ 剩余 6-9 个 caster（=建筑挤出件）足以覆盖差带；
+- elevcasteroff+offextr 组合：逐位=默认 ⇒ 结构段+挤出全非差带源。
+- **结论：差带遮挡体 = 200m shadow-casters 建筑的影子**。
+
+**② 建筑朝向差（本轮主发现）**：影子掩膜几何分解——右边界=光方向射线自建筑角（两引擎逐位一致, (470,*) Δ1 ✓），左边界=建筑顶边平行线：ours 斜率 tan=1.61 vs expected tan=2.94（**绕同一角点 ≈(59.5,168) 旋差 ~14°**）。视觉模型并排比对独立确认"我方建筑顺时针旋转 ~12-15°"。mgl 侧 zLevel 为死参数（传入 addPortalCandidates 后从未使用）——deck 高度差候选排除。
+
+**③ 根因候选（下轮正攻）**：我方 GeoJSON fill-extrusion 顶点链（GeoJsonDataAdapter.project→world2tile（纯 mercator 各向同性）→transformPolygonGeometry→emitExtrudedPolygon→project()）存在旋转/各向异性失配——MVT 道路同链投影像素级吻合，唯 GeoJSON 建筑旋转，嫌疑集中在 GeoJSON 专属分支（m_mvtFlip=null 无变换 vs MVT 侧 y-flip 补偿的对称性）。**第一步取证**：decodedbg 下转储建筑底环世界坐标，与 geojson 原始经纬度（已知 5 点）离线比对即可定位失真层级。
+
+**④ 工具落地**：shcasteroff=extr|hd 逐类消隐旋钮（注意 extr 分支对 :232 直连路径无效——补挂账）+ MBSTYLE_SHCASTEROFF 透传；caster census 验证法（offhd 70→6）入档。
+
+**⑤ 状态**：单测 310 passing；tsc 26；esl 22,372 持平（旋钮默认惰性）。

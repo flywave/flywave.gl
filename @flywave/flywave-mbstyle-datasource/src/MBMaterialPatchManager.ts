@@ -1038,6 +1038,14 @@ export class MBMaterialPatchManager {
         if (!isExtrusion && !isHdElevated) return;
         if (!(obj as any).isMesh) return;
         if (shadowCasters.has(obj)) return;
+        // §885 g74: per-class caster ablation (shcasteroff=extr|hd) —
+        // attributes the esl band occluder (+11m per g71 unprojection).
+        // extr = fill-extrusion buildings; hd = elevated fills/decks.
+        {
+            const off = String((globalThis as any).__mbShCasterOff ?? '');
+            if (off === 'extr' && isExtrusion) return;
+            if (off === 'hd' && !isExtrusion) return;
+        }
         obj.layers.enable(1);
         shadowCasters.add(obj);
     }

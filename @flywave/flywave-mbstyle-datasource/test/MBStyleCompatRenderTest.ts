@@ -587,9 +587,14 @@ function discoverTests(): TestEntry[] {
         a.startsWith("shrad="))?.slice("shrad=".length);
     if (shr) (globalThis as any).__mbShadowRad = Number(shr);
     // §885 g71: shclipunder=<z> — clip depth-pass casters below world z.
+    // §885 g74: shcasteroff=extr|hd — per-class caster ablation.
     const scu = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shclipunder="))?.slice("shclipunder=".length);
     if (scu !== undefined) (globalThis as any).__mbShClipUnder = Number(scu);
+    // §885 g74: shcasteroff=extr|hd — per-class caster ablation.
+    const sco = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("shcasteroff="))?.slice("shcasteroff=".length);
+    if (sco) (globalThis as any).__mbShCasterOff = sco;
     // §885 终八十九: model-vector tile 404 → parent-tile fallback. The
     // vendored data covers only part of the requested tree/model tiles; a
     // 404 drops whole tree groups (green canopies vanish). mgl CI has the
