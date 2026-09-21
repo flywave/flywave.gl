@@ -6614,3 +6614,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 - 建议：S10/S8 保持挂账不主攻；下一正攻=viewport-aligned 无影差的逐段归因（互相关已证非整体位移，需路段级覆盖 diff——复用 g72/g73 的 MVT 直读+边界带方法论）。
 
 **④ 状态**：单测 310；tsc 26；零渲染行为改动。
+
+### §885 g83: viewport-aligned 逐段归因→**mgl 指数插值公式字面修正落地**（2026-09-22）
+
+**① 归因链（g82③ 计划执行）**：viewport-aligned 无影差量化——白色像素 ours 34,876 vs exp 12,696（**2.75×**）；expected 色桶大头=road-base 色 26.7k（路段局部差）+shade/background 互换。视觉+连通域判别：白 blobs ours 650 vs exp 404（**1.6× 复制**）且最大 blob 7.7k vs 2.9k（**放大**）——turnlane 箭头双问题。
+
+**② 字面发现与修复**：style 的 icon-size 用 `["interpolate",["exponential",1.2],...]`——我方 MBExpressionEngine 指数分支公式 `(base^t−1)/(base−1)`（t=线性 zoom 分数）≠ mgl 字面 **`(base^(input−z0)−1)/(base^(z1−z0)−1)`**（style-spec interpolate.ts:267-277，指数是原始 zoom 增量而非线性分数）。已按字面修正（默认 base=1 路径不受影响）。z19.28/base1.2: icon-size 0.33→0.28。
+
+**③ 实测（mtime 新鲜）**：viewport-aligned 62,762→61,808（−954）/text 63,287→61,498（−789）/terrain 50,084→49,669（−415）；回归：**junction 18,284→18,148（−136）**/esl-text 24,975→**23,458（−1,517）**/text-terrain −827；esl/terrain ±4 噪声。**净 ≈ −2.5k+ 零回退**，且公式语义全局归一（所有显式 base 指数表达式受益）。
+
+**④ 残余（下轮）**：白像素仍 2.63×——箭头**复制**（650 vs 404 blobs）未被尺寸修正解决：嫌疑=hd_road_point 跨 tile 重复发射（filterFeaturesToTile 的 keepPointsEverywhere 对 sort-key 层保留所有 tile 副本 vs mgl 跨 tile symbol 去重语义——CrossTileSymbolIndex 索引已有，未覆盖此路径？）。路段局部差（road-base 26.7k 桶）另列。
+
+**⑤ 状态**：单测 310 passing；tsc 26。

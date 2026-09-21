@@ -617,7 +617,17 @@ export class MBExpressionEngine {
 
                         if (mode === 'exponential' && args[0]?.[1] !== undefined) {
                             const base = args[0][1] as number;
-                            const curve = base !== 1 ? (Math.pow(base, t) - 1) / (base - 1) : t;
+                            // mgl literal (style-spec interpolate.ts:267-277
+                            // exponentialInterpolation): t = (base^(input−z0)
+                            // − 1) / (base^(z1−z0) − 1) — the exponent is the
+                            // RAW zoom delta, NOT the linear fraction. The old
+                            // (base^t−1)/(base−1) form inflated mid-range
+                            // values (icon-size @z19.28/base1.2: 0.33 vs mgl
+                            // 0.28 → oversized turnlane arrows, 3× white px).
+                            const dz = stops[i + 1][0] - stops[i][0];
+                            const curve = base !== 1 && dz !== 0
+                                ? (Math.pow(base, input - stops[i][0]) - 1) / (Math.pow(base, dz) - 1)
+                                : t;
                             if (typeof a === 'string' && typeof b === 'string') {
                                 return this.interpolateColor(a, b, curve);
                             }
