@@ -678,11 +678,19 @@ export class MBShadowRenderer {
         (mat as any).__mbMglLit = true;
         const biasV = Number((globalThis as any).__mbShadowBias ?? 0.0002);
         mat.onBeforeCompile = (shader: any) => {
+            // §885 g67c: gpone=1 — force F≡1 (multiply no-op) with the REAL
+            // draw path: separates "the draw itself perturbs the frame" from
+            // "the F math is wrong".
+            if ((globalThis as any).__mbGPOne) {
+                shader.fragmentShader = '#define MB_GP_ONE 1\n' + shader.fragmentShader;
+            }
             if ((globalThis as any).__mbGPRed) {
                 const d = (globalThis as any).__mbGPDiag
                     ? '#define MB_GP_DIAG 1\n'
                     : ((globalThis as any).__mbGPDiag2 ? '#define MB_GP_DIAG2 1\n' : '#define MB_GP_DIAGSD 1\n');
-                shader.fragmentShader = d + '#define MB_GP_RED 1\n' + shader.fragmentShader;
+                shader.fragmentShader = d
+                    + ((globalThis as any).__mbGPOne ? '#define MB_GP_ONE 1\n' : '')
+                    + '#define MB_GP_RED 1\n' + shader.fragmentShader;
             }
             shader.uniforms.uMBShadowMap = { value: this.m_shTex };
             shader.uniforms.uMBShadowMap1 = { value: this.m_shTex1 };
@@ -709,8 +717,13 @@ export class MBShadowRenderer {
                 + `#define MB_SH_BIAS ${biasV}\n`
                 + `#define MB_GP_LIFT ${Number((globalThis as any).__mbGPLift ?? 10.0).toFixed(2)}\n`
                 + shader.fragmentShader).replace(
-                '#include <opaque_fragment>',
-                `#include <opaque_fragment>
+                // §885 g67c: anchor AFTER colorspace_fragment — the multiply
+                // runs on the sRGB-ENCODED output (mgl ground_shadow.frag
+                // multiplies the encoded framebuffer; a pre-encode write gets
+                // re-encoded by colorspace_fragment — the double-encode that
+                // washed the wedge 0.455→0.707→179).
+                '#include <colorspace_fragment>',
+                `#include <colorspace_fragment>
                 {
                     // §885 g67: MB_GP_LIFT — receiver lift toward the light in
                     // metres (float literal — an int literal is a hard GLSL ES
@@ -770,8 +783,12 @@ export class MBShadowRenderer {
                     gl_FragColor.rgb = vec3(1.0, 0.0, 0.0);
                     #endif
                     #else
-                    gl_FragColor.rgb = mix(
+                    vec3 mbF = mix(
                         pow(uMBGroundShadowFactor, vec3(1.0 / 2.2)), vec3(1.0), light);
+                    #ifdef MB_GP_ONE
+                    mbF = vec3(1.0);
+                    #endif
+                    gl_FragColor.rgb = mbF;
                     #endif
                 }`);
             this.m_groundPlaneU = shader.uniforms;

@@ -6385,3 +6385,7 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 基线安全**：默认关复验 junction 18,275 / circles-nonelevated 7,853 = 基线逐位。单测 310 passing。提交 ab2a8f92（g67b）+ 本条（g67c）。
 
 **移交优先级（再更新）**：①发白现象二分（②①三步，半会话内可闭合）→ 通道点亮 → "非 elevated fill 停用 receiver" 配套 → A/B shadows-underpass+lighting 四件净改善 → ②guard-rail depth-reconstruction ③ortho-camera 58.1k ④wireframe 77.5k ⑤tunnel 簇。
+
+### §885 g67d: 锚点改 colorspace 后实测（2026-09-21）
+
+乘法锚点从 opaque_fragment 移到 colorspace_fragment 之后（mgl 语义：乘 sRGB 编码后的帧缓冲）。实测（groundplane=1，junction/esl/underpass/tunnel 四件）：junction 18,158（≈基线，平面基本 no-op）、esl 110,079、tunnel 219,347——仍未收敛。gdiag5/esl 证明采样本身正确（楔形 lit=0、空白 lit=1、桥面深度拒绝），故剩余为**光域拟合覆盖**（r=97 不含建筑地面影子足迹，楔形处 uv 越界→白清→lit=1）与 **flat-fill 双重压暗**的复合。gp9 楔形实测 (179,179,179) = 255(白清)×sRGB_encode(0.455) 双重编码实锤（该锚点已修，下一轮在扩拟合半径后重测即知）。通道保持默认关（groundplane=1 显式启用），基线零风险。单测 310 passing。

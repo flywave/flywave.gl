@@ -134,8 +134,8 @@ function discoverTests(): TestEntry[] {
     }
     // §885 g67: gpred=1 — paint the ground-shadow plane solid red (rasterizer
     // proof). gpred=2 — DIAG paint (R=sample depth, G=stored, B=lit).
-    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "gpred=1")) {
-        (globalThis as any).__mbGPRed = true;
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "gpone=1")) {
+        (globalThis as any).__mbGPOne = true;
     }
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "gpred=2" || a === "gpred=3" || a === "gpred=4")) {
         const a2 = (v: string) => (window as any).__karma__?.config?.args?.some?.((a: string) => a === v);
