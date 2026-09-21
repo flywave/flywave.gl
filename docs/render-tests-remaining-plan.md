@@ -6626,3 +6626,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 残余（下轮）**：白像素仍 2.63×——箭头**复制**（650 vs 404 blobs）未被尺寸修正解决：嫌疑=hd_road_point 跨 tile 重复发射（filterFeaturesToTile 的 keepPointsEverywhere 对 sort-key 层保留所有 tile 副本 vs mgl 跨 tile symbol 去重语义——CrossTileSymbolIndex 索引已有，未覆盖此路径？）。路段局部差（road-base 26.7k 桶）另列。
 
 **⑤ 状态**：单测 310 passing；tsc 26。
+
+### §885 g84: 符号跨 tile 去重落地（惰性）+ 白超量真源改判=车道标线（2026-09-22）
+
+**① mgl 字面落地（symbol_layout.ts:957）**：processPointFeature 增加锚点界内过滤——mgl 原文注释"Symbol layers are drawn across tile boundaries. We filter out symbols outside our tile boundaries (which may be included in vector tile buffers) to prevent double-drawing"。A/B 实测**逐位不变**（点本就界内——箭头"复制"的 650 vs 404 blobs 非跨 tile 重复发射，g83④ 候选证伪）。修复保留（字面正确，对未来未裁剪数据有保护）。
+
+**② 白超量真源改判（白色差集叠加图）**：红过量白=**细长车道标线段**（沿线平行条带，solid/double/dashed-lines 白色 hsl(0,0%,96%)），非箭头。g83④"箭头复制"假设修正为**标线过宽/过量**。候选：SolidLineMaterial 的 metricUnit:'Pixel' px→世界换算 vs mgl draw_line 的 lineWidthScale/pixelsToTileUnits（**overzoom 语义**：z19.28 从 maxzoom18 源 overzoom×2，mgl tilePixelRatio=EXTENT/(tileSize·overscaleFactor) 与我方 mppTech(m_zoom) 的差异）；line-width @z19.28 mgl≈3.36px。
+
+**③ 下轮**：审计 SolidLineMaterial 的 Pixel→world 换算链与 mgl draw_line 的 overscale 线宽语义逐字对照（draw_line.ts lineWidthScale）；对照实验旋钮（linewscale）二分。
+
+**④ 状态**：单测 310；tsc 26；viewport-aligned 61,808 持平（去重惰性零扰动）。

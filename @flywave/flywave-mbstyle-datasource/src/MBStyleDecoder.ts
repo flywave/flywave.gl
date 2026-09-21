@@ -455,6 +455,26 @@ class MBStyleDataProcessor implements IGeometryProcessor {
         }
         const visible = matched.filter(l => !this.isClipped(l.type, coords[0], coords[1]));
         if (visible.length === 0) return;
+        // mgl symbol_layout.ts:957 addSymbolAtAnchor — "Symbol layers are
+        // drawn across tile boundaries. We filter out symbols outside our
+        // tile boundaries (which may be included in vector tile buffers) to
+        // prevent double-drawing symbols." The unclipped tilecover fixtures
+        // carry every nearby point in EVERY tile → our per-tile emission
+        // triple-drew the turnlane arrows (650 vs 404 blobs, g83④).
+        const symbolLayers = visible.filter(l => l.type === 'symbol');
+        if (symbolLayers.length > 0) {
+            const p0 = geometry[0];
+            const outOfTile = p0.x < 0 || p0.x >= extents || p0.y < 0 || p0.y >= extents;
+            if (outOfTile) {
+                const kept = visible.filter(l => l.type !== 'symbol');
+                if (kept.length === 0) return;
+                // eslint-disable-next-line no-console
+                if ((globalThis as any).__mbDecodeDbg)
+                    console.log(`[MBSymDrop] layer=${layer} xy=${p0.x.toFixed(0)},${p0.y.toFixed(0)} ext=${extents}`);
+                this.m_emitter.processPointFeature(layer, extents, this.transformPoints(geometry, extents), properties, featureId, kept);
+                return;
+            }
+        }
         this.m_emitter.processPointFeature(layer, extents, this.transformPoints(geometry, extents), properties, featureId, visible);
     }
 
