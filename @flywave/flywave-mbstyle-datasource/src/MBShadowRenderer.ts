@@ -678,9 +678,10 @@ export class MBShadowRenderer {
         const biasV = Number((globalThis as any).__mbShadowBias ?? 0.0002);
         mat.onBeforeCompile = (shader: any) => {
             if ((globalThis as any).__mbGPRed) {
-                shader.fragmentShader = ((globalThis as any).__mbGPDiag
-                    ? ((globalThis as any).__mbGPDiag2 ? '#define MB_GP_DIAG2 1\n' : '#define MB_GP_DIAG 1\n')
-                    : '') + '#define MB_GP_RED 1\n' + shader.fragmentShader;
+                const d = (globalThis as any).__mbGPDiag
+                    ? '#define MB_GP_DIAG 1\n'
+                    : ((globalThis as any).__mbGPDiag2 ? '#define MB_GP_DIAG2 1\n' : '#define MB_GP_DIAGSD 1\n');
+                shader.fragmentShader = d + '#define MB_GP_RED 1\n' + shader.fragmentShader;
             }
             shader.uniforms.uMBShadowMap = { value: this.m_shTex };
             shader.uniforms.uMBShadowMap1 = { value: this.m_shTex1 };
@@ -762,6 +763,8 @@ export class MBShadowRenderer {
                     gl_FragColor.rgb = vec3(fract(vMBGPW.x / 64.0), fract(vMBGPW.y / 64.0), lit);
                     #elif defined(MB_GP_DIAG)
                     gl_FragColor.rgb = vec3(clamp(uv4.x, 0.0, 1.0), clamp(uv4.y, 0.0, 1.0), clamp(uv4.z, 0.0, 1.0));
+                    #elif defined(MB_GP_DIAGSD)
+                    gl_FragColor.rgb = vec3(clamp(mbWPSd, 0.0, 1.0), clamp(uv4.z, 0.0, 1.0), lit);
                     #else
                     gl_FragColor.rgb = vec3(1.0, 0.0, 0.0);
                     #endif

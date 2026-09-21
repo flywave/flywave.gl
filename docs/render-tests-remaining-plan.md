@@ -6363,3 +6363,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 工具**：scripts/tile-screen-probe.ts（vendored Transform locationPoint 瓦片角投屏）；MBGPlane/MBGQInvoke 探针；mgl-shot 临时 fixture 法（上游 integration 树建 __nocast 副本）验证 layer 可见性二分。
 
 **移交优先级（更新）**：①地面通道采样校准（②①：先解 uv4.z 饱和，再 flat-fill receiver 让位）→ 单通道预期回收 ~30 万+ ②guard-rail depth-reconstruction ③ortho-camera 正交接收端 58.1k ④elevated-wireframe 77.5k ⑤tunnel 簇 ~390k。
+
+### §885 g67b: 地面通道采样诊断推进——gp5 全黑根因=零因子；剩余=光域拟合不含影子足迹（2026-09-21）
+
+**① gp5 全黑根因闭合**：当时 updateGroundPlane 从 m_groundUniforms（null）拷 factor → 向量恒 (0,0,0) → pow(0,1/2.2)=0 → F=light → 影子区纯黑。已改为本地按 lighting3DState 计算 factor 与 fade（不再依赖 legacy stash）。
+
+**② gdiag4b（groundplane=1 gpred=4，junction）**：DIAGSD 显示 **sd 读取正常**——空白瓦片区 sd≈1.004（白清）→ lit≈1；桥体足迹区 sd≈0.7（真影）→ lit<1。即**采样链（texture/矩阵/解码）已通**，plane 在空白区正确 no-op。
+
+**③ 剩余根因（高置信）**：esl 真实路径楔形仍缺失+整屏发白伪影。[MBShadowMat] 拟合 r=97、cam=(32,-64,-66)——**光域拟合只覆盖桥体自身**；建筑（200m 高，~150m 外）的地面影子足迹沿光轴南伸 ~168m（200·tan40°），**大部分落在光域 [0,1] 之外** → 地面采样点 uv 越界/落白清区 → lit=1 → 无楔形。mgl 的 createLightMatrix 用 cascadeSplitDist(=1.5×cameraToCenterDistance)·3 的 far + verticalRange 覆盖地面影子接收区——我们的拟合半径未含"caster 影子地面足迹"。**下轮首刀：拟合半径扩至 max( casterAABB 影子足迹, 现值 )**（prepareFit 处 m_shadowCamera right/left/top/bottom 与 far），预计一步点亮楔形。
+
+**④ 安全确认**：默认关=基线逐位（junction 18,275 / circles-nonelevated 7,853 复现）。配套步提醒：通道点亮后需"非 elevated fill 停用 receiver"（mgl：flat fill 无 RENDER_SHADOWS，地面由 quad 管）否则地面 fill 双重压暗（gp5 的第二回归源）。
+
+**⑤ 探针扩容**：gpred=2（uv4.xyz）/3（世界坐标梯度+lit）/4（sd+uv4.z+lit）；gplift=<m>；[MBGPlane] n=1/30/300 挂载探针。全部走 MBSTYLE_EXTRA_ARGS。

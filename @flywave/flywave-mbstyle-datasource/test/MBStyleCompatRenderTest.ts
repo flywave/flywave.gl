@@ -137,10 +137,12 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "gpred=1")) {
         (globalThis as any).__mbGPRed = true;
     }
-    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "gpred=2" || a === "gpred=3")) {
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "gpred=2" || a === "gpred=3" || a === "gpred=4")) {
+        const a2 = (v: string) => (window as any).__karma__?.config?.args?.some?.((a: string) => a === v);
         (globalThis as any).__mbGPRed = true;
-        (globalThis as any).__mbGPDiag = true;
-        (globalThis as any).__mbGPDiag2 = (window as any).__karma__?.config?.args?.some?.((a: string) => a === "gpred=3");
+        (globalThis as any).__mbGPDiag = a2("gpred=2");
+        (globalThis as any).__mbGPDiag2 = a2("gpred=3");
+        (globalThis as any).__mbGPDiagSd = a2("gpred=4");
     }
     // §885 g67: gplift=<m> — ground-plane receiver lift toward the light.
     {
