@@ -200,6 +200,7 @@ function main() {
             ...(process.env.MBSTYLE_SHCASTEROFF ? [`shcasteroff=${process.env.MBSTYLE_SHCASTEROFF}`] : []),
             ...(process.env.MBSTYLE_EXTSHADOWH ? ["extshadowh=1"] : []),
             ...(process.env.MBSTYLE_GPLIFT ? [`gplift=${process.env.MBSTYLE_GPLIFT}`] : []),
+            ...(process.env.MBSTYLE_LINEWSCALE ? [`linewscale=${process.env.MBSTYLE_LINEWSCALE}`] : []),
             ...(process.env.MBSTYLE_GPONE ? ["gpone=1"] : []),
             ...(process.env.MBSTYLE_SHADOWHW ? ["shadowhw=1"] : []),
             ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),

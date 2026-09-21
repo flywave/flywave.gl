@@ -1245,6 +1245,14 @@ export class MBTileDataEmitter {
                 const mppTech = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
                     (256 * Math.pow(2, this.m_zoom + 1));
                 props.lineWidth = p['line-width'] ?? 1;
+                // §885 g85: linewscale=<f> — A/B probe for the lane-line
+                // width over-render (white px 2.63×; g84③ mpp/overzoom audit).
+                {
+                    const lws = Number((globalThis as any).__mbLineWScale);
+                    if (Number.isFinite(lws) && lws > 0 && typeof props.lineWidth === 'number') {
+                        props.lineWidth = props.lineWidth * lws;
+                    }
+                }
                 if (lineMeters && typeof props.lineWidth === 'number') {
                     props.lineWidth = props.lineWidth / mppTech;
                 }
@@ -3910,7 +3918,16 @@ export class MBTileDataEmitter {
                 // depend on the SolidLineMaterial's GLSL extrusion (which fails to
                 // rasterize on SwiftShader). The shader is told to use `position`
                 // directly via the `_preExtrudedLines` technique flag.
-                const lineWidthPx = Number(layer.paint?.['line-width'] ?? 1);
+                // §885 g85: linewscale=<f> — ribbon width multiplier (A/B
+                // probe; the technique-branch knob missed this path).
+                const lineWidthPx = Number(layer.paint?.['line-width'] ?? 1)
+                    * (Number.isFinite(Number((globalThis as any).__mbLineWScale))
+                        ? Number((globalThis as any).__mbLineWScale) : 1);
+                if ((globalThis as any).__mbDecodeDbg
+                    && ((globalThis as any).__mbRbZoomN = ((globalThis as any).__mbRbZoomN ?? 0) + 1) <= 3) {
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBRbZoom] m_zoom=${this.m_zoom} layer=${layer.id} lwPx=${lineWidthPx}`);
+                }
                 // Convert CSS px to world units at the DISPLAY zoom. The camera
                 // is driven at mapbox zoom + 1 (see applyCameraSettings), so a
                 // level-z tile renders at 512px rather than 256px. Pixel → world

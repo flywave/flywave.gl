@@ -6636,3 +6636,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮**：审计 SolidLineMaterial 的 Pixel→world 换算链与 mgl draw_line 的 overscale 线宽语义逐字对照（draw_line.ts lineWidthScale）；对照实验旋钮（linewscale）二分。
 
 **④ 状态**：单测 310；tsc 26；viewport-aligned 61,808 持平（去重惰性零扰动）。
+
+### §885 g85: 标线宽度假设证伪 + linewscale 扫描（诊断性 −10k）+ 根因收敛至线跨 tile 重复（2026-09-22）
+
+**① linewscale 旋钮与扫描（ribbon 路径 :3921 生效；technique 分支旋钮惰性——HD 线走 ribbon/fill path）**：viewport-aligned 61,808 → 0.62:55,999 → 0.5:54,254 → 0.4:52,950 → 0.3:51,557（单调改善，白像素 33,373→17,227）。**默认不改**（全局线宽牵动 line-cap/round 等已校准家族，终一百六十七 1.0×mpp 基准）。
+
+**② 宽度假设证伪（[MBRbZoom] 探针）**：m_zoom=**19.28**（live 分数相机 zoom 正确传入）、lwPx 求值=mgl 精确（solid 3.36/22 停止点指数修正后）——**mpp 换算与线宽求值均字面正确**，2.43× 宽度假设（mpp(18)/mpp(19.28)=白比 2.63 的数值巧合）死刑。
+
+**③ 根因收敛**：白超量 2.63× 与"未裁剪 tile 的线几何跨 tile 重复绘制"一致（vendored tile 线几何 12× extent，每个 tile 都画全部线；各 tile 投影浮点差异使副本微错位→视觉增厚）。**mgl 字面=clipLines 到 tile 盒**（线桶按 tile 裁剪，配合正常预裁剪语料）。我方已有 `clipLinePathsToTile`（Liang-Barsky，sea/ground offset 层在用）——**下轮正攻=扩展到全部线层**（注意 offset 分支的 geojson y-mirror 帧归一化需沿用）。
+
+**④ 基建教训**：decodedbg 探针引用声明前 const（TDZ）在 transpileOnly 下静默崩溃整条 ribbon 路径（154,475 假象）——探针引用必须 tsc 后再跑；decodedbg 本身也可能有未审计副作用。
+
+**⑤ 状态**：单测 310；tsc 26；linewscale 旋钮（默认 1 惰性）+ MBRbZoom 探针入库。

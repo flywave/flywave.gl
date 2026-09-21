@@ -595,6 +595,10 @@ function discoverTests(): TestEntry[] {
     const sco = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("shcasteroff="))?.slice("shcasteroff=".length);
     if (sco) (globalThis as any).__mbShCasterOff = sco;
+    // §885 g85: linewscale=<f> — line-width multiplier (A/B probe).
+    const lws = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+        a.startsWith("linewscale="))?.slice("linewscale=".length);
+    if (lws !== undefined) (globalThis as any).__mbLineWScale = Number(lws);
     // §885 g78: extshadowh=1 — drop the §294 sec(lat) extra height factor.
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "extshadowh=1")) {
         (globalThis as any).__mbExtShadowH = true;
