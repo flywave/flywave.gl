@@ -1823,9 +1823,12 @@ export class MBMaterialPatchManager {
                              // LIT across the far quarter of the shadow
                              // camera's coverage (mgl: mix(occlusion1, 0.0,
                              // smoothstep(0.75·far, far, view_depth))),
-                             // shadow_renderer.ts:363.
+                             // shadow_renderer.ts:363. §885 g70: view_depth =
+                             // gl_Position.w = vViewPosition.z (camera-forward
+                             // depth; vViewPosition = −mvPosition), NOT the 3D
+                             // length — length() over-fades high-pitch frags.
                              float mbFade = smoothstep(uMBShadowFar * 0.75,
-                                 uMBShadowFar * 1.0, length(vViewPosition));
+                                 uMBShadowFar * 1.0, vViewPosition.z);
                              mbShLit = mix(mbShLit, 1.0, mbFade);
                              mbNdotL *= mix(1.0 - uMBShadowIntensity, 1.0, mbShLit);
                              // §714 shadow-uv probe: R = signed depth delta

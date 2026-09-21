@@ -6459,3 +6459,19 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 默认态验证（无旋钮）**：esl **22,372**（=校准最优, off 态 24,727）/ esl-terrain-enabled 41,876 / junction 18,284（持平）/ tunnel **53,326**（−304）。lighting 四件按 g67h 数据 −2.4~−2.6k/件落袋（esl 已实证）。单测 310 passing。
 
 **⑤ 残余**：esl 影子边界形状（(470,30) 型远缘差=200m 建筑 vs 桥足迹 caster 内容范围）+ 桥洞 speckle + underpass 武装态超时无数据。下轮候选：caster 内容差（G1 范围/高度）与 underpass harness 治理。
+
+### §885 g70: esl 残余像素级定位——"远缘差"已闭合，真残余=我方多余影带；fade 深度度量 mgl 字面化（2026-09-22）
+
+**① g67f "expected 影子更远"已闭合**：(470,20..80) ours=(83,·,·) vs expected=(82,·,·) **Δ1**（默认点亮态实测）——g69 默认化后远缘差不再是残余。
+
+**② fade 度量字面修正（audit S13）**：mgl `v_depth = gl_Position.w` = **相机前向深度 (−viewZ)**，非 3D 距离。两处落地：地面平面（`mbCamFwd` 投影点积替代 `distance()`）与 extrusion 接收端（`vViewPosition.z` 替代 `length(vViewPosition)`，vViewPosition=−mvPosition 故 z 即 w）。实测 esl/tunnel 逐位不变（该夹具 fade 未激活），语义归一留待高 pitch 远景夹具生效。
+
+**③ 真残余定位（esl 22,372 中的主导结构）**：影子掩膜 XOR 连通域——**我方多余影带 n=14,093（bbox 0,0-397,190），expected 多余仅 383**。差带两条边界线汇于建筑西南角 ≈(65,165)，边界角差 ~14°。逐项排除：
+- `shadowdisable=1`：差带消失 → 属阴影链内容（非路面填充/几何）；
+- `shaz=±13`：esl 52,087/47,619（3× 变差）→ **非全局光方位角**（现有方位校准正确）；
+- `elevcasteroff=1`：差带仍在、总数 22,372 不变 → 非 elevated-structures caster 段（该旋钮对此夹具惰性）；
+- 建筑本体两态均在画（90,90,90 面色在默认态可见；"建筑缺失"系无影对照被 expected 含影污染的误判，已数值证伪）。
+
+**④ 剩余假设（下轮正攻）**：差带=我方深度图在 mgl 判亮的区域有遮挡内容，边界同锚建筑角、角差 14°——候选：我方建筑 extrusion 的顶面/棱几何与 mgl 体素有系统差（如垂直棱的斜切/顶盖多边形），或我方 caster 采集了建筑之外的第二高体。**下一步探针**：gpred=2（cascade uv）+ gpred=4（sd/z/lit）在差带像素 (30,200)/(64,200) 采样定位贡献级联与遮挡深度值，再反投影光空间 uv 到 c0/c1 深度图 dump（shadow-depth-canvas/canvas1 已随 feedback 自动落盘）找出遮挡三角形。
+
+**⑤ 状态**：esl 22,372 / tunnel 53,326 / junction 18,284 持平；单测 310 passing；tsc 26（=HEAD 基线）。工具：tmp/img-diff3.js（三图对比）、tmp/esl-xor.png（差集叠加）生成法在案。

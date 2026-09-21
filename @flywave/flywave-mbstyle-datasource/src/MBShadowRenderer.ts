@@ -773,7 +773,13 @@ export class MBShadowRenderer {
                         mbWPSd = sdC;
                         if (inC1) {
                             vec3 wp = (uMBCamWorld * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-                            float viewDist = distance(mbWP, wp);
+                            // §885 g70 (audit S13): mgl v_depth = gl_Position.w
+                            // = −viewZ (camera-FORWARD depth), not the 3D
+                            // distance — distance() over-fades high-pitch far
+                            // fragments (the esl far-wedge truncation:
+                            // expected's shadow reaches farther than ours).
+                            vec3 mbCamFwd = -normalize((uMBCamWorld * vec4(0.0, 0.0, 1.0, 0.0)).xyz);
+                            float viewDist = abs(dot(mbWP - wp, mbCamFwd));
                             float fade = 1.0 - smoothstep(uMBFadeRange.x, uMBFadeRange.y, viewDist);
                             lit = mix(1.0, lit, fade);
                         }
