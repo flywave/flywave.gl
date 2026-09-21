@@ -6648,3 +6648,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 基建教训**：decodedbg 探针引用声明前 const（TDZ）在 transpileOnly 下静默崩溃整条 ribbon 路径（154,475 假象）——探针引用必须 tsc 后再跑；decodedbg 本身也可能有未审计副作用。
 
 **⑤ 状态**：单测 310；tsc 26；linewscale 旋钮（默认 1 惰性）+ MBRbZoom 探针入库。
+
+### §885 g86: 线层 tile 裁剪 mgl 字面落地——跨 tile 线重复根除（2026-09-22）
+
+**① mgl 字面（line_bucket.ts:1092-1094）**：所有线裁剪到 tile 盒 **±10 单位**（offset elevation 型 ±2）。落地：`clipLinePathsToTile` 参数化 clipMargin 并从 sea/ground offset 层扩展到全部线层（`nolineclip=1` 回退旋钮，needsResample 路径维持排除，geojson y-mirror 帧归一化沿用）。
+
+**② 实测（mtime 新鲜）**：viewport-aligned 61,808→**60,222**（−1,586）/text 61,498→**59,936**（−1,562）/terrain 49,669→**47,961**（−1,708）——净 ≈ −4.9k，字面语义修正（g85③ 根因=未裁剪 tile 线几何 12× extent 跨 tile 重复绘制）。
+
+**③ 待补**：白像素收敛读数与 line-cap/round、gradient-with-corners 已校准线族回归（会话中止未跑）——若回归超预期需 `nolineclip=1` 定位。单测 310 passing；tsc 26。

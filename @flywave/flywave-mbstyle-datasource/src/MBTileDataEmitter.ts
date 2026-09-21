@@ -3508,8 +3508,9 @@ export class MBTileDataEmitter {
      */
     private clipLinePathsToTile(
         positions: THREE.Vector2[], extents: number,
+        clipMargin = 2,
     ): Array<{ positions: THREE.Vector2[]; startArc: number; totalArc: number }> {
-        const m = 2;
+        const m = clipMargin;
         const minX = -m, minY = -m, maxX = extents + m, maxY = extents + m;
 
         const cum: number[] = [0];
@@ -3598,17 +3599,24 @@ export class MBTileDataEmitter {
         // mvtTransform) — x is tile-local but y is a huge frame value. The
         // §513 border clip needs true tile-local coordinates, so normalize
         // y before clipping and map the clipped pieces back afterwards.
-        const clipFrameC = anyOffsetLayer && !needsResample
+        // §885 g86 (mgl literal, line_bucket.ts:1092): EVERY line clips to
+        // the tile box ±10 units (offset elevation type: ±2) — the vendored
+        // tilecover fixtures carry line geometry ~12× the extent and each
+        // tile drew ALL of it (cross-tile duplicates, white px 2.63×).
+        const clipAllLines = (globalThis as any).__mbNoLineClip !== true;
+        const shouldClipLines = clipAllLines && !needsResample;
+        const clipFrameC = shouldClipLines
             ? this.geojsonYFrameConstant(extents)
             : null;
         const toLocalY = (p: THREE.Vector2): THREE.Vector2 =>
             clipFrameC === null ? p : new THREE.Vector2(p.x, clipFrameC - p.y);
         const fromLocalY = (p: THREE.Vector2): THREE.Vector2 =>
             clipFrameC === null ? p : new THREE.Vector2(p.x, clipFrameC - p.y);
-        const linePaths: ClippedLinePath[] | null = anyOffsetLayer && !needsResample
+        const linePaths: ClippedLinePath[] | null = shouldClipLines
             ? geometry
                 .flatMap(g => this.clipLinePathsToTile(
-                    g.positions.map(toLocalY), extents))
+                    g.positions.map(toLocalY), extents,
+                    anyOffsetLayer ? 2 : 10))
                 .map(p => ({
                     positions: p.positions.map(fromLocalY),
                     startArc: p.startArc,
