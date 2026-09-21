@@ -196,6 +196,7 @@ function main() {
             // §885 g71: gpred/gpone — ground-plane DIAG probes (uv / sd-lit).
             ...(process.env.MBSTYLE_GPRED ? [`gpred=${process.env.MBSTYLE_GPRED}`] : []),
             ...("shclipunder" in process.env ? [`shclipunder=${process.env.MBSTYLE_SHCLIPUNDER}`] : []),
+            ...(process.env.MBSTYLE_POLYCLIP === "0" ? ["polygonclip=0"] : []),
             ...(process.env.MBSTYLE_GPONE ? ["gpone=1"] : []),
             ...(process.env.MBSTYLE_SHADOWHW ? ["shadowhw=1"] : []),
             ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),

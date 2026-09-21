@@ -6487,3 +6487,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ mgl ground shadow 机制字面入库（painter.ts:1454-1471 + shadow_renderer.ts:439-487）**：时序=clearStencil → 逐 fill 层 drawGroundShadowMask（depthSegments 以 depth-reconstruct 投到 z=0、stencil REPLACE 0xFF，LEQUAL ReadOnly）→ drawGroundShadows（per covering-tile extent quad，**stencil EQUAL 0x00**、ColorMode.multiply、shadowed_light_factor_plane_bias）——**路面像素被 mask 排除出地面影 quad**，路面阴影走 fill 自身 receiver。我方 paint 模式平面用 fills 覆写近似了该语义，S12 stencil 机制本身仍为等价近似（挂账维持）。
 
 **⑤ 状态**：esl 22,372 持平（探针零扰动）；单测 310 passing；tsc 26。工具增量：MBSTYLE_GPRED/GPONE/SHCLIPUNDER 透传 + shclipunder 旋钮。下轮正攻：**路面几何覆盖缺失**（差带内缺失段的 edge 生成/瓦片覆盖审计，关联 G10 SUBDIVISION_EDGE_EXTENSION 与 g52x2 边界带记录）。
+
+### §885 g72: 差带缺失路面=flat fill 外溢——机制链闭环至"消失点在发射之后"（2026-09-22）
+
+**① 颜色数学定性**：expected 差带色 (127,141,156) = **fake-road-shade `rgb(214,221,219)` × apply_lighting(~0.6)** 精确匹配（road-base hsl(212) 蓝调不符）。fake-road-shade 是**无 fill-elevation-reference 的平面 fill** → mgl 平面 fill 桶**从不裁剪到瓦片界**（仅 HD 路径 clipPolygonsToTile margin=1，fill_hd_extension.ts:129/288）→ 外溢渲染进 404 空洞（g66 mgl-shot oracle 实证同语料可渲染）。
+
+**② 数据侧证实**：直读 vendored MVT（tmp/mvt-extent.js）：18-232843-103243 的 hd_road_polygon 几何 x 达 100,607（extent 8192 的 ~12 倍）——**tilecover 族夹具的瓦片本来就不裁剪**，外溢数据在库中。覆盖集：72 cell 请求、差带所属 cell 404（语料无）、外溢源瓦片 HIT+decoded（[MBFillHD-bounds] 三 decodeCenter 与 HIT cell 对齐）。
+
+**③ A/B 陷阱揭露**：`polygonclip=0` 实测逐位不变的原因=**旋钮装错包**——`__mbNoPolyClip` 消费者在 flywave-vectortile-datasource/VectorTileDataEmitter.ts:878，而 mbstyle 夹具走 MBTileDataEmitter（其平面 fill 分支代码本身无裁剪）。旋钮对 mbstyle 族恒惰性，此前结论"decode 裁剪非裁点"仍成立但证据无效化后需以正确探针重做。
+
+**④ 残余悬点（下轮正攻）**：flat 外溢在 processFillFeature 平面分支（无裁剪、project() 无 clamp 迹象）之后、光栅化之前消失。候选：proto 读取器几何上限/project() 深处 clamp/逐瓦片对象剔除。**下一步**：仿 [MBFillHD-bounds] 增设平面 fill 世界边界转储（含瓦片本地 x>extents 的顶点计数），一次运行即可定位消失层级。
+
+**⑤ 状态**：本轮零渲染行为改动（仅 runner MBSTYLE_POLYCLIP 透传+取证工具 mvt-extent.js）；esl 22,372 基线不变；台账更新。
