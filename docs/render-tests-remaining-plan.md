@@ -6533,3 +6533,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 嫌疑收敛**：楔形左边界=建筑**顶边**影子的平行线——底环正确而顶边影子旋 14° ⇒ **顶环相对底环横移 ~50m（=200m·tan14°）**：挤出轴倾斜（up-矢量含水平分量）或高度施加路径带水平项。此量级的倾斜在渲染上即视觉所见"建筑旋转"。**下一步**：[MBBldgRing] 扩展转储顶环（base+height 后同点坐标）五点对拍底环，Δx/Δy/Δz 直接读出倾斜向量与来源（emitExtrudedPolygon 高度加法 vs project() z 链）。
 
 **③ 状态**：esl 22,372 持平；tsc 26；探针零扰动（默认惰性）。
+
+### §885 g76: 挤出垂直性验证 + 嫌疑收敛至跨 cell 片段合并（2026-09-22）
+
+**① 顶点级验证**：emitExtrudedPolygon 顶/底构造 `tx=w.x, ty=w.y`（平面路径 top 与 base 严格同 x/y，spherical 路径沿径向）——**挤出轴无倾斜**，g75②"顶环横移"假设不成立。
+
+**② 嫌疑最终收敛**：底环主片段朝向正确 + 挤出垂直 ⇒ 单片段几何正确；**剩余解释=跨 cell 片段合并帧差**（建筑横跨 4 cell，各 cell 的 clipped 片段经 g43/g45 邻居合并/重标定拼装——某片段帧错会改变合成顶边走向）。与 [MBBldgRing] n=4 sliver 片段未对拍、及 filterFeaturesToTile/g45 merge 的既有复杂度一致。
+
+**③ 下轮步骤（精确）**：[MBBldgRing] 扩展打印每片段的 cell key + 全角点，逐片段对 geojson 裁剪期望值（可离线精确计算），定位错帧片段；修复点在 MBExtraVectorSourcesProvider 邻居合并的坐标重标定链。
+
+**④ 状态**：esl 22,372 持平；tsc 26；单测 310。
