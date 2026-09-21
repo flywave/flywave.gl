@@ -2945,12 +2945,14 @@ export class MBTileDataEmitter {
             if ((globalThis as any).__mbDecodeDbg
                 && ((layer as any)._layerId === 'shadow-casters' || layer.id === 'shadow-casters')
                 && rings[0]?.length > 2) {
-                const pts = rings[0].slice(0, 8).map((p: any) => {
+                const tk = (this.m_decodeInfo as any).tileKey;
+                const pts = rings[0].map((p: any) => {
                     const w = this.project(new THREE.Vector2(p.x, p.y));
                     return `${w.x.toFixed(1)},${w.y.toFixed(1)}`;
                 });
+                const c = (this.m_decodeInfo as any).center;
                 // eslint-disable-next-line no-console
-                console.log(`[MBBldgRing] n=${rings[0].length} world=${pts.join(' ')}`);
+                console.log(`[MBBldgRing] cell=${tk ? `z${tk.level}/${tk.column}/${tk.row}` : '?'} src=${(properties as any)?._sourceId ?? 'primary'} n=${rings[0].length} center=${c.x.toFixed(1)},${c.y.toFixed(1)} world=${pts.join(' ')}`);
             }
             const allVerts: number[] = [];
             const holeIndices: number[] = [];
