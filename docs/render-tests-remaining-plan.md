@@ -6347,3 +6347,19 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **⑦ 工具/基建**：mgl-shot 新增 `MGL_SHOT_SCALE` env（=1 输出 512² 与 expected 可 pixelmatch）；tmp/fam-summary.js（ibct-result 聚合表，注意 name 在 imageProps 内层）；tmp/img-diff.js（pixelmatch+均值）；polygonclip=0 调试门控（VectorTileDataEmitter + harness，本轮无效应保留备用）；shadowmgl=0 为无效 knob（harness 只解析 =1，值 0 落空）——已记档。
 
 **移交优先级**：①缺失路面载体定位（③）→ 预期回收 esl 四件 ~140k + shadows-underpass 128k 的大头 ②guard-rail depth-reconstruction 专项 ③ortho-camera 正交接收端 58.1k ④elevated-wireframe 77.5k（三角剖分奇偶性）⑤tunnel 簇 ~390k 归因（下一轮 DIYAG/内容对拍）。
+
+### §885 g67: "缺失路面"证伪→实为背景投影；深度测试地面阴影通道建成（默认待校准）（2026-09-21）
+
+**① g66 "缺失路面"结论修正（决定性实验）**：esl 夹具 mgl 本体隐藏 shadow-casters 层（临时 fixture __nocast）→ 右上暗楔**完全消失、场景全亮**——右上区域不是路面，而是 **shadow-casters 内联 geojson 挤出体（200m 建筑）投在背景地面上的影子 + 暗墙**。像素证据闭环：lit 背景 184 × 0.446(=pow(A/(A+D),1/2.2), A=0.1 D=0.75·cos50°) = 82 ≈ 实测楔形 (82,85,84)；mgl z18 瓦片请求 {103243(200),103244(404),232844-103244(404)}，103243 语料库 md5 与我们一致——与瓦片/裁剪/外溢全部无关（tile-screen-probe.ts 用 vendored Transform locationPoint 把瓦片角投屏，边界线叠图核对）。g66 的"缺失路面载体"开放项就此关闭：**载体 = 背景投影缺失**。
+
+**② 深度测试地面阴影通道（MBShadowRenderer.ensureGroundPlane/updateGroundPlane/attachGroundPlane，本 g67 主体）**：世界空间 4 顶点地面网格（每帧按 prepGroundQuad 角点重定位，RTE 帧 = 角点 − eye），MeshBasicMaterial + MultiplyBlending（=mgl ColorMode.multiply），depthWrite=false depthTest=true，renderOrder 9.9（fills 9.5-9.8 后、symbols 前），每帧 preSceneHook 重挂 m_sceneRoot。fragment：vMBGPW 采样 3×3 PCF（打包 rg 解码）+ cascade-1 fade + `mix(pow(factor,1/2.2),1,1-int·(1-lit))`。工程陷阱三连（供后人）：
+- 引擎清场用 `m_sceneRoot.children.length = 0`（绕过 three 移除记账）→ child.parent 指针残留 → `parent!==root` 判断跳过重挂 → 网格静默离场（gpred=1 红屏零像素但 parent=Object3D 在案）→ 必须**无条件 add()**；
+- prepGroundQuad 曾在 m_groundUniforms（legacy overlay 未编译则 null）早退 → 角点/corners 全链饿死（[MBRf2] gc0=(0,0,0) 实锤）→ 已重构为角点无条件计算、legacy 写入单独 gated；
+- FrontSide 从上方看绕序为背 → 全剔除，side=DoubleSide 必需。
+现状：**gpred=1 红屏证明栅格化+深度测试全通（桥面/墙体正确拒绝、背景/地面着色）**；但真实采样 lit=0 恒成立（gplift 0/1.3/10 三值不变；gpred=2 uv 梯度平滑、gpred=3 世界坐标梯度正常）→ **默认关**（groundplane=1 显式启用）。下轮首查：m_matrix 的 z 值域 vs 地面点（diag 显示 uv4.z≥1 恒定，疑似 light-frustum far 端饱和——对照 fill receiver 的 ray-plane mbWP 与 uMBNOffZ 链路逐项对齐）。
+
+**③ A/B 记录（全数保留在 rendering-test-results/mb-gp*、mb-gpl*）**：地面通道启用态 gp5：esl 100,562 / junction 121,709 / tunnel 219,347 / circles-nonelevated 7,853（=基线，对照 ✓）——背景正确压暗的同时地面 fill 被二次压暗（我们的 fill receiver 全量自采样 vs mgl 仅 elevated fill 自采样+quad 管地面）→ 收复需配套"非 elevated fill 停用 receiver"（mgl 语义②步，未落地）。校准完成后（①采样修复②flat-fill receiver 让位）预期回收 lighting 四件+shadows 系 ~30-40 万。
+
+**④ 工具**：scripts/tile-screen-probe.ts（vendored Transform locationPoint 瓦片角投屏）；MBGPlane/MBGQInvoke 探针；mgl-shot 临时 fixture 法（上游 integration 树建 __nocast 副本）验证 layer 可见性二分。
+
+**移交优先级（更新）**：①地面通道采样校准（②①：先解 uv4.z 饱和，再 flat-fill receiver 让位）→ 单通道预期回收 ~30 万+ ②guard-rail depth-reconstruction ③ortho-camera 正交接收端 58.1k ④elevated-wireframe 77.5k ⑤tunnel 簇 ~390k。

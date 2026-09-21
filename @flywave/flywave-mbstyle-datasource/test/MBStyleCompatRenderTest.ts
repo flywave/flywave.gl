@@ -125,6 +125,29 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "polygonclip=0")) {
         (globalThis as any).__mbNoPolyClip = true;
     }
+    // §885 g67: groundplane=1 — arm the depth-tested ground-shadow pass
+    // (mgl ground_shadow program equivalent). DEFAULT OFF: the plane
+    // rasterizes and spares decks (gpred=1/3 proofs) but its shadow sample
+    // reads lit=0 plane-wide (gplift-invariant) — calibration pending.
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "groundplane=1")) {
+        (globalThis as any).__mbGroundPlaneOn = true;
+    }
+    // §885 g67: gpred=1 — paint the ground-shadow plane solid red (rasterizer
+    // proof). gpred=2 — DIAG paint (R=sample depth, G=stored, B=lit).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "gpred=1")) {
+        (globalThis as any).__mbGPRed = true;
+    }
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "gpred=2" || a === "gpred=3")) {
+        (globalThis as any).__mbGPRed = true;
+        (globalThis as any).__mbGPDiag = true;
+        (globalThis as any).__mbGPDiag2 = (window as any).__karma__?.config?.args?.some?.((a: string) => a === "gpred=3");
+    }
+    // §885 g67: gplift=<m> — ground-plane receiver lift toward the light.
+    {
+        const gl = (window as any).__karma__?.config?.args
+            ?.find?.((a: string) => a.startsWith("gplift="))?.slice("gplift=".length);
+        if (gl !== undefined && gl !== "") (globalThis as any).__mbGPLift = Number(gl);
+    }
     // §885 终三十九g50o: faceprobe=1 — per-mesh facing dump (needs decodedbg).
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "faceprobe=1")) {
         (globalThis as any).__mbFaceProbe = true;

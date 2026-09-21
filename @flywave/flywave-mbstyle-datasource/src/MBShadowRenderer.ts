@@ -217,6 +217,14 @@ export class MBShadowRenderer {
     // translucent gate, which disabled the quad for virtually every style).
     private m_groundQuad: THREE.Mesh | null = null;
     private m_groundUniforms: any = null;
+    /** §885 g67: depth-tested ground-shadow pass (mgl ground_shadow program
+     * equivalent). A world-space quad at the ground plane, drawn AFTER the
+     * opaque tiles with depthTest LEQUAL: ground/background fragments (depth
+     * = cleared far) pass and take the shadow factor; elevated decks/walls
+     * (nearer, depth-written) reject the quad — the mgl semantics the
+     * fullscreen overlay (g52v-retired) approximated without depth. */
+    private m_groundPlane: THREE.Mesh | null = null;
+    private m_groundPlaneU: any = null;
     private m_groundScene = new THREE.Scene();
     private m_groundCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     /** Drawing-buffer size for the §692 screen-space receivers. */
@@ -635,6 +643,224 @@ export class MBShadowRenderer {
         this.m_groundUniforms = (mat as any).uniforms || null;
     }
 
+    /** §885 g67: build the depth-tested ground-shadow plane. The quad's four
+     * vertices are repositioned every frame from the same NDC-corner ground
+     * intersections the legacy overlay used (prepGroundQuad); the fragment
+     * samples the shadow map at the interpolated world position — no NDC
+     * unproject, so a pixel darkens only if a GROUND-DEPTH fragment survives
+     * the depth test there. DEFAULT OFF (g67: the plane rasterizes — gpred=1
+     * red proof — and the depth test correctly spares decks — gpred=3 image —
+     * but the shadow sample reads "shadowed" across the whole plane: lit=0
+     * invariant to gplift 0/1.3/10, gpred=2 uv gradient smooth). groundplane=1
+     * arms it for the next calibration session. */
+    private ensureGroundPlane(): void {
+        if (this.m_groundPlane) return;
+        if ((globalThis as any).__mbGroundPlaneOn !== true) return;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3));
+        geo.setIndex([0, 1, 2, 0, 2, 3]);
+        const mat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            // mgl ground_shadow draws with ColorMode.multiply — framebuffer
+            // × fragment. MultiplyBlending = dst × src here as well.
+            blending: THREE.MultiplyBlending,
+            transparent: true,
+            depthWrite: false,
+            depthTest: true,
+            // §885 g67: the corner winding depends on the camera azimuth —
+            // FrontSide culled the quad entirely from above (gpred=1 showed
+            // zero red pixels).
+            side: THREE.DoubleSide,
+            fog: false,
+        });
+        (mat as any).__mbShadowSkipped = true;
+        (mat as any).__mbMglLit = true;
+        const biasV = Number((globalThis as any).__mbShadowBias ?? 0.0002);
+        mat.onBeforeCompile = (shader: any) => {
+            if ((globalThis as any).__mbGPRed) {
+                shader.fragmentShader = ((globalThis as any).__mbGPDiag
+                    ? ((globalThis as any).__mbGPDiag2 ? '#define MB_GP_DIAG2 1\n' : '#define MB_GP_DIAG 1\n')
+                    : '') + '#define MB_GP_RED 1\n' + shader.fragmentShader;
+            }
+            shader.uniforms.uMBShadowMap = { value: this.m_shTex };
+            shader.uniforms.uMBShadowMap1 = { value: this.m_shTex1 };
+            shader.uniforms.uMBShadowMatrix = { value: this.m_matrix.clone() };
+            shader.uniforms.uMBShadowMatrix1 = { value: this.m_matrix1.clone() };
+            shader.uniforms.uMBGroundShadowFactor = { value: new THREE.Vector3() };
+            shader.uniforms.uMBShadowIntensity = { value: 0 };
+            shader.uniforms.uMBShadowTexel = { value: 1 / mbShadowRes() };
+            shader.uniforms.uMBFadeRange = { value: new THREE.Vector2(1e6, 2e6) };
+            shader.uniforms.uMBCamWorld = { value: new THREE.Matrix4() };
+            shader.vertexShader = ('varying vec3 vMBGPW;\n' + shader.vertexShader).replace(
+                '#include <project_vertex>',
+                '#include <project_vertex>\n    vMBGPW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+            shader.fragmentShader = ('varying vec3 vMBGPW;\n'
+                + 'uniform sampler2D uMBShadowMap;\n'
+                + 'uniform sampler2D uMBShadowMap1;\n'
+                + 'uniform mat4 uMBShadowMatrix;\n'
+                + 'uniform mat4 uMBShadowMatrix1;\n'
+                + 'uniform vec3 uMBGroundShadowFactor;\n'
+                + 'uniform float uMBShadowIntensity;\n'
+                + 'uniform float uMBShadowTexel;\n'
+                + 'uniform vec2 uMBFadeRange;\n'
+                + 'uniform mat4 uMBCamWorld;\n'
+                + `#define MB_SH_BIAS ${biasV}\n`
+                + `#define MB_GP_LIFT ${Number((globalThis as any).__mbGPLift ?? 10.0).toFixed(2)}\n`
+                + shader.fragmentShader).replace(
+                '#include <opaque_fragment>',
+                `#include <opaque_fragment>
+                {
+                    // §885 g67: MB_GP_LIFT — receiver lift toward the light in
+                    // metres (float literal — an int literal is a hard GLSL ES
+                    // compile error).
+                    vec3 mbWP = vMBGPW;
+                    mbWP.z += MB_GP_LIFT;
+                    vec4 uv4 = uMBShadowMatrix * vec4(mbWP, 1.0);
+                    vec4 uv4b = uMBShadowMatrix1 * vec4(mbWP, 1.0);
+                    float lit = 1.0;
+                    float mbWPSd = 0.0;
+                    bool inC0 = uv4.x >= 0.0 && uv4.x <= 1.0 &&
+                        uv4.y >= 0.0 && uv4.y <= 1.0 && uv4.z >= 0.0 && uv4.z <= 1.0;
+                    bool inC1 = !inC0 && uv4b.x >= 0.0 && uv4b.x <= 1.0 &&
+                        uv4b.y >= 0.0 && uv4b.y <= 1.0 && uv4b.z >= 0.0 && uv4b.z <= 1.0;
+                    if (inC0 || inC1) {
+                        float litSum = 0.0;
+                        float sdC = 0.0;
+                        for (int dy = -1; dy <= 1; dy++) {
+                            for (int dx = -1; dx <= 1; dx++) {
+                                vec2 off = vec2(float(dx), float(dy)) * uMBShadowTexel * 1.5;
+                                float l = 0.0;
+                                if (inC0) {
+                                    vec4 pk = texture2D(uMBShadowMap, uv4.xy + off);
+                                    float sd = pk.r + pk.g / 255.0;
+                                    if (dx == 0 && dy == 0) sdC = sd;
+                                    l = smoothstep(-float(MB_SH_BIAS), float(MB_SH_BIAS), sd - uv4.z);
+                                } else {
+                                    vec4 pk = texture2D(uMBShadowMap1, uv4b.xy + off);
+                                    float sd = pk.r + pk.g / 255.0;
+                                    if (dx == 0 && dy == 0) sdC = sd;
+                                    l = smoothstep(-float(MB_SH_BIAS), float(MB_SH_BIAS), sd - uv4b.z);
+                                }
+                                litSum += l;
+                            }
+                        }
+                        lit = litSum / 9.0;
+                        mbWPSd = sdC;
+                        if (inC1) {
+                            vec3 wp = (uMBCamWorld * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+                            float viewDist = distance(mbWP, wp);
+                            float fade = 1.0 - smoothstep(uMBFadeRange.x, uMBFadeRange.y, viewDist);
+                            lit = mix(1.0, lit, fade);
+                        }
+                    }
+                    float light = 1.0 - uMBShadowIntensity * (1.0 - lit);
+                    // §885 g67: gpred=1 — solid red (rasterizer proof).
+                    // gpred=2 — R/G/B = cascade-0 uv.
+                    // gpred=3 — R/G = world-pos gradient, B = lit.
+                    #ifdef MB_GP_RED
+                    #ifdef MB_GP_DIAG2
+                    gl_FragColor.rgb = vec3(fract(vMBGPW.x / 64.0), fract(vMBGPW.y / 64.0), lit);
+                    #elif defined(MB_GP_DIAG)
+                    gl_FragColor.rgb = vec3(clamp(uv4.x, 0.0, 1.0), clamp(uv4.y, 0.0, 1.0), clamp(uv4.z, 0.0, 1.0));
+                    #else
+                    gl_FragColor.rgb = vec3(1.0, 0.0, 0.0);
+                    #endif
+                    #else
+                    gl_FragColor.rgb = mix(
+                        pow(uMBGroundShadowFactor, vec3(1.0 / 2.2)), vec3(1.0), light);
+                    #endif
+                }`);
+            this.m_groundPlaneU = shader.uniforms;
+            (mat as any).customProgramCacheKey = () => 'mbgroundplane-v1';
+        };
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.name = 'MBShadowGroundPlane';
+        mesh.frustumCulled = false;
+        // after the tile fills (9.5-9.8), before symbols
+        mesh.renderOrder = 9.9;
+        mesh.visible = false;
+        this.m_groundPlane = mesh;
+    }
+
+    /** §885 g67: reposition the ground plane from the freshly computed
+     * corners (RTE frame = corners − eye) and refresh its uniforms. The
+     * factor/fade are computed LOCALLY — the legacy overlay's uniform stash
+     * is null when the overlay is retired (default), and the plane must not
+     * depend on it. */
+    private updateGroundPlane(eye: THREE.Vector3): void {
+        if (!this.m_groundPlane || !this.m_groundPlaneU) return;
+        const pos = (this.m_groundPlane.geometry as THREE.BufferGeometry)
+            .getAttribute('position') as THREE.BufferAttribute;
+        for (let i = 0; i < 4; i++) {
+            const c = this.m_corners[i];
+            pos.setXYZ(i, c.x - eye.x, c.y - eye.y, c.z - eye.z);
+        }
+        pos.needsUpdate = true;
+        const u = this.m_groundPlaneU;
+        u.uMBShadowMap.value = this.m_shTex;
+        u.uMBShadowMap1.value = this.m_shTex1;
+        u.uMBShadowMatrix.value.copy(this.m_matrix);
+        u.uMBShadowMatrix1.value.copy(this.m_matrix1);
+        u.uMBShadowIntensity.value = this.m_intensity;
+        u.uMBShadowTexel.value = 1 / mbShadowRes();
+        // mgl calculateGroundShadowFactor: A/(A+D·NdotL_ground) per channel,
+        // linear — the fragment encodes with pow(1/2.2) (184→82 measured).
+        {
+            const ls = (this.m_dataSource as any).m_environment?.lighting3DState;
+            const f = u.uMBGroundShadowFactor.value as THREE.Vector3;
+            if (ls) {
+                const ndl = Math.max(ls.dir[2], 0);
+                for (let i = 0; i < 3; i++) {
+                    const a = ls.ambientColorLinear[i];
+                    const d = ls.directionalColorLinear[i] * ndl;
+                    f.setComponent(i, a > 0 ? a / (a + d) : 0);
+                }
+            }
+        }
+        // mgl u_fade_range = [far1×0.75, far1]; our metric far1 = 4.5×ctcd.
+        const fadeFar = 4.5 * Math.max(1, (this.m_mapView as any).targetDistance ?? 500);
+        (u.uMBFadeRange.value as THREE.Vector2).set(fadeFar * 0.75, fadeFar);
+        // cascade-1 fade needs the camera world matrix — same one the
+        // legacy overlay refreshed (the rteCamera's rotation).
+        const cam = (this.m_mapView as any).getRteCamera?.()
+            ?? (this.m_mapView?.camera as THREE.PerspectiveCamera | undefined);
+        if (cam) (u.uMBCamWorld.value as THREE.Matrix4).copy(cam.matrixWorld);
+    }
+
+    /** §885 g67: (re)attach the ground plane to the per-frame rebuilt scene
+     * root. Idempotent; called from the preSceneHook (drawGroundQuad entry)
+     * so the plane rides the SAME frame's render. */
+    private attachGroundPlane(): void {
+        const on = (globalThis as any).__mbGroundPlaneOn === true;
+        if (!on || !this.m_enabled || this.m_intensity <= 0 || !this.m_groundPlane) {
+            if (this.m_groundPlane) this.m_groundPlane.visible = false;
+            return;
+        }
+        this.m_groundPlane.visible = true;
+        const root = (this.m_mapView as any)?.m_sceneRoot;
+        // §885 g67: the engine wipes m_sceneRoot with `children.length = 0`
+        // (MapView.render) — that truncation does NOT reset the child's
+        // parent pointer, so a `parent !== root` check would skip the re-add
+        // and the plane would silently leave the scene graph after the first
+        // wipe (gpred=1 painted zero red pixels with parent=Object3D logged).
+        // add() unconditionally: it re-pushes into the children array.
+        if (root) root.add(this.m_groundPlane);
+        // one-shot state probe
+        {
+            const gP = (globalThis as any);
+            gP.__mbGPAttachN = (gP.__mbGPAttachN ?? 0) + 1;
+            const n = gP.__mbGPAttachN;
+            if (n === 1 || n === 30 || n % 300 === 0) {
+                const p = (this.m_groundPlane.geometry as THREE.BufferGeometry)
+                    .getAttribute('position') as THREE.BufferAttribute;
+                const pa: string[] = [];
+                for (let i = 0; i < 4; i++) pa.push(`(${p.getX(i).toFixed(0)},${p.getY(i).toFixed(0)},${p.getZ(i).toFixed(0)})`);
+                // eslint-disable-next-line no-console
+                console.log(`[MBGPlane] n=${n} parent=${this.m_groundPlane.parent?.type ?? 'null'} ro=${this.m_groundPlane.renderOrder} int=${this.m_intensity} u=${!!this.m_groundPlaneU} verts=${pa.join(' ')} tex=${!!this.m_shTex}`);
+            }
+        }
+    }
+
     /** Unproject one NDC corner onto the ground plane (far clamp on sky). */
     private cornerOnGround(
         cam: THREE.PerspectiveCamera, camPos: THREE.Vector3,
@@ -673,6 +899,11 @@ export class MBShadowRenderer {
      * quad lies beneath all content). Uniforms were prepared by run() in
      * WillRender; a fresh style's first frame simply draws nothing. */
     private drawGroundQuad(renderer: THREE.WebGLRenderer): void {
+        // §885 g67: (re)attach the depth-tested ground plane BEFORE the
+        // legacy-overlay early returns — this hook runs after the engine's
+        // per-frame m_sceneRoot rebuild and before the render, so the plane
+        // added here rides THIS frame's draw.
+        this.attachGroundPlane();
         // §885 终五十八: invocation counter probe.
         {
             const gq = (globalThis as any);
@@ -801,22 +1032,13 @@ export class MBShadowRenderer {
 
     private prepGroundQuad(center: THREE.Vector3, radius: number, eye: THREE.Vector3): void {
         this.ensureGroundQuad();
-        // 终五十八: m_groundUniforms appears only after the quad's first
-        // compile — skip the uniform WRITES until then (the draw itself no
-        // longer depends on it, see drawGroundQuad).
-        if (!this.m_groundUniforms) return;
-        // 终五十八: pinpoint which uniform key the stash is missing.
-        {
-            const need = ['uMBInvProj', 'uMBCamWorld', 'uMBGroundZ', 'uMBShadowMap',
-                'uMBShadowMatrix', 'uMBShadowIntensity', 'uMBGroundShadowFactor'];
-            const missing = need.filter((k) => !(this.m_groundUniforms as any)[k]);
-            if (missing.length) {
-                // eslint-disable-next-line no-console
-                console.log('[MBGQPrep] missing uniforms: ' + missing.join(',') +
-                    ' have=' + Object.keys(this.m_groundUniforms).join(','));
-                return;
-            }
-        }
+        // §885 g67: the legacy overlay's uniforms appear only after the quad's
+        // first compile — with the overlay retired by default (g52v) they stay
+        // null and this function used to bail HERE, never computing the
+        // corners (the fill receivers' uMBGC and the depth-tested ground plane
+        // both starved). The corner math now runs unconditionally; only the
+        // legacy uniform WRITES are gated on m_groundUniforms.
+        const legacyU = this.m_groundUniforms;
         const renderer = this.m_mapView?.renderer as THREE.WebGLRenderer | undefined;
         // §885 终二十七: compute the corners IN THE SCENE (RTE) frame — the
         // frame the casters, the depth pass, the shadow-camera fit, and the
@@ -840,9 +1062,11 @@ export class MBShadowRenderer {
         // never recomputed — it stays IDENTITY, collapsing every ground ray
         // to the origin (±136 units) and pushing all shadow samples outside
         // the map. Derive the inverse from the projection matrix here.
-        this.m_groundUniforms.uMBInvProj.value.copy(cam.projectionMatrix).invert();
-        this.m_groundUniforms.uMBCamWorld.value.copy(cam.matrixWorld);
-        this.m_groundUniforms.uMBGroundZ.value = groundZ;
+        if (legacyU) {
+            legacyU.uMBInvProj.value.copy(cam.projectionMatrix).invert();
+            legacyU.uMBCamWorld.value.copy(cam.matrixWorld);
+            legacyU.uMBGroundZ.value = groundZ;
+        }
         this.m_eye.copy(eye);
         const corners = this.m_corners;
         // §885 终九十七: the rteCam's projectionMatrixInverse is stale (its
@@ -865,18 +1089,20 @@ export class MBShadowRenderer {
         // (终十九 removed this add because it leaked into a different
         // channel's varying sky-gate; that channel no longer uses corners.)
         for (const c of corners) c.add(eye);
-        this.m_groundUniforms.uMBShadowMap.value = this.m_shTex;
-        this.m_groundUniforms.uMBShadowMatrix.value.copy(this.m_matrix);
-        this.m_groundUniforms.uMBShadowIntensity.value = this.m_intensity;
-        // §885 终一百三十: cascade-1 uniforms — refreshed per frame.
-        this.m_groundUniforms.uMBShadowMap1 = { value: this.m_shTex1 };
-        this.m_groundUniforms.uMBShadowMatrix1 = { value: this.m_matrix1.clone() };
+        if (legacyU) {
+            legacyU.uMBShadowMap.value = this.m_shTex;
+            legacyU.uMBShadowMatrix.value.copy(this.m_matrix);
+            legacyU.uMBShadowIntensity.value = this.m_intensity;
+            // §885 终一百三十: cascade-1 uniforms — refreshed per frame.
+            legacyU.uMBShadowMap1 = { value: this.m_shTex1 };
+            legacyU.uMBShadowMatrix1 = { value: this.m_matrix1.clone() };
+        }
 
         // mgl calculateGroundShadowFactor: shadow = ambient/(ambient+dir·NdotL)
         // per channel, sRGB-encoded (shadow_utils.ts) — NOT 1 − shadow-intensity.
-        {
+        if (legacyU) {
             const ls = (this.m_dataSource as any).m_environment?.lighting3DState;
-            const f = this.m_groundUniforms.uMBGroundShadowFactor.value;
+            const f = legacyU.uMBGroundShadowFactor.value;
             if (ls) {
                 const ndl = Math.max(ls.dir[2], 0);
                 for (let i = 0; i < 3; i++) {
@@ -907,6 +1133,11 @@ export class MBShadowRenderer {
         // (gl_FragCoord.xy is in device px).
         const cv2 = this.m_mapView?.canvas as HTMLCanvasElement | undefined;
         if (cv2) this.m_res.set(cv2.width, cv2.height);
+        // §885 g67: feed the depth-tested ground plane AFTER the factor/fade
+        // refresh above so its first armed frame carries real values (a
+        // (0,0,0) factor would multiply the framebuffer to black for a frame).
+        this.ensureGroundPlane();
+        this.updateGroundPlane(eye);
         // §643: the quad itself is drawn by the engine's preSceneHook —
         // see drawGroundQuad.
         // §885 终十九: cross-fixture ground-quad state snapshot (POSTed via
@@ -1936,12 +2167,36 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
                         }
                         const m0: any = Array.isArray(o.material) ? o.material[0] : o.material;
                         const l1 = (o.layers.mask & 2) ? 1 : 0;
+                        // §885 g67: L0 = main-camera layer still enabled,
+                        // fc = frustumCulled, bs = bounding-sphere state —
+                        // explains a caster the depth pass draws but the main
+                        // camera skips (esl shadow-casters building).
+                        const l0 = (o.layers.mask & 1) ? 1 : 0;
+                        let bs = 'none';
+                        try {
+                            const bsp = (o.geometry as any).boundingSphere
+                                ?? (o.geometry.computeBoundingSphere(), (o.geometry as any).boundingSphere);
+                            bs = bsp && Number.isFinite(bsp.radius)
+                                ? `r${bsp.radius.toFixed(0)}@(${bsp.center?.x?.toFixed(0) ?? '?'},${bsp.center?.y?.toFixed(0) ?? '?'})`
+                                : 'nan';
+                        } catch { bs = 'err'; }
                         let inCasters = false;
                         for (const c of shadowCasters) {
                             if (c === o || c === o.parent) { inCasters = true; break; }
                         }
+                        // §885 g67b: parent chain — is the mesh under the
+                        // per-frame rebuilt m_sceneRoot (what the composer
+                        // path renders) or directly under m_scene (dropped
+                        // by the composer)? chain = node names/types to root.
+                        let chain = '';
+                        let underRoot = false;
+                        for (let p: any = o.parent; p; p = p.parent) {
+                            const nm = p.type || p.constructor?.name;
+                            chain = (chain ? chain + '<' : '') + nm;
+                            if (p === (this.m_mapView as any)?.m_sceneRoot) underRoot = true;
+                        }
                         // eslint-disable-next-line no-console
-                        console.log(`[MBMesh] z=[${mb.min.z.toFixed(0)},${mb.max.z.toFixed(0)}] x=[${mb.min.x.toFixed(0)},${mb.max.x.toFixed(0)}] L1=${l1} caster=${inCasters ? 1 : 0} mat=${m0?.uuid?.slice?.(0, 8) ?? '?'} vis=${o.visible}`);
+                        console.log(`[MBMesh] z=[${mb.min.z.toFixed(0)},${mb.max.z.toFixed(0)}] x=[${mb.min.x.toFixed(0)},${mb.max.x.toFixed(0)}] L1=${l1} L0=${l0} fc=${o.frustumCulled} ${bs} ro=${o.renderOrder} root=${underRoot ? 1 : 0} chain=${chain.slice(0, 60)} caster=${inCasters ? 1 : 0} mat=${m0?.uuid?.slice?.(0, 8) ?? '?'} vis=${o.visible} dw=${m0?.depthWrite} dt=${m0?.depthTest} tr=${m0?.transparent} side=${m0?.side} col=${m0?.color?.getHexString?.() ?? '?'}`);
                     });
                     // §885 终七: per-caster identity — is each registered
                     // caster actually attached to the rendered scene, and
