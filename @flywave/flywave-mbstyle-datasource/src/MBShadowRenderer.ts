@@ -662,15 +662,17 @@ export class MBShadowRenderer {
         geo.setIndex([0, 1, 2, 0, 2, 3]);
         const mat = new THREE.MeshBasicMaterial({
             color: 0xffffff,
-            // mgl ground_shadow draws with ColorMode.multiply — framebuffer
-            // × fragment. MultiplyBlending = dst × src here as well.
-            blending: THREE.MultiplyBlending,
+            // §885 g67c: the plane PAINTS the shadowed background color
+            // directly (uMBGPBg × factor-mix) — an overwrite, not a dst
+            // multiply: SwiftShader's blend of the fragment proved
+            // unreliable (the F≡1 control washed the ground to white), while
+            // painting the absolute color is dst-independent. Depth-tested:
+            // elevated decks/walls (nearer, depth-written) reject the plane,
+            // ground/background pixels (cleared depth) accept it — the mgl
+            // ground_shadow LEQUAL semantics.
             transparent: true,
             depthWrite: false,
             depthTest: true,
-            // §885 g67: the corner winding depends on the camera azimuth —
-            // FrontSide culled the quad entirely from above (gpred=1 showed
-            // zero red pixels).
             side: THREE.DoubleSide,
             fog: false,
         });
@@ -701,6 +703,7 @@ export class MBShadowRenderer {
             shader.uniforms.uMBShadowTexel = { value: 1 / mbShadowRes() };
             shader.uniforms.uMBFadeRange = { value: new THREE.Vector2(1e6, 2e6) };
             shader.uniforms.uMBCamWorld = { value: new THREE.Matrix4() };
+            shader.uniforms.uMBGPBg = { value: new THREE.Vector3(1, 1, 1) };
             shader.vertexShader = ('varying vec3 vMBGPW;\n' + shader.vertexShader).replace(
                 '#include <project_vertex>',
                 '#include <project_vertex>\n    vMBGPW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
@@ -714,6 +717,7 @@ export class MBShadowRenderer {
                 + 'uniform float uMBShadowTexel;\n'
                 + 'uniform vec2 uMBFadeRange;\n'
                 + 'uniform mat4 uMBCamWorld;\n'
+                + 'uniform vec3 uMBGPBg;\n'
                 + `#define MB_SH_BIAS ${biasV}\n`
                 + `#define MB_GP_LIFT ${Number((globalThis as any).__mbGPLift ?? 10.0).toFixed(2)}\n`
                 + shader.fragmentShader).replace(
@@ -783,12 +787,19 @@ export class MBShadowRenderer {
                     gl_FragColor.rgb = vec3(1.0, 0.0, 0.0);
                     #endif
                     #else
+                    // §885 g67c: paint the SHADOWED BACKGROUND COLOR — the
+                    // plane owns the no-fill ground, so it replaces (not
+                    // multiplies) the dst with background × shadow factor.
+                    // uMBGPBg = the clear color in LINEAR; the trailing
+                    // colorspace_fragment re-encodes to sRGB exactly like
+                    // the tile fills (lit ground = 184 → shadowed = 82 on
+                    // esl, measured).
                     vec3 mbF = mix(
                         pow(uMBGroundShadowFactor, vec3(1.0 / 2.2)), vec3(1.0), light);
                     #ifdef MB_GP_ONE
                     mbF = vec3(1.0);
                     #endif
-                    gl_FragColor.rgb = mbF;
+                    gl_FragColor.rgb = uMBGPBg * mbF;
                     #endif
                 }`);
             this.m_groundPlaneU = shader.uniforms;
@@ -857,6 +868,17 @@ export class MBShadowRenderer {
         const cam = (this.m_mapView as any).getRteCamera?.()
             ?? (this.m_mapView?.camera as THREE.PerspectiveCamera | undefined);
         if (cam) (u.uMBCamWorld.value as THREE.Matrix4).copy(cam.matrixWorld);
+        // §885 g67c: the plane PAINTS the shadowed background — the base
+        // color = the style clear/background in sRGB (the block writes AFTER
+        // colorspace_fragment, so no re-encode: background 184 × factor
+        // encode 0.455 ≈ 82 = expected's wedge).
+        {
+            const clearHex = (this.m_mapView as any).clearColor;
+            const bg = u.uMBGPBg.value as THREE.Vector3;
+            if (Number.isFinite(clearHex)) {
+                bg.set(((clearHex >> 16) & 255) / 255, ((clearHex >> 8) & 255) / 255, (clearHex & 255) / 255);
+            }
+        }
     }
 
     /** §885 g67: (re)attach the ground plane to the per-frame rebuilt scene

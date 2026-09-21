@@ -6408,3 +6408,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 遗留现象精确记录（esl，groundplane=1）**：(30,30) 远区背景基线=(184,191,189)、平面武装态=(255,255,255) 纯白——乘法混合理论上不能提亮，白斑机制未闭合（F 已限 ≤1；gpone 恒等态 junction 无白斑但 esl 未复测）。可能方向：①平面覆盖区与雾/大气合成的次序竞争（renderOrder 9.9 vs 环境合成）；②透明 pass 的 blend 态被后续 pass 改写；③SwiftShader 对 Multiply+特定 dst 的实现差异。下轮先 gpone=1 复测 esl（junction 已证无泄漏，esl 若无白斑则白斑与 F 值相关而非绘制行为）。
 
 **③ 完整修复清单（点亮楔形的剩余步）**：①远区背景底色：白清屏→背景层色（mgl 背景层全地面覆盖；我们注入 quad 仅盖瓦片区）——注意需与雾一致（expected 远区 183=雾化背景）；②平面点亮（groundplane=1 默认化）后配套"非 elevated fill 停用 receiver"防双重压暗；③A/B shadows-underpass+lighting 四件净改善。
+
+### §885 g67g: paint 模式实测与隧道回退定界（2026-09-21）
+
+**① paint 模式（覆写背景色×因子）四件微赢**：esl 24,720→24,498（−222）、text −271、terrain −376、text-terrain −373；junction 18,286→18,161（−125）。像素验证：楔形 (440,60) ours=(83,86,85) vs expected=(82,85,84) Δ=1 ✓、(30,30) Δ=1 ✓、桥面带逐位 ✓——**远区背景着色修复生效**（白清屏→背景层色已落地）。(470,30) 仍差：expected 影子边界比我们更远（光域 cascade-1 覆盖/形状差）。
+
+**② tunnel 回退定界**：shadows-tunnel 54,199→90,682（**+36,483**）——平面把隧道内部地面正确按影子压暗，但 mgl 隧道内部暗度来自 ceiling-face apply_lighting（未落地），mgl 地面影 quad 在隧道内的行为与预期不同 → 平面对 tunnel 族净有害。underpass 武装态 180s 超时（重型夹具+平面负载，无数据）。
+
+**③ 结论**：地面通道"半点亮"净效果 = lighting 四件 −1.2k + junction −125 vs tunnel +36.5k → **净负，默认关维持**。点亮前置：①tunnel 专项（ceiling-face lighting 或平面在隧道区间的 mask/stencil 排除）②(470,30) 型影子边界差（cascade-1 覆盖/形状）。完成后预期净赢：lighting −1.2k、underpass 楔形部分（若其 128k 中背景楔形占比大则收益显著）、junction −125 落袋。
+
+**④ 状态**：单测 310 passing；默认态=基线逐位（零风险）；全部 A/B 数据在 rendering-test-results/mb-gp*、mb-gs*、mb-gdiag*。
