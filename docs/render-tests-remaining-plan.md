@@ -6400,3 +6400,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 - 桥面范围：(420,100) 等桥面点逐位一致 ✓。
 
 **③ 通道现状**：默认关（groundplane=1 启用）。全部探针就绪：gpred=1/2/3/4、gplift、[MBGPlane]。下轮：①远区背景着色（clear 色应=背景色×雾，现为白）→ 与地面通道配合即点亮楔形；②shrad 联调；③flat-fill receiver 让位。
+
+### §885 g67f: gpone 对照实验与远区白斑记录（2026-09-21）
+
+**① gpone=1 对照（F≡1 恒等乘法，junction）**：18,158 ≈ 基线 18,286（Δ-128）——平面 F 链路有限、无状态泄漏时的 no-op 行为正常。结合 gdiag5（楔形 lit=0 判定正确）与 gdiag4b（sd 读数正常）：**F 计算与采样均正确，通道本体可用**。
+
+**② 遗留现象精确记录（esl，groundplane=1）**：(30,30) 远区背景基线=(184,191,189)、平面武装态=(255,255,255) 纯白——乘法混合理论上不能提亮，白斑机制未闭合（F 已限 ≤1；gpone 恒等态 junction 无白斑但 esl 未复测）。可能方向：①平面覆盖区与雾/大气合成的次序竞争（renderOrder 9.9 vs 环境合成）；②透明 pass 的 blend 态被后续 pass 改写；③SwiftShader 对 Multiply+特定 dst 的实现差异。下轮先 gpone=1 复测 esl（junction 已证无泄漏，esl 若无白斑则白斑与 F 值相关而非绘制行为）。
+
+**③ 完整修复清单（点亮楔形的剩余步）**：①远区背景底色：白清屏→背景层色（mgl 背景层全地面覆盖；我们注入 quad 仅盖瓦片区）——注意需与雾一致（expected 远区 183=雾化背景）；②平面点亮（groundplane=1 默认化）后配套"非 elevated fill 停用 receiver"防双重压暗；③A/B shadows-underpass+lighting 四件净改善。
