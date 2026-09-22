@@ -7069,3 +7069,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 决策**：深阴影战役单列（预期收益=double-shading 156,898 + shadows 族 4 件数十 k, 但工程量大且该族历史回归密度最高）; **短线优先回评 wireframe 72,049/ortho 71,901**（不涉阴影, kill-switch 工具链现成）。
 
 **④ 状态**：零代码改动; 单测 310。**下轮正攻: wireframe 72,049 定界（expected 语义=RENDER_CUTOFF 系? 我方 wireframe 模式对拍）→ ortho-camera 71,901（正交相机链, §571 已有 ortho 专项痕迹）。**
+
+### §885 g121: g120③ 执行——wireframe 语义定界+结构段红网落库（72,049→69,792）; 红色亮度/定位残差挂号（2026-09-23 第三十三轮）
+
+**① mgl 语义**：program.ts `debugWireframe3DLayerProgramNames`=[stars/particles/**fillExtrusion***/**building***/**elevatedStructures**/model/symbol]——**elevated fill 程序不在列**（期望路面无红线）; 实现=三角 index→线 index 缓存重绘, vec4(0.7,0,0,0.7) 预乘+depth pull −0.0001。
+
+**② 落库**：attachWireframes 扩至 `technique.__elev`（结构段 tile mesh）——首版误含 _hdElevation fills（81,246 反退, mgl 列表排除 fill 程序）收窄后 **elevated-wireframe 72,049→69,792**（−2,257）; plain/instanced 仍排除（g252 回归防护）; 旗标门控=非 wireframe 件零影响（ncb 10,148 ✓）。
+
+**③ 残差（69,792 挂号）**：红色亮度（我方 (216,14,15) vs exp (251,19,18)≈近全红——mgl 预乘/alpha 语义或双绘）+ 定位（少量我方红处 exp 无——WireframeGeometry 边去重 vs mgl 逐三角边重复绘的密度差）。
+
+**④ 状态**：单测 310。**下轮: ①wireframe 残差（红亮度=预乘混合字面; 密度=WireframeGeometry→逐三角边 index）; ②ortho-camera 71,901 正交链定界。**

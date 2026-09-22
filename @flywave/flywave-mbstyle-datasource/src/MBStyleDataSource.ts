@@ -4469,24 +4469,29 @@ export class MBStyleDataSource extends TileDataSource {
             if (!scene) return;
             scene.traverse((obj: any) => {
                 if (!obj.isMesh || obj.userData?.__mbWfDone) return;
-                // Scope: batched-model tiles only (marker set at the tile
-                // group root). mgl's layers3D list is program-name based
-                // (fillExtrusion/building/elevatedStructures/model...); the
-                // engine's tile meshes reuse the 'fill'/'solid-line'
-                // techniques for PLAIN fills, so technique matching
-                // over-wires (landmark-wireframe +4.8k, instanced-rendering
-                // +42.5k — instanced draws also need instance-aware lines a
-                // single WireframeGeometry child cannot express).
-                if (obj.userData?.technique) return;
+                // Scope: batched-model tiles (marker at the tile group root)
+                // + §885 g121: ELEVATED-STRUCTURES tile meshes (technique
+                // carries __elev) ONLY — mgl's debugWireframe3DLayerProgram
+                // Names = [stars, particles, fillExtrusion*, building*,
+                // elevatedStructures, model, symbol]; the elevated road FILL
+                // programs are NOT in the list (expected has no red over the
+                // deck faces). Plain/instanced tiles stay excluded (g252:
+                // landmark +4.8k, instanced +42.5k).
+                const tech = obj.userData?.technique;
+                let hdTile = false;
+                if (tech && tech.__elev) hdTile = true;
+                if (tech && !hdTile) return;
                 if ((obj as any).isInstancedMesh) return;
-                let rooted = false;
-                for (let p: any = obj.parent; p; p = p.parent) {
-                    if (p.userData?.__mbBatchedModelRoot) { rooted = true; break; }
+                if (!hdTile) {
+                    let rooted = false;
+                    for (let p: any = obj.parent; p; p = p.parent) {
+                        if (p.userData?.__mbBatchedModelRoot) { rooted = true; break; }
+                    }
+                    if (!rooted) return;
+                    const mat = obj.material;
+                    if (!mat || mat.isShaderMaterial || Array.isArray(mat)) return;
                 }
-                if (!rooted) return;
-                const mat = obj.material;
-                if (!mat || mat.isShaderMaterial || Array.isArray(mat)) return;
-                if (!obj.geometry?.attributes?.position || !obj.geometry?.attributes?.normal) return;
+                if (!obj.geometry?.attributes?.position) return;
                 obj.userData.__mbWfDone = true;
                 let wf: THREE.LineSegments;
                 try {
