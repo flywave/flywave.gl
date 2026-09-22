@@ -7181,3 +7181,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② tunnel-color-fd 定界**：夹具=数据驱动隧道结构色（`fill-tunnel-structure-color: case id%3 → yellow/blue/green/purple`）+`fill-bridge-guard-rail-color: red`+pitch 60/z20。我方 117,392 diffs: 大面积 (213,220,218)≈fake-road-shade 色透出（=隧道结构段未绘制/色解析失败）, expected 处=路面色/结构蓝 (0,0,225)/白标记——**S6 隧道结构域**（与 b2t/junction 残差同域, 数据驱动表达式 ['id'] 求值链为嫌疑首查点: 我方 emitter 的 case/`['id']` 求值或 featureId 传递）。
 
 **③ 状态**：零代码改动; 单测 310。**下轮: ①tunnel-color-fd 首案=数据驱动结构色求值链对拍（case+id%3 字面; 快收益）; ②cascade-1 专案; ③WebGL 拦截。**
+
+### §885 g134: g133③ 执行——tunnel-color-fd 快收益假设证伪: 色解析链健康, 真缺=我方隧道结构 sections 全空（tunnelPrim 0 vs mgl 142）; MVT 无负高曲线（min −3.5）⇒ mgl 隧道墙=constructTunnelStructures 的"每路边下墙"语义非 isTunnel 门（2026-09-23 第四十六轮）
+
+**① 假设证伪（[MBColorRes] 探针）**：结构色解析链逐例健康——bridge 段 red/featId/props 全解析 ✓; **seg=tunnel 条目为零**=数据驱动 case 表达式从未到达求值（快收益假设退役）。
+
+**② 真缺定界**：census edges={none:217, polygon:11} 无 tunnel/entrance 型 vs mgl {none:71, entrance:3} + **tunnelPrim=142**; MVT 直读: 该瓦 hd_road_elevation 高度 min=−3.5 **无 ≤−5 曲线** ⇒ mgl isTunnel 全 false 而 tunnelPrim=142≠0 ⇒ **mgl constructTunnelStructures 产墙不依赖 tunnel 型边**（我方移植的"tunnel walls under every edge of the road"注释疑漏实现/被门控）——S6 隧道墙管线正主。mgl-vs-expected 615 px=oracle 有效。
+
+**③ 下轮首案**：constructTunnelStructures 逐行对拍（mgl js mirror 与我方 port 的墙生成门控差异——mgl 在无 tunnel 边时仍产 142 prim 的路径）, 预期 tunnel-color-fd 111,975 与 S6 族联动。
+
+**④ 状态**：探针弃置树净; 单测 310。cascade-1/WebGL 拦截按挂号维持。
