@@ -321,7 +321,19 @@ export class MBElevatedStructures {
         // cross-tile registry/merge is the line_hd path). Cross-tile-merged
         // fills carry UNIONED safeAreas that over-keep wall edges (junction:
         // ours 905 'none' vs mgl 753) and mis-lift curve-MISS decks.
-        if (localOnly) return undefined;
+        if (localOnly) {
+            if ((globalThis as any).__mbDecodeDbg && properties?.['3d_elevation_id'] !== undefined) {
+                const reg = this.m_registryProvider?.() ?? [];
+                const idV = properties?.['3d_elevation_id'];
+                const inReg = reg.some((e: any) => e.feature.id === idV);
+                const inLocal = this.features.some((f: any) => f.id === idV);
+                const arr = (globalThis as any).__mbIdMiss ??= [];
+                if (arr.length < 12) { arr.push(1);
+                    console.log(`[MBIdMiss] id=${idV} inRegistry=${inReg} inLocal=${inLocal} localN=${this.features.length} regN=${reg.length}`);
+                }
+            }
+            return undefined;
+        }
 
         const registry = this.m_registryProvider?.() ?? [];
         const parts = getOverlappingElevationParts(
@@ -387,7 +399,15 @@ export class MBElevatedStructures {
             const kept = clipRingToBox(ring, ELEVATION_EXTENT, ELEVATION_CLIP_MARGIN);
             if (kept) clipped.push(kept);
         }
-        if (clipped.length === 0) return null;
+        if (clipped.length === 0) {
+            if ((globalThis as any).__mbDecodeDbg) {
+                const arr = (globalThis as any).__mbClipDrop ??= [];
+                if (arr.length < 10) { arr.push(1);
+                    console.log(`[MBClipDrop] id=${properties?.['3d_elevation_id']} rings=${canonRings.length} extents=\${tileExtent}`);
+                }
+            }
+            return null;
+        }
 
         // §885 终三一九b: markupbias=<m> — the markup lift over the deck;
         // the 0.05 m default is sub-depth-precision at high zoom (the

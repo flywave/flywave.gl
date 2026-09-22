@@ -7129,3 +7129,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 四路全灭汇总（封案）**：g125 sweep onBeforeCompile 包裹 / g126 MeshBasic 色烘焙 / g126 MeshStandard 色烘焙 / g127 adapter 基色乘法——全部 inert ⇒ **deck 材质的颜色路径不经过其中任何一处**（引擎对 deck 可能有独立 material 管理线或颜色被 GLSL 侧常量/attribute 承载）。五步定界需要的下一步=**在引擎 renderer 断点/帧内直接抓 deck draw call 的 uniform 色**（渲染级取证, 非材质对象级）——工具成本高, 封案挂号。
 
 **③ 状态**：实验全弃置（含 mapview 共享包改动——未验证收益不入共享包）; 树净（ortho 71,858 ✓ 复测）; 单测 310。**下轮转向: ①家族 deck/bg 覆盖缺口（g110⑤, 收益面更大且工具就绪）; ②深阴影 cascade-1 战役; deck 照亮子项降级排队（渲染级取证为前置）。**
+
+### §885 g128: g127③ 执行——家族覆盖缺口根因实锤: 瓦片集差（mgl 4 vs 我方 3, ortho）——缺失邻瓦持有被裁剪丢弃的 deck（2026-09-23 第四十轮）
+
+**① 定界链闭环**：ortho plan census=90 NO/124 yes; [MBIdMiss]（新探针）**零触发** ⇒ 缺失非 resolve 失败; [MBClipDrop]（新探针）实证 plan=NO 的带 id feature（含 4368045121443499 等 5+ 例）**curve 解析成功但 clipRingToBox 全环丢弃**=几何属邻瓦; clip 语义双引擎对拍逐行同（SH 平面 vs mgl 分组+clipPoly, 均保部分重叠丢全外）⇒ 差异不在裁剪; **瓦片集对拍: mgl ortho 加载 4 瓦 vs 我方解码 3 瓦（18/232843/10324{2,3}+232844/103242）**——缺失邻瓦的属主 feature 在我方被邻瓦副本+裁剪丢弃 ⇒ 覆盖缺口（ortho 122k bg 透出; 与 g110 line-pattern 的 mgl 1 vs 我方 2 反向不对称一致=**我方瓦片 cover 逻辑与 mgl coveringTiles 收敛域不同**）。
+
+**② 修复点（下轮首案）**：MBStyleDataSource/MapView 的瓦片请求 cover 与 mgl `coveringTiles`（viewport+pixelRatio+pitch/ortho 语义）对齐——一处修复预期联动四件（ortho 122k/wireframe/line-pattern 残差/b2t 残差）。mgl-shot tile-list 查询工具入库（g128-query.cjs）。
+
+**③ 状态**：诊断探针（[MBIdMiss]/[MBClipDrop], DECODEDBG 门控）+ 查询工具入库; 零行为改动（ortho 71,858 ✓）; 单测 310。
