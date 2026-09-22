@@ -2071,8 +2071,18 @@ export class MBTileDataEmitter {
                                     }
                                 }
                                 const c = this.m_decodeInfo.center;
+                                // §885 g100: separate the frame term (w.z) from
+                                // the curve-height term for the deck placement
+                                // parity probe (vs vendored mgl = ground 0 +
+                                // curve).
+                                let w0z = 0, hLo = Infinity, hHi = -Infinity;
+                                for (const piece of plan.pieces) {
+                                    const p0 = piece.ring[0];
+                                    if (p0) w0z = this.project(new THREE.Vector2(p0.x, p0.y)).z;
+                                    for (const h of piece.heights) { hLo = Math.min(hLo, h); hHi = Math.max(hHi, h); }
+                                }
                                 // eslint-disable-next-line no-console
-                                console.log(`[MBFillHD-bounds] layer=${layer.id} world=[${minx.toFixed(1)},${miny.toFixed(1)},${minz.toFixed(2)}]..[${maxx.toFixed(1)},${maxy.toFixed(1)},${maxz.toFixed(2)}] decodeCenter=[${c.x.toFixed(1)},${c.y.toFixed(1)},${c.z.toFixed(1)}]`);
+                                console.log(`[MBFillHD-bounds] layer=${layer.id} world=[${minx.toFixed(1)},${miny.toFixed(1)},${minz.toFixed(2)}]..[${maxx.toFixed(1)},${maxy.toFixed(1)},${maxz.toFixed(2)}] decodeCenter=[${c.x.toFixed(1)},${c.y.toFixed(1)},${c.z.toFixed(1)}] elevId=${plan.feature.id} w0z=${w0z.toFixed(3)} h=${hLo.toFixed(2)}..${hHi.toFixed(2)} zoff=${this.m_currentZOffset}`);
                                 // §885 g52e: stash the first piece's first ring
                                 // vertex in WORLD space — emitElevatedStructures
                                 // pairs it with the nearest rail vertex (same

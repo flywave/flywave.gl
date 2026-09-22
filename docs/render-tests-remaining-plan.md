@@ -6816,3 +6816,17 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 关键交叉证据（矛盾收敛）**：mgl vs expected 486 / mgl vs ours-legacy **42,792** / ours-legacy vs expected 42,390——**我方 va 误差几乎全部是与 mgl 共享的**（非 expected 特有），且 legacy（带 level 抬升）比 mgl 字面纯曲线更接近 expected/mgl。结论：**level 补偿当前在补偿我方 deck/护栏渲染链中另一个尚未定位的放置差**（候选：elevated structures/rails 的高度来源、project() 帧项、细分差）；在该放置差修复前剥 comp = 裸露误差（g89/g99 两轮一致）。overzoom-merge 假设被几何排除（z19 consumer 仅一个 z18 parent，merge=恒等变换）。
 
 **⑤ 状态**：默认回退 legacy（复核逐位：va 42,390 md5 与 g97 基线一致）；`fhdstrip=1` 旋钮（MBSTYLE_FHDSTRIP）保留实验路径；对拍 harness 入 tmp/（含 pbf/vector-tile 双侧驱动）；单测 310 passing。**下轮正攻：直接对拍"deck/护栏最终世界 z"我方 vs mgl-shot 页内探针（g52e __mbPairDeck 系），定位补偿所吸收的放置差本体。**
+
+### §885 g100: deck/护栏世界 z 对拍——ground z=0 实锤、vendored 构建镜像陷阱、level 轴 72k 定量、发散多因子定界（2026-09-22 第十二轮）
+
+**① 遥测增强（[MBFillHD-bounds] 加 w0z/h/zoff/elevId 分项）**：**ground z（project 纯帧项）= 0.000 实锤**（帧项排除）；bridge deck legacy = 曲线 + level（zoff=2/3/−1/−2 即 properties.level），stripped = 曲线精确（fhdstrip 复核 zoff=0）——g99② 的"resolveZOffset 二次叠加"在 deck 侧同样成立。
+
+**② vendored 构建镜像陷阱（重大基建发现）**：rollup stage-1 从 **stale 编译 .js 镜像**（3d-style/data/bucket/*.js）而非 .ts 取源——g98 的 zLevel fork .ts 编辑从未进过任何 bundle（"mgl(zl=1) vs mgl(zl=0) 逐位相同"暴露）。修复：fork 同步落 .js 镜像（fill_hd_extension.js + fill_bucket.js）后 fork 生效。
+
+**③ level 轴定量（fork 生效后）**：mgl(zl=1) vs mgl(zl=0) = **72,181 px**——level 语义单变量在 mgl 自身就是 ~72k 像素轴（va 总失配 42-65k 同量级），且 expected=mgl(zl=0)（486）再次确认。交叉矩阵：ours-legacy vs mgl(zl0)=42,792 / vs mgl(zl1)=52,632；ours-stripped vs mgl(zl0)=65,249 / vs mgl(zl1)=80,852——**两个变体都更接近 zl=0**，无单一常数平移可解释 strip 恶化。
+
+**④ 位移测量（patch-NCC，120 关键点）**：guard-rail fixture rails 我方 legacy 高出 oracle −11px 中位 → stripped −5px（strip 使 rails 向 oracle 收敛一半，方向正确）；junction 两态均 −2px 不敏感；va 分区呈双峰（部分结构收敛/部分发散）——**放置差非整体平移，是 per-结构混合**。
+
+**⑤ 定界结论**：ground 帧=0✓、曲线高度逐位✓、level 二次叠加机制已定位✓；strip 恶化的余项=**多因子**（rails 结构性差 + 道路几何家族差 g82③ 与 level 轴的交互/遮挡耦合）。oracle bundle 已还原纯态（486 复核）。**下轮正攻：单变量隔离 rails——对拍 mgl constructBridgeStructures 输出 vs 我方 MBElevatedStructures rails（0.5m 截面/高度/位置逐顶点），rails 收敛后 strip 的净效应重测。**
+
+**⑥ 状态**：默认渲染逐位不变（md5 复核）；遥测增强入库；单测 310 passing；vendored 工作树 = prelude 修复 + zLevel fork（.ts+.js 镜像，L=0）+ 重建 dist。
