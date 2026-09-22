@@ -19,6 +19,7 @@
     (async function () {
         const params = new URLSearchParams(location.search);
         globalThis.__mbKill = params.get('kill') || '';
+        if (params.get('structdbg')) globalThis.__mbStructDbg = 1;
         const fixture = params.get('fixture');
         // Use the UPSTREAM integration root — it is self-contained (tiles,
         // glyphs, sprites match the fixture expectations, e.g. the NY tiles

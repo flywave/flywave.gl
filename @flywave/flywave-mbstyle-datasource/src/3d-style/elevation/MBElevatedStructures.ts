@@ -28,6 +28,7 @@ import {
     MARKUP_ELEVATION_BIAS,
 } from './MBElevationConstants';
 import {
+    ElevationBounds,
     MBElevationFeature,
     mergeElevationFeatures,
 } from './MBElevationFeature';
@@ -244,6 +245,17 @@ export class MBElevatedStructures {
             if (!last || last.id !== v.id || last.idx !== v.idx) deduped.push(v);
         }
         const metas = this.m_meta.slice().sort((a, b) => a.id - b.id);
+        // §885 g112: normalize meta bounds into the canonical ELEVATION_EXTENT
+        // frame — the rings/queries are canonical (×ELEVATION_EXTENT/extent)
+        // but the parsed bounds stay in the layer frame (hd-roads 8192).
+        // Unnormalized bounds made addRenderableRing's safeArea filter prune
+        // ~1230 of ~1290 wall edges (line-pattern: mgl keeps 395, we kept 23
+        // — the missing continuous warm walls).
+        const boundsK = ELEVATION_EXTENT / (this.m_layerExtent > 0 ? this.m_layerExtent : ELEVATION_EXTENT);
+        const canonBounds = (b: [number, number, number, number]): ElevationBounds =>
+            boundsK === 1
+                ? { minX: b[0], minY: b[1], maxX: b[2], maxY: b[3] }
+                : { minX: b[0] * boundsK, minY: b[1] * boundsK, maxX: b[2] * boundsK, maxY: b[3] * boundsK };
 
         let vCurrent = 0;
         const vEnd = deduped.length;
@@ -253,7 +265,7 @@ export class MBElevatedStructures {
             if (meta.constantHeight != null) {
                 this.features.push(new MBElevationFeature(
                     meta.id,
-                    { minX: meta.bounds[0], minY: meta.bounds[1], maxX: meta.bounds[2], maxY: meta.bounds[3] },
+                    canonBounds(meta.bounds),
                     meta.constantHeight,
                 ));
                 continue;
@@ -278,7 +290,7 @@ export class MBElevatedStructures {
 
             this.features.push(new MBElevationFeature(
                 meta.id,
-                { minX: meta.bounds[0], minY: meta.bounds[1], maxX: meta.bounds[2], maxY: meta.bounds[3] },
+                canonBounds(meta.bounds),
                 undefined,
                 outVertices,
                 outEdges,
@@ -711,6 +723,11 @@ export class MBElevatedStructures {
             const ringRanges: Array<[number, number]> = [];
 
             for (const { ring, heights } of rings) {
+                if ((globalThis as any).__mbDecodeDbg) {
+                    const rc = (globalThis as any).__mbRingCnt ??= { rings: 0, verts: 0, skipped: 0 };
+                    rc.rings++; rc.verts += ring.length;
+                    if (ring.length < 3) rc.skipped++;
+                }
                 const open = ring.length >= 2 &&
                     ring[0].x === ring[ring.length - 1].x &&
                     ring[0].y === ring[ring.length - 1].y
@@ -774,6 +791,14 @@ export class MBElevatedStructures {
         if (this.m_unevalEdges.length > 0) {
             wallEndIdx = partition(this.m_unevalEdges, 'none');
             this.constructBridgeStructures(builder, wallEndIdx, bridgeSections);
+        }
+        // §885 g112: structures census (mgl [MGLStruct] counterpart).
+        if ((globalThis as any).__mbDecodeDbg) {
+            const counts: Record<string, number> = {};
+            for (const e of this.m_unevalEdges) counts[e.type] = (counts[e.type] ?? 0) + 1;
+            const wallIdxEnd = indices.length;
+            // eslint-disable-next-line no-console
+            console.log(`[MBStruct] ringCnt=${JSON.stringify((globalThis as any).__mbRingCnt ?? {})} edgeCnt=${JSON.stringify((globalThis as any).__mbEdgeCnt ?? {})} prune=${JSON.stringify((globalThis as any).__mbPrune ?? {})} verts=${positions.length / 3} idxSoFar(wall)=${wallIdxEnd} edges=${JSON.stringify(counts)} triN=${this.m_unevalTriangles?.length ?? 0} tunnelTriN=${this.m_unevalTunnelTriangles?.length ?? 0}`);
         }
 
         const tunnelStart = indices.length;
@@ -1185,6 +1210,10 @@ export class MBElevatedStructures {
         area?: { minX: number; minY: number; maxX: number; maxY: number },
     ): void {
         const vertices = this.m_unevalPositions;
+        if ((globalThis as any).__mbDecodeDbg && !(globalThis as any).__mbAreaLogged) {
+            (globalThis as any).__mbAreaLogged = 1;
+            console.log(`[MBArea] area=${JSON.stringify(area)} count=${count} firstV=(${vertices[vertexOffset * 2]},${vertices[vertexOffset * 2 + 1]})`);
+        }
         // The stored ring is OPEN (closing duplicate stripped) — all count
         // edges wrap. (mgl loops count-1 because its rings keep the dup.)
         for (let i = 0; i < count; i++) {
@@ -1201,17 +1230,31 @@ export class MBElevatedStructures {
                     (vax >= area.minX && vax <= area.maxX && vay >= area.minY && vay <= area.maxY) ||
                     (vbx >= area.minX && vbx <= area.maxX && vby >= area.minY && vby <= area.maxY);
                 if (!insideBounds && !edgeIntersectsBox(
-                    { x: vax, y: vay }, { x: vbx, y: vby }, area)) continue;
+                    { x: vax, y: vay }, { x: vbx, y: vby }, area)) {
+                    ((globalThis as any).__mbPrune ??= { area: 0, border: 0 }).area++;
+                    continue;
+                }
             }
-            if (this.isOnBorder(vax, vbx) || this.isOnBorder(vay, vby)) continue;
+            if (this.isOnBorder(vax, vbx) || this.isOnBorder(vay, vby)) {
+                ((globalThis as any).__mbPrune ??= { area: 0, border: 0 }).border++;
+                continue;
+            }
 
             const va = { x: vax, y: vay };
             const vb = { x: vbx, y: vby };
+            if ((globalThis as any).__mbDecodeDbg) {
+                const c = (globalThis as any).__mbEdgeCnt ??= { offered: 0, kept: 0 };
+                c.offered++;
+                if (c.offered % 400 === 0) console.log(`[MBEdge] offered=${c.offered} kept=${c.kept}`);
+            }
             const edgeHash = edgeHashOf(va, vb);
             let portalHash = this.m_vertexHashLookup.get(posHashOf(va))?.next
                 ?? this.m_vertexHashLookup.get(posHashOf(vb))?.prev
                 ?? edgeHash;
 
+            if ((globalThis as any).__mbDecodeDbg) {
+                ((globalThis as any).__mbEdgeCnt ??= { offered: 0, kept: 0 }).kept++;
+            }
             this.m_unevalEdges.push({
                 polygonIdx, a: ai, b: bi, hash: edgeHash, portalHash,
                 isTunnel, type: 'unevaluated',

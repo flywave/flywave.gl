@@ -6969,3 +6969,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 工程注记**：setPaintProperty 不可用于 live 二分（g110④）; kill-switch 留库（mirror 本地, gitignored 同既往 fork 补丁惯例）; mgl-shot `?kill=` 参数入库。
 
 **⑤ 状态**：我方引擎零改动（本轮纯 oracle 侧定界）; 单测 310。**下轮正攻: structures 通道字面对齐——dump mgl drawElevatedStructures 的顶点/三角计数与色源（elevated_structures.js construct 输出）vs 我方 emitElevatedStructures, 从最大缺口件（elevated-line-pattern/va 走廊）逐 feature 对拍墙体几何。**
+
+### §885 g112: g111⑤ 执行——structures 通道根因=meta bounds 帧未归一（safeArea 剪除 1230/1290 墙边）——修复落默认, 家族净 −39k（2026-09-23 第二十四轮）
+
+**① 双引擎 census 基建**：mgl mirror construct() 加 [MGLStruct] 段计数（worker console 经 mgl-shot 打印链打通）；我方 [MBStruct]/[MBEdge]/[MBRingCnt]/[MBArea]/prune 计数器入库（DECODEDBG 门控）。
+
+**② 逐级定界（计数漏斗）**：mgl line-pattern 瓦片 verts=685/bridgePrim=1462/edges{none:395}；我方 verts=48/edges{none:23}——[MBRingCnt] rings=119/verts=846 已达 ⇒ 非输入缺；[MBEdge] offered=41 ⇒ 中间剪除；prune 分解 **area=1228/border=0** ⇒ safeArea 剪除；[MBArea] area=(1498,3100)-(5816,6561) vs mgl (1498,1631)-(5816,5092)——**x 相同, y 差 +1469 且未 ×0.5** ⇒ meta bounds 停留层帧(8192 翻转) 而环/采样在 canonical 4096（vertices 路径采样时重缩放所以 g99 曲线逐点 parity 从未暴露 bounds 未用）。
+
+**③ 修复（默认 ON）**：finalize 里 meta bounds ×ELEVATION_EXTENT/m_layerExtent 归一到 canonical（canonBounds）——mgl 字面（mgl 单帧 8192 无此换算, 我方双帧架构必需）。
+
+**④ A/B（vs g106 基线）**：elevated-line-pattern 55,021→**31,447**（−23,574）/guard-rail-color 34,082→**29,180**（−4,902）/road-markups 14,330→**10,480**（−3,850）/va 27,858→**23,854**（−4,004）/munich-close 23,246→**19,502**（−3,744）；no-cross-beams 持平；**回退两件=隧道域**：bridge-to-tunnel 36,126→51,911（+15,785）/shadows-junction 19,162→24,102（+4,940）——新增密的隧道墙/口放大已知 S6 隧道合成缺口（诚实入账, 隧道族下一正攻）。**净 ≈ −39k**。
+
+**⑤ 状态**：默认 ON（bug 修复非语义旋钮）；单测 310；kill-switch/[MGLStruct]/[MBArea] 探针留库（mirror 本地）。**下轮正攻：①隧道墙/口合成（S6 缺口, b2t +15.8k 回退 + tunnel 族 41-56k 梯队）；②line-pattern 残 31.4k 复评（墙密度已对, 剩屏位/色系）。**
