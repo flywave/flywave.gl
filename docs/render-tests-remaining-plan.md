@@ -7173,3 +7173,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 五路全灭终局（g125-g132）**：shader 包裹/色烘焙×2/adapter 乘法/uniform 刷新——材质对象级干预全部无法触及 deck 的实际渲染路径。**结论（强）**：deck 像素由某条不经过上述任何材质对象/管理器的路径渲染（引擎 renderer 内部缓存 program、或独立材质实例每次重建）。**下一层取证=WebGL 拦截**（karma 页 hook WebGLRenderingContext.uniform3fv/4fv+getProgramInfoLog, 按 program 哈希收集 deck 绘制时的 uniform 值与编译后着色器源）——工具化成本一整轮, 专案挂号。
 
 **③ 状态**：实验弃置树净（ortho 71,858 ✓）; 单测 310。**下轮优先: ①深阴影 cascade-1 战役（double-shading 156,898, mgl 语义已全文入账 g120, 独立于材质考古）; ②tunnel-color-fd 56,646; ③WebGL 拦截专案。**
+
+### §885 g133: g132③ 执行——cascade-1 战役首探(SHDIAG 渲染无帧, 需整段专案时间)缓行; tunnel-color-fd 56,646 定界: 数据驱动 fill-tunnel-structure-color 隧道结构色全缺（2026-09-23 第四十五轮）
+
+**① cascade-1 首探**：MBSTYLE_SHDIAG=9（接收器状态漆绘）于 double-shading 件渲染**无帧产出**（DIAG 分支疑致渲染失败）——战役需整段专案时间（第二相机/RT/fade 全链+诊断基建修复）, 本轮缓行挂号维持。
+
+**② tunnel-color-fd 定界**：夹具=数据驱动隧道结构色（`fill-tunnel-structure-color: case id%3 → yellow/blue/green/purple`）+`fill-bridge-guard-rail-color: red`+pitch 60/z20。我方 117,392 diffs: 大面积 (213,220,218)≈fake-road-shade 色透出（=隧道结构段未绘制/色解析失败）, expected 处=路面色/结构蓝 (0,0,225)/白标记——**S6 隧道结构域**（与 b2t/junction 残差同域, 数据驱动表达式 ['id'] 求值链为嫌疑首查点: 我方 emitter 的 case/`['id']` 求值或 featureId 传递）。
+
+**③ 状态**：零代码改动; 单测 310。**下轮: ①tunnel-color-fd 首案=数据驱动结构色求值链对拍（case+id%3 字面; 快收益）; ②cascade-1 专案; ③WebGL 拦截。**
