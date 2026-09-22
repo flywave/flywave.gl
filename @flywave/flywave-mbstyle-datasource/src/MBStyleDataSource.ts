@@ -1259,9 +1259,33 @@ class MglChildFallbackProvider extends DataProvider {
             }
             return data;
         }
-        // Miss (sparse tileset 404): try the four mgl-level children.
+        // Miss (sparse tileset 404): try the four mgl-level children, then
+        // §885 g130 the deepest ANCESTOR (mgl source-cache retry: a 404 cell
+        // resolves to the closest available ancestor overscaled tile — the
+        // 3d-intersections set is missing single z18 cells like
+        // 18-232844-103243 whose z17 parent exists; decoder merges ancestor
+        // parts frame-correctly per the g50p rebasing).
         const L = tileKey.level;
-        if (L >= this.m_maxZoom) return data;
+        if (L >= this.m_maxZoom) {
+            for (let a = L - 1; a >= 0; a--) {
+                const shift = L - a;
+                const ax = tileKey.column >> shift, ay = tileKey.row >> shift;
+                try {
+                    const ab: ArrayBufferLike | {} = await this.m_inner.getTile(
+                        TileKey.fromRowColumnLevel(ay, ax, a), abortSignal);
+                    if (ab instanceof ArrayBuffer || ab instanceof Uint8Array) {
+                        if (mglTileBlocked(a, ax, ay)) return data;
+                        if (mbTileReqDbg()) {
+                            // eslint-disable-next-line no-console
+                            console.log(`[MBTileReq] ancestor(maxzoom) z${a}/${ax}/${ay}`);
+                        }
+                        mbPendingChildrenPut(mbCellTileKeyString(tileKey), [{ z: a, x: ax, y: ay, bytes: ab }]);
+                        return JSON.stringify({ type: 'FeatureCollection', features: [] });
+                    }
+                } catch { /* keep walking */ }
+            }
+            return data;
+        }
         const x = tileKey.column;
         const y = tileKey.row;
         const children: MBPendingChildTile[] = [];
@@ -1288,7 +1312,27 @@ class MglChildFallbackProvider extends DataProvider {
                 }
             }
         }
-        if (children.length === 0) return data;
+        if (children.length === 0) {
+            // §885 g130: children all missed too — deepest-ancestor walk.
+            for (let a = L - 1; a >= 0; a--) {
+                const shift = L - a;
+                const ax = tileKey.column >> shift, ay = tileKey.row >> shift;
+                try {
+                    const ab: ArrayBufferLike | {} = await this.m_inner.getTile(
+                        TileKey.fromRowColumnLevel(ay, ax, a), abortSignal);
+                    if (ab instanceof ArrayBuffer || ab instanceof Uint8Array) {
+                        if (mglTileBlocked(a, ax, ay)) return data;
+                        if (mbTileReqDbg()) {
+                            // eslint-disable-next-line no-console
+                            console.log(`[MBTileReq] ancestor z${a}/${ax}/${ay}`);
+                        }
+                        mbPendingChildrenPut(mbCellTileKeyString(tileKey), [{ z: a, x: ax, y: ay, bytes: ab }]);
+                        return JSON.stringify({ type: 'FeatureCollection', features: [] });
+                    }
+                } catch { /* keep walking */ }
+            }
+            return data;
+        }
         if (mbTileReqDbg()) {
             // eslint-disable-next-line no-console
             console.log(`[MBTileReq] children z${L + 1}: ${children.map(c => `${c.x}/${c.y}`).join(" ")}`);

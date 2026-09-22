@@ -5,6 +5,8 @@ const CHROME = process.env.CHROME_BIN || path.join(process.env.HOME, ".cache/pup
     const browser = await puppeteer.launch({executablePath: CHROME, headless: "shell",
         args: ["--no-sandbox","--disable-dev-shm-usage","--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader","--enable-webgl","--ignore-gpu-blocklist","--use-mock-keychain","--hide-scrollbars"]});
     const page = await browser.newPage();
+    const urls = [];
+    page.on('response', r => { const u = r.url(); if (u.includes('.mvt')) urls.push(u.split('/tiles/')[1] + ' status=' + r.status()); });
     await page.setViewport({width:512, height:512, deviceScaleFactor:1});
     await page.goto(`http://localhost:8130/scripts/mgl-shot/mgl-shot.html?fixture=${encodeURIComponent(process.argv[2])}`, {waitUntil:"load", timeout:60000});
     await page.waitForFunction("window.__shotReady === true", {timeout:60000});
@@ -13,6 +15,6 @@ const CHROME = process.env.CHROME_BIN || path.join(process.env.HOME, ".cache/pup
         const sc = Object.values(st._sourceCaches ?? st.sourceCaches ?? {})[0];
         return Object.keys(sc._tiles);
     });
-    console.log(JSON.stringify(tiles));
+    console.log(JSON.stringify({tiles, mvt: urls}));
     await browser.close();
 })().catch(e => {console.error(e); process.exit(1);});

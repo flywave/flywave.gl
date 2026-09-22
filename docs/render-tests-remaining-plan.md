@@ -7145,3 +7145,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 修复规格（下轮实现）**：矢量 DataProvider 祖先回退——子瓦 404 时取 z17 祖先数据并以子键解码（mgl overscaledTile 语义: 数据帧=祖先 extent, 每子瓦窗口偏移; 我方 decode 链的 extents 归一化/ y 翻转需带 overscale 因子）。预期联动 ortho(122k bg)/wireframe/line-pattern 残差/b2t 残差四件。
 
 **③ 状态**：mvopts 旋钮+MBSTYLE_MVOPTS 入库（行为默认零改动, ortho 71,858 ✓）; 单测 310。
+
+### §885 g130: g129② 执行——祖先回退实现落库(inert); **重大修正: expected 本身含 110,903 白=缺失瓦片为正确行为**, "一处修复联动四件"论题退役; ortho 真残差=漏照亮 deck(~30k)+其他（2026-09-23 第四十二轮）
+
+**① 祖先回退实现落库**：MglChildFallbackProvider 扩展——子瓦与四子全 MISS 时最深祖先走查（m_source_cache retry 语义, pending-children 通道复用 g50p rebasing）; 网络日志实证 mgl 对 18-232844-103243 **同样 404**（且无 z17 回退请求, z17 该区域无文件）⇒ 本家族内回退 inert（A/B 六件逐数不变=零回归零收益）; 保留（mgl 字面语义, 稀疏+z17 家族正确）。
+
+**② 重大修正（g124/g128/g129 定性链纠错）**：vendored mgl ortho 渲染 **110,362 白** 且 **与 expected 仅差 865 px**——expected 本身含 **110,903** 白 (252,255,255)！g124 的"expected 白仅 10,767"系色值误判（(255,255,243)±10 未覆盖真白调）⇒ **缺失瓦片区=正确行为（双引擎+expected 一致透出背景）**, "覆盖缺口 122k"实为 ~12k 真差; g128"四件同源覆盖缺口"论题退役。
+
+**③ ortho 真残差重定界**：71,858 − (mgl 同源差 865) ≈ 我方 vs 双引擎差: 漏照亮 deck ~29k（g125 封案项, 渲染级取证前置）+ lit-tone 计数差余量 ~30k 域 + lane-nav 线——**回到 g125 主线**, tile 域关闭。
+
+**④ 状态**：祖先回退落库（inert 保留, 单测 310）; 网络日志工具（mgl-shot 响应监听）入库。**下轮: ①渲染级 draw-call 取证（deck uniform 色——g125 前置, 现为 ortho 主残差）; ②阴影 cascade-1 战役; ③tunnel-color-fd 56,646 未触。**
