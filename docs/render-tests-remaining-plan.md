@@ -7105,3 +7105,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 路色两调真相**：expected 主调 (176,194,216)=路面色 (162,179,199)×1.0794 **正确照亮**（非 z16 插值!）; 我方 43.6k px 呈未照亮暗调（×0.88 域）⇒ ~29k px 路面漏照亮子缺口。**ortho-camera 71,901 分解=①家族 deck/bg 覆盖缺口(122k 白透出)+②漏照亮路面(~29k)+③lane-nav 边框线——无正交特有缺陷, 并入家族主线**（§571 局部补丁担忧在本层未证实）。
 
 **③ 状态**：零代码改动; 单测 310。**家族主线（deck/bg 覆盖+漏照亮）已聚拢四件同源（elevated-wireframe/ortho-camera/elevated-line-pattern/b2t 残差）——下轮首案: 漏照亮子缺口定界（哪些 fill 材质未吃 ground-radiance 链, [MBGrRad] 已证链存在）, 与覆盖缺口（g110⑤）并行。**
+
+### §885 g125: g124③ 执行——漏照亮缺口根因半闭环: 桥面 deck=引擎 MeshBasicMaterial 仅有 ground-shadow 扫描链无 ground-radiance 链; 修复尝试 inert 弃置（flag/锚点次序需专案）（2026-09-23 第三十七轮）
+
+**① 缺口定位闭环**：ortho 暗调 43.7k px 去除 road-base-bridge 层后→3.2k（且原暗调位变正确照亮 (176,194,216)=下层 road-base 透出）⇒ **暗调=bridge deck 专属**。sweep 遥测实证 deck 材质=引擎 MeshBasicMaterial 且 `groundLit=false`——引擎工厂实例（§585: tile.objects 材质不栅格化）只被 per-frame 扫描链覆盖（该链仅 injectGroundShadow），而 injectGroundLighting 仅在 patchMaterial（tile.objects 路径）注入 ⇒ **deck 材质从未收到 radiance 乘法**（渲染 raw 色）。
+
+**② 修复尝试 inert 弃置（诚实记录）**：sweep 内补 radiance 包裹（colorspace_fragment 锚+__mbGroundLitHandler dedup）——ortho/ncb/va 三件逐数不变；且该注入可能先占 flag 反堵 patchMaterial 链 ⇒ 回退。**次序陷阱入库**: sweep(每帧)先于/后于 patchTile 的不确定性 + flag 单占语义 = 修复需专案设计（建议: radiance 乘法改 uniform-based per-frame refresh 而非 onBeforeCompile 竞争, 或 patchMaterial 侧对引擎实例的延迟重扫）。
+
+**③ 状态**：零代码落地（实验全弃置, 树净=ortho 71,858 复测）; 单测 310。**下轮首案: deck radiance 注入的竞争安全实现**（预期收益: ortho ~29k + 全家族 deck 亮度域一致性——g112 密墙件的 deck 亦同链, 或有联动收敛）。
