@@ -6694,3 +6694,17 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 教训**：tmp 叠加脚本必须写 alpha=255（pngjs 新建 PNG alpha 默认 0→整图透明渲染成黑，两轮误导）。探针增强后必须确认旧探针仍打点（[MBFillHD] 曾因 ringHeights 字段不存在静默 0 打点）。
 
 **④ 状态**：零渲染行为改动（纯归因+台账）；单测 310 维持。
+
+### §885 g88b: junction 埋没机制三证收敛——fill zOffset 域 vs 线曲线域不对称 + bias 假说证伪（2026-09-22 第三轮）
+
+**① BAD 埋没空间分布（junction-bad-burial.png）**：2,991 个 BAD 像素呈**整条连续车道线**沿坡道走廊分布（非散点）——被埋的是坡道上整条 markup 线。
+
+**② bias 假说证伪（markupbias=0.3 扫描）**：junction 20,637→**22,959（+2,322 恶化）**；viewport-aligned 45,775→45,438（−337 微益）/text −299/terrain −839。抬升更大反而更差 → 埋没非"lift 不足"，且 0.05→0.3 对其余夹具惰性 = 埋没源高度差 ≥ 米级。
+
+**③ 机制定位（静态链完整）**：①`project()`（:912-938）对 m_currentZOffset≠0 的**所有**投影点加 z；②fill 的 m_currentZOffset=resolveZOffset 无条件含 level 补偿（junction 桥 polygon **level=2**），fillHD deck 经 project() 整体抬升；③线的 HD 路径 :3735 显式清零 zOffset → markup=曲线+bias。**deck 与 markup 相差 level 补偿量级（≥1-2m）**——米级差与 ② 惰性一致。④数据层关联正确（桥 polygon eid=401 与 lanes/dashed eid 同 id，18-139476-90932 实测）——排除"id 关联"假说，问题在**高度域不对称**。
+
+**④ 坡度指纹**：[MBLineHD] junction 埋没线 h=5.05 恒定（n=2 无范围）而桥面应为坡道（expected 端点高差 ~1m）——markup 采样未体现坡度 → 跨 tile 曲线合并（mergeElevationFeatures）或曲线点密度审计为下轮入口（g13④ 具体化：对比我方 resolveElevation local-first vs mgl 同 tile 直用 + 跨 tile merge 的逐点高度）。
+
+**⑤ 修复候选（下轮按序）**：a) fillHD 路径剥离 level 补偿（mgl 字面：曲线即高度，zLevel/level 从不加进高度——g13 已证 mgl 死参）+ 同步验证 no-cross-beams/guard-rail 族（当年 level 补偿校准的家族）；b) 曲线合并审计（local-first vs 全量 merge 的坡度还原）。两者都在"高程关联域"内，karma 旋钮markupbias 已证无效，勿再扫。
+
+**⑥ 状态**：零渲染行为改动（bias 扫描经旋钮、未落默认）；单测 310 维持。
