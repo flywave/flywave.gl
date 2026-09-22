@@ -6792,3 +6792,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 根因判别（raw WebGL2 最小复现）**：headless-shell/ANGLE-Vulkan-SwiftShader 下 POT/NPOT（含 40×40）mipmap 均**工作正常**（25% duty 条纹 LOD≥2 时 64 平均 vs 无 mip 的 128/0 振荡）——GL 栈排除。结论：**夹具分辨率下 hatch 采样 LOD≤0（放大态）**，g94② 的"minification aliasing"定性在本夹具族不成立为白比源（与 g95 的 patternmul 扫描否定互证——图案尺度轴整体非白比主源）。
 
 **④ 状态**：mipmap 保持 mgl 字面默认（`patmip=0` 回退旋钮保留）；零像素回归（逐位中性）；单测 310 passing；lib emit 含新代码。g94④ 修复方向（uMBPatternScale overzoom 语义）经 g96（period 字面化）+ g97（min 链字面化）+ g95（尺度扫描否定）三向收官：**图案采样链对 mgl 已字面对齐，va 白比主源回归 g95② 的 level 域阻塞项（expected-generator 语义，挂号中）**。
+
+### §885 g98: **g92 oracle 定性推翻——vendored mgl 即 oracle（va 486/junction 441 像素）**，g95② 阻塞正式解锁（2026-09-22 第十轮）
+
+**① 起点（g95③ 解锁路径②执行）**：为做 zLevel 单变量二分，为 vendored mgl 实现 level 活性 fork——fill_bucket.addGeometry 增 zLevelBias 参数（逐顶点 height+bias），fill_hd_extension 以 `MGL_ZLEVEL_M`（构建期常量，默认 0=vendored 行为）计算 `level×L` 注入（mapbox-gl-js 工作树，目录 git-ignored 与历轮 vendored 改动同一形态）。
+
+**② bundle_prelude arity 修复（mgl-shot 复活的前置）**：重建 dist 时发现 UMD prelude 的 define shim 硬编码 `shared(undefined, sharedChunk)` 双参调用，而当前源码态 shared chunk 无动态 import() → 工厂签名 `(exports)` 单参 → `exports.KDBush=undefined` 抛错、bundle 整体不加载（历史 dist 为 9 月 12 日旧构建故此前未暴露）。修复=按 arity 分派（`shared.length===2 ? 双参 : 单参`，worker blob 字符串同改），rollup.config.ts 经 `node --import tsx` 驱动重建（prod MINIFY 与 dev 均验证，dist 采用 dev 更名 mapbox-gl.js）。
+
+**③ 决定性实测（512×512 pixelmatch threshold 0.1，MGL_SHOT_SCALE=1）**：vendored mgl（L=0 纯曲线）vs expected——**va 486 px（0.09%）/ shadows-junction 441 px（0.08%）**，色彩统计对拍排除空图巧合。**g92"oracle 非可行性（146,502 失配）"推翻**——该值系旧测量链（尺度失配或坏 bundle 态）产物。**expected-generator 高度域语义=vendored mgl 纯曲线语义，level 无活性**（zLevel fork 保 knob 未启用即已收敛，二分不需要了）。
+
+**④ 战略重构（下一正攻线）**：既然 expected=纯曲线而我方 deck=曲线+comp 为对 expected 经验最优（20.6k/42.4k），则 **comp 吸收的是我方曲线管线自身的系统性高度差**（g91 已排除：单位✓、合并语义✓、overzoom merge 无像素效应）——真修复=逐点对拍我方 resolveElevation 曲线高度 vs vendored mgl ElevationFeatureSampler.pointElevation（mgl-shot 页可作 oracle 探针），收敛后剥 comp、markup 埋没/terrain 白比/va 残差同域自愈。g89"剥 comp +21k 恶化"重定性：恶化非 comp 承重，而是剥 comp 后曲线误差裸露。
+
+**⑤ 状态**：vendored 工作树含 zLevel fork（L=0 零行为差）+ prelude 修复 + 重建 dist；零我方渲染行为改动；单测 310 不涉。oracle 基建（mgl-shot + 512 对拍脚本）就绪，下轮首案=曲线高度逐点对拍。
