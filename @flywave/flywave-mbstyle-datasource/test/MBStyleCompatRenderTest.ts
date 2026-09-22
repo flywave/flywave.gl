@@ -609,6 +609,12 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "markupdepth=0")) {
         (globalThis as any).__mbNoMarkupDepth = true;
     }
+    // §885 g89: fhdlevel=0 — strip the resolveZOffset level compensation from
+    // the fillHD deck (mgl-purist experiment; exploded va/guard-rail, kept as
+    // an attribution knob only).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "fhdlevel=0")) {
+        (globalThis as any).__mbFillHdLevel = false;
+    }
     // §885 g78: extshadowh=1 — drop the §294 sec(lat) extra height factor.
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "extshadowh=1")) {
         (globalThis as any).__mbExtShadowH = true;

@@ -1911,6 +1911,16 @@ export class MBTileDataEmitter {
             geometry.length > 0 && geometry[0].rings.length > 0 && geometry[0].rings[0].length > 0
                 ? { x: geometry[0].rings[0][0].x, y: geometry[0].rings[0][0].y }
                 : undefined, fillHdMode);
+            // §885 g89: the level compensation here is LOAD-BEARING for the
+            // fillHD deck — stripping it (mgl-purist "curve IS the height")
+            // exploded viewport-aligned +21k / guard-rail +11-21k (the curve
+            // heights/units still differ from mgl's; the compensation absorbs
+            // that). Junction alone improved −613. Default keeps the lift;
+            // `fhdlevel=0` strips it for experiments.
+            if (fillHdMode &&
+                (globalThis as any).__mbFillHdLevel === false) {
+                this.m_currentZOffset = 0;
+            }
             this.noteGeometryHeight(this.m_currentZOffset);
             // §244: injected per-tile background quads use the mgl-native fog
             // formula (mix(bgColor, fogColor, α²) band matches mgl exactly).

@@ -6708,3 +6708,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **⑤ 修复候选（下轮按序）**：a) fillHD 路径剥离 level 补偿（mgl 字面：曲线即高度，zLevel/level 从不加进高度——g13 已证 mgl 死参）+ 同步验证 no-cross-beams/guard-rail 族（当年 level 补偿校准的家族）；b) 曲线合并审计（local-first vs 全量 merge 的坡度还原）。两者都在"高程关联域"内，karma 旋钮markupbias 已证无效，勿再扫。
 
 **⑥ 状态**：零渲染行为改动（bias 扫描经旋钮、未落默认）；单测 310 维持。
+
+### §885 g89: fillHD 剥离 level 补偿实验——决定性否定，补偿承重实锤（2026-09-22 第四轮）
+
+**① 实验**：按 mgl 字面"曲线即高度（zLevel/level 从不加进采样高程）"将 fillHD deck 的 resolveZOffset level 补偿剥离（`fhdlevel` 旋钮）。**A/B（junction/va/guard-rail/tunnel/no-cross-beams 八件）**：viewport-aligned 45,775→**67,243（+21,468）**/text +20,621/guard-rail-color 54,731→**65,497（+10,766）**/-fd 50,985→**71,787（+20,802）**；junction 20,637→20,024（−613 唯一改善）/no-cross-beams +622/tunnel +601。
+
+**② 结论**：level 补偿对 fillHD deck 是**承重项**——viewport-aligned（东京，曲线解析健康的夹具）剥掉即 +21k，说明**我方曲线高度/单位与 mgl 仍存在系统性差异，补偿吸收的正是该差异**。junction 的 −613 改善不足以抵消。g88b⑤-a 候选证伪；junction 埋没的修复只剩 g88b⑤-b（跨 tile 曲线合并/单位审计：height_relative 的单位语义 mm vs m、merge 权重、local-first 策略逐项对照 mgl getElevationFeature/mergeElevationFeatures）。
+
+**③ 状态**：默认已回退（fhdlevel 旋钮反转为 =0 剥离、仅供实验），六件复核逐位恢复 g87 值（45,775/45,538/47,876/54,731/50,985/20,637）；单测 310 passing。
