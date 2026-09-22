@@ -599,6 +599,16 @@ function discoverTests(): TestEntry[] {
     const lws = (window as any).__karma__?.config?.args?.find?.((a: string) =>
         a.startsWith("linewscale="))?.slice("linewscale=".length);
     if (lws !== undefined) (globalThis as any).__mbLineWScale = Number(lws);
+    // §885 g86: nolineclip=1 — disable the mgl-literal per-tile line clipping
+    // (line_bucket.ts:1092) for A/B attribution of the line-family residuals.
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "nolineclip=1")) {
+        (globalThis as any).__mbNoLineClip = true;
+    }
+    // §885 g87: markupdepth=0 — exclude the hd-road-markup band from depth
+    // testing (restore draw-order-only stacking; pre-g87 behavior).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "markupdepth=0")) {
+        (globalThis as any).__mbNoMarkupDepth = true;
+    }
     // §885 g78: extshadowh=1 — drop the §294 sec(lat) extra height factor.
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "extshadowh=1")) {
         (globalThis as any).__mbExtShadowH = true;

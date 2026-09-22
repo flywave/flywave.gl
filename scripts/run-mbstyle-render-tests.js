@@ -201,6 +201,10 @@ function main() {
             ...(process.env.MBSTYLE_EXTSHADOWH ? ["extshadowh=1"] : []),
             ...(process.env.MBSTYLE_GPLIFT ? [`gplift=${process.env.MBSTYLE_GPLIFT}`] : []),
             ...(process.env.MBSTYLE_LINEWSCALE ? [`linewscale=${process.env.MBSTYLE_LINEWSCALE}`] : []),
+            // §885 g86: nolineclip=1 — disable per-tile line clipping (A/B).
+            ...(process.env.MBSTYLE_NOLINECLIP ? [`nolineclip=${process.env.MBSTYLE_NOLINECLIP}`] : []),
+            // §885 g87: markupdepth=0 — restore draw-order-only markup band.
+            ...(process.env.MBSTYLE_MARKUPDEPTH ? [`markupdepth=${process.env.MBSTYLE_MARKUPDEPTH}`] : []),
             ...(process.env.MBSTYLE_GPONE ? ["gpone=1"] : []),
             ...(process.env.MBSTYLE_SHADOWHW ? ["shadowhw=1"] : []),
             ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),

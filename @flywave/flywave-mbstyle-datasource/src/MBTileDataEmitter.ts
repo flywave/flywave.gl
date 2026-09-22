@@ -3599,12 +3599,17 @@ export class MBTileDataEmitter {
         // mvtTransform) — x is tile-local but y is a huge frame value. The
         // §513 border clip needs true tile-local coordinates, so normalize
         // y before clipping and map the clipped pieces back afterwards.
-        // §885 g86 (mgl literal, line_bucket.ts:1092): EVERY line clips to
-        // the tile box ±10 units (offset elevation type: ±2) — the vendored
-        // tilecover fixtures carry line geometry ~12× the extent and each
-        // tile drew ALL of it (cross-tile duplicates, white px 2.63×).
+        // §885 g86 (line clipping, CORRECTED g88): mgl clips ONLY the HD
+        // road-markup lines — line_hd_extension.ts:152,215 clipLines to the
+        // tile box ± ELEVATION_CLIP_MARGIN (=1); the plain line bucket has
+        // no clipping at all (line-gradient/tile-boundaries fixtures draw
+        // across-tile geometry unclipped). Offset (sea/ground) layers keep
+        // their dropOutOfBounds clip at ±2 (§513).
         const clipAllLines = (globalThis as any).__mbNoLineClip !== true;
-        const shouldClipLines = clipAllLines && !needsResample;
+        const anyHdLayer = matchedLayers.some(l =>
+            l.layout?.['line-elevation-reference'] === 'hd-road-markup');
+        const shouldClipLines = clipAllLines && !needsResample &&
+            (anyOffsetLayer || anyHdLayer);
         const clipFrameC = shouldClipLines
             ? this.geojsonYFrameConstant(extents)
             : null;
@@ -3612,11 +3617,14 @@ export class MBTileDataEmitter {
             clipFrameC === null ? p : new THREE.Vector2(p.x, clipFrameC - p.y);
         const fromLocalY = (p: THREE.Vector2): THREE.Vector2 =>
             clipFrameC === null ? p : new THREE.Vector2(p.x, clipFrameC - p.y);
+        const clipMargin = anyHdLayer && !anyOffsetLayer
+            ? 1 // mgl ELEVATION_CLIP_MARGIN (line_hd_extension)
+            : 2; // §513 offset dropOutOfBounds
         const linePaths: ClippedLinePath[] | null = shouldClipLines
             ? geometry
                 .flatMap(g => this.clipLinePathsToTile(
                     g.positions.map(toLocalY), extents,
-                    anyOffsetLayer ? 2 : 10))
+                    clipMargin))
                 .map(p => ({
                     positions: p.positions.map(fromLocalY),
                     startArc: p.startArc,
@@ -3769,6 +3777,14 @@ export class MBTileDataEmitter {
                             pts = plan.points.map(p => new THREE.Vector2(p.x, p.y + yDelta));
                             ptHeights = plan.heights;
                         }
+                        // §885 g87: per-line HD elevation telemetry ([MBFillHD]
+                        // counterpart) — curve resolution + height range.
+                        if ((globalThis as any).__mbDecodeDbg) {
+                            let hMin = Infinity, hMax = -Infinity;
+                            if (ptHeights) for (const h of ptHeights) { if (h < hMin) hMin = h; if (h > hMax) hMax = h; }
+                            // eslint-disable-next-line no-console
+                            console.log(`[MBLineHD] layer=${layer.id} class=${properties?.['class']} lineType=${properties?.['line_type']} elevId=${JSON.stringify(properties?.['3d_elevation_id'])} plan=${plan ? 'yes' : 'NO'} n=${ptHeights?.length ?? 0} h=${ptHeights ? `${hMin.toFixed(2)}..${hMax.toFixed(2)}` : '-'}`);
+                        }
                     } else if (useZOffsetMode) {
                         // Cumulative distance → line-progress per vertex.
                         const cum: number[] = [0];
@@ -3820,16 +3836,25 @@ export class MBTileDataEmitter {
                 // §548: offset lines ride the DEM when terrain is live —
                 // mgl line.vertex.glsl `ele = sample_elevation(offset_pos)
                 // + scaled_z_offset` (fill-extrusion §279 sampler pattern).
-                const cwLine = this.m_decodeInfo.center;
-                for (let pi = 0; pi < pts.length; pi++) {
-                    const pt = pts[pi];
-                    const w = this.project(pt);
-                    if ((globalThis as any).__mbDecodeDbg && pi === 0 && useZOffsetMode) {
-                        // §881: raw tile px → projected world for offset lines.
-                        // eslint-disable-next-line no-console
-                        console.log(`[MBProj] px=(${pt.x.toFixed(1)},${pt.y.toFixed(1)}) w=(${w.x.toFixed(1)},${w.y.toFixed(1)},${w.z.toFixed(1)}) center=(${cwLine.x.toFixed(1)},${cwLine.y.toFixed(1)},${cwLine.z.toFixed(1)})`);
-                    }
-                    const h = ptHeights ? ptHeights[pi] : 0;
+                    // §885 g87: markup ribbons whose curve did NOT resolve
+                    // drape flat (mgl line_hd_extension:206 flat path). Lift
+                    // them by the markup bias like mgl's MARKUP_ELEVATION_BIAS
+                    // so they win the LEQUAL tie against the road surface they
+                    // annotate instead of z-fighting it (flat 0 vs deck 0).
+                    const flatMarkupBias = useHdRoad &&
+                        layer.layout?.['line-elevation-reference'] === 'hd-road-markup'
+                        ? Number((globalThis as any).__mbMarkupBias ?? 0.05)
+                        : 0;
+                    const cwLine = this.m_decodeInfo.center;
+                    for (let pi = 0; pi < pts.length; pi++) {
+                        const pt = pts[pi];
+                        const w = this.project(pt);
+                        if ((globalThis as any).__mbDecodeDbg && pi === 0 && useZOffsetMode) {
+                            // §881: raw tile px → projected world for offset lines.
+                            // eslint-disable-next-line no-console
+                            console.log(`[MBProj] px=(${pt.x.toFixed(1)},${pt.y.toFixed(1)}) w=(${w.x.toFixed(1)},${w.y.toFixed(1)},${w.z.toFixed(1)}) center=(${cwLine.x.toFixed(1)},${cwLine.y.toFixed(1)},${cwLine.z.toFixed(1)})`);
+                        }
+                        const h = ptHeights ? ptHeights[pi] : flatMarkupBias;
                     if (h > pathMaxH) pathMaxH = h;
                     let baseZ = w.z;
                     if (useZOffsetMode && this.m_terrainSampler) {
@@ -4964,6 +4989,11 @@ export class MBTileDataEmitter {
                 _paint: paint,
                 _layout: layer.layout,
                 _mbGlobalLayerOrder: true,
+                // §885 g87: under terrain the markup ribbons drape flat while
+                // the terrain surface sits above them — the depth test would
+                // bury every marking (mgl drapes them ON the terrain in the
+                // shader instead; until that lands, keep draw-order stacking).
+                ...(this.terrainActive ? { _mbMarkupDrawOrder: true } : {}),
                 // line-gradient: per-feature line-progress ramp consumed by
                 // the patcher (aRibbonDist varying → ramp texture sample).
                 ...(gradient ? { _lineGradientStops: gradient } : {}),

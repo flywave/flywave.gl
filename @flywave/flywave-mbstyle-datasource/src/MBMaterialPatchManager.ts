@@ -713,15 +713,22 @@ export class MBMaterialPatchManager {
             // roads vs the depth prepass). Scoped to HD-elevated layers and
             // structure meshes so every other category keeps its
             // draw-order-only behavior.
+            // §885 g87 (mgl literal): markup band INCLUDED — mgl draws
+            // hd-road-markup lines/fills in the main pass WITH depth test
+            // (LEQUAL) against the road depth written first: at grade the
+            // line ties the surface depth and passes; under an elevated
+            // deck the line is farther and loses (draw_elevated_fill main
+            // pass + line_hd_extension flat path). The old exclusion dates
+            // from before §515/§S6 wrote real road depth — with it in place
+            // the tie goes to whoever draws later, which painted ground
+            // lane markings OVER elevated decks (white excess 2.7×).
+            // `markupdepth=0` restores the draw-order-only behavior.
             if ((tech as any)._hdElevation !== undefined || (tech as any).__elev) {
-                // Markup (additive/stackable) layers overdraw the base roads by
-                // design — mgl stacks them in the depth reconstruction; without
-                // that pass depth-testing markup against the base surface
-                // z-fights it away. Base roads + structures keep depth testing.
+                const markupDepthOff = (globalThis as any).__mbNoMarkupDepth === true;
                 const isMarkupBand = (tech as any).renderOrder >= 9.75 ||
                     (tech as any)._paint?.['line-elevation-reference'] === 'hd-road-markup' ||
                     (tech as any)._layout?.['line-elevation-reference'] === 'hd-road-markup';
-                if (!isMarkupBand) {
+                if (!markupDepthOff || !isMarkupBand) {
                     for (const material of materials) {
                         if (material.depthTest !== true) {
                             material.depthTest = true;
@@ -3172,8 +3179,20 @@ export class MBMaterialPatchManager {
         // Pre-extruded line ribbons: per-color meshes are coplanar; disable
         // depth testing so the drawn (feature) order decides which color wins
         // at crossings (mapbox painter's algorithm for one line layer).
+        // §885 g87 (mgl literal): hd-road-markup ribbons KEEP the depth test
+        // (mgl main pass DepthMode LEQUAL + ReadOnly, draw_elevated_fill.ts):
+        // at grade the ribbon ties the road-surface depth (drawn earlier) and
+        // LEQUAL passes — crossings still resolve by draw order — but under an
+        // elevated deck the ribbon is farther and loses, hiding ground markup
+        // that used to paint OVER the deck (viewport-aligned white 2.7×).
+        // `markupdepth=0` restores the unconditional draw-order behavior.
         if (technique?._isLineRibbon) {
-            (material as any).depthTest = false;
+            const markupDepth = (globalThis as any).__mbNoMarkupDepth !== true &&
+                !(technique as any)._mbMarkupDrawOrder &&
+                ((technique as any).renderOrder >= 9.75 ||
+                 technique._paint?.['line-elevation-reference'] === 'hd-road-markup' ||
+                 technique._layout?.['line-elevation-reference'] === 'hd-road-markup');
+            (material as any).depthTest = markupDepth ? true : false;
             (material as any).depthWrite = false;
             // line-blend-mode on the ribbon fill material (mgl 'additive' /
             // 'multiply' glass modes; the SolidLine path below handles the

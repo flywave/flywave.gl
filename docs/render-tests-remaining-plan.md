@@ -6656,3 +6656,31 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 实测（mtime 新鲜）**：viewport-aligned 61,808→**60,222**（−1,586）/text 61,498→**59,936**（−1,562）/terrain 49,669→**47,961**（−1,708）——净 ≈ −4.9k，字面语义修正（g85③ 根因=未裁剪 tile 线几何 12× extent 跨 tile 重复绘制）。
 
 **③ 待补**：白像素收敛读数与 line-cap/round、gradient-with-corners 已校准线族回归（会话中止未跑）——若回归超预期需 `nolineclip=1` 定位。单测 310 passing；tsc 26。
+
+### §885 g87: markup 线深度测试对齐 + g86 裁剪范围修正——viewport-aligned 族白超量 2.70×→1.00× 归零（2026-09-22）
+
+**① g86③ 待办收口（线族回归 + 白像素收敛）**：全 mtime 新鲜。line-cap/round=410（校准带 297-404 内）、line-gradient/gradient-with-corners=29 PASS、line-width/very-overscaled=0、elevated 对应族同值——已校准线族零回归。白像素读数（阈值 240）：viewport-aligned ours 31,677 vs expected 11,723=**2.70×**，超量大头仍在，g86 裁剪只收掉 ~1.7k。
+
+**② 白超量归因（改色判别夹具 + mgl oracle）**：红/蓝叠加图显示红(我方独有)与蓝(expected 独有)成对平行条带非对称（28,970 vs 9,016）。临时改色夹具（solid=红/double=绿/dashed=蓝）+ vendored mgl 实拍（tmp/mgl-shot 工具修复后可用）判别：我方在每条走廊画满**连续细实线**（solid-lines 层），expected 只有稀疏长虚线+路缘线。3× 放大确认 expected 的高架段桥面完全无车道线。
+
+**③ mgl 字面语义（line_hd_extension.ts:112-231 + draw_elevated_fill 主 pass）**：①线按特征自身 `3d_elevation_id` 解析高程曲线；无 id（hasOwn 失败/NaN）→ 贴地面平铺（:206 flat path，无 bias）；有 id 但曲线缺失且有覆盖 provider tile → **整体隐藏**（:196-204）。②主 pass 线深度模式 LEQUAL + ReadOnly——平铺标记与路面深度打平靠后画者胜（LEQUAL 通过），在 elevated deck 下方则深度失败被遮挡。**我方原状：markup ribbon 无条件 depthTest=false（patchFillMaterial :3182，§515/深度重建落地前的历史决定）→ 地面车道线全部按 draw-order 盖在桥面上** = 白超量真源。[MBLineHD] 探针（decodedbg，本轮新增）证实：junction/viewport-aligned 的无 id 标记平铺 h=0，有 id 标记解析出合法多层高度（11.05/-4.95=东京多层立交）。
+
+**④ 修复（全部带回退旋钮）**：
+- **markup 深度**：patchFillMaterial 的 `_isLineRibbon` 分支对 hd-road-markup ribbon 启用 depthTest=true（mgl LEQUAL+ReadOnly 字面；交叉线同深度仍由 draw-order 决胜）；terrain 激活时保持 draw-order（`_mbMarkupDrawOrder`，mgl 地形下标记贴地形 shader 链未移植前的定界）；平铺无 id 标记加 MARKUP_ELEVATION_BIAS=0.05 抬升（mgl bias 语义，赢 LEQUAL 平局）。旋钮 `markupdepth=0`。
+- **g86 裁剪范围修正**：mgl `clipLines` 只存在于 3d-style line_hd_extension（:152/:215，±ELEVATION_CLIP_MARGIN=**1**）；普通 line_bucket :1091-1111 的 margin 2/10 只服务 `outside` 判定而 `outside` 仅 offset 型可为 true——**非 offset 线不裁剪**。g86 的"全部线层 ±10"过度泛化，正是 line-gradient 族回归根因（gradient 591→2768、tile-boundaries→1230）。修正：仅 hd-road-markup 层裁 ±1、offset 维持 ±2（§513 dropOutOfBounds）、其余不裁。`nolineclip=1` 旋钮保留。
+
+**⑤ 实测（mtime 新鲜，g86 基线 → g87）**：
+- **viewport-aligned 60,200→45,775（−14,425）/text 59,916→45,538（−14,378）/pitched 59,983→48,314（−11,669）/guard-rail-color 61,551→54,731（−6,820）/guard-rail-color-fd 58,765→50,985（−7,780）/elevated-symbols-terrain 32,458→29,506（−2,952）**；
+- **白像素比 2.70×→1.00×**（11,668 vs 11,723；text 0.99×）——g83④ 白超量问题正式闭环；
+- terrain 系逐位持平（47,959/26,419/42,525/41,916/10,994）= terrain 定界有效；
+- line-gradient/gradient 2768→**331**、gradient-tile-boundaries 1230→**61**（=nolineclip=1 逐位同值，归因闭环）；
+- **唯一回归：shadows-junction 18.1k→20,637（+2.5k）**——junction 的标记解析到 5.0 曲线而 deck 在 6.0（g12-g14 已挂账的"高程 id 关联缺陷"），深度测试使该偏差显形（此前被错误地画在 deck 上方掩盖）。期望图显示这些标记本应可见 → 修复方向=高程关联精度（g13④ 老案），非回退深度语义。
+- ortho-camera 81,065→78,956、wireframe 75.4k→77.2k（+1.8k，wireframe 系结构边与 markup 深度交互，幅度噪声级挂账观察）。
+
+**⑥ 基建**：tmp/mgl-shot.html 修复两处（模板串含 style 结束标签导致 CSS 块早闭泄漏文本；glyphs 缺失时 localize 崩溃）+ 口径校验通过（与 expected 语义一致）；**render-tests-index.ts 再生成绝不可在 karma 会话进行中执行**（watch 重编译→浏览器 DISCONNECTED，本次 fam2 批次被污染）；并行 karma 批次必须 MBSTYLE_PORT/MBSTYLE_KARMA_PORT 分端口。
+
+**⑦ 状态**：单测 310 passing；tsc 改动文件零新增错误；旋钮 `markupdepth=0`/`nolineclip=1` 入库；`[MBLineHD]`/`[MBFillHD]` 探针入库（decodedbg 门控）。
+
+**⑧ 下轮**：①junction 高程关联修复（g13④：hd_road_elevation 曲线归属/3d_elevation_id→level-6 关联，修好 deck 6.0 与 markup 同高，guard-rail 缺失同源）；②wireframe +1.8k 观察；③terrain 系 1.44× 白比（mgl 地形下标记贴地形链）。
+
+**⑧a g87 全族终测补遗（2026-09-22 当日晚）**：批次化后 75 件中 **70 件**在 g87 树上度量完成。新增：zLevel/tokyo-clip-lines 41,143→**31,397（−9,746）**、tunnel-enterance 42,418、tunnel-enterance-color 54,197、tunnel-separate-layer 42,418、tunnel-ortho 2,857、tooling-support 25,954、terrain-toggle-on-off 22,869、tile-border 10,728、versioning 4,669。**未度量 5 件**（shadows-double-shading-ramps-regression / shadows-double-shading-regression / shadows-roads-depth / shadows-underpass / stacked-underground-roads）：单夹具隔离 + `markupdepth=0` 完全回退双判别均于 ~5-7 分钟浏览器 DISCONNECTED——SwiftShader 马拉松环境退化（g57/g59 同型），与本轮改动无关，须冷启动后复测。
