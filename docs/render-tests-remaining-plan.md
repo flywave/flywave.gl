@@ -7191,3 +7191,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮首案**：constructTunnelStructures 逐行对拍（mgl js mirror 与我方 port 的墙生成门控差异——mgl 在无 tunnel 边时仍产 142 prim 的路径）, 预期 tunnel-color-fd 111,975 与 S6 族联动。
 
 **④ 状态**：探针弃置树净; 单测 310。cascade-1/WebGL 拦截按挂号维持。
+
+### §885 g135: g134③ 执行——隧道墙实际有生成（ok=34/21 quads, null=176/193 prepareEdgePoints 拒绝）: 断点收窄至 wall 生成→emit sections 的数组接线（tunnelSections 空 vs 墙已产）（2026-09-23 第四十七轮）
+
+**① 逐行对拍**：constructTunnelStructures 我方 port 与 mgl mirror **逐行等价**（墙循环 compare ha<0/夹持插值/entrance 双面 quad/topB isTunnel 门全同）——门控差异假设退役。
+
+**② 探针三连**：[MBCurveH] 曲线负高健康（min −3.5, 8 负顶点/瓦）; [MBFeatH] 负 ringH 存在（−3.50..−3.50 等 3 型）; [MBTunnelWall] **墙实际生成 ok=34/21/0 quads**（null=176/193=prepareEdgePoints 正常拒绝全正边）⇒ **墙已产出但 emit 段 seg=tunnel 零条目**——断点在 construct 内 sections 推送→emitElevatedStructures 的 mesh.tunnelSections 数组接线（构造传参与 mesh 暴露字段疑不同源/被后续清空）。
+
+**③ 下轮首案（纯接线, 快）**：追 tunnelSections 从 construct() 传参到 mesh.tunnelSections 的赋值链（mesh 组装处), 修复后 A/B tunnel-color-fd + S6 族（b2t/junction）。
+
+**④ 状态**：探针弃置树净（tunnel-color-fd 111,975 ✓）; 单测 310。
