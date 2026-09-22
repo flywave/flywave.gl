@@ -656,9 +656,14 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "fhdmislegacy=1")) {
         (globalThis as any).__mbFillHdMissLegacy = true;
     }
-    // §885 g110: atmos=0 — disable the mgl Atmosphere glow overlay.
-    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "atmos=0")) {
-        (globalThis as any).__mbAtmosOff = true;
+    // §885 g113: tunnelstructs=0 — drop the tunnel wall/portal structure segment.
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "tunnelstructs=0")) {
+        (globalThis as any).__mbNoTunnelStructs = true;
+    }
+    // §885 g113: atmos=1 — enable the mgl Atmosphere glow overlay (default
+    // OFF since g113: the port over-draws portal interiors at high pitch).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "atmos=1")) {
+        (globalThis as any).__mbAtmosOn = true;
     }
     // §885 g90: mkuptwin=0 — hd-road-markup lines drop the deck's level
     // compensation (curve-only height; the pre-g90 line height).

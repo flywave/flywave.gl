@@ -110,8 +110,12 @@ export class MBMaterialPatchManager {
         // fog/high/space color ramp (elevated-line-pattern's y50-90 band,
         // va's corridor warm band). The fog-per-fragment FOG define stays
         // pitch-gated (smoothstep 45..65) and is NOT this mechanism.
-        // `atmos=0` reverts.
-        if ((globalThis as any).__mbAtmosOff !== true) {
+        // §885 g110 landed this default-ON, but the port's depth semantics
+        // diverge from mgl at high pitch (b2t pitch 75: blue veil over the
+        // tunnel portal, +16.1k — mgl's overlay is LEQUAL-tested against
+        // content depth including the mask-written portal interior; ours
+        // over-draws it). Default OFF until that matches; `atmos=1` opts in.
+        if ((globalThis as any).__mbAtmosOn === true) {
             try { this.ensureAtmosphereOverlay(); } catch { /* diagnostic path only */ }
         }
 

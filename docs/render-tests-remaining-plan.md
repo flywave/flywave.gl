@@ -6981,3 +6981,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ A/B（vs g106 基线）**：elevated-line-pattern 55,021→**31,447**（−23,574）/guard-rail-color 34,082→**29,180**（−4,902）/road-markups 14,330→**10,480**（−3,850）/va 27,858→**23,854**（−4,004）/munich-close 23,246→**19,502**（−3,744）；no-cross-beams 持平；**回退两件=隧道域**：bridge-to-tunnel 36,126→51,911（+15,785）/shadows-junction 19,162→24,102（+4,940）——新增密的隧道墙/口放大已知 S6 隧道合成缺口（诚实入账, 隧道族下一正攻）。**净 ≈ −39k**。
 
 **⑤ 状态**：默认 ON（bug 修复非语义旋钮）；单测 310；kill-switch/[MGLStruct]/[MBArea] 探针留库（mirror 本地）。**下轮正攻：①隧道墙/口合成（S6 缺口, b2t +15.8k 回退 + tunnel 族 41-56k 梯队）；②line-pattern 残 31.4k 复评（墙密度已对, 剩屏位/色系）。**
+
+### §885 g113: g112⑤ 执行——b2t "+15.8k 回退"归因反转=g110 Atmosphere overlay(非隧道墙), 默认翻OFF; junction +4.9k=真 S6 域唯一残退（2026-09-23 第二十五轮）
+
+**① b2t 归因反转（关键）**：g112 家族 A/B 里 b2t 51,911 的"新增蓝色薄纱带"（y60-128 平滑渐变, 遮 expected 黑色隧道口内腔与 bg）经 mbhide 逐层排除（bridge/tunnel 结构段/全部 fill/全部 line 均不消除）+ **MBSTYLE_ATMOS=0 复测**定位：**b2t pitch=75°**（g110 中性复核只测了 pitch≤60 三件, 漏网）——蓝纱=g110 我方 Atmosphere overlay port 的深度语义偏差（mgl 的 overlay 被 LEQUAL 挡在 mask 写深的隧道口内腔之外, 我方 port 越画； 蓝色=high-color #245cdf 混合带）。atmos=0 → b2t **35,781**（< g106 基线 36,126 = g112 密墙在 b2t 实为 **−345 净益**）。**g112 无 b2t 回退, g112④ 定性修正**。
+
+**② 落地**：Atmosphere overlay 默认 **OFF**（`atmos=1` 选择开启, 原 atmos=0 语义废弃）——port 的深度交互待高 pitch 家族单独正攻后再翻默认。
+
+**③ junction 残退复核**：shadows-junction pitch 56.25（overlay 本就 inert）, atmos=0 不变 24,102 = **真回退**：新密度墙改变了 junction 口深度合成（双向错位: 新画 deck 色处 expected=bg 及反向）——S6 隧道口/墙深度语义（GREATER mask/underground LESS）与密墙交互, 唯一残退项。
+
+**④ 修正后家族态**：b2t 35,781（−345 vs 基线）/line-pattern 31,447（−23.6k）/junction 24,102（+4.9k 残）——g112 净改 ≈ **−40k**。tunnelstructs=0 bisect 旋钮入库（b2t 实证非隧道段, 保留供后续）。
+
+**⑤ 状态**：单测 310。**下轮正攻：①S6 隧道口/墙深度语义字面化（GREATER/LESS mask 与密墙交互, 消 junction +4.9k + tunnel 族 41-56k 梯队）；②Atmosphere overlay 深度语义修正后翻回默认（高 pitch 件 b2t/ortho 组）。**

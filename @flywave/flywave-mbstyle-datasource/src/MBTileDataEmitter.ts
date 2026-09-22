@@ -2553,6 +2553,9 @@ export class MBTileDataEmitter {
         // groups of one geometry repaint the whole mesh with the last color.
         for (const seg of segments) {
             if (seg.to <= seg.from) continue;
+            // §885 g113 bisect knob: tunnelstructs=0 drops the tunnel
+            // wall/portal segment (bridge segment unaffected).
+            if (seg.key === 'tunnel' && (globalThis as any).__mbNoTunnelStructs) continue;
             interface Bucket {
                 techIdx: number;
                 info: Record<string, any> | null;
