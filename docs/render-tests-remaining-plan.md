@@ -6742,3 +6742,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ double-shading 补测终结**：第 7 次冷启动（15min testtimeout）仍于 ~6.8min DISCONNECTED。此二件自 g66 基线起从未成功度量（mb-fam-align0 即缺失），浏览器/SwiftShader 在巨型 shadow caster 集下固有崩溃。**建议：给二件加 platform-tag skip 或独立降载变体前不再重试。**
 
 **④ 状态**：默认渲染行为=g87（twin/mkuptwin/fhdlevel 全部惰性旋钮）；单测 310；tsc 干净。**g13④ 审计链正式收官**——单位✓、合并语义✓、overzoom-merge 经数据证伪为无像素效应（我方单次解码已携带完整曲线；va curve-miss 系数据层真实无 id，双方同判 flat），埋没残差归属 expected-generator 语义盲域，挂号关闭。
+
+### §885 g93: terrain 贴地链落地（lineTerrainFlat 逐顶点采样）+ terrain 白比前提修正（2026-09-22 第七轮）
+
+**① 实现（mgl line_hd_extension:115 字面）**：①顶点循环地形采样条件从 offset 模式扩展到 lineTerrainFlat——`(useZOffsetMode || lineTerrainFlat) && m_terrainSampler` 时 baseZ=sampleElevation(worldXy)，markup 线在 terrain 激活时贴地形面而非 z=0 平铺（曲线查找照旧跳过=不叠加高度）；②draw-order 回退收窄：`_mbMarkupDrawOrder` 仅在 sampler 缺失（style 声明 terrain 但无 controller）时设置——sampler 在位时 markup 照常 depthTest。
+
+**② 实测（五件 terrain 系逐位不变）**：va-terrain 47,876 / lighting-terrain 41,924 / symbols-terrain 29,507 / oriented-terrain 26,418 / circles-mixed-terrain 10,974——全部与 g87 逐位同值。原因：夹具位于东京湾，DEM 高度≈0m → 贴地≈原 z=0、深度 tie≈全过，两步改动在该地形下均为无操作（已验证 DEM tiles 存在 z10+、controller/采样链经 §279 接线）。
+
+**③ terrain 1.44× 白比前提修正**：白像素叠加图显示过剩主源=**左上走廊虚线的碎斑状渲染伪影**（speckle corridor：本应平行双线的 corridor 渲染成断续噪点带）+ 右下 hatched 框与虚线相位的细节差——**非 markup 高度问题**（贴地对平地无操作可证）。speckle 伪影（terrain 下 dashed 线碎裂）列为独立调查项。
+
+**④ 无回归验证（逐位）**：junction 20,637 / wireframe 77,158 / guard-rail-color 54,731 / -fd 50,985 全部等于 g87 值（非 terrain 夹具 lineTerrainFlat=false，改动惰性）。
+
+**⑤ 状态**：单测 310；tsc 干净；贴地链+draw-order 收窄落地（对真实高程 terrain 生效，对平地惰性）；`markupdepth=0`/`mkuptwin`/`fhdlevel` 旋钮族照旧。

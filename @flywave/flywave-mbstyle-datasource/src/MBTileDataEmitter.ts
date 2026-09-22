@@ -3900,7 +3900,18 @@ export class MBTileDataEmitter {
                         const h = ptHeights ? ptHeights[pi] : flatMarkupBias;
                     if (h > pathMaxH) pathMaxH = h;
                     let baseZ = w.z;
-                    if (useZOffsetMode && this.m_terrainSampler) {
+                    // §548: offset lines ride the DEM when terrain is live —
+                    // mgl line.vertex.glsl `ele = sample_elevation(offset_pos)
+                    // + scaled_z_offset` (fill-extrusion §279 sampler pattern).
+                    // §885 g93: lineTerrainFlat markup lines drape ON the
+                    // terrain the same way (mgl line_hd_extension:115 "under
+                    // terrain, HD road-markup lines drape flat — skip
+                    // elevation lookup" = follow the terrain surface in the
+                    // line shader instead of z=0). Without this the markings
+                    // stayed on the z=0 plane under a raised terrain while
+                    // still painting over everything (draw-order), the
+                    // terrain-enabled white excess 1.44×.
+                    if ((useZOffsetMode || lineTerrainFlat) && this.m_terrainSampler) {
                         const g = this.m_terrainSampler(w.x + cwLine.x, w.y + cwLine.y);
                         if (Number.isFinite(g)) baseZ = g;
                     }
@@ -5036,7 +5047,14 @@ export class MBTileDataEmitter {
                 // the terrain surface sits above them — the depth test would
                 // bury every marking (mgl drapes them ON the terrain in the
                 // shader instead; until that lands, keep draw-order stacking).
-                ...(this.terrainActive ? { _mbMarkupDrawOrder: true } : {}),
+                // §885 g93: the draping HAS landed (per-vertex terrainSampler
+                // ride below) — with the ribbon tying the terrain surface the
+                // depth test may stay on; keep the draw-order fallback only
+                // for the sampler-less case (style declares terrain but no
+                // controller ⇒ nothing to drape onto).
+                ...(this.terrainActive && !this.m_terrainSampler
+                    ? { _mbMarkupDrawOrder: true }
+                    : {}),
                 // line-gradient: per-feature line-progress ramp consumed by
                 // the patcher (aRibbonDist varying → ramp texture sample).
                 ...(gradient ? { _lineGradientStops: gradient } : {}),
