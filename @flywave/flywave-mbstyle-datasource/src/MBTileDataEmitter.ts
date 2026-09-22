@@ -2044,16 +2044,18 @@ export class MBTileDataEmitter {
                         // is vs-mgl-shared: ours-legacy vs mgl 42,792 ≈ vs
                         // expected 42,390). `fhdstrip=1` enables the strip for
                         // the placement-parity investigation.
-                        // §885 g103: deck-only strip — the legacy deck zoff
-                        // (=level) exceeds the markup lines' own stacked
-                        // curves and buries them (va corridors y≈101-107
-                        // x≈64-235 empty vs mgl oracle). Dropping ONLY the
-                        // deck emission term un-buries the lines while markup
-                        // fills/rails keep the calibrated lift. Full strip
-                        // (fhdstrip) resets for everything incl. rails.
+                        // §885 g104: mgl literal (DEFAULT since g104) — a
+                        // curve-HIT piece sits at curve height × sec(lat)
+                        // (mercatorZfromAltitude; the zk factor in
+                        // emitElevatedFillPiece) with NO resolveZOffset
+                        // elevation term (markup bias is inside the plan
+                        // heights via the sampler). Oracle: vendored mgl
+                        // matches expected at 486/441/813 px with pure curve
+                        // heights, and the g104 px/m probe measured our z
+                        // frame at cos(lat) scale. `fhdlegacy=1` restores the
+                        // g89-calibrated curve+level behavior.
                         const zOffLegacy = this.m_currentZOffset;
-                        if ((globalThis as any).__mbFillHdStrip === true ||
-                            ((globalThis as any).__mbDeckStrip === true && fillElevRef === 'hd-road-base')) {
+                        if ((globalThis as any).__mbFillHdLegacy !== true) {
                             this.m_currentZOffset = Number(
                                 layer.paint?.['fill-z-offset'] ?? layer.layout?.['fill-z-offset'] ?? 0);
                         }
@@ -2151,9 +2153,9 @@ export class MBTileDataEmitter {
                                 // not-worse precondition everything stays
                                 // off; land the split-win pair together with
                                 // the interior-rail hide mechanism.
-                                zOffset: (globalThis as any).__mbFillHdStrip === true
-                                    ? this.m_currentZOffset
-                                    : zOffLegacy,
+                                zOffset: (globalThis as any).__mbFillHdLegacy === true
+                                    ? zOffLegacy
+                                    : this.m_currentZOffset,
                             });
                         }
                         // §885 g90: curve-HIT decks KEEP the level
@@ -2378,9 +2380,17 @@ export class MBTileDataEmitter {
 
         const startIdx = geo.positions.length / 3;
         const vertCount2d = allVerts.length / 2;
+        // §885 g104: mgl mercatorZfromAltitude — meters→z carries sec(lat)
+        // (px/m probe: mgl 8.22/8.48/8.90 vs ours 6.66/6.83/7.10 at h=1/5/11
+        // = ratio 1.234 = sec(35.66°)). Buildings already apply it as
+        // m_terrainHeightScale (§289); HD road heights did not — the level
+        // compensation was absorbing the deficit (11m × 0.234 ≈ 2.6m ≈ level
+        // 2-3). `zsec=1` enables; pairs with fhdstrip for the mgl-literal
+        // height domain.
+        const zk = (globalThis as any).__mbZSec === false ? 1 : this.m_terrainHeightScale;
         for (let i = 0; i < vertCount2d; i++) {
             const w = this.project(new THREE.Vector2(allVerts[i * 2], allVerts[i * 2 + 1]));
-            geo.positions.push(w.x, w.y, w.z + allHeights[i]);
+            geo.positions.push(w.x, w.y, w.z + allHeights[i] * zk);
             // §885 终三十九g34: per-vertex elevation for the shadow
             // receiver's sample-plane ray-cast (aMBElev attribute).
             geo.elevAttr = geo.elevAttr ?? [];
@@ -2438,12 +2448,15 @@ export class MBTileDataEmitter {
             ? this.m_extents / 4096 : 1;
         const yDelta = this.elevationYDelta(this.m_extents);
         const projected: number[] = new Array(mesh.positions.length);
+        // §885 g104: rails share the deck's zsec factor (see
+        // emitElevatedFillPiece).
+        const zkRail = (globalThis as any).__mbZSec === false ? 1 : this.m_terrainHeightScale;
         for (let i = 0; i < mesh.positions.length; i += 3) {
             const w = this.project(new THREE.Vector2(
                 mesh.positions[i] * scale, mesh.positions[i + 1] * scale + yDelta));
             projected[i] = w.x; projected[i + 1] = w.y;
-            projected[i + 2] = w.z + mesh.positions[i + 2];
-            if (mesh.positions[i + 2] > 0) this.noteGeometryHeight(mesh.positions[i + 2]);
+            projected[i + 2] = w.z + mesh.positions[i + 2] * zkRail;
+            if (mesh.positions[i + 2] > 0) this.noteGeometryHeight(mesh.positions[i + 2] * zkRail);
         }
         // §885 g52s: per-face normals for the structure mesh — the builder
         // emits OUTER/TOP/INNER face normals per rail edge; carry them
@@ -3933,7 +3946,10 @@ export class MBTileDataEmitter {
                             // eslint-disable-next-line no-console
                             console.log(`[MBProj] px=(${pt.x.toFixed(1)},${pt.y.toFixed(1)}) w=(${w.x.toFixed(1)},${w.y.toFixed(1)},${w.z.toFixed(1)}) center=(${cwLine.x.toFixed(1)},${cwLine.y.toFixed(1)},${cwLine.z.toFixed(1)})`);
                         }
-                        const h = ptHeights ? ptHeights[pi] : flatMarkupBias;
+                        // §885 g104: HD line heights share the deck's zsec
+                        // factor (sec(lat) mercator-z semantics).
+                        const zkLine = (globalThis as any).__mbZSec === false ? 1 : this.m_terrainHeightScale;
+                        const h = ptHeights ? ptHeights[pi] * zkLine : flatMarkupBias * zkLine;
                     if (h > pathMaxH) pathMaxH = h;
                     let baseZ = w.z;
                     // §548: offset lines ride the DEM when terrain is live —

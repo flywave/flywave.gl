@@ -6866,3 +6866,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 桥面结构密度/屏位双差（新主线索）**：桥区强水平边缘密度 mgl 1,874 / 我方 legacy **449** / stripped **1,577**——**legacy 桥面缺失大部分细结构（=标线被压埋），strip 恢复至近 parity**；但 strip 后 deck 边缘屏位比 mgl 低 ~18-20px（x=260:114 vs 96 等）——**同高度（curve）不同屏位**。style 无 fill-z-offset（mgl deck=curve 再证）→ 指向**屏幕空间高度缩放/相机差异**（guard-rail 6/5、va 14/11 的 1.18-1.27× 比值同号）。edge 检测跨纹理态匹配不可靠，需换可控探针。
 
 **⑤ 状态**：`deckstrip=1` 旋钮（MBSTYLE_DECKSTRIP）+ zOffLegacy 重构入库；**默认逐位不变（md5 复核）**；单测待跑。**下轮首案：屏位差定界——在 mgl-shot 页与我方 karma 各注入同一线段的"世界坐标→屏幕坐标"探针（transform.locationPoint vs 我方 project+camera），直接对拍投影链的米→像素缩放（1.18-1.27× 假设的数值验证），锁定后修复投影或统一基准，则 strip 三件套（deck/markup/rails）可整体落 mgl 字面。**
+
+### §885 g104: **sec(lat) 高度缩放实锤并落地——mgl 字面高度域收官，家族级 −135k 收敛**（2026-09-22 第十六轮）
+
+**① px/m 双引擎探针（g103⑤ 执行）**：karma 侧 PXM 探针（camera.project 地心点 + 0/1/5/11m 垂直偏移，MBSTYLE_EDBG 触发 census）= 6.66/6.83/7.10 px/m；mgl-shot 侧 map.project(center, h) = 8.22/8.48/8.90 px/m。**比值 1.234/1.243/1.254 = sec(35.66°)（va 纬度）——1.18-1.27× 假设数值验证成立**。mgl 字面锚点=mercatorZfromAltitude(alt, lat)=alt/(C·cos(lat))（mercator_coordinate.ts:29）。
+
+**② 根因闭环**：我方 HD 道路高度的米→世界 z 缺 sec(lat) 因子——建筑物早已通过 m_terrainHeightScale=sec(lat) 应用（§289，setTerrainHeightScale 无 terrain 也注入），**HD 道路链从未应用**；level 补偿吸收的正是该亏损（11m×0.234≈2.57m≈level 2-3，与 g88b③ junction 桥 level=2、g99 遥测 level 2/3 全部对上）。
+
+**③ 落地（默认 ON）**：①emitElevatedFillPiece/②rails 投影/③HD 线 ptHeights 三处 z 乘 `m_terrainHeightScale`（`zsec=0` 回退）；curve-HIT fillHD 剥 resolveZOffset 项改默认（`fhdlegacy=1` 回退，md5 逐位复核恢复 legacy）。**A/B（vs expected，14 件）**：va 42,390→**28,357**（−14.0k）/va-text −13.9k/munich-close 46,625→**23,246**（−23.4k）/**no-cross-beams 35,065→10,148（−24.9k）**/guard-rail-color −20.6k/-fd −25.5k/rm-clipping −5.3k/rm-high-pitch −4.6k/wireframe −4.4k/terrain −1.7k；回退项 junction +137（噪声）/tunnel +1.6k。**净 ≈ −135k**。oracle 验证：mgl vs ours(g104) 42,792→**28,712**（改善全为真 mgl 收敛）；埋没走廊 0→774（解埋，仍过冲 mgl 373——线密度残差为下一层）。
+
+**④ 战略意义**：g89-g103 四轮"strip 净负"悖论破案——**level comp 一直在代偿 sec(lat) 缺失**；正确组合（curve×sec(lat)+strip）即 mgl 字面且净大幅正。高度域四件套（曲线✓/帧✓/rails✓/**z 缩放✓**）全部字面对齐并落默认。
+
+**⑤ 状态**：单测 310 passing；默认=zsec+strip；回退旋钮 `MBSTYLE_ZSEC=0`/`MBSTYLE_FHDLEGACY=1`。**下轮正攻：tunnel +1.6k 回退归因 + 走廊线密度过冲（774 vs 373）——dash 相位/密度域；随后 elevated-symbols 家族复测全量。**

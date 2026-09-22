@@ -628,8 +628,14 @@ function discoverTests(): TestEntry[] {
     // §885 g103: deckstrip=1 — strip the deck (hd-road-base) emission zoff
     // only; markup fills and rails keep the legacy lift (un-buries markup
     // lines under level-lifted decks).
-    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "deckstrip=1")) {
-        (globalThis as any).__mbDeckStrip = true;
+    // §885 g104: fhdlegacy=1 — restore the g89-calibrated curve+level
+    // fillHD placement (before the mgl-literal curve×sec(lat) default);
+    // zsec=0 disables the sec(lat) mercator-z factor (both default ON).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "fhdlegacy=1")) {
+        (globalThis as any).__mbFillHdLegacy = true;
+    }
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "zsec=0")) {
+        (globalThis as any).__mbZSec = false;
     }
     // §885 g90: mkuptwin=0 — hd-road-markup lines drop the deck's level
     // compensation (curve-only height; the pre-g90 line height).
@@ -1295,6 +1301,32 @@ async function renderUntilSettled(
             // §885 g52l: camera-parity dump — mgl-probe (mgl-cam.cjs) prints
             // the same quantities from live mgl for the diff.
             rows.push(`CAM zoomLevel=${mv?.zoomLevel} pitch=${mv?.pitch} heading=${mv?.heading} fov=${mv?.camera?.fov} aspect=${mv?.camera?.aspect} targetDistance=${mv?.targetDistance} viewport=${JSON.stringify(mv?.canvas ? [mv.canvas.width, mv.canvas.height] : null)} camPos=${mv?.camera?.position ? [mv.camera.position.x, mv.camera.position.y, mv.camera.position.z].map(n => +n.toExponential(4)).join(',') : '?'}`);
+            // §885 g104: px/m probe — project ground-center + vertical offsets
+            // through the live camera; pairs with the mgl-shot side's
+            // map.project(lnglat, altitude) sweep to test the screen-space
+            // height-scale hypothesis (g103④).
+            try {
+                const cam = mv?.camera;
+                if (cam) {
+                    cam.updateMatrixWorld?.();
+                    const dir = new THREE.Vector3();
+                    cam.getWorldDirection(dir);
+                    const tGround = dir.z !== 0 ? (0 - cam.position.z) / dir.z : 100;
+                    const P0 = cam.position.clone().addScaledVector(dir, tGround);
+                    const W = mv?.canvas?.width ?? 512, H = mv?.canvas?.height ?? 512;
+                    const px = (p: THREE.Vector3) => {
+                        const n = p.clone().project(cam);
+                        return [((n.x + 1) / 2) * W, ((1 - n.y) / 2) * H];
+                    };
+                    const a = px(P0);
+                    const parts: string[] = [`P0=(${a[0].toFixed(1)},${a[1].toFixed(1)})`];
+                    for (const h of [1, 5, 11]) {
+                        const b = px(P0.clone().add(new THREE.Vector3(0, 0, h)));
+                        parts.push(`h${h}:y=${b[1].toFixed(2)} dypm=${((a[1] - b[1]) / h).toFixed(3)}`);
+                    }
+                    rows.push(`PXM ${parts.join(' ')}`);
+                }
+            } catch { /* probe best-effort */ }
             if (fb) {
                 fetch(`${fb}/mb-probe-dump`, {
                     method: "POST",
