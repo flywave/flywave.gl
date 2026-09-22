@@ -6754,3 +6754,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 无回归验证（逐位）**：junction 20,637 / wireframe 77,158 / guard-rail-color 54,731 / -fd 50,985 全部等于 g87 值（非 terrain 夹具 lineTerrainFlat=false，改动惰性）。
 
 **⑤ 状态**：单测 310；tsc 干净；贴地链+draw-order 收窄落地（对真实高程 terrain 生效，对平地惰性）；`markupdepth=0`/`mkuptwin`/`fhdlevel` 旋钮族照旧。
+
+### §885 g94: terrain/非terrain 白比真源判别闭环——road-hatched-area fill-pattern 采样噪声（2026-09-22 第八轮）
+
+**① 三步判别链（rmstyle 层移除法）**：a) va 改色夹具（三线层红/绿/蓝）：碎斑保持**白色**——不属于任何线层；b) `rmstyle=road-hatched-area`：碎斑**完全消失**（crop 干净路面+clean dashes）；c) `rmstyle=road-base`（保留 hatch）：碎斑**依旧**→ 排除 z-fighting，**噪声=hatch fill-pattern 自身采样**。
+
+**② 根因定性**：road-hatched-area = HD elevated（hd-road-markup）+ data-driven `fill-pattern`（hatched-pattern sprite）。图案 shader 非 composite 分支用 `position.xy−uMBPatOrigin`（世界相位，无需 uv 属性）——相位应正确；噪声表现为图案纹理**高频最小化 aliasing**（sprite 以错误尺度平铺：疑似 uMBPatternScale 未计入 overzoom overscale 因子，或应以 tile-zoom 像素密度而非显示 zoom 世界密度平铺），双线性采样跨越 sprite 透明/不透明边界 → 每像素随机透过 = 白噪点。expected（expected-generator）以 1:1 texel 对齐渲染 → 干净细纹。
+
+**③ 影响面**：va 非 terrain（45.7k 残差的主要成分之一）与 va-terrain（1.44× 白比）同源；junction 的 hatch 框干净（低 level 无 overzoom 拉伸）——**修复 uMBPatternScale 的 overzoom 语义可同时收敛 va/va-terrain 白比与部分残差**。
+
+**④ 修复方向（下轮首案）**：对照 mgl fill_pattern.vertex `uv = a_pos·scale` 的 scale 定义（tile pixelRatio×overscaleFactor，与线宽同源的 overscale 语义——g84②/g85② 已备好 MBRbZoom 探针方法论），修正 uMBPatternScale 在 overzoom 消费下的取值；A/B va + va-terrain 白比与 line 家族回归。
+
+**⑤ 状态**：零行为改动（判别经 rmstyle 旋钮）；单测 310；zzdiag-va 诊断夹具已清理（index 已再生成）。
