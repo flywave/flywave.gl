@@ -4992,9 +4992,13 @@ export class MBTileDataEmitter {
     ): [number, number] {
         const widthUnit = layer.layout?.['line-width-unit'] ?? 'pixels';
         const scale = widthUnit === 'meters' ? 1 : mppDash;
+        // §885 g105: dash-period scan knob — measured on-screen period is
+        // ~2× mgl's on va (20px vs ~10px); `dashmul=<f>` scales dashWorld to
+        // bisect the conversion error.
+        const dashMul = Number((globalThis as any).__mbDashMul ?? 1) || 1;
         return [
-            dashArr[0] * dashWidth * scale,
-            dashArr[1] * dashWidth * scale,
+            dashArr[0] * dashWidth * scale * dashMul,
+            dashArr[1] * dashWidth * scale * dashMul,
         ];
     }
 

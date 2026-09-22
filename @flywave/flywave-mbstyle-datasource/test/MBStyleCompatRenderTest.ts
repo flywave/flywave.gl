@@ -637,6 +637,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "zsec=0")) {
         (globalThis as any).__mbZSec = false;
     }
+    {
+        const dm = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("dashmul="))?.slice("dashmul=".length);
+        if (dm !== undefined) (globalThis as any).__mbDashMul = Number(dm) || 1;
+    }
     // §885 g90: mkuptwin=0 — hd-road-markup lines drop the deck's level
     // compensation (curve-only height; the pre-g90 line height).
     const mkt = (window as any).__karma__?.config?.args?.find?.(

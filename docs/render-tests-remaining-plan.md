@@ -6878,3 +6878,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 战略意义**：g89-g103 四轮"strip 净负"悖论破案——**level comp 一直在代偿 sec(lat) 缺失**；正确组合（curve×sec(lat)+strip）即 mgl 字面且净大幅正。高度域四件套（曲线✓/帧✓/rails✓/**z 缩放✓**）全部字面对齐并落默认。
 
 **⑤ 状态**：单测 310 passing；默认=zsec+strip；回退旋钮 `MBSTYLE_ZSEC=0`/`MBSTYLE_FHDLEGACY=1`。**下轮正攻：tunnel +1.6k 回退归因 + 走廊线密度过冲（774 vs 373）——dash 相位/密度域；随后 elevated-symbols 家族复测全量。**
+
+### §885 g105: g104⑤ 执行——家族全量复测（隐式收益巨大）+ tunnel 回退定界 + 走廊非 dasharray 域判别（2026-09-22 第十七轮）
+
+**① 家族全量复测（39 件，g104 默认态）**：zsec+strip 的收益是**全家族隐式**的——bridge-to-tunnel 72,560→**36,126**（−36.4k）、road-islands 34,668→**8,653**（−26k）、icons-and-text −29.5k、circles-tiled −18.9k、elevated-symbols 38,335→7,798、lighting 22k 档；当前最低梯队 road-markups-no-elevation 2,654 / circles-mixed 2,829。唯二可注意项：line-labels-multi-level 20,791→22,789（+2.0k，待归因）、line-pattern 55k 档（line-pattern 路径不涉 zsec，属 pattern 域）。
+
+**② tunnel +1.6k 回退定界**：changed-region 18,825 px 中 g104 胜 7,930 / legacy 胜 10,548（混合带 y256-448 为主）——**非单一结构回归**，负高（隧道腔 −5×sec=−6.17）与已知隧道合成缺口（S6/语料洞，g81/g82 记录）交互的再分布；52,973→54,612 在该夹具已知不可修项量级内，接受为 mgl 字面化的成本。
+
+**③ 走廊密度过冲判别（dashmul 扫描）**：`dashmul=0.5`（dashWorld ÷2）——**走廊完全不变**（y101/104 逐 run 相同）→ 走廊白斑**不是 ribbon dasharray 周期驱动**（疑 MVT 预切 dash 几何或独立层）；全图 va 28,357→31,243（+2.9k 恶化）= 其他 dasharray 线的默认周期已优。`dashmul` 旋钮（MBSTYLE_DASHMUL）入库供后续；走廊残差转 MVT 直读几何对拍。
+
+**④ 状态**：默认逐位复核（md5 与 g104 默认一致）；单测 310；dashmul 旋钮+PXM/家族快照入库。**下轮正攻：①line-labels-multi-level +2k 归因（zsec 对 label z 的作用路径）；②走廊 MVT 几何直读（dash 几何 feature 的双引擎渲染宽度/合并）；③全量 58 例汇总对账更新。**
