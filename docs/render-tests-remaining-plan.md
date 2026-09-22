@@ -6888,3 +6888,19 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 走廊密度过冲判别（dashmul 扫描）**：`dashmul=0.5`（dashWorld ÷2）——**走廊完全不变**（y101/104 逐 run 相同）→ 走廊白斑**不是 ribbon dasharray 周期驱动**（疑 MVT 预切 dash 几何或独立层）；全图 va 28,357→31,243（+2.9k 恶化）= 其他 dasharray 线的默认周期已优。`dashmul` 旋钮（MBSTYLE_DASHMUL）入库供后续；走廊残差转 MVT 直读几何对拍。
 
 **④ 状态**：默认逐位复核（md5 与 g104 默认一致）；单测 310；dashmul 旋钮+PXM/家族快照入库。**下轮正攻：①line-labels-multi-level +2k 归因（zsec 对 label z 的作用路径）；②走廊 MVT 几何直读（dash 几何 feature 的双引擎渲染宽度/合并）；③全量 58 例汇总对账更新。**
+
+### §885 g106: g105④ 执行——走廊根因闭环（fill-pattern 域）+ line-labels 归因 + 全量基线对账（2026-09-22 第十八轮）
+
+**① line-labels-multi-level +2.0k 归因（完成）**：legacy 20,596 → zsec-only 32,746 → g104(zsec+strip) 22,789——纯 zsec 恶化 +12.2k，strip 在其上回收 −9.9k；组合轻微过调（+2.2k vs legacy）= label z 路径上两因子部分重叠作用，**接受为局部成本**（家族净 −135k 的大盘下不再单点追击）。
+
+**② 走廊密度过冲根因闭环（774/6224 vs mgl 373/3451 白比，双引擎隔离对拍）**：
+- mgl-shot 直读（MGL_SHOT_SCALE=1 对齐 512 空间）：mgl 走廊白比 3,451 = **expected.png 逐数一致**（oracle 有效，早前 scale=2 量纲错误修正）；
+- rmstyle 隔离（va）：我方 default 6,224 / 去 road-hatched-area **3,010**（≈expected 3,451！）/ 去 fake-road-shade 2,154；mgl 侧删除任一层走廊 **3,983/3,451 完全不变**（mgl 中 hatch/shade 对走廊白比零贡献——被上层覆盖或 pattern 稀疏）；
+- 单层 probe（双引擎）：only-shade 12000=12000 逐位同量级、only-base 8141 vs 7696 近似——**孤立层一致，差异在合成**；
+- **定性：走廊 +2.8k 过冲全部来自 road-hatched-area（fill-pattern hatch）的白色碎斑采样**——与 g94（HD elevated+overzoom 下 pattern scale/aliasing 白斑）同根因，非线层、非 dasharray（g105 dashmul 已排除）、非宽度域。**管线级修复点=fill-pattern 采样/scale 域（g94 挂账的 uMBPatternScale overscale 语义），走廊项并入 g94 主攻线，不再独立开线。**
+
+**③ 全量基线对账（75 例）**：71 例有数 **TOTAL=1,722,604**（g104 默认态）；2 例 PASS（depth-segments-crash-geometry / ortho-camera-tunnel）；2 例无数=固有挂起（shadows-underpass 超时 / shadows-double-shading-ramps-regression，g92 已记 chrome 崩溃系）。梯队：最低 road-markups-no-elevation 2,654 / circles-mixed 2,829 / versioning 2,089 / tile-border 4,932；最高 double-shading-regression 99,679 / wireframe 72,049 / ortho-camera 71,901 / tunnel-color-fd 56,646 / line-pattern 55,021（pattern 域同 g94 线）。基线快照 /tmp/g106-final.txt 口径入账。
+
+**④ 工程注记**：单测 310 passing（canonical `npm test` glob 排除 *Compat*/*Render*；flywave-test-utils lib 工件已手工补 rendering re-exports——`npm run build` 会覆盖，pretest tsc 的 mapview project-ref 源错为存量问题与本轮无关）；karma 多 filter= AND 语义陷阱（多滤须逐个跑）；Chrome 大批例（>57）ping-timeout 断连须分批。
+
+**⑤ 状态**：本轮零行为改动（纯归因+对账）；repo 干净。**下轮正攻：fill-pattern 采样域合流大线（g94+g106 走廊+line-pattern 55k 三案同源）——mgl fill_pattern 的 sprite 尺寸→tile 单位换算（u_pattern_tl_{a,b}/u_pixel_coord_translation）逐字面对拍，锚 overscale/overzoom 语义，修 uMBPatternScale。**
