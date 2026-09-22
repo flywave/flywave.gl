@@ -7229,3 +7229,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下一可行通道（下轮首案）**：①radiance 经 DecodeInfo/DecoderOptions（configure 通道, worker 可达——terrainHeightScale 先例 §289）下发给 emitter; ②或 decode 后主线程改写 techniques[i].color（decodedTile 返回前 multiply——datasource 侧 getTile 后处理, 无 worker 问题）。两者均为小改, 预期解 deck 照亮墙; mask 的 GREATER 属性仍需材质侧通道（technique 无深度属性字段, 待照亮解后评估 cast 技巧）。
 
 **④ 状态**：实验全弃置树净（ortho 71,858 ✓）; 单测 310。
+
+### §885 g139: g138③ 执行——通道(b)实现且实证生效（.then 重写 techniques, gr=1.0794 落地）而像素仍不变 ⇒ deck 材质连 adapter 也不挂; 常规通道穷尽, WebGL 拦截为唯一残路（2026-09-23 第五十一轮）
+
+**① 通道(b)全链实证**：decodeTile().then 重写 techniques[i].color ×radiance——[MBPostDec] 探针实证**重写生效**（gr=[1.0794…]×3, techs=26/36, THREE 桥在）且早帧 gr=0.9945 后收敛 1.0794; **ortho 逐数 71,858 不变, 暗调 43,711 依旧** ⇒ technique.color 变了而 deck 像素不变 = **deck 材质连 MapMaterialAdapter 都未挂**（rendered 实例的颜色既不来自 technique 也不来自任何已知链——与 g131 的 5123 字符独立链、g126 的每帧色重置全部吻合: 引擎对该类材质有完全独立的渲染管线）。
+
+**② 会话终局定性（34 轮后）**：材质/technique/adapter/shader/烘焙/刷新**六层注入全部实证不达** deck 渲染实例 ⇒ 唯一残路=**WebGL 拦截**（hook uniform3fv/4fv+program 源按 draw-call 抓 deck 实际色源）——下一会话首案, 工具化约一轮。
+
+**③ 状态**：实验全弃置树净（ortho 71,858 ✓）; 单测 310。**下一会话序列: ①WebGL 拦截专案（解 deck 墙→ortho~29k+或 mask 通道发现）; ②cascade-1 战役（独立域, mgl 语义已全文）; ③S6 mask 车削（墙后或随拦截发现通道）。**
