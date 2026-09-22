@@ -2117,6 +2117,14 @@ export class MBTileDataEmitter {
                         // feeds every elevated fill (markup included; only
                         // addPortalCandidates is hd-road-base-only). Junction:
                         // mgl offered=1756 rings (incl. markup) vs our 1506.
+                        // §885 g117: GATED OFF by default — mgl prunes 46% of
+                        // these (safeArea) while our prune is inert (ring
+                        // frame subdivision-set gap, g116), so ungated markup
+                        // walls regressed va +3.3k. `markupstructs=1` opts in
+                        // until the prune converges.
+                        const markupSkipped = fillElevRef !== 'hd-road-base' &&
+                            (globalThis as any).__mbMarkupStructs !== true;
+                        if (!markupSkipped) {
                             // fill-construct-bridge-guard-rail is a
                             // data-driven LAYOUT property (mgl default true).
                             const guardRailRaw = layer.layoutDefs?.['fill-construct-bridge-guard-rail'] ??
@@ -2163,7 +2171,8 @@ export class MBTileDataEmitter {
                                 zOffset: (globalThis as any).__mbFillHdLegacy === true
                                     ? zOffLegacy
                                     : this.m_currentZOffset,
-                        });
+                            });
+                        }
                         // §885 g90: curve-HIT decks KEEP the level
                         // compensation — stripping it exploded va +19k /
                         // guard-rail +10-21k even hit-only (the vendored

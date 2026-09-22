@@ -656,6 +656,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "fhdmislegacy=1")) {
         (globalThis as any).__mbFillHdMissLegacy = true;
     }
+    // §885 g117: markupstructs=1 — feed markup rings into structures
+    // (mgl literal, gated off until our safeArea prune converges).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "markupstructs=1")) {
+        (globalThis as any).__mbMarkupStructs = true;
+    }
     // §885 g113: tunnelstructs=0 — drop the tunnel wall/portal structure segment.
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "tunnelstructs=0")) {
         (globalThis as any).__mbNoTunnelStructs = true;

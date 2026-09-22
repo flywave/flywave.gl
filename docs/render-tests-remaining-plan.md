@@ -7025,3 +7025,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮首案（定界完成, 修复待做）**：piecesCanonical 摄入帧审计——从 MVT 原始 ring 坐标起逐步对拍 mvtTransform→elevationLocalY→canonical 缩放→clipRingToBox 各级 x/y 变换, 与 mgl fill_bucket 的 ring 帧逐级对齐; 修复后 junction prune 行为应自发收敛至 mgl 46% 剪除率并消除 +4,940 残退。
 
 **④ 状态**：junction 24,102 不变（帧分歧未修, 诚实挂账）; 单测 310; [MGLEdge]/[MBEdge] dump 工具链入库; mgl mirror dump 为本地调试态（每次 oracle 渲染打印, 后续收紧门控）。
+
+### §885 g117: g116③ 执行——帧审计反转闭环: 变换=x·0.5+y翻·0.5 成立(676 精确公共顶点, g116"无变换"结论修正); flat-shortcut 假设证伪并回退; **g115 markup 回退(va +3.3k)发现并门控**（2026-09-23 第二十九轮）
+
+**① g116 结论修正（重要）**：轴域分析实证变换关系成立——mgl y 1086..8192 ↔ 我方 0..3553 **精确**=(8192−y)·0.5, x=·0.5 边界 4096↔8192 同；顶点云 NN 检验 **676/878 精确公共顶点**（g116 边集 0 公共=细分顶点错位所致, "帧分歧"定性错误修正）。真实残差=**细分边集差异**（我方 982 顶点 vs mgl 878, 76 孤儿顶点=我方多出的细分内割边; EdgeIterator/ SUBDIVISION_EDGE_EXTENSION/ metersToTile 域）。
+
+**② flat-shortcut 假设证伪**：209 个 4 顶点环=细分输出非 shortcut 输出（census 去除前后逐数相同 996 none）; 移除 shortcut 的 A/B：va 23,854→27,150（+3.3k, SH-gap 防护实载）其余六件不变 ⇒ **回退保留 shortcut**。
+
+**③ g115 markup 回退发现与门控（诚实修正）**：②的 va +3.3k 经复核实为 **g115 markup rings 入 structures 所致**（g115 时 va 未复测, 漏网）; mgl 字面但我们的 safeArea 剪除尚 inert（细分边集差未修）→ 未剪除的 markup 墙可见过画。落地: markupstructs 门控**默认 OFF**（`markupstructs=1` 选择开启, 剪除收敛后翻回）; 门控后 va 恢复 **23,854** ✓, b2t 回 35,781（放弃 g115 的 −279 换 va +3.3k 防护, 净正确）。
+
+**④ 状态**：junction 24,102（=g114 态, 残退维持; 根因精确化=细分边集差异）; va 23,854/b2t 35,781/line-pattern 31,447/grc 29,180/munich 19,502 全部回到各自最优态; 单测 310。
+
+**⑤ 下轮正攻：①细分边集字面对齐**（EdgeIterator 语义/ SUBDIVISION_EDGE_EXTENSION=1? / metersToTile 双引擎数值对拍——修复后 prune 自发收敛→markup 门控翻回+junction 残退消除一石三鸟）; ②overlay 深度语义仍挂号。

@@ -216,6 +216,7 @@ function main() {
             ...(process.env.MBSTYLE_FHDMISLEGACY ? ["fhdmislegacy=1"] : []),
             ...(process.env.MBSTYLE_ATMOS === "1" ? ["atmos=1"] : []),
             ...(process.env.MBSTYLE_TUNNELSTRUCTS === "0" ? ["tunnelstructs=0"] : []),
+            ...(process.env.MBSTYLE_MARKUPSTRUCTS === "1" ? ["markupstructs=1"] : []),
             // §885 g90: mkuptwin=0 — markup lines curve-only height (no level twin).
             ...(process.env.MBSTYLE_MKUPTWIN ? [`mkuptwin=${process.env.MBSTYLE_MKUPTWIN}`] : []),
             ...(process.env.MBSTYLE_GPONE ? ["gpone=1"] : []),

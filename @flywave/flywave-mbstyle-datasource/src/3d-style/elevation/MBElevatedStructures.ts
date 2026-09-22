@@ -414,6 +414,11 @@ export class MBElevatedStructures {
                 if (hh > hMax) hMax = hh;
             }
         }
+        // §885 g117 A/B: removing this shortcut (mgl subdivides flat decks
+        // too) regressed va +3.3k (SH-split gaps, 终三一九b) with zero
+        // effect on junction/line-pattern/b2t/grc — the junction 4-vertex
+        // rings are subdivision OUTPUT, not shortcut output. Keep the
+        // shortcut; the ring-density delta is a subdivision-edge-set issue.
         const flatFeature = hMax - hMin < 0.05;
 
         const back = (ring: ClipPoint[]): ClipPoint[] =>
@@ -765,6 +770,10 @@ export class MBElevatedStructures {
             for (const idx of tri) outTriangles.push(idx + vOffset);
 
             for (const [offset, count, wasClosed] of ringRanges) {
+                if ((globalThis as any).__mbDecodeDbg) {
+                    const rl = (globalThis as any).__mbRingTags ??= [];
+                    if (rl.length < 500) rl.push([featureIndex, offset, count, this.m_unevalHeights[vOffset + offset] ?? 0]);
+                }
                 this.addRenderableRing(
                     featureIndex, vOffset + offset, count, isTunnel, guardRailEnabled, safeArea, wasClosed !== false);
             }
@@ -814,6 +823,7 @@ export class MBElevatedStructures {
             // eslint-disable-next-line no-console
             const edDump = (globalThis as any).__mbEdges ?? [];
             for (let i = 0; i < edDump.length; i += 100) console.log(`[MBEdge] ${JSON.stringify(edDump.slice(i, i + 100))}`);
+            console.log(`[MBRingTag] ${JSON.stringify((globalThis as any).__mbRingTags ?? [])}`);
             console.log(`[MBStruct] ringCnt=${JSON.stringify((globalThis as any).__mbRingCnt ?? {})} edgeCnt=${JSON.stringify((globalThis as any).__mbEdgeCnt ?? {})} prune=${JSON.stringify((globalThis as any).__mbPrune ?? {})} noArea=${(globalThis as any).__mbNoArea ?? 0} areas=${JSON.stringify(((globalThis as any).__mbAreaList ?? []).slice(0, 8))} verts=${positions.length / 3} idxSoFar(wall)=${wallIdxEnd} edges=${JSON.stringify(counts)} triN=${this.m_unevalTriangles?.length ?? 0} tunnelTriN=${this.m_unevalTunnelTriangles?.length ?? 0}`);
         }
 
