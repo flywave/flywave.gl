@@ -6732,3 +6732,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **⑥ 状态**：默认渲染行为回 g87（twin=0）；单测 310；tsc 干净。下轮首案：实现 provider(真实 z18)≠consumer 的 registry 合并路径（对齐 getOverlappingElevationParts 的 isChildOf 空间过滤 + zoom 降序 index 去重），A/B va curve-miss 探针（elevId=undefined level=2 的 deck 应 resolve 而非 flat）→ 届时再剥 comp。
 
 **⑥a shadows 系冷启动补测结果（g91 树，逐件独立批次）**：shadows-roads-depth 2,480→**1,176（−1,304 ✓）**、stacked-underground-roads 38,532→**38,496（持平 ✓）**、shadows-underpass 128,359→**130,483（+2,124，g81 已定性主源=语料库覆盖洞，幅度在已知行为内）**。shadows-double-shading-ramps-regression/-regression 双件：今日 5 次尝试（含冷启动/单夹具/15min 超时预算）均于 ~5.5min 浏览器 DISCONNECTED——且 mb-fam-align0（g66 基线）即无此二件（当时已崩），**无基线可归因、非本轮引入**，遗留为环境/夹具固有稳定性问题（巨型 shadow caster 集）。
+
+### §885 g92: oracle 非可行性实锤 + twin 强制验证 + double-shading 补测终结（2026-09-22 第六轮）
+
+**① vendored mgl 无 oracle 资格（junction 三方像素对比）**：mgl-shot(junction) vs expected=**146,502** 失配，而我方 vs expected=20,637（近 7 倍差）——vendored mgl 的纯曲线高度域与 expected 生成器（level 活性语义）不同源。此前 esl 夹具 0.17% 的 oracle 有效性不适用于 junction 高度域。**推论：我方 deck=曲线+level 的经验域是当前对 expected 最优的域；markup 埋没修复不可诉诸"对齐 vendored mgl"，只能诉诸 expected-generator 语义（不可得）。**
+
+**② twin 强制验证（mkuptwin=1，junction+wireframe）**：junction **20,637 逐位不变**——junction 为堆叠立交，level=1/2 标记线在抬升前后均被上层 deck 遮挡（BAD 埋没像素位于最低走廊）；wireframe 75,991（=twin 生效值，−1,167 vs g87）。twin 机制本身有效（wireframe/ncb 改善）但 guard-rail +6k / va +2k 净负，维持默认关。
+
+**③ double-shading 补测终结**：第 7 次冷启动（15min testtimeout）仍于 ~6.8min DISCONNECTED。此二件自 g66 基线起从未成功度量（mb-fam-align0 即缺失），浏览器/SwiftShader 在巨型 shadow caster 集下固有崩溃。**建议：给二件加 platform-tag skip 或独立降载变体前不再重试。**
+
+**④ 状态**：默认渲染行为=g87（twin/mkuptwin/fhdlevel 全部惰性旋钮）；单测 310；tsc 干净。**g13④ 审计链正式收官**——单位✓、合并语义✓、overzoom-merge 经数据证伪为无像素效应（我方单次解码已携带完整曲线；va curve-miss 系数据层真实无 id，双方同判 flat），埋没残差归属 expected-generator 语义盲域，挂号关闭。

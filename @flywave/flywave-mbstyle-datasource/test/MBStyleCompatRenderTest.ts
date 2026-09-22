@@ -617,9 +617,11 @@ function discoverTests(): TestEntry[] {
     }
     // §885 g90: mkuptwin=0 — hd-road-markup lines drop the deck's level
     // compensation (curve-only height; the pre-g90 line height).
-    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "mkuptwin=0")) {
-        (globalThis as any).__mbMarkupTwin = false;
-    }
+    const mkt = (window as any).__karma__?.config?.args?.find?.(
+        (a: string) => a.startsWith("mkuptwin="))?.slice("mkuptwin=".length);
+    if (mkt === "0") (globalThis as any).__mbMarkupTwin = false;
+    // §885 g92: mkuptwin=1 — force the twin lift ON for attribution.
+    if (mkt === "1") (globalThis as any).__mbMarkupTwin = true;
     // §885 g78: extshadowh=1 — drop the §294 sec(lat) extra height factor.
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "extshadowh=1")) {
         (globalThis as any).__mbExtShadowH = true;

@@ -3825,8 +3825,8 @@ export class MBTileDataEmitter {
                         if ((globalThis as any).__mbDecodeDbg) {
                             let hMin = Infinity, hMax = -Infinity;
                             if (ptHeights) for (const h of ptHeights) { if (h < hMin) hMin = h; if (h > hMax) hMax = h; }
-                            // eslint-disable-next-line no-console
-                            console.log(`[MBLineHD] layer=${layer.id} class=${properties?.['class']} lineType=${properties?.['line_type']} elevId=${JSON.stringify(properties?.['3d_elevation_id'])} plan=${plan ? 'yes' : 'NO'} n=${ptHeights?.length ?? 0} h=${ptHeights ? `${hMin.toFixed(2)}..${hMax.toFixed(2)}` : '-'}`);
+                        // eslint-disable-next-line no-console
+                        console.log(`[MBLineHD] layer=${layer.id} class=${properties?.['class']} lineType=${properties?.['line_type']} elevId=${JSON.stringify(properties?.['3d_elevation_id'])} level=${JSON.stringify(properties?.['level'])} plan=${plan ? 'yes' : 'NO'} n=${ptHeights?.length ?? 0} h=${ptHeights ? `${hMin.toFixed(2)}..${hMax.toFixed(2)}` : '-'}`);
                         }
                     } else if (useZOffsetMode) {
                         // Cumulative distance → line-progress per vertex.
