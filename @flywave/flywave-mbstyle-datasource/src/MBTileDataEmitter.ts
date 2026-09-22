@@ -2033,6 +2033,21 @@ export class MBTileDataEmitter {
                         }
                     }
                     if (plan) {
+                        // §885 g99: EXPERIMENT (default OFF) — strip the
+                        // resolveZOffset elevation term from curve-HIT pieces
+                        // (mgl literal: heights = curve + sampler bias only;
+                        // oracle-verified 486/441 px, g98). A/B showed the
+                        // legacy curve+level calibration is net-better vs
+                        // expected (va +22k worse stripped) because the level
+                        // term currently compensates a placement error
+                        // elsewhere in our deck/rail chain (all our va error
+                        // is vs-mgl-shared: ours-legacy vs mgl 42,792 ≈ vs
+                        // expected 42,390). `fhdstrip=1` enables the strip for
+                        // the placement-parity investigation.
+                        if ((globalThis as any).__mbFillHdStrip === true) {
+                            this.m_currentZOffset = Number(
+                                layer.paint?.['fill-z-offset'] ?? layer.layout?.['fill-z-offset'] ?? 0);
+                        }
                         if (fillElevRef === 'hd-road-base') {
                             // mgl handleFeature: portal candidates from the
                             // clipped ORIGINAL polygon first, then the mesh

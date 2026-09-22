@@ -6804,3 +6804,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 战略重构（下一正攻线）**：既然 expected=纯曲线而我方 deck=曲线+comp 为对 expected 经验最优（20.6k/42.4k），则 **comp 吸收的是我方曲线管线自身的系统性高度差**（g91 已排除：单位✓、合并语义✓、overzoom merge 无像素效应）——真修复=逐点对拍我方 resolveElevation 曲线高度 vs vendored mgl ElevationFeatureSampler.pointElevation（mgl-shot 页可作 oracle 探针），收敛后剥 comp、markup 埋没/terrain 白比/va 残差同域自愈。g89"剥 comp +21k 恶化"重定性：恶化非 comp 承重，而是剥 comp 后曲线误差裸露。
 
 **⑤ 状态**：vendored 工作树含 zLevel fork（L=0 零行为差）+ prelude 修复 + 重建 dist；零我方渲染行为改动；单测 310 不涉。oracle 基建（mgl-shot + 512 对拍脚本）就绪，下轮首案=曲线高度逐点对拍。
+
+### §885 g99: 曲线高度逐点对拍——采样器/解析器逐位全等，comp 补偿定性为我方 deck/护栏链的"未定位放置差"，strip 实验（fhdstrip 旋钮）净负回退默认（2026-09-22 第十一轮）
+
+**① 对拍 harness（tmp/g99-curve-parity.ts）**：同一 MVT（va 主瓦片 18-232843-103243）双解析——vendored mgl parseElevationFeatures vs 我方 parser+assembleElevationFeatures（layer extent **8192**→4096 域换算后同点采样）。**结果：1,176 采样 meanAbs=0.000、worst=0.000——解析器+采样器+getElevationFeature 关联逐位全等**（单位/合并语义/插值/getClosestEdge 全部排除，g91 审计的最终实证）。
+
+**② 消费端定性（[MBFillHD] 遥测）**：curve-HIT markup fill 我方 = 曲线 + level + 0.1（zoff=3.1@level3）而 mgl = 曲线 + MARKUP_BIAS（bias 在采样器内）；deck = 曲线+0.05 vs mgl 曲线+0。**唯一剩余高度差 = resolveZOffset 项被 project() 二次叠加**（emitElevatedFillPiece: w.z+heights）。
+
+**③ strip 实验（mgl 字面，fhdstrip=1）**：curve-HIT 剥离 resolveZOffset 项（仅保留显式 fill-z-offset）。**A/B 全线净负**：va 42,390→64,832（+22.4k）/va-text +21.6k/munich-close +10.4k/ncb +4.8k/guard-rail-color +10.5k；va-terrain −1.7k/wireframe −2.4k 改善不抵。像素判别（strip-affected 像素上 legacy:new 胜率 ≈3:1）+ 视觉 diff（桥面 deck 大块+细线 1-2px 位移）。
+
+**④ 关键交叉证据（矛盾收敛）**：mgl vs expected 486 / mgl vs ours-legacy **42,792** / ours-legacy vs expected 42,390——**我方 va 误差几乎全部是与 mgl 共享的**（非 expected 特有），且 legacy（带 level 抬升）比 mgl 字面纯曲线更接近 expected/mgl。结论：**level 补偿当前在补偿我方 deck/护栏渲染链中另一个尚未定位的放置差**（候选：elevated structures/rails 的高度来源、project() 帧项、细分差）；在该放置差修复前剥 comp = 裸露误差（g89/g99 两轮一致）。overzoom-merge 假设被几何排除（z19 consumer 仅一个 z18 parent，merge=恒等变换）。
+
+**⑤ 状态**：默认回退 legacy（复核逐位：va 42,390 md5 与 g97 基线一致）；`fhdstrip=1` 旋钮（MBSTYLE_FHDSTRIP）保留实验路径；对拍 harness 入 tmp/（含 pbf/vector-tile 双侧驱动）；单测 310 passing。**下轮正攻：直接对拍"deck/护栏最终世界 z"我方 vs mgl-shot 页内探针（g52e __mbPairDeck 系），定位补偿所吸收的放置差本体。**
