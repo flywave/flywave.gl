@@ -658,6 +658,21 @@ export class MBMaterialPatchManager {
         // clears it as soon as geometry loading finishes, which made this whole
         // patcher a silent no-op. Everything needed is on obj.userData.technique.
         let noTech = 0, withTech = 0;
+        // §885 g107: does this style carry HD elevation geometry at all? Gates
+        // the plain-fill depth enable below to HD-bearing styles only. NOTE:
+        // datasource-level (not per-tile) — patchTile can fire on partial
+        // object lists while bridge tiles decode later.
+        const hdActiveInTile = (() => {
+            const es = (this.m_dataSource as any)?.m_elevationStructures;
+            if (es && !es.isEmpty) return true;
+            for (const o of tile.objects ?? []) {
+                const t = o.userData?.technique;
+                if (t && ((t as any)._hdElevation !== undefined || (t as any).__elev)) {
+                    return true;
+                }
+            }
+            return false;
+        })();
         for (const obj of tile.objects ?? []) {
             const tech = obj.userData?.technique;
             if (!tech) { noTech++; continue; }
@@ -734,7 +749,59 @@ export class MBMaterialPatchManager {
                             material.depthTest = true;
                             material.needsUpdate = true;
                         }
+                        // §885 g107: mgl's road depth comes from the DEPTH
+                        // PREPASS — the deck's main-pass color fragments are
+                        // ReadOnly. We have no full geometry prepass, so the
+                        // OPAQUE deck fills must write depth themselves for
+                        // anything later (ground shade, coplanar markups) to
+                        // resolve against. Translucent fills keep no-write.
+                        if (!material.transparent && material.depthWrite !== true) {
+                            material.depthWrite = true;
+                            material.needsUpdate = true;
+                        }
                     }
+                }
+            }
+
+            // §885 g107 (mgl literal): plain fills depth-test too. mgl
+            // draw_fill draws EVERY fill through the depth/stencil machinery
+            // — a flat ground fill (no fill-elevation-reference, e.g.
+            // fake-road-shade) fails the depth test under an elevated deck
+            // and stays hidden. The mapview leaves plain fills depthTest=off
+            // (draw-order-only 2D semantics), so our flat shade rides OVER
+            // the HD deck when drawn later — the va corridor band (g106②:
+            // ours shade×1.09 where expected shows road-base-bridge).
+            // Scoped to tiles that carry HD elevation geometry so non-HD
+            // styles keep draw-order behavior; coplanar ground fills are
+            // unaffected (LEQUAL ties go to the later draw). Knob
+            // `plainfilldepth=0` reverts.
+            if (hdActiveInTile &&
+                (tech as any).technique === 'fill' &&
+                (tech as any)._hdElevation === undefined && !(tech as any).__elev &&
+                (globalThis as any).__mbPlainFillDepth !== false) {
+                for (const material of materials) {
+                    if (material.depthTest !== true) {
+                        material.depthTest = true;
+                        material.needsUpdate = true;
+                    }
+                }
+            }
+
+            // §885 g107 probe: fill-material final state (dump channel).
+            if ((tech as any).technique === 'fill' &&
+                (globalThis as any).__mbFillStateProbe) {
+                const m0: any = materials[0];
+                const row = {
+                    layer: (tech as any)._layerId ?? (tech as any).name,
+                    color: String(m0?.color?.getHexString?.() ?? ''),
+                    transparent: m0?.transparent, depthTest: m0?.depthTest,
+                    depthWrite: m0?.depthWrite, ro: (tech as any).renderOrder,
+                    hd: (tech as any)._hdElevation, tech: (tech as any).technique,
+                };
+                const arr = ((globalThis as any).__mbFillStateProbe as any[]);
+                if (arr.length < 40) {
+                    arr.push(row);
+                    console.log('[MBFillState] ' + JSON.stringify(row));
                 }
             }
 

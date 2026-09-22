@@ -211,6 +211,8 @@ function main() {
             ...(process.env.MBSTYLE_ZSEC === "0" ? ["zsec=0"] : []),
             ...(process.env.MBSTYLE_FHDLEGACY ? ["fhdlegacy=1"] : []),
             ...(process.env.MBSTYLE_DASHMUL ? [`dashmul=${process.env.MBSTYLE_DASHMUL}`] : []),
+            ...(process.env.MBSTYLE_PLAINFILLDEPTH === "0" ? ["plainfilldepth=0"] : []),
+            ...(process.env.MBSTYLE_FILLSTATE ? ["fillstate=1"] : []),
             // §885 g90: mkuptwin=0 — markup lines curve-only height (no level twin).
             ...(process.env.MBSTYLE_MKUPTWIN ? [`mkuptwin=${process.env.MBSTYLE_MKUPTWIN}`] : []),
             ...(process.env.MBSTYLE_GPONE ? ["gpone=1"] : []),

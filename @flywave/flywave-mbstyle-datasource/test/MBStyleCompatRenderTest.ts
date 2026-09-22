@@ -642,6 +642,15 @@ function discoverTests(): TestEntry[] {
             a.startsWith("dashmul="))?.slice("dashmul=".length);
         if (dm !== undefined) (globalThis as any).__mbDashMul = Number(dm) || 1;
     }
+    // §885 g107: plainfilldepth=0 — plain (non-HD) fills revert to the
+    // mapview's draw-order-only semantics (no depth test).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "plainfilldepth=0")) {
+        (globalThis as any).__mbPlainFillDepth = false;
+    }
+    // §885 g107: fillstate=1 — dump final fill-material depth/blend state.
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "fillstate=1")) {
+        (globalThis as any).__mbFillStateProbe = [];
+    }
     // §885 g90: mkuptwin=0 — hd-road-markup lines drop the deck's level
     // compensation (curve-only height; the pre-g90 line height).
     const mkt = (window as any).__karma__?.config?.args?.find?.(

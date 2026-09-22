@@ -6904,3 +6904,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 工程注记**：单测 310 passing（canonical `npm test` glob 排除 *Compat*/*Render*；flywave-test-utils lib 工件已手工补 rendering re-exports——`npm run build` 会覆盖，pretest tsc 的 mapview project-ref 源错为存量问题与本轮无关）；karma 多 filter= AND 语义陷阱（多滤须逐个跑）；Chrome 大批例（>57）ping-timeout 断连须分批。
 
 **⑤ 状态**：本轮零行为改动（纯归因+对账）；repo 干净。**下轮正攻：fill-pattern 采样域合流大线（g94+g106 走廊+line-pattern 55k 三案同源）——mgl fill_pattern 的 sprite 尺寸→tile 单位换算（u_pattern_tl_{a,b}/u_pixel_coord_translation）逐字面对拍，锚 overscale/overzoom 语义，修 uMBPatternScale。**
+
+### §885 g107: g106⑤ 执行——fill-pattern 合流线开线即破案反转：走廊非 pattern 域=桥面远缘屏位短缺；mgl fill 调度语义四件套入账（2026-09-22 第十九轮）
+
+**① mgl 字面链通读（fill-pattern 域）**：`get_pattern_pos`（_prelude.vertex.glsl:89: v_pos=(units_to_pixels·pos+offset)/display_size，offset=u_pixel_coord 全局像素栅相位）+ `patternUniformValues`（pattern.ts: u_tile_units_to_pixels=tileSize·2^(z−ovZ)/EXTENT 的倒数=与瓦片屏放大精确抵消）+ fragment `textureLodCustom`（_prelude.fragment.glsl:77: LOD 取自**未取模连续坐标** v_pos 的 dFdx/dFdy，避免 mod 断导数）+ atlas `useMipmap:hasPattern`（image_atlas.ts:475）——**mipmap+显式 LOD 双机制我方 g97 已等价落地**（连续 vMBPatternUv+RepeatWrapping+generateMipmaps，patmip=1），pattern 域字面差仅剩全局像素栅相位锚（tileOrigin 锚定的相位差）。
+
+**② 走廊归因反转（关键）**：g106 的"road-hatched-area 白斑采样"定性**证伪**——逐列像素对拍（x=155, y84-131）发现走廊带 y90-103：expected=(213,208,199)（mgl only-probe 实证=road-base-bridge 桥面远缘），我方=(233,242,239)=fake-road-shade×1.09；y106-120 两引擎逐位一致（桥面本体 OK）。mgl queryRenderedFeatures 实证该点 shade features 在 road-base-bridge 之下（深度正确遮蔽）；我方 fill-state 探针（fillstate=1 新入库）实证 shade ro=1/dt=dw=true、deck ro=9.6/dt=dw=true——**材质态全对而像素不变** ⇒ 真根因=**我方桥面远缘屏位短缺（各列 0-20px：x100 +20/x155 0/x200 +5/x230 +8），草地 shade 从缺口合法透出**，g103"deck 屏位低 18-20px"残差（zsec 后仍存）。rmstyle noshade 显示 base 色≠修复证据——源级 rmstyle 改变解码路径（false lead）。
+
+**③ mgl fill 调度语义四件套（draw_fill.ts:60-119 通读）**：`fill-elevation-reference` 默认 **none**（spec v8：enum none/hd-road-base/hd-road-markup）→ fake-road-shade=平地填充；elevationType 分派 none/offset(fill-z-offset≠0)/road(reference)；road 型=opaque 主通道+**depth prepass（geometry 写深）**+translucent 通道 LEQUAL+ReadOnly 读深。我方对应落地（行为中性已验证）：①平地 fill 在 HD 场景 depthTest=true（plainfilldepth=0 回退，mapview 原 draw-order-only 语义）；②HD opaque fill 主材质补 depthWrite=true（mgl 深度由 prepass 承担，我方无全量 prepass 由主通道代偿）。A/B 八件（va/rm/ncb/b2t/guard-rail/line-pattern/islands/munich）**全部与 g106 基线逐数一致**=零回归零收益（是远缘修复后的正确性前置）。
+
+**④ 工程注记**：fillstate=1 探针（MBSTYLE_FILLSTATE）入库；lib 工件陷阱记档——**karma 经 package main 解析 lib/src，src 改动必须 tsc --build 才生效**（本轮前两次 A/B 空跑教训）；tsc --build 带 mapview src 存量 33 错但仍 emit。
+
+**⑤ 状态**：默认像素逐位不变（八件对账）；单测 310；回退旋钮 MBSTYLE_PLAINFILLDEPTH=0。**下轮正攻：①桥面远缘屏位短缺定界（y86 vs y104 带=远距 curve 采样 LOD/瓦片细分？投影远平面？）——在世界系对拍 deck 远缘顶点的双引擎屏位；②elevated-line-pattern 55k 单独开线：mgl line_pattern.vertex 的 linesofar 锚定（v_linesofar·scale）与我方 vCoords 累距的逐线对拍。**
