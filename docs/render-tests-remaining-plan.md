@@ -7209,3 +7209,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 真缺收敛（S6 核心）**：墙面/色/段全在而像素仍 shade 透出 ⇒ 隧道内部应经 **mask prepass 的 GREATER 车削孔洞**露出（§515: mask=tunnel structures+非隧道路面摊平 GREATER 车出 see-through 孔, 深度链使其读作下沉 3D 腔）——我方孔洞未生效=腔内内容被地面 shade 盖住。**S6 战役正主=mask/depth prepass 的 GREATER 车削与渲染序**（与 g119 阴影全域化/junction 残差同根深度链）。
 
 **③ 下轮**: ①mask prepass 车削对拍（§515 我方实现 vs mgl drawDepthPrepass 'reset' GREATER 相位——[MBPrepass] 遥测已有）; ②cascade-1; ③WebGL 拦截。**状态**: 探针弃置树净（tunnel-color-fd 111,975 ✓）; 单测 310。
+
+### §885 g137: g136③ 执行——mask 车削 emit 侧健康（maskN 678/843/891, underground=true 全过门）; §515 材质属性疑撞 deck 同墙（引擎实例不收 patchTile）⇒ 三线（deck 照亮/mask 车削/或更多）统一阻塞于引擎工厂（2026-09-23 第四十九轮）
+
+**① mask emit 侧对拍**：[MBPrepass] 遥测实证隧道三瓦全过门（underground=true, maskN=678/843/891, 索引集= tunnelQuads+路面三角 与 mgl reset 相位一致; 门限 minHeight<0/underground h<1 与 mgl heightMargin<1/<0 逐字面同）——**emit 侧无可指摘**。
+
+**② 材质侧墙（强嫌疑）**：mask 技术的 colorWrite=false/depthFunc GREATER/depthWrite=true 由 patchTile 的 §515 块设置——而 g125-g132 已五路实证**引擎渲染实例不收 patchTile/任何材质对象级干预**（deck 照亮五路 inert）⇒ mask 材质疑以默认状态（LessEqual+colorWrite）渲染=车削无效。**三线统一**: deck 照亮/mask 车削（S6: tunnel-color-fd+junction+阴影深度链）或更多=同一引擎工厂墙。
+
+**③ 会话战略结论（48 轮后）**：下一会话最高杠杆 = **引擎工厂/WebGL 拦截取证一击**（mapview createMaterial 渲染实例的材质属性来源+patch 注入点）——解墙后 deck 照亮(ortho ~29k)+mask 车削(S6 族 ~110k+)批量解锁; 其次 cascade-1（独立域）。
+
+**④ 状态**：零代码改动; 单测 310; 探针无新增（复用 [MBPrepass]）。
