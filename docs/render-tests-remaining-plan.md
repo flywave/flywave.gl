@@ -7049,3 +7049,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 树态验证**：实验代码全部弃置（stash drop）, 干净树 va **23,854** ✓ 复测确认; junction 24,102/line-pattern 31,447 系 g117 门控后真值（31,447→32,832 为 trunc 实验中间态, 已消）。
 
 **⑤ 状态**：零代码改动落地（纯实验+弃置轮）; 单测 310; **下轮正攻回归大账: ①整数帧规范化评估（大改, 或搁置）②转向未触梯队——double-shading-regression 99,679/wireframe 72,049/ortho-camera 71,901/tunnel-color-fd 56,646（kill-switch/oracle 工具链已成熟, 逐件定界）; ③overlay 深度语义仍挂号。**
+
+### §885 g119: g118⑤① 执行——double-shading-regression 99,679 首轮定界: 主失配=阴影覆盖率全域化（78% 帧=均匀 groundShadowFactor×bg, 单退化级联 vs mgl 双级联定点阴影）（2026-09-23 第三十一轮）
+
+**① 夹具语义**：geojson fill-extrusion(h=200 白) 为专职 casters + directional cast-shadows, pitch 75/z20.29; expected=定点阴影（路面暗带 (103,101,96)/(78,87,96)）+ 顶部 caster 墙黑色立面。
+
+**② 我方态定界**：全帧 78% (204,733 px) 为**均匀 (186,194,191)** = bg(234,243,240)×0.795 ≈ groundShadowFactor 0.8（ambient 0.8/总 1.0）——即**阴影判定全域为真**：内容/背景被整体×0.8 而非 mgl 的定点暗带。rmstyle shadow-casters 零变化 ⇒ 阴影源=道路 structures/elevated casters（非 geojson casters）。总失配 156,898（>99,679 基线系 g106 时 Chrome 断连前旧值, 本轮完整渲染真值）。
+
+**③ 通道定位（方向已明）**：mgl = 双级联阴影（u_light_matrix_0/1 + shadowed_light_factor 两级插值, draw_atmosphere 同款 frustum 系）; 我方 MBShadowRenderer 单正交Coverage 疑在高 pitch/低太阳角下罩住全场景——**修复点=级联矩阵/深度比较域对拍**（shadow_utils.calculateShadowCascades 字面）。g92"崩溃系"记载与此同域（不稳定→现为稳定但全罩）。
+
+**④ 状态**：零代码改动（纯定界）; 单测 310。**下轮正攻: ①MBShadowRenderer 级联字面化（mgl shadow_utils 双级联+两级 shadowed_light_factor）——直接攻 99,679 件+shadows 家族（junction/tunnel/underpass/roads-depth 4 件同域）; ②若级联修成, 回评 wireframe 72,049/ortho 71,901。**
