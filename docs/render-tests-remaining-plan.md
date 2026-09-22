@@ -7059,3 +7059,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 通道定位（方向已明）**：mgl = 双级联阴影（u_light_matrix_0/1 + shadowed_light_factor 两级插值, draw_atmosphere 同款 frustum 系）; 我方 MBShadowRenderer 单正交Coverage 疑在高 pitch/低太阳角下罩住全场景——**修复点=级联矩阵/深度比较域对拍**（shadow_utils.calculateShadowCascades 字面）。g92"崩溃系"记载与此同域（不稳定→现为稳定但全罩）。
 
 **④ 状态**：零代码改动（纯定界）; 单测 310。**下轮正攻: ①MBShadowRenderer 级联字面化（mgl shadow_utils 双级联+两级 shadowed_light_factor）——直接攻 99,679 件+shadows 家族（junction/tunnel/underpass/roads-depth 4 件同域）; ②若级联修成, 回评 wireframe 72,049/ortho 71,901。**
+
+### §885 g120: g119④ 执行——mgl 双级联语义全文入账; 我方接收态遥测落样; 深阴影域确认为需专项战役的大改（2026-09-23 第三十二轮）
+
+**① mgl 语义全文（_prelude_shadow.fragment.glsl 逐行）**：`shadow_occlusion` 双级联——cascade-0 界内→采样 map0; 界外且 cascade-1 界外→**occlusion 0（无阴影）**; cascade-1 界内→采样 map1 且 **view-depth 淡出** `mix(occl1, 0, smoothstep(u_fade_range))`; 偏置三式（normal/slope/receiver-plane）; 采样=sampler2DShadow 硬件比较。级联矩阵=createLightMatrix（frustum 最小球公式, 我方终五十五已移植）。
+
+**② 我方接收态落样（[MBShadowRecv], double-shading 件）**：res=(512,512) c0=(6.4e6,2.5e7,0) mT=(0.49,0.82,0.66) m00=-1.01e-2 int=1 eyeZ=12——单图 cascade-0 语义（界内即采样, 无 cascade-1 淡出段）。**g119 定性的机制闭合**：pitch 75 + 200m casters + 低太阳角下我方 cascade-0 大范围界内且深度图大面积遮挡→全域×0.8; mgl 由 cascade-1 淡出段与两级边界截断为定点暗带。**修复=cascade-1 第二深度图+界内采样+fade 段的全链新增**（第二 shadow camera/RT/接收分支）——量级=独立战役（g66-g92 已投 27 轮于阴影域, 本项为其中最大未做件）。
+
+**③ 决策**：深阴影战役单列（预期收益=double-shading 156,898 + shadows 族 4 件数十 k, 但工程量大且该族历史回归密度最高）; **短线优先回评 wireframe 72,049/ortho 71,901**（不涉阴影, kill-switch 工具链现成）。
+
+**④ 状态**：零代码改动; 单测 310。**下轮正攻: wireframe 72,049 定界（expected 语义=RENDER_CUTOFF 系? 我方 wireframe 模式对拍）→ ortho-camera 71,901（正交相机链, §571 已有 ortho 专项痕迹）。**
