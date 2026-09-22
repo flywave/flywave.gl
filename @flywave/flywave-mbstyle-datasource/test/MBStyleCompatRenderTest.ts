@@ -3241,6 +3241,10 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 mapView = new MapView({
                     canvas,
                     context: ctx ?? undefined,
+                    // §885 g129: nofrustum=0 — toggle the engine's extended
+                    // frustum culling (tile-cover A/B vs mgl coveringTiles).
+                    ...(JSON.parse((window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith('mvopts='))?.slice('mvopts='.length) ?? '{}')),
                     // mgl has no engine ground plane: the background is the
                     // CLEAR color and the background-fog quad/dome own the
                     // fog bands. The engine plane's geometry reaches above

@@ -7137,3 +7137,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 修复点（下轮首案）**：MBStyleDataSource/MapView 的瓦片请求 cover 与 mgl `coveringTiles`（viewport+pixelRatio+pitch/ortho 语义）对齐——一处修复预期联动四件（ortho 122k/wireframe/line-pattern 残差/b2t 残差）。mgl-shot tile-list 查询工具入库（g128-query.cjs）。
 
 **③ 状态**：诊断探针（[MBIdMiss]/[MBClipDrop], DECODEDBG 门控）+ 查询工具入库; 零行为改动（ortho 71,858 ✓）; 单测 310。
+
+### §885 g129: g128② 执行——覆盖缺口最终根因: 缺失瓦片=文件不存在（18-232844-103243.mvt 无此文件）且我方矢量链无祖先回退; mgl 经 z17 祖先过缩解决（2026-09-23 第四十一轮）
+
+**① 定界收口**：mvopts 旋钮入库（MapView 构造选项注入, extendedFrustumCulling=false A/B ortho 逐数不变=非裁剪域）; 请求遥测实证**引擎确有请求第 4 瓦 18/232844/103243**; 磁盘检验 **18-232844-103243.mvt 不存在**（18/23284{3,4}/10324{2,3} 四件仅存三）⇒ 我方 z18 直取 404 且**矢量链无 raster 式祖先回退**（resolveAncestor 仅 raster 分支）; mgl 以 source maxzoom 17 请求+z18 过缩——4 个 z18 overscaled 键=2×2 z17 祖先, 全部有数据。
+
+**② 修复规格（下轮实现）**：矢量 DataProvider 祖先回退——子瓦 404 时取 z17 祖先数据并以子键解码（mgl overscaledTile 语义: 数据帧=祖先 extent, 每子瓦窗口偏移; 我方 decode 链的 extents 归一化/ y 翻转需带 overscale 因子）。预期联动 ortho(122k bg)/wireframe/line-pattern 残差/b2t 残差四件。
+
+**③ 状态**：mvopts 旋钮+MBSTYLE_MVOPTS 入库（行为默认零改动, ortho 71,858 ✓）; 单测 310。
