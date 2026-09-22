@@ -6684,3 +6684,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **⑧ 下轮**：①junction 高程关联修复（g13④：hd_road_elevation 曲线归属/3d_elevation_id→level-6 关联，修好 deck 6.0 与 markup 同高，guard-rail 缺失同源）；②wireframe +1.8k 观察；③terrain 系 1.44× 白比（mgl 地形下标记贴地形链）。
 
 **⑧a g87 全族终测补遗（2026-09-22 当日晚）**：批次化后 75 件中 **70 件**在 g87 树上度量完成。新增：zLevel/tokyo-clip-lines 41,143→**31,397（−9,746）**、tunnel-enterance 42,418、tunnel-enterance-color 54,197、tunnel-separate-layer 42,418、tunnel-ortho 2,857、tooling-support 25,954、terrain-toggle-on-off 22,869、tile-border 10,728、versioning 4,669。**未度量 5 件**（shadows-double-shading-ramps-regression / shadows-double-shading-regression / shadows-roads-depth / shadows-underpass / stacked-underground-roads）：单夹具隔离 + `markupdepth=0` 完全回退双判别均于 ~5-7 分钟浏览器 DISCONNECTED——SwiftShader 马拉松环境退化（g57/g59 同型），与本轮改动无关，须冷启动后复测。
+
+### §885 g88: g87 两笔残差像素级归因——wireframe/junction 埋没定量分类（2026-09-22 第二轮）
+
+**① wireframe +1,792 归因（75,366→77,158；markupdepth=0 复测 75,534≈基线，归因成立）**：深度 ON 相对 OFF 变更像素 37,066，全部单向变暗（埋没）、零新增。分类（对 expected-white）：**GOOD 30,070（81%，本就不该画的白被正确遮挡）vs BAD 6,996（19%，expected 要的标记被埋）**。净 +1.6k ≈ BAD−GOOD 溢出。BAD 集中于结构外缘路缘标记线（deck rim）——rim 处深度写入者待查（rails g57 起 depthWrite=false；layers3D wireframe 材质亦 depthWrite=false + gl_FragDepth 前拉不写深度）。修复方向同 junction=高程关联精度，非回退深度语义。
+
+**② junction +2,572 同法定量（ab1 18,065→ab4 20,637）**：变更像素 6,903 全埋没：BAD 2,991（43%，expected 要的标记被埋）/ GOOD 3,912。BAD 主导与 wireframe 相反——证实 [MBLineHD] 探针读数（markup 解析 5.05=曲线5.0+bias，deck 走 legacy level 路径 6.0）即 g13/g14"高程 id 关联缺陷"：**同一桥面 fill 与 markup 高度域不一致（fill 走 level 补偿/线走曲线解析）**。修复=g13④ 曲线归属审计（桥多边形↔level-6 曲线关联），修好后 junction 埋没转 GOOD、护栏 5.5..6.5 同步浮现。
+
+**③ 教训**：tmp 叠加脚本必须写 alpha=255（pngjs 新建 PNG alpha 默认 0→整图透明渲染成黑，两轮误导）。探针增强后必须确认旧探针仍打点（[MBFillHD] 曾因 ringHeights 字段不存在静默 0 打点）。
+
+**④ 状态**：零渲染行为改动（纯归因+台账）；单测 310 维持。
