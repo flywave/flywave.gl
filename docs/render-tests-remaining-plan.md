@@ -7121,3 +7121,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 专案设计要素（挂号升级）**：deck 照亮需在**引擎材质工厂/refresh 侧**解决（createMaterial 输出色或 technique 色预处理 ×radiance）, 非事后 patch; 或拦截引擎的每帧色重设点。预期收益不变（ortho ~29k + 家族 deck 亮度联动）。
 
 **③ 状态**：实验全弃置, 树净（ortho 71,858 复测 ✓）; 单测 310。**下轮: ①deck radiance 专案（引擎工厂侧）; ②家族覆盖缺口（g110⑤）; ③深阴影 cascade-1 战役。**
+
+### §885 g127: g126② 执行——deck radiance 第四尝试(引擎 adapter 侧)仍 inert, 四路全灭诚实封案; 引擎工厂路径记档（2026-09-23 第三十九轮）
+
+**① 第四尝试**：MapMaterialAdapter.applyMaterialBaseColor（引擎每帧基色重置点, color.setRGB(r,g,b,SRGB)）内挂 globalThis.__mbGroundRadMul 乘法（datasource 侧逐帧发布 lighting3DState.groundRadiance, __mbGroundLitHandler 去重）——lib 构建确认含 hook, **ortho 逐数 71,858 不变, deck 暗调 raw 色依旧**。
+
+**② 四路全灭汇总（封案）**：g125 sweep onBeforeCompile 包裹 / g126 MeshBasic 色烘焙 / g126 MeshStandard 色烘焙 / g127 adapter 基色乘法——全部 inert ⇒ **deck 材质的颜色路径不经过其中任何一处**（引擎对 deck 可能有独立 material 管理线或颜色被 GLSL 侧常量/attribute 承载）。五步定界需要的下一步=**在引擎 renderer 断点/帧内直接抓 deck draw call 的 uniform 色**（渲染级取证, 非材质对象级）——工具成本高, 封案挂号。
+
+**③ 状态**：实验全弃置（含 mapview 共享包改动——未验证收益不入共享包）; 树净（ortho 71,858 ✓ 复测）; 单测 310。**下轮转向: ①家族 deck/bg 覆盖缺口（g110⑤, 收益面更大且工具就绪）; ②深阴影 cascade-1 战役; deck 照亮子项降级排队（渲染级取证为前置）。**
