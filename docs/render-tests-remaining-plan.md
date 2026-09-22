@@ -7097,3 +7097,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮首案**：正交域全链对拍——mgl isOrthographic 的 transform/camera 参数（cameraToCenterDistance/fov 替代量）与我方 MapView 正交分支数值级对照; ②白过曝源定位（emissive 0.5 线层 vs 路面）; ③lane-nav 边框线（line-border-width 路径）渲染态。
 
 **④ 状态**：零代码改动; 单测 310; 家族主线（deck/bg）与深阴影战役按挂号维持。
+
+### §885 g124: g123③ 执行——ortho-camera 反转定性: 无正交相机链缺陷; 分解=家族覆盖缺口(122k 白=背景透出)+未照亮路面子缺口(29k); groundRadiance 1.0794 数值级正确（2026-09-23 第三十六轮）
+
+**① 白过曝源定位（rmstyle 级联）**：去 background 层→白 122k→**1,101**（(72,0)→黑）⇒ 白=**背景层透出**非过曝; 我方背景渲染 (252,255,255)=style (234,243,240)×**1.0794**——与 mgl 公式一致（ambient 0.8+dir 0.5·cos40°=1.183 linear→sRGB 1.08; expected 的 (255,255,243) 10,767 px 即 mgl 同亮度背景 ✓）——**我方正交照明数值级正确**, g123②"光照因子差"定性修正。
+
+**② 路色两调真相**：expected 主调 (176,194,216)=路面色 (162,179,199)×1.0794 **正确照亮**（非 z16 插值!）; 我方 43.6k px 呈未照亮暗调（×0.88 域）⇒ ~29k px 路面漏照亮子缺口。**ortho-camera 71,901 分解=①家族 deck/bg 覆盖缺口(122k 白透出)+②漏照亮路面(~29k)+③lane-nav 边框线——无正交特有缺陷, 并入家族主线**（§571 局部补丁担忧在本层未证实）。
+
+**③ 状态**：零代码改动; 单测 310。**家族主线（deck/bg 覆盖+漏照亮）已聚拢四件同源（elevated-wireframe/ortho-camera/elevated-line-pattern/b2t 残差）——下轮首案: 漏照亮子缺口定界（哪些 fill 材质未吃 ground-radiance 链, [MBGrRad] 已证链存在）, 与覆盖缺口（g110⑤）并行。**
