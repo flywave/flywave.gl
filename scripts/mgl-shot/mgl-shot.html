@@ -18,6 +18,7 @@
     // the same mapping as the compat harness's localizeUrl.
     (async function () {
         const params = new URLSearchParams(location.search);
+        globalThis.__mbKill = params.get('kill') || '';
         const fixture = params.get('fixture');
         // Use the UPSTREAM integration root — it is self-contained (tiles,
         // glyphs, sprites match the fixture expectations, e.g. the NY tiles

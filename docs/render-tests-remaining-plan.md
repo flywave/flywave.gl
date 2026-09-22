@@ -6957,3 +6957,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 工程注记**：setPaintProperty 运行时改 opacity 会使 mgl-shot 渲染空白（不可用作 live 二分）；karma tiles 真路径记档；MBAtmos overlay 场景属性=mapView.m_scene ?? scene。
 
 **⑤ 状态**：默认逐数中性（va 27,858/rm 14,330/ncb 10,148=g106 基线）；单测 310；atmos=0 回退旋钮入库。**下轮正攻: 55k 抑制机制定界（fork 逐 pass 关断二分优先），随后视结果重开走廊/tunnel 族。**
+
+### §885 g111: g110⑤ 执行——55k 抑制机制定界闭环：elevated-structures 通道（kill-switch 四分叉收敛）（2026-09-23 第二十三轮）
+
+**① kill-switch 基建**：draw_fill.js mirror 加 `kill=flat/prepass/elevated/structs` 四关断（mgl-shot.html `?kill=` 透传, bundle rebuild dev→mapbox-gl.js）。四分叉矩阵（样本 (250,70/90/130)+(339,71/170)）：**flat=无变化 / prepass=无变化**（mgl 平地 pass 在该域零可见贡献）/ **elevated=消去 y130 桥面**（elevated fill 通道产近距路面）/ **structs=暖带全部消失→bg**（(339,71)(339,170) 的 (211,206,197)/(216,212,202) → (233,242,239)）——**抑制源=ElevatedStructures 通道**（桥墙/护栏/隧道口, 暖混凝土色系）。
+
+**② 定量**：mgl 去 structs vs expected = **30,713**（≈55k 的 30k+ 由 structures 贡献）；去 structs vs 我方 = 43,826。**我方 MBRailH 遥测实证 rails 有生成**（h=0.73-1.00 边链完整）→ 非缺失而是**覆盖/屏位/形貌差**——与 va 走廊带 (213,208,199) 同一暖色系（g107 误判为"雾/背景域"的带实为 structures 墙面, 定性第三次修正入账）+ 已知 S6 隧道墙/口合成缺口。
+
+**③ 至此 55k 案完整因果链**：expected 远带 = ElevatedStructures 暖墙/口覆盖（非雾[g110①]非 atmosphere[g110②]非 cutoff/瓦片[g110③]非 pattern[g109①]非 fill/line pass[本轮 flat/elevated kill]）——**下一主攻=structures 通道对齐**（墙/口几何与色系, 我方 rails 已在但墙/口缺或错位; MGLRailH 已有 g92-104 高度四件套基础）。
+
+**④ 工程注记**：setPaintProperty 不可用于 live 二分（g110④）; kill-switch 留库（mirror 本地, gitignored 同既往 fork 补丁惯例）; mgl-shot `?kill=` 参数入库。
+
+**⑤ 状态**：我方引擎零改动（本轮纯 oracle 侧定界）; 单测 310。**下轮正攻: structures 通道字面对齐——dump mgl drawElevatedStructures 的顶点/三角计数与色源（elevated_structures.js construct 输出）vs 我方 emitElevatedStructures, 从最大缺口件（elevated-line-pattern/va 走廊）逐 feature 对拍墙体几何。**
