@@ -7219,3 +7219,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 会话战略结论（48 轮后）**：下一会话最高杠杆 = **引擎工厂/WebGL 拦截取证一击**（mapview createMaterial 渲染实例的材质属性来源+patch 注入点）——解墙后 deck 照亮(ortho ~29k)+mask 车削(S6 族 ~110k+)批量解锁; 其次 cascade-1（独立域）。
 
 **④ 状态**：零代码改动; 单测 310; 探针无新增（复用 [MBPrepass]）。
+
+### §885 g138: 引擎工厂专案首击——technique 色烘焙（绕墙上行注入）inert: 解码在 worker（globalThis 桥不达）; adapter 确认吃 technique.color（pick(technique, attrs)）⇒ 注入点=worker 可达通道（2026-09-23 第五十轮）
+
+**① 注入点考古**：引擎链=technique → createMaterial → MapMaterialAdapter.create(material, pick(technique, automaticAttributes)) → 每帧 ensureUpdated→applyMaterialBaseColor(technique.color)——**technique.color 是确认的上行注入点**（引擎真正吃的色源）。
+
+**② 烘焙实现与 inert 定性**：datasource publish __mbGroundRadiance（applyLights 后）+ emitter 技术色 ×radiance + patchMaterial 去重门——ortho 71,858→71,871（噪声）, **暗调逐数 43,719 不变** ⇒ 烘焙未达 decode（**瓦片解码在 worker, globalThis 桥不达**——g50m"in-process"记载仅限诊断路径）。三改动全弃置。
+
+**③ 下一可行通道（下轮首案）**：①radiance 经 DecodeInfo/DecoderOptions（configure 通道, worker 可达——terrainHeightScale 先例 §289）下发给 emitter; ②或 decode 后主线程改写 techniques[i].color（decodedTile 返回前 multiply——datasource 侧 getTile 后处理, 无 worker 问题）。两者均为小改, 预期解 deck 照亮墙; mask 的 GREATER 属性仍需材质侧通道（technique 无深度属性字段, 待照亮解后评估 cast 技巧）。
+
+**④ 状态**：实验全弃置树净（ortho 71,858 ✓）; 单测 310。
