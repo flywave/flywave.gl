@@ -625,6 +625,12 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "fhdstrip=1")) {
         (globalThis as any).__mbFillHdStrip = true;
     }
+    // §885 g103: deckstrip=1 — strip the deck (hd-road-base) emission zoff
+    // only; markup fills and rails keep the legacy lift (un-buries markup
+    // lines under level-lifted decks).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "deckstrip=1")) {
+        (globalThis as any).__mbDeckStrip = true;
+    }
     // §885 g90: mkuptwin=0 — hd-road-markup lines drop the deck's level
     // compensation (curve-only height; the pre-g90 line height).
     const mkt = (window as any).__karma__?.config?.args?.find?.(

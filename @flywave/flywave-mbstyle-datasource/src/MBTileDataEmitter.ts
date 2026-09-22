@@ -2044,7 +2044,16 @@ export class MBTileDataEmitter {
                         // is vs-mgl-shared: ours-legacy vs mgl 42,792 ≈ vs
                         // expected 42,390). `fhdstrip=1` enables the strip for
                         // the placement-parity investigation.
-                        if ((globalThis as any).__mbFillHdStrip === true) {
+                        // §885 g103: deck-only strip — the legacy deck zoff
+                        // (=level) exceeds the markup lines' own stacked
+                        // curves and buries them (va corridors y≈101-107
+                        // x≈64-235 empty vs mgl oracle). Dropping ONLY the
+                        // deck emission term un-buries the lines while markup
+                        // fills/rails keep the calibrated lift. Full strip
+                        // (fhdstrip) resets for everything incl. rails.
+                        const zOffLegacy = this.m_currentZOffset;
+                        if ((globalThis as any).__mbFillHdStrip === true ||
+                            ((globalThis as any).__mbDeckStrip === true && fillElevRef === 'hd-road-base')) {
                             this.m_currentZOffset = Number(
                                 layer.paint?.['fill-z-offset'] ?? layer.layout?.['fill-z-offset'] ?? 0);
                         }
@@ -2142,7 +2151,9 @@ export class MBTileDataEmitter {
                                 // not-worse precondition everything stays
                                 // off; land the split-win pair together with
                                 // the interior-rail hide mechanism.
-                                zOffset: this.m_currentZOffset,
+                                zOffset: (globalThis as any).__mbFillHdStrip === true
+                                    ? this.m_currentZOffset
+                                    : zOffLegacy,
                             });
                         }
                         // §885 g90: curve-HIT decks KEEP the level

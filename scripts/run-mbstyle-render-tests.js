@@ -209,6 +209,7 @@ function main() {
             // §885 g89: fhdlevel=0 — strip fillHD level compensation (experiment).
             ...(process.env.MBSTYLE_FHDLEVEL ? [`fhdlevel=${process.env.MBSTYLE_FHDLEVEL}`] : []),
             ...(process.env.MBSTYLE_FHDSTRIP ? ["fhdstrip=1"] : []),
+            ...(process.env.MBSTYLE_DECKSTRIP ? ["deckstrip=1"] : []),
             // §885 g90: mkuptwin=0 — markup lines curve-only height (no level twin).
             ...(process.env.MBSTYLE_MKUPTWIN ? [`mkuptwin=${process.env.MBSTYLE_MKUPTWIN}`] : []),
             ...(process.env.MBSTYLE_GPONE ? ["gpone=1"] : []),
