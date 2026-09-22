@@ -7087,3 +7087,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 结果与定性**：elevated-wireframe 69,792→**69,783**（−9）——红色修正后**残差主体暴露为家族通用差**：我方 deck 色 (162,179,199) 处 expected=bg (233,242,239) 及反向（同 elevated-line-pattern/g110 远带语义）, 8 带均匀分布 ~12-15k/带 ⇒ 线框件收敛与家族 deck/合成主线同源, 不再独立开线。
 
 **③ 状态**：旗标门控零外溢（ncb 10,148 ✓）; 单测 310。**下轮: ortho-camera 71,901 正交链定界（§571/终四十四 ortho 痕迹+双引擎单层 probe）; 家族主线（deck/bg 覆盖域）继续按 g110⑤ 挂号。**
+
+### §885 g123: g122③ 执行——ortho-camera 71,901 定界：三向量化（白过曝 122k/10.8k; 路色倒置 z16↔z18 计数反转; lane-nav 边框线层）夹具事实入库（2026-09-23 第三十五轮）
+
+**① 夹具事实**：style `camera:{"camera-projection":"orthographic"}` + pitch 0/z19 + 第二源 route-line（line 层 line-emissive 0.5/line-border-width 5 绿蓝边框线）; operations 仅 [["wait"]]（无运行时切换——正交来自 camera 声明）。mgl 语义：transform.isOrthographic → cameraToCenter/bias/阴影全链换轨（draw_elevated_fill computeDepthBias 已见 isOrthographic 分支）。
+
+**② 三向量差**：①近白 (252,255,255) 我方 **122,030 px** vs expected 10,767（emissive 0.5 的 lane 线在我方链路过曝/或路面白片）; ②路色两调计数倒置——expected 主 (176,194,216) 88,904/(147,162,180) 16,812, 我方 59,704/43,627（**正交下照明/色插值域差**, 比值≈1.196 恒定=光照因子而非 zoom 插值）; ③diffs 79,960 全帧均匀分布。§571/终四十四 ortho 痕迹（地面接收器 unproject/阴影跳过）提示我方正交链为局部补丁非全链。
+
+**③ 下轮首案**：正交域全链对拍——mgl isOrthographic 的 transform/camera 参数（cameraToCenterDistance/fov 替代量）与我方 MapView 正交分支数值级对照; ②白过曝源定位（emissive 0.5 线层 vs 路面）; ③lane-nav 边框线（line-border-width 路径）渲染态。
+
+**④ 状态**：零代码改动; 单测 310; 家族主线（deck/bg）与深阴影战役按挂号维持。
