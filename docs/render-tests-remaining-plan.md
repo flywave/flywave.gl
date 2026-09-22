@@ -7113,3 +7113,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 修复尝试 inert 弃置（诚实记录）**：sweep 内补 radiance 包裹（colorspace_fragment 锚+__mbGroundLitHandler dedup）——ortho/ncb/va 三件逐数不变；且该注入可能先占 flag 反堵 patchMaterial 链 ⇒ 回退。**次序陷阱入库**: sweep(每帧)先于/后于 patchTile 的不确定性 + flag 单占语义 = 修复需专案设计（建议: radiance 乘法改 uniform-based per-frame refresh 而非 onBeforeCompile 竞争, 或 patchMaterial 侧对引擎实例的延迟重扫）。
 
 **③ 状态**：零代码落地（实验全弃置, 树净=ortho 71,858 复测）; 单测 310。**下轮首案: deck radiance 注入的竞争安全实现**（预期收益: ortho ~29k + 全家族 deck 亮度域一致性——g112 密墙件的 deck 亦同链, 或有联动收敛）。
+
+### §885 g126: g125③ 执行——deck radiance 两轮竞争安全尝试均 inert（引擎每帧重置材质色实锤）; 材质识别修正 MeshStandardMaterial; 专案挂号升级（2026-09-23 第三十八轮）
+
+**① 尝试与结果**：A) MeshBasicMaterial 色烘焙（per-frame color=base×radiance, 无 shader 竞争）——ortho 71,858→71,649（−209）但暗调逐像素不变; B) 扩至 MeshStandardMaterial（[MBDeckMat] 色值定位实证 deck=**MeshStandardMaterial** map=false groundLit=false, 非 Basic）——**逐数 71,857 不变, 暗调像素仍 raw 色** ⇒ **引擎每帧从 technique 重设材质色**（烘焙被覆盖）——inert 的真正机制, g125"flag 竞争"假设修正。
+
+**② 专案设计要素（挂号升级）**：deck 照亮需在**引擎材质工厂/refresh 侧**解决（createMaterial 输出色或 technique 色预处理 ×radiance）, 非事后 patch; 或拦截引擎的每帧色重设点。预期收益不变（ortho ~29k + 家族 deck 亮度联动）。
+
+**③ 状态**：实验全弃置, 树净（ortho 71,858 复测 ✓）; 单测 310。**下轮: ①deck radiance 专案（引擎工厂侧）; ②家族覆盖缺口（g110⑤）; ③深阴影 cascade-1 战役。**
