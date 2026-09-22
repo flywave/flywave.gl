@@ -6716,3 +6716,19 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 结论**：level 补偿对 fillHD deck 是**承重项**——viewport-aligned（东京，曲线解析健康的夹具）剥掉即 +21k，说明**我方曲线高度/单位与 mgl 仍存在系统性差异，补偿吸收的正是该差异**。junction 的 −613 改善不足以抵消。g88b⑤-a 候选证伪；junction 埋没的修复只剩 g88b⑤-b（跨 tile 曲线合并/单位审计：height_relative 的单位语义 mm vs m、merge 权重、local-first 策略逐项对照 mgl getElevationFeature/mergeElevationFeatures）。
 
 **③ 状态**：默认已回退（fhdlevel 旋钮反转为 =0 剥离、仅供实验），六件复核逐位恢复 g87 值（45,775/45,538/47,876/54,731/50,985/20,637）；单测 310 passing。
+
+### §885 g91: g13④ 跨 tile 曲线合并/单位审计收官——单位✓、合并语义映射、overzoom-merge 缺口定性（2026-09-22 第五轮）
+
+**① 单位审计（对照 elevation_feature_parser.ts:175-187）**：mgl v1.0.0 relative schema `decodeRelativeHeight = hr×(1/10000)×5.0 = ×0.0005`（v1.0.1 metric ×0.0001，vendored 数据用 height_relative/fixed_height_relative → v1.0.0）。我方解析一致（tokyo 探针 11.05=22000×0.0005+0.05 bias 逐项吻合）——**单位无差异，假说排除**。
+
+**② 合并语义（elevation_feature.ts:628-685 + get_elevation_feature.ts）**：mgl 合并=①所有 overlap（祖先/后代）部件按 zoom 降序；②顶点经 ElevationFeatureSampler 变换到 consumer 帧后按 curve index 去重（高层瓦片胜）；③index 相邻连边。**same-tile 命中→不合并**（tileId.equals(canonical)）。我方 resolveElevation local-first 结构等价。
+
+**③ 真根因定性：overzoom-merge 缺口**。va/夹具全在 z19.28 消费 z18 数据——mgl 侧 provider(z18)≠consumer(z19 canonical) → **永远走 merge 分支**（跨 tile 部件并集，含 fixed_height 常高部件）；我方把 z18 数据 overscale 当 z19 解码 → provider==consumer → local-first 直接返回，**从未触发合并**。后果：需要跨 tile/常高部件信息的高度在我们这里缺失或取局部切片，deck 与 markup 各自的解析在 overzoom 下不一致。g90 的 curve-miss 探针（va elevId=undefined level=2 的 flat fallback deck）即此缺口的可见症状。
+
+**④ twin 实验证伪（线侧补 level）**：mkuptwin（线加自身 featElev=level）junction ±0（线特征 level=0 而桥 polygon level=1——**vendored 数据层 level 不一致**，线的 level 无法重建 deck 抬升）、guard-rail-color +6,055/-fd +6,435、va +2,078/no-cross-beams −3,573/wireframe −1,167——净负，已回退默认（twin=0，`mkuptwin=<f>` 旋钮留作实验）。
+
+**⑤ 累计实验矩阵（本轮 g89/g90/g91 三连）**：deck 剥 level（全量/g89）=va+21k✗；deck 剥 level（仅 curve-hit/g90）=va+19k✗；线补 level（g91）=guard-rail+6k✗。三向否定收敛：** Compensation 必须保留（deck 侧），线的相干抬升不能靠 line-level 重建——唯一出路=实现 overzoom 跨 tile 曲线合并（③），使 deck 高度回归纯曲线（mgl 字面）后 deck/markup 自然同域。**
+
+**⑥ 状态**：默认渲染行为回 g87（twin=0）；单测 310；tsc 干净。下轮首案：实现 provider(真实 z18)≠consumer 的 registry 合并路径（对齐 getOverlappingElevationParts 的 isChildOf 空间过滤 + zoom 降序 index 去重），A/B va curve-miss 探针（elevId=undefined level=2 的 deck 应 resolve 而非 flat）→ 届时再剥 comp。
+
+**⑥a shadows 系冷启动补测结果（g91 树，逐件独立批次）**：shadows-roads-depth 2,480→**1,176（−1,304 ✓）**、stacked-underground-roads 38,532→**38,496（持平 ✓）**、shadows-underpass 128,359→**130,483（+2,124，g81 已定性主源=语料库覆盖洞，幅度在已知行为内）**。shadows-double-shading-ramps-regression/-regression 双件：今日 5 次尝试（含冷启动/单夹具/15min 超时预算）均于 ~5.5min 浏览器 DISCONNECTED——且 mb-fam-align0（g66 基线）即无此二件（当时已崩），**无基线可归因、非本轮引入**，遗留为环境/夹具固有稳定性问题（巨型 shadow caster 集）。

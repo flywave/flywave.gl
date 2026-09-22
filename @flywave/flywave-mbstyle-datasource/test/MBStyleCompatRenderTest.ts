@@ -615,6 +615,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "fhdlevel=0")) {
         (globalThis as any).__mbFillHdLevel = false;
     }
+    // §885 g90: mkuptwin=0 — hd-road-markup lines drop the deck's level
+    // compensation (curve-only height; the pre-g90 line height).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "mkuptwin=0")) {
+        (globalThis as any).__mbMarkupTwin = false;
+    }
     // §885 g78: extshadowh=1 — drop the §294 sec(lat) extra height factor.
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "extshadowh=1")) {
         (globalThis as any).__mbExtShadowH = true;

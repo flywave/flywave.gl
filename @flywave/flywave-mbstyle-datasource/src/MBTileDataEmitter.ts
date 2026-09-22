@@ -1911,12 +1911,12 @@ export class MBTileDataEmitter {
             geometry.length > 0 && geometry[0].rings.length > 0 && geometry[0].rings[0].length > 0
                 ? { x: geometry[0].rings[0][0].x, y: geometry[0].rings[0][0].y }
                 : undefined, fillHdMode);
-            // §885 g89: the level compensation here is LOAD-BEARING for the
-            // fillHD deck — stripping it (mgl-purist "curve IS the height")
-            // exploded viewport-aligned +21k / guard-rail +11-21k (the curve
-            // heights/units still differ from mgl's; the compensation absorbs
-            // that). Junction alone improved −613. Default keeps the lift;
-            // `fhdlevel=0` strips it for experiments.
+            // §885 g89/g90: the resolveZOffset level compensation is only
+            // load-bearing as the FLAT-FALLBACK height for curve-MISS decks
+            // (stripping it everywhere collapsed va +21k — those features'
+            // level meters are their only height). Curve-HIT decks get the
+            // compensation stripped AFTER the plan resolves (below) — mgl
+            // never adds level to sampled curve heights.
             if (fillHdMode &&
                 (globalThis as any).__mbFillHdLevel === false) {
                 this.m_currentZOffset = 0;
@@ -2011,9 +2011,18 @@ export class MBTileDataEmitter {
                     // emitted vert count (3d-intersections deck hairline triage).
                     if ((globalThis as any).__mbDecodeDbg) {
                         let planVerts = 0;
-                        if (plan) for (const piece of plan.pieces) planVerts += piece.ring.length;
+                        let hMin = Infinity, hMax = -Infinity;
+                        if (plan) {
+                            for (const piece of plan.pieces) {
+                                planVerts += piece.ring.length;
+                                for (const h of piece.heights) {
+                                    if (h < hMin) hMin = h;
+                                    if (h > hMax) hMax = h;
+                                }
+                            }
+                        }
                         // eslint-disable-next-line no-console
-                        console.log(`[MBFillHD] layer=${layer.id} ref=${fillElevRef} plan=${plan ? 'yes' : 'NO'} pieces=${plan?.pieces?.length ?? 0} planVerts=${planVerts} ring0=${effectiveRings[0]?.length ?? 0} elevId=${JSON.stringify(properties?.['3d_elevation_id'])}`);
+                        console.log(`[MBFillHD] layer=${layer.id} class=${properties?.['class']} ref=${fillElevRef} plan=${plan ? 'yes' : 'NO'} pieces=${plan?.pieces?.length ?? 0} planVerts=${planVerts} ring0=${effectiveRings[0]?.length ?? 0} elevId=${JSON.stringify(properties?.['3d_elevation_id'])} level=${JSON.stringify(properties?.['level'])} zoff=${this.m_currentZOffset} h=${plan && plan.pieces.length ? `${hMin.toFixed(2)}..${hMax.toFixed(2)}` : '-'}`);
                     }
                     if (plan && yDelta) {
                         const back = (rs: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> =>
@@ -2111,6 +2120,12 @@ export class MBTileDataEmitter {
                                 zOffset: this.m_currentZOffset,
                             });
                         }
+                        // §885 g90: curve-HIT decks KEEP the level
+                        // compensation — stripping it exploded va +19k /
+                        // guard-rail +10-21k even hit-only (the vendored
+                        // expected renders decks at curve+level; g89/g90
+                        // A/B twice). The markup-line twin below adds the
+                        // SAME compensation so lines ride their decks.
                         let maxH = 0;
                         for (const piece of plan.pieces) {
                             for (const h of piece.heights) if (h > maxH) maxH = h;
@@ -3742,12 +3757,30 @@ export class MBTileDataEmitter {
                   layer.layout?.['line-z-offset'] ??
                   layer.paint?.['line-z-offset'] ?? 0)
                 : null;
-            this.m_currentZOffset = (useHdRoad || useZOffsetMode || lineTerrainFlat)
-                ? 0
-                : this.resolveZOffset(layer, properties, 'line',
-                    geometry.length > 0 && geometry[0].positions.length > 0
-                        ? { x: geometry[0].positions[0].x, y: geometry[0].positions[0].y }
-                        : undefined);
+            // §885 g90/g91: hd-road-markup lines share the deck's height
+            // domain — the vendored expected renders BOTH deck and markup at
+            // curve+level (g89/g90 A/B: stripping the fill-side level comp
+            // exploded va +19k / guard-rail +10-21k even curve-hit-only).
+            // The deck keeps curve+level. The line-side twin via the LINE
+            // feature's own `level` was tried and REVERTED (g91): vendored
+            // lines carry level=0 while their decks carry 1-3 (data-level
+            // inconsistency) — the twin lifted nothing where needed and
+            // mislifted elsewhere (guard-rail +6k). Lines stay curve-only
+            // (pre-g90); the coherent fix = the overzoom cross-tile curve
+            // merge (g91 audit), which makes deck heights pure-curve like
+            // mgl. `mkuptwin=<f>` scales an experimental twin lift.
+            this.m_currentZOffset = (useHdRoad)
+                ? ((globalThis as any).__mbMarkupTwin
+                    ? Number(properties?.elevation ??
+                        properties?.height ?? properties?.z ??
+                        properties?.level ?? 0)
+                    : 0)
+                : (useZOffsetMode || lineTerrainFlat)
+                    ? 0
+                    : this.resolveZOffset(layer, properties, 'line',
+                        geometry.length > 0 && geometry[0].positions.length > 0
+                            ? { x: geometry[0].positions[0].x, y: geometry[0].positions[0].y }
+                            : undefined);
             this.noteGeometryHeight(this.m_currentZOffset);
 
             for (let __pathIdx = 0; __pathIdx < linePaths.length; __pathIdx++) {
