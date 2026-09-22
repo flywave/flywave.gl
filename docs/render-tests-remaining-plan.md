@@ -6782,3 +6782,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② A/B（九件，mtime 新鲜）**：no-cross-beams 39,149→**34,907（−4,242 ✓✓）**；va 45,775→45,867（+92）/va-text +170/va-terrain +120/junction −23——噪声级；wireframe 77,158→77,165/guard-rail-color 54,731/-fd 50,985/munich-close 46,639——逐位持平。**净 −4,067，零实质回归**。va/va-terrain 白比的碎斑成分随周期回归 mgl 尺寸减轻（碎斑面积减半）但白比计数未显著收敛（碎斑非白比主源的结论维持，g95）。
 
 **③ 状态**：单测 310 passing；tsc 干净；patMul=1 落默认（patternmul 旋钮保留）。注：g52x 时代的 ×2 校准（junction weave 视觉匹配）早于 g87 markup 深度重构，本轮 A/B 证伪——junction 在 patMul=1 下持平微改善。
+
+### §885 g97: 图案纹理 mipmap mgl 字面化——SwiftShader 像素中性定性 + 采样链字面对照收官（2026-09-22 第九轮）
+
+**① mgl 字面证据链**：pattern atlas 上传 `useMipmap: hasPattern`（image_atlas.ts:475）→ texture.ts minFilter=LINEAR_MIPMAP_LINEAR+generateMipmap（:112-126）；shader 侧 `textureLodCustom`（_prelude.fragment.glsl:77）以**连续未取模坐标**（lod_pos=v_pos）导数算 LOD——因 `mod(v_pos,1.0)` 破坏导数。我方等价性核验：per-sprite 纹理已用连续 vMBPatternUv + RepeatWrapping（derivatives 天然连续=textureLodCustom 的免费等价），**唯一缺口=min 链**。落地：extractPatternTexture minFilter LinearFilter→LinearMipmapLinearFilter+generateMipmaps（MBMaterialPatchManager.ts:6387-6401），`patmip=<0|1>` 旋钮（MBSTYLE_PATMIP 透传）。
+
+**② A/B（13 件，Chrome 149 headless-shell 本机基线自洽）**：patmip=0/1 全部**逐位相同**（va 42,390/ncb 35,065/junction 19,025/tunnel 52,973 等）；patternmul=2 强制 4 texel/px 下 mip 开关仍逐位相同。PATTEX 探针实证纹理确以 minFilter=1008+genMip=true 创建（knob 生效、非管线旁路）。
+
+**③ 根因判别（raw WebGL2 最小复现）**：headless-shell/ANGLE-Vulkan-SwiftShader 下 POT/NPOT（含 40×40）mipmap 均**工作正常**（25% duty 条纹 LOD≥2 时 64 平均 vs 无 mip 的 128/0 振荡）——GL 栈排除。结论：**夹具分辨率下 hatch 采样 LOD≤0（放大态）**，g94② 的"minification aliasing"定性在本夹具族不成立为白比源（与 g95 的 patternmul 扫描否定互证——图案尺度轴整体非白比主源）。
+
+**④ 状态**：mipmap 保持 mgl 字面默认（`patmip=0` 回退旋钮保留）；零像素回归（逐位中性）；单测 310 passing；lib emit 含新代码。g94④ 修复方向（uMBPatternScale overzoom 语义）经 g96（period 字面化）+ g97（min 链字面化）+ g95（尺度扫描否定）三向收官：**图案采样链对 mgl 已字面对齐，va 白比主源回归 g95② 的 level 域阻塞项（expected-generator 语义，挂号中）**。

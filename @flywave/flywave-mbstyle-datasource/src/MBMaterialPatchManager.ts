@@ -6388,7 +6388,23 @@ const mbGroundDual = (globalThis as any).__mbGroundLitDual === true ? 1 : 0;
             tex.wrapS = THREE.RepeatWrapping;
             tex.wrapT = THREE.RepeatWrapping;
             tex.magFilter = THREE.LinearFilter;
-            tex.minFilter = THREE.LinearFilter;
+            // §885 g97: mgl uploads the pattern atlas with useMipmap=true
+            // (image_atlas.ts:475 → texture.ts LINEAR_MIPMAP_LINEAR +
+            // generateMipmap) and samples it through textureLodCustom — the
+            // LOD derived from the CONTINUOUS (unwrapped) coordinate, since
+            // mod(v_pos,1) breaks derivatives. Our per-sprite texture
+            // already samples a continuous vMBPatternUv with RepeatWrapping,
+            // which gives the same continuous derivatives natively — only
+            // the mip chain was missing, and its absence minified the hatch
+            // into per-pixel speckle (g94②). `patmip=0` reverts.
+            const patMip = Number((globalThis as any).__mbPatMip ?? 1) || 1;
+            if (patMip === 1) {
+                tex.generateMipmaps = true;
+                tex.minFilter = THREE.LinearMipmapLinearFilter;
+            } else {
+                tex.generateMipmaps = false;
+                tex.minFilter = THREE.LinearFilter;
+            }
             tex.needsUpdate = true;
             (tex as any).__mbHasAlpha = hasAlpha;
             patternTextureCache.set(patternName, tex);

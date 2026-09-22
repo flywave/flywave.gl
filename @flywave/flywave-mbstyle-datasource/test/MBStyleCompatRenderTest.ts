@@ -236,6 +236,11 @@ function discoverTests(): TestEntry[] {
         if (pm !== undefined) (globalThis as any).__mbPatternMul = Number(pm) || 1;
     }
     {
+        const pmi = (window as any).__karma__?.config?.args?.find?.((a: string) =>
+            a.startsWith("patmip="))?.slice("patmip=".length);
+        if (pmi !== undefined) (globalThis as any).__mbPatMip = Number(pmi) || 1;
+    }
+    {
         const sk = (window as any).__karma__?.config?.args?.find?.((a: string) =>
             a.startsWith("shadowkappa="))?.slice("shadowkappa=".length);
         if (sk !== undefined) (globalThis as any).__mbShadowKappa = Number(sk) || 1;

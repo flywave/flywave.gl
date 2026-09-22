@@ -136,6 +136,7 @@ function main() {
             ...(process.env.MBSTYLE_PREPASSDBG ? ["prepassdbg=1"] : []),
             ...(process.env.MBSTYLE_PREPASSOFF ? ["prepassoff=1"] : []),
             ...(process.env.MBSTYLE_PATTERNMUL ? [`patternmul=${process.env.MBSTYLE_PATTERNMUL}`] : []),
+            ...(process.env.MBSTYLE_PATMIP ? [`patmip=${process.env.MBSTYLE_PATMIP}`] : []),
             ...(process.env.MBSTYLE_SHADOWKAPPA ? [`shadowkappa=${process.env.MBSTYLE_SHADOWKAPPA}`] : []),
             ...(process.env.MBSTYLE_SHARREF ? ["sharref=1"] : []),
             ...(process.env.MBSTYLE_PREPASSZ ? [`prepassz=${process.env.MBSTYLE_PREPASSZ}`] : []),
