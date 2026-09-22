@@ -7201,3 +7201,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮首案（纯接线, 快）**：追 tunnelSections 从 construct() 传参到 mesh.tunnelSections 的赋值链（mesh 组装处), 修复后 A/B tunnel-color-fd + S6 族（b2t/junction）。
 
 **④ 状态**：探针弃置树净（tunnel-color-fd 111,975 ✓）; 单测 310。
+
+### §885 g136: g135③ 执行——g135"接线断裂"证伪（探针上限伪影）: 隧道 sections 全链健康（29/49/59 段含索引）; 真缺=S6 透视 mask 孔洞（GREATER prepass 车削）未生效（2026-09-23 第四十八轮）
+
+**① 接线追查**：[MBSegCount]（探针置于 sectionIndices 过滤**之后**——修正 g134 探针位于 continue 之前+8 行上限的双重伪影）：tunnel sections 逐瓦 **29/49/59 段全部非空**、色解析健康——**g134/g135"隧道段空/接线断裂"两定性均系探针伪影, 修正**。隧道墙+数据驱动色 emit 全链无断点。
+
+**② 真缺收敛（S6 核心）**：墙面/色/段全在而像素仍 shade 透出 ⇒ 隧道内部应经 **mask prepass 的 GREATER 车削孔洞**露出（§515: mask=tunnel structures+非隧道路面摊平 GREATER 车出 see-through 孔, 深度链使其读作下沉 3D 腔）——我方孔洞未生效=腔内内容被地面 shade 盖住。**S6 战役正主=mask/depth prepass 的 GREATER 车削与渲染序**（与 g119 阴影全域化/junction 残差同根深度链）。
+
+**③ 下轮**: ①mask prepass 车削对拍（§515 我方实现 vs mgl drawDepthPrepass 'reset' GREATER 相位——[MBPrepass] 遥测已有）; ②cascade-1; ③WebGL 拦截。**状态**: 探针弃置树净（tunnel-color-fd 111,975 ✓）; 单测 310。
