@@ -6462,24 +6462,25 @@ const mbGroundDual = (globalThis as any).__mbGroundLitDual === true ? 1 : 0;
             : undefined;
 
         // Pattern tile size in world units. mgl tiles fill patterns at a
-        // SCREEN-CONSTANT size (displaySize = sprite px / pixelRatio in CSS
-        // px at every zoom — fill_pattern.vertex.glsl scales the pattern by
-        // the current zoom's pixels-per-tile-unit). The old
-        // spritePr/width uv (tile = displaySize in raw local units ≈ meters)
-        // was zoom-invariant: at z21 the hatch markup tile rendered ~27×
-        // oversize — the fine crosshatch smeared into broad white streaks.
-        // Convert displaySize px → meters with the current zoom's
-        // meters-per-pixel (same formula as the line-translate path).
+        // SCREEN-CONSTANT size: fill_pattern.vertex glsl `v_pos =
+        // get_pattern_pos(u_pixel_coord_*, display_size,
+        // u_tile_units_to_pixels, pos)` with display_size =
+        // (pattern_br−pattern_tl)/pixel_ratio (sprite cell px / pr) and
+        // u_tile_units_to_pixels = 1/pixelsToTileUnits(tile,1,tileZoom) =
+        // tileSize×2^(tileZoom−overscaledZ)/EXTENT — the overscale factor
+        // and the tile magnification cancel, so the on-screen period is
+        // display_size at EVERY zoom (pattern.ts patternUniformValues).
         const spriteInfo = (this.m_dataSource as any).spriteAtlas?.icons?.get(technique._patternName);
         const spritePr = Math.max(1, Number(spriteInfo?.pixelRatio ?? 1) || 1);
         const mapViewP = (this.m_dataSource as any).mapView;
         const dZoomP = mapViewP?.zoomLevel ?? 1;
         const mppP = EarthConstants.EQUATORIAL_CIRCUMFERENCE /
             (256 * Math.pow(2, dZoomP));
-        // §885 g52x/g52y: DEFAULT 2.0 — the mpp-at-engine-zoomLevel formula
-        // leaves the tile 2× fine vs mgl (junction weave visual match at
-        // ×2; 18,161 vs 18,152 counts are noise). patternmul recalibrates.
-        const patMul = Number((globalThis as any).__mbPatternMul ?? 2) || 2;
+        // §885 g95: the g52x patMul=2 fudge (junction weave, pre-g87 depth
+        // rework) halved the period to 10px vs mgl's 20px — at va/va-terrain
+        // the fine hatch minified into per-pixel speckle. Default 1 =
+        // mgl-literal; patternmul=<f> rescales for experiments.
+        const patMul = Number((globalThis as any).__mbPatternMul ?? 1) || 1;
         const tileScale = patMul * spritePr /
             (Math.max(1, (tex.image?.width ?? 32)) * Math.max(mppP, 1e-9));
         const origOnCompile = material.onBeforeCompile;

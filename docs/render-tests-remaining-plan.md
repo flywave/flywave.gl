@@ -6774,3 +6774,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② terrain 白比 9.5k 过剩的最终定性**：蓝（expected-only）6,175 的存在证明 expected 在 deck 上画 markup 而我方该域缺失；我方 terrain markup 走 draw-order 全画 → 红蓝相抵后的净差 = 线/deck level 域差（deck=曲线+comp 1-3m，line=纯曲线+0.05，线特征自身 level=0 无法重建 deck 的 comp——g91④ 数据不一致实锤）。**三条修复路线全部需要 expected-generator 的高度域语义**（g92① oracle 146.5k 发散不可得）：a) deck 剥 comp → va/guard-rail +19-21k ✗（g89/g90）；b) 线 twin by line.level → 数据不允许 ✗（本轮）；c) overzoom merge → 无像素效应 ✗（g91③）。**定界为阻塞项**：除非获得 expected-generator 的高度语义（mgl 版本考证或官方数据），任何单侧改动都会破坏另一侧。
 
 **③ 状态**：零行为改动（patternmul 经旋钮扫描、未落默认）；单测 310；tsc 干净。terrain 贴地链（g93）保持——对真实高程 terrain 生效。**本阻塞项的合法解锁路径**：①找到 expected-generator 的 mgl fork 源码考证 zLevel 活性语义；②或用 mgl-shot 在 junction/va 上做 zLevel 单变量二分（需 vendored mgl 的 zLevel 活性 fork——当前 vendored 为死参，fork 成本高）；③或官方澄清 height_relative 与 level 的关系。在解锁前，3d-intersections 家族的 markup/deck 高度域维持现状（deck=曲线+comp 为经验最优）。
+
+### §885 g96: uMBPatternScale mgl 字面化落地（patMul 2→1）——no-cross-beams −4.2k、其余噪声级（2026-09-22 第八轮）
+
+**① 公式实现（fill_pattern.vertex + pattern.ts 字面）**：mgl period = display_size = sprite cell px/pixelRatio（**屏幕常量**——u_tile_units_to_pixels = tileSize×2^(tileZoom−overscaledZ)/EXTENT 的 overscale 因子与瓦片放大相互抵消，pattern.ts:35-52 + pixels_to_tile_units.ts）。我方现行 period_px = texWidth/(patMul×spritePr)——hatch sprite 40×40@2x 下 patMul=2 → 10px vs mgl 20px（细一倍）。落地：patMul 默认 2→1（公式结构不变，`patternmul=<f>` 旋钮保留）。
+
+**② A/B（九件，mtime 新鲜）**：no-cross-beams 39,149→**34,907（−4,242 ✓✓）**；va 45,775→45,867（+92）/va-text +170/va-terrain +120/junction −23——噪声级；wireframe 77,158→77,165/guard-rail-color 54,731/-fd 50,985/munich-close 46,639——逐位持平。**净 −4,067，零实质回归**。va/va-terrain 白比的碎斑成分随周期回归 mgl 尺寸减轻（碎斑面积减半）但白比计数未显著收敛（碎斑非白比主源的结论维持，g95）。
+
+**③ 状态**：单测 310 passing；tsc 干净；patMul=1 落默认（patternmul 旋钮保留）。注：g52x 时代的 ×2 校准（junction weave 视觉匹配）早于 g87 markup 深度重构，本轮 A/B 证伪——junction 在 patMul=1 下持平微改善。
