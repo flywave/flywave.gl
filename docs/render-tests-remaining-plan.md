@@ -7155,3 +7155,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ ortho 真残差重定界**：71,858 − (mgl 同源差 865) ≈ 我方 vs 双引擎差: 漏照亮 deck ~29k（g125 封案项, 渲染级取证前置）+ lit-tone 计数差余量 ~30k 域 + lane-nav 线——**回到 g125 主线**, tile 域关闭。
 
 **④ 状态**：祖先回退落库（inert 保留, 单测 310）; 网络日志工具（mgl-shot 响应监听）入库。**下轮: ①渲染级 draw-call 取证（deck uniform 色——g125 前置, 现为 ortho 主残差）; ②阴影 cascade-1 战役; ③tunnel-color-fd 56,646 未触。**
+
+### §885 g131: g130③ 执行——渲染级取证第一击: deck 材质实况=MeshStandard+5123 字符预存 onBeforeCompile（structure-lighting 链含 origOnCompile 级联）, 四级注入全绕过的机制收窄（2026-09-23 第四十三轮）
+
+**① 取证落样（[MBDeckF] 探针）**：ortho 扫描中 hex=a3b4c8 的 deck 材质：type=MeshStandardMaterial, shInj=**false**, gLit=false, **onBeforeCompile 长度 5123 且含 uMB3DAmb/`__mbStructPow`/origOnCompile 级联**（=injectStructure3DLighting 家族的链）, 自带 customProgramCacheKey。
+
+**② 机制假说收窄**：deck 材质已被 structure-lighting 链包裹（其 origOnCompile 级联可能吞掉/前置了后续注入的锚点替换——后到 wrap 在已被改写的 shader 字符串上找不到 `#include <opaque_fragment>`/colorspace 锚=替换静默失败）; 且 shInj=false=连 shadow 链也未及（扫描时序）——**"引擎每帧重置色"（g126）与"flag 竞争"（g125）两假设均被此实况取代/细化: 真相=deck 材质的 shader 字符串已被第一条链改写到锚点失配**。
+
+**③ 下轮修复路径（明确）**：radiance 乘法作为 structure-lighting 链的**同链追加**（在其 wrap 内部直接乘, 非事后独立锚）——找到该 5123 链的注册点（injectStructure3DLighting 或其对 deck 的误挂）, 在同处补 `×groundRadiance`; 或先查为何 deck 材质挂了 structure 链（`__elev` 误判?）。
+
+**④ 状态**：探针弃置（数据已入库, DECODEDBG 版保留于 g131 会话记录）; 树净（ortho 71,858 ✓）; 单测 310。**下轮: ①structure 链注册点追查+同链 radiance 追加（ortho ~29k 主线）; ②阴影 cascade-1; ③tunnel-color-fd。**
