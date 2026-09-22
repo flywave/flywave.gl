@@ -7079,3 +7079,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 残差（69,792 挂号）**：红色亮度（我方 (216,14,15) vs exp (251,19,18)≈近全红——mgl 预乘/alpha 语义或双绘）+ 定位（少量我方红处 exp 无——WireframeGeometry 边去重 vs mgl 逐三角边重复绘的密度差）。
 
 **④ 状态**：单测 310。**下轮: ①wireframe 残差（红亮度=预乘混合字面; 密度=WireframeGeometry→逐三角边 index）; ②ortho-camera 71,901 正交链定界。**
+
+### §885 g122: g121④ 执行——wireframe 红色双绘语义破译并落库（预乘(0.7,0,0,0.7)×2=期望(251,19,18)近全红之解）; 残差主体确证=家族通用 deck/bg 覆盖差非线框域（2026-09-23 第三十四轮）
+
+**① 红色亮度闭环（数学破译）**：期望 (251,19,18) ≈ (254,22,22) = **两遍**预乘 (0.7,0,0,0.7) over 内容（178+0.3·(178+0.3·dst)）——mgl structures 同一 indexBuffer 分 bridge/tunnel 两段绘制, wireframe hook 每次绘制都触发=双绘。落库：逐三角边 index（3 线/三角不去重, 弃 WireframeGeometry 去重）+ 双 LineSegments 附加。
+
+**② 结果与定性**：elevated-wireframe 69,792→**69,783**（−9）——红色修正后**残差主体暴露为家族通用差**：我方 deck 色 (162,179,199) 处 expected=bg (233,242,239) 及反向（同 elevated-line-pattern/g110 远带语义）, 8 带均匀分布 ~12-15k/带 ⇒ 线框件收敛与家族 deck/合成主线同源, 不再独立开线。
+
+**③ 状态**：旗标门控零外溢（ncb 10,148 ✓）; 单测 310。**下轮: ortho-camera 71,901 正交链定界（§571/终四十四 ortho 痕迹+双引擎单层 probe）; 家族主线（deck/bg 覆盖域）继续按 g110⑤ 挂号。**

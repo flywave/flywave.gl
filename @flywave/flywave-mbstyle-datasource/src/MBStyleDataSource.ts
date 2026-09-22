@@ -4493,18 +4493,35 @@ export class MBStyleDataSource extends TileDataSource {
                 }
                 if (!obj.geometry?.attributes?.position) return;
                 obj.userData.__mbWfDone = true;
+                // §885 g122 (mgl literal): per-TRIANGLE edge indices (3
+                // lines per triangle, duplicates kept — WireframeGeometry
+                // dedups shared edges) and the lines are added TWICE: mgl
+                // draws the structures index buffer once per segment pass
+                // (bridges then tunnels), the wireframe hook firing on each
+                // → double composite (expected's near-full red (251,19,18)
+                // = two premultiplied (0.7,0,0,0.7) passes over the deck).
                 let wf: THREE.LineSegments;
                 try {
-                    wf = new THREE.LineSegments(
-                        new THREE.WireframeGeometry(obj.geometry),
-                        wireframeMaterial
-                    );
+                    const idx = obj.geometry.index;
+                    if (!idx) return;
+                    const lines: number[] = [];
+                    for (let i = 0; i + 2 < idx.count; i += 3) {
+                        const a = idx.getX(i), b = idx.getX(i + 1), c = idx.getX(i + 2);
+                        lines.push(a, b, b, c, c, a);
+                    }
+                    const g2 = new THREE.BufferGeometry();
+                    g2.setAttribute('position', obj.geometry.attributes.position);
+                    g2.setIndex(lines);
+                    wf = new THREE.LineSegments(g2, wireframeMaterial);
                 } catch {
                     return;
                 }
                 wf.renderOrder = 9999;
                 wf.userData.__mbWfOverlay = true;
                 obj.add(wf);
+                const wf2 = wf.clone();
+                wf2.userData.__mbWfOverlay = true;
+                obj.add(wf2);
             });
         };
         this.mapView.addEventListener(
