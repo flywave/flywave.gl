@@ -651,6 +651,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "fillstate=1")) {
         (globalThis as any).__mbFillStateProbe = [];
     }
+    // §885 g108: fhdmislegacy=1 — curve-MISS HD fills restore the
+    // level-meter flat fallback (pre-g108 behavior).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "fhdmislegacy=1")) {
+        (globalThis as any).__mbFillHdMissLegacy = true;
+    }
     // §885 g90: mkuptwin=0 — hd-road-markup lines drop the deck's level
     // compensation (curve-only height; the pre-g90 line height).
     const mkt = (window as any).__karma__?.config?.args?.find?.(

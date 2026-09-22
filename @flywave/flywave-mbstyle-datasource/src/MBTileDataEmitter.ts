@@ -2175,6 +2175,33 @@ export class MBTileDataEmitter {
                     // No curve for this feature → renders flat (mgl:
                     // "elevated-mode features with no tiled elevation
                     // coverage render flat rather than being dropped").
+                    // §885 g108 (mgl literal): the flat draw is the PLAIN
+                    // non-elevated one (fill_bucket.js addFeature:
+                    // consumedByHD=false → addGeometry into plain buffer)
+                    // — its z is fill-z-offset ONLY. The resolveZOffset
+                    // fallback's `level` meters must NOT lift it (a MISS
+                    // level-3 bridge at +3m instead of z=0 is the va
+                    // corridor far-band shortfall). Level-0 keeps the
+                    // 0.05/0.1 ground z-fight guards (mgl resolves
+                    // coplanar fills via its stencil machinery; we don't —
+                    // A/B guard-rail-color +3.9k without them).
+                    // `fhdmislegacy=1` restores the level-meter fallback.
+                    if ((globalThis as any).__mbFillHdMissLegacy !== true) {
+                        const missLevel = Number(properties?.['level'] ?? 0) || 0;
+                        if (missLevel !== 0 ||
+                            fillElevRef === 'hd-road-markup') {
+                            // Level≠0: mgl literal plain draw (z=0).
+                            // Level-0 markup: also z=0 — mgl's markup bias
+                            // only exists on the ELEVATED path (bias const in
+                            // fill_hd_extension), and A/B va −3.5k /
+                            // b2t −3.6k. Level-0 hd-road-base keeps the
+                            // 0.05 z-fight guard (guard-rail-color +3.9k
+                            // without it — our coplanar resolution still
+                            // lacks mgl's stencil machinery).
+                            this.m_currentZOffset = Number(
+                                layer.paint?.['fill-z-offset'] ?? layer.layout?.['fill-z-offset'] ?? 0);
+                        }
+                    }
                 }
 
                 // Use earcut for proper polygon triangulation with hole support

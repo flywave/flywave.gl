@@ -6916,3 +6916,18 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 工程注记**：fillstate=1 探针（MBSTYLE_FILLSTATE）入库；lib 工件陷阱记档——**karma 经 package main 解析 lib/src，src 改动必须 tsc --build 才生效**（本轮前两次 A/B 空跑教训）；tsc --build 带 mapview src 存量 33 错但仍 emit。
 
 **⑤ 状态**：默认像素逐位不变（八件对账）；单测 310；回退旋钮 MBSTYLE_PLAINFILLDEPTH=0。**下轮正攻：①桥面远缘屏位短缺定界（y86 vs y104 带=远距 curve 采样 LOD/瓦片细分？投影远平面？）——在世界系对拍 deck 远缘顶点的双引擎屏位；②elevated-line-pattern 55k 单独开线：mgl line_pattern.vertex 的 linesofar 锚定（v_linesofar·scale）与我方 vCoords 累距的逐线对拍。**
+
+### §885 g108: g107⑤① 执行——curve-MISS 平地 z 字面化三段式定界（+3.7k 潜益与 grc −3.9k 抵消，落安全中性态）+ 走廊残留=我方无覆盖多边形（跨瓦片 elevation registry 缺口）（2026-09-23 第二十轮）
+
+**① mgl 字面锚（fill_bucket.js:131）**：`consumedByHD = hdExt.handleFeature(...)` 为 false（curve MISS/elevId 无命中）→ `addGeometry` 进**普通平地 buffer**，z=fill-z-offset 唯一来源——resolveZOffset 的 level 米 fallback 是我方自创。getElevationFeature（get_elevation_feature.ts）按 `3d_elevation_id` 严格匹配：同瓦片 sameTileFeatures → **跨瓦片 registry**（二分+tile key 精确匹配）。
+
+**② 三段式 A/B（va/b2t/grc/rm 四件对拍）**：
+- 全 MISS→z0（level≠0 桥 + level0 markup 0.1→0 + level0 road 0.05→0）：va 27,858→**24,305**（−3,553）/b2t 36,126→**32,526**（−3,600）/rm −23/ncb −19/islands −97/munich −238，但 **grc 34,082→37,977（+3,895）**——净 −3.7k 但单件回退（fhdmislegacy=1 回退复核 34,082 确证因果）；
+- 拆分定位：**收益全部来自 level0 road-base 0.05→0**（markup 0.1→0 无效果）；**回退同源**（0.05 是"clear the ground-plane z-fight"守卫，mgl 靠 stencil 机制解析共面而我方没有）；
+- **落地位（安全中性）**：level≠0 MISS→z0（mgl 字面，真桥案例）+ level0 markup→z0（mgl 字面，bias 仅存在于 mgl 高程路径）+ level0 road-base 保留 0.05 守卫——四件全部回到 g106 基线=零回归零收益；`fhdmislegacy=1` 整体回退。
+
+**③ 走廊带 y90-103 残差定性（rmstyle road-base-bridge 不变 + fillstate 材质态全对）**：该带我方**无任何多边形覆盖**（rmstyle 桥层后 y92-100 像素不变）——非高度/深度问题，是**几何缺失**：mgl 经跨瓦片 registry 解析到该桥的 curve，我方 MISS（telemetry: elevId=4368045121443499 有 id 无命中 + elevId=undefined）→ 平地化后仍被上层遮蔽。**管线级修复点=跨瓦片 elevation registry（getOverlappingElevationParts/mergeElevationFeatures 的祖先/后代瓦片合并）**，落地后 level≠0 MISS 集合将与 mgl 一致。
+
+**④ 下轮正攻（优先序）**：①跨瓦片 elevation registry（走廊几何缺失根修 + 解锁 level≠0 z0 全量收益）；②level0 road-base 共面解析字面化（去 0.05 守卫：polygonOffset/绘制序精确复刻 mgl stencil，grc +3.9k 反转为净益）；③g107⑤② line-pattern linesofar 对拍仍挂号。
+
+**⑤ 状态**：默认四件逐数中性（grc/va/b2t/rm=g106 基线）；单测 310；MBSTYLE_FHDMISLEGACY 回退旋钮入库；台账 g108。
