@@ -6945,3 +6945,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **⑤ 下轮正攻：mgl 雾字面落地（HD fill/line 材质）**——fog_position/fog_apply 逐字面（_prelude_fog.vertex/fragment.glsl: fog_depth=smoothstep(range), fog_apply_premultiplied+fog_dither, per-tile isTileAffectedByFog 门控与 u_fog_color/rgb_range/high_color 系 uniform 采集）注入 patcher 材质链；A/B 首件 elevated-line-pattern/va/line-pattern 预期大幅收敛；随后回头看走廊与 tunnel 族残差。
 
 **⑥ 状态**：MBElevMiss 探针入库（零行为改动）；单测 310；台账 g109。
+
+### §885 g110: g109⑤ 执行——"雾主源"定性三连否证（fog/atmosphere/cutoff 全排除）+ mgl Atmosphere glow overlay 字面落地（本家族 inert）+ 瓦片对拍闭环（55k 抑制机制仍未定界, 诚实挂账）（2026-09-23 第二十二轮）
+
+**① fog 否证**：mgl fog_helpers FOG_PITCH_START=45/END=65（smoothstep 门）——elevated-line-pattern pitch 39 → getOpacity=0 → **per-fragment FOG 全关**；页面直查实证 style.fogExists=**false**（无 fog 键的 style 连 fog 对象都无）→ g109③"雾主源"定性**错误，修正**。va (54.5°) 雾亦仅 0.34 且 fogExists=false 同关。
+
+**② atmosphere 否证**：draw_atmosphere.drawAtmosphereGlow（opaque pass 末尾 alpha 混合地平线带）为 g109 遗漏的候选——已按 mgl 字面全量实现（atmosphere.vertex/fragment mercator 变体 + atmosphereUniformValues + fadeoutRange=mapValue(horizon-blend,0,1,0.0005,0.25) + spec 默认色链 + onBeforeRender 逐帧 frustum/unproject + isHorizonVisible 近似门, `atmos=0` 回退）——但页面直查 **isHorizonVisible()=false**（pitch+fovAboveCenter=39+18.4<88°）→ 本家族（pitch≤60）**inert**（A/B va/rm/ncb 逐数=基线证实）。代码保留（高 pitch 家族外有效, mgl 字面）。
+
+**③ cutoff/瓦片/数据否证**：RENDER_CUTOFF 仅 raster/fill-extrusion 着色器（fill/line 无）；mgl 单瓦片 vs 我方双瓦片——真路径 tiles=（test/rendering/integration/tiles, 非 mapbox-gl-js 目录）删瓦片对拍：删 21057 → 55,021→**108,451**（必需, =mgl 唯一瓦片）；删 21056 → **55,021 不变**（我方多余解码瓦片零像素贡献）→ 无瓦片覆盖差。MVT 直读+queryRenderedFeatures 实证 expected 远带 (250,70) 处 mgl **有** road-base feature 覆盖但渲染为 bg——**抑制机制未定界**（候选剩: stencil 瓦片裁剪/elevated 通道深度交互/LOD 瓦片语义; 下轮: vendored fork 逐 pass 关断二分[.js mirror 补丁+rebuild]或 GL 级 trace）。
+
+**④ 工程注记**：setPaintProperty 运行时改 opacity 会使 mgl-shot 渲染空白（不可用作 live 二分）；karma tiles 真路径记档；MBAtmos overlay 场景属性=mapView.m_scene ?? scene。
+
+**⑤ 状态**：默认逐数中性（va 27,858/rm 14,330/ncb 10,148=g106 基线）；单测 310；atmos=0 回退旋钮入库。**下轮正攻: 55k 抑制机制定界（fork 逐 pass 关断二分优先），随后视结果重开走廊/tunnel 族。**

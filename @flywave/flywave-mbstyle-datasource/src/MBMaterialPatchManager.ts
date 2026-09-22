@@ -101,6 +101,20 @@ export class MBMaterialPatchManager {
     patchTileMaterials(): void {
         const tiles = this.m_dataSource.getDecodedTiles();
 
+        // §885 g110 (mgl literal): the Atmosphere glow overlay — mgl
+        // draw_atmosphere.ts drawAtmosphereGlow, drawn at the END of the
+        // opaque pass whenever style.fog exists (it does by default) and the
+        // horizon is visible (painter.ts:1251/1307). A fullscreen quad at
+        // the far plane, alpha-blended (ONE, ONE_MINUS_SRC_ALPHA), depth
+        // ReadOnly LEQUAL — it fades FAR content near the horizon with the
+        // fog/high/space color ramp (elevated-line-pattern's y50-90 band,
+        // va's corridor warm band). The fog-per-fragment FOG define stays
+        // pitch-gated (smoothstep 45..65) and is NOT this mechanism.
+        // `atmos=0` reverts.
+        if ((globalThis as any).__mbAtmosOff !== true) {
+            try { this.ensureAtmosphereOverlay(); } catch { /* diagnostic path only */ }
+        }
+
         // §664: the visible-tile cache holds MIRRORED entries per child
         // datasource (vector vs model-source delegates) with identical
         // geometry — only this.m_dataSource's copies were patched, and the
@@ -651,6 +665,154 @@ export class MBMaterialPatchManager {
         const m = obj?.material;
         if (Array.isArray(m)) return m.length > 0 && m.every((x: any) => x?.__mbPatched);
         return !!m?.__mbPatched;
+    }
+
+    /**
+     * §885 g110: mgl Atmosphere glow overlay (draw_atmosphere.ts, mercator
+     * variant — no PROJECTION_GLOBE_VIEW, single color pass). Colors and the
+     * fadeout range come from style.fog (spec defaults when absent).
+     */
+    private m_atmosphereMesh: any = null;
+    private ensureAtmosphereOverlay(): void {
+        if (this.m_atmosphereMesh) return;
+        const mapView: any = (this.m_dataSource as any).mapView;
+        const scene: any = mapView?.m_scene ?? mapView?.scene;
+        if (!scene) return;
+        const style: any = (this.m_dataSource as any).m_runtime?.style
+            ?? (this.m_dataSource as any).m_styleParams?.style ?? {};
+        const fog: any = style.fog ?? {};
+        const zoom = Number(mapView.zoomLevel ?? 10);
+
+        // style-spec v8 defaults (fog): color #ffffff; high-color #245cdf;
+        // space-color interp z4 #010b19 → z7 #367ab9; horizon-blend interp
+        // z4 0.2 → z7 0.1. Constant style overrides win when present.
+        const constOf = (v: any, dflt: string): string =>
+            typeof v === 'string' ? v : dflt;
+        const spaceDefault = zoom >= 7 ? '#367ab9'
+            : zoom <= 4 ? '#010b19'
+                : (() => {
+                    const a = [1, 11, 25], b = [54, 122, 185];
+                    const t = (zoom - 4) / 3;
+                    return '#' + a.map((av, i) => Math.round(av + (b[i] - av) * t)
+                        .toString(16).padStart(2, '0')).join('');
+                })();
+        const hbRaw = typeof fog['horizon-blend'] === 'number'
+            ? fog['horizon-blend']
+            : (zoom >= 7 ? 0.1 : zoom <= 4 ? 0.2 : 0.2 + (zoom - 4) / 3 * (0.1 - 0.2));
+        // mgl drawAtmosphereGlow: mapValue(hb, 0, 1, 0.0005, 0.25)
+        const fadeoutRange = 0.0005 + (hbRaw - 0) / (1 - 0) * (0.25 - 0.0005);
+
+        const mkColor = (hex: string): THREE.Vector4 => {
+            const c = new THREE.Color(hex);
+            return new THREE.Vector4(c.r, c.g, c.b, 1);
+        };
+
+        const mat = new THREE.ShaderMaterial({
+            uniforms: {
+                u_frustum_tl: { value: new THREE.Vector3(0, 0, -1) },
+                u_frustum_tr: { value: new THREE.Vector3(0, 0, -1) },
+                u_frustum_br: { value: new THREE.Vector3(0, 0, -1) },
+                u_frustum_bl: { value: new THREE.Vector3(0, 0, -1) },
+                u_horizon: { value: 1 },
+                u_fadeout_range: { value: fadeoutRange },
+                u_atmosphere_fog_color: { value: mkColor(constOf(fog.color, '#ffffff')) },
+                u_high_color: { value: mkColor(constOf(fog['high-color'], '#245cdf')) },
+                u_space_color: { value: mkColor(constOf(fog['space-color'], spaceDefault)) },
+            },
+            vertexShader: `
+                attribute vec2 uv2;
+                uniform vec3 u_frustum_tl;
+                uniform vec3 u_frustum_tr;
+                uniform vec3 u_frustum_br;
+                uniform vec3 u_frustum_bl;
+                uniform float u_horizon;
+                varying vec3 v_ray_dir;
+                varying vec3 v_horizon_dir;
+                void main() {
+                    v_ray_dir = mix(
+                        mix(u_frustum_tl, u_frustum_tr, uv2.x),
+                        mix(u_frustum_bl, u_frustum_br, uv2.x),
+                        uv2.y);
+                    v_horizon_dir = mix(
+                        mix(u_frustum_tl, u_frustum_bl, u_horizon),
+                        mix(u_frustum_tr, u_frustum_br, u_horizon),
+                        uv2.x);
+                    gl_Position = vec4(position.xy, 1.0, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float u_fadeout_range;
+                uniform vec4 u_atmosphere_fog_color;
+                uniform vec4 u_high_color;
+                uniform vec4 u_space_color;
+                varying vec3 v_ray_dir;
+                varying vec3 v_horizon_dir;
+                void main() {
+                    vec3 dir = normalize(v_ray_dir);
+                    vec3 horizon_dir = normalize(v_horizon_dir);
+                    // mgl atmosphere.fragment (mercator): world-up is the
+                    // comparison axis (their view-space y ↔ our world z).
+                    float horizon_angle = dir.z < horizon_dir.z
+                        ? 0.0
+                        : max(acos(clamp(dot(dir, horizon_dir), -1.0, 1.0)), 0.0);
+                    horizon_angle /= 3.141592653589793;
+                    float t = exp(-horizon_angle / u_fadeout_range);
+                    float alpha_0 = u_atmosphere_fog_color.a;
+                    float alpha_1 = u_high_color.a;
+                    vec3 c0 = mix(u_space_color.rgb, u_high_color.rgb, alpha_1);
+                    vec3 c1 = mix(c0, u_atmosphere_fog_color.rgb, alpha_0);
+                    vec3 c2 = mix(c0, c1, t);
+                    gl_FragColor = vec4(c2 * t, t);
+                }
+            `,
+            transparent: true,
+            depthTest: true,
+            depthWrite: false,
+            blending: THREE.CustomBlending,
+            blendSrc: THREE.OneFactor,
+            blendDst: THREE.OneMinusSrcAlphaFactor,
+        });
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+            -1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0,
+        ]), 3));
+        geo.setAttribute('uv2', new THREE.BufferAttribute(new Float32Array([
+            0, 0, 1, 0, 1, 1, 0, 1,
+        ]), 2));
+        geo.setIndex([0, 1, 2, 0, 2, 3]);
+
+        const mesh: any = new THREE.Mesh(geo, mat);
+        mesh.frustumCulled = false;
+        mesh.renderOrder = 1e9;
+        mesh.name = '__mbAtmosphereGlow';
+        mesh.raycast = () => {};
+        mesh.onBeforeRender = () => {
+            try {
+                const cam = mapView.camera as THREE.Camera;
+                const dirFor = (nx: number, ny: number): THREE.Vector3 =>
+                    new THREE.Vector3(nx, ny, 0.5).unproject(cam)
+                        .sub(cam.position).normalize();
+                const tl = dirFor(-1, 1), tr = dirFor(1, 1);
+                const br = dirFor(1, -1), bl = dirFor(-1, -1);
+                mat.uniforms.u_frustum_tl.value.copy(tl);
+                mat.uniforms.u_frustum_tr.value.copy(tr);
+                mat.uniforms.u_frustum_br.value.copy(br);
+                mat.uniforms.u_frustum_bl.value.copy(bl);
+                // Single scalar for both edges (mgl approximation): solve
+                // mix(bl, tl, t).z == 0 on the left edge.
+                const denom = tl.z - bl.z;
+                const tHorizon = Math.abs(denom) > 1e-9
+                    ? Math.min(1, Math.max(0, -bl.z / denom)) : 1;
+                mat.uniforms.u_horizon.value = tHorizon;
+                // painter.ts isHorizonVisible(): overlay only when the
+                // horizon line is inside the viewport.
+                const horizVisible = tHorizon < 1;
+                mesh.visible = horizVisible;
+            } catch { mesh.visible = false; }
+        };
+        this.m_atmosphereMesh = mesh;
+        scene.add(mesh);
     }
 
     private patchTile(tile: any): void {
