@@ -6931,3 +6931,17 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 下轮正攻（优先序）**：①跨瓦片 elevation registry（走廊几何缺失根修 + 解锁 level≠0 z0 全量收益）；②level0 road-base 共面解析字面化（去 0.05 守卫：polygonOffset/绘制序精确复刻 mgl stencil，grc +3.9k 反转为净益）；③g107⑤② line-pattern linesofar 对拍仍挂号。
 
 **⑤ 状态**：默认四件逐数中性（grc/va/b2t/rm=g106 基线）；单测 310；MBSTYLE_FHDMISLEGACY 回退旋钮入库；台账 g108。
+
+### §885 g109: g107⑤② 执行——elevated-line-pattern 55k 主源定界=HD 道路内容缺 mgl 距离雾（全家族远域失配的总根因候选）+ MVT 直读闭环 MISS 语义（2026-09-23 第二十一轮）
+
+**① 线链对拍前置排除**：mgl line_pattern 链通读（line_pattern.vertex/fragment: v_linesofar=a_linesofar+corner 偏移, pattern_x=v_linesofar/pattern_size×aspect, aspect=displayH/v_width 即**图案沿线周期=v_width（方形铺满线宽）**, y=v_normal 跨线, texel 内缩 1px, textureLodCustom, LINE_JOIN_NONE 段相位窗）——我方 ribbon 路径（uMBPatUScale 含 floorwidth aspect 与 fracZoom 锚, vMBRibbonEdge 跨线）**语义已等价**，55k 非 pattern 域。
+
+**② MVT 直读闭环（MISS 语义）**：17-21056/50814 直读——hd_road_polygon withId=7/noId=7、hd_road_line 99/23：**一半 feature 天然无 3d_elevation_id**（mgl getElevationFeature 对 undefined 同样 MISS→flat）；我方 [MBElevMiss] 探针（新入库, DECODEDBG 门控）实证 MISS 全部 id=undefined 且 registry 健康（33-59 条）——**跨瓦片 registry 无缺口，g108③ 修正**。mgl 对 id-less feature 无 hide 门（line_hd_extension:196 的 hide 需 hasId+covering+ready 三条件全真）。
+
+**③ 55k 主源定界（逐列像素+双引擎单层 probe）**：x=250 列 y50-130——expected y50=(240,235,224)/y60=(212,208,198)/y70-90=(233,242,239)（**雾色/雾化道路/bg 三态**）vs 我方全程 (162,179,199) 原色——**我方 HD 道路 fill/line 完全未应用 mgl 距离雾**；y130+ 两引擎逐位一致。mgl fill/line shaders 均带 `#ifdef FOG v_fog_pos=fog_position(pos)` + fog_apply（预乘+dither），fog 默认 spec: color #ffffff/range [0.5,10]/horizon-blend——expected 远域=雾化结果。我方仅 background quad 有雾（g244 MBBackgroundFogRenderer），**HD 道路内容雾缺失=55k 主源，且为全家族远域失配的通用根因候选**（va 走廊 y86-89 暖白带/y90-103 (213,208,199) 亦为雾色系——g107"shade×1.09"应修正为雾/背景域）。rmstyle road-base 消除 excess（+23k px base-where-exp-bg）与单层 probe（mgl bg+road-base only：上域 bg=雾化耗尽）全部同源。
+
+**④ 修正记录**：g107②"我方桥面远缘屏位短缺"与 g108③"跨瓦片 registry 缺口"两定性均被本轮证据修正——远域差异主体=雾；屏位/registry 为次级或伪因（诚实入账防回归）。
+
+**⑤ 下轮正攻：mgl 雾字面落地（HD fill/line 材质）**——fog_position/fog_apply 逐字面（_prelude_fog.vertex/fragment.glsl: fog_depth=smoothstep(range), fog_apply_premultiplied+fog_dither, per-tile isTileAffectedByFog 门控与 u_fog_color/rgb_range/high_color 系 uniform 采集）注入 patcher 材质链；A/B 首件 elevated-line-pattern/va/line-pattern 预期大幅收敛；随后回头看走廊与 tunnel 族残差。
+
+**⑥ 状态**：MBElevMiss 探针入库（零行为改动）；单测 310；台账 g109。

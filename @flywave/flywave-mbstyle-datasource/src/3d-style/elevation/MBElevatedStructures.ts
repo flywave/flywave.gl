@@ -307,6 +307,15 @@ export class MBElevatedStructures {
         const parts = getOverlappingElevationParts(
             properties, registry, this.m_consumerZ, this.m_consumerX, this.m_consumerY);
         if (parts.length === 0) {
+            if ((globalThis as any).__mbDecodeDbg) {
+                const arr = (globalThis as any).__mbElevMissLog ??= [];
+                if (arr.length < 40) {
+                    // @ts-ignore — diagnostic dump channel
+                    arr.push(1);
+                    // eslint-disable-next-line no-console
+                    console.log(`[MBElevMiss] consumer=${this.m_consumerZ}/${this.m_consumerX}/${this.m_consumerY} id=${JSON.stringify(properties?.['3d_elevation_id'])} class=${JSON.stringify(properties?.['class'])} level=${JSON.stringify(properties?.['level'])} registryN=${registry.length} localN=${this.features.length}`);
+                }
+            }
             if (properties?.['3d_elevation_id'] !== undefined) {
                 this.m_deferredKeys.add(this.m_consumerKey);
             }
