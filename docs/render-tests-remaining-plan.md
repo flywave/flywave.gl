@@ -7037,3 +7037,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 状态**：junction 24,102（=g114 态, 残退维持; 根因精确化=细分边集差异）; va 23,854/b2t 35,781/line-pattern 31,447/grc 29,180/munich 19,502 全部回到各自最优态; 单测 310。
 
 **⑤ 下轮正攻：①细分边集字面对齐**（EdgeIterator 语义/ SUBDIVISION_EDGE_EXTENSION=1? / metersToTile 双引擎数值对拍——修复后 prune 自发收敛→markup 门控翻回+junction 残退消除一石三鸟）; ②overlay 深度语义仍挂号。
+
+### §885 g118: g117⑤ 执行——细分边集对齐两轮实验均净负并诚实弃置; mgl markup 无关性实证; tree 回到 g117 最优态（2026-09-23 第三十轮）
+
+**① mgl 语义对拍**：EdgeIterator.get（割线=逐曲线顶点垂直线, 半长=(extent+1)·metersToTile, **Math.trunc 端点**）与我方 getSubdivisionEdges 结构逐行等价（唯一差=trunc 与浮点）; metersToTile 数值经 4096 帧自洽换算等价; edgeIntersectsBox/isCounterClockwise 逐行同。
+
+**② mgl markup 无关性实证**：mgl 探针（junction 去 road-hatched-area 层）census 逐数不变（offered=1756/edges 753 none）——**mgl 的 structures 摄入本就不含该 markup 层**（其 1756 offered 全来自 road-base/bridge），g115 的"markup rings 入 structures"定性随之再修正：非 mgl 差异源。我方门控保持 OFF（va 防护有效）。
+
+**③ trunc 实验两轮净负弃置**：割线端点+posHash 整数化（mgl 字面方向）——junction −111 但 va +891/line-pattern +1,403/grc +827（我方 .5 格浮点环顶点与整数哈希碰撞≠mgl 原生整数帧）; 0.5 格量化变体更差（junction 31,856）。**结论：浮点/整数帧差异是结构性前提——正解=环管线整数规范化（mgl 原生整数帧）而非末端量化**, 成本高挂下轮再评估。
+
+**④ 树态验证**：实验代码全部弃置（stash drop）, 干净树 va **23,854** ✓ 复测确认; junction 24,102/line-pattern 31,447 系 g117 门控后真值（31,447→32,832 为 trunc 实验中间态, 已消）。
+
+**⑤ 状态**：零代码改动落地（纯实验+弃置轮）; 单测 310; **下轮正攻回归大账: ①整数帧规范化评估（大改, 或搁置）②转向未触梯队——double-shading-regression 99,679/wireframe 72,049/ortho-camera 71,901/tunnel-color-fd 56,646（kill-switch/oracle 工具链已成熟, 逐件定界）; ③overlay 深度语义仍挂号。**
