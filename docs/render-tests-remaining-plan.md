@@ -6830,3 +6830,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **⑤ 定界结论**：ground 帧=0✓、曲线高度逐位✓、level 二次叠加机制已定位✓；strip 恶化的余项=**多因子**（rails 结构性差 + 道路几何家族差 g82③ 与 level 轴的交互/遮挡耦合）。oracle bundle 已还原纯态（486 复核）。**下轮正攻：单变量隔离 rails——对拍 mgl constructBridgeStructures 输出 vs 我方 MBElevatedStructures rails（0.5m 截面/高度/位置逐顶点），rails 收敛后 strip 的净效应重测。**
 
 **⑥ 状态**：默认渲染逐位不变（md5 复核）；遥测增强入库；单测 310 passing；vendored 工作树 = prelude 修复 + zLevel fork（.ts+.js 镜像，L=0）+ 重建 dist。
+
+### §885 g101: rails 逐顶点对拍收官——heights/坐标全对齐（strip 态=mgl 字面），残差定性=非高度合成域（2026-09-22 第十三轮）
+
+**① 双侧 rail 探针**：vendored `elevated_structures.js` 注入 [MGLRailH]（worker console 经 page.on('console') 收取，mgl-shot 复用需换自写 puppeteer 抓取）；我方 [MBRailH] 既有。guard-rail-color 实测——**坐标逐点对应**（我方 4096 域 ×2 + y 翻转 = mgl 8192 域，如 (858.0,2579.5)↔(1716,3033)=1716/8192−5159 ✓）；**高度：mgl=5.000 恒定（纯曲线），我方 legacy=6.000/5.050（+zOff：level 1 与 base 0.05），stripped=5.000 与 mgl 完全一致**。
+
+**② 结论 1（rails 收敛达成）**：fhdstrip 态下 rails/deck 高度与坐标均与 mgl 字面相同——g100④ 的 −5px 位移残差并非 rails 高度差。MARKUP_ELEVATION_BIAS 等常量双侧一致（0.05）。
+
+**③ 结论 2（悖论定界）**：guard-rail-color 交叉矩阵：mgl vs expected **813**（oracle 再证）；mgl vs ours-legacy 55,444 / vs ours-stripped **65,887（仍更差）**——**高度已字面相同时渲染仍发散**，证明该 fixture 的 55k 基线误差主体在非高度域（材质/深度合成/线渲染/道路局部几何=g82③ legacy 家族），level 项的增减通过与遮挡顺序的耦合"搬运"误差而非净增。**strip 落默认的前置条件不是 rails（已收敛）而是非高度合成域的收敛。**
+
+**④ 状态**：零我方代码改动（探针在 git-ignored vendored 树+既有遥测）；默认 legacy 维持；单测 310 不涉。**下轮正攻转移：g82③ 非高度域（elevated-symbols 家族局部几何差/道路渲染）逐段归因——这是 strip 解锁与 ~196 万总失配的共同主源；高度域三件套（曲线✓/帧✓/rails✓）已全部对齐可写死。**
