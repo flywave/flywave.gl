@@ -7005,3 +7005,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 下轮正攻**：①junction 边级对拍（[MGLRailH]/[MBRailH] 全量边 dump 比对, 定位 +152 边的构成——细分内割边 vs ring 集）+ markup rings 入 structures（mgl fill_bucket 语义）; ②Atmosphere overlay 深度语义（mask 写深交互）后翻回默认。
 
 **⑤ 状态**：零像素变化（两修语义正确但 inert）; 单测 310; mgl mirror offered/[MGLArea] 计数器留库。
+
+### §885 g115: g114④ 执行——markup rings 入 structures 落库（b2t −279）; junction 残退定界至 ring 顶点构成（safeArea/首域逐数精确, prune 0%vs46% 之谜指向环顶点本身）（2026-09-23 第二十七轮）
+
+**① markup rings 入 structures（mgl 字面, 落库）**：processFillFeature 的 addElevatedFeature 移出 hd-road-base 门（mgl fill_bucket addGeometry 对两模式全量喂 addRenderableRing; addPortalCandidates 保持仅 base）。junction census offered 1506→**1643**（markup 35 环入）; A/B：b2t 35,781→**35,502**（−279）/junction 24,102 不变/line-pattern 31,447 不变。
+
+**② junction prune 之谜推进**：noArea=0 + 首域逐数双确认（mgl (775,2302,1824,8192) ↔ 我方 ×0.5+翻转精确, 第 7+ 环起 mgl 进入第二曲线域 (856,2301,1889,8192)）——bounds 侧无可指摘; 我方 prune.area 仍恒 0 而 mgl 46%。**结论收敛：差异在环顶点集本身**（我方环被 ELEVATION_CLIP_MARGIN 裁剪至瓦片框内且构成=细分件环; mgl 环=prepareElevatedPolygons 产物可远超 safeArea）——逐边 dump（[MGLRailH]/[MBRailH] 全量化+比对脚本）为下轮首案。
+
+**③ 状态**：junction 24,102 残退未消（诚实挂账）; b2t 35,502; 单测 310; areas/noArea 计数器入库（DECODEDBG 门控, 单测空 area 路径已守护）。
+
+**④ 下轮正攻：①边级全量 dump 比对（mgl mirror [MGLRailH] 去上限+我方 [MBRailH] 对齐格式, 集合差=+152 边清单）; ②Atmosphere overlay 深度语义（mask 写深交互）修正后翻回默认。**

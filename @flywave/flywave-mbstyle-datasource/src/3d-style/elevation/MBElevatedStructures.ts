@@ -812,7 +812,7 @@ export class MBElevatedStructures {
             for (const e of this.m_unevalEdges) counts[e.type] = (counts[e.type] ?? 0) + 1;
             const wallIdxEnd = indices.length;
             // eslint-disable-next-line no-console
-            console.log(`[MBStruct] ringCnt=${JSON.stringify((globalThis as any).__mbRingCnt ?? {})} edgeCnt=${JSON.stringify((globalThis as any).__mbEdgeCnt ?? {})} prune=${JSON.stringify((globalThis as any).__mbPrune ?? {})} verts=${positions.length / 3} idxSoFar(wall)=${wallIdxEnd} edges=${JSON.stringify(counts)} triN=${this.m_unevalTriangles?.length ?? 0} tunnelTriN=${this.m_unevalTunnelTriangles?.length ?? 0}`);
+            console.log(`[MBStruct] ringCnt=${JSON.stringify((globalThis as any).__mbRingCnt ?? {})} edgeCnt=${JSON.stringify((globalThis as any).__mbEdgeCnt ?? {})} prune=${JSON.stringify((globalThis as any).__mbPrune ?? {})} noArea=${(globalThis as any).__mbNoArea ?? 0} areas=${JSON.stringify(((globalThis as any).__mbAreaList ?? []).slice(0, 8))} verts=${positions.length / 3} idxSoFar(wall)=${wallIdxEnd} edges=${JSON.stringify(counts)} triN=${this.m_unevalTriangles?.length ?? 0} tunnelTriN=${this.m_unevalTunnelTriangles?.length ?? 0}`);
         }
 
         const tunnelStart = indices.length;
@@ -1242,6 +1242,8 @@ export class MBElevatedStructures {
             // mgl literal (es.ts:240-252, audit G3): keep the edge when
             // either endpoint is inside the safeArea bounds, or when the
             // edge intersects the bounds box; otherwise prune.
+            if (!area) { ((globalThis as any).__mbNoArea ??= 0); (globalThis as any).__mbNoArea++; }
+            else { const al = (globalThis as any).__mbAreaList ??= []; if (al.length < 40) al.push([area.minX, area.minY, area.maxX, area.maxY]); }
             if (area) {
                 const insideBounds =
                     (vax >= area.minX && vax <= area.maxX && vay >= area.minY && vay <= area.maxY) ||

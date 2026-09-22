@@ -2110,6 +2110,13 @@ export class MBTileDataEmitter {
                                     };
                                 }
                             }
+                        }
+                        // §885 g115 (mgl literal): the STRUCTURES intake
+                        // (addElevatedFeature → addRenderableRing) runs for
+                        // BOTH elevation modes — mgl fill_bucket's addGeometry
+                        // feeds every elevated fill (markup included; only
+                        // addPortalCandidates is hd-road-base-only). Junction:
+                        // mgl offered=1756 rings (incl. markup) vs our 1506.
                             // fill-construct-bridge-guard-rail is a
                             // data-driven LAYOUT property (mgl default true).
                             const guardRailRaw = layer.layoutDefs?.['fill-construct-bridge-guard-rail'] ??
@@ -2156,8 +2163,7 @@ export class MBTileDataEmitter {
                                 zOffset: (globalThis as any).__mbFillHdLegacy === true
                                     ? zOffLegacy
                                     : this.m_currentZOffset,
-                            });
-                        }
+                        });
                         // §885 g90: curve-HIT decks KEEP the level
                         // compensation — stripping it exploded va +19k /
                         // guard-rail +10-21k even hit-only (the vendored
