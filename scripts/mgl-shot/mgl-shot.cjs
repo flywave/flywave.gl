@@ -52,7 +52,7 @@ const CHROME = process.env.CHROME_BIN ||
         await page.screenshot({ path: out });
         console.log(`[mgl-shot] saved ${out}`);
         const cc = (globalThis.__c) ?? [];
-        for (const t of cc) if (t.includes('MGLStruct') || t.includes('MGLRailH') || t.includes('MGLArea')) console.log('[worker] ' + t);
+        for (const t of cc) if (t.includes('MGLStruct') || t.includes('MGLRailH') || t.includes('MGLArea') || t.includes('MGLEdge')) console.log('[worker] ' + t);
         // §885 终二三九: with probe=1, print the placed-icon dump.
         if (extraQuery.includes("probe=1")) {
             try {

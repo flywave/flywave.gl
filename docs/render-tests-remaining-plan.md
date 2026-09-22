@@ -7015,3 +7015,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 状态**：junction 24,102 残退未消（诚实挂账）; b2t 35,502; 单测 310; areas/noArea 计数器入库（DECODEDBG 门控, 单测空 area 路径已守护）。
 
 **④ 下轮正攻：①边级全量 dump 比对（mgl mirror [MGLRailH] 去上限+我方 [MBRailH] 对齐格式, 集合差=+152 边清单）; ②Atmosphere overlay 深度语义（mask 写深交互）修正后翻回默认。**
+
+### §885 g116: g115④ 执行——全量边 dump+集合差分落成; 决定性否定: 我方 ring 帧非 mgl 任何简单变换（0 公共边, 平移搜索无主峰）⇒ 环摄入帧审计为下一首案（2026-09-23 第二十八轮）
+
+**① 工具链落成**：mgl mirror addRenderableRing 全量 [MGLEdge] dump（量化 0.5, 100 边/行 chunk, worker console→mgl-shot 中继）+ 我方 [MBEdge] 对齐格式（DECODEDBG 门控）。junction 双侧捕获：mgl 1,446 边/我方 3,286（未去重 1,324 uniq）。
+
+**② 集合差分决定性否定**：x·0.5 + y翻转·0.5 / y不翻·0.5 两种变换下 **公共边=0**；垂直边对平移暴力搜索（50×400 对）**无主峰 offset**（top 计数 2 = 噪声）——我方 piecesCanonical ring 坐标与 mgl ring 无任何简单全局变换关系 ⇒ **环摄入链存在帧分歧**（嫌疑: mvtTransform/elevationLocalY 的 tile-local 窗口 delta 与 canonical 缩放对 x/y 施加不一致, 或裁剪窗口错位; g112 bounds 修复只对齐了 bounds 侧）。
+
+**③ 下轮首案（定界完成, 修复待做）**：piecesCanonical 摄入帧审计——从 MVT 原始 ring 坐标起逐步对拍 mvtTransform→elevationLocalY→canonical 缩放→clipRingToBox 各级 x/y 变换, 与 mgl fill_bucket 的 ring 帧逐级对齐; 修复后 junction prune 行为应自发收敛至 mgl 46% 剪除率并消除 +4,940 残退。
+
+**④ 状态**：junction 24,102 不变（帧分歧未修, 诚实挂账）; 单测 310; [MGLEdge]/[MBEdge] dump 工具链入库; mgl mirror dump 为本地调试态（每次 oracle 渲染打印, 后续收紧门控）。

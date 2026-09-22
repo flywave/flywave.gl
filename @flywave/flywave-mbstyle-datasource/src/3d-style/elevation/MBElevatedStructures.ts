@@ -812,6 +812,8 @@ export class MBElevatedStructures {
             for (const e of this.m_unevalEdges) counts[e.type] = (counts[e.type] ?? 0) + 1;
             const wallIdxEnd = indices.length;
             // eslint-disable-next-line no-console
+            const edDump = (globalThis as any).__mbEdges ?? [];
+            for (let i = 0; i < edDump.length; i += 100) console.log(`[MBEdge] ${JSON.stringify(edDump.slice(i, i + 100))}`);
             console.log(`[MBStruct] ringCnt=${JSON.stringify((globalThis as any).__mbRingCnt ?? {})} edgeCnt=${JSON.stringify((globalThis as any).__mbEdgeCnt ?? {})} prune=${JSON.stringify((globalThis as any).__mbPrune ?? {})} noArea=${(globalThis as any).__mbNoArea ?? 0} areas=${JSON.stringify(((globalThis as any).__mbAreaList ?? []).slice(0, 8))} verts=${positions.length / 3} idxSoFar(wall)=${wallIdxEnd} edges=${JSON.stringify(counts)} triN=${this.m_unevalTriangles?.length ?? 0} tunnelTriN=${this.m_unevalTunnelTriangles?.length ?? 0}`);
         }
 
@@ -1265,6 +1267,8 @@ export class MBElevatedStructures {
                 const c = (globalThis as any).__mbEdgeCnt ??= { offered: 0, kept: 0 };
                 c.offered++;
                 if (c.offered % 400 === 0) console.log(`[MBEdge] offered=${c.offered} kept=${c.kept}`);
+                const ed = (globalThis as any).__mbEdges ??= [];
+                if (ed.length < 4000) ed.push([Math.round(vax * 2) / 2, Math.round(vay * 2) / 2, Math.round(vbx * 2) / 2, Math.round(vby * 2) / 2]);
             }
             const edgeHash = edgeHashOf(va, vb);
             let portalHash = this.m_vertexHashLookup.get(posHashOf(va))?.next
