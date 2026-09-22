@@ -311,9 +311,17 @@ export class MBElevatedStructures {
      * `handleFeature` mergedFeatureCache path). Returns undefined when the
      * id has no curve available.
      */
-    resolveElevation(properties: Record<string, unknown> | undefined): MBElevationFeature | undefined {
+    resolveElevation(properties: Record<string, unknown> | undefined, localOnly = false): MBElevationFeature | undefined {
         const local = getElevationFeature(properties, this.features);
         if (local) return local;
+
+        // §885 g114 (mgl literal): fills resolve SAME-TILE ONLY — mgl
+        // fill_hd_extension calls getElevationFeature(feature,
+        // elevationFeatures, undefined, canonical) with NO registry (the
+        // cross-tile registry/merge is the line_hd path). Cross-tile-merged
+        // fills carry UNIONED safeAreas that over-keep wall edges (junction:
+        // ours 905 'none' vs mgl 753) and mis-lift curve-MISS decks.
+        if (localOnly) return undefined;
 
         const registry = this.m_registryProvider?.() ?? [];
         const parts = getOverlappingElevationParts(
@@ -362,7 +370,7 @@ export class MBElevatedStructures {
         isMarkup: boolean,
         tileExtent: number,
     ): FillElevationPlan | null {
-        const feature = this.resolveElevation(properties);
+        const feature = this.resolveElevation(properties, /* localOnly */ true);
         if (!feature) return null;
 
         const scale = tileExtent > 0 && tileExtent !== ELEVATION_EXTENT
@@ -720,7 +728,7 @@ export class MBElevatedStructures {
             ];
             const flattened: number[] = [];
             const holeIndices: number[] = [];
-            const ringRanges: Array<[number, number]> = [];
+            const ringRanges: Array<[number, number, boolean]> = [];
 
             for (const { ring, heights } of rings) {
                 if ((globalThis as any).__mbDecodeDbg) {
@@ -741,7 +749,13 @@ export class MBElevatedStructures {
                     this.m_unevalHeights.push((heights[i] ?? 0) + zOff);
                 }
                 if (start > 0) holeIndices.push(start);
-                ringRanges.push([start, open.length]);
+                // §885 g114 (mgl literal): mgl emits count-1 edges and NEVER
+                // wraps — a ring whose raw form is OPEN (no closing dup) must
+                // not gain a fabricated closing edge (junction: 905 wall
+                // edges vs mgl 753, ~one spurious edge per open ring).
+                ringRanges.push([start, open.length,
+                    ring.length >= 2 && ring[0].x === ring[ring.length - 1].x
+                        && ring[0].y === ring[ring.length - 1].y]);
             }
             if (ringRanges.length === 0) continue;
 
@@ -750,9 +764,9 @@ export class MBElevatedStructures {
             const outTriangles = isTunnel ? this.m_unevalTunnelTriangles : this.m_unevalTriangles;
             for (const idx of tri) outTriangles.push(idx + vOffset);
 
-            for (const [offset, count] of ringRanges) {
+            for (const [offset, count, wasClosed] of ringRanges) {
                 this.addRenderableRing(
-                    featureIndex, vOffset + offset, count, isTunnel, guardRailEnabled, safeArea);
+                    featureIndex, vOffset + offset, count, isTunnel, guardRailEnabled, safeArea, wasClosed !== false);
             }
         }
     }
@@ -1208,15 +1222,18 @@ export class MBElevatedStructures {
         polygonIdx: number, vertexOffset: number, count: number,
         isTunnel: boolean, guardRailEnabled: boolean,
         area?: { minX: number; minY: number; maxX: number; maxY: number },
+        ringWasClosed: boolean = true,
     ): void {
         const vertices = this.m_unevalPositions;
         if ((globalThis as any).__mbDecodeDbg && !(globalThis as any).__mbAreaLogged) {
             (globalThis as any).__mbAreaLogged = 1;
             console.log(`[MBArea] area=${JSON.stringify(area)} count=${count} firstV=(${vertices[vertexOffset * 2]},${vertices[vertexOffset * 2 + 1]})`);
         }
-        // The stored ring is OPEN (closing duplicate stripped) — all count
-        // edges wrap. (mgl loops count-1 because its rings keep the dup.)
-        for (let i = 0; i < count; i++) {
+        // The stored ring is OPEN (closing duplicate stripped) — the wrap
+        // edge is ONLY emitted when the RAW ring carried the closing dup
+        // (mgl loops count-1 unconditionally and never fabricates a close).
+        const n = ringWasClosed ? count : count - 1;
+        for (let i = 0; i < n; i++) {
             const ai = vertexOffset + i;
             const bi = vertexOffset + ((i + 1) % count);
             const vax = vertices[ai * 2], vay = vertices[ai * 2 + 1];

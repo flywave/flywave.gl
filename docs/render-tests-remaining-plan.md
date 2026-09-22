@@ -6993,3 +6993,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 修正后家族态**：b2t 35,781（−345 vs 基线）/line-pattern 31,447（−23.6k）/junction 24,102（+4.9k 残）——g112 净改 ≈ **−40k**。tunnelstructs=0 bisect 旋钮入库（b2t 实证非隧道段, 保留供后续）。
 
 **⑤ 状态**：单测 310。**下轮正攻：①S6 隧道口/墙深度语义字面化（GREATER/LESS mask 与密墙交互, 消 junction +4.9k + tunnel 族 41-56k 梯队）；②Atmosphere overlay 深度语义修正后翻回默认（高 pitch 件 b2t/ortho 组）。**
+
+### §885 g114: g113⑤ 执行——S6/junction 残退三向定界（safeArea 变换实证精确; 差在 ring 输入构成）; mgl 字面两修落库（wrap 边/fills localOnly, 本家族 inert）（2026-09-23 第二十六轮）
+
+**① mgl 深度语义通读**：draw_elevated_fill.js 全链——structures 色通道 LEQUAL/ReadOnly/backCCW（bridges→tunnels 两段）; depth prepass 三相（initialize LEQUAL 重构/geometry LEQUAL+bias 写深/reset **GREATER** mask 复位）; ground shadow mask LEQUAL+stencil REPLACE。
+
+**② junction 三向定界**（双引擎 census+offered 计数器）：我方 offered=1506/keeps 973（prune≈0%）vs mgl offered=1756/keeps 817（prune 46%）——**safeArea 变换逐数实证精确**（junction 首例 mgl (775,2302)-(1824,8192) ↔ 我方 (387.5,0)-(912,2945) = ×0.5+翻转全对）⇒ 差异不在 bounds 而在 **ring 输入构成**：mgl 输入含 markup 层 rings（我方 processFillFeature 仅 hd-road-base 分支喂 addElevatedFeature, mgl fill_bucket 对 markup 同样 addRenderableRing）且其 46% 剪除主要落 markup; 我方少 markup 却多保留 base 边（none 905 vs 753）——残余 +152 边=细分内割边/ring 构成差, 需几何级逐边 dump（下轮）。
+
+**③ mgl 字面两修（落库, 本家族 A/B inert）**：①addRenderableRing **wrap 边仅当原始 ring 闭合**（mgl 恒 count−1 不补闭边; 本家族 rings 全闭合故 inert）; ②**fills resolveElevation localOnly**（mgl fill_hd_extension registry=undefined 同瓦片解析, 跨瓦片 merge 是 line_hd 路径; junction 单瓦片故 inert, 但语义正确入库）。A/B 七件全数不变（junction 24,102/b2t 35,781/line-pattern 31,447/grc 29,180/va 23,854/rm 10,480/munich 19,502）。
+
+**④ 下轮正攻**：①junction 边级对拍（[MGLRailH]/[MBRailH] 全量边 dump 比对, 定位 +152 边的构成——细分内割边 vs ring 集）+ markup rings 入 structures（mgl fill_bucket 语义）; ②Atmosphere overlay 深度语义（mask 写深交互）后翻回默认。
+
+**⑤ 状态**：零像素变化（两修语义正确但 inert）; 单测 310; mgl mirror offered/[MGLArea] 计数器留库。
