@@ -3221,24 +3221,79 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 // §885 g140: WebGL interception directly on the pre-created
                 // context (glcatch=1) — six object-model layers proved
                 // unreachable (g125-g139); capture the actual color provenance.
-                if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "glcatch=1") && ctx) {
+                const glMode = (window as any).__karma__?.config?.args
+                    ?.find?.((a: string) => a.startsWith("glcatch="))?.slice("glcatch=".length) ?? "";
+                if ((glMode === "1" || glMode === "2" || glMode === "3") && ctx) {
+                    // §885 g141: the radiance for glcatch=2 multiply — read from
+                    // the datasource environment once available; default 1.0794
+                    // fallback so the A/B runs even before wiring.
+                    if ((glMode === "2" || glMode === "3") && !(globalThis as any).__mbGroundRadiance) {
+                        (globalThis as any).__mbGroundRadiance = [1.0794, 1.0794, 1.0794];
+                    }
                     const L = (window as any).__mbGlLog = [];
+                    (window as any).__mbStackTraps = [];
                     const programs: string[] = (window as any).__mbGlPrograms = [];
                     const origSC = ctx.shaderSource;
+                    const srcByShader = new Map();
                     ctx.shaderSource = function (sh: any, src: string) {
-                        try {
-                            if (src && src.includes('mbBaseColor') && programs.length < 40) programs.push(src.slice(-500));
-                        } catch {}
+                        try { srcByShader.set(sh, src); } catch {}
                         return origSC.call(this, sh, src);
+                    };
+                    const origLink = ctx.linkProgram;
+                    ctx.linkProgram = function (prog: any) {
+                        const r = origLink.call(this, prog);
+                        try {
+                            const n = ctx.getProgramParameter(prog, ctx.ACTIVE_UNIFORMS) | 0;
+                            const names: string[] = [];
+                            for (let i = 0; i < n; i++) names.push(ctx.getActiveUniform(prog, i).name);
+                            const anySrc = [...srcByShader.values()].join('').slice(0, 200000);
+                            const isStruct = anySrc.includes('mbBaseColor');
+                            if (isStruct && (window as any).__mbGlUni == null) {
+                                (window as any).__mbGlUni = names;
+                            }
+                        } catch {}
+                        return r;
                     };
                     for (const n of ['uniform3f', 'uniform3fv', 'uniform4f', 'uniform4fv']) {
                         const orig = ctx[n];
                         if (typeof orig !== 'function') continue;
                         ctx[n] = function (...args: any[]) {
                             try {
-                                const v = args.slice(1).find(a => a && typeof a.length === 'number');
-                                if (L.length < 1200 && v && v.length === 3 && typeof v[0] === 'number') {
+                                // §885 g141 A/B: glcatch=2 — multiply base-color
+                                // uniforms (scalar vec3 with distinct channels)
+                                // by the ground radiance, in-place, to validate
+                                // the deck-lighting fix target.
+                                if ((glMode === "2" || glMode === "3") && n === "uniform3f" && args.length === 4
+                                    && typeof args[1] === 'number') {
+                                    const gr = (globalThis as any).__mbGroundRadiance as number[] | undefined;
+                                    if (gr && (args[1] !== args[2] || args[2] !== args[3])) {
+                                        // glcatch=2: sRGB-space multiply (as uploaded);
+                                        // glcatch=3: LINEAR multiply (gr^2.2) — mgl
+                                        // multiplies sRGB color by sRGB radiance;
+                                        // these uniforms are LINEAR, so the
+                                        // equivalent is × pow(gr, 2.2).
+                                        const k = glMode === "3"
+                                            ? [Math.pow(gr[0], 2.2), Math.pow(gr[1], 2.2), Math.pow(gr[2], 2.2)]
+                                            : gr;
+                                        return orig.call(this, args[0],
+                                            args[1] * k[0], args[2] * k[1], args[3] * k[2]);
+                                    }
+                                }
+                                let v = args.slice(1).find(a => a && typeof a.length === 'number');
+                                if (!v && n === 'uniform3f' && args.length === 4
+                                    && typeof args[1] === 'number') {
+                                    v = [args[1], args[2], args[3]];
+                                }
+                                if (L.length < 1200 && v && (v.length === 3 || v.length === 4) && typeof v[0] === 'number') {
                                     L.push([n, Array.from(v).map((x: number) => +x.toFixed(4))]);
+                                    // §885 g141: stack trap on the deck base color
+                                    // (0.3663,0.4564,0.5776 = linear a2b3c7).
+                                    const TR = (window as any).__mbStackTraps;
+                                    if (TR && TR.length < 3
+                                        && Math.abs(v[0] - 0.3663) < 0.002
+                                        && Math.abs(v[1] - 0.4564) < 0.002) {
+                                        try { TR.push(new Error('deck-color').stack?.split('\n').slice(1, 7).join(' | ')); } catch {}
+                                    }
                                 }
                             } catch {}
                             return orig.apply(this, args);
@@ -3916,7 +3971,9 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         for (const e of L) tally[String(e[0]) + ':' + JSON.stringify((e as any)[1])] =
                             (tally[String(e[0]) + ':' + JSON.stringify((e as any)[1])] ?? 0) + 1;
                         const top = Object.entries(tally).sort((a: any, b: any) => b[1] - a[1]).slice(0, 12);
-                        console.log('[MBGL] n=' + L.length + ' top=' + JSON.stringify(top));
+                        console.log('[MBGL] n=' + L.length + ' top=' + JSON.stringify(top)
+                            + ' structUni=' + JSON.stringify(((window as any).__mbGlUni ?? []).slice(0, 30))
+                            + ' traps=' + JSON.stringify(((window as any).__mbStackTraps ?? []).slice(0, 2)));
                         for (let pi = 0; pi < Math.min(P.length, 3); pi++) {
                             console.log('[MBGLProg ' + pi + '] ' + String(P[pi]).replace(/\n/g, '|').slice(-320));
                         }

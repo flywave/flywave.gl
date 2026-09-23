@@ -7247,3 +7247,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮首案（色源已二选一）**：`vertexColors/color attribute` 检查——geometry attributes 里查 color 流（emitElevatedFillPiece/TileGeometryCreator 是否烘顶点色）; 若是, **修法=烘色处 ×radiance**（一处, 与 g139 通道同源但落点在几何构建——datasource 可控）; 若无常量则在程序源（已采 mbBaseColor 程序尾可查）。
 
 **④ 状态**：工具+MBSTYLE_GLCATCH 入库（默认零影响）; 单测 310; 树净。
+
+### §885 g141: WebGL 拦截破案+修复目标 A/B 实证——deck 基色=material.color（uniform3f 标量式, 线性域 0.3663/0.4564/0.5776=a2b3c7^2.2, 栈=THREE setProgram→WebGLUniforms.upload）; 线性域×gr^2.2 修复 **ortho 71,858→20,137（−51.7k）**（2026-09-23 第五十三轮）
+
+**① 捕获缺口修正（g140 采获为何漏基色）**：向量式过滤漏掉 **uniform3f 标量式**（THREE 的 diffuse 上传路径）——补标量式后采获爆发：[0.3663,0.4564,0.5776]×123（=路面基色 a2b3c7 的线性域）/[0.8228,0.8963,0.8714]×123（=shade 色）/[0.9131]×376 等; **栈陷阱实证**：ctx.uniform3f ← SingleUniform.setValueV3f ← WebGLUniforms.upload ← setProgram ← renderBufferDirect = **THREE 标准 material.color 每绘制上传**（g140"顶点属性/常量"定性修正——是 uniform, 标量式）。
+
+**② 修复目标 A/B（glcatch=2/3 诊断模式, harness 内拦截乘法）**：glcatch=2（原值×gr）→ ortho **36,105**（−35.7k）; glcatch=3（**线性域×gr^2.2**——mgl sRGB 色×sRGB 辐射度 ≡ 线性域×gr^2.2）→ ortho **20,137**（−51.7k）✓ 量纲正确。家族: wireframe −5.7k/line-pattern −200/tunnel-fd −793; ncb +1.3k（已知已照亮路径双乘, 生产实现需其去重）。
+
+**③ 生产修复路径（下轮首案）**：值=material.color 线性域——修点=**引擎每帧设置该 material.color 的源头**（MapObjectAdapter→applyMaterialGenericProp m.color.set 路径, g127 只钩了 applyMaterialBaseColor 故 inert）: 在 generic-prop 色路径同样乘 gr^2.2（或 technique 色快照处）; glcatch=3 数值为对拍基准。
+
+**④ 状态**：glcatch=1/2/3 三模式工具入库（默认零影响, ortho 71,858 ✓）; 单测 310。
