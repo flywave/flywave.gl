@@ -290,9 +290,16 @@ export function createMaterial(
     {
         const kLin = (globalThis as any).__mbGroundRadLinear as number[] | undefined;
         const mc = (material as any).color;
-        if (kLin && mc && mc.isColor && !(material as any).__mbGroundLitHandler
+        // §885 g143: ALWAYS stash the pre-multiply base (materials created
+        // before the datasource published the factor get no bake here — the
+        // per-frame re-apply in the datasource sweep catches them from the
+        // stash). Dedup flags keep datasource-lit materials out.
+        if (mc && mc.isColor && !(material as any).__mbGroundLitHandler
             && !(options.technique as any).__mbSkipGroundRad) {
-            mc.setRGB(mc.r * kLin[0], mc.g * kLin[1], mc.b * kLin[2]);
+            (material as any).__mbGroundRadBase = [mc.r, mc.g, mc.b];
+            if (kLin) {
+                mc.setRGB(mc.r * kLin[0], mc.g * kLin[1], mc.b * kLin[2]);
+            }
         }
     }
     return material;

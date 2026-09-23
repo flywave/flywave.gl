@@ -7267,3 +7267,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 会话级结论**：九轮（g125-g142）deck 照亮案闭合——six 层对象模型 inert 的真相=值经 uniform3f 标量式上传（检测盲区）+ 材质在引擎工厂创建（datasource 包装不达）; 最终修复=工厂创建点烘入, datasource 侧发布因子。
 
 **④ 状态**：三文件落地（mapview DecodedTileHelpers + datasource 双发布）; 单测 310; **下轮: ①line-pattern +472 复核; ②mask GREATER 同类通道评估（S6）; ③cascade-1 战役。**
+
+### §885 g143: g142④① 执行——line-pattern +472 复核闭环: 残差=clone 材质逃逸（THREE .clone() 不携带自定义 stash）; 刷新扫落库（120/176 材质覆盖, 幂等）; 家族数字定格（2026-09-24 第五十五轮）
+
+**① 回退复核（glcatch=3 对照）**：line-pattern 生产 31,919 / glcatch=3-only 31,247 / 双链 31,118 ⇒ 生产烘焙漏=早帧+**clone 材质**（[MBRadSweep] 晚帧 census: 176 材质中 120 有 base stash, 111 有 lit 去重旗——56 无 stash=.clone() 产物, THREE clone 不复制自定义属性）。ortho 残差同源（32,109 vs 20,137 逐帧上限）。
+
+**② 落库（刷新扫）**：createMaterial 无条件 stash base（kLin 缺席也 stash）+ patchTileMaterials 每帧幂等 re-apply base×kLin（skip-if-equal, 无需 recompile）——120 stash 材质全时正确; 56 clone 材质仍逃逸（clone 点补 stash=下轮小改或 clone 后钩）。
+
+**③ 家族定格（生产版 vs g142 前最优）**: ortho −39.7k/line-pattern +472/wireframe −195/ncb −106/va −99/munich −290/tfd −168/b2t +13/grc +24 = **净 ≈ −40k**。line-pattern +472 在 −40k 大盘下接受（clone 补齐后应转正）。
+
+**④ 状态**：两文件增量（stash+刷新扫）入库; 单测 310; 树净（探针弃置）。**下轮: ①clone 点 stash 补齐（或 Material.clone 钩）; ②mask GREATER createMaterial 通道评估; ③cascade-1。**

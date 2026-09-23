@@ -105,12 +105,40 @@ export class MBMaterialPatchManager {
         // material adapter (MapMaterialAdapter.applyMaterialGenericProp
         // multiplies it into the per-frame base-color set — the fill decks'
         // only color path; glcatch=3-validated: ortho 71,858→20,137).
-        {
+        const kLinNow = (() => {
             const lsP = (this.m_dataSource as any).m_environment?.lighting3DState;
             const grP = lsP ? lsP.groundRadiance : undefined;
-            (globalThis as any).__mbGroundRadLinear = grP
+            return grP
                 ? [Math.pow(grP[0], 2.2), Math.pow(grP[1], 2.2), Math.pow(grP[2], 2.2)]
                 : undefined;
+        })();
+        (globalThis as any).__mbGroundRadLinear = kLinNow;
+        // §885 g143: re-apply base×kLin to engine-created materials that
+        // were built before the factor was published (kLin≈[1,1,1] at
+        // creation) — the creation bake alone missed early materials
+        // (line-pattern 31,919 vs both-chains 31,118).
+        if (kLinNow) {
+            // §885 g143: EVERY frame, idempotent — the signature gate blocked
+            // materials created after the first sweep; color assignment needs
+            // no recompile, and skip-if-equal avoids churn.
+            const sceneR = (this.m_dataSource as any).mapView?.m_scene;
+            if (sceneR) {
+                sceneR.traverse((o: any) => {
+                    if (!o.isMesh) return;
+                    const raw = o.material;
+                    const mats: any[] = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+                    for (const m of mats) {
+                        const base = m?.__mbGroundRadBase;
+                        if (base && m.color?.isColor && !m.__mbGroundLitHandler) {
+                            const tr = base[0] * kLinNow[0], tg = base[1] * kLinNow[1], tb = base[2] * kLinNow[2];
+                            if (Math.abs(m.color.r - tr) > 1e-6 || Math.abs(m.color.g - tg) > 1e-6
+                                || Math.abs(m.color.b - tb) > 1e-6) {
+                                m.color.setRGB(tr, tg, tb);
+                            }
+                        }
+                    }
+                });
+            }
         }
 
         // §885 g110 (mgl literal): the Atmosphere glow overlay — mgl
