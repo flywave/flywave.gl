@@ -101,6 +101,18 @@ export class MBMaterialPatchManager {
     patchTileMaterials(): void {
         const tiles = this.m_dataSource.getDecodedTiles();
 
+        // §885 g142: publish the LINEAR ground-radiance factor for the engine
+        // material adapter (MapMaterialAdapter.applyMaterialGenericProp
+        // multiplies it into the per-frame base-color set — the fill decks'
+        // only color path; glcatch=3-validated: ortho 71,858→20,137).
+        {
+            const lsP = (this.m_dataSource as any).m_environment?.lighting3DState;
+            const grP = lsP ? lsP.groundRadiance : undefined;
+            (globalThis as any).__mbGroundRadLinear = grP
+                ? [Math.pow(grP[0], 2.2), Math.pow(grP[1], 2.2), Math.pow(grP[2], 2.2)]
+                : undefined;
+        }
+
         // §885 g110 (mgl literal): the Atmosphere glow overlay — mgl
         // draw_atmosphere.ts drawAtmosphereGlow, drawn at the END of the
         // opaque pass whenever style.fog exists (it does by default) and the

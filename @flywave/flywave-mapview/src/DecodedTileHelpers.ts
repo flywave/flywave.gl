@@ -280,6 +280,21 @@ export function createMaterial(
     } else {
         MapMaterialAdapter.create(material, getMainMaterialStyledProps(technique));
     }
+    // §885 g142 (mbstyle datasource hook): mgl `lights` ground radiance —
+    // sRGB color × sRGB radiance ≡ linear × gr^2.2. Multiply into the
+    // material's base color AT CREATION (the fill decks' color path — the
+    // datasource's own wraps never reach engine-created materials,
+    // g125-g141; glcatch=3-validated: ortho 71,858→20,137). The datasource
+    // publishes the linear factor; materials it lights itself opt out via
+    // __mbGroundLitHandler.
+    {
+        const kLin = (globalThis as any).__mbGroundRadLinear as number[] | undefined;
+        const mc = (material as any).color;
+        if (kLin && mc && mc.isColor && !(material as any).__mbGroundLitHandler
+            && !(options.technique as any).__mbSkipGroundRad) {
+            mc.setRGB(mc.r * kLin[0], mc.g * kLin[1], mc.b * kLin[2]);
+        }
+    }
     return material;
 }
 

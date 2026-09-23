@@ -2530,6 +2530,16 @@ export class MBStyleDataSource extends TileDataSource {
                 (style as any).lights as any,
                 style.light,
             );
+            // §885 g142: publish the LINEAR ground-radiance factor at lights
+            // time (before any tile material creation — creation-time bake
+            // in DecodedTileHelpers multiplies it into fill base colors).
+            {
+                const lsL = this.m_environment?.lighting3DState;
+                const grL = lsL ? lsL.groundRadiance : undefined;
+                (globalThis as any).__mbGroundRadLinear = grL
+                    ? [Math.pow(grL[0], 2.2), Math.pow(grL[1], 2.2), Math.pow(grL[2], 2.2)]
+                    : undefined;
+            }
             // applyBackgroundColor ran before the environment existed; re-run it
             // now that lighting3DState is configured so the background clear
             // color picks up the 3D-lights ground radiance.

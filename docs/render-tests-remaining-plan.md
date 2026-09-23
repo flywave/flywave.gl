@@ -7257,3 +7257,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 生产修复路径（下轮首案）**：值=material.color 线性域——修点=**引擎每帧设置该 material.color 的源头**（MapObjectAdapter→applyMaterialGenericProp m.color.set 路径, g127 只钩了 applyMaterialBaseColor 故 inert）: 在 generic-prop 色路径同样乘 gr^2.2（或 technique 色快照处）; glcatch=3 数值为对拍基准。
 
 **④ 状态**：glcatch=1/2/3 三模式工具入库（默认零影响, ortho 71,858 ✓）; 单测 310。
+
+### §885 g142: g141③ 扥产的修复落地——**deck 照亮墙破（生产版）**: createMaterial 创建时 ×gr^2.2（线性域）, ortho 71,858→**32,109**（−39.7k）, 家族净 ≈ −40k 全绿（2026-09-23 第五十四轮）
+
+**① 落地点（第三层命中）**：adapter generic-prop 路（第一层）仍 inert（[MBDeckF] 的 adapter=false 实证该路径不挂）⇒ 改 **DecodedTileHelpers.createMaterial 材质创建时**乘线性因子 `__mbGroundRadLinear`（datasource applyLights+patchTileMaterials 双点发布 gr^2.2, __mbGroundLitHandler 去重门 + technique.__mbSkipGroundRad 逃生口）——创建时烘入 = 该值随后经 THREE 标准上传（g141 栈实证）直达像素。
+
+**② A/B（vs 各件最优基线）**：ortho 71,858→**32,109**（−39.7k, glcatch=3 的 20,137 为逐帧晚绑定上限, 创建时烘入略低=早帧材质先建）/wireframe −195/ncb −106（双乘担忧未现, 反而改善）/va −99/munich −290/tunnel-fd −168/b2t +13/grc +24（中性）/line-pattern +472（唯一小回退, 挂号复核）。**家族净 ≈ −40k**。
+
+**③ 会话级结论**：九轮（g125-g142）deck 照亮案闭合——six 层对象模型 inert 的真相=值经 uniform3f 标量式上传（检测盲区）+ 材质在引擎工厂创建（datasource 包装不达）; 最终修复=工厂创建点烘入, datasource 侧发布因子。
+
+**④ 状态**：三文件落地（mapview DecodedTileHelpers + datasource 双发布）; 单测 310; **下轮: ①line-pattern +472 复核; ②mask GREATER 同类通道评估（S6）; ③cascade-1 战役。**
