@@ -7365,3 +7365,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② A/B（vs 各件最优）**：**shadows-junction 24,102→23,210（−892 ✓ 首个 S6 深度链正向）**/b2t 35,794（中性）/ncb 10,042 ✓/va 23,755 ✓/tunnel-color-fd **111,807 不变**——junction 的 mask 车削生效而 tunnel-fd 不生效=两夹具 mask 通道下游差异（tunnel-fd 疑 mask 对象未绘制或渲染序问题, [MBPrepass] 已证 emit 侧健康 → 下一层=mask mesh 的 draw 可见性/renderOrder 域, 挂号）。
 
 **③ 状态**：mapview+datasource 两文件已改（含 g142 烘焙）; 单测 310; 净 −892 零回归落地。**下轮: tunnel-fd mask 对象渲染可见性定界（为何 junction 的 carve 生效而 tunnel-fd 不生效）→ 预期联动 111k; 其后 cascade-1。**
+
+### §885 g153: g152③ 执行——tunnel-fd mask 材质态实证**正确**（cw=false/df=GREATER/dw=true 与 junction 同）; 发散域收窄至材质态之下的绘制序/内容层（2026-09-24 第六十五轮）
+
+**① [MBPrepassMat] 探针（patch 时点）**：tunnel-fd 的 ground/mask 材质 colorWrite=false/depthFunc=6(GreaterDepth)/depthWrite=true 全对——**与 junction 无差** ⇒ g152 的"渲染可见性"疑点排除一半: 材质态两夹具一致, 发散在**之下**（绘制批次序/深度缓冲时序/tunnel 腔内容本身是否达屏）。
+
+**② 收窄后的三选一（下轮首案）**：①mask 执行时深度缓冲尚未含 ground 写入（批次序/双通道三通道渲染分批）→ 抓 draw-call 序; ②tunnel 腔内容（蓝色数据驱动墙/标记）虽 emit 但未达屏（被 shade/路面盖）→ mbhide shade 复测; ③junction 的 −892 来源并非 mask 车削而是 prepass 其他副作用 → junction −892 归因复核（防误锁）。
+
+**③ 状态**：探针弃置树净; 单测 310; 本轮零代码改动（纯定界）。**下轮: 三选一裁决后或修 tunnel-fd（111k）或转 cascade-1（157k）。**
