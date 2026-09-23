@@ -3223,7 +3223,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 // unreachable (g125-g139); capture the actual color provenance.
                 const glMode = (window as any).__karma__?.config?.args
                     ?.find?.((a: string) => a.startsWith("glcatch="))?.slice("glcatch=".length) ?? "";
-                if ((glMode === "1" || glMode === "2" || glMode === "3") && ctx) {
+                if ((glMode === "1" || glMode === "2" || glMode === "3" || glMode === "4") && ctx) {
                     // §885 g141: the radiance for glcatch=2 multiply — read from
                     // the datasource environment once available; default 1.0794
                     // fallback so the A/B runs even before wiring.
@@ -3263,6 +3263,19 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                 // uniforms (scalar vec3 with distinct channels)
                                 // by the ground radiance, in-place, to validate
                                 // the deck-lighting fix target.
+                                if (glMode === "4" && n === "uniform3f" && args.length === 4
+                                    && typeof args[1] === 'number'
+                                    && (args[1] !== args[2] || args[2] !== args[3])) {
+                                    // §885 g145: stack-sample the distinct-channel
+                                    // color uploads to identify their owners.
+                                    const TR4 = (window as any).__mbStackTraps4 ??= [];
+                                    if (TR4.length < 14) {
+                                        try {
+                                            TR4.push([+args[1].toFixed(4), +args[2].toFixed(4), +args[3].toFixed(4),
+                                                String(new Error('t').stack?.split('\n').slice(2, 5).join(' <= '))]);
+                                        } catch {}
+                                    }
+                                }
                                 if ((glMode === "2" || glMode === "3") && n === "uniform3f" && args.length === 4
                                     && typeof args[1] === 'number') {
                                     const gr = (globalThis as any).__mbGroundRadiance as number[] | undefined;
@@ -3973,7 +3986,8 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                         const top = Object.entries(tally).sort((a: any, b: any) => b[1] - a[1]).slice(0, 12);
                         console.log('[MBGL] n=' + L.length + ' top=' + JSON.stringify(top)
                             + ' structUni=' + JSON.stringify(((window as any).__mbGlUni ?? []).slice(0, 30))
-                            + ' traps=' + JSON.stringify(((window as any).__mbStackTraps ?? []).slice(0, 2)));
+                            + ' traps=' + JSON.stringify(((window as any).__mbStackTraps ?? []).slice(0, 2))
+                            + ' traps4=' + JSON.stringify(((window as any).__mbStackTraps4 ?? []).slice(0, 6)));
                         for (let pi = 0; pi < Math.min(P.length, 3); pi++) {
                             console.log('[MBGLProg ' + pi + '] ' + String(P[pi]).replace(/\n/g, '|').slice(-320));
                         }

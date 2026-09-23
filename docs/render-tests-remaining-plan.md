@@ -7285,3 +7285,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 下轮（修正后的首案）**: glcatch=3 的多出 +12k 对象识别（在钩内按 uniform 值聚类对照 stash 清单, 或 stack-trap 扩采样）→ 补其照亮路径; 其后 mask GREATER（createMaterial depthTest 仅 extruded 分支, 需扩 technique 字段）与 cascade-1 按挂号。
 
 **③ 状态**：clone 钩落地（中性标注）; 单测 310; 树净。
+
+### §885 g145: g144② 执行——glcatch=4 栈采样落地（栈仅 THREE 内部=无主识别）; prod-vs-g3 像素对拍=**双向色调交换**非单调欠照亮类 ⇒ +12k 非单一对象群, 需 setProgram 材质柄级取证（2026-09-24 第五十七轮）
+
+**① glcatch=4（栈采样）**：distinct-channel 标量色上传的栈采样——全部止于 SingleUniform.setValueV3f←upload←setProgram（THREE 内部, 无材质柄可达）⇒ uniform 钩层无法识别"主人"。烘焙后采获更新: 基色 [0.4333,...]=0.3663×1.183 ✓（生产烘焙生效实证）; 新现 [0,0,1.183]×123（疑 emissive/错位串扰, 待查）。
+
+**② prod-vs-g3 对拍（12k 差）**：**双向交换**——(226,117) prod(190,209,232) vs g3(159,175,194), (365,182) 反向; 白区 prod 255 vs g3 (227,236,233)=g3 侧**变暗**（×1.18 不可能调暗 ⇒ g3 采样基不同或含其他效应）⇒ **+12k 非简单欠照亮对象群**, glcatch=3 的标量乘本身有副作用（乘中了不该乘的 uniform 如 [0,0,1.183] 类）——20,137 上限的"纯净性"存疑, 不宜作为收敛目标盲追。
+
+**③ 下轮决策**: ①以 expected 为准逐像素重审 ortho 32,109 的主残差带（而非追 g3）——prod 是否已**过度**照亮某带; ②setProgram 材质柄级取证（hook WebGLRenderer.renderBufferDirect 的 object.material, 在 datasource patchTile 的 scene traverse 内即可对齐——已有 census 机制）; ③S6 mask 与 cascade-1 按挂号。
+
+**④ 状态**：glcatch=4 工具入库（默认零影响, ortho 32,109 ✓）; 单测 310。
