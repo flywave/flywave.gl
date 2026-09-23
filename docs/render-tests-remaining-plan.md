@@ -7305,3 +7305,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮首案**: structure 链 mbK 对照 mgl apply_lighting 逐项数值对拍（探针扩 uMB3DAmb/dir 采样 + exp 墙像素反解期望因子）; 或 structpow=0 A/B 复查（链内已有旋钮）。
 
 **④ 状态**：零代码改动; 单测 310; 树净。
+
+### §885 g147: g146③ 执行——mbK 假设证伪（structpow=0 反差 +39）; **过冲像素=background 层**（rmstyle 实证）⇒ ortho 主残差=背景雾/clear 域非结构链（g146 定性再修正）（2026-09-24 第五十九轮）
+
+**① structpow=0 A/B**：ortho 32,109→32,148（+39 反差）⇒ pow 项正确, mbK 过冲假设削弱。
+
+**② rmstyle 级联定界**：(390,153)/(72,0) 过冲与白溢出像素在去除 fake-road-shade/road-base-bridge/lane-nav **全部不变**, 去 background → (95,105,116)/(0,0,0) ⇒ **过冲类+白溢出类均为 background 层内容**（我方 (223,232,244) vs exp (176,194,216); 顶带我方 255 vs exp (213,215,215)=**exp 背景比 style 色 (234,243,240) 更暗**——fog/半透明覆盖/剪裁语义）。g146"结构墙 mbK 过照亮"定性**再修正**（1.27 比值巧合）。
+
+**③ 下轮首案**: 背景域对拍——mgl background.fragment（apply_lighting_with_emission_ground + fog + 剪裁）vs 我方背景 quad/clear 链（MBBackgroundFogRenderer §244+applyBackgroundColor）; exp (213,215,215) 反解: 暗化因子 ~0.91 疑 fog 混合或 cutoff。
+
+**④ 状态**：零代码改动; 单测 310; 树净。
