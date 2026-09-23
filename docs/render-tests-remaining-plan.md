@@ -7315,3 +7315,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮首案**: 背景域对拍——mgl background.fragment（apply_lighting_with_emission_ground + fog + 剪裁）vs 我方背景 quad/clear 链（MBBackgroundFogRenderer §244+applyBackgroundColor）; exp (213,215,215) 反解: 暗化因子 ~0.91 疑 fog 混合或 cutoff。
 
 **④ 状态**：零代码改动; 单测 310; 树净。
+
+### §885 g148: g147③ 执行——背景域 mgl 链通读+数值假设扫描: 暗化非 lighting（radiance 1.0794 应增亮）; mgl 实渲 (213,215,215)=exp 逐数一致; 暗化机制收敛至 **色彩空间/FBO 转换语义**（0.835≈0.918^2.2 一阶吻合但逐通道不齐）（2026-09-24 第六十轮）
+
+**① mgl 链通读**：background.vertex `v_color = apply_lighting_with_emission_ground(u_color, e)`（=color×u_ground_radiance, e=0）; fragment fog/cutout 均未激活; draw_background 非 viewport-pitch 走 per-tile bounds; u_color=toPremultipliedRenderColor(a=1 直通)——**链内无暗化源, radiance 1.0794 为增亮**。
+
+**② 数值假设扫描（全否）**：style^2.2（211/229/223 vs exp 213/215/215 逐通道不齐）/ fog（暗于 style 且向白雾应增亮）/ cutout/opacity（a=1）——暗化真源=mgl 内部色彩空间/FBO 写出转换（0.835≈srgbToLinear(0.918) 一阶吻合 ⇒ 疑 u_color(sRGB 值)被当线性写出或反之的双转换）。
+
+**③ 我方链现状**：applyBackgroundColor 已做 linear radiance 乘法（lit=linear(c)×rad^2.2 → getHex 复原 sRGB ⇒ 应≈234×1.08=253）——与我方实测 255 顶带/(223,232,244) 不完全一致 ⇒ 我方链亦有第二效应（fog 带蓝移 244>240）待并案。
+
+**④ 下轮首案**: vendored mgl 直改 u_color=纯红/白 实验（mirror 补丁）判定其 FBO 写出转换式; 同步我方 clearColor 双效应（蓝移）归因; 修齐后 ortho 主残差带应收敛。
+
+**⑤ 状态**：零代码改动; 单测 310; 树净。
