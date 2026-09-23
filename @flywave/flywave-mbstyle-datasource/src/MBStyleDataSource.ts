@@ -1664,6 +1664,23 @@ export class MBStyleDataSource extends TileDataSource {
     private m_clipMask: Map<string, number[][][]> = new Map();
 
     constructor(params: MBStyleDataSourceParameters) {
+        // §885 g144: propagate the ground-rad base stash through
+        // THREE.Material.clone — clones copy the (already multiplied) color
+        // but not custom props. Measured NEUTRAL on the current fixtures
+        // (the g143 56-material escape is NOT clone-sourced — creation path
+        // still unidentified), but semantically required so clones stay
+        // re-appliable if/when clone-sourced materials appear.
+        if (!(globalThis as any).__mbRadCloneHook) {
+            (globalThis as any).__mbRadCloneHook = true;
+            const origClone = THREE.Material.prototype.clone;
+            THREE.Material.prototype.clone = function (this: any, ...args: any[]) {
+                const c: any = origClone.apply(this, args);
+                if (this.__mbGroundRadBase && !c.__mbGroundRadBase) {
+                    c.__mbGroundRadBase = this.__mbGroundRadBase;
+                }
+                return c;
+            };
+        }
         const delegatingProvider = new DelegatingDataProvider();
 
         const options: TileDataSourceOptions = {

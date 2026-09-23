@@ -7277,3 +7277,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 家族定格（生产版 vs g142 前最优）**: ortho −39.7k/line-pattern +472/wireframe −195/ncb −106/va −99/munich −290/tfd −168/b2t +13/grc +24 = **净 ≈ −40k**。line-pattern +472 在 −40k 大盘下接受（clone 补齐后应转正）。
 
 **④ 状态**：两文件增量（stash+刷新扫）入库; 单测 310; 树净（探针弃置）。**下轮: ①clone 点 stash 补齐（或 Material.clone 钩）; ②mask GREATER createMaterial 通道评估; ③cascade-1。**
+
+### §885 g144: g143④① 执行——clone 钩落地但**中性**: 56 材质逃逸非 clone 源（theory 证伪）; 残余 12k=另一创建路径的合法照亮对象（图标/符号系?）; ②③挂号维持（2026-09-24 第五十六轮）
+
+**① clone 钩（落地, 标注中性）**：THREE.Material.prototype.clone 一次性钩传播 __mbGroundRadBase（源→克隆共享 pre-bake 基色）——ortho/line-pattern 逐数不变（32,109/31,919）⇒ **g143"56 材质=clone 逃逸"定性证伪**; 钩保留（语义正确, 标注 measured-neutral）。56 材质真源=**非 createMaterial 非 clone 的第三路径**（疑图标/符号/天空系——glcatch=3 乘它们得 +12k = mgl 对 symbol 也照亮, 而我方 stash 仅覆盖 fill 创建路径）。
+
+**② 下轮（修正后的首案）**: glcatch=3 的多出 +12k 对象识别（在钩内按 uniform 值聚类对照 stash 清单, 或 stack-trap 扩采样）→ 补其照亮路径; 其后 mask GREATER（createMaterial depthTest 仅 extruded 分支, 需扩 technique 字段）与 cascade-1 按挂号。
+
+**③ 状态**：clone 钩落地（中性标注）; 单测 310; 树净。
