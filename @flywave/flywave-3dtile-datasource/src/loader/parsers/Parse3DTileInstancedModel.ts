@@ -150,34 +150,25 @@ function extractInstancedAttributes(
 
         instancePosition.copy(position);
 
-        // Get the instance rotation
-        const normalUp = scratch1.fromArray(
-            featureTable.getProperty("NORMAL_UP", GL.FLOAT, 3, i, [])
-        );
-        const normalRight = scratch2.fromArray(
-            featureTable.getProperty("NORMAL_RIGHT", GL.FLOAT, 3, i, [])
-        );
-
+        // Get the instance rotation（NORMAL_* 为可选属性：缺失时 getProperty 返回
+        // undefined，必须先 hasProperty 守卫，否则 fromArray(undefined) 崩溃）
         let hasCustomOrientation = false;
-        if (normalUp) {
-            if (!normalRight) {
+        if (featureTable.hasProperty("NORMAL_UP")) {
+            if (!featureTable.hasProperty("NORMAL_RIGHT")) {
                 throw new Error(
                     "i3dm: Custom orientation requires both NORMAL_UP and NORMAL_RIGHT."
                 );
             }
-            instanceNormalUp.copy(normalUp);
-            instanceNormalRight.copy(normalRight);
+            instanceNormalUp.copy(
+                scratch1.fromArray(featureTable.getProperty("NORMAL_UP", GL.FLOAT, 3, i, []))
+            );
+            instanceNormalRight.copy(
+                scratch2.fromArray(featureTable.getProperty("NORMAL_RIGHT", GL.FLOAT, 3, i, []))
+            );
             hasCustomOrientation = true;
         } else {
-            const octNormalUp = scratch1.fromArray(
-                featureTable.getProperty("NORMAL_UP_OCT32P", GL.UNSIGNED_SHORT, 2, i, [])
-            );
-            const octNormalRight = scratch2.fromArray(
-                featureTable.getProperty("NORMAL_RIGHT_OCT32P", GL.UNSIGNED_SHORT, 2, i, [])
-            );
-
-            if (octNormalUp) {
-                if (!octNormalRight) {
+            if (featureTable.hasProperty("NORMAL_UP_OCT32P")) {
+                if (!featureTable.hasProperty("NORMAL_RIGHT_OCT32P")) {
                     throw new Error(
                         "i3dm: oct-encoded orientation requires NORMAL_UP_OCT32P and NORMAL_RIGHT_OCT32P"
                     );
@@ -221,11 +212,12 @@ function extractInstancedAttributes(
         if (Number.isFinite(scale)) {
             instanceScale.multiplyScalar(scale);
         }
-        const nonUniformScale = scratch1.fromArray(
-            featureTable.getProperty("SCALE_NON_UNIFORM", GL.FLOAT, 3, i, [])
-        );
-        if (nonUniformScale) {
-            instanceScale.multiply(nonUniformScale);
+        if (featureTable.hasProperty("SCALE_NON_UNIFORM")) {
+            instanceScale.multiply(
+                scratch1.fromArray(
+                    featureTable.getProperty("SCALE_NON_UNIFORM", GL.FLOAT, 3, i, [])
+                )
+            );
         }
 
         // Get the batchId

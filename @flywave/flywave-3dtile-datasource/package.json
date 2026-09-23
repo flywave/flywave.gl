@@ -9,7 +9,7 @@
         "test": "test"
     },
     "scripts": {
-        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/*.js",
+        "test": "npx webpack --config scripts/webpack.test.cjs && node test-dist/run.cjs",
         "build": "cross-env tsc --build $EXTRA_TSC_ARGS --force",
         "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS"
     },

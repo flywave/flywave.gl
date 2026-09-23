@@ -75,7 +75,7 @@ const vBatchVisible = varying(float(1), "vBatchVisible");
 
 function buildBatchOffsetNode(batchIdAttrName: string) {
     return Fn(() => {
-        const batchId = attribute(batchIdAttrName).round();
+        const batchId = float(attribute(batchIdAttrName)).round();
 
         const animU = float(0.5).div(_animTexW);
         const animV = batchId.add(0.5).div(_animTexH);

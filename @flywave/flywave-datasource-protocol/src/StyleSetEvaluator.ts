@@ -679,6 +679,11 @@ export class StyleSetEvaluator {
                     "error",
                     String(err)
                 );
+                // fail-closed：when 解析失败（如使用了不受支持的运算符）绝不能让
+                // _whenExpr 保持 undefined——匹配阶段会跳过条件检查，样式变成
+                // "无条件命中所有要素"（静默染全部对象）。置为恒假条件，使该样式
+                // 永不生效，问题通过日志暴露。
+                style._whenExpr = Expr.parse("0!=0");
             }
         }
     }

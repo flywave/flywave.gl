@@ -39,6 +39,19 @@
   已在 eslint-config-prettier 8 合并进 `prettier`，配置链启动即崩（与改动
   无关的既有问题）。`pnpm prettier` 正常。
 
+**✅ 例外（2026-09-23 修复）：`@flywave/flywave-3dtile-datasource` 的
+`pnpm --filter @flywave/flywave-3dtile-datasource test` 已打通**——webpack
+（ts-loader transpileOnly）把 `test/theme/*.test.ts` 打成单文件 CJS，node 里
+以程序化 mocha 运行（`test/run.cjs` 手动 emit root suite 的 pre-require 钩子
+安装 bdd 全局，再 require.context 加载用例）。当前 28 用例全绿，覆盖 theme
+系统（Observe3DTileChange 通知语义/Tiles3DStyleWatcher 批材质生命周期与逐出
+遗忘/BatchStyleProcessor 求值合并/B3DMBatchMaterial 样式纹理/Tile3DFeatureTable
+可选属性语义）。给其他包复刻此链路：复制 `scripts/webpack.test.cjs`
+（ts-loader 路径 `node_modules/.pnpm/ts-loader@9.5.4_typescript@5.8.2_webpack@5.104.1`）
++ `test/run.cjs` 模板，`@flywave/*` 用 alias 指到各包 src，three/webgpu 一并
+打包（CJS require 不了 ESM-only 子路径）。新增用例放 `test/theme/*.test.ts`
+即被自动拾取。
+
 ### ❌ 文档幻觉（不存在，勿引用）
 
 `docs/docs/development/*.md` 里的 Jest、`jest.config.js`、`pnpm test:watch`、

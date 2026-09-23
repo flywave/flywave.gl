@@ -17,3 +17,4 @@ three-geospatial/
 credentials.js
 @flywave/flywave.gl/dist
 dist
+test-dist

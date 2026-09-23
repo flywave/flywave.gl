@@ -61,6 +61,17 @@ export class Observe3DTileChange {
         });
     }
 
+    /**
+     * 瓦片被逐出（disposeTile）时回调：从去重集合中遗忘该 uri，
+     * 使其重新解析后的首次激活能再次触发 load 通知（重新套批材质）。
+     * 默认只遗忘 uri；子类可覆写以清理逐出瓦片的关联登记。
+     * @param currentTile The tile that was disposed
+     */
+    public onTileDisposed(currentTile: ITile): void {
+        const uri = `${currentTile.__basePath}/${currentTile.content.uri}`;
+        this._watchIds.delete(uri);
+    }
+
     public dispose(): void {
         this._watchIds.clear();
         this._notifyCallback = null;

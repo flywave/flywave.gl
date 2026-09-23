@@ -316,6 +316,23 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
     }
 
     /**
+     * 瓦片被逐出（disposeTile）时清理该瓦片的批材质登记。
+     *
+     * 批材质实例随 cached.materials 别名由引擎在 disposeTile 中统一 dispose，
+     * 这里只清登记：让该瓦片重新解析后的首次激活重新求值样式并对全新 mesh
+     * 套批材质（首次挂载）。激活/失活路径保持零操作——已挂材质绝不触碰
+     * （three 0.185.1 下任何翻动材质都会全量重编译，见
+     * references/3dtile-styling.md「渲染路径零操作」铁律）。
+     * @param tile - Disposed tile instance
+     */
+    onTileDisposed(tile: ITile): void {
+        super.onTileDisposed(tile);
+        const tileId = this.getTileId(tile);
+        this.m_appliedMaterials.delete(tileId);
+        this.m_tileFeatures.delete(tileId);
+    }
+
+    /**
      * Extracts tile feature data
      * @param tile - Tile instance to extract features from
      * @returns Tile feature data or null if unsupported format
@@ -1244,7 +1261,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
         this.m_appliedMaterials.clear();
         this.m_tileFeatures.clear();
 
-        this.m_mapRenderingManager.removeTranslucentLayer(this.observeId);
+        this.m_mapRenderingManager?.removeTranslucentLayer(this.observeId);
 
         // Call parent class dispose method
         super.dispose();
