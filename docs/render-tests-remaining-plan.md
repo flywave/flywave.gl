@@ -7391,3 +7391,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮首案（终界-1）**: 蓝墙 mesh 的世界包围盒→投影→屏坐标对拍（census 已有 bounds 机制; 若投影后不在视口=几何错位, 在视口但不亮=深度/裁剪）; 或 three.js renderer.info 该 mesh 的 draw call 计数。
 
 **④ 状态**：探针弃置树净; 单测 310; 零代码改动。
+
+### §885 g156: 终界-1 实验——投影 census 揭示**探针目标错误**: 蓝墙对象 8 角投影全同点 (−209,−187, NDC z=1)=包围盒退化 ⇒ census 命中的是 **tile.objects（§585 不栅格化体）非引擎渲染实例**; g125-139 墙的根因回望=**多年探针一直打在错误对象集上**（2026-09-24 第六十八轮）
+
+**① [MBTunProj] 实验**：蓝/红墙对象 8 包围盒角投影**全部同点** (−209,−187, z=1)——包围盒退化（computeBoundingBox 于该对象=单点/空 position）⇒ 这些对象是 **tile.objects 装饰体**（§585 明载"materials never rasterize"）, 不是渲染实例。g155 的"mesh 在场景内"系 tile.objects 层的假象; **真正渲染实例在 engine 的 Tile 工厂产物中, patchTile 循环不可见**。
+
+**② 会话级回望（重要）**：g125-g139 六层注入"全 inert"的复核视角——探针/注入多数打在 tile.objects 或其材质上, 而渲染实例自 createMaterial 起即分叉; g142 的 createMaterial 杠杆成功恰因打在正确层。**tunnel-fd 终界 = 需 scene.traverse 全场景级 census 找到蓝色 #0000fe 的渲染实例**（g131 MBDeckF 风格但按色键控）, 对拍其包围盒/投影。
+
+**③ 状态**：探针弃置树净; 单测 310; 零代码改动。**下一会话: 渲染实例 scene-traverse 色键 census（#0000fe/#fe0000）→ 对拍 junction → 修 → tunnel-fd 111k; cascade-1。**
