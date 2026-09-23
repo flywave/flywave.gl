@@ -287,6 +287,27 @@ export function createMaterial(
     // g125-g141; glcatch=3-validated: ortho 71,858→20,137). The datasource
     // publishes the linear factor; materials it lights itself opt out via
     // __mbGroundLitHandler.
+    // §885 g152 (mbstyle datasource hook): the elevation PREPASS techniques
+    // (technique._mbElevPrepass 'ground'|'mask') need depth-only materials —
+    // mgl drawDepthPrepass renders colorless fragments that write/carve the
+    // depth buffer (mask = GREATER reset carving see-through tunnel holes).
+    // The datasource's patchTile sets these on tile-object materials, but the
+    // RENDERED instances come from THIS factory (g125-g141 wall) — apply at
+    // creation (mgl literal: colorWrite=false, depthWrite, CullFace disabled;
+    // initialize/geometry LEQUAL, reset GREATER).
+    {
+        const pre = (technique as any)._mbElevPrepass as string | undefined;
+        if (pre === 'ground' || pre === 'mask') {
+            material.colorWrite = false;
+            material.depthWrite = true;
+            material.depthTest = true;
+            material.transparent = false;
+            material.side = THREE.DoubleSide;
+            material.depthFunc = pre === 'mask'
+                ? (THREE as any).GreaterDepth
+                : (THREE as any).LessEqualDepth;
+        }
+    }
     {
         const kLin = (globalThis as any).__mbGroundRadLinear as number[] | undefined;
         const mc = (material as any).color;

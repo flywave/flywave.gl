@@ -7357,3 +7357,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 决策（防反复纪律）**：背景微结构挂账封存（三层定性: 全局线性→梯度→振荡, 每层都被下一测量推翻——继续追将违反"不盲对齐"纲领）; 可落地项=顶带 +5 偏亮的恒定项修正评估（若消除→预计 −数千级, 下轮与 mask/cascade 大项权衡优先级）。
 
 **④ 状态**：探针清理; 零代码改动; 单测 310; 树净。
+
+### §885 g152: S6 mask GREATER 生产通道落地（createMaterial 创建时 prepass 材质属性）——junction −892 首收, tunnel-fd 不变（双速域差异挂号）, 零回归（2026-09-24 第六十四轮）
+
+**① 实现（g142 同款杠杆）**：DecodedTileHelpers.createMaterial 创建时按 `technique._mbElevPrepass`（'ground'|'mask'）设置 colorWrite=false/depthWrite/DoubleSide/depthFunc（mask=GREATER, ground=LEQUAL）——mgl drawDepthPrepass 字面；g137 的"patchTile 不达引擎实例"墙由此绕过（引擎工厂内直接生效）。
+
+**② A/B（vs 各件最优）**：**shadows-junction 24,102→23,210（−892 ✓ 首个 S6 深度链正向）**/b2t 35,794（中性）/ncb 10,042 ✓/va 23,755 ✓/tunnel-color-fd **111,807 不变**——junction 的 mask 车削生效而 tunnel-fd 不生效=两夹具 mask 通道下游差异（tunnel-fd 疑 mask 对象未绘制或渲染序问题, [MBPrepass] 已证 emit 侧健康 → 下一层=mask mesh 的 draw 可见性/renderOrder 域, 挂号）。
+
+**③ 状态**：mapview+datasource 两文件已改（含 g142 烘焙）; 单测 310; 净 −892 零回归落地。**下轮: tunnel-fd mask 对象渲染可见性定界（为何 junction 的 carve 生效而 tunnel-fd 不生效）→ 预期联动 111k; 其后 cascade-1。**
