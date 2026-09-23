@@ -3218,6 +3218,33 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 const ctx =
                     canvas.getContext("webgl2", { stencil: true, antialias: true, preserveDrawingBuffer: true, alpha: true }) as any ??
                     canvas.getContext("webgl", { stencil: true, antialias: true, preserveDrawingBuffer: true, alpha: true }) as any;
+                // §885 g140: WebGL interception directly on the pre-created
+                // context (glcatch=1) — six object-model layers proved
+                // unreachable (g125-g139); capture the actual color provenance.
+                if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "glcatch=1") && ctx) {
+                    const L = (window as any).__mbGlLog = [];
+                    const programs: string[] = (window as any).__mbGlPrograms = [];
+                    const origSC = ctx.shaderSource;
+                    ctx.shaderSource = function (sh: any, src: string) {
+                        try {
+                            if (src && src.includes('mbBaseColor') && programs.length < 40) programs.push(src.slice(-500));
+                        } catch {}
+                        return origSC.call(this, sh, src);
+                    };
+                    for (const n of ['uniform3f', 'uniform3fv', 'uniform4f', 'uniform4fv']) {
+                        const orig = ctx[n];
+                        if (typeof orig !== 'function') continue;
+                        ctx[n] = function (...args: any[]) {
+                            try {
+                                const v = args.slice(1).find(a => a && typeof a.length === 'number');
+                                if (L.length < 1200 && v && v.length === 3 && typeof v[0] === 'number') {
+                                    L.push([n, Array.from(v).map((x: number) => +x.toFixed(4))]);
+                                }
+                            } catch {}
+                            return orig.apply(this, args);
+                        };
+                    }
+                }
 
                 // Pin the global label fade duration to the test's requested
                 // value so opacity transitions match `expected.png` timing.
@@ -3881,6 +3908,19 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                     console.log('[MBCapFinal] px=' + pF.join(',')
                         + ' discLast=' + JSON.stringify((globalThis as any).__mbDiscLast ?? null)
                         + ' frameN=' + ((globalThis as any).__mbFrameN ?? 0));
+                    // §885 g140: dump the GL interception harvest.
+                    {
+                        const L = (window as any).__mbGlLog ?? [];
+                        const P = (window as any).__mbGlPrograms ?? [];
+                        const tally: Record<string, number> = {};
+                        for (const e of L) tally[String(e[0]) + ':' + JSON.stringify((e as any)[1])] =
+                            (tally[String(e[0]) + ':' + JSON.stringify((e as any)[1])] ?? 0) + 1;
+                        const top = Object.entries(tally).sort((a: any, b: any) => b[1] - a[1]).slice(0, 12);
+                        console.log('[MBGL] n=' + L.length + ' top=' + JSON.stringify(top));
+                        for (let pi = 0; pi < Math.min(P.length, 3); pi++) {
+                            console.log('[MBGLProg ' + pi + '] ' + String(P[pi]).replace(/\n/g, '|').slice(-320));
+                        }
+                    }
                 } catch { /* probe only */ }
                 // §885 终二四九: camdump=1 → engine camera pose at capture
                 // time (world xyz + zoom/fov) for the mgl free-camera

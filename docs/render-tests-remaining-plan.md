@@ -7237,3 +7237,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 会话终局定性（34 轮后）**：材质/technique/adapter/shader/烘焙/刷新**六层注入全部实证不达** deck 渲染实例 ⇒ 唯一残路=**WebGL 拦截**（hook uniform3fv/4fv+program 源按 draw-call 抓 deck 实际色源）——下一会话首案, 工具化约一轮。
 
 **③ 状态**：实验全弃置树净（ortho 71,858 ✓）; 单测 310。**下一会话序列: ①WebGL 拦截专案（解 deck 墙→ortho~29k+或 mask 通道发现）; ②cascade-1 战役（独立域, mgl 语义已全文）; ③S6 mask 车削（墙后或随拦截发现通道）。**
+
+### §885 g140: WebGL 拦截专案落地（工具+首份采获）——deck 基色**从不以 uniform 出现**（采获仅照明因子 1.183/0.8/0.5）⇒ 色源=顶点属性或常量烘焙（2026-09-23 第五十二轮）
+
+**① 工具落地**：`glcatch=1`（MBSTYLE_GLCATCH）——harness 预建 ctx（engine 不自取 getContext, g140 前两版原型钩因此空采获）上直挂 shaderSource+uniform{3,4}{f,v} 包装; [MBCapFinal] 处倾倒 tally+程序尾。零默认影响（ortho 71,858 ✓）。
+
+**② 首份采获（ortho）**：n=26 uniform3fv——top=[**1.183×20**（=ambient 0.8+dir 0.5·cos40° 之合成因子）, 0.8×2（uMB3DAmb）, 0.5×2（uMB3DDirColor）, dir 向量×2]；第二帧 n=15 同族。**路面基色 (0.635,0.702,0.78) 从未出现** ⇒ **deck 基色不走任何 uniform3fv** = 顶点属性（vertexColors/color attribute）或着色器常量——六层对象模型注入全 inert 的最终统一解释。
+
+**③ 下轮首案（色源已二选一）**：`vertexColors/color attribute` 检查——geometry attributes 里查 color 流（emitElevatedFillPiece/TileGeometryCreator 是否烘顶点色）; 若是, **修法=烘色处 ×radiance**（一处, 与 g139 通道同源但落点在几何构建——datasource 可控）; 若无常量则在程序源（已采 mbBaseColor 程序尾可查）。
+
+**④ 状态**：工具+MBSTYLE_GLCATCH 入库（默认零影响）; 单测 310; 树净。
