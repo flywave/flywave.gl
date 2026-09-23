@@ -7409,3 +7409,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ tunnel-fd 残余候选（穷尽后）**: 渲染实例在+材质对+（探针不可用故几何未证）⇒ 剩余=几何/索引域（tunnel 段 idx=246 引用的顶点位置是否有效——可经 dump 顶点 attribute 原始值判定）或绘制序。**下轮首案**: ①census 改在 onBeforeRender/updateWorldMatrix 后复测投影; ②或直接 dump #0000fe mesh 的首顶点原始 position attribute 值对拍 junction。
 
 **④ 状态**：探针全弃置树净; 单测 310; 零代码改动。
+
+### §885 g158: g157④ 原始顶点 dump——蓝墙几何**数值健康**（v0 z=+17.1/zMean 8.5=entrance-quad 正域, 非负/非 NaN/计数正常）; junction 同法（v0=-967,-1133,6.8 局部帧差异）; 投影探针 updateWorldMatrix 后仍伪影（两夹具均 z=1 离屏而 junction 像素正常）⇒ mesh 层全健康, 断点只剩**绘制/裁剪链**（2026-09-24 第七十轮）
+
+**① [MBRawDump]（帧40）**：tunnel-fd 蓝墙: v0=(-22.6,42.1,**17.1**)/zMean=8.47/n=1400（及 -24.6,77.1 与 -75.9,56.2 变体）——z 正域=entrance quad（墙 0..h+4m）语义正确, 非 NaN/非退化; junction 暖墙 v0=(-967,-1133,6.8)/n=5208（局部帧尺度差, 不可直比但健康）。
+
+**② 投影探针二次伪影**：updateWorldMatrix(true,false) 后 v0→px 仍 (-209,-187,z=1.00)（两夹具同, junction 像素正常渲染）⇒ census 上下文的 camera/矩阵链仍有伪影源（疑 census 时 camera 引用或视口未定）; **mesh 层（存在/材质/几何数值）三查全过** ⇒ tunnel-fd 断点终极收窄=**绘制/裁剪链**（frustum 剔除的实际运行时值/相机远平面对 z+17 的容纳/渲染批次归属）。
+
+**③ 下轮首案**: onBeforeRender 内联探针（渲染时点自动矩阵/camera 正确）打印该 mesh 的 gl_Position 或直接 renderer.info draw 计数差分（隐藏/显示该 mesh 对比 calls 数=是否真的在画）。
+
+**④ 状态**：探针弃置树净; 单测 310; 零代码改动。
