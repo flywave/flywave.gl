@@ -50,6 +50,20 @@ const CHROME = process.env.CHROME_BIN ||
         const errors = await page.evaluate("window.__mbErrors ?? []");
         if (errors.length) console.log("[mgl-shot] page errors:", errors.slice(0, 5));
         await page.screenshot({ path: out });
+        // §885 g150: read the canvas backing store directly (bypass screenshot).
+        try {
+            const cvPx = await page.evaluate(() => {
+                const cv = document.querySelector('canvas');
+                if (!cv) return null;
+                const c2 = document.createElement('canvas');
+                c2.width = cv.width; c2.height = cv.height;
+                const cx = c2.getContext('2d');
+                cx.drawImage(cv, 0, 0);
+                const d = cx.getImageData(Math.floor(cv.width*0.14), Math.floor(cv.height*0.02), 1, 1).data;
+                return {w: cv.width, h: cv.height, px: [d[0], d[1], d[2], d[3]]};
+            });
+            if (cvPx) console.log('[mbCanvasPx] ' + JSON.stringify(cvPx));
+        } catch (e) { console.log('[mbCanvasPx] err ' + e); }
         console.log(`[mgl-shot] saved ${out}`);
         const cc = (globalThis.__c) ?? [];
         for (const t of cc) if (t.includes('MGLStruct') || t.includes('MGLRailH') || t.includes('MGLArea') || t.includes('MGLEdge')) console.log('[worker] ' + t);

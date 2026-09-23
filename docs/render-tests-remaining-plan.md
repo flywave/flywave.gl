@@ -7337,3 +7337,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 实现决策（纪律）**：0.9098 的物理源未明（盲拟合违反会话纪律）——**不落地曲线拟合**; 下轮首案=溯源 1.0992（疑: mgl 输出 canvas 色彩空间/截图链 alpha 合成/three.js r178 ColorManagement 默认）后再实现。白点例外随源。
 
 **④ 状态**：bgcol 标定工具入库（mirror 本地+mgl-shot 参数; 我方零改动, ortho 32,109 ✓）; 单测 310。
+
+### §885 g150: g149③ 执行——**0.9098"转换式"证伪（重大修正）: 暗化=垂直空间梯度**——底行 v×1.0794（=ground radiance 照亮 ✓）/顶行降至 v×0.9098; g149"全局线性"系单行采样巧合（2026-09-24 第六十二轮）
+
+**① 梯度实证（跨分辨率列扫描）**：bgcol=0.5 纯色注入下, **512 瓦**: y5=130/y50=127/y200=138/y400=138; **1024 瓦(1:1 无降采样)**: 顶/中=116, 底=138 ⇒ **位置依赖的垂直梯度**（0.5→0.455 顶 … 0.541 底）。底行 138/255=0.541 ≈ **0.5×1.0794=radiance_srgb 照亮** ✓ 与 background.vertex 的 apply_lighting_with_emission_ground 自洽; 顶行向 0.9098·v 渐落。
+
+**② 排除项**：fog=false（页面直查 style.fog 无）; 页面合成（红页实验 116 不变）; GL 回读（preserveDrawingBuffer=false 不可用）。
+
+**③ 机制定性（下轮实现锚）**：背景面的照明随**视线倾角**变化——顶行（远/掠射）法向相对光方向（polar 40°）偏转, directionalFactor 落向 factor_min(1−0.3·dirLum=0.85)——即背景走的是**非平坦法向的 apply_lighting**（或 ground_radiance 之外的 NdotL 项）, 我方 clearColor 恒定平坦照明 ⇒ 主残差=**背景应逐像素按倾角照明而非恒定色**。实现方向: 我方背景 quad 顶点着色按行渐变（或直接用 mgl 公式 on view-dependent normal）。
+
+**④ 状态**：mgl-shot 页面 bgpage 参+canvas 直读探针入库（诊断）; 我方零改动（ortho 32,109 ✓）; 单测 310。
