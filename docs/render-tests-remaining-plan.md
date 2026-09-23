@@ -7381,3 +7381,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② tunnel-fd 下轮首案（终界）**：渲染实例层定界——engine 对 tunnel walls（mesh.tunnelStart..indices.length 段）的 draw 可见性（scene traverse census 该段 mesh 的 visible/frustumCulled/材质状态）或直接对比 junction/tunnel-fd 同段 mesh 存在性; 修复后 111k 主失配应有大幅收敛（expected 该区域=隧道腔色）。
 
 **③ 状态**：零代码改动; 单测 310; junction 23,210 复现稳定。**下一会话: tunnel 墙渲染实例定界（终界）→ 修复 → cascade-1 战役。**
+
+### §885 g155: g154② tunnel 墙渲染实例 census——**蓝色墙 mesh 在场景内**（vis=true/fc=false/dw=dt=true/ro=9.7/#0000fe 精确）⇒ 断点=mesh→像素之间（几何错位/深度裁剪/投影域）; "仅结构"隔离测试因 mbhide layerId 前缀匹配污染作废（记档防重蹈）（2026-09-24 第六十七轮）
+
+**① [MBTunMesh] census（双夹具对拍）**：tunnel-fd: bridge 段 #fe0000×4 + **tunnel 段 #0000fe（蓝!）×多 mesh, idx=186/246…** 全 vis=true/fc=false/tr=false/dw=dt=true/ro=9.7 —— **蓝色数据驱动墙的渲染实例存在且属性全对**; junction 同构（#ece7dc 暖色）。相机 pose: camPos z=+28.7, 墙 z<0（-5..-10 域）。
+
+**② 排除与污染**：mesh 不存在的假设排除 ⇒ 断点=**mesh→像素**（几何世界错位/深度裁剪(z<0 在 pitch0 正交远平面?)/顶点属性坏）; "mbhide 全部只留结构"测试**作废**——mbhide 按 technique layerId 前缀匹配, 'road-base' 同时命中结构的 _layerId（把结构自己也藏了=全背景的假象）; 此陷阱记档。
+
+**③ 下轮首案（终界-1）**: 蓝墙 mesh 的世界包围盒→投影→屏坐标对拍（census 已有 bounds 机制; 若投影后不在视口=几何错位, 在视口但不亮=深度/裁剪）; 或 three.js renderer.info 该 mesh 的 draw call 计数。
+
+**④ 状态**：探针弃置树净; 单测 310; 零代码改动。
