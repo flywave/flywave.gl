@@ -10,7 +10,7 @@ if (!win.THREE) {
 }
 
 import { MapView as RawMapView, MapViewOptions } from "@flywave/flywave-mapview";
-
+export { mapAssetsUriResolver };
 export * from "@flywave/flywave-mapview";
 export * from "@flywave/flywave-mapview-decoder";
 export * from "@flywave/flywave-terrain-datasource";
