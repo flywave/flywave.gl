@@ -7399,3 +7399,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 会话级回望（重要）**：g125-g139 六层注入"全 inert"的复核视角——探针/注入多数打在 tile.objects 或其材质上, 而渲染实例自 createMaterial 起即分叉; g142 的 createMaterial 杠杆成功恰因打在正确层。**tunnel-fd 终界 = 需 scene.traverse 全场景级 census 找到蓝色 #0000fe 的渲染实例**（g131 MBDeckF 风格但按色键控）, 对拍其包围盒/投影。
 
 **③ 状态**：探针弃置树净; 单测 310; 零代码改动。**下一会话: 渲染实例 scene-traverse 色键 census（#0000fe/#fe0000）→ 对拍 junction → 修 → tunnel-fd 111k; cascade-1。**
+
+### §885 g157: g156③ 渲染实例色键 census——蓝/红实例**确在场景**（帧40延迟后命中 #0000fe idx=246/#fe0000 多 mesh）; 投影探针**伪影定性**（junction 结构同退化为恒等矩阵单点 z=1 但其像素正常渲染=matrixWorld 时序伪影, 非真错位）（2026-09-24 第六十九轮）
+
+**① 延迟 census（帧40）**：早帧 NONE=时序（瓦片未入）; 帧40 命中: tunnel-fd #0000fe(lay=road-base, idx=246)+#fe0000(bridge, 198/2394/3528) **渲染实例存在**; junction #ece7dc 同在。
+
+**② 投影伪影（junction 交叉验证）**：两夹具结构 mesh 投影**全部**退化为恒等矩阵单点（z=1.00）——junction 的结构像素明明正常渲染 ⇒ **localToWorld/matrixWorld 在 census 时点未更新（伪影）**, 非几何错位。真实定位需 onBeforeRender 时点或 updateWorldMatrix 后采样（下轮工具修正）。
+
+**③ tunnel-fd 残余候选（穷尽后）**: 渲染实例在+材质对+（探针不可用故几何未证）⇒ 剩余=几何/索引域（tunnel 段 idx=246 引用的顶点位置是否有效——可经 dump 顶点 attribute 原始值判定）或绘制序。**下轮首案**: ①census 改在 onBeforeRender/updateWorldMatrix 后复测投影; ②或直接 dump #0000fe mesh 的首顶点原始 position attribute 值对拍 junction。
+
+**④ 状态**：探针全弃置树净; 单测 310; 零代码改动。
