@@ -7295,3 +7295,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮决策**: ①以 expected 为准逐像素重审 ortho 32,109 的主残差带（而非追 g3）——prod 是否已**过度**照亮某带; ②setProgram 材质柄级取证（hook WebGLRenderer.renderBufferDirect 的 object.material, 在 datasource patchTile 的 scene traverse 内即可对齐——已有 census 机制）; ③S6 mask 与 cascade-1 按挂号。
 
 **④ 状态**：glcatch=4 工具入库（默认零影响, ortho 32,109 ✓）; 单测 310。
+
+### §885 g146: g145③ 执行——ortho 32,109 残差重审（expected 基准）: **过照亮主导 3.5:1**, 两类=白溢出+1.27× 过冲; 过冲≈structure 链 mbK（非 deck/非 THREE 场景光——deck=Basic 免疫）⇒ 结构墙照亮过强为主残差（2026-09-24 第五十八轮）
+
+**① 重审（expected 基准, thr60）**：41,055 diffs 全帧均匀 ~5k/带; 采样方向性 **brighter(prod) 4,569 : darker 1,296 = 3.5:1 过照亮主导**; 两类: ①白溢出 prod(255,255,255) vs exp(213,215,215)（顶带+散布）; ②色调过冲 prod(223,232,244) vs exp(176,194,216) ≈ **1.27×**（非均匀, 面向相关）。
+
+**② 排除链**：deck=MapMeshBasicMaterial（enableShadows 未设→constructor Basic, 免疫 THREE 场景光）⇒ 过冲非 deck×场景光; THREE 场景 DirectionalLight 存在（3D-lights 支为 shadow renderer 保留）但 Basic 不受影响; **1.27 ≈ structure 链 mbK**（uMB3DAmb·(vert·ambDir)+dir·max(NdotL)——面向墙 ≈0.8+0.5·0.94≈1.27）⇒ **主残差=结构墙的 mgl apply_lighting 实现过强**（exp 的墙=较暗, 我方 mbK 过冲或墙 normals 域差）; 白溢出疑同链高光/白色材质×链因子。
+
+**③ 下轮首案**: structure 链 mbK 对照 mgl apply_lighting 逐项数值对拍（探针扩 uMB3DAmb/dir 采样 + exp 墙像素反解期望因子）; 或 structpow=0 A/B 复查（链内已有旋钮）。
+
+**④ 状态**：零代码改动; 单测 310; 树净。
