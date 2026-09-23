@@ -7373,3 +7373,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 收窄后的三选一（下轮首案）**：①mask 执行时深度缓冲尚未含 ground 写入（批次序/双通道三通道渲染分批）→ 抓 draw-call 序; ②tunnel 腔内容（蓝色数据驱动墙/标记）虽 emit 但未达屏（被 shade/路面盖）→ mbhide shade 复测; ③junction 的 −892 来源并非 mask 车削而是 prepass 其他副作用 → junction −892 归因复核（防误锁）。
 
 **③ 状态**：探针弃置树净; 单测 310; 本轮零代码改动（纯定界）。**下轮: 三选一裁决后或修 tunnel-fd（111k）或转 cascade-1（157k）。**
+
+### §885 g154: g153② 三选一裁决——**②胜出: 隧道腔内容本身未达屏**（mbhide shade 后蓝标记仍不出现, (246,196)=背景）⇒ 遮蔽排除, tunnel-fd 修复域=隧道墙/标记的绘制链（emit✓ 但不入屏）（2026-09-24 第六十六轮）
+
+**① 裁决实验**：tunnel-fd mbhide fake-road-shade → 蓝色数据驱动标记 (0,0,225) 在 (246,196)/(72,246) **仍不出现**（=背景色）⇒ 内容非被遮（排除②'被 shade 盖'的遮蔽变体）; 与 g136"sections 29/49/59 非空+色解析✓"合并 ⇒ **emit→屏之间的绘制断链**（渲染实例被剔除/深度挡/未生成 draw）。①(draw 序)对内容缺失型为次级; ③(junction −892 归因)独立复核维持 23,210 稳定复现。
+
+**② tunnel-fd 下轮首案（终界）**：渲染实例层定界——engine 对 tunnel walls（mesh.tunnelStart..indices.length 段）的 draw 可见性（scene traverse census 该段 mesh 的 visible/frustumCulled/材质状态）或直接对比 junction/tunnel-fd 同段 mesh 存在性; 修复后 111k 主失配应有大幅收敛（expected 该区域=隧道腔色）。
+
+**③ 状态**：零代码改动; 单测 310; junction 23,210 复现稳定。**下一会话: tunnel 墙渲染实例定界（终界）→ 修复 → cascade-1 战役。**
