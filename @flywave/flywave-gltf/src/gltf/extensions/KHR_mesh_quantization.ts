@@ -24,13 +24,13 @@ interface QuantizationParams {
 
 export const name = EXT_NAME;
 
-// 缓存解量化结果，避免重复处理相同访问器
+// Cache dequantization results to avoid reprocessing the same accessor
 const dequantizationCache = new Map<string, number>();
 
 export async function decode(gltfData: { json: GLTF }, options: GLTFLoaderOptions) {
     const scenegraph = new GLTFScenegraph(gltfData);
 
-    // 并行处理所有需要解量化的图元
+    // Process all primitives that need dequantization in parallel
     const promises: Array<Promise<void>> = [];
     let hasProcessed = false;
 
@@ -46,10 +46,10 @@ export async function decode(gltfData: { json: GLTF }, options: GLTFLoaderOption
 
     await Promise.all(promises);
 
-    // 清除缓存
+    // Clear the cache
     dequantizationCache.clear();
 
-    // 移除顶层扩展声明
+    // Remove the top-level extension declaration
     if (hasProcessed) {
         scenegraph.removeExtension(EXT_NAME);
     }
@@ -67,16 +67,16 @@ async function processPrimitive(
                 const originalAccessor = scenegraph.json.accessors?.[accessorIndex];
                 if (!originalAccessor) return;
 
-                // 创建缓存键
+                // Build the cache key
                 const cacheKey = `${accessorIndex}:${attributeName}`;
 
-                // 检查缓存
+                // Check the cache
                 if (dequantizationCache.has(cacheKey)) {
                     primitive.attributes[attributeName] = dequantizationCache.get(cacheKey)!;
                     return;
                 }
 
-                // 创建新访问器避免污染原始数据
+                // Create a new accessor to avoid polluting the original data
                 const newAccessorIndex = await dequantizeAccessor(
                     scenegraph,
                     originalAccessor,
@@ -85,10 +85,10 @@ async function processPrimitive(
                     options
                 );
 
-                // 更新图元属性索引到新访问器
+                // Point the primitive attribute at the new accessor
                 primitive.attributes[attributeName] = newAccessorIndex;
 
-                // 存入缓存
+                // Store it in the cache
                 dequantizationCache.set(cacheKey, newAccessorIndex);
             }
         );
@@ -108,12 +108,12 @@ async function dequantizeAccessor(
     attributeName: string,
     options: GLTFLoaderOptions
 ): Promise<number> {
-    // 跳过浮点类型和不需要解量化的属性
+    // Skip float types and attributes that do not need dequantization
     if (accessor.componentType === 5126) {
-        return accessor.bufferView!; // 返回原始索引
+        return accessor.bufferView!; // Return the original index
     }
 
-    // 确保有有效的缓冲视图
+    // Make sure there is a valid buffer view
     if (accessor.bufferView === undefined) {
         throw new Error(`访问器 ${accessor.name || "unnamed"} 缺少缓冲视图引用`);
     }
@@ -125,21 +125,21 @@ async function dequantizeAccessor(
         throw new Error(`无法找到访问器 ${accessor.bufferView} 引用的缓冲视图`);
     }
 
-    // 获取原始量化数据
+    // Get the raw quantized data
     const bufferData = scenegraph.getTypedArrayForBufferView(accessor.bufferView);
     if (!bufferData) {
         throw new Error(`无法获取缓冲视图 ${accessor.bufferView} 的数据`);
     }
 
-    // 计算组件属性
+    // Compute the component layout
     const componentSize = getComponentSize(accessor.type);
     const componentByteSize = getComponentByteSize(accessor.componentType);
     const stride = bufferView.byteStride || componentSize * componentByteSize;
 
-    // 获取量化位数（根据属性类型）
+    // Get the quantization bit depth (per attribute semantic)
     const bits = getQuantizationBits(attributeName, params);
 
-    // 验证min/max值
+    // Validate the min/max values
     if (!accessor.min || !accessor.max) {
         throw new Error(`访问器 ${accessor.name || "unnamed"} 缺少解量化所需的 min/max 值`);
     }
@@ -151,7 +151,7 @@ async function dequantizeAccessor(
         throw new Error(`访问器 ${accessor.name || "unnamed"} 的 min/max 数组长度不匹配组件大小`);
     }
 
-    // 执行解量化
+    // Perform the dequantization
     const dequantized = dequantizeData(
         bufferData.buffer,
         accessor,
@@ -164,37 +164,37 @@ async function dequantizeAccessor(
         maxValues
     );
 
-    // 添加新的缓冲视图（使用GLTFScenegraph的API）
+    // Add a new buffer view (using the GLTFScenegraph API)
     const newBufferViewIndex = scenegraph.addBufferView(dequantized);
 
-    // 更新缓冲视图的元数据
+    // Update the buffer view metadata
     const newBufferView = scenegraph.json.bufferViews?.[newBufferViewIndex];
     if (newBufferView) {
-        newBufferView.byteStride = componentSize * 4; // 解量化后每个组件4字节
+        newBufferView.byteStride = componentSize * 4; // 4 bytes per component after dequantization
 
-        // 保留原始目标类型（如果存在）
+        // Keep the original target type (if present)
         if (bufferView.target !== undefined) {
             newBufferView.target = bufferView.target;
         }
 
-        // 保留名称（如果存在）
+        // Keep the name (if present)
         if (bufferView.name) {
             newBufferView.name = `${bufferView.name}_dequantized`;
         }
     }
 
-    // 创建新访问器（保留元数据）
+    // Create the new accessor (preserving metadata)
     const newAccessor = { ...accessor };
     newAccessor.bufferView = newBufferViewIndex;
     newAccessor.componentType = 5126; // FLOAT
     newAccessor.normalized = false;
 
-    // 保留原始名称（如果存在）
+    // Keep the original name (if present)
     if (accessor.name) {
         newAccessor.name = `${accessor.name}_dequantized`;
     }
 
-    // 添加新访问器并返回索引
+    // Push the new accessor and return its index
     scenegraph.json.accessors!.push(newAccessor);
     return scenegraph.json.accessors!.length - 1;
 }
@@ -210,16 +210,16 @@ function dequantizeData(
     min: number[],
     max: number[]
 ): Float32Array {
-    // 计算量化范围
+    // Compute the quantization range
     const maxIntegerValue = Math.pow(2, bits) - 1;
 
-    // 确定是否为无符号整型（根据GLTF组件类型）
+    // Determine whether it is an unsigned integer type (per the glTF component type)
     const isUnsigned =
         accessor.componentType === 5121 || // UNSIGNED_BYTE
         accessor.componentType === 5123 || // UNSIGNED_SHORT
         accessor.componentType === 5125; // UNSIGNED_INT
 
-    // 根据规范计算量化偏移量（用于有符号整型）
+    // Compute the quantization offset per the spec (used for signed integer types)
     const quantizationOffset = isUnsigned ? 0 : Math.pow(2, bits - 1);
 
     const srcView = new DataView(data);
@@ -227,13 +227,13 @@ function dequantizeData(
     const totalOffset = baseByteOffset + accessorOffset;
     const dstArray = new Float32Array(accessor.count * components);
 
-    // 计算每个分量的范围（优化性能）
+    // Compute the range of each component (performance optimization)
     const ranges: number[] = [];
     for (let c = 0; c < components; c++) {
         ranges[c] = max[c] - min[c];
     }
 
-    // 处理无步长情况
+    // Handle the tightly packed case (no stride)
     if (stride === components * componentByteSize) {
         const startOffset = totalOffset;
 
@@ -244,7 +244,7 @@ function dequantizeData(
                 const byteOffset = elementOffset + c * componentByteSize;
                 const rawValue = readComponent(srcView, byteOffset, accessor.componentType);
 
-                // 正确的解量化公式（符合规范）
+                // Correct dequantization formula (per the spec)
                 const normalized = isUnsigned
                     ? rawValue / maxIntegerValue
                     : rawValue / (maxIntegerValue / 2);
@@ -254,7 +254,7 @@ function dequantizeData(
             }
         }
     } else {
-        // 处理带步长的情况（非连续数据）
+        // Handle the strided case (non-contiguous data)
         let dstIndex = 0;
         for (let i = 0; i < accessor.count; i++) {
             const elementOffset = totalOffset + i * stride;
@@ -263,7 +263,7 @@ function dequantizeData(
                 const byteOffset = elementOffset + c * componentByteSize;
                 const rawValue = readComponent(srcView, byteOffset, accessor.componentType);
 
-                // 使用量化偏移量进行解量化
+                // Dequantize using the quantization offset
                 const normalized = (rawValue - quantizationOffset) / maxIntegerValue;
                 const floatValue = min[c] + (max[c] - min[c]) * normalized;
                 dstArray[dstIndex++] = floatValue;
@@ -285,9 +285,9 @@ function readComponent(view: DataView, offset: number, type: number): number {
                 return view.getInt16(offset, true);
             case 5123: // UNSIGNED_SHORT
                 return view.getUint16(offset, true);
-            case 5125: // UNSIGNED_INT (非标准但可能)
+            case 5125: // UNSIGNED_INT (non-standard but possible)
                 return view.getUint32(offset, true);
-            case 5124: // INT (非标准但可能)
+            case 5124: // INT (non-standard but possible)
                 return view.getInt32(offset, true);
             default:
                 throw new Error(`不支持的组件类型: ${type}`);
@@ -298,7 +298,7 @@ function readComponent(view: DataView, offset: number, type: number): number {
 }
 
 function getQuantizationBits(attributeName: string, params: QuantizationParams): number {
-    // 根据属性语义获取对应位数
+    // Look up the bit depth by attribute semantic
     if (attributeName.startsWith("POSITION")) return params.POSITION || 12;
     if (attributeName.startsWith("NORMAL")) return params.NORMAL || 10;
     if (attributeName.startsWith("TANGENT")) return params.TANGENT || 10;
@@ -336,7 +336,7 @@ function getComponentByteSize(componentType: number): number {
             return 2;
         case 5124: // INT
         case 5125: // UNSIGNED_INT
-        case 5126: // FLOAT (虽然跳过但保留)
+        case 5126: // FLOAT (kept for completeness even though it is skipped)
             return 4;
         default:
             throw new Error(`不支持的组件类型: ${componentType}`);

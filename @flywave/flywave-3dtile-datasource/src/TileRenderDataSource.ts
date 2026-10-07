@@ -1,37 +1,41 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    ITranslucentLayerConfig,
-    Style,
     type FlatTheme,
+    type ITranslucentLayerConfig,
+    type Style,
     type Theme
 } from "@flywave/flywave-datasource-protocol";
 import {
     type GeoBox,
-    quadTreeSubdivisionScheme,
     type TileKey,
+    quadTreeSubdivisionScheme,
     TilingScheme,
     webMercatorProjection
 } from "@flywave/flywave-geoutils";
-import { type DataSourceOptions, type MapView, DataSource, Tile } from "@flywave/flywave-mapview";
+import {
+    type DataSourceOptions,
+    type ICameraCollidable,
+    type MapView,
+    DataSource,
+    Tile
+} from "@flywave/flywave-mapview";
 import { type IntersectParams } from "@flywave/flywave-mapview/IntersectParams";
 import { ThemeLoader } from "@flywave/flywave-mapview/ThemeLoader";
-import { type ICameraCollidable } from "@flywave/flywave-mapview";
 import {
-    Intersection,
-    Object3D,
-    Raycaster,
-    type Matrix4,
+    type Intersection,
     type Material,
-    type MaterialParameters
+    type MaterialParameters,
+    type Matrix4,
+    type Raycaster,
+    Object3D
 } from "three/webgpu";
 
+import type { Tile as InternalTile } from "./base/Tile";
+import { type ITile } from "./ObserveTileChange";
+import { type MatrixTransformCallback } from "./renderer/TilesRenderer";
 import { type CustomAttributeConfig, Tiles3DStyleWatcher } from "./theme/Tiles3DStyleWatcher";
 import { type TilesRendererOptions, TilesRenderer } from "./TilesRenderer";
-import { ITile } from "./ObserveTileChange";
-import type { Tile as InternalTile } from "./base/Tile";
-
-import { MatrixTransformCallback } from "./renderer/TilesRenderer";
 
 interface TileExtraTheme {
     /**
@@ -91,7 +95,7 @@ interface TileExtraTheme {
     };
 }
 
-// 可选：为 tile3DRender 内部结构单独定义类型以便重用
+// Optional: define separate types for the internal tile3DRender structures so they can be reused
 export type FlatThemeExtra = TileExtraTheme & FlatTheme;
 export type ThemeExtra = TileExtraTheme & Theme;
 
@@ -228,7 +232,7 @@ export interface TileRenderDataSourceOptions extends DataSourceOptions {
     enableCameraCollision?: boolean;
 }
 
-let tempObject = new Object3D();
+const tempObject = new Object3D();
 class RootTile extends Tile {
     constructor(tileKey: TileKey, dataSource: TileRenderDataSource) {
         super(dataSource, tileKey);
@@ -507,6 +511,7 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
         if (!this.m_styleWatcher) return false;
         return this.m_styleWatcher.updateStyleById(id, updates);
     }
+
     /**
      * Sets the theme from the base theme.
      *
@@ -543,6 +548,7 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
             return undefined;
         }
     }
+
     /**
      * Sets up event listeners for the tiles renderer
      */

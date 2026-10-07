@@ -2,7 +2,7 @@
 
 import { LRUCache } from "@flywave/flywave-lrucache";
 import * as THREE from "three/webgpu";
-import { RenderTarget, NodeMaterial, type Renderer, RendererUtils, QuadMesh } from "three/webgpu";
+import { type Renderer, NodeMaterial, QuadMesh, RendererUtils, RenderTarget } from "three/webgpu";
 
 import { type Font, type FontMetrics } from "./FontCatalog";
 import { GlyphData } from "./GlyphData";
@@ -98,6 +98,7 @@ export class GlyphTextureCache {
     get texture(): THREE.Texture {
         return this.m_rt.texture;
     }
+
     get textureSize(): THREE.Vector2 {
         return this.m_textureSize;
     }
@@ -114,6 +115,7 @@ export class GlyphTextureCache {
     has(hash: string): boolean {
         return this.m_entryCache.has(hash);
     }
+
     get(hash: string): GlyphCacheEntry | undefined {
         return this.m_entryCache.get(hash);
     }
@@ -133,9 +135,12 @@ export class GlyphTextureCache {
 
         const rendererState = RendererUtils.resetRendererState(renderer, undefined);
         renderer.autoClear = false;
-        // WebGPU 后端：outputColorSpace 转换会把 render() 路由到一个画布大小的共享
-        // 中间 framebuffer，再 blit 回目标——图集拷贝会因此混入上一帧残留内容
-        //（黑框/竖线/鬼影），并被降分辨率放大。直通色彩空间让 pass 直接写入图集。
+        // WebGPU backend: the outputColorSpace conversion routes render() through a
+        // canvas-sized shared intermediate framebuffer and then blits back to the
+        // target — atlas copies therefore pick up leftover content from the previous
+        // frame (black boxes / vertical lines / ghosting), which is then magnified by
+        // the resolution upscale. A pass-through color space lets the pass write
+        // straight into the atlas.
         renderer.toneMapping = THREE.NoToneMapping;
         renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
         renderer.setRenderTarget(this.m_rt);
@@ -165,12 +170,12 @@ export class GlyphTextureCache {
         RendererUtils.restoreRendererState(renderer, rendererState);
     }
 
-    private m_clearRects: THREE.Vector4[] = [];
-    private m_copyEntries: {
+    private readonly m_clearRects: THREE.Vector4[] = [];
+    private readonly m_copyEntries: Array<{
         srcTexture: THREE.Texture;
         srcRect: THREE.Vector4;
         dstRect: THREE.Vector4;
-    }[] = [];
+    }> = [];
 
     private initCacheEntries() {
         const dummyMetrics: FontMetrics = {

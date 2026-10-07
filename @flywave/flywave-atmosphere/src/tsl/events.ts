@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { NodeUpdateType, type Node, type NodeFrame } from "three/webgpu";
 import { OnBeforeObjectUpdate, OnObjectUpdate } from "three/tsl";
+import { type Node, type NodeFrame, NodeUpdateType } from "three/webgpu";
 
 /**
  * Creates a node that executes a callback once per frame update.

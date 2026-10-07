@@ -3,7 +3,7 @@
 import { defined } from "@flywave/flywave-utils";
 import { type Ray, Sphere as ThreeSphere, Vector3 } from "three/webgpu";
 
-// 重用向量对象以避免内存分配
+// Reuse vector objects to avoid memory allocations
 const fromPointsCurrentPos = new Vector3();
 const fromPointsXMin = new Vector3();
 const fromPointsYMin = new Vector3();
@@ -31,9 +31,9 @@ export class BoundingSphere {
     }
 
     /**
-     * 检查射线是否与球体相交
-     * @param ray 要测试的射线
-     * @returns 如果相交返回true，否则返回false
+     * Check whether a ray intersects this sphere
+     * @param ray the ray to test
+     * @returns true if they intersect, otherwise false
      */
     intersectsRay(ray: Ray): boolean {
         const diff = ray.origin.clone().sub(this.center);
@@ -46,10 +46,10 @@ export class BoundingSphere {
     }
 
     /**
-     * 从点数组创建包围球
-     * @param positions 点数组
-     * @param result 可选的结果对象
-     * @returns 包含所有点的包围球
+     * Create a bounding sphere from an array of points
+     * @param positions the array of points
+     * @param result optional result object
+     * @returns the bounding sphere containing all points
      */
     static fromPoints(positions: Vector3[], result?: BoundingSphere): BoundingSphere {
         if (!defined(result)) {
@@ -74,7 +74,7 @@ export class BoundingSphere {
 
         const numPositions = positions.length;
 
-        // 第一遍：找到每个轴上的最小/最大点
+        // First pass: find the min/max points on each axis
         for (let i = 1; i < numPositions; i++) {
             currentPos.copy(positions[i]);
 
@@ -90,12 +90,12 @@ export class BoundingSphere {
             if (z > zMax.z) zMax.copy(currentPos);
         }
 
-        // 计算每个轴的跨度
+        // Compute the span of each axis
         const xSpan = fromPointsScratch.subVectors(xMax, xMin).lengthSq();
         const ySpan = fromPointsScratch.subVectors(yMax, yMin).lengthSq();
         const zSpan = fromPointsScratch.subVectors(zMax, zMin).lengthSq();
 
-        // 找到最大跨度作为初始直径
+        // Pick the largest span as the initial diameter
         let diameter1 = xMin;
         let diameter2 = xMax;
         let maxSpan = xSpan;
@@ -110,29 +110,29 @@ export class BoundingSphere {
             diameter2 = zMax;
         }
 
-        // 计算Ritter球中心点和半径
+        // Compute the Ritter sphere center and radius
         const ritterCenter = fromPointsRitterCenter;
         ritterCenter.addVectors(diameter1, diameter2).multiplyScalar(0.5);
         const radiusSquared = fromPointsScratch.subVectors(diameter2, ritterCenter).lengthSq();
         let ritterRadius = Math.sqrt(radiusSquared);
 
-        // 计算简单包围盒中心点
+        // Compute the naive bounding box center
         const minBoxPt = fromPointsMinBoxPt.set(xMin.x, yMin.y, zMin.z);
         const maxBoxPt = fromPointsMaxBoxPt.set(xMax.x, yMax.y, zMax.z);
         const naiveCenter = fromPointsNaiveCenterScratch
             .addVectors(minBoxPt, maxBoxPt)
             .multiplyScalar(0.5);
 
-        // 第二遍：调整球体并计算简单半径
+        // Second pass: refine the sphere and compute the naive radius
         let naiveRadius = 0;
         for (let i = 0; i < numPositions; i++) {
             currentPos.copy(positions[i]);
 
-            // 更新简单半径
+            // Update the naive radius
             const r = fromPointsScratch.subVectors(currentPos, naiveCenter).length();
             naiveRadius = Math.max(naiveRadius, r);
 
-            // 如果需要，调整Ritter球
+            // Grow the Ritter sphere if necessary
             const oldCenterToPointSquared = fromPointsScratch
                 .subVectors(currentPos, ritterCenter)
                 .lengthSq();
@@ -149,7 +149,7 @@ export class BoundingSphere {
             }
         }
 
-        // 使用两个球中较小的一个
+        // Use the smaller of the two spheres
         if (ritterRadius < naiveRadius) {
             result.center.copy(ritterCenter);
             result.radius = ritterRadius;
@@ -162,12 +162,12 @@ export class BoundingSphere {
     }
 
     /**
-     * 从顶点数组创建包围球
-     * @param positions 顶点坐标数组 [x, y, z, x, y, z, ...]
-     * @param center 可选的中心偏移
-     * @param stride 每个顶点的组件数（默认为3）
-     * @param result 可选的结果对象
-     * @returns 包含所有顶点的包围球
+     * Create a bounding sphere from an array of vertex coordinates
+     * @param positions vertex coordinate array [x, y, z, x, y, z, ...]
+     * @param center optional center offset
+     * @param stride number of components per vertex (defaults to 3)
+     * @param result optional result object
+     * @returns the bounding sphere containing all vertices
      */
     static fromVertices(
         positions: number[],
@@ -198,7 +198,7 @@ export class BoundingSphere {
 
         const numElements = positions.length;
 
-        // 第一遍：找到每个轴上的最小/最大点
+        // First pass: find the min/max points on each axis
         for (let i = 0; i < numElements; i += stride) {
             currentPos.set(
                 positions[i] + center.x,
@@ -214,12 +214,12 @@ export class BoundingSphere {
             if (currentPos.z > zMax.z) zMax.copy(currentPos);
         }
 
-        // 计算每个轴的跨度
+        // Compute the span of each axis
         const xSpan = fromPointsScratch.subVectors(xMax, xMin).lengthSq();
         const ySpan = fromPointsScratch.subVectors(yMax, yMin).lengthSq();
         const zSpan = fromPointsScratch.subVectors(zMax, zMin).lengthSq();
 
-        // 找到最大跨度作为初始直径
+        // Pick the largest span as the initial diameter
         let diameter1 = xMin;
         let diameter2 = xMax;
         let maxSpan = xSpan;
@@ -234,20 +234,20 @@ export class BoundingSphere {
             diameter2 = zMax;
         }
 
-        // 计算Ritter球中心点和半径
+        // Compute the Ritter sphere center and radius
         const ritterCenter = fromPointsRitterCenter;
         ritterCenter.addVectors(diameter1, diameter2).multiplyScalar(0.5);
         const radiusSquared = fromPointsScratch.subVectors(diameter2, ritterCenter).lengthSq();
         let ritterRadius = Math.sqrt(radiusSquared);
 
-        // 计算简单包围盒中心点
+        // Compute the naive bounding box center
         const minBoxPt = fromPointsMinBoxPt.set(xMin.x, yMin.y, zMin.z);
         const maxBoxPt = fromPointsMaxBoxPt.set(xMax.x, yMax.y, zMax.z);
         const naiveCenter = fromPointsNaiveCenterScratch
             .addVectors(minBoxPt, maxBoxPt)
             .multiplyScalar(0.5);
 
-        // 第二遍：调整球体并计算简单半径
+        // Second pass: refine the sphere and compute the naive radius
         let naiveRadius = 0;
         for (let i = 0; i < numElements; i += stride) {
             currentPos.set(
@@ -256,11 +256,11 @@ export class BoundingSphere {
                 positions[i + 2] + center.z
             );
 
-            // 更新简单半径
+            // Update the naive radius
             const r = fromPointsScratch.subVectors(currentPos, naiveCenter).length();
             naiveRadius = Math.max(naiveRadius, r);
 
-            // 如果需要，调整Ritter球
+            // Grow the Ritter sphere if necessary
             const oldCenterToPointSquared = fromPointsScratch
                 .subVectors(currentPos, ritterCenter)
                 .lengthSq();
@@ -277,7 +277,7 @@ export class BoundingSphere {
             }
         }
 
-        // 使用两个球中较小的一个
+        // Use the smaller of the two spheres
         if (ritterRadius < naiveRadius) {
             result.center.copy(ritterCenter);
             result.radius = ritterRadius;
@@ -290,10 +290,10 @@ export class BoundingSphere {
     }
 
     /**
-     * 从Three.js的Sphere对象创建BoundingSphere
-     * @param threeSphere Three.js的Sphere对象
-     * @param result 可选的结果对象
-     * @returns 新的BoundingSphere实例
+     * Create a BoundingSphere from a Three.js Sphere object
+     * @param threeSphere the Three.js Sphere object
+     * @param result optional result object
+     * @returns a new BoundingSphere instance
      */
     static fromThreeSphere(threeSphere: ThreeSphere, result?: BoundingSphere): BoundingSphere {
         if (!defined(result)) {
@@ -305,9 +305,9 @@ export class BoundingSphere {
     }
 
     /**
-     * 转换为Three.js的Sphere对象
-     * @param result 可选的结果对象
-     * @returns Three.js的Sphere对象
+     * Convert to a Three.js Sphere object
+     * @param result optional result object
+     * @returns the Three.js Sphere object
      */
     toThreeSphere(result?: ThreeSphere): ThreeSphere {
         if (!defined(result)) {
@@ -319,10 +319,10 @@ export class BoundingSphere {
     }
 
     /**
-     * 合并两个包围球
-     * @param sphere 要合并的另一个包围球
-     * @param result 可选的结果对象
-     * @returns 包含两个球的新包围球
+     * Merge two bounding spheres
+     * @param sphere the other bounding sphere to merge with
+     * @param result optional result object
+     * @returns a new bounding sphere containing both spheres
      */
     union(sphere: BoundingSphere, result?: BoundingSphere): BoundingSphere {
         if (!defined(result)) {
@@ -352,9 +352,9 @@ export class BoundingSphere {
     }
 
     /**
-     * 复制另一个包围球的属性
-     * @param sphere 要复制的源球体
-     * @returns 当前球体实例
+     * Copy the properties of another bounding sphere
+     * @param sphere the source sphere to copy from
+     * @returns this sphere instance
      */
     copy(sphere: BoundingSphere): this {
         this.center.copy(sphere.center);
@@ -363,17 +363,17 @@ export class BoundingSphere {
     }
 
     /**
-     * 克隆当前包围球
-     * @returns 新的BoundingSphere实例
+     * Clone the current bounding sphere
+     * @returns a new BoundingSphere instance
      */
     clone(): BoundingSphere {
         return new BoundingSphere(this.center.clone(), this.radius);
     }
 
     /**
-     * 检查是否与另一个包围球相交
-     * @param sphere 要测试的另一个包围球
-     * @returns 如果相交返回true，否则返回false
+     * Check whether this sphere intersects another bounding sphere
+     * @param sphere the other bounding sphere to test
+     * @returns true if they intersect, otherwise false
      */
     intersectsSphere(sphere: BoundingSphere): boolean {
         const radiusSum = this.radius + sphere.radius;
@@ -382,18 +382,18 @@ export class BoundingSphere {
     }
 
     /**
-     * 检查点是否在球体内
-     * @param point 要测试的点
-     * @returns 如果点在球体内返回true，否则返回false
+     * Check whether a point lies inside the sphere
+     * @param point the point to test
+     * @returns true if the point is inside the sphere, otherwise false
      */
     containsPoint(point: Vector3): boolean {
         return this.center.distanceToSquared(point) <= this.radius * this.radius;
     }
 
     /**
-     * 扩展球体以包含指定点
-     * @param point 要包含的点
-     * @returns 当前球体实例
+     * Expand the sphere so that it contains the given point
+     * @param point the point to include
+     * @returns this sphere instance
      */
     expandByPoint(point: Vector3): this {
         if (!this.containsPoint(point)) {
@@ -408,7 +408,7 @@ export class BoundingSphere {
     }
 }
 
-// 兼容性函数
+// Compatibility function
 export function makeBoundingSphereFromPoints(
     positions: Vector3[],
     result?: BoundingSphere

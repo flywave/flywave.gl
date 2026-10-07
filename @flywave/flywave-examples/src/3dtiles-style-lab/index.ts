@@ -1,13 +1,13 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    MapView,
-    GeoCoordinates,
-    ellipsoidProjection,
-    MapControls,
+    type Theme,
     CesiumIonDataSource,
+    ellipsoidProjection,
+    GeoCoordinates,
+    MapControls,
     MapControlsUI,
-    Theme,
+    MapView,
     WindowEventHandler
 } from "@flywave/flywave.gl";
 
@@ -74,7 +74,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         zoomLevel: 18,
         tilt: 70,
         heading: 35.1,
-        canvas: canvas,
+        canvas,
         enableGpuPicking: true,
         theme: {
             atmosphere: {
@@ -214,6 +214,7 @@ const log = (message: string): void => {
  */
 const createControlPanel = (): {
     addButton: (text: string, color: string, onClick: () => void) => void;
+    addSection: (title: string) => void;
 } => {
     const panel = document.createElement("div");
     panel.style.cssText =
@@ -303,7 +304,10 @@ const startFpsMonitor = (): void => {
 /**
  * 批材质登记快照：页内断言"样式操作零重建零 dispose"铁律
  */
-type WatcherSnapshot = { count: number; instances: Array<[string, any]> };
+interface WatcherSnapshot {
+    count: number;
+    instances: Array<[string, any]>;
+}
 
 const snapshotWatcher = (dataSource: any): WatcherSnapshot => {
     const applied = dataSource.m_styleWatcher.m_appliedMaterials as Map<string, any[]>;
@@ -537,7 +541,7 @@ try {
                     {
                         id: "selected",
                         when: "0!=0",
-                        technique: "tile3d",
+                        technique: "tile3d" as const,
                         color: "#FFFF00",
                         opacity: 1
                     }
@@ -551,7 +555,7 @@ try {
         const bands = Array.from({ length: 20 }, (_, i) => ({
             id: `band-${i}`,
             when: `Height >= ${i * 10} && Height < ${(i + 1) * 10}`,
-            technique: "tile3d",
+            technique: "tile3d" as const,
             color: BAND_COLORS[i],
             opacity: 1
         }));
@@ -562,7 +566,7 @@ try {
                     {
                         id: "selected",
                         when: "0!=0",
-                        technique: "tile3d",
+                        technique: "tile3d" as const,
                         color: "#FFFF00",
                         opacity: 1
                     }

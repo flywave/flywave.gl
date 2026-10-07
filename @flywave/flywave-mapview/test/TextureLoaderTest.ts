@@ -40,7 +40,7 @@ describe("TextureLoader", function () {
             const texture = await textureLoader.load(jpgTexturePath);
 
             expect(texture.image).to.not.be.undefined;
-            expect(texture.format).to.equal(THREE.RGBFormat);
+            expect(texture.format).to.equal(THREE.RGBAFormat); // three r137+ removed RGBFormat
         });
 
         it("loads images with request headers", async function () {
@@ -60,7 +60,7 @@ describe("TextureLoader", function () {
             });
 
             expect(texture.image).to.not.be.undefined;
-            expect(texture.format).to.equal(THREE.RGBFormat);
+            expect(texture.format).to.equal(THREE.RGBAFormat); // three r137+ removed RGBFormat
         });
 
         it("throws an error if image can not be loaded", async function () {

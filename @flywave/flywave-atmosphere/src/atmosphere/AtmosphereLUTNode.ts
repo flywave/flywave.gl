@@ -5,19 +5,19 @@
 // (updateBeforeType, version, dispatchEvent) not fully typed in @types/three@0.184.
 
 import {
-    Data3DTexture,
-    FloatType,
-    HalfFloatType,
-    RGBAFormat,
-    Texture,
     type NodeBuilder,
     type NodeFrame,
     type Renderer,
     type Texture3DNode,
     type TextureNode,
+    Data3DTexture,
+    FloatType,
+    HalfFloatType,
     Node,
     NodeUpdateType,
-    RendererUtils
+    RendererUtils,
+    RGBAFormat,
+    Texture
 } from "three/webgpu";
 
 import { isFloatLinearSupported } from "../capabilities";

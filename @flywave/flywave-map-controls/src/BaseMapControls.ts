@@ -1,13 +1,13 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { GeoCoordinates, Projection } from "@flywave/flywave-geoutils";
+import { type Projection, GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
+import { WindowEventHandler } from "@flywave/flywave-utils";
 import { type Event, EventDispatcher, Matrix4, Vector3, Vector4 } from "three/webgpu";
 
 import { type CameraTransform } from "./CameraTransform";
-import { MouseCursorManager } from "./MouseCursorManager";
-import { PivotIndicator, type PivotIndicatorOptions } from "./PivotIndicator";
-import { WindowEventHandler } from "@flywave/flywave-utils";
+import { type MouseCursorManager } from "./MouseCursorManager";
+import { type PivotIndicatorOptions, PivotIndicator } from "./PivotIndicator";
 
 export interface BaseMapControlsOptions {
     zoomEnabled?: boolean;
@@ -62,8 +62,9 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     private readonly lastHitCenter: Vector3 = new Vector3();
     private readonly lastHitCenterClick: Vector3 = new Vector3();
     private readonly lastHitGravity: Vector3 = new Vector3();
-    // Google Earth 式右键旋转：按下瞬间在光标处一次 CPU 射线锁定支点，
-    // 手势及惯性尾巴期间绕该支点旋转（低频，符合碰撞锁哲学）。
+    // Google Earth-style right-button rotation: at press time, one CPU ray at the cursor
+    // locks the pivot; the gesture and its inertia tail then rotate around that pivot
+    // (low frequency, consistent with the collision-lock philosophy).
     private readonly m_rotatePivot: Vector3 = new Vector3();
     private readonly m_rotateGravity: Vector3 = new Vector3();
     private m_rotatePivotDistance: number = -1;
@@ -99,6 +100,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     public get zoomEnabled() {
         return this._zoomEnabled;
     }
+
     public set zoomEnabled(value: boolean) {
         this._zoomEnabled = value;
     }
@@ -107,6 +109,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     public get tiltEnabled() {
         return this._tiltEnabled;
     }
+
     public set tiltEnabled(value: boolean) {
         this._tiltEnabled = value;
     }
@@ -114,6 +117,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     public get maxTiltAngle() {
         return (this.tiltLimit * 180) / Math.PI;
     }
+
     public set maxTiltAngle(value: number) {
         this.tiltLimit = (value * Math.PI) / 180;
     }
@@ -121,6 +125,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     public get maxZoomLevel() {
         return this.limitZoomOut;
     }
+
     public set maxZoomLevel(value: number) {
         this.limitZoomOut = value;
     }
@@ -135,12 +140,13 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
     protected windowEventHandler: WindowEventHandler;
     private readonly mouseCursorManager: MouseCursorManager;
-    private m_pivotIndicator?: PivotIndicator;
+    private readonly m_pivotIndicator?: PivotIndicator;
 
     private _enabled: boolean = true;
     public get enabled() {
         return this._enabled;
     }
+
     public set enabled(value: boolean) {
         this._enabled = value;
     }
@@ -349,7 +355,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
         if (isWheel || isClick) {
             if (isClick) {
-                // 左键手势不继承右键旋转的过期支点
+                // Left-button gestures must not inherit the stale pivot of right-button rotation
                 this.m_rotatePivotDistance = -1;
             }
             const target = new Vector3();
@@ -437,7 +443,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     private handleRotationOperations(mouseDown: boolean[], mouseX: number, mouseY: number): void {
         const rotationDamping = 0.1;
 
-        // 右键按下沿：在光标处捕获旋转支点（一次 CPU 射线 + 投影兜底）。
+        // On the right-button press edge: capture the rotation pivot at the cursor (one CPU ray + projection fallback).
         if (mouseDown[2] && !this.m_rotateDragging) {
             this.m_rotateDragging = true;
             this.captureRotatePivot(mouseX, mouseY);
@@ -463,7 +469,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         } else {
             this.inertialDeltaX += (0 - this.inertialDeltaX) * rotationDamping * 0.75;
             this.inertialDeltaY += (0 - this.inertialDeltaY) * rotationDamping * 0.75;
-            // 惯性收敛后清除支点，避免过期支点泄漏进后续手势
+            // Clear the pivot after inertia converges so a stale pivot cannot leak into later gestures
             if (
                 !mouseDown[2] &&
                 Math.abs(this.inertialDeltaX) < 1e-3 &&
@@ -495,7 +501,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
                 pivotPoint = camPos;
                 this.getDistanceToGlobe(camPos, gravityPoint);
             } else if (this.m_rotatePivotDistance > 0) {
-                // 右键旋转支点：按下位置锁定的世界点（手势 + 惯性尾巴）。
+                // Right-button rotation pivot: the world point locked at the press position (gesture + inertia tail).
                 pivotPoint = this.m_rotatePivot;
                 gravityPoint = this.m_rotateGravity;
             }
@@ -520,8 +526,9 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     }
 
     /**
-     * 在右键按下位置捕获旋转支点：一次 CPU 射线（miss 走投影面兜底），
-     * 拿到世界点 + 重力法线。手势期间锁定不复碰撞。
+     * Capture the rotation pivot at the right-button press position: one CPU ray
+     * (falling back to the projection plane on a miss) yields the world point plus the
+     * gravity normal. Locked for the duration of the gesture; no collision re-testing.
      */
     private captureRotatePivot(mouseX: number, mouseY: number): void {
         const target = new Vector3();
@@ -530,8 +537,9 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         this.cameraTransform.getOrigin(origin);
 
         const hitPoint = new Vector3();
-        // GPU 兜底的像素坐标由 rayCastWorld 内部取 lastMouseX/Y（本函数的
-        // mouseX/Y 是翻转后的内部坐标），与支点射线对应的真实像素一致。
+        // The pixel coordinates for the GPU fallback are taken internally by rayCastWorld
+        // from lastMouseX/Y (the mouseX/Y passed into this function are flipped internal
+        // coordinates), matching the real pixel the pivot ray corresponds to.
         const dist = this.rayCastWorld(hitPoint, origin, target);
         if (dist > 0) {
             this.m_rotatePivot.copy(hitPoint);
@@ -663,8 +671,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         if (this.m_pivotIndicator == null || !this.m_pivotIndicator.enabled) return;
 
         if (mouseDown[2] && this.m_rotateDragging && this.m_rotatePivotDistance > 0) {
-            // 指示器显示在右键按下的像素位置（支点在屏幕上的投影，
-            // 绕支点公转时该投影保持不动）。
+            // The indicator is shown at the right-click pixel position (the pivot's
+            // projection on screen; that projection stays fixed while orbiting the pivot).
             this.m_pivotIndicator.show(this.m_rotatePivotScreenX, this.m_rotatePivotScreenY);
         } else {
             this.m_pivotIndicator.hide();
@@ -755,9 +763,11 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         isWheel: boolean
     ): number {
         if (!this.lockCenterPoint || !isWheel) {
-            // isWheel（滚轮）→ MapControls 用碰撞锁防止 zoom 高频射线。
-            // GPU 兜底的像素坐标由 rayCastWorld 内部取 lastMouseX/Y——
-            // 本函数收到的 mouseX/Y 是翻转后的内部坐标，不能透传。
+            // isWheel (mouse wheel) -> MapControls uses the collision lock to avoid
+            // high-frequency zoom rays.
+            // The pixel coordinates for the GPU fallback are taken internally by
+            // rayCastWorld from lastMouseX/Y -- the mouseX/Y this function receives are
+            // flipped internal coordinates and must not be passed through.
             return this.rayCastWorld(result, origin, target, isWheel);
         } else {
             const cameraPos = new Vector3();

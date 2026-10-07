@@ -1,9 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three/webgpu";
-
 import { mercatorProjection, ProjectionType, sphereProjection } from "@flywave/flywave-geoutils";
 import { MapViewEventNames } from "@flywave/flywave-mapview";
+import * as THREE from "three/webgpu";
 
 import { type MapControls } from "./MapControls";
 
@@ -163,10 +162,10 @@ export class MapControlsUI {
         readonly controls: MapControls,
         options: MapControlsUIOptions = {
             zoomLevel: "input",
-            screenshotButton: true // 默认启用截图按钮
+            screenshotButton: true // enable the screenshot button by default
         }
     ) {
-        // 初始化截图配置
+        // Initialize the screenshot configuration
         this.m_screenshotConfig = this.normalizeScreenshotConfig(options.screenshotButton);
 
         // State to track if controls are expanded
@@ -439,13 +438,13 @@ export class MapControlsUI {
         const originalHeight = canvas.height;
 
         try {
-            // 显示加载状态
+            // Show the loading state
             if (this.m_screenshotButton) {
                 const originalHTML = this.m_screenshotButton.innerHTML;
                 this.m_screenshotButton.innerHTML = getLoadingSVG();
                 this.m_screenshotButton.disabled = true;
 
-                // 使用配置的尺寸
+                // Use the configured dimensions
                 const targetWidth = this.m_screenshotConfig.width!;
                 const targetHeight = this.m_screenshotConfig.height!;
 
@@ -454,13 +453,13 @@ export class MapControlsUI {
                 const dataURL = canvas.toDataURL("image/png", this.m_screenshotConfig.quality);
                 this.downloadScreenshot(dataURL, targetWidth, targetHeight);
 
-                // 恢复按钮状态
+                // Restore the button state
                 this.m_screenshotButton.innerHTML = originalHTML;
                 this.m_screenshotButton.disabled = false;
             }
         } catch (error) {
             console.error("截图失败:", error);
-            // 恢复按钮状态
+            // Restore the button state
             if (this.m_screenshotButton) {
                 this.m_screenshotButton.innerHTML = getScreenshotSVG();
                 this.m_screenshotButton.disabled = false;
@@ -478,13 +477,13 @@ export class MapControlsUI {
         const link = document.createElement("a");
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 
-        // 生成文件名，替换占位符
+        // Build the filename, replacing the placeholders
         let filename = this.m_screenshotConfig
             .filename!.replace(/{timestamp}/g, timestamp)
             .replace(/{width}/g, width.toString())
             .replace(/{height}/g, height.toString());
 
-        // 确保文件扩展名
+        // Ensure the file extension
         if (!filename.toLowerCase().endsWith(".png")) {
             filename += ".png";
         }

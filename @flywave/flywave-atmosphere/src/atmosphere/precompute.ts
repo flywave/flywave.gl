@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
 
 // Based on: https://github.com/ebruneton/precomputed_atmospheric_scattering/blob/master/atmosphere/functions.glsl
@@ -64,7 +66,6 @@ import type { Texture3DNode } from "three/webgpu";
 import { FnLayout } from "../tsl/FnLayout";
 import { FnVar } from "../tsl/FnVar";
 import type { Node } from "../tsl/node";
-
 import {
     atmosphereParametersStruct,
     densityProfileStruct,
@@ -82,10 +83,10 @@ import {
     rayleighPhaseFunction
 } from "./common";
 import {
+    type IrradianceSpectrum,
     Dimensionless,
     DimensionlessSpectrum,
-    Length,
-    type IrradianceSpectrum
+    Length
 } from "./dimensional";
 
 const computeOpticalDepthToTopAtmosphereBoundary = /*#__PURE__*/ FnLayout({

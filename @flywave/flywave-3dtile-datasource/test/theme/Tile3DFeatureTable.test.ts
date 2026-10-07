@@ -6,7 +6,7 @@ import { expect } from "chai";
 import Tile3DFeatureTable from "../../src/loader/classes/Tile3DFeatureTable";
 
 function makeFeatureTable(): Tile3DFeatureTable {
-    // 纯 JSON 型 feature table（POSITION/SCALE 存在，NORMAL_*/SCALE_NON_UNIFORM 缺失）
+    // Pure JSON feature table (POSITION/SCALE present, NORMAL_*/SCALE_NON_UNIFORM missing)
     const table = new Tile3DFeatureTable(
         {
             POSITION: [1, 2, 3, 4, 5, 6],

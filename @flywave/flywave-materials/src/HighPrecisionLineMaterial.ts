@@ -1,9 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
+import { attribute, Fn, uniform, vec3, vec4 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
-import { Fn, attribute, uniform, vec3, vec4 } from "three/tsl";
 
 export interface HighPrecisionLineMaterialParameters {
     color?: number | string | THREE.Color;
@@ -17,14 +17,17 @@ export class HighPrecisionLineMaterial extends NodeMaterial {
 
     isHighPrecisionLineMaterial: boolean = true;
 
-    private m_diffuseColorU = uniform(new THREE.Color(HighPrecisionLineMaterial.DEFAULT_COLOR));
-    private m_opacityU = uniform(HighPrecisionLineMaterial.DEFAULT_OPACITY);
-    private m_mvpU = uniform(new THREE.Matrix4());
-    private m_eyeposU = uniform(new THREE.Vector3());
-    private m_eyeposLowU = uniform(new THREE.Vector3());
+    private readonly m_diffuseColorU = uniform(
+        new THREE.Color(HighPrecisionLineMaterial.DEFAULT_COLOR)
+    );
 
-    private m_hpEye = new THREE.Vector3();
-    private m_hpMvp = new THREE.Matrix4();
+    private readonly m_opacityU = uniform(HighPrecisionLineMaterial.DEFAULT_OPACITY);
+    private readonly m_mvpU = uniform(new THREE.Matrix4());
+    private readonly m_eyeposU = uniform(new THREE.Vector3());
+    private readonly m_eyeposLowU = uniform(new THREE.Vector3());
+
+    private readonly m_hpEye = new THREE.Vector3();
+    private readonly m_hpMvp = new THREE.Matrix4();
 
     opacity: number = HighPrecisionLineMaterial.DEFAULT_OPACITY;
 
@@ -98,6 +101,7 @@ export class HighPrecisionLineMaterial extends NodeMaterial {
     get color(): THREE.Color {
         return this.m_diffuseColorU.value;
     }
+
     set color(value: THREE.Color) {
         this.m_diffuseColorU.value.copy(value);
     }

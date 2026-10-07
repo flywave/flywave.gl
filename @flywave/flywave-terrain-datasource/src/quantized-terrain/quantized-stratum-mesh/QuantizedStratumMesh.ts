@@ -2,12 +2,12 @@
 
 import {
     type GeoBox,
-    ProjectionType,
     type TilingScheme,
-    geographicTerrainStandardTiling
+    geographicTerrainStandardTiling,
+    ProjectionType
 } from "@flywave/flywave-geoutils";
+import { type MapView } from "@flywave/flywave-mapview";
 import { VisualStyle } from "@flywave/flywave-materials";
-import { MapView } from "@flywave/flywave-mapview";
 import * as THREE from "three/webgpu";
 
 import { type WebTile } from "../../WebImageryTileProvider";
@@ -143,7 +143,7 @@ export class QuantizedStratumMesh extends THREE.Mesh {
         imageryTilingScheme: TilingScheme,
         quantizedTilingScheme: TilingScheme
     ): THREE.Vector4 | false {
-        // 1. 计算投影后的坐标范围
+        // 1. Compute the projected coordinate bounds
         const quantizedWorldBox = new THREE.Box3(
             imageryTilingScheme.projection.projectPoint(
                 this.quantizedTerrainMesh.geoBox.southWest,
@@ -165,7 +165,7 @@ export class QuantizedStratumMesh extends THREE.Mesh {
             )
         );
 
-        // 2. 计算缩放比例（保留符号）
+        // 2. Compute the scale factors (keeping the sign)
         const textureSize = new THREE.Vector2().subVectors(
             imageryWorldBox.max,
             imageryWorldBox.min
@@ -178,20 +178,20 @@ export class QuantizedStratumMesh extends THREE.Mesh {
         const scaleX = tileSize.x / textureSize.x;
         const scaleY = tileSize.y / textureSize.y;
 
-        // 3. 计算偏移量（注意Y轴方向）
+        // 3. Compute the offsets (mind the Y-axis direction)
         let offsetX;
         let offsetY;
         if (quantizedTilingScheme == geographicTerrainStandardTiling) {
             offsetX = (quantizedWorldBox.min.x - imageryWorldBox.min.x) / textureSize.x;
-            offsetY = (imageryWorldBox.max.y - quantizedWorldBox.max.y) / textureSize.y; // 反转Y轴
+            offsetY = (imageryWorldBox.max.y - quantizedWorldBox.max.y) / textureSize.y; // flip Y axis
         } else {
             offsetX = (quantizedWorldBox.min.x - imageryWorldBox.min.x) / textureSize.x;
-            offsetY = (quantizedWorldBox.min.y - imageryWorldBox.min.y) / textureSize.y; // 反转Y轴
+            offsetY = (quantizedWorldBox.min.y - imageryWorldBox.min.y) / textureSize.y; // flip Y axis
         }
 
         const transform = new THREE.Vector4(scaleX, scaleY, offsetX, offsetY);
 
-        // 4. 验证变换是否有效
+        // 4. Verify that the transform is valid
         if (Number.isFinite(transform.length()) && Math.abs(scaleX) > 0 && Math.abs(scaleY) > 0) {
             return transform;
         }

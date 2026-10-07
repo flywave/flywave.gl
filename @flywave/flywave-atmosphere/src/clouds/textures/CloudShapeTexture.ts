@@ -2,31 +2,31 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    type ComputeNode,
-    type Renderer,
-    Storage3DTexture,
-    NoColorSpace,
-    HalfFloatType,
-    RepeatWrapping
-} from "three/webgpu";
-import {
-    Fn,
-    If,
-    Return,
     dot,
     float,
+    Fn,
+    globalId,
+    If,
+    Return,
+    textureStore,
+    uvec3,
     vec2,
     vec3,
-    vec4,
-    globalId,
-    uvec3,
-    textureStore
+    vec4
 } from "three/tsl";
+import {
+    type ComputeNode,
+    type Renderer,
+    HalfFloatType,
+    NoColorSpace,
+    RepeatWrapping,
+    Storage3DTexture
+} from "three/webgpu";
 
-import { CLOUD_SHAPE_TEXTURE_SIZE } from "../cloudConstants";
-import { perlinNoise, worleyNoise, remapOut, remap } from "../noise/noise";
 import type { AnyFloatType } from "../../tsl/types";
 import { reinterpretType } from "../../tsl/types";
+import { CLOUD_SHAPE_TEXTURE_SIZE } from "../cloudConstants";
+import { perlinNoise, remap, remapOut, worleyNoise } from "../noise/noise";
 
 export class CloudShapeTexture {
     readonly size = CLOUD_SHAPE_TEXTURE_SIZE;

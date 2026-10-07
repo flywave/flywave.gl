@@ -1,4 +1,6 @@
-import { Vector3, type Matrix4 } from "three/webgpu";
+/* Copyright (C) 2025 flywave.gl contributors */
+
+import { type Matrix4, Vector3 } from "three/webgpu";
 
 export class FrustumCorners {
     readonly near = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];

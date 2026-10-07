@@ -1,19 +1,20 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { TextElement } from "@flywave/flywave-mapview";
 import { webMercatorTerrainTilingScheme } from "@flywave/flywave-geoutils";
+import { TextElement } from "@flywave/flywave-mapview";
+import type * as THREE from "three/webgpu";
+
+import { type ProjectorTileEntry, projectorBlending } from "../projector-overlay";
 import { ResourceTileLoader, TerrainTileLoader } from "../ResourceTileLoader";
 import { type TerrainResourceTile } from "../TerrainSource";
 import { type DEMTerrainSource } from "./DEMTerrainSource";
-import { type DemTileResource } from "./DEMTileProvider";
 import {
+    type DEMLayerKind,
     DEMTileBaseMaterial,
-    DEMTileOverlayMaterial,
-    type DEMLayerKind
+    DEMTileOverlayMaterial
 } from "./DEMTileLayerMaterial";
+import { type DemTileResource } from "./DEMTileProvider";
 import { TerrainLayerMesh, TerrainTileState } from "./TerrainLayerMesh";
-import { type ProjectorTileEntry, projectorBlending } from "../projector-overlay";
-import type * as THREE from "three/webgpu";
 
 /**
  * Resource tile loader for DEM (Digital Elevation Model) data
@@ -89,7 +90,8 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
         if (demTile && demTile.resource) {
             const texture = demTile.resource.demData.getPixels();
             if (texture) {
-                // 解码常数必须跟随 DEM 编码（terrarium 与 mapbox 的解包向量完全不同）
+                // The decoding constants must follow the DEM encoding (terrarium
+                // and mapbox use completely different unpack vectors)
                 state.setHeightMap(texture, demTile.tileKey, demTile.resource.demData.unpackVector);
             }
         }
@@ -219,8 +221,10 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             });
         });
 
-        // 未配置任何卫星图层数据源：直接不渲染地形 mesh。已配置图层但
-        // 本瓦片纹理未就绪时仍保留 base 兜底（渐进加载连续性不受影响）。
+        // No satellite-layer sources configured: skip rendering the terrain
+        // mesh entirely. If layers are configured but this tile's texture is
+        // not ready yet, keep the base fallback (so progressive loading stays
+        // continuous).
         if (!baseAssigned && providers.length > 0) {
             targets.push({ key: "base", kind: "base" });
         }

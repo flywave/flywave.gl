@@ -1,12 +1,12 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    FileLoader,
-    InstancedBufferAttribute,
-    Sprite,
     type Camera,
     type Intersection,
-    type Raycaster
+    type Raycaster,
+    FileLoader,
+    InstancedBufferAttribute,
+    Sprite
 } from "three/webgpu";
 
 import { DEFAULT_STARS_DATA_URL } from "../constants";

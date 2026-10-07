@@ -28,51 +28,51 @@ export class MeshRenderGeometry implements RenderGeometry {
         this.isInstanceable = data.viewIndependentOrigin === undefined;
         this.range = params.vertices.qparams.computeRange();
 
-        // 创建表面几何体
+        // Create the surface geometry
         this.surface = SurfaceGeometry.create(data, params);
         if (this.surface) {
-            const surfaceMesh = this.surface.createMesh(); // 添加括号
+            const surfaceMesh = this.surface.createMesh(); // added parentheses
             if (surfaceMesh) this.group.add(surfaceMesh);
         }
 
-        // 创建边缘几何体
+        // Create the edge geometries
         const edges = params.edges;
         if (edges) {
-            // 轮廓边
+            // Silhouette edges
             if (edges.silhouettes) {
                 this.silhouetteEdges = SilhouetteEdgeGeometry.createSilhouettes(
                     data,
                     edges.silhouettes
                 );
-                const silhouetteMesh = this.silhouetteEdges.createMesh(); // 添加括号
+                const silhouetteMesh = this.silhouetteEdges.createMesh(); // added parentheses
                 if (silhouetteMesh) this.group.add(silhouetteMesh);
             }
 
-            // 线段边
+            // Segment edges
             if (edges.segments) {
                 this.segmentEdges = EdgeGeometry.create(data, edges.segments);
-                const segmentMesh = this.segmentEdges?.createMesh(); // 添加括号
+                const segmentMesh = this.segmentEdges?.createMesh(); // added parentheses
                 if (segmentMesh) this.group.add(segmentMesh);
             }
 
-            // 折线边
+            // Polyline edges
             if (edges.polylines) {
                 this.polylineEdges = PolylineEdgeGeometry.create(data, edges.polylines);
-                const polylineMesh = this.polylineEdges?.createMesh(); // 添加括号
+                const polylineMesh = this.polylineEdges?.createMesh(); // added parentheses
                 if (polylineMesh) this.group.add(polylineMesh);
             }
 
-            // 索引边
+            // Indexed edges
             if (edges.indexed) {
                 this.indexedEdges = IndexedEdgeGeometry.create(edges.indexed);
-                const indexedMesh = this.indexedEdges?.createMesh(); // 添加括号
+                const indexedMesh = this.indexedEdges?.createMesh(); // added parentheses
                 if (indexedMesh) this.group.add(indexedMesh);
             }
         }
     }
 
     /**
-     * 创建 MeshRenderGeometry 实例
+     * Creates a MeshRenderGeometry instance
      */
     public static create(
         params: MeshParams,
@@ -83,12 +83,12 @@ export class MeshRenderGeometry implements RenderGeometry {
     }
 
     /**
-     * 释放资源
+     * Releases resources
      */
     public dispose() {
         if (this._isDisposed) return;
 
-        // 释放所有几何体资源
+        // Dispose of all geometry resources
         this.data.dispose();
         this.surface?.dispose();
         this.segmentEdges?.dispose();
@@ -96,7 +96,7 @@ export class MeshRenderGeometry implements RenderGeometry {
         this.polylineEdges?.dispose();
         this.indexedEdges?.dispose();
 
-        // 释放 Three.js 对象
+        // Dispose of the Three.js objects
         while (this.group.children.length > 0) {
             const child = this.group.children[0];
             if (child instanceof THREE.Mesh) {
@@ -114,49 +114,49 @@ export class MeshRenderGeometry implements RenderGeometry {
     }
 
     /**
-     * 检查是否已释放
+     * Checks whether this instance has been disposed
      */
     public get isDisposed(): boolean {
         return this._isDisposed;
     }
 
     /**
-     * 计算边界范围
+     * Computes the bounding range
      */
     public computeRange(out?: Range3d): Range3d {
         return this.range.clone(out);
     }
 
     /**
-     * 获取 Three.js 场景对象
+     * Gets the Three.js scene object
      */
     public get threeObject(): THREE.Object3D {
         return this.group;
     }
 
     /**
-     * 设置可见性
+     * Sets visibility
      */
     public setVisible(visible: boolean) {
         this.group.visible = visible;
     }
 
     /**
-     * 设置位置
+     * Sets the position
      */
     public setPosition(position: Point3d) {
         this.group.position.set(position.x, position.y, position.z);
     }
 
     /**
-     * 设置旋转
+     * Sets the rotation
      */
     public setRotation(rotation: { x: number; y: number; z: number }) {
         this.group.rotation.set(rotation.x, rotation.y, rotation.z);
     }
 
     /**
-     * 设置缩放
+     * Sets the scale
      */
     public setScale(scale: number) {
         this.group.scale.set(scale, scale, scale);

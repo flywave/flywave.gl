@@ -1,9 +1,8 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { log, type TextureNode, type UniformNode } from "three/webgpu";
+import { type IVisualBatchMaterialParams, VisualBatchMaterial } from "@flywave/flywave-materials";
 import {
-    PI,
     asin,
     atan,
     attribute,
@@ -15,6 +14,7 @@ import {
     materialColor,
     materialOpacity,
     mix,
+    PI,
     positionLocal,
     select,
     sin,
@@ -26,9 +26,9 @@ import {
     vec3,
     vec4
 } from "three/tsl";
+import { type TextureNode, type UniformNode, log } from "three/webgpu";
 import * as THREE from "three/webgpu";
 
-import { type IVisualBatchMaterialParams, VisualBatchMaterial } from "@flywave/flywave-materials";
 import { FaceTypes } from "../decoder";
 
 /** Maximum number of texture patches supported by the material */
@@ -75,8 +75,8 @@ interface IStratumMaterialParams extends IVisualBatchMaterialParams {
 class StratumMaterial extends VisualBatchMaterial {
     // Texture / transform uniforms
     private readonly _imageryTexNodes: TextureNode[] = [];
-    private readonly _imageryTexUniforms: UniformNode<THREE.Texture | null>[] = [];
-    private readonly _imageryTransformUniforms: UniformNode<THREE.Vector4>[] = [];
+    private readonly _imageryTexUniforms: Array<UniformNode<THREE.Texture | null>> = [];
+    private readonly _imageryTransformUniforms: Array<UniformNode<THREE.Vector4>> = [];
     private readonly _imageryCountUniform: UniformNode<number>;
 
     // Face / clip uniforms

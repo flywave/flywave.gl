@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { GeoBox } from "@flywave/flywave-geoutils";
+import { type GeoBox } from "@flywave/flywave-geoutils";
 
 import {
     type HeightMapModifier,

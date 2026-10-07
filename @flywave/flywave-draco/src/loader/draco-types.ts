@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three/webgpu";
+import type * as THREE from "three/webgpu";
 
 // DRACO FORMAT SPECIFIC DATA
 
@@ -39,7 +39,7 @@ export interface DracoAttribute {
     quantization_transform?: DracoQuantizationTransform;
     octahedron_transform?: DracoOctahedronTransform;
 
-    metadata: { [key: string]: DracoMetadataEntry };
+    metadata: Record<string, DracoMetadataEntry>;
     attribute_index: number;
 }
 
@@ -53,8 +53,8 @@ export interface DracoLoaderData {
     num_attributes: number;
     num_points: number;
     num_faces: number;
-    metadata: { [entry: string]: DracoMetadataEntry };
-    attributes: { [unique_id: number]: DracoAttribute };
+    metadata: Record<string, DracoMetadataEntry>;
+    attributes: Record<number, DracoAttribute>;
 }
 
 /**
@@ -69,7 +69,7 @@ export interface DracoMesh {
         boundingBox: THREE.Box3;
     };
     schema: {
-        attributes: { [name: string]: THREE.BufferAttribute };
+        attributes: Record<string, THREE.BufferAttribute>;
         index?: THREE.BufferAttribute;
         metadata: Record<string, any>;
     };

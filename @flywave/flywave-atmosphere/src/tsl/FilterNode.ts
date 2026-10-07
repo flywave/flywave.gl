@@ -1,15 +1,16 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
 import {
-    HalfFloatType,
-    RenderTarget,
+    type NodeBuilder,
     type RenderTargetOptions,
     type Texture,
+    type TextureNode,
+    HalfFloatType,
     NodeUpdateType,
-    TempNode,
-    type NodeBuilder,
-    type TextureNode
+    RenderTarget,
+    TempNode
 } from "three/webgpu";
-
 import invariant from "tiny-invariant";
 
 import type { Node } from "./node";

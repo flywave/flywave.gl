@@ -28,7 +28,7 @@ type EasingType = "linear" | "ease-in" | "ease-out" | "ease-in-out";
  */
 export class BatchAnimationManager {
     private _animation?: BatchAnimation;
-    private _batchStates: Map<number, BatchAnimationState> = new Map();
+    private readonly _batchStates = new Map<number, BatchAnimationState>();
     private _easingFunction: EasingFunction;
     private _lastUpdateTime: number = 0;
 
@@ -145,7 +145,7 @@ export class BatchAnimationManager {
             }
 
             const elapsed = currentTime - state.startTime;
-            let rawProgress = Math.min(elapsed / this._animation!.duration, 1.0);
+            const rawProgress = Math.min(elapsed / this._animation!.duration, 1.0);
 
             // Apply easing function
             const easedProgress = this._easingFunction(rawProgress);

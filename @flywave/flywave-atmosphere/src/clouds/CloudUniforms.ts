@@ -1,11 +1,11 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { mat4, uniform, vec2, vec3, vec4 } from "three/tsl";
 import { Matrix4, Vector2, Vector3, Vector4 } from "three/webgpu";
-import { uniform, vec2, vec3, vec4, mat4 } from "three/tsl";
 
 import { CloudLayers } from "./CloudLayer";
-import { qualityPresets, type QualityPreset } from "./QualityPresets";
+import { type QualityPreset, qualityPresets } from "./QualityPresets";
 
 export class CloudUniforms {
     // Atmosphere
@@ -69,18 +69,21 @@ export class CloudUniforms {
         uniform(new Matrix4()),
         uniform(new Matrix4())
     ];
+
     inverseShadowMatrices = [
         uniform(new Matrix4()),
         uniform(new Matrix4()),
         uniform(new Matrix4()),
         uniform(new Matrix4())
     ];
+
     shadowIntervals = [
         uniform(new Vector2(0, 1)),
         uniform(new Vector2(0, 1)),
         uniform(new Vector2(0, 1)),
         uniform(new Vector2(0, 1))
     ];
+
     // Previous frame cascade matrices for shadow velocity reprojection.
     // Populated from prevShadowMatrices in CloudRenderNode each frame.
     reprojectionMatrices = [
@@ -89,8 +92,9 @@ export class CloudUniforms {
         uniform(new Matrix4()),
         uniform(new Matrix4())
     ];
+
     // Shadow buffer textures (one per cascade). Set externally by CloudRenderNode.
-    shadowTextureNodes: (any | null)[] = [null, null, null, null];
+    shadowTextureNodes: Array<any | null> = [null, null, null, null];
 
     // Shape and weather
     localWeatherRepeat = uniform(new Vector2(100, 100));

@@ -2,7 +2,7 @@
 
 import * as THREE from "three/webgpu";
 
-// 渲染模式枚举
+// Render mode enum
 export enum RenderMode {
     Wireframe = 0,
     HiddenLine = 1,
@@ -11,10 +11,10 @@ export enum RenderMode {
     Monochrome = 4
 }
 
-// 渲染通道类型
+// Render pass types
 export type RenderPass = "none" | "opaque" | "translucent" | "edge";
 
-// 渲染目标接口
+// Render target interface
 export interface RenderTarget {
     isDrawingShadowMap: boolean;
     currentViewFlags: {
@@ -24,14 +24,14 @@ export interface RenderTarget {
     };
 }
 
-// 着色器参数
+// Shader parameters
 export interface ShaderParams {
     renderPass?: RenderPass;
     devicePixelRatio?: number;
 }
 
 export class MeshGeometry extends THREE.BufferGeometry {
-    // 几何体属性
+    // Geometry attributes
     public viewIndependentOrigin: THREE.Vector3;
     public edgeWidth: number;
     public edgeLineCode: number;
@@ -39,16 +39,16 @@ export class MeshGeometry extends THREE.BufferGeometry {
     public hasBakedLighting: boolean;
     public hasScalarAnimation: boolean;
 
-    // 材质相关属性
+    // Material-related attributes
     public uniformColor: THREE.Vector4 | null = null;
     public texture: THREE.Texture | null = null;
     public normalMap: THREE.Texture | null = null;
     public vertexColors: boolean = false;
 
-    // 实例计数（用于实例化渲染）
+    // Instance count (for instanced rendering)
     public instanceCount: number = 0;
 
-    // 材质缓存
+    // Material cache
     private readonly _materialCache = new Map<string, THREE.Material>();
 
     constructor(options: {
@@ -69,7 +69,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }) {
         super();
 
-        // 设置几何数据
+        // Set the geometry data
         if (options.indices) {
             this.setIndex(new THREE.BufferAttribute(options.indices, 1));
         }
@@ -91,7 +91,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
             this.vertexColors = true;
         }
 
-        // 设置其他属性
+        // Set the remaining attributes
         this.viewIndependentOrigin = options.viewIndependentOrigin || new THREE.Vector3();
         this.edgeWidth = options.edgeWidth ?? 1.0;
         this.edgeLineCode = options.edgeLineCode ?? 0;
@@ -102,12 +102,12 @@ export class MeshGeometry extends THREE.BufferGeometry {
         this.texture = options.texture || null;
         this.normalMap = options.normalMap || null;
 
-        // 计算边界
+        // Compute the bounds
         this.computeBoundingSphere();
         this.computeBoundingBox();
     }
 
-    // 新增颜色转换方法
+    // New color conversion method
     public getUniformColorHex(includeAlpha: boolean = false): string | null {
         if (!this.uniformColor) return null;
 
@@ -125,7 +125,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }
 
     /**
-     * 计算边缘线宽
+     * Computes the edge line width
      */
     protected computeEdgeWeight(params: ShaderParams): number {
         const baseWidth = this.edgeWidth;
@@ -138,7 +138,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }
 
     /**
-     * 确定渲染通道
+     * Determines the render pass
      */
     protected determineRenderPass(target: RenderTarget): RenderPass {
         const vf = target.currentViewFlags;
@@ -152,10 +152,10 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }
 
     /**
-     * 创建或获取缓存的材质
+     * Creates or retrieves a cached material
      */
     public getMaterial(pass: RenderPass, target: RenderTarget): THREE.Material {
-        // 创建唯一的缓存键
+        // Build a unique cache key
         const cacheKey = [
             pass,
             this.isPlanar ? "planar" : "non-planar",
@@ -168,7 +168,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
             this.edgeLineCode
         ].join("|");
 
-        // 使用缓存或创建新材质
+        // Use the cache or create a new material
         if (!this._materialCache.has(cacheKey)) {
             const material = this.createMaterialForPass(pass, target);
             this._materialCache.set(cacheKey, material);
@@ -178,7 +178,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }
 
     /**
-     * 创建 Three.js 网格对象
+     * Creates a Three.js mesh object
      */
     public createMesh(target: RenderTarget): THREE.Object3D | null {
         const pass = this.determineRenderPass(target);
@@ -186,7 +186,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
 
         const material = this.getMaterial(pass, target);
 
-        // 处理实例化渲染
+        // Handle instanced rendering
         if (this.instanceCount > 0 && this.attributes.instanceMatrix) {
             const mesh = new THREE.InstancedMesh(this, material, this.instanceCount);
             return mesh;
@@ -196,7 +196,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }
 
     /**
-     * 创建特定通道的材质
+     * Creates the material for a specific pass
      */
     protected createMaterialForPass(pass: RenderPass, target: RenderTarget): THREE.Material {
         switch (pass) {
@@ -210,7 +210,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }
 
     /**
-     * 创建边缘材质
+     * Creates the edge material
      */
     protected createEdgeMaterial(): THREE.Material {
         return new THREE.LineBasicMaterial({
@@ -221,7 +221,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }
 
     /**
-     * 创建半透明材质
+     * Creates the translucent material
      */
     protected createTranslucentMaterial(): THREE.Material {
         const material = new THREE.MeshStandardMaterial({
@@ -239,7 +239,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }
 
     /**
-     * 创建不透明材质
+     * Creates the opaque material
      */
     protected createOpaqueMaterial(): THREE.Material {
         const material = new THREE.MeshStandardMaterial({
@@ -257,19 +257,19 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }
 
     /**
-     * 更新材质 uniforms
+     * Updates the material uniforms
      */
     public updateMaterialUniforms(material: THREE.Material, params: ShaderParams = {}) {
         if (!(material instanceof THREE.ShaderMaterial)) return;
 
         const uniforms = material.uniforms;
 
-        // 更新视图独立原点
+        // Update the view-independent origin
         if (uniforms.viewIndependentOrigin) {
             uniforms.viewIndependentOrigin.value = this.viewIndependentOrigin;
         }
 
-        // 更新边缘相关属性
+        // Update the edge-related attributes
         if (uniforms.edgeWeight) {
             uniforms.edgeWeight.value = this.computeEdgeWeight(params);
         }
@@ -278,7 +278,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
             uniforms.edgeLineCode.value = this.edgeLineCode;
         }
 
-        // 更新颜色
+        // Update the color
         if (this.uniformColor && uniforms.uniformColor) {
             uniforms.uniformColor.value = new THREE.Vector4(
                 this.uniformColor.x,
@@ -288,7 +288,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
             );
         }
 
-        // 更新纹理
+        // Update the textures
         if (this.texture && uniforms.map) {
             uniforms.map.value = this.texture;
         }
@@ -299,29 +299,29 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }
 
     /**
-     * 更新几何数据
+     * Updates the geometry data
      */
     public updateGeometry(options: {
         positions?: Float32Array;
         normals?: Float32Array;
         colors?: Float32Array;
     }) {
-        // 正确更新位置数据
+        // Correctly update the position data
         if (options.positions) {
             const positionAttr = this.attributes.position;
             if (positionAttr && positionAttr.array.length === options.positions.length) {
-                // 复制数据到现有数组
+                // Copy the data into the existing array
                 (positionAttr.array as Float32Array).set(options.positions);
                 positionAttr.needsUpdate = true;
             } else {
-                // 创建新的 BufferAttribute
+                // Create a new BufferAttribute
                 this.setAttribute("position", new THREE.BufferAttribute(options.positions, 3));
             }
             this.computeBoundingSphere();
             this.computeBoundingBox();
         }
 
-        // 正确更新法线数据
+        // Correctly update the normal data
         if (options.normals) {
             const normalAttr = this.attributes.normal;
             if (normalAttr && normalAttr.array.length === options.normals.length) {
@@ -332,7 +332,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
             }
         }
 
-        // 正确更新颜色数据
+        // Correctly update the color data
         if (options.colors) {
             const colorAttr = this.attributes.color;
             if (colorAttr && colorAttr.array.length === options.colors.length) {
@@ -346,16 +346,16 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }
 
     /**
-     * 释放资源
+     * Releases resources
      */
     public dispose(): void {
         super.dispose();
 
-        // 释放纹理
+        // Dispose of the textures
         if (this.texture) this.texture.dispose();
         if (this.normalMap) this.normalMap.dispose();
 
-        // 释放材质
+        // Dispose of the materials
         for (const material of this._materialCache.values()) {
             material.dispose();
         }
@@ -363,7 +363,7 @@ export class MeshGeometry extends THREE.BufferGeometry {
     }
 
     /**
-     * 应用实例化矩阵
+     * Applies the instancing matrices
      */
     public applyInstancingMatrices(matrices: Float32Array, count: number): void {
         if (matrices.length === 0) return;
@@ -371,12 +371,12 @@ export class MeshGeometry extends THREE.BufferGeometry {
         const instancedMatrix = new THREE.InstancedBufferAttribute(matrices, 16);
         this.setAttribute("instanceMatrix", instancedMatrix);
 
-        // 设置实例计数
+        // Set the instance count
         this.instanceCount = count;
     }
 
     /**
-     * 创建自定义着色器材质（高级用法）
+     * Creates a custom shader material (advanced usage)
      */
     public createCustomShaderMaterial(
         vertexShader: string,

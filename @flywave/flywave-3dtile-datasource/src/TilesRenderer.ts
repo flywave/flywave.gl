@@ -364,10 +364,13 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
     }
 
     /**
-     * 逐出即遗忘：通知观察者清理该瓦片的登记（去重 uri / 批材质 / features）。
-     * 瓦片重新解析后的首次激活会重新套批材质——对全新 mesh 是首次挂载，
-     * 不触碰已挂材质（渲染路径零操作铁律，见 references/3dtile-styling.md），
-     * 同时避免 m_appliedMaterials 随逐出瓦片无界增长。
+     * Forget on eviction: notify observers to clean up their registrations for
+     * this tile (dedup uri / batch material / features). The first activation
+     * after the tile is re-parsed re-applies batch materials — for a brand-new
+     * mesh this is the first mount and never touches already-mounted materials
+     * (the "zero-op render path" iron rule, see references/3dtile-styling.md),
+     * while also keeping m_appliedMaterials from growing unboundedly as tiles
+     * are evicted.
      * @param tile - The tile being disposed from the cache
      */
     disposeTile(tile: any): void {

@@ -573,4 +573,4 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     }
 }
 
-export { WindowEventHandler, WindowEventMap };
+export { WindowEventHandler, type WindowEventMap };

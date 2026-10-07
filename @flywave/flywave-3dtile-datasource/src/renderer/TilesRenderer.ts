@@ -23,19 +23,19 @@ import {
     Object3D,
     PerspectiveCamera,
     Points,
+    PointsNodeMaterial,
     Quaternion,
     Scene,
     Sphere,
     TypedArray,
     Vector2,
-    Vector3,
-    PointsNodeMaterial
+    Vector3
 } from "three/webgpu";
 
-import { ITile, type Tile, type TileInternal } from "../base/Tile";
+import { LOADED } from "../base/constants";
+import { type Tile, type TileInternal, ITile } from "../base/Tile";
 import { TilesRendererBase } from "../base/TilesRendererBase";
 import { type ViewErrorTarget } from "../base/traverseFunctions";
-import { LOADED } from "../base/constants";
 
 // Type for matrix transformation function
 export type MatrixTransformCallback = (matrix: Matrix4) => Matrix4;
@@ -277,7 +277,7 @@ export abstract class TilesRenderer extends TilesRendererBase {
     /**
      * Shared material for points rendering
      */
-    private m_pointsMaterial: PointsNodeMaterial;
+    private readonly m_pointsMaterial: PointsNodeMaterial;
 
     /**
      * Size of points in the point cloud

@@ -5,7 +5,7 @@ import * as THREE from "three/webgpu";
 /** Extract an arrow-like schema from a Draco mesh */
 
 interface DracoSchema {
-    attributes: { [name: string]: THREE.BufferAttribute };
+    attributes: Record<string, THREE.BufferAttribute>;
     index?: THREE.BufferAttribute;
     metadata: Record<string, any>;
 }

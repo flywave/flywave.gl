@@ -1,28 +1,28 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
+    ArcGISTileProvider,
+    DEMTerrainSource,
     GeoCoordinates,
-    sphereProjection,
     MapControls,
     MapControlsUI,
-    DEMTerrainSource,
-    ArcGISTileProvider,
+    MapView,
     MapViewEventNames,
-    PostProcessingGUIModule
+    PostProcessingGUIModule,
+    sphereProjection
 } from "@flywave/flywave.gl";
 import { GUI } from "dat.gui";
-
 import {
+    BoxGeometry,
+    Color,
+    ConeGeometry,
+    CylinderGeometry,
+    Group,
     Mesh,
     MeshBasicNodeMaterial,
     SphereGeometry,
-    BoxGeometry,
-    ConeGeometry,
-    CylinderGeometry,
-    TorusGeometry,
-    Group,
-    Color
+    TorusGeometry
 } from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 /**
  * Get map canvas element
@@ -53,7 +53,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         zoomLevel: 17, // Initial zoom level
         tilt: 45, // Initial tilt angle
         heading: 1.5413763202653008, // Initial heading angle
-        canvas: canvas, // Specify render canvas
+        canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
             lights: [],
@@ -166,9 +166,9 @@ const createGlowingObject = (
     opacity: number = 0.7
 ): any => {
     const material = new MeshBasicNodeMaterial({
-        color: color,
+        color,
         transparent: true,
-        opacity: opacity
+        opacity
     });
     return new Mesh(geometry, material);
 };

@@ -25,8 +25,8 @@ describe("B3DMBatchMaterial（样式纹理与生命周期）", function () {
         const material = new B3DMBatchMaterial({ materialParams: { color: 0xffffff } });
         expect(material.positionNode).to.exist;
         expect(material.colorNode).to.exist;
-        // uint _BATCHID 的 WGSL 合法性（float(attribute()).round()）需真实渲染验证，
-        // 这里保证节点图构建路径不抛错
+        // WGSL validity of uint _BATCHID (float(attribute()).round()) needs real rendering
+        // to verify; here we only guarantee the node graph build path does not throw
     });
 
     it("setBatchStyles 写入批样式并生成样式纹理", function () {
@@ -65,6 +65,8 @@ describe("B3DMBatchMaterial（样式纹理与生命周期）", function () {
     it("dispose 可安全调用", function () {
         const material = new B3DMBatchMaterial({});
         material.setBatchStyles(new Map([[0, makeStyle("#ff0000")]]));
-        expect(() => material.dispose()).to.not.throw();
+        expect(() => {
+            material.dispose();
+        }).to.not.throw();
     });
 });

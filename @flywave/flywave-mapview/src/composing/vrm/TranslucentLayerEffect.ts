@@ -1,14 +1,16 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
+import { type ITranslucentLayerConfig } from "@flywave/flywave-datasource-protocol";
 import {
+    type Object3D,
     Color,
     DataTexture,
     FloatType,
-    RGBAFormat,
     LinearFilter,
-    Scene,
-    type Object3D
+    RGBAFormat,
+    Scene
 } from "three/webgpu";
-import { ITranslucentLayerConfig } from "@flywave/flywave-datasource-protocol";
 
 interface InternalLayerConfig extends ITranslucentLayerConfig {
     parsedColor?: Color;
@@ -50,14 +52,14 @@ export const OUTLINE_LAYER_BIT = 11;
  * Zero modifications to any material. Zero shader recompilations.
  */
 export class TranslucentLayerEffect {
-    private readonly layers: Map<string, InternalLayerConfig> = new Map();
-    private readonly layerIndices: Map<string, number> = new Map();
+    private readonly layers = new Map<string, InternalLayerConfig>();
+    private readonly layerIndices = new Map<string, number>();
     private nextLayerIndex: number = 0;
 
-    private layerDataTexture: DataTexture;
+    private readonly layerDataTexture: DataTexture;
     private needsLayerTextureUpdate: boolean = false;
 
-    private readonly registeredObjects: Set<Object3D> = new Set();
+    private readonly registeredObjects = new Set<Object3D>();
 
     constructor() {
         this.layerDataTexture = this.createLayerDataTexture();

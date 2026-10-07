@@ -23,12 +23,12 @@ import { type QuantizedTerrainMeshData } from "./quantized-terrain/quantized-mes
 import { type DecodedStratumTileData } from "./quantized-terrain/quantized-stratum-mesh/stratum-tile/StratumTileData";
 import {
     type DecodeStratumTileParams,
+    type TileGeometryReprojectionData,
+    type TileGeometryReprojectionParams,
     processQuantizedMesh,
     processReProjectTileGeometry,
     processStratumTile,
-    processUpsampledMesh,
-    TileGeometryReprojectionData,
-    TileGeometryReprojectionParams
+    processUpsampledMesh
 } from "./quantized-terrain/TileWorkerDecoder";
 
 /**
@@ -138,8 +138,9 @@ export class TerrainTileDecoder implements ITileDecoder {
     public configure(options?: DecoderOptions, customOptions: OptionsMap = {}): void {
         // Handle height map modifiers synchronization
         const terrainSourceId = customOptions.terrainSourceId as string;
-        const modifiers =
-            customOptions.heightMapModifiers as import("./ground-modification-manager").SerializedHeightMapModifier[];
+        const modifiers = customOptions.heightMapModifiers as Array<
+            import("./ground-modification-manager").SerializedHeightMapModifier
+        >;
 
         if (terrainSourceId) {
             if (modifiers && modifiers.length > 0) {
@@ -218,7 +219,7 @@ export class TerrainTileDecoder implements ITileDecoder {
             }
 
             case TaskType.GeometryReprojection:
-                let buffer = processReProjectTileGeometry(
+                const buffer = processReProjectTileGeometry(
                     data as unknown as TileGeometryReprojectionParams,
                     projection
                 );

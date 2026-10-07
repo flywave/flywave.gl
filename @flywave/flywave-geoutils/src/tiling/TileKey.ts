@@ -1,10 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// 在TileKey.ts开头添加
+// Added at the top of TileKey.ts
 export enum TileEncoding {
-    /** 标准四叉树编码 (2^n x 2^n) */
+    /** Standard quadtree encoding (2^n x 2^n) */
     QUAD_TREE,
-    /** 半四叉树编码 (2^(n+1) x 2^n) */
+    /** Half quadtree encoding (2^(n+1) x 2^n) */
     HALF_QUAD_TREE
 }
 
@@ -147,7 +147,7 @@ export class TileKey {
         let column = 0;
         let quadKey = quadKey64;
 
-        // 标准QUAD_TREE处理
+        // Standard QUAD_TREE handling
 
         while (quadKey > 1) {
             const mask = 1 << level;
@@ -330,7 +330,7 @@ export class TileKey {
         this.m_tileEncoding = effectiveEncoding;
 
         if (this.m_mortonCode === undefined) {
-            // 标准 QUAD_TREE 处理
+            // Standard QUAD_TREE handling
             let column = this.column;
             let row = this.row;
             let level = this.level;

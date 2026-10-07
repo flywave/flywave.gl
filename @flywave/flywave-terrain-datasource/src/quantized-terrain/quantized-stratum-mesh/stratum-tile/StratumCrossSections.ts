@@ -31,7 +31,7 @@ export class StratumCrossSections {
         collapseProfiles: CollapseProfile[];
         line: GeoCoordinatesLike[];
     }> {
-        // 如果没有提供upDir，则默认使用(0, 0, 1)
+        // Default upDir to (0, 0, 1) when not provided
         const upDirection = upDir || new Vector3(0, 0, 1);
 
         const localLines = cutLines.map(line =>
@@ -41,12 +41,12 @@ export class StratumCrossSections {
         const _collapsePillars = this.stratumMeshData.createCollapsePillars();
         const _stratumLayers = this.stratumMeshData.createStratumLayers();
 
-        // 第一阶段：收集所有局部坐标结果
+        // Phase 1: collect all local-coordinate results
         const rawResults = localLines.map((line, lineIndex) => {
             const stratumProfiles: StratumProfile[] = [];
             const collapseProfiles: CollapseProfile[] = [];
 
-            // 1. 处理陷落柱剖面（局部坐标）
+            // 1. Process collapse pillar profiles (local coordinates)
             _collapsePillars.forEach(collapse => {
                 const result = collapse.generateCrossSections(
                     [
@@ -75,7 +75,7 @@ export class StratumCrossSections {
                 });
             });
 
-            // 2. 处理地层剖面（局部坐标）
+            // 2. Process stratum profiles (local coordinates)
             const lineStart = new Vector3(line[0].x, line[0].y, line[0].z);
             const lineEnd = new Vector3(line[1].x, line[1].y, line[1].z);
 
@@ -90,7 +90,7 @@ export class StratumCrossSections {
                 };
 
                 layer.voxels.forEach(voxel => {
-                    // 生成顶底板数据（局部坐标）
+                    // Generate roof/floor data (local coordinates)
                     const topPoints = this.processTriangles(voxel.getTopTriangles(), [
                         lineStart,
                         lineEnd
@@ -103,7 +103,7 @@ export class StratumCrossSections {
                     stratumProfile.top.push(...topPoints);
                     stratumProfile.base.push(...basePoints);
 
-                    // 生成剖面网格（局部坐标）
+                    // Generate the profile mesh (local coordinates)
                     const { meshes, polys } = this.generateStratumMesh(
                         this.sortPointsAlongLine(topPoints, [lineStart, lineEnd], upDirection),
                         this.sortPointsAlongLine(basePoints, [lineStart, lineEnd], upDirection),
@@ -216,35 +216,35 @@ export class StratumCrossSections {
         return [];
     }
 
-    // 新增地质剖面生成核心方法
+    // Core geological cross-section generation method
     private generateStratumMesh(
         top: Vector3[],
         base: Vector3[],
         lineDir: Vector3,
         collapseProfiles: CollapseProfile[],
-        upDir: Vector3 // 新增 upDir 参数
+        upDir: Vector3 // added upDir parameter
     ): { meshes: BufferGeometry[]; polys: Vector3[][] } {
         const meshes: BufferGeometry[] = [];
         const polys: Vector3[][] = [];
 
         if (top.length < 2) return { meshes, polys };
 
-        // 分割连续段（处理尖灭）
+        // Split into continuous segments (handle pinch-outs)
         const segments = this.splitContinuousSegments(top, base);
 
         for (const seg of segments) {
             if (seg.top.length < 2) continue;
 
-            // 构建地层多边形（顶板 + 反转的底板）
+            // Build the stratum polygon (roof + reversed floor)
             const polygon = [...seg.top, ...[...seg.base].reverse()];
 
-            // 计算投影矩阵时使用 upDir
+            // upDir is used when computing the projection matrix
             const matrix = this.calculateProjectionMatrixForSection(polygon, lineDir, upDir);
             if (!matrix) {
                 continue;
             }
 
-            // 执行三角剖分
+            // Triangulate
             const subMesh = this.buildTriangulateMesh(polygon);
             if (subMesh) {
                 meshes.push(subMesh);
@@ -252,12 +252,12 @@ export class StratumCrossSections {
             }
         }
 
-        // 处理陷落柱切割
+        // Cut the profiles with collapse pillars
         const finalMeshes: BufferGeometry[] = [];
         for (let i = 0; i < meshes.length; i++) {
             const polygon = polys[i];
 
-            // 重新计算投影矩阵（使用 upDir）
+            // Recompute the projection matrix (using upDir)
             const matrix = this.calculateProjectionMatrixForSection(polygon, lineDir, upDir);
             if (!matrix) {
                 finalMeshes.push(meshes[i]);
@@ -270,7 +270,7 @@ export class StratumCrossSections {
                 continue;
             }
 
-            // 处理每个相关的陷落柱
+            // Process each relevant collapse pillar
             for (const collapse of relevantCollapses) {
                 for (const collapsePoly of collapse.polys) {
                     try {
@@ -282,7 +282,7 @@ export class StratumCrossSections {
                 }
             }
 
-            // 保留未切割的部分（如果有效）
+            // Keep the uncut remainder (if valid)
             const positionAttr = meshes[i].getAttribute("position");
             if (positionAttr && positionAttr.count > 2) {
                 finalMeshes.push(meshes[i]);
@@ -292,7 +292,7 @@ export class StratumCrossSections {
         return { meshes: finalMeshes, polys };
     }
 
-    // 新增方法：为剖面计算投影矩阵（使用 upDir）
+    // Compute the projection matrix for a profile (uses upDir)
     private calculateProjectionMatrixForSection(
         poly: Vector3[],
         lineDir: Vector3,
@@ -300,33 +300,33 @@ export class StratumCrossSections {
     ): ProjectionMatrix | null {
         if (poly.length < 3) return null;
 
-        // 使用 upDir 作为主要参考方向
+        // Use upDir as the primary reference direction
         const normal = this.computePolygonNormal(poly);
 
-        // 确保x轴与线方向对齐
+        // Keep the x axis aligned with the line direction
         const xAxis = lineDir.clone().projectOnPlane(normal).normalize();
         if (xAxis.length() < 0.001) {
             xAxis.set(1, 0, 0).projectOnPlane(normal).normalize();
         }
 
-        // 确保y轴与上方向对齐
+        // Keep the y axis aligned with the up direction
         let yAxis = upDir.clone().projectOnPlane(normal).normalize();
         if (yAxis.length() < 0.001) {
             yAxis = new Vector3().crossVectors(normal, xAxis).normalize();
         }
 
-        // 正交化处理
+        // Orthogonalize
         const correction = yAxis.clone().projectOnVector(xAxis);
         yAxis.sub(correction).normalize();
 
         return { origin: poly[0], xAxis, yAxis, normal };
     }
 
-    // 修改点排序方法（使用 upDir）
+    // Point sorting along the line (uses upDir)
     private sortPointsAlongLine(
         points: Vector3[],
         line: Vector3[],
-        upDir: Vector3 // 新增 upDir 参数
+        upDir: Vector3 // added upDir parameter
     ): Vector3[] {
         interface ParamPoint {
             totalDist: number;
@@ -336,19 +336,19 @@ export class StratumCrossSections {
         const paramPoints: ParamPoint[] = [];
         const segDists: number[] = [0];
 
-        // 计算线段长度
+        // Compute segment lengths
         for (let i = 1; i < line.length; i++) {
             segDists.push(segDists[i - 1] + line[i].distanceTo(line[i - 1]));
         }
 
-        // 计算每个点的参数值
+        // Compute the parameter value for each point
         for (const pt of points) {
             let minDist = Infinity;
             let bestSegmentIndex = 0;
             let bestParam = 0;
             let accumDist = 0;
 
-            // 找到最近的线段
+            // Find the closest segment
             for (let i = 1; i < line.length; i++) {
                 const segStart = line[i - 1];
                 const segEnd = line[i];
@@ -364,21 +364,21 @@ export class StratumCrossSections {
                 }
             }
 
-            // 添加垂直方向偏差（使用 upDir）
+            // Add a vertical offset (using upDir)
             if (minDist < Infinity) {
                 const verticalOffset = pt.clone().sub(line[0]).dot(upDir);
-                accumDist += verticalOffset * 0.001; // 小权重避免影响主要排序
+                accumDist += verticalOffset * 0.001; // small weight so it barely affects the primary ordering
                 paramPoints.push({ totalDist: accumDist, point: pt });
             }
         }
 
-        // 按累计距离排序
+        // Sort by accumulated distance
         paramPoints.sort((a, b) => a.totalDist - b.totalDist);
 
         return paramPoints.map(pp => pp.point);
     }
 
-    // 空间查询方法
+    // Spatial query helper
     private queryRelevantCollapses(
         poly: Vector3[],
         allCollapses: CollapseProfile[]
@@ -389,14 +389,14 @@ export class StratumCrossSections {
         );
     }
 
-    // 三维包围盒计算 (3D Bounding Box Calculation)
+    // 3D bounding box calculation
     private calculate3DBounds(poly: Vector3[]): Box3 {
         const box = new Box3();
         poly.forEach(v => box.expandByPoint(v));
         return box;
     }
 
-    // 连续地质段分割（检测尖灭点）(Continuous Segment Splitting - Pinch-out Detection)
+    // Continuous segment splitting - pinch-out detection
     private splitContinuousSegments(
         top: Vector3[],
         base: Vector3[]
@@ -409,7 +409,7 @@ export class StratumCrossSections {
         for (let i = 1; i < top.length; i++) {
             const thickness = top[i].distanceTo(base[i]);
 
-            // 检测尖灭点或终点 (Detect pinch-out or end point)
+            // Detect pinch-out or end point
             if (thickness < thicknessThreshold || i === top.length - 1) {
                 if (i - start >= 1 && !prevIsPinch) {
                     segments.push({
@@ -429,7 +429,7 @@ export class StratumCrossSections {
         return segments;
     }
 
-    // 多边形法向量计算
+    // Polygon normal computation
     private computePolygonNormal(poly: Vector3[]): Vector3 {
         const normal = new Vector3();
         for (let i = 0; i < poly.length; i++) {
@@ -442,35 +442,35 @@ export class StratumCrossSections {
         return normal.normalize();
     }
 
-    // 剖面切割核心方法
+    // Core profile-cutting method
     private cutProfiles(
         stratumPoly: Vector3[],
         collapsePoly: Vector3[],
         matrix: ProjectionMatrix
     ): BufferGeometry[] {
-        // 添加顶点顺序校验
+        // Enforce vertex winding order
         const orientedStratum = this.ensureClockwiseOrder(stratumPoly);
         const orientedCollapse = this.ensureCounterClockwiseOrder(collapsePoly);
 
-        // 三维转二维投影
+        // Project 3D to 2D
         const stratum2D = this.projectTo2D(orientedStratum, matrix);
         const collapse2D = this.projectTo2D(orientedCollapse, matrix);
 
-        // 添加快速空检测
+        // Fast empty-intersection rejection
         if (!this.polygonsIntersect(stratum2D, collapse2D)) {
             return [this.buildTriangulateMesh(stratumPoly)];
         }
 
-        // 执行二维多边形裁剪（示例实现）
+        // Run the 2D polygon clip
         const clipped = this.weilerAthertonClip(stratum2D, collapse2D);
 
-        // 转换回三维并生成网格
+        // Project back to 3D and build meshes
         return clipped
             .map(poly => this.buildTriangulateMesh(this.projectTo3D(poly, matrix)))
             .filter(Boolean);
     }
 
-    // 新增多边形方向校验方法
+    // Polygon winding-order check helpers
     private ensureClockwiseOrder(poly: Vector3[]): Vector3[] {
         const area = this.calculatePolygonArea(poly);
         return area > 0 ? poly.reverse() : poly;
@@ -481,7 +481,7 @@ export class StratumCrossSections {
         return area < 0 ? poly.reverse() : poly;
     }
 
-    // 计算多边形面积（带符号）
+    // Signed polygon area
     private calculatePolygonArea(poly: Vector3[]): number {
         let area = 0;
         for (let i = 0; i < poly.length; i++) {
@@ -492,12 +492,12 @@ export class StratumCrossSections {
         return area;
     }
 
-    // 快速相交检测
+    // Fast intersection test
     private polygonsIntersect(a: Vector2[], b: Vector2[]): boolean {
         const aBounds = this.calculateBounds(a);
         const bBounds = this.calculateBounds(b);
 
-        // 包围盒快速排除
+        // Quick AABB rejection
         if (
             aBounds.maxX < bBounds.minX ||
             aBounds.minX > bBounds.maxX ||
@@ -507,11 +507,11 @@ export class StratumCrossSections {
             return false;
         }
 
-        // 精确相交检测（简化版）
+        // Exact intersection test (simplified)
         return a.some(p => this.pointInPolygon(p, b)) || b.some(p => this.pointInPolygon(p, a));
     }
 
-    // 三维到二维投影 (3D to 2D Projection)
+    // 3D to 2D projection
     private projectTo2D(poly: Vector3[], matrix: ProjectionMatrix): Vector2[] {
         return poly.map(p => {
             const rel = new Vector3().subVectors(p, matrix.origin);
@@ -519,7 +519,7 @@ export class StratumCrossSections {
         });
     }
 
-    // 二维到三维逆投影 (2D to 3D Inverse Projection)
+    // 2D to 3D inverse projection
     private projectTo3D(points: Vector2[], matrix: ProjectionMatrix): Vector3[] {
         return points.map(p => {
             const xComponent = new Vector3().copy(matrix.xAxis).multiplyScalar(p.x);
@@ -528,7 +528,7 @@ export class StratumCrossSections {
         });
     }
 
-    // 二维包围盒计算
+    // 2D bounding box computation
     private calculateBounds(points: Vector2[]): {
         minX: number;
         minY: number;
@@ -550,20 +550,20 @@ export class StratumCrossSections {
         return { minX, minY, maxX, maxY };
     }
 
-    // 三维包围盒相交检测
+    // 3D bounding box intersection test
     private boundsIntersect(a: Box3, b: Box3): boolean {
-        // 三维AABB相交检测
+        // 3D AABB intersection test
         return (
             a[0][0] <= b[1][0] &&
-            a[1][0] >= b[0][0] && // X轴
+            a[1][0] >= b[0][0] && // X axis
             a[0][1] <= b[1][1] &&
-            a[1][1] >= b[0][1] && // Y轴
+            a[1][1] >= b[0][1] && // Y axis
             a[0][2] <= b[1][2] &&
             a[1][2] >= b[0][2]
-        ); // Z轴
+        ); // Z axis
     }
 
-    // 射线法判断点是否在多边形内
+    // Ray-casting point-in-polygon test
     private pointInPolygon(point: Vector2, polygon: Vector2[]): boolean {
         const epsilon = 1e-10;
         let inside = false;
@@ -572,12 +572,12 @@ export class StratumCrossSections {
             const pi = polygon[i];
             const pj = polygon[j];
 
-            // 排除在顶点上的情况
+            // Handle the point-on-vertex case
             if (Math.abs(pi.x - point.x) < epsilon && Math.abs(pi.y - point.y) < epsilon) {
                 return true;
             }
 
-            // 检测线段与水平射线的交点
+            // Test the segment against the horizontal ray
             const intersect =
                 // eslint-disable-next-line no-mixed-operators
                 pi.y > point.y !== pj.y > point.y &&
@@ -611,21 +611,21 @@ export class StratumCrossSections {
         }
     }
 
-    // 二维多边形裁剪（示例实现）
+    // 2D polygon clipping (Weiler-Atherton)
     private weilerAthertonClip(subjectPolygon: Vector2[], clipPolygon: Vector2[]): Vector2[][] {
-        // 将THREE.Vector2数组转换为FlatArray格式（修复参数结构）
+        // Convert THREE.Vector2 arrays to FlatArray format (matches the parameter shape)
         const subject = FlatArray.create({
-            array: subjectPolygon.map(v => [v.x, v.y]).flat(), // 展平二维数组
-            itemSize: 2 // 明确指定每个顶点的坐标数
+            array: subjectPolygon.map(v => [v.x, v.y]).flat(), // flatten the 2D array
+            itemSize: 2 // coordinate count per vertex
         });
         const clip = FlatArray.create({
             array: clipPolygon.map(v => [v.x, v.y]).flat(),
             itemSize: 2
         });
-        // 调用核心算法实现
+        // Invoke the core algorithm
         const resultPolygons = weilerAthertonClip(subject, clip);
 
-        // 将结果转换回THREE.Vector2数组
+        // Convert the result back to THREE.Vector2 arrays
         return resultPolygons.map(poly => {
             return poly.array.reduce((acc: Vector2[], _, i) => {
                 if (i % poly.itemSize === 0) {
@@ -656,10 +656,10 @@ export class StratumCrossSections {
             extents: [
                 minLon, // minLongitude
                 minLat, // minLatitude
-                minZ, // 地面面最小高程
+                minZ, // min ground-face elevation
                 maxLon, // maxLongitude
                 maxLat, // maxLatitude
-                maxZ // 地面面最大高程
+                maxZ // max ground-face elevation
             ]
         };
     }
@@ -692,12 +692,12 @@ export class StratumCrossSections {
                 const localY = positions[base + 1];
                 const localZ = positions[base + 2];
 
-                // 转换为世界坐标系
+                // Convert to world coordinates
                 const worldPos = this.stratumMeshData.unprojectLocalToGeo(
                     new Vector3(localX, localY, localZ)
                 ) as GeoCoordinates;
 
-                // 更新高程极值
+                // Update the elevation extremes
                 minZ = Math.min(minZ, worldPos.altitude);
                 maxZ = Math.max(maxZ, worldPos.altitude);
                 minLon = Math.min(minLon, worldPos.longitude);
@@ -705,7 +705,7 @@ export class StratumCrossSections {
                 minLat = Math.min(minLat, worldPos.latitude);
                 maxLat = Math.max(maxLat, worldPos.latitude);
 
-                // 使用世界坐标生成哈希
+                // Hash from the world coordinates
                 const hash = this.generatePositionHash(worldPos);
 
                 if (!vertexMap.has(hash)) {
@@ -729,15 +729,15 @@ export class StratumCrossSections {
         };
     }
 
-    // 新增高效哈希生成方法
+    // Efficient position-hash helper
     private generatePositionHash(v: GeoCoordinates): number {
-        // 按厘米级精度处理（适用于地质坐标）
+        // Quantize to centimeter-level precision (suitable for geological coordinates)
         const scale = 1000;
         const x = Math.round(v.longitude * scale);
         const y = Math.round(v.latitude * scale);
         const z = Math.round(v.altitude * scale);
 
-        // 使用素数混合哈希 (2^24 + 2^14 + 2^3) 减少碰撞
+        // Prime-based hash mix (2^24 + 2^14 + 2^3) to reduce collisions
         return (x << 24) ^ (y << 14) ^ (z << 3);
     }
 }

@@ -13,42 +13,40 @@
  */
 
 import {
-    PerspectiveCamera,
-    OrthographicCamera,
-    PlaneGeometry,
-    Mesh,
-    Scene,
-    Vector3,
-    NoToneMapping,
-    WebGPURenderer,
-    NodeMaterial
-} from "three/webgpu";
-import {
-    Fn,
-    vec3,
-    vec4,
-    uniform,
-    uv,
-    normalize,
-    float,
-    dot,
-    length,
-    mix,
-    sqrt,
-    texture,
-    screenUV
-} from "three/tsl";
-
-import { GUI } from "dat.gui";
-
-import {
     AtmosphereContext,
     AtmosphereParameters,
     cloudRender,
+    getCubeSphereUv,
     registerAtmosphereContext,
-    registerAtmosphereContextBase,
-    getCubeSphereUv
+    registerAtmosphereContextBase
 } from "@flywave/flywave-atmosphere";
+import { GUI } from "dat.gui";
+import {
+    dot,
+    float,
+    Fn,
+    length,
+    mix,
+    normalize,
+    screenUV,
+    sqrt,
+    texture,
+    uniform,
+    uv,
+    vec3,
+    vec4
+} from "three/tsl";
+import {
+    Mesh,
+    NodeMaterial,
+    NoToneMapping,
+    OrthographicCamera,
+    PerspectiveCamera,
+    PlaneGeometry,
+    Scene,
+    Vector3,
+    WebGPURenderer
+} from "three/webgpu";
 
 const CANVAS_ID = "mapCanvas";
 const EARTH_RADIUS = 6360000; // matches CloudUniforms.bottomRadius default
@@ -111,11 +109,11 @@ async function main() {
     registerAtmosphereContextBase(atmosphereContext);
 
     // --- Mouse look (debug only) ---
-    let yaw = 0,
-        pitch = 0;
+    let yaw = 0;
+    let pitch = 0;
     let isDragging = false;
-    let lastX = 0,
-        lastY = 0;
+    let lastX = 0;
+    let lastY = 0;
 
     canvas.addEventListener("mousedown", e => {
         isDragging = true;
@@ -293,8 +291,8 @@ async function main() {
         for (let dy = -halfSize; dy <= halfSize; dy++) {
             const row: string[] = [];
             for (let dx = -halfSize; dx <= halfSize; dx++) {
-                const px = cx + dx,
-                    py = cy + dy;
+                const px = cx + dx;
+                const py = cy + dy;
                 if (px < 0 || px >= w || py < 0 || py >= h) {
                     row.push("------");
                     continue;
@@ -411,7 +409,9 @@ async function main() {
             renderer.render(scene, quadCamera);
             setTimeout(() => {
                 renderer.render(scene, quadCamera);
-                setTimeout(() => sampleRT(), 50);
+                setTimeout(() => {
+                    sampleRT();
+                }, 50);
             }, 50);
         }, 50);
     };
@@ -439,7 +439,7 @@ async function main() {
     });
 
     // --- Animation loop ---
-    let lastSampleTime = 0;
+    const lastSampleTime = 0;
     let frameCount = 0;
     let fps = 0;
     let lastFpsTime = 0;

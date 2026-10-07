@@ -1,20 +1,20 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three/webgpu";
 import {
-    type MapView,
-    type ElevationProvider,
-    type ElevationRangeSource
-} from "@flywave/flywave-mapview";
-import {
-    TileKey,
+    GeoBox,
+    GeoCoordinates,
     geographicTerrainStandardTiling,
     normalizedEquirectangularProjection,
-    GeoBox,
     OrientedBox3,
-    GeoCoordinates
+    TileKey
 } from "@flywave/flywave-geoutils";
-import { GUI } from "dat.gui";
+import {
+    type ElevationProvider,
+    type ElevationRangeSource,
+    type MapView
+} from "@flywave/flywave-mapview";
+import { type GUI } from "dat.gui";
+import * as THREE from "three/webgpu";
 
 /**
  * Frustum culling debugging module for flywave inspector
@@ -83,13 +83,13 @@ export class FrustumCullingModule {
                     );
 
                     // Store results for display
-                    const levelCheckResults: {
+                    const levelCheckResults: Array<{
                         level: number;
                         tileKey: TileKey;
                         intersects: boolean;
                         geoBox: GeoBox;
                         orientedBox: OrientedBox3;
-                    }[] = [];
+                    }> = [];
 
                     // Start with the input tile key and go up to level 0
                     let currentTileKey = tileKey;
@@ -145,7 +145,7 @@ export class FrustumCullingModule {
                             tileKey: currentTileKey,
                             intersects: isIntersecting,
                             geoBox: geoBoxWithElevation,
-                            orientedBox: orientedBox
+                            orientedBox
                         });
 
                         // If we're at level 0, break

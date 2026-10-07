@@ -1,23 +1,24 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
+    type Feature,
+    type MapAnchor,
+    ArcGISTileProvider,
+    DEMTerrainSource,
     GeoCoordinates,
+    GUI,
     MapControls,
     MapControlsUI,
-    TileRenderDataSource,
-    sphereProjection,
-    TransferManager,
-    ModularMapViewMonitor,
-    Feature,
-    DEMTerrainSource,
-    ArcGISTileProvider,
-    GUI,
+    MapView,
     MapViewEventNames,
-    MapAnchor
+    ModularMapViewMonitor,
+    sphereProjection,
+    TileRenderDataSource,
+    TransferManager
 } from "@flywave/flywave.gl";
+import { MeshBasicNodeMaterial } from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 import { PolygonMesh } from "./PolygonMesh.js";
 import { WaterMaterial } from "./water";
-import { MeshBasicNodeMaterial } from "three/webgpu";
 
 // Project configuration constants
 const PROJECT_CONFIG = {
@@ -58,7 +59,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         zoomLevel: 16, // Initial zoom level
         tilt: 60, // Initial tilt angle
         heading: 45, // Initial heading angle
-        canvas: canvas, // Specify render canvas
+        canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
             lights: [

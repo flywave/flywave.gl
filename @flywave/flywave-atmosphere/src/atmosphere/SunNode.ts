@@ -1,11 +1,10 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { TempNode, type NodeBuilder } from "three/webgpu";
 import { Fn, fwidth, If, smoothstep, uniform, vec4 } from "three/tsl";
+import { type NodeBuilder, TempNode } from "three/webgpu";
 
 import type { Node } from "../tsl/node";
-
 import { getAtmosphereContext } from "./AtmosphereContext";
 import { getSolarLuminance } from "./runtime";
 

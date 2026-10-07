@@ -1,22 +1,28 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { BufferAttribute, BufferGeometry, Sphere, Vector3, type DataTexture } from "three/webgpu";
-
-import { ITileResource, TileValidResource } from "../TileResourceManager";
-import { GeoCoordinates, Projection } from "@flywave/flywave-geoutils";
 import {
     getProjection,
     getProjectionName,
     RequestController
 } from "@flywave/flywave-datasource-protocol";
+import { type GeoCoordinates, type Projection } from "@flywave/flywave-geoutils";
+import { Tile } from "@flywave/flywave-mapview";
+import { get } from "http";
+import {
+    type BufferGeometry,
+    type DataTexture,
+    type Sphere,
+    BufferAttribute,
+    Vector3
+} from "three/webgpu";
+
 import { TaskType } from "../Constants";
+import { type DecodedTerrainTile } from "../TerrainDecoderWorker";
+import { ITileResource, TileValidResource } from "../TileResourceManager";
 import type {
     TileGeometryReprojectionData,
     TileGeometryReprojectionParams
 } from "./TileWorkerDecoder";
-import { Tile } from "@flywave/flywave-mapview";
-import { DecodedTerrainTile } from "../TerrainDecoderWorker";
-import { get } from "http";
 
 /**
  * Interface representing a height map with displacement data
@@ -152,13 +158,15 @@ export abstract class QuantizedTileResource extends TileValidResource {
      */
     private m_reProjectGeometryPanding: boolean = false;
 
-    private projectionCacheBuffer: {
-        [key: string]: {
+    private projectionCacheBuffer: Record<
+        string,
+        {
             position: BufferAttribute;
             normal: BufferAttribute;
             boundingSphere: Sphere;
-        };
-    };
+        }
+    >;
+
     /**
      * Attempts to reproject the tile geometry to the specified target projection
      *
@@ -177,7 +185,7 @@ export abstract class QuantizedTileResource extends TileValidResource {
 
         const cached = this.projectionCacheBuffer?.[getProjectionName(targetProjection)];
         if (cached) {
-            // 使用缓存的数据
+            // Use the cached data
             this.updateGeometryProjection(targetProjection);
             this.geometry.setAttribute("position", cached.position);
             this.geometry.setAttribute("normal", cached.normal);
@@ -191,8 +199,8 @@ export abstract class QuantizedTileResource extends TileValidResource {
 
         this.m_reProjectGeometryPanding = true;
 
-        let posiiton = this.geometry.getAttribute("position");
-        let normal = this.geometry.getAttribute("normal");
+        const posiiton = this.geometry.getAttribute("position");
+        const normal = this.geometry.getAttribute("normal");
 
         this.terrainSource.decoder
             .decodeTile(
@@ -213,7 +221,7 @@ export abstract class QuantizedTileResource extends TileValidResource {
                 this.m_RequestController
             )
             .then((params: DecodedTerrainTile) => {
-                let reprojectedGeometry = params.tileTerrain as TileGeometryReprojectionData;
+                const reprojectedGeometry = params.tileTerrain as TileGeometryReprojectionData;
 
                 this.updateGeometryProjection(
                     getProjection(reprojectedGeometry.targetProjectionName)
@@ -230,7 +238,7 @@ export abstract class QuantizedTileResource extends TileValidResource {
                     boundingSphere: this.geometry.boundingSphere
                 };
 
-                let targetPosition = new BufferAttribute(
+                const targetPosition = new BufferAttribute(
                     reprojectedGeometry.position.array,
                     reprojectedGeometry.position.itemSize
                 );
@@ -250,7 +258,7 @@ export abstract class QuantizedTileResource extends TileValidResource {
         return true;
     }
 
-    private m_RequestController = new RequestController();
+    private readonly m_RequestController = new RequestController();
 
     dispose(): void {
         super.dispose();

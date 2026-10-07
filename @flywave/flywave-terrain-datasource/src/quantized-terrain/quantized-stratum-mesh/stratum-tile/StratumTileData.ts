@@ -32,7 +32,6 @@ import {
 } from "three/webgpu";
 
 import DEMData from "../../../dem-terrain/dem/DemData";
-import { type StratumClipRegion } from "./StratumClipTypes";
 import { renderGroundModificationHeightMap, renderHeightMap } from "../../../terrain-processor";
 import { HEIGHT_MAP_HEIGHT, HEIGHT_MAP_WIDTH } from "../../../terrain-processor/constants";
 import {
@@ -50,6 +49,7 @@ import { BspObject } from "./BspObject";
 import { CollapsePillar } from "./CollapsePillar";
 import { FaultProfile } from "./FaultProfile";
 import { SectionLine } from "./SectionLine";
+import { type StratumClipRegion } from "./StratumClipTypes";
 import { StratumLayer } from "./StratumLayer";
 import { StratumMeshCliper } from "./StratumTileCliper";
 import { type StratumVoxel } from "./StratumVoxel";
@@ -157,7 +157,7 @@ export class StratumTileData {
     private _voxelIndices?: BufferAttribute;
     private _layerIndx?: BufferAttribute;
     private readonly stratumTileGeometry?: BufferGeometry;
-    private _groundElevationModified?: boolean;
+    private readonly _groundElevationModified?: boolean;
 
     // Metadata
     private readonly _header?: Header;

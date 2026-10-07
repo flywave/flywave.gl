@@ -1,16 +1,16 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import {
-    Matrix4,
-    Vector2,
-    Vector3,
-    type Camera,
-    NodeBuilder,
-    type Renderer,
-    type Texture
-} from "three/webgpu";
 import { renderGroup, uniform } from "three/tsl";
+import {
+    type Camera,
+    type Renderer,
+    type Texture,
+    Matrix4,
+    NodeBuilder,
+    Vector2,
+    Vector3
+} from "three/webgpu";
 
 import { AtmosphereContextBase } from "./AtmosphereContextBase";
 import { AtmosphereLUTNode } from "./AtmosphereLUTNode";
@@ -140,12 +140,12 @@ export class AtmosphereContext extends AtmosphereContextBase {
                 sx = 1 / (1 + lambda * rx);
                 sy = 1 / (1 + lambda * ry);
                 sz = 1 / (1 + lambda * rz);
-                const sx2 = sx * sx,
-                    sy2 = sy * sy,
-                    sz2 = sz * sz;
-                const sx3 = sx2 * sx,
-                    sy3 = sy2 * sy,
-                    sz3 = sz2 * sz;
+                const sx2 = sx * sx;
+                const sy2 = sy * sy;
+                const sz2 = sz * sz;
+                const sx3 = sx2 * sx;
+                const sy3 = sy2 * sy;
+                const sz3 = sz2 * sz;
                 error = x2 * sx2 + y2 * sy2 + z2 * sz2 - 1;
                 correction = error / ((x2 * sx3 * rx + y2 * sy3 * ry + z2 * sz3 * rz) * -2);
             } while (Math.abs(error) > 1e-12);
@@ -217,12 +217,12 @@ export class AtmosphereContext extends AtmosphereContextBase {
                 sx = 1 / (1 + lambda * rx);
                 sy = 1 / (1 + lambda * rx);
                 sz = 1 / (1 + lambda * rz);
-                const sx2 = sx * sx,
-                    sy2 = sy * sy,
-                    sz2 = sz * sz;
-                const sx3 = sx2 * sx,
-                    sy3 = sy2 * sy,
-                    sz3 = sz2 * sz;
+                const sx2 = sx * sx;
+                const sy2 = sy * sy;
+                const sz2 = sz * sz;
+                const sx3 = sx2 * sx;
+                const sy3 = sy2 * sy;
+                const sz3 = sz2 * sz;
                 error = x2 * sx2 + y2 * sy2 + z2 * sz2 - 1;
                 correction = error / ((x2 * sx3 * rx + y2 * sy3 * rx + z2 * sz3 * rz) * -2);
             } while (Math.abs(error) > 1e-12);
@@ -268,6 +268,7 @@ export class AtmosphereContext extends AtmosphereContextBase {
         new Vector2(0, 1),
         new Vector2(0, 1)
     ];
+
     cloudShadowCascadeCount = 0;
     cloudShadowFar = 50000;
     cloudShadowTopHeight = 8000;

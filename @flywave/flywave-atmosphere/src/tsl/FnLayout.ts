@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { StructTypeNode } from "three/webgpu";
 import { Fn } from "three/tsl";
+import { StructTypeNode } from "three/webgpu";
 
 import type { Node, NodeType } from "./node";
 
@@ -31,7 +31,7 @@ export interface ShaderFn<Args extends readonly unknown[]> {
     setLayout: (layout: {
         name: string;
         type: string;
-        inputs: { name: string; type: string }[];
+        inputs: Array<{ name: string; type: string }>;
     }) => ShaderFn<Args>;
 }
 

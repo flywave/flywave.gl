@@ -90,7 +90,7 @@ export class TextGeometry {
     private m_geometry: THREE.BufferGeometry;
     private m_mesh: THREE.Mesh;
     private m_bgMesh: THREE.Mesh;
-    private m_bgScene: THREE.Scene;
+    private readonly m_bgScene: THREE.Scene;
 
     private readonly m_pickingDataArray: PickingData[] = [];
 

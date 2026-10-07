@@ -1,17 +1,17 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import {
+    type FlywaveWebpackConfig,
+    createAssetsConfig,
+    createBrowserConfig,
+    createDecoderConfig
+} from "@flywave/flywave-webpack-utils/scripts/WebpackConfig";
+import CopyWebpackPlugin from "copy-webpack-plugin";
+import { createRequire } from "module";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import type { Configuration } from "webpack";
-import { createRequire } from "module";
 import { merge } from "webpack-merge";
-import CopyWebpackPlugin from "copy-webpack-plugin";
-import {
-    createDecoderConfig,
-    createBrowserConfig,
-    createAssetsConfig,
-    FlywaveWebpackConfig
-} from "@flywave/flywave-webpack-utils/scripts/WebpackConfig";
 
 // Get current file path and directory
 const __filename = fileURLToPath(import.meta.url);
@@ -36,8 +36,8 @@ function getFilenameSuffix(): string {
 // Define configuration options
 const flywaveConfig: FlywaveWebpackConfig = {
     themePath: mapThemePath,
-    fontResourcesPath: fontResourcesPath,
-    threeDracoPath: threeDracoPath,
+    fontResourcesPath,
+    threeDracoPath,
     projectRoot: path.resolve(__dirname, "../../"),
     outputPath: path.resolve(__dirname, "dist"),
     enableTsconfigPaths: true
@@ -69,7 +69,7 @@ const outputFormats = [
         name: "commonjs",
         filename: `flywave.gl.cjs${getFilenameSuffix()}`,
         library: {
-            type: "commonjs" // 或者 'commonjs', 'umd' 等
+            type: "commonjs" // or 'commonjs', 'umd', etc.
         }
     },
     {
@@ -79,7 +79,7 @@ const outputFormats = [
             outputModule: true
         },
         library: {
-            type: "module" // 或者 'commonjs', 'umd' 等
+            type: "module" // or 'commonjs', 'umd', etc.
         }
     }
 ];

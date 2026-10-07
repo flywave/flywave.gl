@@ -1,29 +1,30 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
+    type DEMTerrainSource as DEMTerrainSourceType,
+    type ProjectorOverlayManager,
+    type TilingScheme,
+    ArcGISTileProvider,
+    DEMTerrainSource,
     GeoBox,
-    sphereProjection,
+    GeoCoordinates,
     MapControls,
     MapControlsUI,
-    DEMTerrainSource,
+    MapView,
     QuantizedTerrainSource,
-    ArcGISTileProvider,
+    sphereProjection,
     TileKey,
-    TileKeyEntry,
-    type ProjectorOverlayManager,
-    type DEMTerrainSource as DEMTerrainSourceType,
-    type TilingScheme
+    TileKeyEntry
 } from "@flywave/flywave.gl";
 import {
     ClampToEdgeWrapping,
+    CylinderGeometry,
     Group,
     Mesh,
     MeshBasicMaterial,
-    CylinderGeometry,
-    Vector3,
-    Texture
+    Texture,
+    Vector3
 } from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 /**
  * SINGLE-TILE UV CALIBRATION
@@ -178,10 +179,15 @@ const addPillars = (mapView: MapView, demTerrain: DEMTerrainSourceType, geoBox: 
             demTerrain.getElevationProvider()?.getHeight(new GeoCoordinates(lat, lon))
         );
         if (heights.some(h => h === undefined)) {
-            if (attempt < 60) setTimeout(() => tryPlace(attempt + 1), 500);
+            if (attempt < 60)
+                setTimeout(() => {
+                    tryPlace(attempt + 1);
+                }, 500);
             return;
         }
-        corners.forEach(([lat, lon], i) => place(lat, lon, 25, 0xff0000, `corner-${i}`));
+        corners.forEach(([lat, lon], i) => {
+            place(lat, lon, 25, 0xff0000, `corner-${i}`);
+        });
         const center = geoBox.center;
         place(center.latitude, center.longitude, 45, 0x00ff00, "center");
     };

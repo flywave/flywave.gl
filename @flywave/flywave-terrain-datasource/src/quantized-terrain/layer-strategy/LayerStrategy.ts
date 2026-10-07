@@ -342,7 +342,7 @@ export async function createLayerStrategy(options: LayerStrategyOptions): Promis
  * for proper terrain data loading and fallback mechanisms.
  */
 class LayerStrategy implements ILayerStrategy {
-    private downloadManager = new TransferManager(undefined, 1);
+    private readonly downloadManager = new TransferManager(undefined, 1);
 
     /**
      * Whether water mask data is requested

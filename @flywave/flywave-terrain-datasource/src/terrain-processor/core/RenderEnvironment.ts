@@ -10,7 +10,7 @@ export class RenderEnvironment {
     private readonly m_renderTarget: THREE.RenderTarget;
     private readonly m_scene: THREE.Scene;
     private readonly m_camera: THREE.OrthographicCamera;
-    private m_initPromise: Promise<void>;
+    private readonly m_initPromise: Promise<void>;
 
     constructor(externalRenderer?: WebGPURenderer) {
         this.m_renderer = externalRenderer ?? this.createDefaultRenderer();

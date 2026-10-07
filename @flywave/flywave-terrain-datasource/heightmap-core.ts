@@ -167,7 +167,7 @@ class NoiseGenerator {
  * Core brush engine that applies brush operations to heightmaps
  */
 export class BrushEngine {
-    private noiseGen: NoiseGenerator;
+    private readonly noiseGen: NoiseGenerator;
 
     /**
      * Creates a new BrushEngine instance
@@ -210,7 +210,7 @@ export class BrushEngine {
 
                 // Calculate brush weight
                 const normalizedDistance = distance / radius;
-                let weight = this.calculateBrushWeight(normalizedDistance, hardness);
+                const weight = this.calculateBrushWeight(normalizedDistance, hardness);
 
                 // Get current height value (0.0-1.0 range)
                 const currentHeight = output.data[pixelY * output.width + pixelX] / 255;
@@ -443,7 +443,7 @@ export class BrushEngine {
         const currentHeightValue = heightmap.data[y * heightmap.width + x] / 255;
 
         // If current point is higher than average, erode downward; if lower, fill upward
-        let erosionFactor = strength * weight;
+        const erosionFactor = strength * weight;
         if (currentHeightValue > averageHeight) {
             return currentHeightValue - erosionFactor * (currentHeightValue - averageHeight);
         } else {
@@ -469,7 +469,7 @@ export class BrushEngine {
  * Heightmap generator that creates heightmaps from brush operations
  */
 export class HeightmapGenerator {
-    private brushEngine: BrushEngine;
+    private readonly brushEngine: BrushEngine;
 
     /**
      * Creates a new HeightmapGenerator instance

@@ -201,12 +201,16 @@ export class FeaturesDataSource extends VectorTileDataSource {
                     break;
                 case "MultiLineString":
                 case "Polygon":
-                    feature.geometry.coordinates.forEach(segment => segment.forEach(addPoint));
+                    feature.geometry.coordinates.forEach(segment => {
+                        segment.forEach(addPoint);
+                    });
                     break;
                 case "MultiPolygon":
-                    feature.geometry.coordinates.forEach(polygon =>
-                        polygon.forEach(segment => segment.forEach(addPoint))
-                    );
+                    feature.geometry.coordinates.forEach(polygon => {
+                        polygon.forEach(segment => {
+                            segment.forEach(addPoint);
+                        });
+                    });
                     break;
             }
         }

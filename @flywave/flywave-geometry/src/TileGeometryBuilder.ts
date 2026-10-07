@@ -3,14 +3,14 @@
 // SphereTileGeometry.ts - Refactored Version
 import {
     type Projection,
+    type SphereProjection,
     type TilingScheme,
     ConvertWebMercatorY,
     GeoCoordinates,
     geographicStandardTiling,
-    TileKey,
-    webMercatorTilingScheme,
     mercatorProjection,
-    SphereProjection
+    TileKey,
+    webMercatorTilingScheme
 } from "@flywave/flywave-geoutils";
 import { BufferAttribute, BufferGeometry, Matrix4, Vector3 } from "three/webgpu";
 
@@ -466,7 +466,7 @@ class TileGeometryBuilder {
         const level = tileKey.level;
         const { maxDetailLevel, minDetailLevel } = this;
 
-        // 网格密度：6 为基准、下限 3（相比原始 7 基准降一档，三角形数约 1/4）
+        // Mesh density: base of 6 with a floor of 3 (one notch below the original base of 7, ~1/4 the triangle count)
         const subdivision = Math.max(6 - level, 3);
         const tileCount = 1 << level;
         let cacheKey: string;
@@ -537,7 +537,7 @@ class TileGeometryBuilder {
     getTileGeometryWithTransform(tileKey: TileKey): TileGeometryWithTransform {
         const row = tileKey.row;
         const level = tileKey.level;
-        // 网格密度：6 为基准、下限 3（相比原始 7 基准降一档，三角形数约 1/4）
+        // Mesh density: base of 6 with a floor of 3 (one notch below the original base of 7, ~1/4 the triangle count)
         const subdivision = Math.max(6 - level, 3);
 
         const cacheKey =
@@ -574,7 +574,7 @@ class TileGeometryBuilder {
             mercatorRotation
         );
 
-        let skirtHeight = Math.min(
+        const skirtHeight = Math.min(
             (getEstimatedLevelZeroGeometricError(
                 this.sphereProjection,
                 (1 << subdivision) + 1,
@@ -1091,9 +1091,10 @@ class TileGeometryBuilder {
             geoBox.northEast.latitudeInRadians
         );
 
-        // level 1 时 countX = tileCount/2 = 1，若只看 countX>1 会跳过居中，
-        // 导致顶点保持绝对世界坐标而 mesh 又被平移到 tile 球面中心，四个 tile 错位。
-        // level 0 几何覆盖全球且 spherePosition 为原点，必须保持不居中。
+        // At level 1, countX = tileCount/2 = 1; checking only countX > 1 would skip centering,
+        // leaving vertices in absolute world coordinates while the mesh is still translated to the
+        // tile's sphere center, misaligning the four tiles.
+        // Level 0 geometry covers the whole globe with spherePosition at the origin, so it must stay uncentered.
         if (isCentered && (tileCountX > 1 || tileCountY > 1 || level > 0)) {
             const centerGeo = geoBox.center;
 

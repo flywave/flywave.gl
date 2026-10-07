@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three/webgpu";
 import type { Renderer } from "three/webgpu";
+import * as THREE from "three/webgpu";
 
 import { type FontCatalog } from "./rendering/FontCatalog";
 import { type GlyphData } from "./rendering/GlyphData";
@@ -425,8 +425,10 @@ export class TextCanvas {
         clear?: boolean
     ) {
         this.m_fontCatalog.update(this.m_renderer);
-        // WebGPU 后端异步提交：图集更新后必须显式切回画布，
-        // 否则后续文字场景会被渲染进图集 RT（字形上出现黑框/竖线伪影）。
+        // WebGPU backend submits asynchronously: after the atlas update we must
+        // explicitly switch back to the canvas, otherwise subsequent text scenes get
+        // rendered into the atlas render target (black boxes / vertical line artifacts
+        // on the glyphs).
         this.m_renderer.setRenderTarget(null);
         let oldTarget: THREE.RenderTarget | null = null;
         if (target !== undefined) {

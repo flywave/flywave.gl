@@ -15,6 +15,8 @@ import {
     type InterleavedBufferAttribute,
     type Material,
     type PixelFormat,
+    type Ray,
+    type Raycaster,
     type Scene,
     Box3,
     ClampToEdgeWrapping,
@@ -34,9 +36,7 @@ import {
     UnsignedIntType,
     UVMapping,
     Vector2,
-    Vector3,
-    Ray,
-    Raycaster
+    Vector3
 } from "three/webgpu";
 
 import { SplatGeometry } from "./SplatGeometry";
@@ -898,9 +898,9 @@ export class SplatMesh extends Mesh {
     }
 
     /**
-     * 射线检测实现
-     * @param raycaster 射线投射器
-     * @param intersects 相交结果数组
+     * Raycast implementation
+     * @param raycaster the raycaster
+     * @param intersects array of intersection results
      */
     override raycast(raycaster: Raycaster, intersects: any[]): void {
         if (!this._readyToDisplay || !this._splatPositions2) {
@@ -911,16 +911,16 @@ export class SplatMesh extends Mesh {
         const positions = this._splatPositions2;
         const vertexCount = this._vertexCount;
 
-        // 获取世界矩阵及其逆矩阵
+        // Get the world matrix and its inverse
         const matrixWorld = this.matrixWorld;
         const inverseMatrix = new Matrix4().copy(matrixWorld).invert();
 
-        // 将射线转换到局部坐标系
+        // Transform the ray into the local coordinate system
         const localRay = ray.clone().applyMatrix4(inverseMatrix);
 
         const localIntersects: SplatIntersection[] = [];
 
-        // 对每个高斯椭球体进行检测
+        // Test against each Gaussian ellipsoid
         for (let i = 0; i < vertexCount; i++) {
             const index = i;
             const position = new Vector3(
@@ -929,11 +929,12 @@ export class SplatMesh extends Mesh {
                 positions[4 * index + 2]
             );
 
-            // 使用简化方法：将高斯椭球体当作球体处理
-            // 使用固定的半径，实际应用中可以根据协方差信息计算更精确的半径
+            // Simplified approach: treat the Gaussian ellipsoid as a sphere
+            // Use a fixed radius; in practice a more precise radius can be computed
+            // from the covariance information
             const radius = 0.05;
 
-            // 计算射线与球体的交点
+            // Compute the intersection of the ray with the sphere
             const intersection = this._raycastGaussianSplat(localRay, position, radius, index);
 
             if (intersection) {
@@ -941,10 +942,10 @@ export class SplatMesh extends Mesh {
             }
         }
 
-        // 按距离排序
+        // Sort by distance
         localIntersects.sort((a, b) => a.distance - b.distance);
 
-        // 转换到世界坐标系并添加到结果中
+        // Transform to world coordinates and add to the results
         for (const localIntersect of localIntersects) {
             const worldPoint = localIntersect.point.applyMatrix4(matrixWorld);
             const worldDistance = raycaster.ray.origin.distanceTo(worldPoint);
@@ -960,8 +961,8 @@ export class SplatMesh extends Mesh {
     }
 
     /**
-     * 射线与高斯椭球体相交检测（简化方法）
-     * 将高斯椭球体近似为球体进行检测
+     * Ray / Gaussian ellipsoid intersection test (simplified approach)
+     * Approximates the Gaussian ellipsoid as a sphere for the test
      */
     private _raycastGaussianSplat(
         ray: Ray,
@@ -969,7 +970,7 @@ export class SplatMesh extends Mesh {
         radius: number,
         index: number
     ): SplatIntersection | null {
-        // 简化实现：将高斯椭球体当作球体处理
+        // Simplified implementation: treat the Gaussian ellipsoid as a sphere
         const sphere = new Sphere(center, radius);
         const intersectionPoint = new Vector3();
         const result = ray.intersectSphere(sphere, intersectionPoint);
@@ -978,7 +979,7 @@ export class SplatMesh extends Mesh {
             return {
                 distance: ray.origin.distanceTo(intersectionPoint),
                 point: intersectionPoint,
-                index: index,
+                index,
                 splatMesh: this
             };
         }
@@ -987,11 +988,11 @@ export class SplatMesh extends Mesh {
     }
 
     /**
-     * 获取最近的高斯椭球体索引
-     * 用于交互选择
-     * @param point 世界坐标系中的点
-     * @param threshold 距离阈值
-     * @returns 高斯椭球体索引或null
+     * Get the index of the nearest Gaussian ellipsoid
+     * Used for interactive selection
+     * @param point a point in world coordinates
+     * @param threshold distance threshold
+     * @returns the Gaussian ellipsoid index, or null
      */
     public getSplatAtPoint(point: Vector3, threshold: number = 0.1): number | null {
         if (!this._splatPositions2) {
@@ -1003,7 +1004,7 @@ export class SplatMesh extends Mesh {
         const matrixWorld = this.matrixWorld;
         const inverseMatrix = new Matrix4().copy(matrixWorld).invert();
 
-        // 将点转换到局部坐标系
+        // Transform the point into the local coordinate system
         const localPoint = point.clone().applyMatrix4(inverseMatrix);
 
         let closestIndex: number | null = null;
@@ -1028,12 +1029,12 @@ export class SplatMesh extends Mesh {
     }
 
     /**
-     * 批量射线检测优化版本
-     * 使用空间加速结构提高性能（待实现）
+     * Optimized batch raycast variant
+     * Uses a spatial acceleration structure to improve performance (not yet implemented)
      */
     public raycastOptimized(raycaster: Raycaster, intersects: any[]): void {
-        // TODO: 实现基于BVH或八叉树的加速结构
-        // 目前先使用基础实现
+        // TODO: implement a BVH or octree based acceleration structure
+        // For now, fall back to the basic implementation
         this.raycast(raycaster, intersects);
     }
 }

@@ -88,16 +88,17 @@ export class MapViewFog {
         ) {
             let density = this.m_cachedFog.ratio;
 
-            // 如果提供了 range 参数且 viewDistance 有效，则根据距离调整雾浓度
+            // If a range parameter is provided and viewDistance is valid, adjust the
+            // fog density based on distance
             if (this.m_cachedFog.range !== undefined && viewDistance !== undefined) {
                 const range = this.m_cachedFog.range;
 
-                // 当 viewDistance 大于 range 时，雾浓度逐渐接近 0
+                // When viewDistance exceeds range, the fog density fades toward 0
                 if (viewDistance > range) {
-                    // 计算超出范围的比例，使用平滑过渡
+                    // Fraction of the overshoot beyond range, for a smooth transition
                     const excessRatio = (viewDistance - range) / range;
-                    // 使用指数衰减让雾浓度逐渐接近 0
-                    const fadeFactor = Math.exp(-excessRatio * 2); // 调整系数可以控制衰减速度
+                    // Exponential decay makes the fog density approach 0 gradually
+                    const fadeFactor = Math.exp(-excessRatio * 2); // the coefficient controls the decay rate
                     density = this.m_cachedFog.ratio * fadeFactor;
                 }
             }

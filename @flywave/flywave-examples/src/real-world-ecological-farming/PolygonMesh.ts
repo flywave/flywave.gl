@@ -1,7 +1,7 @@
-import * as THREE from "three/webgpu";
-import { Feature, GeoCoordinates } from "@flywave/flywave.gl";
-import * as turf from "@turf/turf";
+import { type Feature, GeoCoordinates } from "@flywave/flywave.gl";
 import type { Polygon as TurfPolygon, Position } from "@turf/turf";
+import * as turf from "@turf/turf";
+import * as THREE from "three/webgpu";
 
 interface Projection {
     projectPoint(coord: GeoCoordinates, target?: THREE.Vector3): THREE.Vector3;
@@ -9,7 +9,7 @@ interface Projection {
 
 export class PolygonMesh extends THREE.Mesh {
     private feature: Feature;
-    private projection: Projection;
+    private readonly projection: Projection;
 
     constructor(feature: Feature, projection: Projection, material: THREE.Material) {
         const geometry = new THREE.BufferGeometry();
@@ -125,7 +125,9 @@ export class PolygonMesh extends THREE.Mesh {
         }
         if (this.material) {
             if (Array.isArray(this.material)) {
-                this.material.forEach(material => material.dispose());
+                this.material.forEach(material => {
+                    material.dispose();
+                });
             } else {
                 this.material.dispose();
             }

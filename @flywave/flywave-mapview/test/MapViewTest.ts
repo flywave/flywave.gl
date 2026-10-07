@@ -28,7 +28,7 @@ import * as THREE from "three/webgpu";
 
 import { type BackgroundDataSource } from "../src/BackgroundDataSource";
 import { CameraUtils } from "../src/CameraUtils";
-import { TerrainDataSource, type DataSource } from "../src/DataSource";
+import { type DataSource, type TerrainDataSource } from "../src/DataSource";
 import { type ElevationProvider } from "../src/ElevationProvider";
 import { type ElevationRangeSource, CalculationStatus } from "../src/ElevationRangeSource";
 import { MapMaterialAdapter } from "../src/MapMaterialAdapter";

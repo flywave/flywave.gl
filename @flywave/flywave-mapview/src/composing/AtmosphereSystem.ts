@@ -2,38 +2,37 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    AtmosphereContext,
     type AtmosphereCelestialUniforms,
-    AtmosphereLUTNode,
+    type SkyNode,
+    AtmosphereContext,
     AtmosphereLight,
     AtmosphereLightNode,
+    AtmosphereLUTNode,
     AtmosphereParameters,
-    SkyNode,
+    registerAtmosphereContext,
+    resolveResourceUrl,
     sky,
     skyEnvironment,
-    updateCelestialDirections,
-    registerAtmosphereContext,
-    resolveResourceUrl
+    updateCelestialDirections
 } from "@flywave/flywave-atmosphere";
-import * as THREE from "three/webgpu";
-import type { Renderer } from "three/webgpu";
-import { texture } from "three/tsl";
-
 import { CascadedShadowMapsNode } from "@flywave/flywave-atmosphere";
 import {
+    type AerialPerspectiveConfig,
     type AtmosphereThemeConfig,
     type CloudConfig,
-    type AerialPerspectiveConfig,
     type ToneMappingMode
 } from "@flywave/flywave-datasource-protocol";
 import { ProjectionType } from "@flywave/flywave-geoutils";
+import { texture } from "three/tsl";
+import type { Renderer } from "three/webgpu";
+import * as THREE from "three/webgpu";
 
-import { ViewRenderManager } from "./vrm/ViewRenderManager";
-import { TranslucentLayerEffect, TRANSLUCENT_LAYER_BIT } from "./vrm/TranslucentLayerEffect";
 import { type MapView } from "../MapView";
 import { EarthCelestialDirections } from "./celestial/EarthCelestialDirections";
 import { JulianDate } from "./celestial/JulianDate";
 import { Simon1994PlanetaryPositions } from "./celestial/Simon1994PlanetaryPositions";
+import { TRANSLUCENT_LAYER_BIT, TranslucentLayerEffect } from "./vrm/TranslucentLayerEffect";
+import { ViewRenderManager } from "./vrm/ViewRenderManager";
 
 const FRUSTUM_CORNERS = [
     { x: -1, y: -1, z: -1 },
@@ -71,7 +70,7 @@ export class AtmosphereSystem {
     private m_accurateShadowScattering: boolean = true;
     private m_correctAltitude: boolean = true;
     private m_constrainCamera: boolean = true;
-    private m_atmosphereOverrides: {
+    private readonly m_atmosphereOverrides: {
         rayleighScale: number;
         mieScale: number;
         groundAlbedo: number;
@@ -84,7 +83,8 @@ export class AtmosphereSystem {
         miePhaseFunctionG: 0.8,
         luminanceScale: 0
     };
-    private m_rebuildScheduled: boolean = false;
+
+    private readonly m_rebuildScheduled: boolean = false;
     private m_toneMappingExposure: number = 3;
     private m_toneMappingMode?: ToneMappingMode;
     private m_lastCsmMaxFar: number = 0;
@@ -208,7 +208,9 @@ export class AtmosphereSystem {
             renderer.toneMapping = THREE.NoToneMapping;
             // Async effect loads (e.g. LUT textures) request a frame through
             // this hook once their needsUpdate flag is set.
-            vrm.onNeedsRender = () => this.mapView.update();
+            vrm.onNeedsRender = () => {
+                this.mapView.update();
+            };
             this.mapView.mapRenderingManager.viewRenderManager = vrm;
             this.mapView.mapRenderingManager.syncPostEffectsToVRM();
             // VRM now exists — push any cloud config that updateOptions()
@@ -425,7 +427,9 @@ export class AtmosphereSystem {
         if (vrm == null) return;
         // Re-apply whenever the cloud node finishes its async init, in case
         // updateOptions ran before the node existed.
-        vrm.onCloudNodeReady = () => this.applyCloudConfig();
+        vrm.onCloudNodeReady = () => {
+            this.applyCloudConfig();
+        };
         if (vrm.cloudNode != null) {
             vrm.cloudNode.setConfig(this.m_cloudConfig as any);
         } else {

@@ -10,8 +10,8 @@ import { Env } from "@flywave/flywave-datasource-protocol";
 import { Math2D } from "@flywave/flywave-utils";
 import { expect } from "chai";
 import sinon from "sinon";
-import * as THREE from "three/webgpu";
 import type { Renderer } from "three/webgpu";
+import * as THREE from "three/webgpu";
 
 import { MapViewImageCache } from "../src/image/MapViewImageCache";
 import { MapView } from "../src/MapView";

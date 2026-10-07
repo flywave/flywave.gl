@@ -1,15 +1,15 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
+    ArcGISTileProvider,
+    DEMTerrainSource,
     GeoCoordinates,
     MapControls,
-    DEMTerrainSource,
-    ArcGISTileProvider,
     MapControlsUI,
+    MapView,
     sphereProjection
 } from "@flywave/flywave.gl";
-import { BoxGeometry, MeshStandardNodeMaterial, Mesh, Group } from "three/webgpu";
-import { NodeBuilder } from "three/webgpu";
+import { BoxGeometry, Group, Mesh, MeshStandardNodeMaterial, NodeBuilder } from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 // TODO(debug): temporary shader build/compile counters, remove after debug.
 // graphBuilds = NodeBuilder.build() calls (node graph recompute, one per
@@ -64,7 +64,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         zoomLevel: 19, // Initial zoom level
         tilt: 45, // Initial tilt angle
         heading: 1.5413763202653008, // Initial heading angle
-        canvas: canvas, // Specify render canvas
+        canvas, // Specify render canvas
         theme: {
             // extends: "resources/tilezen_base_globe.json", // Bas÷e theme configuration
             atmosphere: {
@@ -135,12 +135,12 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
         arr.push(line);
         if (arr.length > 80) arr.splice(0, arr.length - 80);
     };
-    window.addEventListener("error", e =>
-        cap(P.errors, "ERR: " + (e.message || e.type) + " @" + (e.lineno || ""))
-    );
-    window.addEventListener("unhandledrejection", e =>
-        cap(P.errors, "REJ: " + String((e as PromiseRejectionEvent).reason).slice(0, 160))
-    );
+    window.addEventListener("error", e => {
+        cap(P.errors, "ERR: " + (e.message || e.type) + " @" + (e.lineno || ""));
+    });
+    window.addEventListener("unhandledrejection", e => {
+        cap(P.errors, "REJ: " + String((e as PromiseRejectionEvent).reason).slice(0, 160));
+    });
     const arm = () => {
         const mv = w.__mapView;
         if (!mv || !mv.renderer || !mv.renderer._bindings) {
@@ -150,17 +150,17 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
         const r = mv.renderer;
         const dev = r.backend && r.backend.device;
         if (dev && dev.addEventListener) {
-            dev.addEventListener("uncapturederror", (e: any) =>
+            dev.addEventListener("uncapturederror", (e: any) => {
                 cap(
                     P.errors,
                     "GPU: " + ((e.error && e.error.message) || String(e.error)).slice(0, 160)
-                )
-            );
+                );
+            });
         }
         const bindings = r._bindings;
         const origUFR = bindings.updateForRender.bind(bindings);
         // per-render-object last seen bound texture, for persistent-poison detection
-        const roLast: Map<number, { bound: string; frames: number }> = new Map();
+        const roLast = new Map<number, { bound: string; frames: number }>();
         bindings.updateForRender = (renderObject: any) => {
             const out = origUFR(renderObject);
             try {

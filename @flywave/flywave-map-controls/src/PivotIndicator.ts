@@ -9,7 +9,7 @@ export interface PivotIndicatorOptions {
 export class PivotIndicator {
     private readonly dot: HTMLDivElement;
     private m_enabled: boolean = true;
-    private m_fadeDuration: number = 250;
+    private readonly m_fadeDuration: number = 250;
     private m_pixelSize: number = 28;
     private m_currentOpacity: number = 0;
     private m_targetOpacity: number = 0;

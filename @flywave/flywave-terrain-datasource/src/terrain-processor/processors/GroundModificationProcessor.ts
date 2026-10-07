@@ -1,14 +1,11 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
-import { CoordinateUtils } from "../utils/coordinate-utils";
-import * as THREE from "three/webgpu";
-import { NodeMaterial } from "three/webgpu";
+import { type GeoBox, GeoCoordinates } from "@flywave/flywave-geoutils";
 import {
-    Fn,
     dot,
     float,
     floor as tslFloor,
+    Fn,
     mod,
     select,
     texture,
@@ -17,11 +14,14 @@ import {
     vec2,
     vec4
 } from "three/tsl";
+import * as THREE from "three/webgpu";
+import { NodeMaterial } from "three/webgpu";
 
 import { type HeightMapModifier } from "../../ground-modification-manager/HeightMapModifierTypes";
 import { GROUND_MODIFICATION_HEIGHT, GROUND_MODIFICATION_WIDTH } from "../constants";
 import { type RenderEnvironment, getGlobalRenderEnvironment } from "../core/RenderEnvironment";
 import { type GroundModificationResult, type RenderOptions } from "../core/types";
+import { CoordinateUtils } from "../utils/coordinate-utils";
 
 const MODIFIERS_PER_PASS = 4;
 
@@ -32,8 +32,8 @@ interface ModifierTextureData {
 }
 
 export class GroundModificationProcessor {
-    private environment?: RenderEnvironment;
-    private textureCache = new Map<string, THREE.DataTexture>();
+    private readonly environment?: RenderEnvironment;
+    private readonly textureCache = new Map<string, THREE.DataTexture>();
 
     constructor(environment?: RenderEnvironment) {
         this.environment = environment;
@@ -333,7 +333,7 @@ export class GroundModificationProcessor {
 
     private createEmptyTexture(): THREE.DataTexture {
         const size = 1;
-        // 编码高度 0 为 RGB
+        // Encode height 0 as RGB
         const vector = [6553.6, 25.6, 0.1, 10000.0];
         let v = Math.floor((0 + vector[3]) / vector[2]);
         const b = v % 256;

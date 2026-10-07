@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
 import { Vector2 } from "three/webgpu";
 

@@ -73,12 +73,16 @@ export class AtmosphereModule {
         this.folder
             .add(this.currentData, "enabled")
             .name("Enabled")
-            .onChange(() => this.applyChanges());
+            .onChange(() => {
+                this.applyChanges();
+            });
 
         const sunTimeController = this.folder
             .add(this.currentData, "sunTime")
             .name("Sun Time")
-            .onChange(() => this.applyChanges());
+            .onChange(() => {
+                this.applyChanges();
+            });
         const dateButton = {
             now: () => {
                 this.currentData.sunTime = Date.now();
@@ -92,32 +96,44 @@ export class AtmosphereModule {
         cloudFolder
             .add(this.currentData, "cloudsEnabled")
             .name("Enabled")
-            .onChange(() => this.applyChanges());
+            .onChange(() => {
+                this.applyChanges();
+            });
         cloudFolder
             .add(this.currentData, "cloudCoverage", 0, 1)
             .step(0.01)
             .name("Coverage")
-            .onChange(() => this.applyChanges());
+            .onChange(() => {
+                this.applyChanges();
+            });
         cloudFolder
             .add(this.currentData, "cloudQuality", QUALITY_OPTIONS)
             .name("Quality")
-            .onChange(() => this.applyChanges());
+            .onChange(() => {
+                this.applyChanges();
+            });
         cloudFolder
             .add(this.currentData, "cloudPowderScale", 0, 5)
             .step(0.01)
             .name("Powder Scale")
-            .onChange(() => this.applyChanges());
+            .onChange(() => {
+                this.applyChanges();
+            });
         cloudFolder
             .add(this.currentData, "cloudScatteringCoefficient", 0, 2)
             .step(0.001)
             .name("Scattering Coeff")
-            .onChange(() => this.applyChanges());
+            .onChange(() => {
+                this.applyChanges();
+            });
         cloudFolder.close();
 
         this.folder
             .add(this.currentData, "aerialPerspectiveEnabled")
             .name("Aerial Perspective")
-            .onChange(() => this.applyChanges());
+            .onChange(() => {
+                this.applyChanges();
+            });
     }
 
     private applyChanges(): void {

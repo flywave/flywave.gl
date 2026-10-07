@@ -1,6 +1,8 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
-import type { ToneMapping } from "three/webgpu";
 import { add, cdl, float, mat3, vec3 } from "three/tsl";
+import type { ToneMapping } from "three/webgpu";
 
 import { FnLayout } from "./FnLayout";
 import { FnVar as FnVarFn } from "./FnVar";

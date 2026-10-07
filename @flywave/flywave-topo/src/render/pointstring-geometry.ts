@@ -7,7 +7,7 @@ import { type Point3d, Range3d } from "../core-geometry";
 import type { RenderPass, RenderTarget } from "./mesh-geometry";
 import { type RenderGeometry } from "./render-geometry";
 
-// 渲染顺序常量
+// Render order constants
 enum RenderOrder {
     PlanarLinear = 3000
 }
@@ -32,10 +32,10 @@ export class PointStringGeometry extends THREE.BufferGeometry implements RenderG
     }) {
         super();
 
-        // 初始化buffer attributes
+        // Initialize the buffer attributes
         this.setAttribute("position", new THREE.BufferAttribute(options.positions, 3));
 
-        // 保留原有属性初始化
+        // Keep the original attribute initialization
         this.weight = options.weight;
         this.isInstanceable = !options.viewIndependentOrigin;
         this._numPoints = options.positions.length / 3;
@@ -43,7 +43,7 @@ export class PointStringGeometry extends THREE.BufferGeometry implements RenderG
         this.uniformColor = options.uniformColor?.clone();
         this.vertexColors = options.vertexColors || false;
 
-        // 处理顶点颜色
+        // Handle vertex colors
         if (options.colors) {
             this.setAttribute("color", new THREE.BufferAttribute(options.colors, 3));
             this.vertexColors = true;
@@ -65,7 +65,7 @@ export class PointStringGeometry extends THREE.BufferGeometry implements RenderG
         viOrigin?: Point3d
     ): PointStringGeometry | undefined {
         try {
-            // 转换点数据为 Float32Array
+            // Convert the point data to a Float32Array
             const positions = new Float32Array(params.indices.length * 3);
             for (let i = 0; i < params.indices.length; i++) {
                 const index = params.indices.data[i];
@@ -74,7 +74,7 @@ export class PointStringGeometry extends THREE.BufferGeometry implements RenderG
                 positions[i * 3 + 2] = index[2];
             }
 
-            // 转换视图独立原点
+            // Convert the view-independent origin
             const viewIndependentOrigin = viOrigin
                 ? new THREE.Vector3(viOrigin.x, viOrigin.y, viOrigin.z)
                 : undefined;
@@ -90,22 +90,22 @@ export class PointStringGeometry extends THREE.BufferGeometry implements RenderG
     }
 
     /**
-     * 确定渲染通道
+     * Determines the render pass
      */
     protected determineRenderPass(target: RenderTarget): RenderPass {
-        // 点几何体通常作为不透明渲染
+        // Point geometry is normally rendered as opaque
         return "opaque";
     }
 
     /**
-     * 获取渲染顺序
+     * Gets the render order
      */
     public get renderOrder(): number {
         return RenderOrder.PlanarLinear;
     }
 
     /**
-     * 收集内存统计信息
+     * Collects memory statistics
      */
     public collectStatistics(): { vertices: number } {
         return {
@@ -113,7 +113,7 @@ export class PointStringGeometry extends THREE.BufferGeometry implements RenderG
         };
     }
 
-    // 实现基类要求的抽象方法
+    // Implement the abstract method required by the base class
     public get asPointString() {
         return this;
     }
@@ -123,6 +123,6 @@ export class PointStringGeometry extends THREE.BufferGeometry implements RenderG
     }
 
     public wantMonochrome(target: RenderTarget): boolean {
-        return false; // 点串通常不需要单色处理
+        return false; // point strings usually don't need monochrome handling
     }
 }

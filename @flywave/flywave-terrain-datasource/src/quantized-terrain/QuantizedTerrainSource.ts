@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { TileKey } from "@flywave/flywave-geoutils";
+import { type TileKey } from "@flywave/flywave-geoutils";
+
 import {
     type BaseQuantizedTerrainSourceOptions,
     BaseQuantizedTerrainSource
@@ -93,10 +94,10 @@ export class QuantizedTerrainSource extends BaseQuantizedTerrainSource<Quantized
             this.dataProvider().layerStrategy.getTileDataAvailable(tileKey) ||
             this.dataProvider().hasResource(tileKey);
 
-        let childrens = this.getTilingScheme().getSubTileKeys(tileKey);
+        const childrens = this.getTilingScheme().getSubTileKeys(tileKey);
 
         if (tileIsAvailable)
-            for (let child of childrens) {
+            for (const child of childrens) {
                 if (!this.canGetSubdivideChildren(child)) {
                     tileIsAvailable = false;
                     break;

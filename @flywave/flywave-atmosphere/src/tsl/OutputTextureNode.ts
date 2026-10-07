@@ -1,10 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import type { NodeBuilder, Texture } from "three/webgpu";
 import { TextureNode } from "three/webgpu";
-import type { Texture, NodeBuilder } from "three/webgpu";
 
-import { reinterpretType } from "./types";
 import type { Node as NodeT } from "./node";
+import { reinterpretType } from "./types";
 
 /**
  * A TextureNode that triggers the owner node's build when accessed.

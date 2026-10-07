@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
 import { Fn, uniform, vec3, vec4 } from "three/tsl";
 

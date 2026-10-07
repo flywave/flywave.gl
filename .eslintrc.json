@@ -1,17 +1,11 @@
 {
     "plugins": ["@typescript-eslint", "prettier", "simple-import-sort"],
-    "extends": ["standard-with-typescript", "prettier/@typescript-eslint"],
+    "extends": ["standard-with-typescript", "prettier"],
     "parserOptions": {
         "project": "./tsconfig.json"
     },
     "rules": {
-        "prettier/prettier": [
-            "error",
-            {
-                "arrowParens": "avoid",
-                "trailingComma": "none"
-            }
-        ],
+        "prettier/prettier": "error",
 
         "@typescript-eslint/no-unused-vars": [
             "error",
@@ -46,6 +40,7 @@
         "@typescript-eslint/strict-boolean-expressions": "off",
         "@typescript-eslint/no-non-null-assertion": "off",
         "@typescript-eslint/explicit-function-return-type": "off",
+        "@typescript-eslint/prefer-nullish-coalescing": "off",
 
         "simple-import-sort/imports": "error",
         "sort-imports": "off",

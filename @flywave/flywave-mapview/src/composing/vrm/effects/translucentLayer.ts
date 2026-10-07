@@ -1,5 +1,7 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
-import { Fn, texture, vec4, vec3, vec2, float, uv } from "three/tsl";
+import { float, Fn, texture, uv, vec2, vec3, vec4 } from "three/tsl";
 
 export const translucentLayer: any = (
     rawGroundColor: any,

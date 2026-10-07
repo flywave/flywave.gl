@@ -1,17 +1,17 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
-    ellipsoidProjection,
-    MapControls,
-    DEMTerrainSource,
     ArcGISTileProvider,
-    MapControlsUI
+    DEMTerrainSource,
+    ellipsoidProjection,
+    GeoCoordinates,
+    MapControls,
+    MapControlsUI,
+    MapView
 } from "@flywave/flywave.gl";
 import * as THREE from "three/webgpu";
 import ParticleSystem, {
     Body,
     Color,
+    ease,
     Emitter,
     Gravity,
     Life,
@@ -24,9 +24,10 @@ import ParticleSystem, {
     Span,
     SphereZone,
     SpriteRenderer,
-    Vector3D,
-    ease
+    Vector3D
 } from "three-nebula";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 // Configuration constants
 const CONFIG = {
@@ -83,7 +84,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         target: CONFIG.INITIAL_COORDINATES,
         zoomLevel: CONFIG.ZOOM_LEVEL,
         addBackgroundDatasource: true,
-        canvas: canvas,
+        canvas,
         tilt: CONFIG.TILT,
         theme: {
             extends: "resources/tilezen_base_globe.json",
@@ -150,7 +151,7 @@ const configureDEMTerrainSource = (mapView: MapView): void => {
 class NebulaParticleManager extends THREE.Object3D {
     private system: ParticleSystem | null = null;
     private renderer: SpriteRenderer | null = null;
-    private clock: THREE.Clock;
+    private readonly clock: THREE.Clock;
     private currentEmitters: Emitter[] = [];
 
     constructor() {

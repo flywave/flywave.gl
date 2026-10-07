@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
 import { hash, hashString as hashStringFn } from "three/src/nodes/core/NodeUtils.js";
 

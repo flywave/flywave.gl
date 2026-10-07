@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 import { BufferGeometry, Float32BufferAttribute, Sphere, Vector3 } from "three/webgpu";
 
 export class QuadGeometry extends BufferGeometry {

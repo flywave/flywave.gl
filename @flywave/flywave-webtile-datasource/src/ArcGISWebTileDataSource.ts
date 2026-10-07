@@ -10,8 +10,8 @@ import {
 import { type Texture } from "three/webgpu";
 
 import {
-    WebTileDataProvider,
     type WebTileDataSourceOptions,
+    WebTileDataProvider,
     WebTileDataSource
 } from "./WebTileDataSource";
 

@@ -21,7 +21,7 @@ export abstract class DrawableObject extends THREE.Object3D {
         );
     }
 
-    private doCameraPositionChanged = () => {
+    private readonly doCameraPositionChanged = () => {
         this.onCameraPositionChanged();
     };
 

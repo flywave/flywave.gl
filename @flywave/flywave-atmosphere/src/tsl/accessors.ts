@@ -1,21 +1,21 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import type { Camera, Vector3, UniformNode } from "three/webgpu";
 import {
+    cameraFar as cameraFarTSL,
+    cameraNear as cameraNearTSL,
+    cameraPosition,
+    cameraProjectionMatrix,
+    cameraProjectionMatrixInverse,
+    cameraViewMatrix,
+    cameraWorldMatrix,
     Fn,
-    uniform,
+    positionView,
     reference,
     renderGroup,
-    cameraProjectionMatrix,
-    cameraViewMatrix,
-    cameraProjectionMatrixInverse,
-    cameraWorldMatrix,
-    cameraPosition,
-    cameraNear as cameraNearTSL,
-    cameraFar as cameraFarTSL,
-    positionView
+    uniform
 } from "three/tsl";
+import type { Camera, UniformNode, Vector3 } from "three/webgpu";
 
 let caches: WeakMap<object, Record<string, unknown>> | undefined;
 

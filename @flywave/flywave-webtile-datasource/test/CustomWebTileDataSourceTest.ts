@@ -25,7 +25,7 @@ describe("CustomWebTileDataSource", function () {
             tileUrlTemplate: "https://example.com/{z}/{x}/{y}.png"
         });
 
-        expect(customWebTileDataSource.maxDataLevel).to.equal(20);
+        expect(customWebTileDataSource.maxDataLevel).to.equal(19); // Default matches ArcGIS/Bing (adjusted 2026-09)
         expect(customWebTileDataSource.minDataLevel).to.equal(0);
         expect(customWebTileDataSource.storageLevelOffset).to.equal(-1);
     });

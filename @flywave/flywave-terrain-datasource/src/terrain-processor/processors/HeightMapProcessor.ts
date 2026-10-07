@@ -54,8 +54,8 @@ export class HeightMapProcessor {
         mesh.frustumCulled = false;
         renderEnv.getScene().add(mesh);
 
-        // HeightMapShader.positionNode 输出 NDC 坐标 [-1,1]
-        // 需要设置 identity 相机让 MVP = identity，避免双重变换
+        // HeightMapShader.positionNode outputs NDC coordinates [-1,1],
+        // so the camera must be identity to keep MVP = identity and avoid a double transform
         const data = await renderEnv.render(width, height);
         return new ImageData(data, width, height);
     }

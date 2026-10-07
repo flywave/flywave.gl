@@ -160,7 +160,8 @@ describe("TileTreeTraverse", function () {
 
     it("get tiles of double umbrella subdivison", function () {
         subdivisionScheme.getSubdivisionX.returns(2);
-        subdivisionScheme.getSubdivisionY.callsFake((level: number) => (level === 0 ? 2 : 1));
+        // The implementation queries the subdivision ratio by "child level" (tileKey.level + 1)
+        subdivisionScheme.getSubdivisionY.callsFake((level: number) => (level === 1 ? 2 : 1));
         subdivisionScheme.getLevelDimensionX.callsFake((level: number) => 1 << level);
         subdivisionScheme.getLevelDimensionY.callsFake((level: number) => (level === 0 ? 1 : 2));
 

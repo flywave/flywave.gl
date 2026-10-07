@@ -9,7 +9,7 @@ import { type MaterialInfo } from "./material";
 import { type MeshData } from "./mesh-data";
 import { MeshGeometry } from "./mesh-geometry";
 
-// 类型定义
+// Type definitions
 interface LayerTextureParams {
     textureMap?: THREE.Texture;
     normalMap?: THREE.Texture;
@@ -47,7 +47,7 @@ export class SurfaceGeometry extends MeshGeometry {
         uvs?: Float32Array,
         indices?: Uint32Array | Uint16Array
     ) {
-        // 调用父类构造函数初始化基础几何数据
+        // Call the parent constructor to initialize the base geometry data
         super({
             positions,
             normals,
@@ -60,16 +60,16 @@ export class SurfaceGeometry extends MeshGeometry {
     }
 
     public createMesh(): THREE.Mesh {
-        // 创建基础材质（使用默认渲染通道和目标）
+        // Create the base material (using the default render pass and target)
         const material = this.createMaterialForPass("opaque", undefined);
 
-        // 创建并返回 THREE.Mesh 实例
+        // Create and return the THREE.Mesh instance
         return new THREE.Mesh(this, material);
     }
 
     static create(mesh: MeshData, params: MeshParams): SurfaceGeometry | undefined {
         try {
-            // 从params提取数据
+            // Extract the data from params
             const positions = this.extractPositions(params);
             const indices = this.extractIndices(params);
 
@@ -81,7 +81,7 @@ export class SurfaceGeometry extends MeshGeometry {
         }
     }
 
-    // 数据提取方法
+    // Data extraction helpers
     private static extractPositions(params: MeshParams): Float32Array {
         if (!params.vertices?.data) throw new Error("Missing vertex data");
         return new Float32Array(params.vertices.data);
@@ -94,11 +94,11 @@ export class SurfaceGeometry extends MeshGeometry {
         return indexData.length < 65535 ? new Uint16Array(indexData) : new Uint32Array(indexData);
     }
 
-    // 资源清理
+    // Resource cleanup
     public dispose(): void {
         super.dispose();
 
-        // 清理纹理资源
+        // Clean up the texture resources
         if (this.textureParams?.textureMap) {
             this.textureParams.textureMap.dispose();
         }

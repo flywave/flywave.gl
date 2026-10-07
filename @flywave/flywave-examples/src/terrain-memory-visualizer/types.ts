@@ -34,7 +34,7 @@ interface CameraInfo {
     altitude: number;
     heading: number;
     tilt: number;
-    frustumCorners: { lat: number; lng: number }[];
+    frustumCorners: Array<{ lat: number; lng: number }>;
 }
 
 interface SnapshotResult {

@@ -1,13 +1,14 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
-import {
-    Plane,
-    Vector3,
+import { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
+import type {
     type DirectionalLight,
     type PerspectiveCamera,
-    type Vector2
+    type Vector2,
+    NodeFrame
 } from "three/webgpu";
-import { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
-import type { NodeFrame } from "three/webgpu";
+import { Plane, Vector3 } from "three/webgpu";
 
 declare module "three/examples/jsm/csm/CSMShadowNode.js" {
     interface CSMShadowNode {

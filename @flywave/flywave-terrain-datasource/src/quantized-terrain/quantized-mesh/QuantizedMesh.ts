@@ -7,19 +7,18 @@ import {
     geographicTerrainStandardTiling,
     ProjectionType
 } from "@flywave/flywave-geoutils";
-import { MapView } from "@flywave/flywave-mapview";
-import { SurfaceType } from "@flywave/flywave-mapview";
+import { type MapView, SurfaceType } from "@flywave/flywave-mapview";
 import * as THREE from "three/webgpu";
 
+import { type ProjectionSwitchController } from "../../ProjectionSwitchController";
 import { type WebTile } from "../../WebImageryTileProvider";
-import { type QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
-import { ProjectionSwitchController } from "../../ProjectionSwitchController";
 import {
     defaultQuantizedMeshMaterial,
+    emptyImageryTextures,
     emptyTexture,
-    emptyTransparentTex,
-    emptyImageryTextures
+    emptyTransparentTex
 } from "./QuantizedMeshMaterial";
+import { type QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
 
 export class QuantizedMesh extends THREE.Mesh {
     // Draped-draw surface capture: this mesh provides ground surfaces.
@@ -33,6 +32,7 @@ export class QuantizedMesh extends THREE.Mesh {
         new THREE.Vector4(1, 1, 0, 0),
         new THREE.Vector4(1, 1, 0, 0)
     ];
+
     public imageryCount: number = 0;
     public waterMaskTexture: THREE.Texture = emptyTexture;
     public waterMaskTranslationAndScale: THREE.Vector4 = new THREE.Vector4();

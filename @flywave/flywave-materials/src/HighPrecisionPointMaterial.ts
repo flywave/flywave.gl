@@ -1,9 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
+import { attribute, float, Fn, pointUV, texture, uniform, vec3, vec4 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { PointsNodeMaterial } from "three/webgpu";
-import { Fn, attribute, uniform, vec3, vec4, texture, pointUV, float } from "three/tsl";
 
 export interface HighPrecisionPointMaterialParameters {
     color?: number | string | THREE.Color;
@@ -23,15 +23,18 @@ export class HighPrecisionPointMaterial extends PointsNodeMaterial {
 
     isHighPrecisionPointMaterial: boolean = true;
 
-    private m_diffuseColorU = uniform(new THREE.Color(HighPrecisionPointMaterial.DEFAULT_COLOR));
-    private m_opacityU = uniform(HighPrecisionPointMaterial.DEFAULT_OPACITY);
-    private m_mvpU = uniform(new THREE.Matrix4());
-    private m_eyeposU = uniform(new THREE.Vector3());
-    private m_eyeposLowU = uniform(new THREE.Vector3());
+    private readonly m_diffuseColorU = uniform(
+        new THREE.Color(HighPrecisionPointMaterial.DEFAULT_COLOR)
+    );
 
-    private m_hpEye = new THREE.Vector3();
-    private m_hpMvp = new THREE.Matrix4();
-    private m_mapU = uniform(new THREE.Texture());
+    private readonly m_opacityU = uniform(HighPrecisionPointMaterial.DEFAULT_OPACITY);
+    private readonly m_mvpU = uniform(new THREE.Matrix4());
+    private readonly m_eyeposU = uniform(new THREE.Vector3());
+    private readonly m_eyeposLowU = uniform(new THREE.Vector3());
+
+    private readonly m_hpEye = new THREE.Vector3();
+    private readonly m_hpMvp = new THREE.Matrix4();
+    private readonly m_mapU = uniform(new THREE.Texture());
 
     opacity: number = HighPrecisionPointMaterial.DEFAULT_OPACITY;
     color: THREE.Color = new THREE.Color(HighPrecisionPointMaterial.DEFAULT_COLOR);

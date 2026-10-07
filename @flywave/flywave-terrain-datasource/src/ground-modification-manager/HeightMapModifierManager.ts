@@ -10,10 +10,10 @@ import {
 } from "three/webgpu";
 
 import {
-    type HeightOperation,
-    type HeightMapSourceData,
+    type HeightMapModificationEventParams,
     type HeightMapModifier,
-    type HeightMapModificationEventParams
+    type HeightMapSourceData,
+    type HeightOperation
 } from "./HeightMapModifierTypes";
 
 interface InternalModifier extends HeightMapModifier {

@@ -1,7 +1,8 @@
-// @ts-nocheck
-import { TempNode, type NodeBuilder, type TextureNode } from "three/webgpu";
-import { add, sub, uniform, uv, vec3 } from "three/tsl";
+/* Copyright (C) 2025 flywave.gl contributors */
 
+// @ts-nocheck
+import { add, sub, uniform, uv, vec3 } from "three/tsl";
+import { type NodeBuilder, type TextureNode, TempNode } from "three/webgpu";
 import invariant from "tiny-invariant";
 
 import { FnLayout } from "./FnLayout";

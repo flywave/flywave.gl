@@ -1,10 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import * as THREE from "three/webgpu";
-import { NodeMaterial } from "three/webgpu";
 import {
-    Fn,
     abs,
     attribute,
     clamp,
@@ -12,6 +9,7 @@ import {
     dFdx,
     dFdy,
     float,
+    Fn,
     inverseSqrt,
     max,
     min,
@@ -21,6 +19,8 @@ import {
     uv as uvNode,
     vec4
 } from "three/tsl";
+import * as THREE from "three/webgpu";
+import { NodeMaterial } from "three/webgpu";
 
 interface RendererCapabilities {
     readonly isWebGL2: boolean;
@@ -128,10 +128,10 @@ export interface SdfTextMaterialParameters extends RendererMaterialParameters {
 
 export class SdfTextMaterial extends NodeMaterial {
     readonly sdfParamsUniform: { value: THREE.Vector4 };
-    private sdfTexNode: ReturnType<typeof texture>;
-    private sdfParamsNode: ReturnType<typeof uniform>;
-    private isMsdf: boolean;
-    private isBackground: boolean;
+    private readonly sdfTexNode: ReturnType<typeof texture>;
+    private readonly sdfParamsNode: ReturnType<typeof uniform>;
+    private readonly isMsdf: boolean;
+    private readonly isBackground: boolean;
 
     constructor(params?: SdfTextMaterialParameters) {
         super();
@@ -229,12 +229,15 @@ export class SdfTextMaterial extends NodeMaterial {
                 const borderPx = min(borderTexels.x, borderTexels.y);
                 dist = min(dist, borderPx.div(sdfParams.w));
 
-                // 与 main 对齐：膨胀权重不得超过安全上限，否则等值线会越过被裁剪的
-                // patch 边界场，形成整圈不透明边框。
+                // Keep in sync with main: the dilation weight must not exceed the safe
+                // upper bound, otherwise the iso-contour crosses outside the clipped
+                // patch border field and forms a solid opaque ring around the edge.
                 const weight = min(aWeight, float(0.5).sub(float(1).div(sdfParams.w)));
 
-                // 字形补丁边缘的 SDF 场被图集裁剪（边界值 ~0.06-0.18），前景等值线（0.5）
-                // 距边界还有余量；背景膨胀权重必须收紧（见背景分支的矩形板实现）。
+                // The SDF field at the glyph patch edge is clipped by the atlas (border
+                // values ~0.06-0.18); the foreground iso-contour (0.5) still has margin
+                // from the border. The background dilation weight must be tightened (see
+                // the rectangular slab implementation in the background branch).
                 const adjustedDist = dist.add(weight).sub(0.5);
                 opacityNode = clamp(adjustedDist.mul(toPixels).add(0.5), 0, 1);
             }

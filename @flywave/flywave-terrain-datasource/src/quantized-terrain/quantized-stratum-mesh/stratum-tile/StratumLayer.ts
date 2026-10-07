@@ -18,10 +18,10 @@ export class StratumLayer {
         filter?: (voxel: StratumVoxel) => boolean
     ) {
         this._layer = layer;
-        // 预先分配数组空间
+        // Pre-allocate the array
         this._voxels = new Array(layer.voxels.length);
 
-        // 使用索引填充确保顺序（带有效性检查）
+        // Fill by index to preserve ordering (with validity checks)
         layer.voxels.forEach(voxel => {
             if (voxel.index >= 0 && voxel.index < layer.voxels.length) {
                 this._voxels[voxel.index] = new StratumVoxel(voxel, stratumMeshData);
@@ -30,7 +30,7 @@ export class StratumLayer {
             }
         });
 
-        // 建立邻接关系（带空值检查）
+        // Establish neighbor links (with null checks)
         layer.voxels.forEach(voxel => {
             const vox = this._voxels[voxel.index];
             if (vox) {
@@ -74,7 +74,7 @@ export class StratumLayer {
         return this._voxels.map(voxel => voxel.geometry);
     }
 
-    // 体素访问方法
+    // Voxel accessors
     get voxels(): StratumVoxel[] {
         return [...this._voxels];
     }
@@ -90,10 +90,10 @@ export class StratumLayer {
         const groundFaces: Array<{ positions: Float32Array; indices: Uint32Array }> = [];
 
         for (const voxel of this.voxels) {
-            // 跳过无效体素
+            // Skip invalid voxels
             if (!voxel.geometry) continue;
 
-            // 直接推送结果避免中间数组
+            // Push results directly to avoid intermediate arrays
             groundFaces.push(this.extractVoxelGroundFaces(voxel));
         }
         return groundFaces;
@@ -107,12 +107,12 @@ export class StratumLayer {
             return { positions: new Float32Array(), indices: new Uint32Array() };
         }
 
-        // 直接从体素获取几何属性
+        // Read the geometry attributes straight from the voxel
         const positionAttr = voxel.geometry.getAttribute("position");
         const faceTypeAttr = voxel.geometry.getAttribute("facetypes");
         const indices = (voxel.geometry.index?.array as Uint32Array) || new Uint32Array();
 
-        // 筛选地面面（假设faceType=0表示地面）
+        // Keep only ground faces (assume faceType 0 means ground)
         const groundIndices = [];
         for (let i = 0; i < faceTypeAttr.count; i++) {
             if (faceTypeAttr.getX(i) === FaceTypes.TopGroundFace) {
@@ -121,7 +121,7 @@ export class StratumLayer {
             }
         }
 
-        // 提取顶点数据
+        // Extract the vertex data
         return {
             positions: positionAttr.array as Float32Array,
             indices: new Uint32Array(groundIndices)

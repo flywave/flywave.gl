@@ -1,6 +1,11 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { GeoBox, GeoCoordinates, GeoLineString, GeoPolygon } from "@flywave/flywave-geoutils";
+import {
+    type GeoBox,
+    type GeoCoordinates,
+    type GeoLineString,
+    type GeoPolygon
+} from "@flywave/flywave-geoutils";
 import * as THREE from "three/webgpu";
 
 export class CoordinateUtils {

@@ -78,7 +78,7 @@ export class BackgroundDataSource extends DataSource {
     getTile(tileKey: TileKey): Tile | undefined {
         const tile = new Tile(this, tileKey);
         tile.forceHasGeometry(true);
-        let mesh = addGroundPlane(tile, BackgroundDataSource.GROUND_RENDER_ORDER);
+        const mesh = addGroundPlane(tile, BackgroundDataSource.GROUND_RENDER_ORDER);
         return tile;
     }
 }

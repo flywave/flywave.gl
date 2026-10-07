@@ -1,19 +1,18 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import {
+    type FlywaveWebpackConfig,
+    createAssetsConfig,
+    createBaseConfig,
+    createDecoderConfig
+} from "@flywave/flywave-webpack-utils/scripts/WebpackConfig";
 import CopyWebpackPlugin from "copy-webpack-plugin";
 import HtmlWebpackPlugin from "html-webpack-plugin";
+import { createRequire } from "module";
 import * as path from "path";
+import { fileURLToPath } from "url";
 import type { Configuration } from "webpack";
 import { merge } from "webpack-merge";
-import { createRequire } from "module";
-import { fileURLToPath } from "url";
-
-import {
-    createBaseConfig,
-    createDecoderConfig,
-    createAssetsConfig,
-    FlywaveWebpackConfig
-} from "@flywave/flywave-webpack-utils/scripts/WebpackConfig";
 
 const require = createRequire(import.meta.url);
 const webpack = require("webpack");
@@ -70,7 +69,7 @@ const flywaveConfig: FlywaveWebpackConfig = {
     enableTsconfigPaths: true,
     themePath: flywaveMapThemePath,
     fontResourcesPath: flywaveFontResourcesPath,
-    threeDracoPath: threeDracoPath
+    threeDracoPath
 };
 
 // 使用flywave-webpack-utils创建基础配置

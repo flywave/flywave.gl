@@ -1,17 +1,18 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
-    ellipsoidProjection,
-    MapControls,
-    DEMTerrainSource,
     ArcGISTileProvider,
+    DEMTerrainSource,
+    ellipsoidProjection,
+    GeoCoordinates,
+    MapControls,
     MapControlsUI,
+    MapView,
     MapViewEventNames
 } from "@flywave/flywave.gl";
-import * as THREE from "three/webgpu";
 import { GUI } from "dat.gui";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
+import * as THREE from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 // Configuration constants
 const CONFIG = {
@@ -61,7 +62,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         forceWebGL: shouldForceWebGL(),
         projection: ellipsoidProjection,
         target: CONFIG.INITIAL_COORDINATES,
-        canvas: canvas,
+        canvas,
         tilt: CONFIG.TILT,
         theme: {
             extends: "resources/tilezen_base_globe.json",

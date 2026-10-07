@@ -41,6 +41,9 @@ class FakeMapView {
         groups: [TileTaskGroups.CREATE, TileTaskGroups.FETCH_AND_DECODE]
     });
 
+    // VisibleTileSet's frustum intersection cache reads mapView.capabilities.logarithmicDepthBuffer
+    capabilities = { logarithmicDepthBuffer: false };
+
     constructor(readonly projection: Projection) {}
 
     get frameNumber(): number {

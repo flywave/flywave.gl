@@ -136,11 +136,12 @@ describe("CameraUtils", function () {
             const height = 100;
             camera.aspect = 0.9;
             CameraUtils.setVerticalFov(camera, MIN_FOV_RAD, height);
-            expect(CameraUtils.getHorizontalFov(camera)).equals(MIN_FOV_RAD);
+            // clamp round-trip carries 1e-15-level float error, so equality can't be exact
+            expect(CameraUtils.getHorizontalFov(camera)).closeTo(MIN_FOV_RAD, 1e-12);
 
             camera.aspect = 1.1;
             CameraUtils.setVerticalFov(camera, MAX_FOV_RAD, height);
-            expect(CameraUtils.getHorizontalFov(camera)).equals(MAX_FOV_RAD);
+            expect(CameraUtils.getHorizontalFov(camera)).closeTo(MAX_FOV_RAD, 1e-12);
         });
     });
 

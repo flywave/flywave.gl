@@ -5,14 +5,14 @@ import { GeoBox } from "../coordinates/GeoBox";
 import { GeoCoordinates } from "../coordinates/GeoCoordinates";
 import { type GeoCoordinatesLike, isGeoCoordinatesLike } from "../coordinates/GeoCoordinatesLike";
 import { type Box3Like, isBox3Like } from "../math/Box3Like";
+import { EllipsoidTangentPlane } from "../math/EllipsoidTangentPlane";
+import { OrientedBox3 } from "../math/OrientedBox3";
 import { type OrientedBox3Like, isOrientedBox3Like } from "../math/OrientedBox3Like";
 import { type TransformLike } from "../math/TransformLike";
 import { type Vector3Like } from "../math/Vector3Like";
 import { EarthConstants } from "./EarthConstants";
-import { Projection, ProjectionType } from "./Projection";
 import { mercatorProjection, webMercatorProjection } from "./MercatorProjection";
-import { OrientedBox3 } from "../math/OrientedBox3";
-import { EllipsoidTangentPlane } from "../math/EllipsoidTangentPlane";
+import { Projection, ProjectionType } from "./Projection";
 
 /**
  * ECEF (Earth-Centered, Earth-Fixed) projection implementation using WGS84 ellipsoid (EPSG:4979)
@@ -175,18 +175,18 @@ class EllipsoidProjection extends Projection {
     unprojectPoint(worldPoint: Vector3Like): GeoCoordinates {
         const { x, y, z } = worldPoint;
 
-        // 改进的 Bowring 1985 算法，精度更高
+        // Improved Bowring 1985 algorithm, more accurate
         const a = this.a;
         const b = this.b;
         const e2 = this.e2;
 
-        // 计算辅助变量
+        // Compute auxiliary variables
         const p = Math.sqrt(x * x + y * y);
 
-        // 初始纬度估计
+        // Initial latitude estimate
         let φ = Math.atan2(z, p * (1 - e2));
 
-        // 迭代求解纬度
+        // Iteratively solve for latitude
         const maxIterations = 10;
         const tolerance = 1e-12;
 
@@ -204,17 +204,17 @@ class EllipsoidProjection extends Projection {
             φ = φNext;
         }
 
-        // 计算经度
+        // Compute longitude
         const λ = Math.atan2(y, x);
 
-        // 计算高度
+        // Compute altitude
         const sinφ = Math.sin(φ);
         const N = a / Math.sqrt(1 - e2 * sinφ * sinφ);
         const h = p / Math.cos(φ) - N;
 
-        // 对于接近极点的特殊情况
+        // Special case for points near the pole
         if (p < 1e-12) {
-            // 在极点处
+            // Exactly at the pole
             return GeoCoordinates.fromRadians((Math.PI / 2) * Math.sign(z), 0, Math.abs(z) - b);
         }
 
@@ -574,10 +574,10 @@ class EllipsoidProjection extends Projection {
 
         const tangentPlane = {
             origin: planeOrigin,
-            xAxis: xAxis,
-            yAxis: yAxis,
+            xAxis,
+            yAxis,
             zAxis: normal,
-            plane: plane
+            plane
         };
 
         // Compute boundary points
@@ -760,12 +760,12 @@ class EllipsoidProjection extends Projection {
         points: GeoCoordinates[],
         tangentPlane: any
     ): { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number } {
-        let minX = Infinity,
-            maxX = -Infinity;
-        let minY = Infinity,
-            maxY = -Infinity;
-        let minZ = Infinity,
-            maxZ = -Infinity;
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minY = Infinity;
+        let maxY = -Infinity;
+        let minZ = Infinity;
+        let maxZ = -Infinity;
 
         for (const geoPoint of points) {
             const worldPoint = this.projectPoint(geoPoint);

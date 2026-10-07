@@ -1,14 +1,14 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { instanceIndex, screenSize, uint, uvec2, vec3, vec4 } from "three/tsl";
 import {
+    type NodeMaterial,
     BufferAttribute,
     BufferGeometry,
     Points,
-    PointsNodeMaterial,
-    type NodeMaterial
+    PointsNodeMaterial
 } from "three/webgpu";
-import { instanceIndex, screenSize, uint, uvec2, vec3, vec4 } from "three/tsl";
 
 import type { ShadowLengthNode } from "./ShadowLengthNode";
 import { isValidScreenLocation } from "./ShadowLengthNode/common";

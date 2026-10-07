@@ -1,4 +1,4 @@
-import type { TileSnapshot, TileEvent, CameraInfo, SnapshotResult } from "./types";
+import type { CameraInfo, SnapshotResult, TileEvent, TileSnapshot } from "./types";
 
 interface EvictAnimation {
     geoBox: {
@@ -14,15 +14,15 @@ interface CreateAnimation {
 }
 
 export class TileOverviewCanvas {
-    private canvas: HTMLCanvasElement;
-    private ctx: CanvasRenderingContext2D;
+    private readonly canvas: HTMLCanvasElement;
+    private readonly ctx: CanvasRenderingContext2D;
     private evictAnimations: EvictAnimation[] = [];
-    private createAnimations: Map<string, number> = new Map();
+    private readonly createAnimations = new Map<string, number>();
     private viewCenter = { lat: 0, lng: 0 };
     private viewRange = 0.5;
     private followCamera = true;
     private hoverTile: string | null = null;
-    private mousePos = { x: 0, y: 0 };
+    private readonly mousePos = { x: 0, y: 0 };
     private lastSnapshots = new Map<string, TileSnapshot>();
 
     constructor(container: HTMLElement) {
@@ -36,7 +36,9 @@ export class TileOverviewCanvas {
 
         this.setupEvents();
         this.resize();
-        window.addEventListener("resize", () => this.resize());
+        window.addEventListener("resize", () => {
+            this.resize();
+        });
     }
 
     private resize() {
@@ -301,7 +303,7 @@ export class TileOverviewCanvas {
                 ctx.font = "11px monospace";
                 const tw = ctx.measureText(txt).width;
                 let tx = this.mousePos.x + 10;
-                let ty = this.mousePos.y + 15;
+                const ty = this.mousePos.y + 15;
                 if (tx + tw > this.canvas.width) tx = this.mousePos.x - tw - 10;
                 ctx.fillStyle = "rgba(0,0,0,0.85)";
                 ctx.fillRect(tx - 4, ty - 12, tw + 8, 18);

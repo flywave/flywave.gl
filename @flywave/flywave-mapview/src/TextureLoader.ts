@@ -39,13 +39,9 @@ export class TextureLoader {
         // Load image from blob using THREE.js loader
         const texture = await this.loadWithThreeLoader(URL.createObjectURL(blob));
 
-        // Set correct image format from original URL or blob mime type
-        // (object URL does not contain file format)
-        const isJPEG =
-            blob.type === "image/jpeg/" ||
-            url.search(/\.jpe?g($|\?)/i) > 0 ||
-            url.search(/^data\:image\/jpeg/) === 0;
-        texture.format = isJPEG ? THREE.RGBFormat : THREE.RGBAFormat;
+        // three r137+ dropped RGBFormat support, so jpg/png textures are always
+        // uploaded as RGBAFormat (the old RGB/RGBA format split by JPEG/PNG is obsolete)
+        texture.format = THREE.RGBAFormat;
 
         return texture;
     }

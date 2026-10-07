@@ -63,19 +63,19 @@ export class CollapsePillar extends BspObject {
         }
 
         const positionAttr = this._geometry.getAttribute("position");
-        const index = this._geometry.index; // 获取几何体的索引
+        const index = this._geometry.index; // geometry index buffer
 
         if (!positionAttr || !index) {
             return new THREE.Sphere(new THREE.Vector3(0, 0, 0), 0);
         }
 
         const positions = positionAttr.array;
-        const indices = index.array; // 获取索引数组
+        const indices = index.array; // index array
         const boundingSphere = new THREE.Sphere();
 
-        // 使用索引计算包围盒
+        // Compute the bounding box from the indices
         for (let i = 0; i < indices.length; i++) {
-            const idx = indices[i] * 3; // 索引指向位置数组中的x坐标
+            const idx = indices[i] * 3; // index maps to the x coordinate entry in the position array
             boundingSphere.expandByPoint(
                 new THREE.Vector3(positions[idx], positions[idx + 1], positions[idx + 2])
             );

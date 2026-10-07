@@ -2,7 +2,7 @@
 
 let supportsOffscreenCanvas: boolean | null = null;
 
-// 扩展 Window 类型声明
+// Extended Window type declaration
 declare global {
     interface Window {
         OffscreenCanvas?: typeof OffscreenCanvas;

@@ -1,13 +1,14 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
-    ellipsoidProjection,
-    MapControls,
     CesiumIonDataSource,
+    ellipsoidProjection,
+    GeoCoordinates,
+    MapControls,
     MapControlsUI,
+    MapView,
     WindowEventHandler
 } from "@flywave/flywave.gl";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 import { CESIUM_ION_TOKEN } from "../token-config";
 
 /**
@@ -24,7 +25,7 @@ class GpuPickTest {
     private infoDiv!: HTMLDivElement;
 
     // hover 性能统计
-    private stats = {
+    private readonly stats = {
         moves: 0,
         pickTimes: [] as number[],
         detailCount: 0,
@@ -48,7 +49,7 @@ class GpuPickTest {
             zoomLevel: 16,
             tilt: 65,
             heading: 20,
-            canvas: canvas,
+            canvas,
             enableGpuPicking: true,
             theme: {
                 atmosphere: {

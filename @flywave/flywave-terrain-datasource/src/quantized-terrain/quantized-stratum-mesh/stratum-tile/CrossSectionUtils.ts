@@ -6,7 +6,7 @@ import * as THREE from "three/webgpu";
 
 import { type Material } from "../decoder";
 
-// 陷落柱剖面结构
+// Collapse pillar profile structure
 export interface CollapseProfile {
     collapseID: string;
     crossSections: THREE.BufferGeometry[];
@@ -14,13 +14,13 @@ export interface CollapseProfile {
     material: number;
 }
 
-// 地层剖面结构
+// Stratum profile structure
 export interface StratumProfile {
-    stratumID: string; // 地层唯一标识
-    top: THREE.Vector3[]; // 顶板交线点序列（沿剖切线有序排列）
-    base: THREE.Vector3[]; // 底板交线点序列
-    crossSections: THREE.BufferGeometry[]; // 三角剖分后的TIN网格集合
-    polys: THREE.Vector3[][]; // 原始剖面多边形顶点序列
+    stratumID: string; // unique stratum identifier
+    top: THREE.Vector3[]; // roof intersection points (ordered along the cut line)
+    base: THREE.Vector3[]; // floor intersection points
+    crossSections: THREE.BufferGeometry[]; // triangulated TIN mesh set
+    polys: THREE.Vector3[][]; // original profile polygon vertex sequences
     material: number;
 }
 
@@ -197,23 +197,23 @@ export interface SVGStyleOptions {
         weight?: string;
     };
     legend?: {
-        show?: boolean; // 是否显示图例
-        position?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "custom"; // 图例位置
-        customPosition?: { x: number; y: number }; // 自定义位置
-        backgroundColor?: string; // 背景颜色
-        backgroundOpacity?: number; // 背景透明度
-        borderColor?: string; // 边框颜色
-        borderWidth?: number; // 边框宽度
-        borderRadius?: number; // 边框圆角
-        title?: string; // 图例标题
-        titleColor?: string; // 标题颜色
-        titleSize?: number; // 标题大小
-        itemSpacing?: number; // 图例项间距
-        symbolSize?: number; // 颜色标记大小
-        textColor?: string; // 文本颜色
-        textSize?: number; // 文本大小
-        columns?: number; // 分列显示
-        horizontal?: boolean; // 水平排列
+        show?: boolean; // whether to show the legend
+        position?: "top-right" | "top-left" | "bottom-right" | "bottom-left" | "custom"; // legend position
+        customPosition?: { x: number; y: number }; // custom position
+        backgroundColor?: string; // background color
+        backgroundOpacity?: number; // background opacity
+        borderColor?: string; // border color
+        borderWidth?: number; // border width
+        borderRadius?: number; // border corner radius
+        title?: string; // legend title
+        titleColor?: string; // title color
+        titleSize?: number; // title size
+        itemSpacing?: number; // spacing between legend items
+        symbolSize?: number; // color swatch size
+        textColor?: string; // text color
+        textSize?: number; // text size
+        columns?: number; // lay out in columns
+        horizontal?: boolean; // horizontal arrangement
     };
 }
 
@@ -223,9 +223,9 @@ export function sectionProfileToSVG(
     profiles: SectionProfile[],
     meterials: Material[],
     upDir: THREE.Vector3,
-    styleOptions?: SVGStyleOptions // 新增可选参数
+    styleOptions?: SVGStyleOptions // optional parameter
 ): void {
-    // 合并默认样式和用户自定义样式
+    // Merge default styles with user-supplied styles
     const styles: Required<SVGStyleOptions> = {
         background: {
             color: "#1e1e28",
@@ -471,7 +471,7 @@ export function sectionProfileToSVG(
             type: "stratum" | "collapse";
         }> = [];
 
-        // 收集地层
+        // Collect strata
         profiles.forEach(profile => {
             profile.stratumProfiles.forEach(stratum => {
                 if (!legendItems.some(item => item.id === stratum.stratumID)) {
@@ -485,7 +485,7 @@ export function sectionProfileToSVG(
                 }
             });
 
-            // 收集塌陷
+            // Collect collapse pillars
             profile.collapseProfiles.forEach(collapse => {
                 if (!legendItems.some(item => item.id === collapse.collapseID)) {
                     const color = getColor(collapse.material, meterials);
@@ -499,11 +499,11 @@ export function sectionProfileToSVG(
             });
         });
 
-        // 计算图例尺寸
+        // Compute the legend dimensions
         const itemHeight = Math.max(legendOptions.symbolSize, legendOptions.textSize) + 5;
         const titleHeight = legendOptions.title ? legendOptions.titleSize + 15 : 0;
         const itemsPerColumn = Math.ceil(legendItems.length / legendOptions.columns);
-        const columnWidth = 200; // 每列宽度
+        const columnWidth = 200; // width of each column
 
         const legendWidth = legendOptions.columns * columnWidth;
         const legendHeight =
@@ -512,7 +512,7 @@ export function sectionProfileToSVG(
             (itemsPerColumn - 1) * legendOptions.itemSpacing +
             20;
 
-        // 确定图例位置
+        // Determine the legend position
         let legendX: number, legendY: number;
         const padding = 20;
 
@@ -542,11 +542,11 @@ export function sectionProfileToSVG(
                 legendY = bounds.minZ + padding;
         }
 
-        // 创建图例组
+        // Create the legend group
         const legendGroup = document.createElementNS(svgNS, "g");
         legendGroup.setAttribute("class", "geology-legend");
 
-        // 绘制图例背景
+        // Draw the legend background
         const legendBg = document.createElementNS(svgNS, "rect");
         legendBg.setAttribute("x", legendX.toString());
         legendBg.setAttribute("y", legendY.toString());
@@ -560,7 +560,7 @@ export function sectionProfileToSVG(
         legendBg.setAttribute("stroke-width", legendOptions.borderWidth.toString());
         legendGroup.appendChild(legendBg);
 
-        // 添加图例标题
+        // Add the legend title
         if (legendOptions.title) {
             const title = document.createElementNS(svgNS, "text");
             title.setAttribute("x", (legendX + legendWidth / 2).toString());
@@ -573,7 +573,7 @@ export function sectionProfileToSVG(
             legendGroup.appendChild(title);
         }
 
-        // 添加图例项
+        // Add legend items
         legendItems.forEach((item, index) => {
             const colIndex = legendOptions.horizontal
                 ? Math.floor(index / itemsPerColumn)
@@ -587,7 +587,7 @@ export function sectionProfileToSVG(
             const itemY =
                 legendY + titleHeight + 15 + rowIndex * (itemHeight + legendOptions.itemSpacing);
 
-            // 绘制颜色标记
+            // Draw the color swatch
             const symbol = document.createElementNS(svgNS, "rect");
             symbol.setAttribute("x", itemX.toString());
             symbol.setAttribute("y", (itemY - legendOptions.symbolSize / 2).toString());
@@ -595,8 +595,8 @@ export function sectionProfileToSVG(
             symbol.setAttribute("height", legendOptions.symbolSize.toString());
             symbol.setAttribute("fill", item.color);
 
-            // 为地层添加特殊标记
-            // 绘制颜色标记
+            // Special marker for strata
+            // Draw the color swatch
             if (item.type === "stratum") {
                 const symbol = document.createElementNS(svgNS, "rect");
                 symbol.setAttribute("x", itemX.toString());
@@ -610,14 +610,14 @@ export function sectionProfileToSVG(
                 symbol.setAttribute("fill", item.color);
                 legendGroup.appendChild(symbol);
             } else {
-                // 塌陷使用梯形标记
+                // Collapse pillars use a trapezoid marker
                 const symbol = document.createElementNS(svgNS, "polygon");
                 const symbolSize = legendOptions.symbolSize;
                 const points = [
-                    `${itemX + symbolSize * 0.2},${itemY - symbolSize / 2}`, // 上左（向右缩进20%）
-                    `${itemX + symbolSize * 0.8},${itemY - symbolSize / 2}`, // 上右（向左缩进20%）
-                    `${itemX + symbolSize},${itemY + symbolSize / 2}`, // 下右（保持原右边界）
-                    `${itemX},${itemY + symbolSize / 2}` // 下左（保持原左边界）
+                    `${itemX + symbolSize * 0.2},${itemY - symbolSize / 2}`, // top-left (indented 20% to the right)
+                    `${itemX + symbolSize * 0.8},${itemY - symbolSize / 2}`, // top-right (indented 20% to the left)
+                    `${itemX + symbolSize},${itemY + symbolSize / 2}`, // bottom-right (keeps original right edge)
+                    `${itemX},${itemY + symbolSize / 2}` // bottom-left (keeps original left edge)
                 ].join(" ");
                 symbol.setAttribute("points", points);
                 symbol.setAttribute("fill", item.color);
@@ -628,7 +628,7 @@ export function sectionProfileToSVG(
 
             legendGroup.appendChild(symbol);
 
-            // 添加文本标签
+            // Add the text label
             const text = document.createElementNS(svgNS, "text");
             text.setAttribute("x", (itemX + legendOptions.symbolSize + 10).toString());
             text.setAttribute("y", itemY.toString());
@@ -636,7 +636,7 @@ export function sectionProfileToSVG(
             text.setAttribute("fill", legendOptions.textColor);
             text.setAttribute("font-size", legendOptions.textSize.toString());
 
-            // 添加类型前缀
+            // Add the type prefix
             const prefix = item.type === "stratum" ? "地层: " : "陷落柱: ";
             text.textContent = prefix + item.label;
             legendGroup.appendChild(text);
@@ -742,7 +742,7 @@ export function sectionProfileToSVG(
     subtitle.setAttribute("x", (bounds.minX + width / 2).toString());
     subtitle.setAttribute("y", (bounds.minZ + height * 0.1).toString());
     subtitle.setAttribute("text-anchor", "middle");
-    subtitle.setAttribute("fill", styles.title.color); // 或使用特定颜色
+    subtitle.setAttribute("fill", styles.title.color); // or use a dedicated color
     subtitle.setAttribute("font-size", styles.title.subtitleSize.toString());
     subtitle.textContent = styles.title.subtitle;
     titleGroup.appendChild(subtitle);
@@ -759,10 +759,10 @@ export function createSectionPlanes(
     group.name = "SectionPlanesGroup";
     const center = new THREE.Vector3();
 
-    // 材质缓存
+    // Material cache
     const materialCache = new Map<string, THREE.Material>();
 
-    // 获取或创建材质
+    // Get or create a material
     const getMaterial = (color: { r: number; g: number; b: number }, opacity: number) => {
         const key = `${color.r}-${color.g}-${color.b}-${opacity}`;
         if (!materialCache.has(key)) {
@@ -783,7 +783,7 @@ export function createSectionPlanes(
         return materialCache.get(key)!;
     };
 
-    // 为每个剖面创建平面
+    // Create planes for each profile
     profiles.forEach((profile, profileIndex) => {
         const sectionGroup = new THREE.Group();
         sectionGroup.name = `Section-${profileIndex}`;
@@ -791,7 +791,7 @@ export function createSectionPlanes(
         const bbox = new THREE.Box3();
         const allPoints: THREE.Vector3[] = [];
 
-        // 收集所有顶点
+        // Collect all vertices
         profile.stratumProfiles.forEach(stratum => {
             stratum.crossSections.forEach(geometry => {
                 const positions = geometry.getAttribute("position");
@@ -816,58 +816,58 @@ export function createSectionPlanes(
             collapse.polys.forEach(poly => allPoints.push(...poly));
         });
 
-        // 计算包围盒和中心点
+        // Compute the bounding box and center point
         allPoints.forEach(p => bbox.expandByPoint(p));
         center.copy(bbox.getCenter(new THREE.Vector3()));
 
-        // 转换坐标系到局部
+        // Transform into local coordinates around the center
         const matrix = new THREE.Matrix4().makeTranslation(-center.x, -center.y, -center.z);
 
-        // 处理地层几何体
+        // Process stratum geometry
         profile.stratumProfiles.forEach(stratum => {
-            // 获取地层材质
+            // Get the stratum material
             const color = getColor(stratum.material, meterials);
             const material = getMaterial(new THREE.Color(color), 0.6);
 
-            // 克隆并转换几何体
+            // Clone and transform the geometry
             stratum.crossSections = stratum.crossSections.map(geometry => {
                 const cloned = geometry.clone();
                 cloned.applyMatrix4(matrix);
                 return cloned;
             });
 
-            // 创建网格
+            // Create meshes
             stratum.crossSections.forEach((geometry, geomIndex) => {
                 const mesh = new THREE.Mesh(geometry, material);
                 mesh.name = `Stratum-${stratum.stratumID}-${geomIndex}`;
-                mesh.renderOrder = 1; // 确保地层在塌陷区域之上
+                mesh.renderOrder = 1; // keep strata above the collapse areas
                 sectionGroup.add(mesh);
             });
         });
 
-        // 处理塌陷几何体
+        // Process collapse geometry
         profile.collapseProfiles.forEach(collapse => {
-            // 获取塌陷材质
+            // Get the collapse material
             const color = getColor(collapse.material, meterials);
             const material = getMaterial(new THREE.Color(color), 0.7);
 
-            // 克隆并转换几何体
+            // Clone and transform the geometry
             collapse.crossSections = collapse.crossSections.map(geometry => {
                 const cloned = geometry.clone();
                 cloned.applyMatrix4(matrix);
                 return cloned;
             });
 
-            // 创建网格
+            // Create meshes
             collapse.crossSections.forEach((geometry, geomIndex) => {
                 const mesh = new THREE.Mesh(geometry, material);
                 mesh.name = `Collapse-${collapse.collapseID}-${geomIndex}`;
-                mesh.renderOrder = 0; // 塌陷区域在地层之下
+                mesh.renderOrder = 0; // collapse areas render below the strata
                 sectionGroup.add(mesh);
             });
         });
 
-        // 设置组位置到原始中心点
+        // Position the group at the original center
         group.add(sectionGroup);
     });
 

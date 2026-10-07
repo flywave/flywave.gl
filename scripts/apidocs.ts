@@ -5,9 +5,8 @@
 import { Extractor, ExtractorConfig } from "@microsoft/api-extractor";
 import { execSync } from "child_process";
 import * as fs from "fs";
-import * as path from "path";
-
 import { createRequire } from "module";
+import * as path from "path";
 const require = createRequire(import.meta.url);
 /**
  * 修复可能导致 acorn 解析错误的内容

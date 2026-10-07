@@ -2,21 +2,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    type Data3DTexture,
-    type Texture,
-    type Vector2,
-    type Vector3,
-    LinearFilter,
-    NoColorSpace,
-    RenderTarget,
-    RenderTarget3D,
-    RGBAFormat,
-    type Renderer,
-    type UniformNode,
-    NodeMaterial,
-    QuadMesh
-} from "three/webgpu";
-import {
     acos,
     cos,
     float,
@@ -33,6 +18,21 @@ import {
     vec3,
     vec4
 } from "three/tsl";
+import {
+    type Data3DTexture,
+    type Renderer,
+    type Texture,
+    type UniformNode,
+    type Vector2,
+    type Vector3,
+    LinearFilter,
+    NoColorSpace,
+    NodeMaterial,
+    QuadMesh,
+    RenderTarget,
+    RenderTarget3D,
+    RGBAFormat
+} from "three/webgpu";
 
 import { FnVar } from "../tsl/FnVar";
 import type { Node } from "../tsl/node";

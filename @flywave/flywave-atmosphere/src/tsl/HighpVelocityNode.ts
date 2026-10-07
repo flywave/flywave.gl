@@ -1,13 +1,15 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
-import {
-    Matrix4,
-    type Object3D,
-    NodeUpdateType,
-    TempNode,
-    type NodeBuilder,
-    type NodeFrame
-} from "three/webgpu";
 import { nodeImmutable, positionLocal, positionPrevious, sub, uniform } from "three/tsl";
+import {
+    type NodeBuilder,
+    type NodeFrame,
+    type Object3D,
+    Matrix4,
+    NodeUpdateType,
+    TempNode
+} from "three/webgpu";
 
 export class HighpVelocityNode extends TempNode {
     static override get type(): string {

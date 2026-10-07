@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { assert } from "@flywave/flywave-utils";
+import { SRGBColorSpace } from "three/webgpu";
 import * as THREE from "three/webgpu";
 
 import { RGBA } from "./RGBA";
@@ -94,7 +95,11 @@ export namespace ColorUtils {
         assert(h >= 0 && h <= 1);
         assert(s >= 0 && s <= 1);
         assert(l >= 0 && l <= 1);
-        return tmpColor.setHSL(h, s, l).getHex();
+        // three r152+ computes setHSL in the Linear working color space by default,
+        // while the hsl() semantics of style expressions follow CSS (sRGB); specify
+        // sRGB explicitly, otherwise the output is overall too bright
+        // (e.g. hsl(20,100%,50%) would yield #ff9c00 instead of CSS's #ff5500)
+        return tmpColor.setHSL(h, s, l, SRGBColorSpace).getHex();
     }
 
     /**

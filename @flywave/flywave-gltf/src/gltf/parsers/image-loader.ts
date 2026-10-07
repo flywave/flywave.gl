@@ -1,11 +1,13 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // image-loader.ts
-import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
-import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader.js";
-import { TGALoader } from "three/examples/jsm/loaders/TGALoader.js";
-import { CompressedTexture, Texture } from "three/webgpu";
-import type { WebGPURenderer } from "three/webgpu";
-import { read } from "ktx-parse";
 import type { UriResolver } from "@flywave/flywave-utils";
+import { read } from "ktx-parse";
+import { DDSLoader } from "three/examples/jsm/loaders/DDSLoader.js";
+import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
+import { TGALoader } from "three/examples/jsm/loaders/TGALoader.js";
+import type { WebGPURenderer } from "three/webgpu";
+import { CompressedTexture, Texture } from "three/webgpu";
 
 export interface LoadedImage {
     width: number;
@@ -47,8 +49,8 @@ function ensureKTX2Loader(
 
 export class ImageLoader {
     private ktx2Loader: KTX2Loader | null = null;
-    private ddsLoader?: DDSLoader;
-    private tgaLoader?: TGALoader;
+    private readonly ddsLoader?: DDSLoader;
+    private readonly tgaLoader?: TGALoader;
     private renderer: WebGPURenderer | null = null;
     private uriResolver: UriResolver | null = null;
 
@@ -179,8 +181,12 @@ export class ImageLoader {
             const texture = await new Promise<any>((resolve, reject) => {
                 this.ktx2Loader!.parse(
                     arrayBuffer,
-                    (tex: any) => resolve(tex),
-                    (err: any) => reject(err)
+                    (tex: any) => {
+                        resolve(tex);
+                    },
+                    (err: any) => {
+                        reject(err);
+                    }
                 );
             });
 

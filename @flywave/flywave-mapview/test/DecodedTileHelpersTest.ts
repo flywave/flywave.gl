@@ -67,9 +67,11 @@ describe("DecodedTileHelpers", function () {
             expect(assert.exists(material));
 
             assert.approximately(material.opacity, 7 / 15, 0.00001);
-            assert.equal(material.blending, THREE.CustomBlending);
+            // SolidLineMaterial is built with transparent=true (line AA); standard
+            // NormalBlending composites identically to the old CustomBlending default
+            assert.equal(material.blending, THREE.NormalBlending);
             assert.equal(material.color.getHex(), 0xff00ff);
-            assert.equal(material.transparent, false);
+            assert.equal(material.transparent, true);
         });
         it("ignores alpha when applying #rgba to secondary colors", function () {
             const technique: SolidLineTechnique = {
@@ -86,9 +88,9 @@ describe("DecodedTileHelpers", function () {
             expect(assert.exists(material));
 
             assert.equal(material.opacity, 1);
-            assert.equal(material.blending, THREE.CustomBlending);
+            assert.equal(material.blending, THREE.NormalBlending);
             assert.equal(material.color.getHex(), 0xff00ff);
-            assert.equal(material.transparent, false);
+            assert.equal(material.transparent, true);
         });
         it("ignores invalid colors", function () {
             const technique: SolidLineTechnique = {

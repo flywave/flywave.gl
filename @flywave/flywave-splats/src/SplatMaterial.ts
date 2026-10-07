@@ -2,25 +2,22 @@
 // @ts-nocheck
 
 import {
-    DataTexture,
-    DoubleSide,
-    NormalBlending,
-    NodeMaterial,
-    RGBAFormat,
-    UnsignedByteType,
-    Vector2
-} from "three/webgpu";
-import {
-    Fn,
     attribute,
+    cameraPosition,
+    cameraProjectionMatrix,
+    cameraViewMatrix,
     dot,
     float,
     floor as tslFloor,
+    Fn,
     length,
     mat3,
     min as tslMin,
     mod,
+    modelViewMatrix,
+    modelWorldMatrix,
     normalize,
+    positionLocal,
     pow,
     sqrt,
     texture,
@@ -28,14 +25,17 @@ import {
     uniform,
     vec2,
     vec3,
-    vec4,
-    positionLocal,
-    modelViewMatrix,
-    cameraProjectionMatrix,
-    modelWorldMatrix,
-    cameraViewMatrix,
-    cameraPosition
+    vec4
 } from "three/tsl";
+import {
+    DataTexture,
+    DoubleSide,
+    NodeMaterial,
+    NormalBlending,
+    RGBAFormat,
+    UnsignedByteType,
+    Vector2
+} from "three/webgpu";
 
 let _sharedMaterial: NodeMaterial | null = null;
 let _sharedMaterialSH: NodeMaterial | null = null;

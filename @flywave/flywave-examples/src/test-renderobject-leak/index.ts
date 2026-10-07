@@ -1,5 +1,5 @@
-import * as THREE from "three/webgpu";
 import { GUI } from "dat.gui";
+import * as THREE from "three/webgpu";
 
 const CANVAS_ID = "mapCanvas";
 
@@ -18,13 +18,13 @@ interface Stats {
 }
 
 class LeakTest {
-    private renderer: THREE.WebGPURenderer;
-    private scene: THREE.Scene;
-    private camera: THREE.OrthographicCamera;
-    private sharedMaterial: THREE.MeshStandardNodeMaterial;
-    private sharedGeometry: THREE.BufferGeometry;
-    private meshPool: THREE.Mesh[] = [];
-    private aliveMeshes: THREE.Mesh[] = [];
+    private readonly renderer: THREE.WebGPURenderer;
+    private readonly scene: THREE.Scene;
+    private readonly camera: THREE.OrthographicCamera;
+    private readonly sharedMaterial: THREE.MeshStandardNodeMaterial;
+    private readonly sharedGeometry: THREE.BufferGeometry;
+    private readonly meshPool: THREE.Mesh[] = [];
+    private readonly aliveMeshes: THREE.Mesh[] = [];
     public mode: "no-dispose" | "full-dispose" | "bindings-only" | "aggressive" = "no-dispose";
     public spawnRate: number = 50;
     public maxAlive: number = 200;
@@ -36,7 +36,7 @@ class LeakTest {
     private lastTime: number = performance.now();
     private fpsAccum: number = 0;
     private fpsFrames: number = 0;
-    private stats: Stats = {
+    private readonly stats: Stats = {
         frame: 0,
         meshesCreated: 0,
         meshesDestroyed: 0,
@@ -49,7 +49,8 @@ class LeakTest {
         jsHeapTotal: 0,
         fps: 0
     };
-    private statsDiv: HTMLDivElement;
+
+    private readonly statsDiv: HTMLDivElement;
 
     constructor() {
         const canvas = document.getElementById(CANVAS_ID) as HTMLCanvasElement;

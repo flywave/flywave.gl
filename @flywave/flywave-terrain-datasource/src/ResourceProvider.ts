@@ -362,6 +362,7 @@ export abstract class ResourceProvider<
         this.minLevel = minLevel ?? this.minLevel;
         this.maxLevel = maxLevel ?? this.maxLevel;
     }
+
     /**
      * Gets the unique resource key for this provider instance
      * Used for resource identification and caching

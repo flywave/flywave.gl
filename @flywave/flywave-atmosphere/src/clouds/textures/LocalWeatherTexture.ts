@@ -2,32 +2,32 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    type ComputeNode,
-    type Renderer,
-    StorageTexture,
-    NoColorSpace,
-    HalfFloatType,
-    RepeatWrapping
-} from "three/webgpu";
-import {
+    dot,
+    float,
     Fn,
+    globalId,
     If,
     Return,
-    dot,
     smoothstep,
+    textureStore,
+    uvec2,
     vec2,
     vec3,
-    vec4,
-    float,
-    globalId,
-    uvec2,
-    textureStore
+    vec4
 } from "three/tsl";
+import {
+    type ComputeNode,
+    type Renderer,
+    HalfFloatType,
+    NoColorSpace,
+    RepeatWrapping,
+    StorageTexture
+} from "three/webgpu";
 
+import type { AnyFloatType } from "../../tsl/types";
+import { reinterpretType } from "../../tsl/types";
 import { CLOUD_LOCAL_WEATHER_TEXTURE_SIZE } from "../cloudConstants";
 import { perlinNoise, perlinNoiseVec3, worleyNoise } from "../noise/noise";
-import { reinterpretType } from "../../tsl/types";
-import type { AnyFloatType } from "../../tsl/types";
 
 function worleyFbm(
     point: any,

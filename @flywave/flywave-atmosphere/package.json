@@ -17,7 +17,8 @@
     },
     "scripts": {
         "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
-        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force",
+        "test": "npx webpack --config scripts/webpack.test.cjs && node test-dist/run.cjs"
     },
     "repository": {
         "type": "git",

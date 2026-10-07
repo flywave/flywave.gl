@@ -11,9 +11,9 @@ import { resolveUrl } from "../gltf-utils/resolve-url";
 import type { GLB } from "../types/glb-types";
 import type { GLTFWithBuffers } from "../types/gltf-types";
 import { assert } from "../utils/assert";
+import { imageLoader } from "./image-loader";
 import type { ParseGLBOptions } from "./parse-glb";
 import { isGLB, parseGLBSync } from "./parse-glb";
-import { imageLoader } from "./image-loader";
 
 /**  */
 export type ParseGLTFOptions = ParseGLBOptions & {
@@ -172,7 +172,7 @@ function getReferencesImageIndices(gltf: GLTFWithBuffers): number[] {
     return Array.from(imageIndices).sort();
 }
 
-// 修改 loadImage 函数
+// Modified loadImage function
 async function loadImage(gltf: GLTFWithBuffers, image: any, index: number, options: any) {
     let arrayBuffer;
 

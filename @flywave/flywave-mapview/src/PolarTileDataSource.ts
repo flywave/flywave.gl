@@ -17,9 +17,8 @@ import {
     polarTilingScheme,
     TransverseMercatorUtils
 } from "@flywave/flywave-geoutils";
-import * as THREE from "three/webgpu";
-
 import { LoggerManager } from "@flywave/flywave-utils";
+import * as THREE from "three/webgpu";
 
 import { type DataSourceOptions, DataSource } from "./DataSource";
 import { createMaterial } from "./DecodedTileHelpers";
@@ -130,7 +129,9 @@ export class PolarTileDataSource extends DataSource {
         this.m_disposed = true;
         for (const texturePromise of [this.m_northPoleTexture, this.m_southPoleTexture]) {
             texturePromise
-                ?.then(texture => texture.dispose())
+                ?.then(texture => {
+                    texture.dispose();
+                })
                 .catch(() => {
                     /* texture never loaded */
                 });

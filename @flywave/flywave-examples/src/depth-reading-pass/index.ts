@@ -1,21 +1,22 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
+    ArcGISTileProvider,
+    CesiumWorldTerrainSource,
+    ClassificationType,
     ellipsoidProjection,
+    GeoCoordinates,
     MapControls,
     MapControlsUI,
-    CesiumWorldTerrainSource,
-    ArcGISTileProvider,
-    ClassificationType,
+    MapView,
+    ModularMapViewMonitor,
     sphereProjection,
     TileRenderDataSource,
-    transformECEFToProjection,
-    ModularMapViewMonitor
+    transformECEFToProjection
 } from "@flywave/flywave.gl";
-import { CESIUM_ION_TOKEN } from "../token-config";
 import { GUI } from "dat.gui";
 import * as THREE from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
+import { CESIUM_ION_TOKEN } from "../token-config";
 
 // Configuration constants
 const CONFIG = {
@@ -60,7 +61,7 @@ const initializeMapView = (
         heading: CONFIG.HEADING,
         tilt: CONFIG.TILT,
         zoomLevel: CONFIG.ZOOM_LEVEL,
-        canvas: canvas,
+        canvas,
         theme: {
             extends: "resources/tilezen_base_globe.json",
             atmosphere: {
@@ -174,9 +175,9 @@ const createSampleObjects = (mapView: MapView): void => {
  * Depth reading controller with dat.GUI interface
  */
 class DepthReadingController {
-    private gui: GUI;
-    private mapView: MapView;
-    private params: any;
+    private readonly gui: GUI;
+    private readonly mapView: MapView;
+    private readonly params: any;
     private clickPoint: THREE.Mesh | null = null;
     private placedObjects: THREE.Object3D[] = [];
 
@@ -227,7 +228,14 @@ class DepthReadingController {
         objectFolder.add(this.params, "objectSize", 1, 100).name("Object Size");
 
         objectFolder
-            .add({ clearObjects: () => this.clearPlacedObjects() }, "clearObjects")
+            .add(
+                {
+                    clearObjects: () => {
+                        this.clearPlacedObjects();
+                    }
+                },
+                "clearObjects"
+            )
             .name("Clear All Objects");
 
         vizFolder.open();

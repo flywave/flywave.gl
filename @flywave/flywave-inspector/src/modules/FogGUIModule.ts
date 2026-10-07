@@ -29,19 +29,27 @@ export class FogGUIModule {
         this.folder
             .add(this.currentData, "enabled")
             .name("Enabled")
-            .onChange(() => this.updateEffects());
+            .onChange(() => {
+                this.updateEffects();
+            });
         this.folder
             .addColor(this.currentData, "color")
             .name("Color")
-            .onChange(() => this.updateEffects());
+            .onChange(() => {
+                this.updateEffects();
+            });
         this.folder
             .add(this.currentData, "ratio", 0, 0.001, 0.00001)
             .name("Density")
-            .onChange(() => this.updateEffects());
+            .onChange(() => {
+                this.updateEffects();
+            });
         this.folder
             .add(this.currentData, "range", 1000, 50000, 100)
             .name("Range")
-            .onChange(() => this.updateEffects());
+            .onChange(() => {
+                this.updateEffects();
+            });
     }
 
     private updateEffects() {

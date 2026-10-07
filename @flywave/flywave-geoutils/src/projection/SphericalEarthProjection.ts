@@ -13,7 +13,7 @@ import { type Vector3Like } from "../math/Vector3Like";
 import { EarthConstants } from "./EarthConstants";
 import { mercatorProjection, webMercatorProjection } from "./MercatorProjection";
 import { Projection, ProjectionType } from "./Projection";
-import { SphereProjection } from "./SphereProjection";
+import { type SphereProjection } from "./SphereProjection";
 
 /**
  * Transforms the given vector using the provided basis.
@@ -448,41 +448,41 @@ class SphericalEarthProjection extends Projection implements SphereProjection {
         rayTarget: Vector3Like,
         altitude: number = 0
     ): number {
-        // 使用THREE.js向量进行计算
+        // Use THREE.js vectors for the computation
         const origin = new THREE.Vector3(rayOrigin.x, rayOrigin.y, rayOrigin.z);
         const target = new THREE.Vector3(rayTarget.x, rayTarget.y, rayTarget.z);
 
-        // 计算射线方向
+        // Compute the ray direction
         const direction = new THREE.Vector3().subVectors(target, origin);
 
         if (direction.lengthSq() < 1e-30) {
-            return -1; // 点太接近
+            return -1; // The points are too close together
         }
 
         direction.normalize();
 
-        // 创建射线
+        // Create the ray
         const ray = new THREE.Ray(origin, direction);
 
-        // 计算球体半径
+        // Compute the sphere radius
         const sphereRadius = this.unitScale + altitude;
         const sphereCenter = new THREE.Vector3(0, 0, 0);
         const sphere = new THREE.Sphere(sphereCenter, sphereRadius);
 
-        // 使用THREE.js的相交测试 - 返回交点向量或null
+        // Use THREE.js intersection test - returns the intersection point or null
         const intersectionPoint = new THREE.Vector3();
-        // 没有正方向的交点，检查是否在球体内部
+        // No intersection along the forward direction; check whether we are inside the sphere
         const distanceToCenter = origin.distanceTo(sphereCenter);
         const isInsideSphere = distanceToCenter < sphereRadius;
 
         if (isInsideSphere) {
-            // 在球体内部，反转方向尝试
+            // Inside the sphere: try again with the reversed direction
             const reversedDirection = direction.clone().negate();
             const reversedRay = new THREE.Ray(origin, reversedDirection);
             const reversedIntersection = reversedRay.intersectSphere(sphere, intersectionPoint);
 
             if (reversedIntersection !== null) {
-                // 计算距离
+                // Compute the distance
                 const distance = origin.distanceTo(intersectionPoint);
 
                 result.x = intersectionPoint.x;
@@ -495,15 +495,15 @@ class SphericalEarthProjection extends Projection implements SphereProjection {
         const intersectionResult = ray.intersectSphere(sphere, intersectionPoint);
 
         if (intersectionResult !== null) {
-            // 有交点，计算距离
+            // There is an intersection; compute the distance
             const distance = origin.distanceTo(intersectionPoint);
 
-            // 检查交点是否在射线正方向
+            // Check that the intersection lies along the forward direction of the ray
             const toIntersection = new THREE.Vector3().subVectors(intersectionPoint, origin);
             const dot = toIntersection.dot(direction);
 
             if (dot > 0) {
-                // 交点在射线正方向
+                // The intersection is in front of the ray
                 result.x = intersectionPoint.x;
                 result.y = intersectionPoint.y;
                 result.z = intersectionPoint.z;
@@ -511,7 +511,7 @@ class SphericalEarthProjection extends Projection implements SphereProjection {
             }
         }
 
-        return -1; // 没有有效的交点
+        return -1; // No valid intersection
     }
 }
 

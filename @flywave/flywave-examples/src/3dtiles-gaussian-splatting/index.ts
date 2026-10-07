@@ -1,6 +1,4 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 /* Copyright (C) 2025 flywave.gl contributors */
-
 import {
     ArcGISWebTileDataSource,
     ellipsoidProjection,
@@ -10,6 +8,8 @@ import {
     MapView,
     TileRenderDataSource
 } from "@flywave/flywave.gl";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 /**
  * Get map canvas element
@@ -40,7 +40,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): [MapView, MapControls] =>
         projection: ellipsoidProjection, // Use ellipsoid projection
         target: initialLocation, // Initial target position
         zoomLevel: 19, // Initial zoom level
-        canvas: canvas, // Specify render canvas
+        canvas, // Specify render canvas
         theme: {
             atmosphere: {
                 sunTime: new Date().setHours(7, 30)

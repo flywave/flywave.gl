@@ -2,8 +2,8 @@
 
 // height-map/HeightMapTerrainMesh.ts
 import { type TileGeometryBuilder, type TileTransformation } from "@flywave/flywave-geometry";
-import { GeoBox, type TilingScheme, ProjectionType, TileKey } from "@flywave/flywave-geoutils";
-import { MapView, SurfaceType, Tile } from "@flywave/flywave-mapview";
+import { type TilingScheme, GeoBox, ProjectionType, TileKey } from "@flywave/flywave-geoutils";
+import { type Tile, MapView, SurfaceType } from "@flywave/flywave-mapview";
 import {
     DataTexture,
     LinearFilter,
@@ -17,17 +17,17 @@ import {
 import * as THREE from "three/webgpu";
 
 import { type HeightMapModifierManager } from "../ground-modification-manager";
+import { type ProjectionSwitchController } from "../ProjectionSwitchController";
 import { type WebTile } from "../WebImageryTileProvider";
 import {
-    emptyTexture as matEmptyTexture,
+    DEMTileMeshMaterial,
     emptyImageryTextures,
-    DEMTileMeshMaterial
+    emptyTexture as matEmptyTexture
 } from "./DEMTileMeshMaterial";
-import { ProjectionSwitchController } from "../ProjectionSwitchController";
 
 const uDemUnpack0 = new Vector4(6553.6, 25.6, 0.1, 10000.0);
 const uDemUnpack1 = new Vector4(0.0, 0.0, 0, 0);
-/** mapbox terrain-rgb 解码常数，未显式提供 DEM 编码时的默认解包向量 */
+/** mapbox terrain-rgb decoding constants; default unpack vector when no DEM encoding is given explicitly */
 const DEFAULT_DEM_UNPACK = uDemUnpack0;
 
 const _identityImageryTransforms = [
@@ -93,27 +93,27 @@ export class HeightMapTerrainMesh extends Mesh {
      */
 
     // --- Internal state ---
-    private m_uPatchPos: Matrix4 = new Matrix4();
+    private readonly m_uPatchPos: Matrix4 = new Matrix4();
     private readonly _scratchInterpPos: Vector3 = new Vector3();
     private m_uHeightMapPos?: Vector3;
-    private m_isSimplePatch: boolean = false;
+    private readonly m_isSimplePatch: boolean = false;
     private m_uHeighMapTexture: THREE.Texture = matEmptyTexture;
-    /** 当前 DEM 纹理的编码解包向量（跟随 DEMData.encoding；默认 mapbox） */
-    private m_demUnpack: Vector4 = DEFAULT_DEM_UNPACK.clone();
-    private m_selfGeoBox: GeoBox;
+    /** Unpack vector for the current DEM texture's encoding (follows DEMData.encoding; mapbox by default) */
+    private readonly m_demUnpack: Vector4 = DEFAULT_DEM_UNPACK.clone();
+    private readonly m_selfGeoBox: GeoBox;
     public displacement: Vector3 = new Vector3();
-    private m_transformation: TileTransformation;
-    private m_targetZRotation: number;
-    private m_skirtHeight: number;
+    private readonly m_transformation: TileTransformation;
+    private readonly m_targetZRotation: number;
+    private readonly m_skirtHeight: number;
     private readonly m_yDown: boolean;
     private m_modifierManager?: HeightMapModifierManager;
     private m_modifierVersion: number = -1;
     private m_modifierTexture: THREE.Texture | null = null;
-    private m_modifierUVBounds: Vector4 = new Vector4();
+    private readonly m_modifierUVBounds: Vector4 = new Vector4();
     private m_modifierOp: number = 0;
     private m_mergedTexture: DataTexture | null = null;
     private m_modifiersDirty: boolean = true;
-    private m_tile: Tile;
+    private readonly m_tile: Tile;
     private readonly m_terrainTilingScheme: TilingScheme;
     private readonly m_projectionSwitchController: ProjectionSwitchController;
     private readonly m_tilingSchemeTileGrid: TileGeometryBuilder;
@@ -356,7 +356,8 @@ export class HeightMapTerrainMesh extends Mesh {
         );
         texture.flipY = this.m_yDown;
         this.m_uHeighMapTexture = texture;
-        // DEM 纹理像素保持源编码上传（见 DemData._buildTexture），解码常数必须跟随编码
+        // DEM texture pixels are uploaded in their source encoding (see DemData._buildTexture),
+        // so the decoding constants must follow that encoding
         if (demUnpack) {
             this.m_demUnpack.copy(demUnpack);
         }

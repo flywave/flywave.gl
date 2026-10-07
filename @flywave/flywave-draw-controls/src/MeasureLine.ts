@@ -2,10 +2,10 @@
 
 import { type GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
+import { type WindowEventHandler } from "@flywave/flywave-utils";
+import { type Line2 } from "three/examples/jsm/lines/webgpu/Line2.js";
 import * as THREE from "three/webgpu";
 import { Line2NodeMaterial } from "three/webgpu";
-import { Line2 } from "three/examples/jsm/lines/webgpu/Line2.js";
-import { WindowEventHandler } from "@flywave/flywave-utils";
 
 import { DrawLine } from "./DrawLine";
 

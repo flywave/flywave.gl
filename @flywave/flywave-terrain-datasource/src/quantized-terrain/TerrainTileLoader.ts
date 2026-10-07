@@ -1,25 +1,30 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type GeoBox, type TilingScheme, ProjectionType, TileKey } from "@flywave/flywave-geoutils";
+import {
+    type GeoBox,
+    type TileKey,
+    type TilingScheme,
+    ProjectionType
+} from "@flywave/flywave-geoutils";
 import { type MapView, type Tile, TextElement } from "@flywave/flywave-mapview";
 import { type BufferGeometry, type Material, Color, Mesh, Object3D, Vector3 } from "three/webgpu";
 
 import { HeightMapTerrainMesh } from "../dem-terrain/DEMTileTerrainMesh";
+import { type ProjectionSwitchController } from "../ProjectionSwitchController";
+import { type ProjectorTileEntry } from "../projector-overlay";
+import { projectorBlending } from "../projector-overlay";
 import { ResourceTileLoader, TerrainTileLoader } from "../ResourceTileLoader";
 import { type TerrainResourceTile } from "../TerrainSource";
 import { type WebTile } from "../WebImageryTileProvider";
-import { type ProjectorTileEntry } from "../projector-overlay";
 import { type BaseQuantizedTerrainSource } from "./BaseQuantizedTerrainSource";
-import { QuantizedMesh, computeDecalUvTransform } from "./quantized-mesh/QuantizedMesh";
+import { computeDecalUvTransform, QuantizedMesh } from "./quantized-mesh/QuantizedMesh";
 import { QuantizedDecalMaterial } from "./quantized-mesh/QuantizedMeshMaterial";
-import { projectorBlending } from "../projector-overlay";
 import { type QuantizedTerrainMesh } from "./quantized-mesh/QuantizedTerrainMesh";
 import { QuantizedStratumMesh } from "./quantized-stratum-mesh/QuantizedStratumMesh";
 import { type QuantizedStratumResource } from "./quantized-stratum-mesh/QuantizedStratumResource";
 import { type QuantizedStratumSource } from "./QuantizedStratumSource";
 import { type QuantizedTerrainSource } from "./QuantizedTerrainSource";
 import { type QuantizedTileResource } from "./QuantizedTileResource";
-import { ProjectionSwitchController } from "../ProjectionSwitchController";
 
 /**
  * Custom QuantizedMesh implementation that integrates with MapView for rendering updates
@@ -331,7 +336,8 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                 const tile = this.dataSource.dataProvider().getPreciseResource(tileKey);
                 if (tile && tile.demMap) {
                     const texture = tile.demMap.getDisplacementMap();
-                    // 解码常数跟随 DEM 编码（quantized 自产 DEM 为 mapbox 默认，行为不变）
+                    // Decoding constants follow the DEM encoding (self-produced
+                    // quantized DEM is mapbox by default, so behavior is unchanged)
                     terrainMesh.setHeightMap(texture, tileKey, tile.demMap.unpackVector);
                     break;
                 }
@@ -414,7 +420,7 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
     loadTileMeshImpl() {
         this.tile.clear();
 
-        let quantizedDataResource = this.dataSource
+        const quantizedDataResource = this.dataSource
             .dataProvider()
             .getBestAvailableResourceTile(this.tile.tileKey);
 

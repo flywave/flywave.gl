@@ -1,21 +1,6 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
-import {
-    AdditiveBlending,
-    CanvasTexture,
-    Mesh,
-    PerspectiveCamera,
-    PlaneGeometry,
-    SRGBColorSpace,
-    Vector2,
-    type Texture,
-    IndirectStorageBufferAttribute,
-    MeshBasicNodeMaterial,
-    RendererUtils,
-    type ComputeNode,
-    type NodeBuilder,
-    type NodeFrame,
-    type TextureNode
-} from "three/webgpu";
 import {
     atomicAdd,
     Fn,
@@ -34,7 +19,23 @@ import {
     vec3,
     vec4
 } from "three/tsl";
-
+import {
+    type ComputeNode,
+    type NodeBuilder,
+    type NodeFrame,
+    type Texture,
+    type TextureNode,
+    AdditiveBlending,
+    CanvasTexture,
+    IndirectStorageBufferAttribute,
+    Mesh,
+    MeshBasicNodeMaterial,
+    PerspectiveCamera,
+    PlaneGeometry,
+    RendererUtils,
+    SRGBColorSpace,
+    Vector2
+} from "three/webgpu";
 import invariant from "tiny-invariant";
 
 import { FilterNode } from "./FilterNode";
@@ -124,6 +125,7 @@ export class LensGlareNode extends FilterNode {
         new Uint32Array([6, 0, 0, 0, 0]),
         1
     );
+
     private instanceBuffer = instancedArray(1, instanceStruct);
 
     private readonly renderTarget = this.createRenderTarget();
@@ -133,6 +135,7 @@ export class LensGlareNode extends FilterNode {
         transparent: true,
         blending: AdditiveBlending
     });
+
     private readonly mesh = new Mesh(new PlaneGeometry(1, 1), this.material);
     private readonly camera = new PerspectiveCamera();
     private _rendererState?: RendererUtils.RendererState;

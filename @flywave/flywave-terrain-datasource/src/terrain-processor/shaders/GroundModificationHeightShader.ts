@@ -1,19 +1,19 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import * as THREE from "three/webgpu";
-import { NodeMaterial } from "three/webgpu";
 import {
-    Fn,
     dot,
     float,
     floor as tslFloor,
+    Fn,
     mod,
     texture,
     uniform,
     uv as uvNode,
     vec4
 } from "three/tsl";
+import * as THREE from "three/webgpu";
+import { NodeMaterial } from "three/webgpu";
 
 export class GroundModificationHeightShader extends NodeMaterial {
     constructor() {

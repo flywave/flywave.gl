@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { WebGLBackend, type Renderer } from "three/webgpu";
+import { type Renderer, WebGLBackend } from "three/webgpu";
 
 export function isFloatLinearSupported(renderer: Renderer): boolean {
     const backend = renderer.backend;

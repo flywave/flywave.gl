@@ -30,6 +30,7 @@
     "devDependencies": {
         "@types/chai-as-promised": "^8.0.2",
         "@types/path-browserify": "^1.0.3",
+        "chai-as-promised": "catalog:",
         "cross-env": "catalog:"
     },
     "private": true

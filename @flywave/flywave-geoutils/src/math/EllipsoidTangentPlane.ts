@@ -1,4 +1,7 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 import * as THREE from "three/webgpu";
+
 import { EarthConstants } from "../projection/EarthConstants";
 
 /**
@@ -6,12 +9,12 @@ import { EarthConstants } from "../projection/EarthConstants";
  * Provides East-North-Up coordinate system for local spatial calculations
  */
 export class EllipsoidTangentPlane {
-    private _ellipsoid: any;
-    private _origin: THREE.Vector3;
-    private _xAxis: THREE.Vector3; // East direction
-    private _yAxis: THREE.Vector3; // North direction
-    private _zAxis: THREE.Vector3; // Up direction (normal vector)
-    private _plane: THREE.Plane;
+    private readonly _ellipsoid: any;
+    private readonly _origin: THREE.Vector3;
+    private readonly _xAxis: THREE.Vector3; // East direction
+    private readonly _yAxis: THREE.Vector3; // North direction
+    private readonly _zAxis: THREE.Vector3; // Up direction (normal vector)
+    private readonly _plane: THREE.Plane;
 
     constructor(origin: THREE.Vector3, ellipsoid?: any) {
         this._ellipsoid = ellipsoid || {
@@ -38,18 +41,23 @@ export class EllipsoidTangentPlane {
     get ellipsoid() {
         return this._ellipsoid;
     }
+
     get origin() {
         return this._origin;
     }
+
     get xAxis() {
         return this._xAxis;
     }
+
     get yAxis() {
         return this._yAxis;
     }
+
     get zAxis() {
         return this._zAxis;
     }
+
     get plane() {
         return this._plane;
     }

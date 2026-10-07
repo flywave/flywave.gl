@@ -7,7 +7,7 @@ export default {
         "Comprehensive styling scenarios against a Cesium Ion 3D Tiles dataset (asset 75343)",
     descriptionZh:
         "对 Cesium Ion 3D Tiles 数据做全面样式测试：分级配色与动画渐变、单色、半透明、按条件隐藏、动态增删改样式、点击高亮，并带 FPS 监视验证样式操作零卡顿",
-    thumbnail: thumbnail,
+    thumbnail,
     code: "3dtiles-model-rendering",
     order: 5
 };

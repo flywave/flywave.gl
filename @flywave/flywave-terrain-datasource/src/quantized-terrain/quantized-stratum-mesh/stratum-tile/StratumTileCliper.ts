@@ -3,9 +3,9 @@
 import {
     type FrustumGeoArea,
     type FrustumTester,
+    type GeoBox,
     FrustumGeoAreaTester,
     FrustumIntersection,
-    GeoBox,
     GeoCoordinates,
     GeoLineString,
     GeoPolygon
@@ -14,9 +14,9 @@ import { TriangleGeometryMerger } from "@flywave/flywave-utils";
 import { BufferAttribute, BufferGeometry, Sphere, Triangle, Vector3 } from "three/webgpu";
 import { Brush } from "three-bvh-csg";
 
-import { type StratumClipRegion } from "./StratumClipTypes";
 import { FaceTypes } from "../decoder";
 import { type BspObject } from "./BspObject";
+import { type StratumClipRegion } from "./StratumClipTypes";
 import { type StratumTileData } from "./StratumTileData";
 import { type StratumVoxel } from "./StratumVoxel";
 
@@ -347,7 +347,7 @@ export class StratumMeshCliper {
     }
 
     private isGeometryClosed(geometry: BufferGeometry) {
-        // 确保有索引
+        // Ensure there is an index buffer
         if (!geometry.index) {
             console.warn("Geometry has no index, creating temporary index");
             geometry = geometry.toNonIndexed();
@@ -355,30 +355,30 @@ export class StratumMeshCliper {
 
         const index = geometry.index;
 
-        // 创建边到面数的映射
+        // Map from edge to face count
         const edgeCount = new Map();
 
-        // 遍历所有三角形
+        // Walk all triangles
         for (let i = 0; i < index.count; i += 3) {
             const a = index.getX(i);
             const b = index.getX(i + 1);
             const c = index.getX(i + 2);
 
-            // 三角形的三条边（按顺序排序以避免方向问题）
+            // The triangle's three edges (ordered to avoid direction issues)
             const edges = [
                 [Math.min(a, b), Math.max(a, b)],
                 [Math.min(b, c), Math.max(b, c)],
                 [Math.min(c, a), Math.max(c, a)]
             ];
 
-            // 统计每条边被多少个三角形使用
+            // Count how many triangles use each edge
             for (const [v1, v2] of edges) {
                 const edgeKey = `${v1}-${v2}`;
                 edgeCount.set(edgeKey, (edgeCount.get(edgeKey) || 0) + 1);
             }
         }
 
-        // 检查是否有边只被一个三角形使用（边界边）
+        // Look for edges used by exactly one triangle (boundary edges)
         let boundaryEdges = 0;
         for (const count of edgeCount.values()) {
             if (count === 1) {
@@ -391,7 +391,7 @@ export class StratumMeshCliper {
         console.log(`Total edges: ${edgeCount.size}`);
         console.log(`Boundary edges: ${boundaryEdges}`);
 
-        // 完全闭合的几何体应该没有边界边
+        // A fully closed geometry should have no boundary edges
         return boundaryEdges === 0;
     }
 
@@ -408,7 +408,7 @@ export class StratumMeshCliper {
         frustumTesters?: FrustumTester[],
         filterFrustumTesters?: FrustumTester[]
     ): void {
-        // 验证必需的属性
+        // Validate the required attributes
         const positionAttr = geometry.getAttribute("position");
         const faceTypeAttr = geometry.getAttribute("faceType");
         const index = geometry.getIndex();
@@ -430,30 +430,30 @@ export class StratumMeshCliper {
             return;
         }
 
-        // 创建临时变量用于三角形检查
+        // Scratch variables for the per-triangle checks
         const triangle = new Triangle();
         const vertexA = new Vector3();
         const vertexB = new Vector3();
         const vertexC = new Vector3();
 
-        // 遍历所有三角形
+        // Walk all triangles
         for (let i = 0; i < index.count; i += 3) {
             const idxA = index.getX(i);
             const idxB = index.getX(i + 1);
             const idxC = index.getX(i + 2);
 
-            // 获取三角形的三个顶点坐标
+            // Fetch the three vertex coordinates of the triangle
             vertexA.set(positionAttr.getX(idxA), positionAttr.getY(idxA), positionAttr.getZ(idxA));
             vertexB.set(positionAttr.getX(idxB), positionAttr.getY(idxB), positionAttr.getZ(idxB));
             vertexC.set(positionAttr.getX(idxC), positionAttr.getY(idxC), positionAttr.getZ(idxC));
 
-            // 设置三角形
+            // Set the triangle
             triangle.set(vertexA, vertexB, vertexC);
 
             let isTriangleIntersecting = false;
 
             let faceType: number = FaceTypes.SideFace;
-            // 检查三角形是否与任何截锥体相交
+            // Check whether the triangle intersects any frustum
             if (frustumTesters)
                 for (const frustumTester of frustumTesters) {
                     const intersection = frustumTester.triangleIntersects(triangle);
@@ -461,7 +461,7 @@ export class StratumMeshCliper {
                     if (intersection !== FrustumIntersection.OUTSIDE) {
                         isTriangleIntersecting = true;
                         faceType = FaceTypes.BoundarySideFace;
-                        break; // 只要与一个截锥体相交就足够
+                        break; // intersecting one frustum is enough
                     }
                 }
 
@@ -472,12 +472,12 @@ export class StratumMeshCliper {
                     if (intersection !== FrustumIntersection.OUTSIDE) {
                         isTriangleIntersecting = true;
                         faceType = FaceTypes.SideFace;
-                        break; // 只要与一个截锥体相交就足够
+                        break; // intersecting one frustum is enough
                     }
                 }
             }
 
-            // 如果三角形相交，标记所有三个顶点
+            // If the triangle intersects, mark all three vertices
             if (isTriangleIntersecting) {
                 [idxA, idxB, idxC].forEach(vertexIndex => {
                     const faceTypeArray = faceTypeAttr.array as Float32Array | Uint32Array;

@@ -6,6 +6,7 @@ import {
     type TextStyleDefinition
 } from "@flywave/flywave-datasource-protocol";
 import { type TileKey, type Vector3Like } from "@flywave/flywave-geoutils";
+import { type RendererCapabilities } from "@flywave/flywave-materials";
 import {
     type AdditionParameters,
     type FontCatalog,
@@ -24,9 +25,8 @@ import {
     MathUtils,
     PerformanceTimer
 } from "@flywave/flywave-utils";
-import * as THREE from "three/webgpu";
 import type { Renderer } from "three/webgpu";
-import { type RendererCapabilities } from "@flywave/flywave-materials";
+import * as THREE from "three/webgpu";
 
 import { type DataSource } from "../DataSource";
 import { debugContext } from "../DebugContext";

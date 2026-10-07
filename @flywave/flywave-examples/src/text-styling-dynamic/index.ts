@@ -381,7 +381,9 @@ export namespace TextStylingDynamicExample {
             canvas: document.getElementById(CONFIG.CANVAS_ELEMENT_ID) as HTMLCanvasElement
         });
         await webglRenderer.init();
-        webglRenderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
+        webglRenderer.domElement.addEventListener("contextmenu", e => {
+            e.preventDefault();
+        });
         webglRenderer.autoClear = false;
         webglRenderer.setClearColor(0xffffff);
         webglRenderer.setPixelRatio(window.devicePixelRatio);

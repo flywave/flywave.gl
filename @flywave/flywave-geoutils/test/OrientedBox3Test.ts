@@ -8,10 +8,10 @@ import * as THREE from "three/webgpu";
 import { GeoCoordinates } from "../src/coordinates/GeoCoordinates";
 import { OrientedBox3 } from "../src/math/OrientedBox3";
 import { EarthConstants } from "../src/projection/EarthConstants";
+import { sphereProjection } from "../src/projection/SphericalEarthProjection";
 import { TileKey } from "../src/tiling/TileKey";
 import { type TilingScheme } from "../src/tiling/TilingScheme";
 import { webMercatorTilingScheme } from "../src/tiling/WebMercatorTilingScheme";
-import { sphereProjection } from "../src/projection/SphericalEarthProjection";
 
 /**
  * Visits the tile tree.

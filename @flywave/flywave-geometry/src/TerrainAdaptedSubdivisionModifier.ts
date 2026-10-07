@@ -4,35 +4,36 @@ import { type Projection, GeoCoordinates } from "@flywave/flywave-geoutils";
 import { Vector3 } from "three/webgpu";
 
 /**
- * 简单的距离插值细分器
+ * Simple distance-based interpolation subdivider
  *
- * 该类实现了基于固定距离间隔的简单插值算法，
- * 不再考虑高程差异，仅根据调节参数控制插值密度。
+ * This class implements a simple interpolation algorithm based on a fixed
+ * distance interval. It no longer accounts for elevation differences; the
+ * interpolation density is controlled solely by the tuning parameters.
  */
 export abstract class TerrainAdaptedSubdivisionModifier {
     private readonly elevationCache: Map<string, number>;
 
     /**
-     * 构造函数
+     * Constructor
      *
-     * @param projection 投影对象
-     * @param interpolationDistance 插值距离（米），控制每隔多少米进行一次插值
-     * @param cacheSize 高程缓存大小，默认为500个点（减少内存使用）
+     * @param projection The projection object
+     * @param interpolationDistance Interpolation distance (meters); controls how many meters between interpolated points
+     * @param cacheSize Elevation cache size, defaults to 500 points (to reduce memory usage)
      */
     constructor(
         readonly projection: Projection,
-        readonly interpolationDistance: number = 100, // 默认每隔100米插值一次
-        readonly cacheSize: number = 500 // 减少缓存大小以节省内存
+        readonly interpolationDistance: number = 100, // Interpolate every 100 meters by default
+        readonly cacheSize: number = 500 // Reduce cache size to save memory
     ) {
         this.elevationCache = new Map();
     }
 
     /**
-     * 对GeoCoordinates线进行距离插值细分
+     * Subdivide a GeoCoordinates line by distance interpolation
      *
-     * @param geoPoints 地理坐标点数组（线）
-     * @param progressCallback 可选进度回调函数
-     * @returns 细分后的地理坐标点数组
+     * @param geoPoints Array of geographic coordinate points (a line)
+     * @param progressCallback Optional progress callback
+     * @returns The subdivided array of geographic coordinate points
      */
     modify(
         geoPoints: GeoCoordinates[],
@@ -42,29 +43,29 @@ export abstract class TerrainAdaptedSubdivisionModifier {
             return [...geoPoints];
         }
 
-        // 清空缓存
+        // Clear the cache
         this.elevationCache.clear();
 
         const result: GeoCoordinates[] = [];
 
-        // 处理每条线段，但保持原始点的顺序
+        // Process each segment while preserving the order of the original points
         for (let i = 0; i < geoPoints.length - 1; i++) {
             const startGeo = geoPoints[i];
             const endGeo = geoPoints[i + 1];
 
-            // 使用插值方法细分这条线段
+            // Subdivide this segment using the interpolation method
             const segmentPoints = this.interpolateSegment(startGeo, endGeo);
 
-            // 添加细分后的点到结果中
+            // Add the subdivided points to the result
             if (i === 0) {
-                // 第一个线段添加所有点
+                // Add all points for the first segment
                 result.push(...segmentPoints);
             } else {
-                // 后续线段跳过第一个点（因为与前一个线段的最后一个点重复）
+                // Skip the first point of subsequent segments (it duplicates the last point of the previous segment)
                 result.push(...segmentPoints.slice(1));
             }
 
-            // 报告进度
+            // Report progress
             if (progressCallback) {
                 progressCallback((i + 1) / (geoPoints.length - 1));
             }
@@ -74,11 +75,12 @@ export abstract class TerrainAdaptedSubdivisionModifier {
     }
 
     /**
-     * 对GeoCoordinates线进行距离插值细分，并返回原始点的索引映射
+     * Subdivide a GeoCoordinates line by distance interpolation and return an
+     * index mapping back to the original points
      *
-     * @param geoPoints 地理坐标点数组（线）
-     * @param progressCallback 可选进度回调函数
-     * @returns 细分后的地理坐标点数组和原始点索引映射
+     * @param geoPoints Array of geographic coordinate points (a line)
+     * @param progressCallback Optional progress callback
+     * @returns The subdivided array of geographic coordinate points and the original-point index mapping
      */
     modifyWithIndexMapping(
         geoPoints: GeoCoordinates[],
@@ -88,63 +90,63 @@ export abstract class TerrainAdaptedSubdivisionModifier {
             return { points: [...geoPoints], originalIndices: geoPoints.map((_, i) => i) };
         }
 
-        // 清空缓存
+        // Clear the cache
         this.elevationCache.clear();
 
         const result: GeoCoordinates[] = [];
         const originalIndices: number[] = [];
         const totalSegments = geoPoints.length - 1;
 
-        // 处理每条线段
+        // Process each segment
         for (let i = 0; i < totalSegments; i++) {
             const startGeo = geoPoints[i];
             const endGeo = geoPoints[i + 1];
 
-            // 使用插值方法细分这条线段
+            // Subdivide this segment using the interpolation method
             const segmentPoints = this.interpolateSegment(startGeo, endGeo);
 
-            // 添加细分后的点到结果中
+            // Add the subdivided points to the result
             if (i === 0) {
-                // 第一个线段添加所有点
+                // Add all points for the first segment
                 result.push(...segmentPoints);
-                // 为第一个点添加原始索引
+                // Add the original index for the first point
                 originalIndices.push(i);
-                // 为中间插入的点添加-1表示它们是新插入的点
+                // Add -1 for intermediate inserted points to mark them as newly inserted
                 for (let j = 1; j < segmentPoints.length; j++) {
                     originalIndices.push(-1);
                 }
             } else {
-                // 后续线段跳过第一个点（因为与前一个线段的最后一个点重复）
+                // Skip the first point of subsequent segments (it duplicates the last point of the previous segment)
                 result.push(...segmentPoints.slice(1));
-                // 为中间插入的点添加-1表示它们是新插入的点
+                // Add -1 for intermediate inserted points to mark them as newly inserted
                 for (let j = 1; j < segmentPoints.length; j++) {
                     originalIndices.push(-1);
                 }
             }
 
-            // 报告进度
+            // Report progress
             if (progressCallback) {
                 progressCallback((i + 1) / totalSegments);
             }
         }
 
-        // 为最后一个原始点添加索引
+        // Add the index for the last original point
         originalIndices[originalIndices.length - 1] = geoPoints.length - 1;
         return { points: result, originalIndices };
     }
 
     /**
-     * 对线段进行插值
+     * Interpolate a single segment
      */
     private interpolateSegment(startGeo: GeoCoordinates, endGeo: GeoCoordinates): GeoCoordinates[] {
-        // 获取端点的高程（使用缓存）
+        // Get the elevations of the endpoints (using the cache)
         const startElevation = this.getElevationWithCache(startGeo) || 0;
         const endElevation = this.getElevationWithCache(endGeo) || 0;
 
-        // 计算两点之间的水平距离（米）
+        // Compute the horizontal distance between the two points (meters)
         const horizontalDistance = this.calculateHorizontalDistance(startGeo, endGeo);
 
-        // 如果距离小于插值距离，则直接返回端点
+        // If the distance is within the interpolation distance, return the endpoints directly
         if (horizontalDistance <= this.interpolationDistance) {
             const startWithElevation = new GeoCoordinates(
                 startGeo.latitude,
@@ -159,14 +161,14 @@ export abstract class TerrainAdaptedSubdivisionModifier {
             return [startWithElevation, endWithElevation];
         }
 
-        // 计算需要插入的点数
+        // Compute the number of points to insert
         const numSegments = Math.ceil(horizontalDistance / this.interpolationDistance);
         const result: GeoCoordinates[] = [];
 
-        // 添加起始点
+        // Add the starting point
         result.push(new GeoCoordinates(startGeo.latitude, startGeo.longitude, startElevation));
 
-        // 插入中间点
+        // Insert the intermediate points
         for (let i = 1; i < numSegments; i++) {
             const t = i / numSegments;
             const interpolatedGeo = this.interpolateGeoCoordinates(startGeo, endGeo, t);
@@ -180,27 +182,27 @@ export abstract class TerrainAdaptedSubdivisionModifier {
             );
         }
 
-        // 添加结束点
+        // Add the ending point
         result.push(new GeoCoordinates(endGeo.latitude, endGeo.longitude, endElevation));
 
         return result;
     }
 
     /**
-     * 带缓存的高程获取方法
+     * Cached elevation lookup
      */
     private getElevationWithCache(geoPoint: GeoCoordinates): number | undefined {
         const key = `${geoPoint.latitude.toFixed(6)},${geoPoint.longitude.toFixed(6)}`;
 
-        // 检查缓存
+        // Check the cache
         if (this.elevationCache.has(key)) {
             return this.elevationCache.get(key);
         }
 
-        // 调用抽象方法获取高程
+        // Call the abstract method to obtain the elevation
         const elevation = this.getElevation(geoPoint);
 
-        // 更新缓存（如果缓存已满，删除最早的一项）
+        // Update the cache (if it is full, evict the oldest entry)
         if (this.elevationCache.size >= this.cacheSize) {
             const firstKey = this.elevationCache.keys().next().value;
             if (firstKey) {
@@ -208,7 +210,7 @@ export abstract class TerrainAdaptedSubdivisionModifier {
             }
         }
 
-        // 将结果存入缓存
+        // Store the result in the cache
         if (elevation !== undefined) {
             this.elevationCache.set(key, elevation);
         }
@@ -217,58 +219,58 @@ export abstract class TerrainAdaptedSubdivisionModifier {
     }
 
     /**
-     * 在两个地理坐标之间进行插值
-     * @param start 起始地理坐标
-     * @param end 结束地理坐标
-     * @param t 插值因子 (0-1)
-     * @returns 插值后的地理坐标
+     * Interpolate between two geographic coordinates
+     * @param start The starting geographic coordinate
+     * @param end The ending geographic coordinate
+     * @param t Interpolation factor (0-1)
+     * @returns The interpolated geographic coordinate
      */
     private interpolateGeoCoordinates(
         start: GeoCoordinates,
         end: GeoCoordinates,
         t: number
     ): GeoCoordinates {
-        // 简单的线性插值
+        // Simple linear interpolation
         const lat = start.latitude + (end.latitude - start.latitude) * t;
         const lon = start.longitude + (end.longitude - start.longitude) * t;
         return new GeoCoordinates(lat, lon);
     }
 
     /**
-     * 计算两个地理坐标点之间的水平距离（米）
-     * @param start 起始地理坐标
-     * @param end 结束地理坐标
-     * @returns 水平距离（米）
+     * Compute the horizontal distance between two geographic coordinate points (meters)
+     * @param start The starting geographic coordinate
+     * @param end The ending geographic coordinate
+     * @returns The horizontal distance (meters)
      */
     protected calculateHorizontalDistance(start: GeoCoordinates, end: GeoCoordinates): number {
-        // 将地理坐标转换为世界坐标
+        // Convert geographic coordinates to world coordinates
         const startWorld = this.projection.projectPoint(start);
         const endWorld = this.projection.projectPoint(end);
 
-        // 计算水平距离（忽略Z轴）
+        // Compute the horizontal distance (ignoring the Z axis)
         const dx = endWorld.x - startWorld.x;
         const dy = endWorld.y - startWorld.y;
         return Math.sqrt(dx * dx + dy * dy);
     }
 
     /**
-     * 清除高程缓存
+     * Clear the elevation cache
      */
     clearCache(): void {
         this.elevationCache.clear();
     }
 
     /**
-     * 获取当前缓存大小
+     * Get the current cache size
      */
     getCacheSize(): number {
         return this.elevationCache.size;
     }
 
     /**
-     * 抽象方法，子类需要实现高程获取逻辑
-     * @param geoPoint 地理坐标
-     * @returns 海拔高度（米）
+     * Abstract method; subclasses must implement the elevation lookup logic
+     * @param geoPoint The geographic coordinate
+     * @returns The altitude in meters
      */
     protected abstract getElevation(geoPoint: GeoCoordinates): number | undefined;
 }

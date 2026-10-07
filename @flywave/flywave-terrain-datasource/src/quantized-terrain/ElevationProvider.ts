@@ -69,7 +69,7 @@ export class ElevationProvider implements InnerElevationProvider {
         if (!this.dataSource.dataProvider().layerStrategy.getAvailability()) {
             return { altitude: defaultIfNotLoaded, tileKey: undefined };
         }
-        let normaledGeoPoint = new GeoCoordinates(
+        const normaledGeoPoint = new GeoCoordinates(
             geoPoint.latitude,
             geoPoint.longitude - 360 * Math.floor((geoPoint.longitude + 180) / 360)
         );

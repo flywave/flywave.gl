@@ -1,20 +1,20 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three/webgpu";
-import { MeshStandardNodeMaterial } from "three/webgpu";
 import {
-    Fn,
-    If,
     attribute,
     clamp,
     cross,
     dot,
     float,
     floor as tslFloor,
+    Fn,
     fract,
+    If,
     mix as tslMix,
     normalize,
+    positionLocal,
+    positionWorld,
     select,
     texture,
     transformNormalToView,
@@ -22,10 +22,10 @@ import {
     uv as uvNode,
     vec2,
     vec3,
-    vec4,
-    positionLocal,
-    positionWorld
+    vec4
 } from "three/tsl";
+import * as THREE from "three/webgpu";
+import { MeshStandardNodeMaterial } from "three/webgpu";
 
 function dummyTex(): THREE.DataTexture {
     const t = new THREE.DataTexture(
@@ -121,7 +121,8 @@ function buildNodes() {
         return dot(vec4(v.xyz.mul(255.0), float(-1.0)), _demUnpack);
     });
 
-    // modifier 固定 mapbox 编码，不复用 _demUnpack（terrarium DEM 时会产生几万米负值）
+    // The modifier is always mapbox-encoded; do not reuse _demUnpack (with a
+    // terrarium DEM it would produce negative values tens of km deep)
     const _modifierUnpack = uniform(new THREE.Vector4(6553.6, 25.6, 0.1, 10000.0));
     const decodeModifierElevation = Fn(([v]: [ReturnType<typeof vec4>]) => {
         return dot(vec4(v.xyz.mul(255.0), float(-1.0)), _modifierUnpack);

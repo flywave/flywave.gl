@@ -1,13 +1,13 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-type RequestIdleCallbackOptions = {
+interface RequestIdleCallbackOptions {
     timeout?: number;
-};
+}
 
-type RequestIdleCallbackDeadline = {
+interface RequestIdleCallbackDeadline {
     readonly didTimeout: boolean;
     timeRemaining(): number;
-};
+}
 
 type IdleCallbackHandle = number;
 

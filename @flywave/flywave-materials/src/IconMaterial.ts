@@ -1,9 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
+import { attribute, Fn, positionLocal, texture, uv as uvNode, varying, vec4 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
-import { Fn, attribute, texture, uv as uvNode, vec4, positionLocal, varying } from "three/tsl";
 
 export interface IconMaterialParameters {
     map: THREE.Texture;
@@ -11,7 +11,7 @@ export interface IconMaterialParameters {
 }
 
 export class IconMaterial extends NodeMaterial {
-    private m_mapNode: ReturnType<typeof texture>;
+    private readonly m_mapNode: ReturnType<typeof texture>;
 
     constructor(params?: IconMaterialParameters) {
         super();

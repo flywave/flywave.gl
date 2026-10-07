@@ -1,23 +1,25 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
+import SMAANode from "three/examples/jsm/tsl/display/SMAANode.js";
 import {
-    HalfFloatType,
-    RenderTarget,
-    TempNode,
-    QuadMesh,
-    NodeMaterial,
-    RendererUtils,
-    NodeUpdateType,
-    Vector2
-} from "three/webgpu";
-import {
-    nodeObject,
     convertToTexture,
-    texture as tslTexture,
     Fn,
+    nodeObject,
     passTexture,
+    texture as tslTexture,
     uv
 } from "three/tsl";
-import SMAANode from "three/examples/jsm/tsl/display/SMAANode.js";
+import {
+    HalfFloatType,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils,
+    RenderTarget,
+    TempNode,
+    Vector2
+} from "three/webgpu";
 
 const _quadMesh = new QuadMesh();
 const _size = new Vector2();

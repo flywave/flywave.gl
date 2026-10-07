@@ -2,26 +2,28 @@
 // @ts-nocheck
 
 import { type LineCaps, type LineDashes } from "@flywave/flywave-datasource-protocol";
-import * as THREE from "three/webgpu";
-import { NodeMaterial } from "three/webgpu";
 import {
-    Fn,
     abs,
     attribute,
     ceil,
     clamp,
     cos as tslCos,
+    Discard,
     distance as tslDistance,
     dot,
     exp,
     float,
+    Fn,
     fwidth,
     length,
     max as tslMax,
     min as tslMin,
     mix as tslMix,
     mod,
+    modelViewPosition,
     normalize,
+    normalLocal,
+    positionLocal,
     pow as tslPow,
     select,
     sign,
@@ -32,15 +34,13 @@ import {
     texture,
     uniform,
     uv as uvNode,
+    varying,
     vec2,
     vec3,
-    vec4,
-    positionLocal,
-    normalLocal,
-    modelViewPosition,
-    varying,
-    Discard
+    vec4
 } from "three/tsl";
+import * as THREE from "three/webgpu";
+import { NodeMaterial } from "three/webgpu";
 
 export enum LineCapsModes {
     CAPS_NONE = 0,
@@ -105,25 +105,26 @@ export class SolidLineMaterial extends NodeMaterial {
     static DEFAULT_GAP_SIZE: number = 1.0;
     static DEFAULT_OFFSET: number = 0.0;
 
-    private m_diffuseColorU = uniform(new THREE.Color(SolidLineMaterial.DEFAULT_COLOR));
-    private m_outlineColorU = uniform(new THREE.Color(SolidLineMaterial.DEFAULT_COLOR));
-    private m_dashColorU = uniform(new THREE.Color(SolidLineMaterial.DEFAULT_COLOR));
-    private m_extrusionWidthU = uniform(SolidLineMaterial.DEFAULT_WIDTH / 2);
-    private m_outlineWidthU = uniform(SolidLineMaterial.DEFAULT_OUTLINE_WIDTH);
-    private m_offsetU = uniform(SolidLineMaterial.DEFAULT_OFFSET);
-    private m_opacityU = uniform(SolidLineMaterial.DEFAULT_OPACITY);
-    private m_tileSizeU = uniform(new THREE.Vector2());
-    private m_fadeNearU = uniform(-1.0);
-    private m_fadeFarU = uniform(-1.0);
-    private m_drawRangeU = uniform(
+    private readonly m_diffuseColorU = uniform(new THREE.Color(SolidLineMaterial.DEFAULT_COLOR));
+    private readonly m_outlineColorU = uniform(new THREE.Color(SolidLineMaterial.DEFAULT_COLOR));
+    private readonly m_dashColorU = uniform(new THREE.Color(SolidLineMaterial.DEFAULT_COLOR));
+    private readonly m_extrusionWidthU = uniform(SolidLineMaterial.DEFAULT_WIDTH / 2);
+    private readonly m_outlineWidthU = uniform(SolidLineMaterial.DEFAULT_OUTLINE_WIDTH);
+    private readonly m_offsetU = uniform(SolidLineMaterial.DEFAULT_OFFSET);
+    private readonly m_opacityU = uniform(SolidLineMaterial.DEFAULT_OPACITY);
+    private readonly m_tileSizeU = uniform(new THREE.Vector2());
+    private readonly m_fadeNearU = uniform(-1.0);
+    private readonly m_fadeFarU = uniform(-1.0);
+    private readonly m_drawRangeU = uniform(
         new THREE.Vector2(
             SolidLineMaterial.DEFAULT_DRAW_RANGE_START,
             SolidLineMaterial.DEFAULT_DRAW_RANGE_END
         )
     );
-    private m_dashSizeU = uniform(SolidLineMaterial.DEFAULT_DASH_SIZE);
-    private m_gapSizeU = uniform(SolidLineMaterial.DEFAULT_GAP_SIZE);
-    private m_displacementMapNode = texture(
+
+    private readonly m_dashSizeU = uniform(SolidLineMaterial.DEFAULT_DASH_SIZE);
+    private readonly m_gapSizeU = uniform(SolidLineMaterial.DEFAULT_GAP_SIZE);
+    private readonly m_displacementMapNode = texture(
         new THREE.DataTexture(
             new Uint8Array([255, 255, 255, 255]),
             1,
@@ -132,8 +133,9 @@ export class SolidLineMaterial extends NodeMaterial {
             THREE.UnsignedByteType
         )
     );
-    private m_capsModeU = uniform(LineCapsModes.CAPS_ROUND);
-    private m_dashesModeU = uniform(LineDashesModes.DASHES_SQUARE);
+
+    private readonly m_capsModeU = uniform(LineCapsModes.CAPS_ROUND);
+    private readonly m_dashesModeU = uniform(LineDashesModes.DASHES_SQUARE);
 
     opacity: number = 1.0;
     fog: boolean = true;
@@ -357,87 +359,113 @@ export class SolidLineMaterial extends NodeMaterial {
     get color(): THREE.Color {
         return this.m_diffuseColorU.value;
     }
+
     set color(value: THREE.Color) {
         this.m_diffuseColorU.value.copy(value);
     }
+
     get outlineColor(): THREE.Color {
         return this.m_outlineColorU.value;
     }
+
     set outlineColor(value: THREE.Color) {
         this.m_outlineColorU.value.copy(value);
     }
+
     get dashColor(): THREE.Color {
         return this.m_dashColorU.value;
     }
+
     set dashColor(value: THREE.Color) {
         this.m_dashColorU.value.copy(value);
     }
+
     get lineWidth(): number {
         return this.m_extrusionWidthU.value * 2;
     }
+
     set lineWidth(value: number) {
         this.m_extrusionWidthU.value = value / 2;
     }
+
     get outlineWidth(): number {
         return this.m_outlineWidthU.value;
     }
+
     set outlineWidth(value: number) {
         this.m_outlineWidthU.value = value;
     }
+
     get dashSize(): number {
         return this.m_dashSizeU.value;
     }
+
     set dashSize(value: number) {
         this.m_dashSizeU.value = value;
     }
+
     get gapSize(): number {
         return this.m_gapSizeU.value;
     }
+
     set gapSize(value: number) {
         this.m_gapSizeU.value = value;
     }
+
     get offset(): number {
         return this.m_offsetU.value;
     }
+
     set offset(value: number) {
         this.m_offsetU.value = value;
     }
+
     get drawRangeStart(): number {
         return this.m_drawRangeU.value.x;
     }
+
     set drawRangeStart(value: number) {
         this.m_drawRangeU.value.x = value;
     }
+
     get drawRangeEnd(): number {
         return this.m_drawRangeU.value.y;
     }
+
     set drawRangeEnd(value: number) {
         this.m_drawRangeU.value.y = value;
     }
+
     get caps(): LineCaps {
         const val = this.m_capsModeU.value;
         const found = Object.entries(LineCapsDefinesMapping).find(([, v]) => v === val);
         return found ? (found[0] as LineCaps) : "Round";
     }
+
     set caps(value: LineCaps) {
         if (LineCapsDefinesMapping.hasOwnProperty(value))
             this.m_capsModeU.value = LineCapsDefinesMapping[value];
     }
+
     get dashes(): LineDashes {
         const val = this.m_dashesModeU.value;
         const found = Object.entries(LineDashesDefinesMapping).find(([, v]) => v === val);
         return found ? (found[0] as LineDashes) : "Square";
     }
+
     set dashes(value: LineDashes) {
         if (LineDashesDefinesMapping.hasOwnProperty(value))
             this.m_dashesModeU.value = LineDashesDefinesMapping[value];
     }
+
     set clipTileSize(tileSize: THREE.Vector2) {
         this.m_tileSizeU.value.copy(tileSize);
     }
+
     get clipTileSize(): THREE.Vector2 {
         return this.m_tileSizeU.value;
     }
+
     setOpacity(opacity: number) {
         this.opacity = opacity;
         this.m_opacityU.value = opacity;

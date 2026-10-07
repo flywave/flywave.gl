@@ -240,7 +240,10 @@ describe("TileGeometryLoader", function () {
 
             expect(mapView.taskQueue.processNext(TileTaskGroups.CREATE)).equal(true);
 
-            await geometryLoader.waitFinished();
+            await geometryLoader.waitFinished().then(
+                () => chai.assert.fail("waitFinished should reject"),
+                () => undefined // canceled/disposed: rejected by design
+            );
             expect(spyProcessTechniques.callCount).equal(1);
             expect(spyCreateGeometries.callCount).equal(0, "should not create geometry");
             expect(geometryLoader.isFinished).to.be.false;
@@ -263,7 +266,10 @@ describe("TileGeometryLoader", function () {
 
             expect(mapView.taskQueue.processNext(TileTaskGroups.CREATE)).equal(true);
 
-            await geometryLoader.waitFinished();
+            await geometryLoader.waitFinished().then(
+                () => chai.assert.fail("waitFinished should reject"),
+                () => undefined // canceled/disposed: rejected by design
+            );
             expect(spyProcessTechniques.callCount).equal(1);
             expect(spyCreateGeometries.callCount).equal(0, "should not create geometry");
             expect(geometryLoader.isFinished).to.be.false;
@@ -286,7 +292,10 @@ describe("TileGeometryLoader", function () {
             expect(mapView.taskQueue.processNext(TileTaskGroups.CREATE)).equal(true);
             expect(mapView.taskQueue.numItemsLeft(TileTaskGroups.CREATE)).equal(0);
 
-            await geometryLoader.waitFinished();
+            await geometryLoader.waitFinished().then(
+                () => chai.assert.fail("waitFinished should reject"),
+                () => undefined // canceled/disposed: rejected by design
+            );
 
             expect(spyProcessTechniques.callCount).equal(1);
             expect(spyCreateGeometries.callCount).equal(0, "should not create geometry");
@@ -358,7 +367,10 @@ describe("TileGeometryLoader", function () {
             tile.dispose();
 
             // Dispose should have rejected the promise.
-            await geometryLoader.waitFinished();
+            await geometryLoader.waitFinished().then(
+                () => chai.assert.fail("waitFinished should reject"),
+                () => undefined // canceled/disposed: rejected by design
+            );
 
             // Wait for the geometry creation task to return without creating any geometry.
             expect(mapView.taskQueue.processNext(TileTaskGroups.CREATE)).to.be.true;

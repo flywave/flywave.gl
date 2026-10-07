@@ -18,8 +18,8 @@ import {
 } from "three/webgpu";
 
 import {
-    type SerializedHeightMapModifier,
-    type HeightMapModifier
+    type HeightMapModifier,
+    type SerializedHeightMapModifier
 } from "../../ground-modification-manager";
 import { type ClippedData, GeometryClipper, hashVertex, SplitOperation } from "./GeometryClipper";
 import { QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
@@ -190,8 +190,8 @@ export class QuantizedMeshClipper extends GeometryClipper {
                     _uv0.fromArray(capUv, i0 * 2);
                     _uv1.fromArray(capUv, i1 * 2);
 
-                    // 精确化UV值，保证精度稳定
-                    // 处理_uv0
+                    // Snap UV values to exact quantities to keep precision stable
+                    // Process _uv0
                     if (Math.abs(_uv0.x - 0) < 0.0001) {
                         _uv0.x = 0;
                     } else if (Math.abs(_uv0.x - 0.5) < 0.0001) {
@@ -208,7 +208,7 @@ export class QuantizedMeshClipper extends GeometryClipper {
                         _uv0.y = 1.0;
                     }
 
-                    // 处理_uv1
+                    // Process _uv1
                     if (Math.abs(_uv1.x - 0) < 0.0001) {
                         _uv1.x = 0;
                     } else if (Math.abs(_uv1.x - 0.5) < 0.0001) {

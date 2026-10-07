@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { MathUtils } from "three/webgpu";
+
 import { ITile } from "./base/Tile";
 
 export type NotifyCallback = (tile: ITile, active: boolean) => void;
@@ -62,9 +63,11 @@ export class Observe3DTileChange {
     }
 
     /**
-     * 瓦片被逐出（disposeTile）时回调：从去重集合中遗忘该 uri，
-     * 使其重新解析后的首次激活能再次触发 load 通知（重新套批材质）。
-     * 默认只遗忘 uri；子类可覆写以清理逐出瓦片的关联登记。
+     * Called when a tile is evicted (disposeTile): forget that uri from the
+     * deduplication set, so the first activation after the tile is re-parsed can
+     * fire the load notification again (re-applying batch materials).
+     * By default only the uri is forgotten; subclasses may override this to clean
+     * up registrations associated with the evicted tile.
      * @param currentTile The tile that was disposed
      */
     public onTileDisposed(currentTile: ITile): void {

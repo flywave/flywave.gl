@@ -6,7 +6,7 @@ export default {
     description:
         "Minimal test: create/destroy meshes with shared material to test RenderObject disposal",
     descriptionZh: "最小测试：使用共享材质创建/销毁 mesh，测试 RenderObject 内存释放",
-    thumbnail: thumbnail,
+    thumbnail,
     code: "test-renderobject-leak",
     order: 99
 };

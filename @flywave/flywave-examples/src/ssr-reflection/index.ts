@@ -1,20 +1,18 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
+    type IReflectiveObjectHandle,
+    ArcGISTileProvider,
+    createSurfaceMaterial,
+    DEMTerrainSource,
+    eastNorthUpToFixedFrame,
+    ellipsoidProjection,
     GeoCoordinates,
     MapControls,
     MapControlsUI,
+    MapView,
     MapViewEventNames,
-    mercatorProjection,
-    ellipsoidProjection,
-    DEMTerrainSource,
-    ArcGISTileProvider,
-    createSurfaceMaterial,
-    eastNorthUpToFixedFrame,
-    type IReflectiveObjectHandle
+    mercatorProjection
 } from "@flywave/flywave.gl";
 import { GUI } from "dat.gui";
-
 import {
     BoxGeometry,
     Matrix4,
@@ -24,6 +22,8 @@ import {
     Quaternion,
     Vector3
 } from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 /**
  * Minimal mirror demo, deliberately FLAT: no elevation source, no imagery —
@@ -63,7 +63,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         tilt: 55,
         heading: 0.6,
         canvas,
-        theme: { 
+        theme: {
             // Atmosphere sun time is UTC — 06:00 UTC puts the sun high over
             // East Asia (local early afternoon); a local-clock value lands on
             // the night side and renders a black sky.

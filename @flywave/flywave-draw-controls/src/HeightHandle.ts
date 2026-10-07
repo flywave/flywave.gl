@@ -1,8 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 // src/HeightHandle.ts
-import * as THREE from "three/webgpu";
 import type { Renderer } from "three/webgpu";
+import * as THREE from "three/webgpu";
 
 import { FixedSizeArrow } from "./FixedSizeArrow";
 

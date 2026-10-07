@@ -79,7 +79,7 @@ export async function loadGLTF(
     }
 
     try {
-        // 1. 获取子树文件
+        // 1. Fetch the subtree file
         const response = await fetchFn(url, {
             headers: options?.headers
         });
@@ -88,10 +88,10 @@ export async function loadGLTF(
             throw new Error(`Failed to fetch subtree: ${response.status} ${response.statusText}`);
         }
 
-        // 2. 读取二进制数据
+        // 2. Read the binary data
         const arrayBuffer = await response.arrayBuffer();
 
-        // 3. 使用加载器解析数据
+        // 3. Parse the data with the loader
         return await loader.parse(arrayBuffer, options, context);
     } catch (error) {
         throw new Error(`Subtree loading failed: ${error.message}`);

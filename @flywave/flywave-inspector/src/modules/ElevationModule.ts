@@ -1,12 +1,12 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { GeoCoordinates, TileKey } from "@flywave/flywave-geoutils";
 import {
-    type MapView,
     type ElevationProvider,
-    type ElevationRangeSource
+    type ElevationRangeSource,
+    type MapView
 } from "@flywave/flywave-mapview";
-import { TileKey, GeoCoordinates } from "@flywave/flywave-geoutils";
-import { GUI } from "dat.gui";
+import { type GUI } from "dat.gui";
 
 /**
  * Elevation debugging module for flywave inspector

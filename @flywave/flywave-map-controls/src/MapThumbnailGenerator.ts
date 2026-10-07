@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 import { type MapView } from "@flywave/flywave-mapview";
 
 export interface ThumbnailSize {
@@ -7,13 +9,13 @@ export interface ThumbnailSize {
 }
 
 export class MapThumbnailGenerator {
-    private mapView: MapView;
-    private originalCanvas: HTMLCanvasElement;
-    private container: HTMLDivElement;
+    private readonly mapView: MapView;
+    private readonly originalCanvas: HTMLCanvasElement;
+    private readonly container: HTMLDivElement;
     private isVisible: boolean = false;
 
-    // 预设尺寸
-    private presetSizes: ThumbnailSize[] = [
+    // Preset sizes
+    private readonly presetSizes: ThumbnailSize[] = [
         { name: "小图 (200x150)", width: 200, height: 150 },
         { name: "中图 (400x300)", width: 400, height: 300 },
         { name: "大图 (800x600)", width: 800, height: 600 },
@@ -28,7 +30,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 创建组件容器
+     * Create the component container
      */
     private createContainer(): HTMLDivElement {
         const container = document.createElement("div");
@@ -121,7 +123,7 @@ export class MapThumbnailGenerator {
             </div>
         `;
 
-        // 添加动画样式
+        // Add the animation styles
         const style = document.createElement("style");
         style.textContent = `
             @keyframes spin {
@@ -148,10 +150,10 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 设置事件监听器
+     * Set up the event listeners
      */
     private setupEventListeners(): void {
-        // 预设尺寸按钮
+        // Preset size buttons
         this.container.querySelectorAll(".preset-btn").forEach(btn => {
             btn.addEventListener("click", e => {
                 const target = e.target as HTMLButtonElement;
@@ -161,7 +163,7 @@ export class MapThumbnailGenerator {
             });
         });
 
-        // 自定义生成按钮
+        // Custom generate button
         const generateCustomBtn = this.container.querySelector(
             "#generateCustomBtn"
         ) as HTMLButtonElement;
@@ -184,20 +186,20 @@ export class MapThumbnailGenerator {
             }
         });
 
-        // 质量滑块
+        // Quality slider
         const qualitySlider = this.container.querySelector("#qualitySlider") as HTMLInputElement;
         const qualityValue = this.container.querySelector("#qualityValue") as HTMLSpanElement;
         qualitySlider.addEventListener("input", () => {
             qualityValue.textContent = qualitySlider.value;
         });
 
-        // 关闭按钮
+        // Close button
         const closeBtn = this.container.querySelector("#closeBtn") as HTMLButtonElement;
         closeBtn.addEventListener("click", () => {
             this.hide();
         });
 
-        // 点击外部关闭
+        // Close when clicking outside
         document.addEventListener("click", e => {
             if (this.isVisible && !this.container.contains(e.target as Node)) {
                 this.hide();
@@ -206,7 +208,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 生成缩略图
+     * Generate a thumbnail
      */
     private async generateThumbnail(width: number, height: number): Promise<void> {
         const qualitySlider = this.container.querySelector("#qualitySlider") as HTMLInputElement;
@@ -227,7 +229,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 生成缩略图DataURL
+     * Generate the thumbnail data URL
      */
     private async generateThumbnailDataURL(
         width: number,
@@ -236,21 +238,21 @@ export class MapThumbnailGenerator {
     ): Promise<string> {
         return new Promise((resolve, reject) => {
             try {
-                // 保存原始尺寸
+                // Save the original dimensions
                 const originalWidth = this.originalCanvas.width;
                 const originalHeight = this.originalCanvas.height;
 
                 console.log(`生成缩略图: ${width}x${height}`);
 
-                // 临时调整canvas尺寸
+                // Temporarily resize the canvas
                 this.originalCanvas.width = width;
                 this.originalCanvas.height = height;
 
                 this.mapView.renderSync();
 
-                // 等待地图渲染完成
+                // Wait for the map to finish rendering
                 setTimeout(() => {
-                    // 创建临时canvas
+                    // Create a temporary canvas
                     const tempCanvas = document.createElement("canvas");
                     tempCanvas.width = width;
                     tempCanvas.height = height;
@@ -262,13 +264,13 @@ export class MapThumbnailGenerator {
                         return;
                     }
 
-                    // 绘制到临时canvas
+                    // Draw onto the temporary canvas
                     ctx.drawImage(this.originalCanvas, 0, 0, width, height);
 
-                    // 生成DataURL
+                    // Generate the data URL
                     const dataURL = tempCanvas.toDataURL("image/png", quality);
 
-                    // 恢复原始尺寸
+                    // Restore the original dimensions
                     this.restoreOriginalSize(originalWidth, originalHeight);
 
                     console.log("缩略图生成完成");
@@ -281,7 +283,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 恢复原始尺寸
+     * Restore the original dimensions
      */
     private restoreOriginalSize(originalWidth: number, originalHeight: number): void {
         this.originalCanvas.width = originalWidth;
@@ -290,7 +292,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 显示/隐藏加载状态
+     * Show/hide the loading state
      */
     private showLoading(show: boolean): void {
         const loadingOverlay = this.container.querySelector("#loadingOverlay") as HTMLDivElement;
@@ -298,7 +300,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 下载DataURL为文件
+     * Download the data URL as a file
      */
     private downloadDataURL(dataURL: string, filename: string): void {
         const link = document.createElement("a");
@@ -310,7 +312,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 格式化日期用于文件名
+     * Format the date for the filename
      */
     private formatDate(): string {
         const now = new Date();
@@ -324,7 +326,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 显示组件
+     * Show the component
      */
     public show(): void {
         if (!this.container.parentElement) {
@@ -335,7 +337,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 隐藏组件
+     * Hide the component
      */
     public hide(): void {
         this.container.style.display = "none";
@@ -343,7 +345,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 切换显示/隐藏
+     * Toggle show/hide
      */
     public toggle(): void {
         if (this.isVisible) {
@@ -354,7 +356,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 销毁组件
+     * Destroy the component
      */
     public destroy(): void {
         if (this.container.parentElement) {
@@ -363,7 +365,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 添加预设尺寸
+     * Add a preset size
      */
     public addPresetSize(size: ThumbnailSize): void {
         this.presetSizes.push(size);
@@ -371,7 +373,7 @@ export class MapThumbnailGenerator {
     }
 
     /**
-     * 更新预设按钮
+     * Update the preset buttons
      */
     private updatePresetButtons(): void {
         const presetContainer = this.container.querySelector(".preset-buttons") as HTMLDivElement;
@@ -387,7 +389,7 @@ export class MapThumbnailGenerator {
             )
             .join("");
 
-        // 重新绑定事件
+        // Rebind the events
         this.container.querySelectorAll(".preset-btn").forEach(btn => {
             btn.addEventListener("click", e => {
                 const target = e.target as HTMLButtonElement;

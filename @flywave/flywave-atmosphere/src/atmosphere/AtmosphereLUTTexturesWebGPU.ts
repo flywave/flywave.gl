@@ -2,18 +2,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    type Data3DTextureImageData,
-    type DataTextureImageData,
-    type Texture,
-    type Vector2,
-    type Vector3,
-    NoColorSpace,
-    type ComputeNode,
-    type Renderer,
-    Storage3DTexture,
-    StorageTexture
-} from "three/webgpu";
-import {
     acos,
     cos,
     float,
@@ -35,6 +23,18 @@ import {
     workgroupArray,
     workgroupBarrier
 } from "three/tsl";
+import {
+    type ComputeNode,
+    type Data3DTextureImageData,
+    type DataTextureImageData,
+    type Renderer,
+    type Texture,
+    type Vector2,
+    type Vector3,
+    NoColorSpace,
+    Storage3DTexture,
+    StorageTexture
+} from "three/webgpu";
 
 import { FnVar } from "../tsl/FnVar";
 import type { Node } from "../tsl/node";

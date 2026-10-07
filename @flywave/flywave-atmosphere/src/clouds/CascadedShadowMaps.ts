@@ -1,7 +1,9 @@
-import { Box3, Matrix4, Object3D, Vector2, Vector3, type PerspectiveCamera } from "three/webgpu";
+/* Copyright (C) 2025 flywave.gl contributors */
+
+import { type PerspectiveCamera, Box3, Matrix4, Object3D, Vector2, Vector3 } from "three/webgpu";
 
 import { FrustumCorners } from "./FrustumCorners";
-import { splitFrustum, type FrustumSplitMode } from "./splitFrustum";
+import { type FrustumSplitMode, splitFrustum } from "./splitFrustum";
 
 const vectorScratch1 = new Vector3();
 const vectorScratch2 = new Vector3();

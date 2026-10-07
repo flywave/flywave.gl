@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 export type FrustumSplitMode = "uniform" | "logarithmic" | "practical";
 
 function lerp(a: number, b: number, t: number): number {

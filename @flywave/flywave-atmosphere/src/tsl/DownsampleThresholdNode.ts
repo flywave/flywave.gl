@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
 import { luminance, smoothstep, uniform, vec4 } from "three/tsl";
 import type { NodeBuilder } from "three/webgpu";

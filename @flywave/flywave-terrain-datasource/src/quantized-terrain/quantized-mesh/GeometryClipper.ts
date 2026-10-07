@@ -3,12 +3,12 @@
 // GeometryClipper.ts
 import {
     type Material,
+    type Matrix4,
     type Object3D,
     type Vector3,
     BufferAttribute,
     BufferGeometry,
     MathUtils,
-    Matrix4,
     Mesh,
     Triangle,
     Vector4

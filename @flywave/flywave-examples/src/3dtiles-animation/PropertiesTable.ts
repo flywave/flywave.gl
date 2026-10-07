@@ -14,7 +14,7 @@ export class PropertiesTable {
 
     private createTable() {
         // Check if table already exists, if so remove it
-        let existingTable = document.getElementById("properties-table");
+        const existingTable = document.getElementById("properties-table");
         if (existingTable) {
             existingTable.remove();
         }

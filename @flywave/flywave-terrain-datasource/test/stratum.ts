@@ -61,7 +61,7 @@ describe("flywave-terrain-datasource.stratum", function () {
     });
 
     it("makeFrustumGeoAreaToBspNode-test", function () {
-        // 创建两个有重叠部分的GeoBox
+        // Create two GeoBoxes that overlap
         const geoBox1 = new GeoBox(
             new GeoCoordinates(52.52, 13.4), // southWest
             new GeoCoordinates(52.54, 13.42) // northEast
@@ -72,7 +72,7 @@ describe("flywave-terrain-datasource.stratum", function () {
             new GeoCoordinates(52.55, 13.43) // northEast
         );
 
-        // 创建一个模拟的StratumTileData对象，只需要包含必要的属性
+        // Mock a StratumTileData object with only the required properties
         const mockStratumTileData: any = {
             maxHeight: 200,
             center: new THREE.Vector3(0, 0, 0),
@@ -89,10 +89,10 @@ describe("flywave-terrain-datasource.stratum", function () {
             }
         }
 
-        // 创建StratumMeshCliper实例
+        // Create a StratumMeshCliper instance
         const cliper = new TestStratumMeshCliper(mockStratumTileData);
 
-        // 调用makeFrustumGeoAreaToBspNode函数
+        // Call makeFrustumGeoAreaToBspNode
         const brush1 = cliper.testMakeFrustumGeoAreaToBspNode({
             geoArea: geoBox1,
             topAltitude: 100,
@@ -105,15 +105,15 @@ describe("flywave-terrain-datasource.stratum", function () {
             bottomAltitude: 0
         });
 
-        // 验证Brush是否正确构造并能够进行裁剪
+        // Verify the brushes are constructed correctly and can be used for clipping
         expect(brush1).to.be.instanceOf(Brush);
         expect(brush2).to.be.instanceOf(Brush);
 
-        // 使用Evaluator进行裁剪操作
+        // Perform the clipping operation with the Evaluator
         const evaluator = new Evaluator();
         const resultBrush = evaluator.evaluate(brush1, brush2, SUBTRACTION);
 
-        // 验证裁剪结果
+        // Verify the clip result
         expect(resultBrush).to.be.instanceOf(Brush);
     });
 });

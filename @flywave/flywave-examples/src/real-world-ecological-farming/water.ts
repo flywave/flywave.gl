@@ -1,16 +1,4 @@
 import {
-    Color,
-    DataTexture,
-    RGBAFormat,
-    UnsignedByteType,
-    Matrix4,
-    Texture,
-    TextureLoader,
-    RepeatWrapping,
-    Vector3,
-    NodeMaterial
-} from "three/webgpu";
-import {
     cameraPosition,
     dot,
     float,
@@ -29,6 +17,18 @@ import {
     vec2,
     vec3
 } from "three/tsl";
+import {
+    type Matrix4,
+    Color,
+    DataTexture,
+    NodeMaterial,
+    RepeatWrapping,
+    RGBAFormat,
+    Texture,
+    TextureLoader,
+    UnsignedByteType,
+    Vector3
+} from "three/webgpu";
 
 interface WaterMaterialOptions {
     alpha?: number;
@@ -43,7 +43,7 @@ interface WaterMaterialOptions {
 
 class WaterMaterial extends NodeMaterial {
     private _speed: number;
-    private _normalSampler: Texture | null = null;
+    private readonly _normalSampler: Texture | null = null;
     private _mirrorSampler: Texture | null = null;
 
     constructor(options: WaterMaterialOptions = {}) {
@@ -155,6 +155,7 @@ class WaterMaterial extends NodeMaterial {
     get speed(): number {
         return this._speed;
     }
+
     set speed(value: number) {
         this._speed = value;
     }
@@ -166,4 +167,4 @@ class WaterMaterial extends NodeMaterial {
     }
 }
 
-export { WaterMaterial, WaterMaterialOptions };
+export { WaterMaterial, type WaterMaterialOptions };

@@ -1,5 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { OrientedBoxHelper } from "@flywave/flywave-geoutils";
 import { GL } from "@flywave/flywave-utils";
 import {
     type BufferGeometry,
@@ -23,7 +24,6 @@ import {
 } from "../loader/types";
 import { SphereHelper } from "../renderer/SphereHelper";
 import { type TileBoundingVolume } from "../utilities/TileBoundingVolume";
-import { OrientedBoxHelper } from "@flywave/flywave-geoutils";
 
 /**
  * Bounding volume representation for a 3D Tile

@@ -1,9 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 // FixedSizeArrow.ts
+import type { Renderer } from "three/webgpu";
 import * as THREE from "three/webgpu";
 import { MeshBasicNodeMaterial } from "three/webgpu";
-import type { Renderer } from "three/webgpu";
 
 /**
  * Fixed size arrow component options

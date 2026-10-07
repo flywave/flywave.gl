@@ -2,12 +2,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    type BufferAttribute,
-    AdditiveBlending,
-    type NodeBuilder,
-    PointsNodeMaterial
-} from "three/webgpu";
-import {
     instancedBufferAttribute,
     log,
     mix,
@@ -17,6 +11,12 @@ import {
     vec3,
     vec4
 } from "three/tsl";
+import {
+    type BufferAttribute,
+    type NodeBuilder,
+    AdditiveBlending,
+    PointsNodeMaterial
+} from "three/webgpu";
 
 import { cameraFar, projectionMatrix } from "../tsl/accessors";
 import { FnLayout } from "../tsl/FnLayout";

@@ -186,7 +186,7 @@ export namespace TileKeyUtils {
         // We subtract half of the total amount, this undoes what is computed in getShiftedOffset
         offset -= powerOfTwo[bitshift - 1];
 
-        // 根据编码类型创建 TileKey
+        // Create the TileKey according to the encoding type
         const tileKey = TileKey.fromMortonCode(mortonCode, mortonTileEncoding);
         return { offset, mortonCode: tileKey.mortonCode(mortonTileEncoding), tileKey };
     }
@@ -215,7 +215,7 @@ export namespace TileKeyUtils {
 
     /**
      * Computes the Morton code of the parent tile key of the given Morton code.
-     * 兼容 HALF_QUAD_TREE 编码的父级计算。
+     * Compatible with parent computation for the HALF_QUAD_TREE encoding.
      *
      * @param mortonCode - A Morton code, for example, obtained from [[mortonCode]].
      * @param encoding - The encoding scheme used.
@@ -226,12 +226,12 @@ export namespace TileKeyUtils {
         encoding: TileEncoding = TileEncoding.QUAD_TREE
     ): number {
         if (encoding === TileEncoding.HALF_QUAD_TREE) {
-            // 对于 HALF_QUAD_TREE，需要特殊处理父级计算
+            // HALF_QUAD_TREE needs special handling for the parent computation
             const tileKey = TileKey.fromMortonCode(mortonCode, encoding);
             const parentTileKey = tileKey.parent();
             return parentTileKey.mortonCode(encoding);
         } else {
-            // 标准 QUAD_TREE 处理
+            // Standard QUAD_TREE handling
             return TileKey.parentMortonCode(mortonCode);
         }
     }

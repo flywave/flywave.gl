@@ -6,7 +6,7 @@ export default {
     description:
         "Example showcasing DepthReadingPass for reading depth and world coordinates (supports logarithmic depth buffer)",
     descriptionZh: "展示如何使用 DepthReadingPass 读取深度和世界坐标的示例（支持对数深度缓冲）",
-    thumbnail: thumbnail,
+    thumbnail,
     code: "advanced-rendering",
     order: 9
 };

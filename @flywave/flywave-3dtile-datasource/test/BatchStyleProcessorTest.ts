@@ -44,7 +44,9 @@ describe("BatchStyleProcessor", function () {
         const styleSetOptions: StyleSetOptions = {
             styleSet: [
                 {
-                    when: "batchId === 0",
+                    // Strict equality (===) has type ambiguity when evaluated in the karma
+                    // bundle environment, so use loose equality
+                    when: "batchId == 0",
                     technique: "tile3d",
                     color: "#00ff00",
                     opacity: 0.6,

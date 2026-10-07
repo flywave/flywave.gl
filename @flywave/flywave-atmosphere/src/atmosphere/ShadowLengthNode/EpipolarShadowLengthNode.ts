@@ -23,21 +23,7 @@
 
 /* eslint-disable max-nested-callbacks */
 
-import {
-    HalfFloatType,
-    RenderTarget,
-    RGFormat,
-    type PerspectiveCamera,
-    NodeMaterial,
-    NodeUpdateType,
-    QuadMesh,
-    RendererUtils,
-    type NodeBuilder,
-    type NodeFrame,
-    type TextureNode,
-    type UniformArrayNode,
-    type UniformNode
-} from "three/webgpu";
+import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
 import {
     and,
     Break,
@@ -56,13 +42,26 @@ import {
     vec3,
     vec4
 } from "three/tsl";
-import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
+import {
+    type NodeBuilder,
+    type NodeFrame,
+    type PerspectiveCamera,
+    type TextureNode,
+    type UniformArrayNode,
+    type UniformNode,
+    HalfFloatType,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils,
+    RenderTarget,
+    RGFormat
+} from "three/webgpu";
 
 import { FnVar } from "../../tsl/FnVar";
-import { outputTexture } from "../../tsl/OutputTextureNode";
 import { raySpheresIntersections } from "../../tsl/math";
 import { Node } from "../../tsl/node";
-
+import { outputTexture } from "../../tsl/OutputTextureNode";
 import { getAtmosphereContext } from "../AtmosphereContext";
 import { HALF_FLOAT_MAX, transformSliceToUnit, transformUnitToShadowUV } from "./common";
 

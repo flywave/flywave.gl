@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three/webgpu";
 import { expect } from "chai";
+import * as THREE from "three/webgpu";
 
 import { Tiles3DStyleWatcher } from "../../src/theme/Tiles3DStyleWatcher";
 
@@ -108,7 +108,8 @@ describe("Tiles3DStyleWatcher（批材质生命周期）", function () {
         watcher.watchTileChange(tile, new Set([tile]), true);
         const first = (watcher as any).m_appliedMaterials.get(TILE_ID)[0];
 
-        // 引擎 disposeTile 会经 cached.materials 别名回收实例，这里模拟之
+        // The engine's disposeTile reclaims the instance through the cached.materials
+        // alias; simulate that here
         first.dispose();
         watcher.onTileDisposed(tile);
 
@@ -132,7 +133,9 @@ describe("Tiles3DStyleWatcher（批材质生命周期）", function () {
         const first = (watcher as any).m_appliedMaterials.get(TILE_ID)[0];
         const disposedCount = spyDispose(first);
 
-        expect(() => watcher.dispose()).to.not.throw();
+        expect(() => {
+            watcher.dispose();
+        }).to.not.throw();
         expect(mesh.material).to.equal(originMat);
         expect(disposedCount()).to.equal(1);
         expect((watcher as any).m_appliedMaterials.size).to.equal(0);
@@ -178,13 +181,13 @@ describe("Tiles3DStyleWatcher（批材质生命周期）", function () {
         expect(instanceB).to.exist;
         expect(instanceB).to.not.equal(instanceA);
 
-        // B 逐出（引擎 disposeTile 同步回收其实例），A/C 不受影响
+        // B is evicted (the engine's disposeTile reclaims its instance in sync); A/C are unaffected
         instanceB.dispose();
         watcher.onTileDisposed(createdB.tile);
         expect((watcher as any).m_appliedMaterials.get(tileIdA)[0]).to.equal(instanceA);
         expect((watcher as any).m_appliedMaterials.has(tileIdB)).to.equal(false);
 
-        // B 重新解析后复活：只为 B 重建
+        // B comes back to life after being re-parsed: rebuild only B
         const freshB = makeB3DMTile("1/1.b3dm");
         watcher.watchTileChange(freshB.tile, new Set([tileA, freshB.tile]), true);
 

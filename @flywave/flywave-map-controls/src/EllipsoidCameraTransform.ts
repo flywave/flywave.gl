@@ -1,10 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Matrix4, Vector3, Vector4 } from "three/webgpu";
+import { type EllipsoidProjection, type SphereProjection } from "@flywave/flywave-geoutils";
+import { assert } from "chai";
+import { type Vector4, Matrix4, Vector3 } from "three/webgpu";
 
 import { CameraTransform } from "./CameraTransform";
-import { EllipsoidProjection, SphereProjection } from "@flywave/flywave-geoutils";
-import { assert } from "chai";
 
 export class EllipsoidCameraTransform extends CameraTransform<
     EllipsoidProjection | SphereProjection
@@ -81,31 +81,31 @@ export class EllipsoidCameraTransform extends CameraTransform<
      * @param step Damping/step factor
      */
     public pan(
-        rayHitPoint: Vector3, // 射线命中点（原参数 rayTargetPoint/[x,w,u]）
-        targetPosition: Vector3, // 目标位置（原参数 moveToTargetPoint/F）
-        inertiaVector: Vector4, // 惯性向量（原参数 inertialAxis/E）
-        interpolationStep: number // 插值步长（原参数 step/r）
+        rayHitPoint: Vector3, // ray hit point (original parameter rayTargetPoint/[x,w,u])
+        targetPosition: Vector3, // target position (original parameter moveToTargetPoint/F)
+        inertiaVector: Vector4, // inertia vector (original parameter inertialAxis/E)
+        interpolationStep: number // interpolation step (original parameter step/r)
     ): void {
-        // 将目标位置转换为数组（保持与原始代码兼容）
+        // Convert the target position to an array (kept for compatibility with the original code)
         const targetPosArray = rayHitPoint.toArray();
-        let atitude = this.projection.unprojectAltitude(rayHitPoint);
+        const atitude = this.projection.unprojectAltitude(rayHitPoint);
 
-        // 获取当前相机世界矩阵和位置
+        // Get the current camera world matrix and position
         const cameraWorldMatrix = this.cameraToWorld;
         const cameraWorldPosition = new Vector3().setFromMatrixPosition(cameraWorldMatrix);
 
-        // 创建方向向量：从相机指向目标位置
+        // Create the direction vector from the camera toward the target position
         const directionToTarget = new Vector3().fromArray(targetPosArray);
         directionToTarget.normalize();
 
-        // 计算碰撞点（如果有碰撞）
+        // Compute the collision point (if there is a collision)
         const collisionPoint = new Vector3();
         if (!this.collisionTo(collisionPoint, cameraWorldPosition, targetPosition, atitude)) {
-            return; // 无碰撞时直接返回
+            return; // return directly when there is no collision
         }
         collisionPoint.normalize();
 
-        // 计算旋转轴：directionToTarget × collisionPoint
+        // Compute the rotation axis: directionToTarget x collisionPoint
         const rotationAxis = new Vector3();
         rotationAxis.crossVectors(directionToTarget, collisionPoint);
 
@@ -114,7 +114,7 @@ export class EllipsoidCameraTransform extends CameraTransform<
             const rotationAxisLength = rotationAxis.length();
             rotationAxis.normalize();
 
-            // 计算旋转角度（限制在[-π/2, π/2]范围内）
+            // Compute the rotation angle (clamped to [-pi/2, pi/2])
             let rotationAngle;
             if (rotationAxisLength <= -1) {
                 rotationAngle = -Math.PI * 0.5;
@@ -125,7 +125,7 @@ export class EllipsoidCameraTransform extends CameraTransform<
             }
 
             if (this.smoothPan) {
-                // 平滑模式：减小旋转角度
+                // smooth mode: reduce the rotation angle
                 rotationAngle *= 0.25;
                 this.rotateAxisAngle(
                     cameraWorldMatrix,
@@ -135,7 +135,7 @@ export class EllipsoidCameraTransform extends CameraTransform<
                     rotationAngle
                 );
             } else {
-                // 普通模式：直接使用计算的角度
+                // normal mode: use the computed angle directly
                 const cosAngle = collisionPoint.dot(directionToTarget);
                 this.rotateAxisSinCos(
                     rotationAxis.x,
@@ -146,12 +146,12 @@ export class EllipsoidCameraTransform extends CameraTransform<
                 );
             }
 
-            // 更新惯性向量
-            rotationAngle *= 0.7; // 阻尼系数
+            // update the inertia vector
+            rotationAngle *= 0.7; // damping factor
             if (rotationAngle > Math.abs(inertiaVector.w)) {
                 inertiaVector.set(rotationAxis.x, rotationAxis.y, rotationAxis.z, rotationAngle);
             } else {
-                // 插值更新惯性向量
+                // interpolate to update the inertia vector
                 inertiaVector.x += (rotationAxis.x - inertiaVector.x) * interpolationStep;
                 inertiaVector.y += (rotationAxis.y - inertiaVector.y) * interpolationStep;
                 inertiaVector.z += (rotationAxis.z - inertiaVector.z) * interpolationStep;
@@ -159,17 +159,17 @@ export class EllipsoidCameraTransform extends CameraTransform<
                 inertiaVector.w += (rotationAngle - inertiaVector.w) * interpolationStep;
             }
         } else {
-            // 无有效旋转时衰减惯性
+            // decay inertia when there is no valid rotation
             inertiaVector.w += (0 - inertiaVector.w) * interpolationStep;
         }
 
-        // 清除微小惯性
+        // clear negligible inertia
         if (Math.abs(inertiaVector.w) < 1e-15) {
             inertiaVector.w = 0;
         }
     }
 
-    // 必须补充的辅助方法（严格对应原始实现）
+    // Auxiliary helpers that must be added (strictly matching the original implementation)
     private rotateAxisAngle(
         matrix: Matrix4,
         axisX: number,
@@ -177,7 +177,7 @@ export class EllipsoidCameraTransform extends CameraTransform<
         axisZ: number,
         angle: number
     ): void {
-        // 创建旋转矩阵
+        // create the rotation matrix
         const rotation = new Matrix4();
         const axis = new Vector3(axisX, axisY, axisZ).normalize().negate();
         rotation.makeRotationAxis(axis, angle);
@@ -192,26 +192,26 @@ export class EllipsoidCameraTransform extends CameraTransform<
         sinAngle: number,
         cosAngle: number
     ): void {
-        // 1. 创建旋转矩阵
+        // 1. create the rotation matrix
         const rotationMatrix = new Matrix4();
-        const axis = new Vector3(axisX, axisY, axisZ).normalize().negate(); // 归一化旋转轴
+        const axis = new Vector3(axisX, axisY, axisZ).normalize().negate(); // normalized rotation axis
 
-        // 2. 使用 setFromAxisAngle 构造旋转矩阵（Three.js 内部会自动处理 sin/cos）
+        // 2. build the rotation matrix with setFromAxisAngle (Three.js handles sin/cos internally)
         rotationMatrix.makeRotationAxis(axis, Math.atan2(sinAngle, cosAngle));
 
-        // 3. 左乘旋转矩阵（相当于 rotationMatrix * this.cameraToWorld）
+        // 3. premultiply the rotation matrix (equivalent to rotationMatrix * this.cameraToWorld)
         this.cameraToWorld.premultiply(rotationMatrix);
     }
 
     public applyPanVelocity(step: number, panVelocityX: number, panVelocityY: number): void {
-        const pivot = new Vector3(0, 0, 0); // 旋转中心（如地球中心）
+        const pivot = new Vector3(0, 0, 0); // center of rotation (e.g. the earth's center)
         const down = new Vector3();
         const right = new Vector3();
 
         this.getDown(down);
         this.getRight(right);
 
-        // X 方向：绕 Down 轴旋转
+        // X direction: rotate around the Down axis
         this.rotateAroundPivot(
             pivot.x,
             pivot.y,
@@ -222,7 +222,7 @@ export class EllipsoidCameraTransform extends CameraTransform<
             panVelocityX * step
         );
 
-        // Y 方向：绕 Right 轴旋转（反向）
+        // Y direction: rotate around the Right axis (reversed)
         this.rotateAroundPivot(
             pivot.x,
             pivot.y,
@@ -237,11 +237,11 @@ export class EllipsoidCameraTransform extends CameraTransform<
     rayCastProjectionWorld(result: Vector3, origin: Vector3, target: Vector3): number {
         const direction = new Vector3().subVectors(target, origin).normalize();
 
-        // 1. 优先检测地形碰撞（包括椭球下方的情况）
+        // 1. check terrain collision first (including the case below the ellipsoid)
         const terrainHit = this.rayCastTerrain(result, origin, direction);
         if (terrainHit >= 0) return terrainHit;
 
-        // 2. 没有地形碰撞时检测椭球
+        // 2. when there is no terrain collision, test against the ellipsoid
         return this.rayCastEllipsoid(result, origin, direction);
     }
 

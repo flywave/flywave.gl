@@ -5,10 +5,13 @@ import {
     type Camera,
     type InstancedBufferAttribute,
     type Object3D,
+    type TextureFilter,
+    type Wrapping,
     AnimationClip,
     Bone,
     BufferAttribute,
     BufferGeometry,
+    ClampToEdgeWrapping,
     CompressedTexture,
     DoubleSide,
     DynamicDrawUsage,
@@ -22,12 +25,16 @@ import {
     LinearFilter,
     LinearMipmapLinearFilter,
     LinearMipmapNearestFilter,
-    NearestMipmapLinearFilter,
-    NearestMipmapNearestFilter,
+    LineBasicNodeMaterial,
     LineSegments,
     Material,
     Matrix4,
     Mesh,
+    MeshStandardNodeMaterial,
+    MirroredRepeatWrapping,
+    NearestFilter,
+    NearestMipmapLinearFilter,
+    NearestMipmapNearestFilter,
     NumberKeyframeTrack,
     OrthographicCamera,
     PerspectiveCamera,
@@ -35,20 +42,13 @@ import {
     QuaternionKeyframeTrack,
     RepeatWrapping,
     Scene,
-    SRGBColorSpace,
     Skeleton,
     SkinnedMesh,
-    ClampToEdgeWrapping,
-    MirroredRepeatWrapping,
-    NearestFilter,
+    SRGBColorSpace,
     Texture,
-    type TextureFilter,
-    type Wrapping,
     Vector2,
     Vector3,
-    VectorKeyframeTrack,
-    LineBasicNodeMaterial,
-    MeshStandardNodeMaterial
+    VectorKeyframeTrack
 } from "three/webgpu";
 
 import type {
@@ -228,6 +228,20 @@ function createDefaultMaterial(
     return material;
 }
 
+/**
+ * glTF `textureInfo.texCoord` selects which TEXCOORD_n set a texture samples
+ * (0 → uv, 1 → uv1, ...); three resolves it through `Texture.channel`, which
+ * defaults to 0. The same image may be referenced by slots using different
+ * texCoord sets, so clone the texture when another channel was claimed first.
+ */
+function withTexCoordChannel(texture: Texture, texCoord: number | undefined): Texture {
+    const channel = texCoord ?? 0;
+    if (texture.channel === channel) return texture;
+    const clone = texture.clone();
+    clone.channel = channel;
+    return clone;
+}
+
 function applyPbrProperties(
     gltfMaterial: GLTFMaterialPostprocessed,
     material: MeshStandardNodeMaterial,
@@ -246,7 +260,7 @@ function applyPbrProperties(
         const texture = textureMap.get(pbr.baseColorTexture.texture.id);
         if (texture) {
             texture.colorSpace = SRGBColorSpace;
-            material.map = texture;
+            material.map = withTexCoordChannel(texture, pbr.baseColorTexture.texCoord);
             // glTF MASK cutout relies solely on the baseColor texture's own
             // alpha channel × alphaTest. Do NOT also assign alphaMap: in the
             // WebGPU/TSL pipeline opacity composes as `opacity × alphaMap`
@@ -262,8 +276,8 @@ function applyPbrProperties(
     if (pbr.metallicRoughnessTexture) {
         const tex = textureMap.get(pbr.metallicRoughnessTexture.texture.id);
         if (tex) {
-            material.metalnessMap = tex;
-            material.roughnessMap = tex;
+            material.metalnessMap = withTexCoordChannel(tex, pbr.metallicRoughnessTexture.texCoord);
+            material.roughnessMap = material.metalnessMap;
         }
     }
 }
@@ -277,7 +291,7 @@ function applyNormalProperties(
 
     const tex = textureMap.get(gltfMaterial.normalTexture.texture.id);
     if (tex) {
-        material.normalMap = tex;
+        material.normalMap = withTexCoordChannel(tex, gltfMaterial.normalTexture.texCoord);
         material.normalScale = new Vector2(
             gltfMaterial.normalTexture.scale ?? 1.0,
             gltfMaterial.normalTexture.scale ?? 1.0
@@ -294,7 +308,7 @@ function applyEmissiveProperties(
         const tex = textureMap.get(gltfMaterial.emissiveTexture.texture.id);
         if (tex) {
             tex.colorSpace = SRGBColorSpace;
-            material.emissiveMap = tex;
+            material.emissiveMap = withTexCoordChannel(tex, gltfMaterial.emissiveTexture.texCoord);
         }
     }
 
@@ -316,7 +330,7 @@ function applyOcclusionProperties(
 
     const tex = textureMap.get(gltfMaterial.occlusionTexture.texture.id);
     if (tex) {
-        material.aoMap = tex;
+        material.aoMap = withTexCoordChannel(tex, gltfMaterial.occlusionTexture.texCoord);
         material.aoMapIntensity = gltfMaterial.occlusionTexture.strength ?? 1.0;
     }
 }
@@ -474,7 +488,7 @@ function createSplatMesh(
         splatGeometry.setAttribute(name, new BufferAttribute(accessor.value, itemSize, normalized));
     };
 
-    let splatGeometry: BufferGeometry = new BufferGeometry();
+    const splatGeometry: BufferGeometry = new BufferGeometry();
     setSplatAttribute("position", "POSITION", 3);
     setSplatAttribute("scale", "_SCALE", 3);
     setSplatAttribute("rotation", "_ROTATION", 4);
@@ -600,10 +614,10 @@ function processNodes(
 }
 
 /**
- * 递归添加节点的所有子节点
- * @param gltfNode 当前GLTF节点
- * @param node 当前Three.js节点对象
- * @param nodeMap 节点映射表
+ * Recursively add all children of the node
+ * @param gltfNode the current glTF node
+ * @param node the current Three.js node object
+ * @param nodeMap the node map
  */
 function addChildrenRecursively(
     gltfNode: GLTFNodePostprocessed,
@@ -615,7 +629,7 @@ function addChildrenRecursively(
             const childNode = nodeMap.get(childGltfNode.id);
             if (childNode) {
                 node.add(childNode);
-                // 递归处理子节点的子节点
+                // Recursively process the children of the child node
                 addChildrenRecursively(childGltfNode, childNode, nodeMap);
             }
         }
@@ -756,7 +770,7 @@ function setupScene(gltf: GLTFPostprocessed, scene: Scene, nodeMap: Map<string, 
         scene.userData.extras = defaultScene.extras;
     }
 
-    // 添加场景中的根节点（子节点已在processNodes中递归添加）
+    // Add the root nodes of the scene (children were already added recursively in processNodes)
     for (const nodeId of defaultScene.nodes || []) {
         const node = nodeMap.get(nodeId.id.toString());
         if (node) {

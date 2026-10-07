@@ -17,7 +17,7 @@ import type { GLTFLoaderOptions } from "../../gltf-loader";
 import { GLTFScenegraph } from "../api/gltf-scenegraph";
 import type { GLTF, GLTFNode } from "../types/gltf-json-schema";
 
-// ==================== 类型定义 ====================
+// ==================== Type definitions ====================
 export interface ExtMeshGpuInstancing {
     attributes: {
         TRANSLATION?: number;
@@ -32,7 +32,7 @@ type InstanceAttributes = Record<InstanceAttributeName, InstancedBufferAttribute
 
 const EXT_NAME = "EXT_mesh_gpu_instancing";
 
-// GLTF 组件类型常量
+// glTF component type constants
 const COMPONENT_TYPES = {
     BYTE: 5120,
     UNSIGNED_BYTE: 5121,
@@ -42,7 +42,7 @@ const COMPONENT_TYPES = {
     FLOAT: 5126
 } as const;
 
-// 访问器类型常量
+// Accessor type constants
 const ACCESSOR_TYPES = {
     SCALAR: "SCALAR",
     VEC2: "VEC2",
@@ -53,7 +53,7 @@ const ACCESSOR_TYPES = {
     MAT4: "MAT4"
 } as const;
 
-// ==================== 扩展注册 ====================
+// ==================== Extension registration ====================
 export const name = EXT_NAME;
 
 export async function decode(gltfData: { json: GLTF }, options: GLTFLoaderOptions): Promise<void> {
@@ -66,7 +66,7 @@ export function encode(gltfData: { json: GLTF }, options: GLTFLoaderOptions): vo
     encodeMeshGpuInstancing(scenegraph, options);
 }
 
-// ==================== 解码逻辑 ====================
+// ==================== Decode logic ====================
 async function decodeMeshGpuInstancing(scenegraph: GLTFScenegraph, options: GLTFLoaderOptions) {
     const promises: Array<Promise<void>> = [];
 
@@ -124,7 +124,7 @@ async function loadInstanceAttributes(
     return attributes;
 }
 
-// ==================== 编码逻辑 ====================
+// ==================== Encode logic ====================
 function encodeMeshGpuInstancing(scenegraph: GLTFScenegraph, options: GLTFLoaderOptions) {
     for (const node of getNodes(scenegraph)) {
         if (node.mesh !== undefined && node.extras?.instancedAttributes) {
@@ -165,7 +165,7 @@ function createExtension(scenegraph: GLTFScenegraph, node: GLTFNode): ExtMeshGpu
     return { attributes };
 }
 
-// ==================== 实例化网格创建 ====================
+// ==================== Instanced mesh creation ====================
 interface InstancedMeshCreationOptions {
     parent?: Object3D;
     applyParentTransform?: boolean;
@@ -182,12 +182,12 @@ export function createInstancedMesh(
 
     const instancedMesh = new InstancedMesh(geometry, material, instanceCount);
 
-    // 应用父级变换（如果需要）
+    // Apply the parent transform (if requested)
     if (parent && applyParentTransform) {
         instancedMesh.applyMatrix4(parent.matrixWorld);
     }
 
-    // 设置实例属性
+    // Set the instance attributes
     applyInstanceAttributes(instancedMesh, geometry, attributes);
 
     return instancedMesh;
@@ -198,12 +198,12 @@ function applyInstanceAttributes(
     geometry: BufferGeometry,
     attributes: InstanceAttributes
 ): void {
-    // 标准TRS属性处理
+    // Standard TRS attribute handling
     if ("TRANSLATION" in attributes || "ROTATION" in attributes || "SCALE" in attributes) {
         updateInstanceMatrices(instancedMesh, attributes);
     }
 
-    // 自定义属性处理
+    // Custom attribute handling
     applyCustomAttributes(geometry, attributes);
 }
 
@@ -222,11 +222,11 @@ function updateInstanceMatrices(
     const scaleAttr = attributes.SCALE;
 
     for (let i = 0; i < instanceCount; i++) {
-        // 读取变换属性
+        // Read the transform attributes
         if (translationAttr) position.fromBufferAttribute(translationAttr, i);
         if (scaleAttr) scale.fromBufferAttribute(scaleAttr, i);
 
-        // 特殊处理旋转属性（可能规范化）
+        // Special handling for the rotation attribute (may be normalized)
         if (rotationAttr) {
             if (rotationAttr.normalized) {
                 const [x, y, z, w] = readNormalizedQuaternion(rotationAttr, i);
@@ -238,16 +238,16 @@ function updateInstanceMatrices(
             rotation.identity();
         }
 
-        // 计算并设置矩阵
+        // Compute and set the matrix
         matrix.compose(position, rotation, scale);
         instancedMesh.setMatrixAt(i, matrix);
     }
 
-    // 标记更新
+    // Mark as updated
     instancedMesh.instanceMatrix.needsUpdate = true;
 }
 
-// ==================== 工具函数 ====================
+// ==================== Utility functions ====================
 function getNodes(scenegraph: GLTFScenegraph): GLTFNode[] {
     return scenegraph.json.nodes || [];
 }
@@ -279,7 +279,7 @@ function getComponentTypeFromData(data: TypedArray): number {
     if (data instanceof Uint8Array) return COMPONENT_TYPES.UNSIGNED_BYTE;
     if (data instanceof Int8Array) return COMPONENT_TYPES.BYTE;
 
-    return COMPONENT_TYPES.FLOAT; // 默认使用FLOAT
+    return COMPONENT_TYPES.FLOAT; // Default to FLOAT
 }
 
 function getAccessorType(name: string): string {
@@ -332,21 +332,21 @@ function readNormalizedQuaternion(
 
 function applyCustomAttributes(geometry: BufferGeometry, attributes: InstanceAttributes): void {
     for (const [name, attr] of Object.entries(attributes)) {
-        // 跳过标准TRS属性
+        // Skip the standard TRS attributes
         if (name === "TRANSLATION" || name === "ROTATION" || name === "SCALE") continue;
 
-        // 设置属性并标记为实例化
+        // Set the attribute and mark it as instanced
         geometry.setAttribute(name, attr);
         attr.setUsage(DynamicDrawUsage);
 
-        // 兼容旧版Three.js
+        // Compatibility with older versions of Three.js
         if (!("isInstancedBufferAttribute" in attr)) {
             (attr as any).isInstancedBufferAttribute = true;
         }
     }
 }
 
-// ==================== 矩阵计算工具 ====================
+// ==================== Matrix computation helpers ====================
 export function calculateInstanceMatrices(
     attributes: InstanceAttributes,
     instanceCount: number
@@ -361,11 +361,11 @@ export function calculateInstanceMatrices(
     const scaleAttr = attributes.SCALE;
 
     for (let i = 0; i < instanceCount; i++) {
-        // 读取变换属性
+        // Read the transform attributes
         if (translationAttr) position.fromBufferAttribute(translationAttr, i);
         if (scaleAttr) scale.fromBufferAttribute(scaleAttr, i);
 
-        // 处理旋转
+        // Handle rotation
         if (rotationAttr) {
             if (rotationAttr.normalized) {
                 const [x, y, z, w] = readNormalizedQuaternion(rotationAttr, i);
@@ -377,7 +377,7 @@ export function calculateInstanceMatrices(
             rotation.identity();
         }
 
-        // 计算矩阵
+        // Compute the matrix
         const matrix = new Matrix4();
         matrix.compose(position, rotation, scale);
         matrices[i] = matrix;

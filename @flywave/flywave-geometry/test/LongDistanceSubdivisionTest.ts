@@ -24,32 +24,32 @@ class TestDistanceInterpolationModifier extends TerrainAdaptedSubdivisionModifie
 
 describe("DistanceInterpolationTest", function () {
     it("performs interpolation for long distances with small elevation differences", function () {
-        // 创建一个高程映射
+        // Create an elevation map
         const elevationMap = new Map<string, number>();
-        elevationMap.set("0.000000,0.000000", 100); // 起点高程100米
-        elevationMap.set("0.000000,2.000000", 105); // 终点高程105米（只有5米高差）
+        elevationMap.set("0.000000,0.000000", 100); // start elevation: 100 meters
+        elevationMap.set("0.000000,2.000000", 105); // end elevation: 105 meters (only a 5-meter difference)
 
-        // 设置插值距离为50公里
-        const modifier = new TestDistanceInterpolationModifier(50000, elevationMap); // 50公里插值间隔
+        // Set the interpolation distance to 50 kilometers
+        const modifier = new TestDistanceInterpolationModifier(50000, elevationMap); // 50 km interpolation interval
 
-        // 创建两个点的线段，距离较远但高程差较小
+        // Create a two-point segment that is far apart but has a small elevation difference
         const startPoint = new GeoCoordinates(0, 0, 100);
-        const endPoint = new GeoCoordinates(0, 2, 105); // 纬度差2度，约222公里
+        const endPoint = new GeoCoordinates(0, 2, 105); // 2 degrees of latitude apart, about 222 km
 
         const points = [startPoint, endPoint];
 
-        // 执行插值
+        // Run the interpolation
         const result = modifier.modify(points);
 
-        // 验证确实进行了插值（结果点数应该大于2）
+        // Verify that interpolation actually happened (the result should have more than 2 points)
         expect(result.length).to.be.greaterThan(2);
 
-        // 验证所有点都使用了通过高程查询获取的高度
+        // Verify that every point uses the altitude obtained from the elevation lookup
         for (const point of result) {
             expect(point.altitude).to.not.be.undefined;
         }
 
-        // 验证起点和终点的高程
+        // Verify the elevations of the start and end points
         expect(result[0].altitude).to.equal(100);
         expect(result[result.length - 1].altitude).to.equal(105);
     });

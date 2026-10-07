@@ -257,16 +257,16 @@ export class GeometryAccumulator {
     ): Object3D[] {
         if (this.geometries.isEmpty) return;
 
-        // 1. 准备几何数据
+        // 1. Prepare the geometry data
         const geometries = this.prepareGeometries(options, tolerance);
 
-        // 2. 创建 Three.js 对象
+        // 2. Create the Three.js objects
         const threeObjects = this.createThreeObjects(geometries);
 
-        // 3. 应用坐标变换
+        // 3. Apply coordinate transformations
         this.applyTransformations(threeObjects);
 
-        // 4. 添加到结果集
+        // 4. Add to the result set
         graphics.push(...threeObjects);
 
         return graphics;
@@ -276,7 +276,7 @@ export class GeometryAccumulator {
         const result: PreparedGeometry[] = [];
 
         for (const geom of this.geometries) {
-            // 使用 instanceof 进行类型判断
+            // Use instanceof for type checking
             if (geom instanceof PrimitivePointStringGeometry) {
                 result.push(this.preparePointGeometry(geom));
             } else if (geom instanceof PrimitiveLineStringGeometry) {
@@ -313,7 +313,7 @@ export class GeometryAccumulator {
                     threeObj = this.createSolid(geom);
                     break;
                 default:
-                    continue; // 跳过未知类型
+                    continue; // skip unknown types
             }
 
             objects.push(threeObj);
@@ -325,7 +325,7 @@ export class GeometryAccumulator {
     private applyTransformations(objects: Object3D[]): void {
         if (objects.length === 0) return;
 
-        // 预计算变换矩阵
+        // Precompute the transformation matrix
         const transformMatrix = this._transform.isIdentity
             ? null
             : new Matrix4().fromArray(this._transform.toArray());
@@ -339,7 +339,7 @@ export class GeometryAccumulator {
             : this.calculateCommonOrigin(objects);
 
         for (const obj of objects) {
-            // 直接修改对象位置避免中间对象
+            // Mutate the object position directly to avoid intermediate objects
             obj.position.sub(origin);
 
             if (transformMatrix) {
@@ -384,7 +384,7 @@ export class GeometryAccumulator {
         const vertices = new Float32Array(count * 3);
         const colors = new Float32Array(count * 3);
 
-        // 使用直接索引访问代替forEach
+        // Use direct index access instead of forEach
         const { r, g, b, t } = geom.params.fillColor.colors;
         const colorR = r / 255;
         const colorG = g / 255;
@@ -418,7 +418,7 @@ export class GeometryAccumulator {
         return new Points(geometry, material);
     }
 
-    // 线几何处理 ==========================================
+    // Line geometry handling ==========================================
     private prepareLineStringGeometry(
         geom: PrimitiveLineStringGeometry,
         tolerance: number
@@ -547,14 +547,14 @@ export class GeometryAccumulator {
 
         if (vertexCount === 0 || indexCount === 0) return null;
 
-        // 预分配内存
+        // Preallocate memory
         const vertices = new Float32Array(vertexCount * 3);
         const indices = new Uint32Array(indexCount);
         const normals = new Float32Array(
             geom.normals.length > 0 ? geom.normals.length * 3 : vertexCount * 3
         );
 
-        // 填充顶点数据
+        // Fill in vertex data
         for (let i = 0; i < vertexCount; i++) {
             const v = geom.vertices[i];
             const base = i * 3;
@@ -563,7 +563,7 @@ export class GeometryAccumulator {
             vertices[base + 2] = v[2];
         }
 
-        // 填充法线数据（如果存在）
+        // Fill in normal data (if present)
         if (geom.normals.length > 0) {
             for (let i = 0; i < geom.normals.length; i++) {
                 const n = geom.normals[i];
@@ -574,7 +574,7 @@ export class GeometryAccumulator {
             }
         }
 
-        // 复制索引数据
+        // Copy index data
         for (let i = 0; i < indexCount; i++) {
             indices[i] = geom.indices[i];
         }
@@ -583,7 +583,7 @@ export class GeometryAccumulator {
         geometry.setAttribute("position", new BufferAttribute(vertices, 3));
         geometry.setAttribute("normal", new BufferAttribute(normals, 3));
 
-        // UV处理
+        // UV handling
         if (geom.uvs.length > 0) {
             const uvs = new Float32Array(geom.uvs.length * 2);
             for (let i = 0; i < geom.uvs.length; i++) {
@@ -597,7 +597,7 @@ export class GeometryAccumulator {
 
         geometry.setIndex(new BufferAttribute(indices, 1));
 
-        // 自动计算法线（如果未提供）
+        // Automatically compute normals (if not provided)
         if (geom.normals.length === 0) {
             geometry.computeVertexNormals();
         }
@@ -610,7 +610,7 @@ export class GeometryAccumulator {
         const { r, g, b, t } = params.fillColor.colors;
         const opacity = t < 255 ? t / 255 : 1.0;
 
-        // 创建基础材质
+        // Create the base material
         const material = new MeshStandardMaterial({
             color: new Color(r / 255, g / 255, b / 255),
             transparent: opacity < 1.0,
@@ -688,18 +688,18 @@ export class GeometryAccumulator {
         symb: Gradient.Symb,
         maxTextureSize?: number
     ): RenderTexture | undefined {
-        // 设置纹理尺寸
+        // Set the texture dimensions
         let width = 0x100;
         let height = 0x100;
 
-        // 处理专题渐变模式
+        // Handle the thematic gradient mode
         if (symb.mode === Gradient.Mode.Thematic) {
-            width = 1; // 每行像素相同
-            height = Math.min(4096, maxTextureSize); // 限制最大高度
+            width = 1; // every row has identical pixels
+            height = Math.min(4096, maxTextureSize); // cap the maximum height
         }
 
         try {
-            // 生成渐变图像
+            // Generate the gradient image
             const imageSource = symb.produceImage({
                 width,
                 height,
@@ -709,7 +709,7 @@ export class GeometryAccumulator {
             // Add null check and convert to Uint8Array
             if (!imageSource?.data) return undefined;
 
-            // 创建 Three.js 纹理
+            // Create the Three.js texture
             const texture = new DataTexture(
                 imageSource.data, // Use the underlying buffer data
                 imageSource.width,
@@ -718,7 +718,7 @@ export class GeometryAccumulator {
                 UnsignedByteType
             );
 
-            // 设置纹理属性
+            // Set the texture properties
             texture.needsUpdate = true;
             texture.premultiplyAlpha = imageSource.format === ImageBufferFormat.Rgba;
 

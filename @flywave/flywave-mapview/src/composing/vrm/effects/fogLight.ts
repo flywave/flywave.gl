@@ -16,15 +16,15 @@ import {
     Fn,
     int,
     Loop,
-    select,
     screenCoordinate,
+    select,
     uniform,
     uniformArray,
     vec3,
     vec4,
     viewportUV
 } from "three/tsl";
-import { Camera, TextureNode, Vector3, Vector4 } from "three/webgpu";
+import { type Camera, type TextureNode, Vector3, Vector4 } from "three/webgpu";
 
 /**
  * Volumetric light halos (lamp glow through haze): analytic per-light

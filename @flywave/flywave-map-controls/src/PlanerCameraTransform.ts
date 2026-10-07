@@ -37,10 +37,10 @@ export class PlanarCameraTransform extends CameraTransform {
     }
 
     public pan(
-        rayHitPoint: Vector3, // 射线命中点（原参数 rayTargetPoint/[x,w,u]）
-        targetPosition: Vector3, // 目标位置（原参数 moveToTargetPoint/F）
-        inertiaVector: Vector4, // 惯性向量（原参数 inertialAxis/E）
-        interpolationStep: number // 插值步长（原参数 step/r）
+        rayHitPoint: Vector3, // ray hit point (original parameter rayTargetPoint/[x,w,u])
+        targetPosition: Vector3, // target position (original parameter moveToTargetPoint/F)
+        inertiaVector: Vector4, // inertia vector (original parameter inertialAxis/E)
+        interpolationStep: number // interpolation step (original parameter step/r)
     ): void {
         // Get current camera position
         const cameraPosition = new Vector3().setFromMatrixPosition(this.cameraToWorld);
@@ -111,8 +111,8 @@ export class PlanarCameraTransform extends CameraTransform {
         this.cameraToWorld.setPosition(position);
     }
 
-    private rayCasterPlane = new Plane(new Vector3(0, 0, 1), 0);
-    private rayCaster = new Ray();
+    private readonly rayCasterPlane = new Plane(new Vector3(0, 0, 1), 0);
+    private readonly rayCaster = new Ray();
     rayCastPlaner(result: Vector3, origin: Vector3, target: Vector3, constant: number): number {
         this.rayCasterPlane.constant = constant;
         this.rayCaster.origin.copy(origin);

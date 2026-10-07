@@ -5,7 +5,7 @@ import { type Vector3Like } from "@flywave/flywave-geoutils/math/Vector3Like";
 import { type AerialPerspectiveConfig, type CloudConfig } from "./AtmosphereConfig";
 import { type JsonExpr, type JsonValue } from "./Expr";
 import { type InterpolatedPropertyDefinition } from "./InterpolatedPropertyDefs";
-import { ITranslucentLayerConfig, type PostEffects } from "./PostEffects";
+import { type PostEffects, ITranslucentLayerConfig } from "./PostEffects";
 import {
     type BaseTechniqueParams,
     type BasicExtrudedLineTechniqueParams,

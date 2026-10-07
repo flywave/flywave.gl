@@ -197,5 +197,5 @@ function createCoordinatesFromGeoBox(geoBox: GeoBox): GeoCoordinates[] {
     ];
 }
 
-// 导出函数供外部使用
+// Export functions for external use
 export { clipTerrainMesh, type QuantizedAreaCliper };

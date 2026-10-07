@@ -1,12 +1,12 @@
-import * as THREE from "three/webgpu";
 import {
-    geographicTerrainStandardTiling,
     GeoBox,
-    TileKey,
-    OrientedBox3,
+    GeoCoordinates,
+    geographicTerrainStandardTiling,
     normalizedEquirectangularProjection,
-    GeoCoordinates
+    OrientedBox3,
+    TileKey
 } from "@flywave/flywave.gl";
+import * as THREE from "three/webgpu";
 
 // Define camera parameters
 const worldMatrix = new THREE.Matrix4().fromArray([

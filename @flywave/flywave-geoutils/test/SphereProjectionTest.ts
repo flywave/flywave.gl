@@ -5,6 +5,7 @@
 import { assert } from "chai";
 import { Vector3 } from "three/webgpu";
 
+import { sphereProjection } from "../src";
 import { GeoBox } from "../src/coordinates/GeoBox";
 import { GeoCoordinates } from "../src/coordinates/GeoCoordinates";
 import { type GeoCoordinatesLike } from "../src/coordinates/GeoCoordinatesLike";
@@ -12,7 +13,6 @@ import { OrientedBox3 } from "../src/math/OrientedBox3";
 import { type Vector3Like } from "../src/math/Vector3Like";
 import { EarthConstants } from "../src/projection/EarthConstants";
 import { webMercatorTilingScheme } from "../src/tiling/WebMercatorTilingScheme";
-import { sphereProjection } from "../src";
 
 const epsilon = 0.000001;
 

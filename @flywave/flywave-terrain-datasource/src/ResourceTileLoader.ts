@@ -3,11 +3,11 @@
 import { type ITileDecoder } from "@flywave/flywave-datasource-protocol";
 import { TextElement, TileLoaderState } from "@flywave/flywave-mapview";
 import { TileLoader } from "@flywave/flywave-mapview-decoder";
+import { Color } from "three/webgpu";
 
 import { type ResourceProvider } from "./ResourceProvider";
 import { type ITerrainSource, type TerrainResourceTile } from "./TerrainSource";
 import { type ITileResource } from "./TileResourceManager";
-import { Color } from "three/webgpu";
 
 /**
  * Tile loader for DEM (Digital Elevation Model) and TIN (Triangulated Irregular Network) data
@@ -139,7 +139,7 @@ export abstract class TerrainTileLoader<
 
         this.tile.clearTextElements();
         if (this.dataSource.showDebugInfo) {
-            let debugTextElement = new TextElement(
+            const debugTextElement = new TextElement(
                 `row:${this.tile.tileKey.row} \n col:${this.tile.tileKey.column}\n level:${this.tile.tileKey.level}`,
                 this.tile.center,
                 {

@@ -159,6 +159,13 @@ export class FrustumGeoAreaTester extends FrustumTester {
 
     /**
      * Creates frustum planes for spherical projections with local coordinate transformation
+     *
+     * The top/bottom planes approximate a spherical shell: the normal is the radial
+     * direction at the area center, and `constant` takes the most conservative value
+     * over the radial projections of all corners. Using the tangent plane at the
+     * center directly (constant = ±R_center) makes the plane noticeably tilted for
+     * large-extent areas, so regions away from the center are judged to be outside
+     * the shell (a false OUTSIDE that wrongly clips StratumTileCliper terrain tiles).
      */
     private static createSphericalFrustumPlanes(
         topAltitude: number,
@@ -170,19 +177,53 @@ export class FrustumGeoAreaTester extends FrustumTester {
     ): void {
         const centerGeo = FrustumGeoAreaTester.calculateGeoAreaCenter(geoArea);
 
-        const topGeo = centerGeo.clone();
-        topGeo.altitude = topAltitude;
+        const centerTop = centerGeo.clone();
+        centerTop.altitude = topAltitude;
+        const centerTopWorld = projection.projectPoint(centerTop, new Vector3());
+        const radial = centerTopWorld.clone().normalize();
 
-        const bottomGeo = centerGeo.clone();
-        bottomGeo.altitude = bottomAltitude;
+        // Sample points: vertices + the midpoint of every edge. The extrema of the
+        // linear function p̂·x over a spherical region lie on the boundary and often
+        // at edge midpoints (the four corners are actually closer to the center),
+        // so sampling only the corners is not conservative enough
+        const outlineCoords: GeoCoordinates[] = Array.isArray(geoArea)
+            ? geoArea
+            : FrustumGeoAreaTester.createCoordinatesFromGeoBox(geoArea, 0);
+        const sampleCoords: GeoCoordinates[] = [];
+        for (let i = 0; i < outlineCoords.length - 1; ++i) {
+            const a = outlineCoords[i];
+            const b = outlineCoords[i + 1];
+            sampleCoords.push(a);
+            sampleCoords.push(
+                new GeoCoordinates(
+                    (a.latitude + b.latitude) / 2,
+                    (a.longitude + b.longitude) / 2,
+                    0
+                )
+            );
+        }
 
-        const topGeoWorld = projection.projectPoint(topGeo, new Vector3());
-        const topGeoNormal = topGeoWorld.clone().normalize();
-        const bottomGeoWorld = projection.projectPoint(bottomGeo, new Vector3());
-        const bottomGeoNormal = bottomGeoWorld.clone().normalize();
+        let minBottomProjection = Number.POSITIVE_INFINITY;
+        let maxTopProjection = Number.NEGATIVE_INFINITY;
+        for (const sample of sampleCoords) {
+            const topWorld = projection.projectPoint(
+                new GeoCoordinates(sample.latitude, sample.longitude, topAltitude),
+                new Vector3()
+            );
+            maxTopProjection = Math.max(maxTopProjection, radial.dot(topWorld));
 
-        const topPlaneWorld = new Plane(topGeoNormal.negate(), topGeoWorld.length());
-        const bottomPlaneWorld = new Plane(bottomGeoNormal, -bottomGeoWorld.length());
+            const bottomWorld = projection.projectPoint(
+                new GeoCoordinates(sample.latitude, sample.longitude, bottomAltitude),
+                new Vector3()
+            );
+            minBottomProjection = Math.min(minBottomProjection, radial.dot(bottomWorld));
+        }
+
+        // Bottom plane: d = radial·x − minBottomProjection ≥ 0 (radial projection of
+        // points inside the region ≥ the minimum over the sampled points)
+        const bottomPlaneWorld = new Plane(radial, -minBottomProjection);
+        // Top plane: d = −radial·x + maxTopProjection ≥ 0
+        const topPlaneWorld = new Plane(radial.clone().negate(), maxTopProjection);
 
         // Transform to local coordinates
         const topPlane = FrustumGeoAreaTester.transformPlaneToLocal(topPlaneWorld, transformMatrix);
@@ -265,8 +306,23 @@ export class FrustumGeoAreaTester extends FrustumTester {
             point.applyMatrix4(transformMatrix)
         );
 
-        // Determine polygon winding order
-        const isClockwise = this.isPolygonClockwise(coordinates);
+        // Interior reference point (polygon centroid, altitude at the mid-height of
+        // top/bottom): used to orient the side normals edge by edge. The global
+        // shoelace winding test is sensitive to closing noise/corners at the seam and
+        // has been observed to produce reversed normals on individual edges (falsely
+        // judging the interior as OUTSIDE); centroid-based per-edge orientation is a
+        // local correction that is robust for the convex / near-convex outlines of
+        // FrustumGeoArea.
+        const centroidGeo = FrustumGeoAreaTester.calculateGeoAreaCenter(coordinates);
+        const centroidWorld = projection.projectPoint(
+            new GeoCoordinates(
+                centroidGeo.latitude,
+                centroidGeo.longitude,
+                (topAltitude + bottomAltitude) / 2
+            ),
+            new Vector3()
+        );
+        const localCentroid = centroidWorld.applyMatrix4(transformMatrix);
 
         // Create side planes in local coordinates
         for (let i = 0; i < coordinates.length - 1; i++) {
@@ -280,50 +336,21 @@ export class FrustumGeoAreaTester extends FrustumTester {
                 continue;
             }
 
-            // Calculate normal based on winding order
-            const normal = this.calculateNormalWithWinding(top1, top2, bottom1, isClockwise);
+            const edge = new Vector3().subVectors(top2, top1);
+            const vertical = new Vector3().subVectors(bottom1, top1);
+            const normal = new Vector3().crossVectors(edge, vertical).normalize();
+
+            // The normal must place the interior of the region (the centroid) on the
+            // positive side; flip it if it does not
+            if (normal.dot(new Vector3().subVectors(localCentroid, top1)) < 0) {
+                normal.negate();
+            }
 
             const constant = -normal.dot(top1);
             const sidePlane = new Plane(normal, constant);
 
             planes.push(sidePlane);
         }
-    }
-
-    /**
-     * 判断多边形是否是顺时针方向
-     */
-    private static isPolygonClockwise(coordinates: GeoCoordinates[]): boolean {
-        let area = 0;
-        for (let i = 0; i < coordinates.length - 1; i++) {
-            const j = (i + 1) % coordinates.length;
-            area +=
-                (coordinates[j].longitude - coordinates[i].longitude) *
-                (coordinates[j].latitude + coordinates[i].latitude);
-        }
-        return area > 0;
-    }
-
-    /**
-     * 根据缠绕顺序计算法线
-     */
-    private static calculateNormalWithWinding(
-        top1: Vector3,
-        top2: Vector3,
-        bottom1: Vector3,
-        isClockwise: boolean
-    ): Vector3 {
-        const edge = new Vector3().subVectors(top2, top1);
-        const vertical = new Vector3().subVectors(bottom1, top1);
-
-        const normal = new Vector3().crossVectors(edge, vertical).normalize();
-
-        // 根据缠绕顺序调整法线方向
-        if (isClockwise) {
-            normal.negate();
-        }
-
-        return normal;
     }
 
     /**

@@ -30,7 +30,7 @@ export function getGLTFAccessor(attribute: BufferAttribute | { value: TypedArray
     const { buffer, size, count } = getAccessorData(attribute);
 
     const glTFAccessor: GLTFAccessor = {
-        // 保持原有逻辑，添加 THREE 类型支持
+        // Keep the original logic while adding THREE type support
         // @ts-ignore
         value: buffer,
         size,
@@ -51,13 +51,13 @@ function getAccessorData(attribute: BufferAttribute | { value: TypedArray; size?
     let size: number;
     let count = 0;
 
-    // 处理 THREE.BufferAttribute 的情况
+    // Handle the THREE.BufferAttribute case
     if (attribute instanceof BufferAttribute) {
         buffer = attribute.array;
         size = attribute.itemSize;
         count = attribute.count;
     } else if (attribute?.value) {
-        // 原有逻辑兼容
+        // Backward compatible with the original logic
         buffer = attribute.value;
         size = attribute.size || 1;
         count = buffer.length / size;
@@ -65,7 +65,7 @@ function getAccessorData(attribute: BufferAttribute | { value: TypedArray; size?
         throw new Error("Invalid attribute format");
     }
 
-    // 保持原有类型转换逻辑
+    // Keep the original type conversion logic
     if (!ArrayBuffer.isView(buffer)) {
         buffer = toTypedArray(buffer, Float32Array);
     }

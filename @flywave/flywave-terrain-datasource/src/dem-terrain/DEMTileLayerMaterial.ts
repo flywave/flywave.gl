@@ -1,17 +1,16 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three/webgpu";
-import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
 import {
-    Fn,
-    If,
     attribute,
     cross,
     dot,
     float,
+    Fn,
+    If,
     mix as tslMix,
     normalize,
+    positionLocal,
     select,
     texture,
     transformNormalToView,
@@ -19,9 +18,10 @@ import {
     uv as uvNode,
     vec2,
     vec3,
-    vec4,
-    positionLocal
+    vec4
 } from "three/tsl";
+import * as THREE from "three/webgpu";
+import { MeshBasicNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
 
 function dummyTex(alpha: number = 255): THREE.DataTexture {
     const t = new THREE.DataTexture(
@@ -176,9 +176,11 @@ const s_sharedNodes = (() => {
         return dot(vec4(v.xyz.mul(255.0), float(-1.0)), _demUnpack);
     });
 
-    // modifier 纹理固定为 mapbox terrain-rgb 编码（HeightMapModifierManager 约定），
-    // 解码必须用 mapbox 常量，不能复用 _demUnpack——terrarium DEM 时 _demUnpack
-    // 是 (256,1,1/256,32768)，用它解 mapbox 编码的 modifier 会产生几万米的负值
+    // The modifier texture is always mapbox terrain-rgb encoded (by
+    // HeightMapModifierManager convention), so decoding MUST use the mapbox
+    // constants — never reuse _demUnpack: with a terrarium DEM _demUnpack is
+    // (256,1,1/256,32768), and decoding a mapbox-encoded modifier with it
+    // yields negative values tens of thousands of meters deep.
     const _modifierUnpack = uniform(new THREE.Vector4(6553.6, 25.6, 0.1, 10000.0));
     const decodeModifierElevation = Fn(([v]: [ReturnType<typeof vec4>]) => {
         return dot(vec4(v.xyz.mul(255.0), float(-1.0)), _modifierUnpack);

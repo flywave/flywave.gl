@@ -3,9 +3,9 @@
 import {
     type TileKey,
     EarthConstants,
-    Projection,
     GeoBox,
-    GeoCoordinates
+    GeoCoordinates,
+    Projection
 } from "@flywave/flywave-geoutils";
 
 import { TaskType } from "../../Constants";
@@ -34,7 +34,7 @@ export async function getQuantizedMeshTerrain(
     elevationMapEnabled: boolean,
     elevationMapFlipY: boolean
 ): Promise<QuantizedTerrainMesh> {
-    let projection = dataSource.projection;
+    const projection = dataSource.projection;
     return await layerStrategy
         .requestTileBuffer(tileKey)
         .then((buffer: ArrayBuffer) => {
@@ -51,7 +51,7 @@ export async function getQuantizedMeshTerrain(
                 .getGroundModificationManager()
                 .findModifiersInBoundingBox(geobox);
 
-            let skirtHeight = Math.min((rootGeometricError / (1 << tileKey.level)) * 4.0, 1000);
+            const skirtHeight = Math.min((rootGeometricError / (1 << tileKey.level)) * 4.0, 1000);
 
             return dataSource.decoder.decodeTile(
                 {
@@ -117,13 +117,13 @@ export async function getUpSamplQuantizedMeshTerrain(
         .getGroundModificationManager()
         .findModifiersInBoundingBox(targetGeoBox);
 
-    let projection = dataSource.projection;
+    const projection = dataSource.projection;
     const maxRadius = EarthConstants.EQUATORIAL_RADIUS;
     const tileCountX = dataSource.getTilingScheme().subdivisionScheme.getLevelDimensionX(0);
 
     const rootGeometricError = (maxRadius * 2 * Math.PI * 0.25) / (65 * tileCountX);
 
-    let skirtHeight = Math.min((rootGeometricError / (1 << tileKey.level)) * 4.0, 1000);
+    const skirtHeight = Math.min((rootGeometricError / (1 << tileKey.level)) * 4.0, 1000);
     // Use decoder for terrain data upsampling
     return dataSource.decoder
         .decodeTile(

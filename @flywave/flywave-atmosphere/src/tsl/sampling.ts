@@ -4,9 +4,9 @@
 import { ivec2, ivec4, vec2, vec4 } from "three/tsl";
 import type { ConstNode, TextureNode } from "three/webgpu";
 
-import { reinterpretType } from "./types";
 import { FnVar } from "./FnVar";
 import type { Node } from "./node";
+import { reinterpretType } from "./types";
 
 const components = ["x", "y", "z", "w"] as const;
 

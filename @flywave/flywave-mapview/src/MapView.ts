@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
+    type AtmosphereThemeConfig,
     type Env,
     type FlatTheme,
     type FontCatalogConfig,
@@ -14,6 +15,7 @@ import { type ViewRanges } from "@flywave/flywave-datasource-protocol/ViewRanges
 import {
     type GeoBoxExtentLike,
     type Projection,
+    type SphereProjection,
     type TilingScheme,
     type Vector3Like,
     EarthConstants,
@@ -25,10 +27,10 @@ import {
     isVector3Like,
     mercatorProjection,
     OrientedBox3,
-    ProjectionType,
-    SphereProjection
+    ProjectionType
 } from "@flywave/flywave-geoutils";
 import { type GeoCoordLike } from "@flywave/flywave-geoutils/coordinates/GeoCoordLike";
+import { type RendererCapabilities } from "@flywave/flywave-materials";
 import {
     type TaskQueue,
     type UriResolver,
@@ -40,11 +42,12 @@ import {
 } from "@flywave/flywave-utils";
 import * as THREE from "three/webgpu";
 import { type Renderer, type WebGPURendererParameters, WebGPURenderer } from "three/webgpu";
-import { type RendererCapabilities } from "@flywave/flywave-materials";
 
-import { type AtmosphereThemeConfig } from "@flywave/flywave-datasource-protocol";
 import { AnimatedExtrusionHandler } from "./AnimatedExtrusionHandler";
 import { BackgroundDataSource } from "./BackgroundDataSource";
+import { CameraAnimationBuilder } from "./camera/CameraAnimationBuilder";
+import { CameraKeyTrackAnimation, ControlPoint } from "./camera/CameraKeyTrackAnimation";
+import type { FlyToBoundsOptions, FlyToOptions } from "./camera/FlyTo";
 import { CameraMovementDetector } from "./CameraMovementDetector";
 import { CameraUtils } from "./CameraUtils";
 import { type ClipPlanesEvaluator, createDefaultClipPlanesEvaluator } from "./ClipPlanesEvaluator";
@@ -57,11 +60,10 @@ import type { IFogLightDef } from "./composing/vrm/ViewRenderTypes";
 import { ConcurrentDecoderFacade } from "./ConcurrentDecoderFacade";
 import { ConcurrentTilerFacade } from "./ConcurrentTilerFacade";
 import { CopyrightInfo } from "./copyrights/CopyrightInfo";
-import { TerrainDataSource, type DataSource } from "./DataSource";
+import { type DataSource, type TerrainDataSource } from "./DataSource";
 import { type ElevationProvider } from "./ElevationProvider";
 import { type ElevationRangeSource } from "./ElevationRangeSource";
 import { type DispatcherEvent, EventDispatcher } from "./EventDispatcher";
-
 import {
     type FovCalculation,
     DEFAULT_FOV_CALCULATION,
@@ -74,20 +76,17 @@ import { TileGeometryManager } from "./geometry/TileGeometryManager";
 import { MapViewImageCache } from "./image/MapViewImageCache";
 import { type IntersectParams } from "./IntersectParams";
 import { MapAnchors } from "./MapAnchors";
-import { SurfaceCapturePass } from "./surface-capture/SurfaceCapturePass";
 import { MapViewEnvironment } from "./MapViewEnvironment";
 import { type MapViewFog } from "./MapViewFog";
 import { MapViewTaskScheduler } from "./MapViewTaskScheduler";
 import { MapViewThemeManager } from "./MapViewThemeManager";
-import { CameraKeyTrackAnimation, ControlPoint } from "./camera/CameraKeyTrackAnimation";
-import { CameraAnimationBuilder } from "./camera/CameraAnimationBuilder";
-import type { FlyToOptions, FlyToBoundsOptions } from "./camera/FlyTo";
 import { type PickResult, PickHandler } from "./PickHandler";
 import { PoiManager } from "./poi/PoiManager";
 import { PoiTableManager } from "./poi/PoiTableManager";
 import { PolarTileDataSource } from "./PolarTileDataSource";
 import { ScreenProjector } from "./ScreenProjector";
 import { type FrameStats, PerformanceStatistics } from "./Statistics";
+import { SurfaceCapturePass } from "./surface-capture/SurfaceCapturePass";
 import { MapViewState } from "./text/MapViewState";
 import { type TextElement } from "./text/TextElement";
 import { TextElementsRenderer } from "./text/TextElementsRenderer";
@@ -1123,7 +1122,7 @@ export class MapView extends EventDispatcher {
             .then(() => {
                 if (maxColorAttachmentBytesPerSample > DEFAULT_MAX_COLOR_ATTACHMENT_BYTES) {
                     Object.assign(rendererParams.requiredLimits!, {
-                        maxColorAttachmentBytesPerSample: maxColorAttachmentBytesPerSample
+                        maxColorAttachmentBytesPerSample
                     });
                 }
                 return this.m_renderer.init();
@@ -2663,7 +2662,9 @@ export class MapView extends EventDispatcher {
 
             const animation = new CameraKeyTrackAnimation(this, flyOptions);
             this.m_activeCameraAnimation = animation;
-            animation.start(undefined, () => resolve());
+            animation.start(undefined, () => {
+                resolve();
+            });
         });
     }
 
@@ -2705,7 +2706,9 @@ export class MapView extends EventDispatcher {
 
             const animation = new CameraKeyTrackAnimation(this, flyOptions);
             this.m_activeCameraAnimation = animation;
-            animation.start(undefined, () => resolve());
+            animation.start(undefined, () => {
+                resolve();
+            });
         });
     }
 
@@ -3266,6 +3269,7 @@ export class MapView extends EventDispatcher {
     get elevationSource(): TerrainDataSource | undefined {
         return this.m_elevationSource as TerrainDataSource | undefined;
     }
+
     /**
      * Public access to {@link MapViewFog} allowing to toggle it by setting its `enabled` property.
      */
@@ -3721,10 +3725,10 @@ export class MapView extends EventDispatcher {
      * Derive the look at settings (i.e. target, zoom, ...) from the current camera.
      */
     protected updateLookAtSettings() {
-        // 中心点锁定零 CPU 碰撞：GPU 中心深度命中 → 用 GPU 值；miss
-        // （冷槽/天空/退化）→ 走 getTargetAndDistance 的纯数学分支
-        // （数学地面/球面求交 + elevation），不传 collidables，不对
-        // enableCameraCollision 数据源执行任何 raycast。
+        // Center-locked zero-CPU collision: GPU center depth hit → use the GPU value;
+        // miss (cold slot / sky / degenerate) → take getTargetAndDistance's pure math
+        // branch (analytic ground/sphere intersection + elevation), no collidables
+        // passed, no raycast run against any enableCameraCollision data source.
         const gpuDepth = this.mapRenderingManager?.readDepth(new THREE.Vector2(0, 0)) ?? null;
         let target: THREE.Vector3;
         let distance: number;
@@ -3755,10 +3759,12 @@ export class MapView extends EventDispatcher {
             final = true;
             altitude = undefined;
         } else {
-            // GPU miss（冷槽/天空/贴面退化——全球级下中心常对着天空或
-            // 背景球，pickId=0 会清空深度槽，每帧都会走到这里）：纯数学
-            // 地面/球面求交，不传 collidables（零数据源碰撞）。每帧新鲜，
-            // 不沿用旧值——冻结的中心目标会和拖拽中的相机互相拉扯振荡。
+            // GPU miss (cold slot / sky / on-surface degeneracy — at global zoom the
+            // center often faces the sky or the background sphere; pickId=0 clears the
+            // depth slot, so we land here every frame): pure math ground/sphere
+            // intersection with no collidables (zero data-source collision). Computed
+            // fresh every frame, never reusing a stale value — a frozen center target
+            // and the camera being dragged would tug against each other and oscillate.
             const result = MapViewUtils.getTargetAndDistance(
                 this.projection,
                 this.camera,

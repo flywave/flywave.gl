@@ -1,17 +1,17 @@
 import type {
-    TileSnapshot,
-    TileEvent,
     CameraInfo,
+    GeoBoxLike,
     SnapshotResult,
+    TileEvent,
     TileKeyLike,
-    GeoBoxLike
+    TileSnapshot
 } from "./types";
 
 export class TileSnapshotCollector {
-    private prevTiles = new Map<string, { snapshot: TileSnapshot; geoBox: GeoBoxLike }>();
+    private readonly prevTiles = new Map<string, { snapshot: TileSnapshot; geoBox: GeoBoxLike }>();
     private frameNumber = 0;
 
-    constructor(private mapView: unknown) {}
+    constructor(private readonly mapView: unknown) {}
 
     collect(): SnapshotResult {
         const mv = this.mapView as Record<string, unknown>;
@@ -192,7 +192,7 @@ export class TileSnapshotCollector {
         const cam = mv.camera;
         const target = mv.target;
 
-        const corners: { lat: number; lng: number }[] = [];
+        const corners: Array<{ lat: number; lng: number }> = [];
 
         return {
             latitude: target?.latitude ?? 0,

@@ -4,7 +4,7 @@ import * as THREE from "three/webgpu";
 
 import { MeshGeometry } from "./mesh-geometry";
 
-// 基础线段几何体
+// Base edge segment geometry
 export class EdgeGeometry extends MeshGeometry {
     protected _endPointAndQuadIndices: Uint8Array;
     protected _indices: Uint8Array;
@@ -27,7 +27,7 @@ export class EdgeGeometry extends MeshGeometry {
         texture?: THREE.Texture;
         normalMap?: THREE.Texture;
     }) {
-        // 转换Uint8Array为Float32Array用于位置数据
+        // Convert Uint8Array to Float32Array for the position data
         const floatIndices = new Float32Array(options.indices.length);
         for (let i = 0; i < options.indices.length; i++) {
             floatIndices[i] = options.indices[i];
@@ -35,7 +35,7 @@ export class EdgeGeometry extends MeshGeometry {
 
         super({
             positions: floatIndices,
-            indices: undefined, // 边几何体不使用索引
+            indices: undefined, // edge geometry does not use indices
             normals: options.normals,
             uvs: options.uvs,
             colors: options.colors,
@@ -54,7 +54,7 @@ export class EdgeGeometry extends MeshGeometry {
         this._endPointAndQuadIndices = options.endPointAndQuadIndices;
         this.isPlanar = options.isPlanar ?? false;
 
-        // 设置端点和四边形索引属性 (4个无符号字节)
+        // Set the endpoint and quad index attribute (4 unsigned bytes)
         const epqAttr = new THREE.Uint8BufferAttribute(options.endPointAndQuadIndices, 4);
         epqAttr.normalized = false;
         this.setAttribute("a_endPointAndQuadIndices", epqAttr);
@@ -89,14 +89,14 @@ export class EdgeGeometry extends MeshGeometry {
     createMesh(): THREE.Mesh {
         const material = new THREE.MeshBasicMaterial({
             color: 0xffffff,
-            vertexColors: !!this.attributes.color // 自动判断是否使用顶点色
+            vertexColors: !!this.attributes.color // auto-detect whether vertex colors are used
         });
         return new THREE.Mesh(this, material);
     }
 
     public override dispose() {
         super.dispose();
-        // 清除特定资源
+        // Clear class-specific resources
         this._indices = new Uint8Array(0);
         this._endPointAndQuadIndices = new Uint8Array(0);
     }
@@ -106,7 +106,7 @@ export class EdgeGeometry extends MeshGeometry {
     }
 }
 
-// 轮廓边几何体
+// Silhouette edge geometry
 export class SilhouetteEdgeGeometry extends EdgeGeometry {
     private _normalPairs: Uint8Array;
 
@@ -131,7 +131,7 @@ export class SilhouetteEdgeGeometry extends EdgeGeometry {
         super(options);
         this._normalPairs = options.normalPairs;
 
-        // 设置法线对属性 (4个无符号字节)
+        // Set the normal pair attribute (4 unsigned bytes)
         const normalAttr = new THREE.Uint8BufferAttribute(options.normalPairs, 4);
         normalAttr.normalized = false;
         this.setAttribute("a_normals", normalAttr);
@@ -157,11 +157,11 @@ export class SilhouetteEdgeGeometry extends EdgeGeometry {
         });
     }
 
-    // 改为实例方法，内部创建材质
+    // Changed to an instance method that creates the material internally
     createMesh(): THREE.Mesh {
         const material = new THREE.MeshPhongMaterial({
             color: 0xffffff,
-            side: THREE.DoubleSide // 轮廓边需要双面材质
+            side: THREE.DoubleSide // silhouette edges require a double-sided material
         });
         return new THREE.Mesh(this, material);
     }
@@ -180,7 +180,7 @@ export class SilhouetteEdgeGeometry extends EdgeGeometry {
     }
 }
 
-// 折线几何体
+// Polyline edge geometry
 export class PolylineEdgeGeometry extends MeshGeometry {
     private readonly _buffers: any;
     public isPlanar: boolean;
@@ -227,11 +227,11 @@ export class PolylineEdgeGeometry extends MeshGeometry {
         });
     }
 
-    // 改为实例方法，内部创建材质
+    // Changed to an instance method that creates the material internally
     createMesh(): THREE.Object3D {
         const material = new THREE.LineBasicMaterial({
             color: 0xffffff,
-            linewidth: this.edgeWidth || 1 // 使用几何体自带的线宽属性
+            linewidth: this.edgeWidth || 1 // use the geometry's own line width property
         });
         return new THREE.LineSegments(this, material);
     }

@@ -1,10 +1,11 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { getProjection, getProjectionName } from "@flywave/flywave-datasource-protocol";
 import {
     type GeoBoxArray,
+    type GeoCoordinates,
     type Projection,
-    GeoBox,
-    GeoCoordinates
+    GeoBox
 } from "@flywave/flywave-geoutils";
 import {
     type SerializableGeometryData,
@@ -14,32 +15,31 @@ import {
 import { estimateGeometryMemory } from "@flywave/flywave-utils/meshMemoryUtils";
 import {
     type BufferGeometry,
-    type Material,
+    type BufferGeometryEventMap,
     type DataTextureImageData,
-    BufferGeometryEventMap,
+    type Material,
+    type NormalBufferAttributes,
     DataTexture,
     LinearFilter,
     LinearMipMapLinearFilter,
     Matrix4,
     Mesh,
-    NormalBufferAttributes,
     Quaternion,
     Texture,
     Vector3
 } from "three/webgpu";
 
-import DEMData, { SerializedDEMData } from "../../dem-terrain/dem/DemData";
+import DEMData, { type SerializedDEMData } from "../../dem-terrain/dem/DemData";
 import { DemTileResource } from "../../dem-terrain/DEMTileProvider";
 import {
     type HeightMapModificationEventParams,
-    type HeightMapModifierManager,
     type HeightMapModifier,
+    type HeightMapModifierManager,
     type SerializedHeightMapModifier
 } from "../../ground-modification-manager";
 import { renderGroundModificationHeightMap, renderHeightMap } from "../../terrain-processor";
 import { QuantizedTileResource } from "../QuantizedTileResource";
 import { type MetadataExtension } from "./QuantizedMeshLoader";
-import { getProjection, getProjectionName } from "@flywave/flywave-datasource-protocol";
 
 const isWorker = typeof document === "undefined";
 
@@ -71,7 +71,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
     private _groundElevationModified?: boolean;
     quantizedGeometry: BufferGeometry;
     position: Vector3 = new Vector3();
-    private m_geoCenter: GeoCoordinates;
+    private readonly m_geoCenter: GeoCoordinates;
     quaternion: Quaternion = new Quaternion();
     scale: Vector3 = new Vector3();
     metadataExtension?: QuantizedMetaData;
@@ -98,7 +98,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
             this.m_geoCenter = this.m_projection.unprojectPoint(this.position);
         } else {
             this.quantizedGeometry = deserializeBufferGeometry(data.geometry);
-            let projection = getProjection(data.projectionName);
+            const projection = getProjection(data.projectionName);
             this.m_projection = projection;
             new Matrix4()
                 .fromArray(data.matrix)
@@ -267,6 +267,7 @@ export class QuantizedTerrainMesh extends QuantizedTileResource {
     public get geometryProjection(): Projection {
         return this.m_projection;
     }
+
     protected updateGeometryProjection(projection: Projection) {
         this.m_projection = projection;
         projection.projectPoint(this.geoCenter, this.position);

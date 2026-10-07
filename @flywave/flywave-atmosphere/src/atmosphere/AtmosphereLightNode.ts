@@ -1,15 +1,7 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import {
-    Matrix3,
-    Matrix4,
-    Vector2,
-    AnalyticLightNode,
-    NodeUpdateType,
-    type NodeBuilder,
-    type NodeFrame
-} from "three/webgpu";
+import type { DirectLightData, LightingContext } from "three/src/nodes/TSL.js";
 import {
     clamp,
     cos,
@@ -34,9 +26,17 @@ import {
     vec2,
     vec4
 } from "three/tsl";
-import type { DirectLightData, LightingContext } from "three/src/nodes/TSL.js";
+import {
+    type NodeBuilder,
+    type NodeFrame,
+    AnalyticLightNode,
+    Matrix3,
+    Matrix4,
+    NodeUpdateType,
+    Vector2
+} from "three/webgpu";
 
-import { getAtmosphereContext, type AtmosphereContext } from "./AtmosphereContext";
+import { type AtmosphereContext, getAtmosphereContext } from "./AtmosphereContext";
 import type { AtmosphereLight } from "./AtmosphereLight";
 import { getTransmittanceToSun } from "./common";
 import { getIndirectIlluminance } from "./runtime";
@@ -63,18 +63,21 @@ export class AtmosphereLightNode extends AnalyticLightNode<AtmosphereLight> {
     private readonly cloudShadowMatrices = Array.from({ length: MAX_CASCADES }, () =>
         uniform(new Matrix4()).setGroup(renderGroup)
     );
+
     private readonly cloudShadowIntervals = Array.from({ length: MAX_CASCADES }, () =>
         uniform(new Vector2(0, 1)).setGroup(renderGroup)
     );
+
     private readonly cloudShadowTexelSize = uniform(new Vector2(1 / 512, 1 / 512)).setGroup(
         renderGroup
     );
-    private cloudShadowTextureNodes: any[] = [null, null, null, null];
-    private cloudShadowRawTextureNodes: any[] = [null, null, null, null];
+
+    private readonly cloudShadowTextureNodes: any[] = [null, null, null, null];
+    private readonly cloudShadowRawTextureNodes: any[] = [null, null, null, null];
     private cloudShadowArrayNode: any = null;
     private _cloudShadowTexReady = false;
 
-    private _setupDone = false;
+    private readonly _setupDone = false;
 
     constructor(light?: AtmosphereLight | null) {
         super(light);

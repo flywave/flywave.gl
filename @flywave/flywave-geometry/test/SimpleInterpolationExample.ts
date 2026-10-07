@@ -1,39 +1,40 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-// 简单插值算法使用示例
+// Usage example for the simple interpolation algorithm
 
 import { GeoCoordinates, mercatorProjection } from "@flywave/flywave-geoutils";
 
 import { TerrainAdaptedSubdivisionModifier } from "../src/TerrainAdaptedSubdivisionModifier";
 
-// 创建一个简单的实现类
+// Create a simple implementation
 class SimpleInterpolationModifier extends TerrainAdaptedSubdivisionModifier {
     constructor(interpolationDistance: number) {
         super(mercatorProjection, interpolationDistance);
     }
 
-    // 简单的高程获取实现（在实际应用中，这里会从地形数据源获取高程）
+    // Simple elevation lookup implementation (in a real application this would
+    // fetch elevations from a terrain data source)
     protected getElevation(geoPoint: GeoCoordinates): number | undefined {
-        // 这里可以实现从实际地形数据源获取高程的逻辑
-        // 为了示例简单，我们返回一个固定值
+        // Implement the logic for reading elevations from a real terrain data source here.
+        // To keep the example simple, we return a fixed value.
         return 100;
     }
 }
 
-// 使用示例
+// Usage example
 function example() {
-    // 创建插值器，每隔50米插值一次
+    // Create the interpolator with one interpolation every 50 meters
     const interpolator = new SimpleInterpolationModifier(50);
 
-    // 创建两个点的线段
+    // Create a two-point segment
     const points = [
-        new GeoCoordinates(0, 0, 100), // 起点
-        new GeoCoordinates(0, 0.001, 100) // 终点（约111米远）
+        new GeoCoordinates(0, 0, 100), // start point
+        new GeoCoordinates(0, 0.001, 100) // end point (about 111 meters away)
     ];
 
     console.log("原始点数:", points.length);
 
-    // 执行插值
+    // Run the interpolation
     const result = interpolator.modify(points);
 
     console.log("插值后点数:", result.length);
@@ -43,5 +44,5 @@ function example() {
     });
 }
 
-// 运行示例
+// Run the example
 example();

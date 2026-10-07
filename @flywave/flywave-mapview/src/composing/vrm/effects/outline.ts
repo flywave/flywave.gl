@@ -1,6 +1,8 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
+import { float, Fn, mix, screenUV, uniform, vec2, vec3, vec4 } from "three/tsl";
 import * as THREE from "three/webgpu";
-import { Fn, uniform, screenUV, vec2, vec3, vec4, mix, float } from "three/tsl";
 
 /**
  * Temporary debugging aid: set to true to visualize the raw mask reads

@@ -1,15 +1,16 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { mapAssetsUriResolver, mapBundleMain } from "./BundleMain";
-import * as THREE from "three/webgpu";
 import { imageLoader } from "@flywave/flywave-gltf";
+import * as THREE from "three/webgpu";
+
+import { mapAssetsUriResolver, mapBundleMain } from "./BundleMain";
 
 const win = window as Window & { THREE?: typeof THREE };
 if (!win.THREE) {
     win.THREE = THREE;
 }
 
-import { MapView as RawMapView, MapViewOptions } from "@flywave/flywave-mapview";
+import { type MapViewOptions, MapView as RawMapView } from "@flywave/flywave-mapview";
 export { mapAssetsUriResolver };
 export * from "@flywave/flywave-mapview";
 export * from "@flywave/flywave-mapview-decoder";

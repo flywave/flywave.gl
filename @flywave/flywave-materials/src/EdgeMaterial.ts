@@ -1,24 +1,24 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import * as THREE from "three/webgpu";
-import { NodeMaterial } from "three/webgpu";
 import {
-    Fn,
     attribute,
+    cameraProjectionMatrix,
+    Fn,
     mix as tslMix,
+    modelViewPosition,
     normalize,
+    normalLocal,
+    positionLocal,
     smoothstep,
     texture,
     uniform,
     uv as uvNode,
     vec3,
-    vec4,
-    positionLocal,
-    normalLocal,
-    modelViewPosition,
-    cameraProjectionMatrix
+    vec4
 } from "three/tsl";
+import * as THREE from "three/webgpu";
+import { NodeMaterial } from "three/webgpu";
 
 import { ExtrusionFeatureDefs } from "./MapMeshMaterialsDefs";
 
@@ -38,13 +38,13 @@ export class EdgeMaterial extends NodeMaterial {
     static DEFAULT_COLOR: number = 0x000000;
     static DEFAULT_COLOR_MIX: number = 0.0;
 
-    private m_edgeColorU = uniform(new THREE.Color(EdgeMaterial.DEFAULT_COLOR));
-    private m_objectColorU = uniform(new THREE.Color(EdgeMaterial.DEFAULT_COLOR));
-    private m_colorMixU = uniform(EdgeMaterial.DEFAULT_COLOR_MIX);
-    private m_fadeNearU = uniform(-1.0);
-    private m_fadeFarU = uniform(-1.0);
-    private m_extrusionRatioU = uniform(ExtrusionFeatureDefs.DEFAULT_RATIO_MAX);
-    private m_displacementMapNode = texture(
+    private readonly m_edgeColorU = uniform(new THREE.Color(EdgeMaterial.DEFAULT_COLOR));
+    private readonly m_objectColorU = uniform(new THREE.Color(EdgeMaterial.DEFAULT_COLOR));
+    private readonly m_colorMixU = uniform(EdgeMaterial.DEFAULT_COLOR_MIX);
+    private readonly m_fadeNearU = uniform(-1.0);
+    private readonly m_fadeFarU = uniform(-1.0);
+    private readonly m_extrusionRatioU = uniform(ExtrusionFeatureDefs.DEFAULT_RATIO_MAX);
+    private readonly m_displacementMapNode = texture(
         new THREE.DataTexture(
             new Uint8Array([255, 255, 255, 255]),
             1,
@@ -133,6 +133,7 @@ export class EdgeMaterial extends NodeMaterial {
     get color(): THREE.Color {
         return this.m_edgeColorU.value;
     }
+
     set color(value: THREE.Color) {
         this.m_edgeColorU.value.copy(value);
     }
@@ -140,6 +141,7 @@ export class EdgeMaterial extends NodeMaterial {
     get objectColor(): THREE.Color {
         return this.m_objectColorU.value;
     }
+
     set objectColor(value: THREE.Color) {
         this.m_objectColorU.value.copy(value);
     }
@@ -147,6 +149,7 @@ export class EdgeMaterial extends NodeMaterial {
     get colorMix(): number {
         return this.m_colorMixU.value;
     }
+
     set colorMix(value: number) {
         this.m_colorMixU.value = value;
     }
@@ -154,6 +157,7 @@ export class EdgeMaterial extends NodeMaterial {
     get lineWidth(): number {
         return this.linewidth;
     }
+
     set lineWidth(value: number) {
         this.linewidth = value;
         this.visible = value > 0;

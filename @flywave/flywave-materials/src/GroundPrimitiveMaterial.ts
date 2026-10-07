@@ -1,4 +1,14 @@
-import { ShaderMaterial, Vector2, Vector3, Matrix4, Color, Texture, Camera } from "three/webgpu";
+/* Copyright (C) 2025 flywave.gl contributors */
+
+import {
+    type Camera,
+    type Texture,
+    Color,
+    Matrix4,
+    ShaderMaterial,
+    Vector2,
+    Vector3
+} from "three/webgpu";
 
 interface IUniform<TValue = any> {
     value: TValue;
@@ -24,20 +34,20 @@ export interface GroundPrimitiveMaterialParameters {
     opacity?: number;
     transparent?: boolean;
 
-    // 深度纹理
+    // Depth texture
     depthTexture?: Texture | null;
 
-    // 模板测试相关
+    // Stencil test related
     stencilReference?: number;
     stencilMask?: number;
 
-    // 分类类型
+    // Classification type
     classificationType?: ClassificationType;
 
-    // 体积边界
+    // Volume bounds
     volumeBounds?: VolumeBounds;
 
-    // 调试选项
+    // Debug options
     debugShowShadowVolume?: boolean;
 }
 
@@ -55,12 +65,12 @@ export interface VolumeBounds {
 }
 
 export class GroundPrimitiveMaterial extends ShaderMaterial {
-    // 模板常量（与Cesium保持一致）
+    // Stencil constants (kept consistent with Cesium)
     static readonly STENCIL_TERRAIN_MASK = 0x01;
     static readonly STENCIL_3D_TILE_MASK = 0x02;
     static readonly STENCIL_BOTH_MASK = 0x03;
 
-    // 类型化uniforms定义
+    // Typed uniforms declaration
     declare uniforms: {
         [key: string]: IUniform;
         diffuse: IUniform;
@@ -89,24 +99,24 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
                 opacity: { value: 1.0 },
                 map: { value: null },
 
-                // 深度纹理相关
+                // Depth texture related
                 depthTexture: { value: null },
                 cameraProjectionMatrix: { value: new Matrix4() },
                 cameraProjectionMatrixInverse: { value: new Matrix4() },
                 viewport: { value: new Vector2(1, 1) },
 
-                // 模板测试
+                // Stencil test
                 stencilReference: { value: GroundPrimitiveMaterial.STENCIL_BOTH_MASK },
                 stencilMask: { value: GroundPrimitiveMaterial.STENCIL_BOTH_MASK },
 
-                // 分类类型
+                // Classification type
                 classificationType: { value: ClassificationType.BOTH },
 
-                // 体积边界
+                // Volume bounds
                 volumeBounds: { value: new Vector3(0, 0, 0) },
                 volumeCenter: { value: new Vector3(0, 0, 0) },
 
-                // 调试
+                // Debug
                 debugShowShadowVolume: { value: false }
             }
         );
@@ -116,7 +126,7 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
             vertexShader: GroundPrimitiveMaterial.getVertexShader(),
             fragmentShader: GroundPrimitiveMaterial.getFragmentShader(),
             transparent: parameters.transparent ?? true,
-            // 使用Three.js的标准模板测试配置
+            // Use Three.js's standard stencil test configuration
             stencilWrite: true,
             stencilFunc: 514, // THREE.EqualToStencil
             stencilRef: parameters.stencilReference ?? GroundPrimitiveMaterial.STENCIL_BOTH_MASK,
@@ -128,7 +138,7 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
 
         this.setValues(parameters);
 
-        // 确保类型安全
+        // Ensure type safety
         this.updateUniforms();
     }
 
@@ -137,7 +147,7 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
       #include <common>
       #include <uv_pars_vertex>
 
-      // 自定义属性
+      // Custom attribute
       attribute vec3 extrudeDirection;
 
       varying vec2 vUv;
@@ -180,7 +190,7 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
       varying vec3 vExtrudeDirection;
 
       /**
-       * 从深度纹理重建世界坐标
+       * Reconstruct world coordinates from the depth texture
        */
       vec3 depthToWorld(vec2 uv, float depth) {
         vec4 clipSpace = vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
@@ -190,23 +200,23 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
       }
 
       /**
-       * 检查点是否在体积内（简化版球体检测）
+       * Check whether a point is inside the volume (simplified sphere test)
        */
       bool pointInVolume(vec3 point) {
-        // 计算到体积中心的距离
+        // Compute the distance to the volume center
         float dist = distance(point, volumeCenter);
         
-        // 检查高度范围
+        // Check the height range
         bool inHeight = point.y >= volumeBounds.x && point.y <= volumeBounds.y;
         
-        // 检查水平距离
+        // Check the horizontal distance
         bool inRadius = dist <= volumeBounds.z;
         
         return inHeight && inRadius;
       }
 
       /**
-       * 基于分类类型和模板值决定是否渲染
+       * Decide whether to render based on the classification type and stencil value
        */
       bool shouldRender(int stencilValue) {
         if (classificationType == ${ClassificationType.TERRAIN}) {
@@ -225,17 +235,17 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
           diffuseColor = texture2D(map, vUv);
         #endif
 
-        // 获取当前像素的深度值
+        // Read the depth value of the current pixel
         vec2 screenUV = gl_FragCoord.xy / viewport;
         float terrainDepth = texture2D(depthTexture, screenUV).r;
         
-        // 重建世界坐标
+        // Reconstruct world coordinates
         vec3 terrainWorldPos = depthToWorld(screenUV, terrainDepth);
         
-        // 体积相交测试
+        // Volume intersection test
         bool inVolume = pointInVolume(terrainWorldPos);
         
-        // 模板测试（在着色器中也可以进行逻辑检查）
+        // Stencil test (the logic can also be checked in the shader)
         bool stencilPass = shouldRender(stencilReference);
         
         if (debugShowShadowVolume) {
@@ -245,7 +255,7 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
             discard;
           }
         } else {
-          // 正常渲染：必须同时通过体积测试和模板测试
+          // Normal rendering: must pass both the volume test and the stencil test
           if (!inVolume || !stencilPass) {
             discard;
           }
@@ -256,18 +266,18 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
     `;
     }
 
-    // ========== 私有方法 ==========
+    // ========== Private methods ==========
 
     /**
-     * 更新uniforms与材质状态的同步
+     * Synchronize the uniforms with the material state
      */
     private updateUniforms(): void {
-        // 确保uniforms与材质状态同步
+        // Ensure the uniforms stay in sync with the material state
         this.uniforms.stencilReference.value = this.stencilRef;
         this.uniforms.stencilMask.value = this.stencilFuncMask;
     }
 
-    // ========== 模板测试相关方法 ==========
+    // ========== Stencil test methods ==========
 
     setStencilForTerrain(): this {
         this.stencilRef = GroundPrimitiveMaterial.STENCIL_TERRAIN_MASK;
@@ -290,7 +300,7 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
         return this;
     }
 
-    // ========== 属性设置方法 ==========
+    // ========== Property setter methods ==========
 
     setDepthTexture(depthTexture: Texture): this {
         this.uniforms.depthTexture.value = depthTexture;
@@ -328,29 +338,29 @@ export class GroundPrimitiveMaterial extends ShaderMaterial {
         return this;
     }
 
-    // ========== Three.js 材质标准方法 ==========
+    // ========== Standard Three.js material methods ==========
 
     copy(source: GroundPrimitiveMaterial): this {
         super.copy(source);
 
-        // 复制自定义uniforms
+        // Copy the custom uniforms
         this.uniforms = cloneUniforms(source.uniforms as UniformsSpec) as typeof this.uniforms;
 
         return this;
     }
 
     /**
-     * 更新方法，可在渲染循环中调用
+     * Update method; can be called in the render loop
      */
     update(camera: Camera): void {
         this.setCameraInfo(camera);
     }
 
     /**
-     * 释放资源
+     * Release resources
      */
     dispose(): void {
-        // 清理自定义资源
+        // Clean up custom resources
         this.uniforms.depthTexture.value = null;
         this.uniforms.map.value = null;
 

@@ -3,8 +3,8 @@
 import { getTestResourceUrl } from "@flywave/flywave-test-utils";
 import { assert } from "chai";
 import * as sinon from "sinon";
-import * as THREE from "three/webgpu";
 import type { Renderer } from "three/webgpu";
+import * as THREE from "three/webgpu";
 
 import {
     DefaultTextStyle,

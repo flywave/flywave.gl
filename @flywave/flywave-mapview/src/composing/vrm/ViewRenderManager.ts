@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
 import * as THREE from "three/webgpu";
 
@@ -5,83 +7,82 @@ import * as THREE from "three/webgpu";
 const _fogLightColor = new THREE.Color();
 const _fogLightOffset = new THREE.Vector3();
 
-import {
-    RenderPipeline,
-    type Renderer,
-    NodeMaterial,
-    MeshBasicNodeMaterial,
-    NodeUpdateType
-} from "three/webgpu";
-import {
-    float,
-    mrt,
-    output,
-    pass,
-    positionView,
-    select,
-    uniform,
-    vec4,
-    vec3,
-    Fn,
-    depth,
-    normalView,
-    attribute,
-    min,
-    texture,
-    vec2,
-    floor,
-    positionLocal,
-    modelViewMatrix,
-    cameraProjectionMatrix,
-    modelWorldMatrix,
-    cameraViewMatrix,
-    mod
-} from "three/tsl";
-
-import type { CascadedShadowMapsNode } from "@flywave/flywave-atmosphere";
-
-import {
-    dithering,
-    lensFlare,
-    aerialPerspective,
-    convertToTexture,
-    agxPunchyToneMapping,
-    temporalAntialias,
-    highpVelocity,
-    shadowLength,
-    cloudRender,
+import type {
+    type AerialPerspectiveNode,
     type CloudRenderNode,
     type LensFlareNode,
-    type AerialPerspectiveNode,
-    type TemporalAntialiasNode
+    type TemporalAntialiasNode,
+    CascadedShadowMapsNode
 } from "@flywave/flywave-atmosphere";
-
-import { smaaWrapped } from "@flywave/flywave-atmosphere";
-
-import type {
-    IViewRenderConfig,
-    IViewRenderManager,
-    ILensFlareConfig,
-    IFogLightDef
-} from "./ViewRenderTypes";
-import { vignette } from "./effects/vignette";
-import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading";
-import { ColorGradingLutController, colorGradingLut } from "./effects/colorGradingLUT";
 import {
-    createFogLightUniforms,
-    fogLight as fogLightEffect,
-    FOG_LIGHT_CAPACITY,
-    type IFogLightUniforms
-} from "./effects/fogLight";
-import { ssr, SSRNode } from "./effects/ssr";
+    aerialPerspective,
+    agxPunchyToneMapping,
+    cloudRender,
+    convertToTexture,
+    dithering,
+    highpVelocity,
+    lensFlare,
+    shadowLength,
+    smaaWrapped,
+    temporalAntialias
+} from "@flywave/flywave-atmosphere";
+import {
+    attribute,
+    cameraProjectionMatrix,
+    cameraViewMatrix,
+    depth,
+    float,
+    floor,
+    Fn,
+    min,
+    mod,
+    modelViewMatrix,
+    modelWorldMatrix,
+    mrt,
+    normalView,
+    output,
+    pass,
+    positionLocal,
+    positionView,
+    select,
+    texture,
+    uniform,
+    vec2,
+    vec3,
+    vec4
+} from "three/tsl";
+import {
+    type Renderer,
+    MeshBasicNodeMaterial,
+    NodeMaterial,
+    NodeUpdateType,
+    RenderPipeline
+} from "three/webgpu";
+
 import { bloom } from "./effects/bloom";
-import { outline } from "./effects/outline";
+import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading";
+import { colorGradingLut, ColorGradingLutController } from "./effects/colorGradingLUT";
 import {
-    TranslucentLayerEffect,
-    TRANSLUCENT_LAYER_BIT,
+    type IFogLightUniforms,
+    createFogLightUniforms,
+    FOG_LIGHT_CAPACITY,
+    fogLight as fogLightEffect
+} from "./effects/fogLight";
+import { outline } from "./effects/outline";
+import { type SSRNode, ssr } from "./effects/ssr";
+import { vignette } from "./effects/vignette";
+import {
+    type TranslucentLayerEffect,
+    OUTLINE_LAYER_BIT,
     SPLAT_DEPTH_LAYER_BIT,
-    OUTLINE_LAYER_BIT
+    TRANSLUCENT_LAYER_BIT
 } from "./TranslucentLayerEffect";
+import type {
+    IFogLightDef,
+    ILensFlareConfig,
+    IViewRenderConfig,
+    IViewRenderManager
+} from "./ViewRenderTypes";
 
 interface DepthSlot {
     /** Pixel the cached invW was read from, in render-target pixels. */
@@ -214,9 +215,10 @@ export class ViewRenderManager implements IViewRenderManager {
         }
         u.count.value = slot;
     }
+
     private aerialNode?: AerialPerspectiveNode;
     private m_cloudNode?: CloudRenderNode;
-    private pendingCloudConfig?: Record<string, unknown>;
+    private readonly pendingCloudConfig?: Record<string, unknown>;
     /**
      * Called once the cloud render node finishes its async texture load and is
      * ready to accept config. AtmosphereSystem hooks this to push the persisted
@@ -233,20 +235,20 @@ export class ViewRenderManager implements IViewRenderManager {
     private taaNode?: TemporalAntialiasNode;
     private ssrNode?: SSRNode;
     private _smaaNode?: ReturnType<typeof smaa>;
-    private scene?: THREE.Scene;
+    private readonly scene?: THREE.Scene;
     private camera?: THREE.Camera;
     private _sunDir?: ReturnType<typeof uniform<"vec3">>;
     private _ambient?: ReturnType<typeof uniform<"float">>;
     private _sunDirWarned = false;
 
-    bloomObjects: Set<THREE.Object3D> = new Set();
-    bloomIgnoreObjects: Set<THREE.Object3D> = new Set();
+    bloomObjects = new Set<THREE.Object3D>();
+    bloomIgnoreObjects = new Set<THREE.Object3D>();
     /**
      * Fog lights feeding the halo pass, keyed by def (re-adding a def moves
      * it) with the def's geo position projected to the world frame once on
      * add — the per-frame upload must not redo the projection.
      */
-    fogLights: Map<IFogLightDef, THREE.Vector3> = new Map();
+    fogLights = new Map<IFogLightDef, THREE.Vector3>();
     /** Persistent fog-light uniform slots; reused across graph rebuilds. */
     private m_fogLightUniforms?: IFogLightUniforms;
     /**
@@ -257,7 +259,7 @@ export class ViewRenderManager implements IViewRenderManager {
      * footprint is the FULL silhouette (occluded parts included) that
      * `vrm/effects/outline` dilates.
      */
-    outlineObjects: Set<THREE.Object3D> = new Set();
+    outlineObjects = new Set<THREE.Object3D>();
     translucentLayerEffect?: TranslucentLayerEffect;
     csmShadowNode?: CascadedShadowMapsNode;
     exposure = uniform(3);
@@ -276,9 +278,9 @@ export class ViewRenderManager implements IViewRenderManager {
 
     private mrtKeys: string[] = ["output"];
     private pickDepthTexIndex: number = -1;
-    private lastCameraPos: THREE.Vector3 = new THREE.Vector3();
-    private lastCameraDir: THREE.Vector3 = new THREE.Vector3();
-    private tmpDir: THREE.Vector3 = new THREE.Vector3();
+    private readonly lastCameraPos: THREE.Vector3 = new THREE.Vector3();
+    private readonly lastCameraDir: THREE.Vector3 = new THREE.Vector3();
+    private readonly tmpDir: THREE.Vector3 = new THREE.Vector3();
 
     /** Screen-center depth, auto-refreshed on camera motion (updateLookAtSettings). */
     private centerSlot: DepthSlot = createDepthSlot();
@@ -286,9 +288,9 @@ export class ViewRenderManager implements IViewRenderManager {
     private querySlot: DepthSlot = createDepthSlot();
 
     /** Dense pickId assignment: rendered object → id (weak — no retention). */
-    private gpuPickIds = new WeakMap<THREE.Object3D, number>();
+    private readonly gpuPickIds = new WeakMap<THREE.Object3D, number>();
     /** Dense pickId → rendered object (validated for scene connectivity). */
-    private gpuPickRegistry = new Map<number, THREE.Object3D>();
+    private readonly gpuPickRegistry = new Map<number, THREE.Object3D>();
     private nextGpuPickId = 1;
     /** Scene root for connectivity validation of registry entries. */
     private pickSceneRoot: THREE.Object3D | null = null;
@@ -315,6 +317,7 @@ export class ViewRenderManager implements IViewRenderManager {
     get aerialPerspectiveNode(): AerialPerspectiveNode | undefined {
         return this.aerialNode;
     }
+
     get cloudNode(): CloudRenderNode | undefined {
         return this.m_cloudNode;
     }
@@ -942,7 +945,7 @@ export class ViewRenderManager implements IViewRenderManager {
         };
     }
 
-    private cameraNearFar: { near: number; far: number } = { near: 1, far: 1000 };
+    private readonly cameraNearFar: { near: number; far: number } = { near: 1, far: 1000 };
 
     async readDepthAsync(ndc: THREE.Vector2 | THREE.Vector3): Promise<number | null> {
         const rt = this.passNode?.renderTarget;

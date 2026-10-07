@@ -4,21 +4,21 @@
 import { type BufferGeometry, type Material, type Mesh, DataTexture, Texture } from "three/webgpu";
 
 /**
- * 估计 Mesh 占用的内存大小
- * @param mesh 要估计的 Mesh 对象
- * @returns 内存大小（字节）
+ * Estimate the amount of memory occupied by a Mesh
+ * @param mesh the Mesh object to estimate
+ * @returns the memory size (bytes)
  */
 export function estimateMeshMemory(mesh: Mesh): number {
     if (!mesh) return 0;
 
     let totalSize = 0;
 
-    // 估计几何体内存
+    // Estimate geometry memory
     if (mesh.geometry) {
         totalSize += estimateGeometryMemory(mesh.geometry);
     }
 
-    // 估计材质内存
+    // Estimate material memory
     if (Array.isArray(mesh.material)) {
         mesh.material.forEach(material => {
             totalSize += estimateMaterialMemory(material);
@@ -31,16 +31,16 @@ export function estimateMeshMemory(mesh: Mesh): number {
 }
 
 /**
- * 估计 BufferGeometry 占用的内存大小
- * @param geometry BufferGeometry 对象
- * @returns 内存大小（字节）
+ * Estimate the amount of memory occupied by a BufferGeometry
+ * @param geometry the BufferGeometry object
+ * @returns the memory size (bytes)
  */
 export function estimateGeometryMemory(geometry: BufferGeometry): number {
     if (!geometry) return 0;
 
     let size = 0;
 
-    // 估计顶点属性内存
+    // Estimate vertex attribute memory
     const attributes = geometry.attributes;
     for (const attributeName in attributes) {
         const attribute = attributes[attributeName];
@@ -49,7 +49,7 @@ export function estimateGeometryMemory(geometry: BufferGeometry): number {
         }
     }
 
-    // 估计索引缓冲区内存
+    // Estimate index buffer memory
     if (geometry.index) {
         size += geometry.index.array.byteLength;
     }
@@ -58,16 +58,16 @@ export function estimateGeometryMemory(geometry: BufferGeometry): number {
 }
 
 /**
- * 估计 Material 占用的内存大小
- * @param material Material 对象
- * @returns 内存大小（字节）
+ * Estimate the amount of memory occupied by a Material
+ * @param material the Material object
+ * @returns the memory size (bytes)
  */
 export function estimateMaterialMemory(material: Material): number {
     if (!material) return 0;
 
     let size = 0;
 
-    // 获取材质中使用的所有纹理
+    // Gather all textures used by the material
     const textures = getMaterialTextures(material);
     textures.forEach(texture => {
         size += estimateTextureMemory(texture);
@@ -77,29 +77,29 @@ export function estimateMaterialMemory(material: Material): number {
 }
 
 /**
- * 获取材质中使用的所有纹理
- * @param material Material 对象
- * @returns 纹理数组
+ * Gather all textures used by the material
+ * @param material the Material object
+ * @returns the array of textures
  */
 function getMaterialTextures(material: Material): Texture[] {
     const textures: Texture[] = [];
 
-    // 检查常见的纹理属性
+    // Check the common texture properties
     const textureProperties = [
-        "map", // 基础贴图
-        "alphaMap", // 透明度贴图
-        "aoMap", // 环境光遮蔽贴图
-        "bumpMap", // 凹凸贴图
-        "displacementMap", // 位移贴图
-        "emissiveMap", // 自发光贴图
-        "envMap", // 环境贴图
-        "lightMap", // 光照贴图
-        "metalnessMap", // 金属度贴图
-        "normalMap", // 法线贴图
-        "roughnessMap", // 粗糙度贴图
-        "specularMap", // 镜面贴图
-        "gradientMap", // 渐变贴图
-        "alphaMap" // alpha贴图
+        "map", // base map
+        "alphaMap", // alpha map
+        "aoMap", // ambient occlusion map
+        "bumpMap", // bump map
+        "displacementMap", // displacement map
+        "emissiveMap", // emissive map
+        "envMap", // environment map
+        "lightMap", // light map
+        "metalnessMap", // metalness map
+        "normalMap", // normal map
+        "roughnessMap", // roughness map
+        "specularMap", // specular map
+        "gradientMap", // gradient map
+        "alphaMap" // alpha map
     ];
 
     textureProperties.forEach(prop => {
@@ -113,16 +113,16 @@ function getMaterialTextures(material: Material): Texture[] {
 }
 
 /**
- * 估计 Texture 占用的内存大小
- * @param texture Texture 对象
- * @returns 内存大小（字节）
+ * Estimate the amount of memory occupied by a Texture
+ * @param texture the Texture object
+ * @returns the memory size (bytes)
  */
 export function estimateTextureMemory(texture: Texture): number {
     if (!texture || !texture.image) {
         return 0;
     }
 
-    // DataTexture 特殊处理
+    // Special handling for DataTexture
     if (texture instanceof DataTexture) {
         const data = texture.image.data;
         if (data) {
@@ -130,7 +130,7 @@ export function estimateTextureMemory(texture: Texture): number {
         }
     }
 
-    // 处理普通纹理（Image/Canvas 元素）
+    // Handle regular textures (Image/Canvas elements)
     const image = texture.image;
     if (
         typeof image !== "object" ||
@@ -147,8 +147,8 @@ export function estimateTextureMemory(texture: Texture): number {
         return 0;
     }
 
-    // 估计通道数
-    let channels = 4; // 默认 RGBA
+    // Estimate the number of channels
+    let channels = 4; // RGBA by default
 
     const format = (texture as any).format;
     switch (format) {
@@ -164,7 +164,7 @@ export function estimateTextureMemory(texture: Texture): number {
             break;
     }
 
-    // 估计每个像素的字节数
+    // Estimate the number of bytes per pixel
     let bytesPerPixel = 1;
     const type = (texture as any).type;
     switch (type) {
@@ -187,10 +187,10 @@ export function estimateTextureMemory(texture: Texture): number {
 }
 
 /**
- * 格式化内存大小显示
- * @param bytes 字节数
- * @param decimals 小数位数
- * @returns 格式化的内存大小字符串
+ * Format a memory size for display
+ * @param bytes the number of bytes
+ * @param decimals the number of decimal places
+ * @returns the formatted memory size string
  */
 export function formatMemorySize(bytes: number, decimals: number = 2): string {
     if (bytes === 0) return "0 Bytes";
@@ -205,9 +205,9 @@ export function formatMemorySize(bytes: number, decimals: number = 2): string {
 }
 
 /**
- * 估计多个 Mesh 的总内存大小
- * @param meshes Mesh 数组
- * @returns 总内存大小（字节）
+ * Estimate the total memory occupied by multiple Meshes
+ * @param meshes an array of Meshes
+ * @returns the total memory size (bytes)
  */
 export function estimateMeshesTotalMemory(meshes: Mesh[]): number {
     return meshes.reduce((total, mesh) => total + estimateMeshMemory(mesh), 0);

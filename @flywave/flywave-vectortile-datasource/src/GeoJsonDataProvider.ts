@@ -215,7 +215,9 @@ export class GeoJsonDataProvider extends DataProvider {
 
     onDidInvalidate(listener: () => void) {
         this.addEventListener(INVALIDATED, listener);
-        return () => this.removeEventListener(INVALIDATED, listener);
+        return () => {
+            this.removeEventListener(INVALIDATED, listener);
+        };
     }
 
     /**

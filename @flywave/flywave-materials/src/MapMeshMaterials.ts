@@ -3,7 +3,10 @@
 
 import * as THREE from "three/webgpu";
 
-import { type DisplacementFeatureParameters, DisplacementFeature } from "./DisplacementFeature";
+import {
+    type DisplacementFeature,
+    type DisplacementFeatureParameters
+} from "./DisplacementFeature";
 import { ExtrusionFeatureDefs } from "./MapMeshMaterialsDefs";
 import { type ViewRanges } from "./ViewRanges";
 

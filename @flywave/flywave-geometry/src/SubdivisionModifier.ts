@@ -153,23 +153,31 @@ export abstract class SubdivisionModifier {
         }
 
         // Update geometry attributes
+        // In three r185, BufferAttribute.count is a plain field at runtime (assigned in the
+        // constructor), but the .d.ts still marks it readonly: after replacing .array the
+        // count must be re-synced through an assertion, otherwise newly subdivided vertices
+        // are silently truncated.
         positionAttr.array = new Float32Array(position);
+        (positionAttr as { count: number }).count = position.length / 3;
         positionAttr.needsUpdate = true;
 
         geometry.setIndex(newIndices);
 
         if (uv !== undefined && uvAttr) {
             uvAttr.array = new Float32Array(uv);
+            (uvAttr as { count: number }).count = uv.length / 2;
             uvAttr.needsUpdate = true;
         }
 
         if (edge !== undefined && edgeAttr) {
             edgeAttr.array = new Float32Array(edge);
+            (edgeAttr as { count: number }).count = edge.length;
             edgeAttr.needsUpdate = true;
         }
 
         if (wall !== undefined && wallAttr) {
             wallAttr.array = new Float32Array(wall);
+            (wallAttr as { count: number }).count = wall.length;
             wallAttr.needsUpdate = true;
         }
 

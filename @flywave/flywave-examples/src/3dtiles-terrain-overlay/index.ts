@@ -1,14 +1,15 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
-    ellipsoidProjection,
-    MapControls,
+    ArcGISTileProvider,
     CesiumIonDataSource,
     DEMTerrainSource,
-    ArcGISTileProvider,
-    MapControlsUI
+    ellipsoidProjection,
+    GeoCoordinates,
+    MapControls,
+    MapControlsUI,
+    MapView
 } from "@flywave/flywave.gl";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 /**
  * Get map canvas element
@@ -41,7 +42,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         tilt: 70, // Initial tilt angle
         heading: 35.1, // Initial heading angle
         enableNativeWebglAntialias: false,
-        canvas: canvas, // Specify render canvas
+        canvas, // Specify render canvas
         theme: {
             // extends: "resources/tilezen_base_globe.json"
             atmosphere: {

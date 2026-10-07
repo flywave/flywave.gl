@@ -1,13 +1,14 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { loadSpz } from "@spz-loader/core";
-import { GLTFScenegraph } from "../../api/gltf-scenegraph";
-import type { GLTFMeshPrimitive } from "../../types/gltf-json-schema";
 import { MathUtils } from "three/webgpu";
+
+import { type GLTFScenegraph } from "../../api/gltf-scenegraph";
+import type { GLTFMeshPrimitive } from "../../types/gltf-json-schema";
 
 export const EXT_SPZ_COMPRESSION = "KHR_gaussian_splatting_compression_spz_2";
 
-// SPZ 数据接口
+// SPZ data interface
 export interface SPZData {
     positions: Float32Array;
     colors: Float32Array;
@@ -37,10 +38,10 @@ export interface SPZDecompressionResult {
     };
 }
 
-// SPZ 解压器
+// SPZ decompressor
 export class SPZDecompressor {
     /**
-     * 解压 SPZ 压缩的高斯泼溅数据
+     * Decompress SPZ-compressed Gaussian splatting data
      */
     static async decompress(
         scenegraph: GLTFScenegraph,
@@ -52,23 +53,23 @@ export class SPZDecompressor {
 
         console.log("Starting SPZ decompression...");
 
-        // 验证扩展数据
+        // Validate the extension data
         this.validateExtension(spzExtension);
 
-        // 获取压缩数据
+        // Get the compressed data
         const compressedData = this.getCompressedData(scenegraph, spzExtension.bufferView);
 
-        // 使用 @spz-loader/core 解码
+        // Decode with @spz-loader/core
         const spzData = await this.decodeSPZ(compressedData);
 
-        // 验证解压后的数据
+        // Validate the decompressed data
         this.validateDecompressedData(spzData);
 
-        // 计算顶点数并验证
+        // Compute and validate the vertex count
         const vertexCount = this.calculateVertexCount(spzData);
         console.log(`SPZ decompression: ${vertexCount} vertices found`);
 
-        // 创建解压后的属性
+        // Create the decompressed attributes
         const attributes = await this.createDecompressedAttributes(
             scenegraph,
             spzData,
@@ -76,11 +77,11 @@ export class SPZDecompressor {
             { mergeAlphaToColor, preserveSHData }
         );
 
-        // 验证创建的访问器类型
+        // Validate the accessor types that were created
         await this.validateCreatedAccessors(scenegraph, attributes);
 
-        // 处理球谐系数
-        let sphericalHarmonics: SPZDecompressionResult["sphericalHarmonics"] = undefined;
+        // Handle spherical harmonics coefficients
+        let sphericalHarmonics: SPZDecompressionResult["sphericalHarmonics"];
         if (spzData.sh && preserveSHData) {
             sphericalHarmonics = await this.handleSphericalHarmonics(
                 scenegraph,
@@ -99,7 +100,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 验证创建的访问器类型
+     * Validate the types of the created accessors
      */
     private static async validateCreatedAccessors(
         scenegraph: GLTFScenegraph,
@@ -132,7 +133,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 验证 SPZ 扩展数据
+     * Validate the SPZ extension data
      */
     private static validateExtension(extension: any): void {
         if (typeof extension.bufferView !== "number") {
@@ -145,15 +146,15 @@ export class SPZDecompressor {
     }
 
     /**
-     * 验证解压后的数据
+     * Validate the decompressed data
      */
     private static validateDecompressedData(spzData: SPZData): void {
-        // 验证必需数据存在
+        // Validate that the required data is present
         if (!spzData.positions || !spzData.colors || !spzData.scales || !spzData.rotations) {
             throw new Error("SPZ data missing required fields");
         }
 
-        // 验证数据长度一致性
+        // Validate that the data lengths are consistent
         const positionCount = spzData.positions.length;
         const colorCount = spzData.colors.length;
         const scaleCount = spzData.scales.length;
@@ -181,7 +182,7 @@ export class SPZDecompressor {
         const vertexCountFromScales = scaleCount / 3;
         const vertexCountFromRotations = rotationCount / 4;
 
-        // 验证顶点数一致性
+        // Validate that the vertex counts are consistent
         if (vertexCountFromColors !== vertexCountFromPositions) {
             throw new Error(
                 `Vertex count mismatch: positions=${vertexCountFromPositions}, colors=${vertexCountFromColors}`
@@ -198,14 +199,14 @@ export class SPZDecompressor {
             );
         }
 
-        // 验证透明度数据（如果存在）
+        // Validate the alpha data (if present)
         if (spzData.alphas && spzData.alphas.length !== vertexCountFromPositions) {
             throw new Error(
                 `Alpha data length mismatch: ${spzData.alphas.length} != ${vertexCountFromPositions}`
             );
         }
 
-        // 验证球谐系数数据（如果存在）
+        // Validate the spherical harmonics data (if present)
         if (spzData.sh && spzData.sh.length % vertexCountFromPositions !== 0) {
             throw new Error(
                 `Spherical harmonics data length invalid: ${spzData.sh.length} for ${vertexCountFromPositions} vertices`
@@ -214,7 +215,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 计算顶点数
+     * Compute the vertex count
      */
     private static calculateVertexCount(spzData: SPZData): number {
         const vertexCount = spzData.positions.length / 3;
@@ -227,7 +228,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 获取压缩数据
+     * Get the compressed data
      */
     private static getCompressedData(
         scenegraph: GLTFScenegraph,
@@ -243,7 +244,7 @@ export class SPZDecompressor {
             throw new Error("Failed to get SPZ compressed data from bufferView");
         }
 
-        // 验证 bufferView 数据大小
+        // Validate the bufferView data size
         if (compressedData.byteLength === 0) {
             throw new Error("SPZ compressed data is empty");
         }
@@ -254,7 +255,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 使用 @spz-loader/core 解码 SPZ 数据
+     * Decode SPZ data with @spz-loader/core
      */
     private static async decodeSPZ(compressedData: Uint8Array): Promise<SPZData> {
         try {
@@ -263,10 +264,10 @@ export class SPZDecompressor {
                 compressedData.byteOffset + compressedData.byteLength
             );
 
-            // 使用 @spz-loader/core 解码
+            // Decode with @spz-loader/core
             const gaussianCloud = await loadSpz(arrayBuffer);
 
-            // 验证解码结果
+            // Validate the decoding result
             if (
                 !gaussianCloud.positions ||
                 !gaussianCloud.colors ||
@@ -291,7 +292,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 创建解压后的属性
+     * Create the decompressed attributes
      */
     private static async createDecompressedAttributes(
         scenegraph: GLTFScenegraph,
@@ -299,14 +300,14 @@ export class SPZDecompressor {
         vertexCount: number,
         options: SPZDecompressionOptions
     ): Promise<SPZDecompressionResult["attributes"]> {
-        // 处理颜色数据（可能包含透明度）
+        // Handle the color data (may contain alpha)
         const colorData = await this.prepareColorData(
             spzData,
             vertexCount,
             options.mergeAlphaToColor
         );
 
-        // 创建所有必需的属性 - 使用标准的属性名称
+        // Create all required attributes - using standard attribute names
         const attributes = {
             POSITION: this.createFloatAttribute(
                 scenegraph,
@@ -330,7 +331,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 准备颜色数据（处理透明度并使用钳制转换）
+     * Prepare the color data (handling alpha and clamped conversion)
      */
     private static async prepareColorData(
         spzData: SPZData,
@@ -340,7 +341,7 @@ export class SPZDecompressor {
         const colorsWithAlpha = new Uint8Array(vertexCount * 4);
 
         if (spzData.alphas && mergeAlphaToColor) {
-            // 创建带透明度的颜色数据，使用钳制转换
+            // Create color data with alpha using clamped conversion
             for (let i = 0; i < vertexCount; i++) {
                 colorsWithAlpha[i * 4] = MathUtils.clamp(spzData.colors[i * 3], 0, 1) * 255; // R
                 colorsWithAlpha[i * 4 + 1] = MathUtils.clamp(spzData.colors[i * 3 + 1], 0, 1) * 255; // G
@@ -348,12 +349,12 @@ export class SPZDecompressor {
                 colorsWithAlpha[i * 4 + 3] = MathUtils.clamp(spzData.alphas[i], 0, 1) * 255; // A
             }
         } else {
-            // 如果没有透明度或不需要合并，将 RGB 转换为 RGBA
+            // If there is no alpha or merging is not needed, convert RGB to RGBA
             for (let i = 0; i < vertexCount; i++) {
                 colorsWithAlpha[i * 4] = MathUtils.clamp(spzData.colors[i * 3], 0, 1) * 255; // R
                 colorsWithAlpha[i * 4 + 1] = MathUtils.clamp(spzData.colors[i * 3 + 1], 0, 1) * 255; // G
                 colorsWithAlpha[i * 4 + 2] = MathUtils.clamp(spzData.colors[i * 3 + 2], 0, 1) * 255; // B
-                colorsWithAlpha[i * 4 + 3] = 255; // 默认不透明度为 1 (255)
+                colorsWithAlpha[i * 4 + 3] = 255; // Default opacity is 1 (255)
             }
         }
 
@@ -361,7 +362,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 创建颜色属性访问器（使用UNSIGNED_BYTE）
+     * Create the color attribute accessor (using UNSIGNED_BYTE)
      */
     private static createColorAttribute(
         scenegraph: GLTFScenegraph,
@@ -394,7 +395,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 创建浮点属性访问器
+     * Create a floating point attribute accessor
      */
     private static createFloatAttribute(
         scenegraph: GLTFScenegraph,
@@ -403,7 +404,7 @@ export class SPZDecompressor {
         components: number,
         expectedCount: number
     ): number {
-        // 验证数据长度
+        // Validate the data length
         const actualCount = data.length / components;
         if (!Number.isInteger(actualCount) || actualCount !== expectedCount) {
             throw new Error(
@@ -425,10 +426,10 @@ export class SPZDecompressor {
             bufferView: bufferViewIndex,
             size: components,
             componentType: 5126, // FLOAT
-            count: count,
-            type: type,
-            min: min,
-            max: max
+            count,
+            type,
+            min,
+            max
         };
 
         const accessorIndex = scenegraph.addAccessor(bufferViewIndex, accessorData);
@@ -436,7 +437,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 验证和修复访问器类型
+     * Validate and fix the accessor type
      */
     private static validateAndFixAccessorType(
         scenegraph: GLTFScenegraph,
@@ -449,7 +450,7 @@ export class SPZDecompressor {
         }
 
         if (accessor.type !== expectedType) {
-            // 直接修改 JSON 中的访问器类型
+            // Patch the accessor type directly in the JSON
             if (scenegraph.json.accessors && scenegraph.json.accessors[accessorIndex]) {
                 scenegraph.json.accessors[accessorIndex].type = expectedType;
             } else {
@@ -463,7 +464,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 创建字节对齐的 BufferView
+     * Create a byte-aligned BufferView
      */
     private static createAlignedBufferView(scenegraph: GLTFScenegraph, data: Float32Array): number {
         const sourceBuffer = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
@@ -472,7 +473,7 @@ export class SPZDecompressor {
         if (alignedByteLength > sourceBuffer.byteLength) {
             const alignedBuffer = new Uint8Array(alignedByteLength);
             alignedBuffer.set(sourceBuffer);
-            // 填充剩余字节为 0
+            // Pad the remaining bytes with 0
             for (let i = sourceBuffer.byteLength; i < alignedByteLength; i++) {
                 alignedBuffer[i] = 0;
             }
@@ -483,7 +484,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 计算最小最大值
+     * Compute the min/max values
      */
     private static calculateMinMax(
         data: Float32Array,
@@ -502,7 +503,7 @@ export class SPZDecompressor {
             }
         }
 
-        // 验证 min/max 值
+        // Validate the min/max values
         for (let j = 0; j < components; j++) {
             if (!isFinite(min[j]) || !isFinite(max[j])) {
                 throw new Error(`Invalid min/max values calculated for component ${j}`);
@@ -513,14 +514,14 @@ export class SPZDecompressor {
     }
 
     /**
-     * 处理球谐系数数据
+     * Handle the spherical harmonics coefficient data
      */
     private static async handleSphericalHarmonics(
         scenegraph: GLTFScenegraph,
         shData: Float32Array,
         vertexCount: number
     ): Promise<SPZDecompressionResult["sphericalHarmonics"]> {
-        const shComponents = 3; // RGB 三个通道分别存储球谐系数
+        const shComponents = 3; // The three RGB channels each store spherical harmonics coefficients
         const coefficientsPerVertex = shData.length / vertexCount;
 
         if (coefficientsPerVertex % shComponents !== 0) {
@@ -545,13 +546,13 @@ export class SPZDecompressor {
     }
 
     /**
-     * 清理 primitive 属性
+     * Clean up primitive attributes
      */
     static cleanPrimitiveAttributes(primitive: GLTFMeshPrimitive): void {
         const attributesToRemove = [];
 
         for (const attrName in primitive.attributes) {
-            // 移除所有扩展相关的属性
+            // Remove all extension-related attributes
             if (
                 attrName.startsWith("KHR_gaussian_splatting:") ||
                 attrName.startsWith("SH_DEGREE_") ||
@@ -567,7 +568,7 @@ export class SPZDecompressor {
     }
 
     /**
-     * 验证最终属性设置
+     * Validate the final attribute setup
      */
     static validateFinalAttributes(primitive: GLTFMeshPrimitive): void {
         const validAttributes = [];
@@ -588,7 +589,7 @@ export class SPZDecompressor {
     }
 }
 
-// 便捷函数
+// Convenience function
 export async function decompressSPZ(
     scenegraph: GLTFScenegraph,
     primitive: GLTFMeshPrimitive,
@@ -596,7 +597,7 @@ export async function decompressSPZ(
     options?: SPZDecompressionOptions
 ): Promise<void> {
     try {
-        // 首先清理 primitive 的现有属性，避免重复
+        // First clean up the primitive's existing attributes to avoid duplicates
         SPZDecompressor.cleanPrimitiveAttributes(primitive);
 
         const result = await SPZDecompressor.decompress(
@@ -606,10 +607,10 @@ export async function decompressSPZ(
             options
         );
 
-        // 只设置标准的属性，避免扩展前缀
+        // Set only the standard attributes, avoiding extension prefixes
         Object.assign(primitive.attributes, result.attributes);
 
-        // 存储球谐系数信息到 primitive extras（如果存在）
+        // Store the spherical harmonics info in primitive extras (if present)
         if (result.sphericalHarmonics) {
             primitive.extras = primitive.extras || {};
             primitive.extras.sphericalHarmonics = result.sphericalHarmonics;
@@ -617,7 +618,7 @@ export async function decompressSPZ(
 
         console.log(`SPZ decompression completed: ${result.vertexCount} vertices processed`);
 
-        // 验证最终属性设置
+        // Validate the final attribute setup
         SPZDecompressor.validateFinalAttributes(primitive);
     } catch (error) {
         console.error("SPZ decompression failed:", error);

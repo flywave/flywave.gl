@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three/webgpu";
 import type { Renderer } from "three/webgpu";
+import * as THREE from "three/webgpu";
 
 import { type MemoryUsage } from "../TextCanvas";
 import { UnicodeUtils } from "../utils/UnicodeUtils";

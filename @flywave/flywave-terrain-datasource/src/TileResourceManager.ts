@@ -214,6 +214,7 @@ export abstract class TileValidResource extends ITileResource {
             ?.getGroundModificationManager()
             ?.addEventListener("change", this.onGroundModificationChanged);
     }
+
     /**
      * Connects the resource to a data source
      *
@@ -299,7 +300,7 @@ export abstract class TileValidResource extends ITileResource {
      *
      * @param event - The ground modification event parameters
      */
-    private onGroundModificationChanged = async (
+    private readonly onGroundModificationChanged = async (
         event: HeightMapModificationEventParams
     ): Promise<void> => {
         // If we're already processing an event, just store this one as the latest and return

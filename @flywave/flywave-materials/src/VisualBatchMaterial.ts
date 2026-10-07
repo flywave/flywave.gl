@@ -2,19 +2,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    ClampToEdgeWrapping,
-    DataTexture,
-    FloatType,
-    LinearFilter,
-    MathUtils,
-    MeshStandardNodeMaterial,
-    RedFormat,
-    RGBAFormat,
-    type MeshStandardNodeMaterialParameters,
-    type Node,
-    type UniformNode
-} from "three/webgpu";
-import {
     attribute,
     float,
     materialColor,
@@ -27,6 +14,19 @@ import {
     vec2,
     vec3
 } from "three/tsl";
+import {
+    type MeshStandardNodeMaterialParameters,
+    type Node,
+    type UniformNode,
+    ClampToEdgeWrapping,
+    DataTexture,
+    FloatType,
+    LinearFilter,
+    MathUtils,
+    MeshStandardNodeMaterial,
+    RedFormat,
+    RGBAFormat
+} from "three/webgpu";
 
 /**
  * Interface defining visual style properties for batch rendering
@@ -220,49 +220,49 @@ class VisualBatchMaterial extends MeshStandardNodeMaterial {
     private _updateTextures(): void {
         if (this._styleTable.size === 0) return;
 
-        // 1. 准备ID映射
+        // 1. Prepare the ID mapping
         const visualIds = Array.from(this._styleTable.keys());
         const maxId = Math.max(...visualIds);
 
-        // 2. 固定纹理宽度为16（4个RGBA像素），高度为样式数量
-        const textureWidth = 4; // 固定宽度
-        const textureHeight = this._styleTable.size; // 高度等于样式数量
+        // 2. Fixed texture width of 16 (4 RGBA pixels); height equals the number of styles
+        const textureWidth = 4; // fixed width
+        const textureHeight = this._styleTable.size; // height equals the number of styles
 
-        // 3. 打包样式数据到纹理
+        // 3. Pack the style data into the texture
         const styleData = new Float32Array(textureWidth * textureHeight * 4).fill(0);
 
         this._styleTable.forEach((style, rowIndex) => {
-            // 每行存储一个完整样式（16个float）
+            // Each row stores one complete style (16 floats)
             const rowStart = rowIndex * textureWidth * 4;
 
-            // 像素0: startOffset (RGB) + 填充(A)
+            // Pixel 0: startOffset (RGB) + padding (A)
             styleData[rowStart] = style.startOffset.x;
             styleData[rowStart + 1] = style.startOffset.y;
             styleData[rowStart + 2] = style.startOffset.z;
 
-            // 像素1: endOffset (RGB) + 填充(A)
+            // Pixel 1: endOffset (RGB) + padding (A)
             styleData[rowStart + 4] = style.endOffset.x;
             styleData[rowStart + 5] = style.endOffset.y;
             styleData[rowStart + 6] = style.endOffset.z;
 
-            // 像素2: startColor (RGB) + startOpacity(A)
+            // Pixel 2: startColor (RGB) + startOpacity (A)
             styleData[rowStart + 8] = style.startColor.r;
             styleData[rowStart + 9] = style.startColor.g;
             styleData[rowStart + 10] = style.startColor.b;
             styleData[rowStart + 11] = style.startOpacity;
 
-            // 像素3: endColor (RGB) + endOpacity(A)
+            // Pixel 3: endColor (RGB) + endOpacity (A)
             styleData[rowStart + 12] = style.endColor.r;
             styleData[rowStart + 13] = style.endColor.g;
             styleData[rowStart + 14] = style.endColor.b;
             styleData[rowStart + 15] = style.endOpacity;
         });
 
-        // 5. 更新uniforms
+        // 5. Update the uniforms
         this._maxVisualIdUniform.value = maxId;
         this._styleHeightUniform.value = textureHeight;
 
-        // 6. 更新样式纹理
+        // 6. Update the style texture
         this._styleTexUniform.value = this._createDataTexture(
             styleData,
             textureWidth,

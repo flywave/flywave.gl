@@ -1,32 +1,34 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
 import {
-    HalfFloatType,
-    RenderTarget,
-    Vector2,
-    Vector3,
-    TempNode,
-    QuadMesh,
-    NodeMaterial,
-    RendererUtils,
-    NodeUpdateType
-} from "three/webgpu";
-import {
-    nodeObject,
-    Fn,
-    float,
-    uv,
-    passTexture,
-    uniform,
-    Loop,
-    texture,
-    luminance,
-    smoothstep,
-    mix,
-    vec4,
-    uniformArray,
     add,
-    int
+    float,
+    Fn,
+    int,
+    Loop,
+    luminance,
+    mix,
+    nodeObject,
+    passTexture,
+    smoothstep,
+    texture,
+    uniform,
+    uniformArray,
+    uv,
+    vec4
 } from "three/tsl";
+import {
+    HalfFloatType,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils,
+    RenderTarget,
+    TempNode,
+    Vector2,
+    Vector3
+} from "three/webgpu";
 
 const _quadMesh = /*@__PURE__*/ new QuadMesh();
 const _size = /*@__PURE__*/ new Vector2();

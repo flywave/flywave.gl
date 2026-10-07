@@ -1,6 +1,8 @@
-import { BufferGeometry, BufferAttribute, Vector2, Vector3, Box3, Plane, Ray } from "three/webgpu";
+/* Copyright (C) 2025 flywave.gl contributors */
+
+import { type Projection } from "@flywave/flywave-geoutils";
 import earcut from "earcut";
-import { Projection } from "@flywave/flywave-geoutils";
+import { Box3, BufferAttribute, BufferGeometry, Plane, Ray, Vector2, Vector3 } from "three/webgpu";
 
 export const ArcType = {
     GEODESIC: 0,
@@ -45,7 +47,6 @@ export interface PolygonGeometryOptions {
 class GeometryPipeline {
     /**
      * Compute vertex normals for geometry
-     * 计算几何体顶点法线
      */
     static computeNormal(geometry: BufferGeometry): BufferGeometry {
         const positionAttribute = geometry.getAttribute("position");
@@ -101,7 +102,6 @@ class GeometryPipeline {
 
     /**
      * Convert geometry to wireframe
-     * 将几何体转换为线框
      */
     static toWireframe(geometry: BufferGeometry): BufferGeometry {
         const indices = geometry.getIndex();
@@ -127,7 +127,6 @@ class GeometryPipeline {
 class PolygonPipeline {
     /**
      * Compute 2D polygon area
-     * 计算2D多边形面积
      */
     static computeArea2D(positions: Vector2[]): number {
         let area = 0.0;
@@ -144,7 +143,6 @@ class PolygonPipeline {
 
     /**
      * Determine polygon winding order
-     * 确定多边形缠绕顺序
      */
     static computeWindingOrder2D(positions: Vector2[]): number {
         const area = this.computeArea2D(positions);
@@ -153,7 +151,6 @@ class PolygonPipeline {
 
     /**
      * Triangulate polygon using earcut
-     * 使用Earcut算法三角化多边形
      */
     static triangulate(positions: Vector2[], holes?: number[]): number[] {
         const flattened: number[] = [];
@@ -165,7 +162,6 @@ class PolygonPipeline {
 
     /**
      * Subdivide geometry based on granularity
-     * 根据粒度细分几何体
      */
     static computeSubdivision(
         projection: Projection,
@@ -325,7 +321,6 @@ class PolygonPipeline {
 
     /**
      * Scale positions to geodetic height
-     * 将位置缩放到大地高度
      */
     static scaleToGeodeticHeight(
         positions: number[],
@@ -362,12 +357,12 @@ class PolygonPipeline {
 }
 
 class EllipsoidTangentPlane {
-    private _projection: Projection;
-    private _origin: Vector3;
-    private _xAxis: Vector3;
-    private _yAxis: Vector3;
-    private _zAxis: Vector3;
-    private _plane: Plane;
+    private readonly _projection: Projection;
+    private readonly _origin: Vector3;
+    private readonly _xAxis: Vector3;
+    private readonly _yAxis: Vector3;
+    private readonly _zAxis: Vector3;
+    private readonly _plane: Plane;
 
     constructor(origin: Vector3, projection?: Projection) {
         this._projection = projection;
@@ -453,18 +448,18 @@ class EllipsoidTangentPlane {
 }
 
 export class PolygonGeometry {
-    private _polygonHierarchy: PolygonHierarchy;
-    private _height: number;
-    private _extrudedHeight: number;
-    private _vertexFormat: VertexFormat;
-    private _projection: Projection;
-    private _granularity: number;
-    private _perPositionHeight: boolean;
-    private _closeTop: boolean;
-    private _closeBottom: boolean;
-    private _arcType: number;
-    private _shadowVolume: boolean;
-    private _stRotation: number;
+    private readonly _polygonHierarchy: PolygonHierarchy;
+    private readonly _height: number;
+    private readonly _extrudedHeight: number;
+    private readonly _vertexFormat: VertexFormat;
+    private readonly _projection: Projection;
+    private readonly _granularity: number;
+    private readonly _perPositionHeight: boolean;
+    private readonly _closeTop: boolean;
+    private readonly _closeBottom: boolean;
+    private readonly _arcType: number;
+    private readonly _shadowVolume: boolean;
+    private readonly _stRotation: number;
 
     constructor(options: PolygonGeometryOptions) {
         this._polygonHierarchy = options.polygonHierarchy;
@@ -489,7 +484,6 @@ export class PolygonGeometry {
 
     /**
      * Create Three.js BufferGeometry from PolygonGeometry
-     * 从PolygonGeometry创建Three.js BufferGeometry
      */
     static createGeometry(geometry: PolygonGeometry): BufferGeometry {
         const polygonHierarchy = geometry._polygonHierarchy;
@@ -741,7 +735,7 @@ export class PolygonGeometry {
         const v0 = new Vector3().subVectors(topCurrent, bottomCurrent);
         const v1 = new Vector3().subVectors(bottomNext, bottomCurrent);
 
-        let normal = new Vector3().crossVectors(v0, v1).normalize();
+        const normal = new Vector3().crossVectors(v0, v1).normalize();
 
         if (!isOuterRing) {
             normal.negate();
@@ -1013,7 +1007,6 @@ export class PolygonGeometry {
 
     /**
      * Create shadow volume geometry
-     * 创建阴影体几何体
      */
     static createShadowVolume(
         geometry: PolygonGeometry,
@@ -1039,14 +1032,13 @@ export class PolygonGeometry {
 
     /**
      * Compute bounding rectangle
-     * 计算边界矩形
      */
     computeRectangle(): { west: number; south: number; east: number; north: number } {
         const positions = this._polygonHierarchy.positions;
-        let west = Infinity,
-            south = Infinity,
-            east = -Infinity,
-            north = -Infinity;
+        let west = Infinity;
+        let south = Infinity;
+        let east = -Infinity;
+        let north = -Infinity;
 
         for (const position of positions) {
             west = Math.min(west, position.x);
@@ -1067,14 +1059,13 @@ export class PolygonBufferGeometry extends BufferGeometry {
 
     /**
      * Create from positions array
-     * 从位置数组创建
      */
     static fromPositions(
         positions: Vector3[],
         options?: Omit<PolygonGeometryOptions, "polygonHierarchy">
     ): PolygonBufferGeometry {
         const polygonHierarchy: PolygonHierarchy = {
-            positions: positions
+            positions
         };
 
         const polygonGeometry = new PolygonGeometry({

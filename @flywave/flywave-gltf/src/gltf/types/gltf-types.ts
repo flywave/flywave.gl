@@ -3,9 +3,9 @@
 /* eslint-disable camelcase */
 
 import { type ImageType } from "@flywave/flywave-utils";
+import { type AnimationClip, type CompressedTexture, type Scene } from "three/webgpu";
 
 import type { GLTF } from "./gltf-json-schema";
-import { AnimationClip, CompressedTexture, Scene } from "three/webgpu";
 
 /** GLTFLoader removes processed extensions from `extensionsUsed` and `extensionsUsed`
  * `processedExtensions` is used to track those extensions

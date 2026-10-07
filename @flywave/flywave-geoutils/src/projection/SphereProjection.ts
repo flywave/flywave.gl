@@ -1,13 +1,13 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Projection, ProjectionType } from "./Projection";
-import { GeoBox } from "../coordinates/GeoBox";
-import { GeoCoordinates } from "../coordinates/GeoCoordinates";
-import { GeoCoordinatesLike } from "../coordinates/GeoCoordinatesLike";
-import { Box3Like } from "../math/Box3Like";
-import { OrientedBox3Like } from "../math/OrientedBox3Like";
-import { TransformLike } from "../math/TransformLike";
-import { Vector3Like } from "../math/Vector3Like";
+import { type GeoBox } from "../coordinates/GeoBox";
+import { type GeoCoordinates } from "../coordinates/GeoCoordinates";
+import { type GeoCoordinatesLike } from "../coordinates/GeoCoordinatesLike";
+import { type Box3Like } from "../math/Box3Like";
+import { type OrientedBox3Like } from "../math/OrientedBox3Like";
+import { type TransformLike } from "../math/TransformLike";
+import { type Vector3Like } from "../math/Vector3Like";
+import { type Projection, type ProjectionType } from "./Projection";
 
 /**
  * Sphere projection interface for spherical Earth model

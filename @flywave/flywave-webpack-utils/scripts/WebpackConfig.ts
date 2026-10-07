@@ -1,12 +1,12 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { execSync } from "child_process";
+import { createRequire } from "module";
 import * as path from "path";
+import TsconfigPathsPlugin from "tsconfig-paths-webpack-plugin";
 import { fileURLToPath } from "url";
 import { type Configuration, type WebpackPluginInstance } from "webpack";
 import { CustomizeRule, mergeWithRules } from "webpack-merge";
-import TsconfigPathsPlugin from "tsconfig-paths-webpack-plugin";
-import { execSync } from "child_process";
-import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 
 // The typings don't yet work for copy-webpack-plugin & webpack 5, hence we ignore them for now,
@@ -81,7 +81,7 @@ function getSubprojectTsconfigPathsPlugins(projectRoot: string): TsconfigPathsPl
 }
 
 /**
- * 创建基础Webpack配置
+ * Creates the base Webpack configuration
  */
 export function createBaseConfig(config?: FlywaveWebpackConfig): Configuration {
     const projectRoot = config?.projectRoot || path.resolve(__dirname, "../../../");
@@ -140,7 +140,7 @@ export function createBaseConfig(config?: FlywaveWebpackConfig): Configuration {
 }
 
 /**
- * 创建浏览器配置
+ * Creates the browser configuration
  */
 export function createBrowserConfig(config?: FlywaveWebpackConfig): Configuration {
     const baseConfig = createBaseConfig(config);
@@ -152,7 +152,7 @@ export function createBrowserConfig(config?: FlywaveWebpackConfig): Configuratio
 }
 
 /**
- * 创建解码器配置
+ * Creates the decoder configuration
  */
 export function createDecoderConfig(config?: FlywaveWebpackConfig): Configuration {
     const baseConfig = createBaseConfig(config);
@@ -175,7 +175,7 @@ export function createDecoderConfig(config?: FlywaveWebpackConfig): Configuratio
 }
 
 /**
- * 创建资源复制配置
+ * Creates the asset copying configuration
  */
 export function createAssetsConfig(config?: FlywaveWebpackConfig): CopyPattern[] {
     const assets: CopyPattern[] = [];

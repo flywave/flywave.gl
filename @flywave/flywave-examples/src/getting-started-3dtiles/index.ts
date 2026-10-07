@@ -1,12 +1,13 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
-    ellipsoidProjection,
-    MapControls,
     CesiumIonDataSource,
-    MapControlsUI
+    ellipsoidProjection,
+    GeoCoordinates,
+    MapControls,
+    MapControlsUI,
+    MapView
 } from "@flywave/flywave.gl";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 /**
  * Get map canvas element
@@ -38,7 +39,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         zoomLevel: 18, // Initial zoom level
         tilt: 70, // Initial tilt angle
         heading: 35.1, // Initial heading angle
-        canvas: canvas, // Specify render canvas
+        canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json" // Base theme configuration
         }

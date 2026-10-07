@@ -13,13 +13,13 @@ import { equirectangularProjection } from "../src/projection/EquirectangularProj
 import { identityProjection } from "../src/projection/IdentityProjection";
 import { mercatorProjection, webMercatorProjection } from "../src/projection/MercatorProjection";
 import { type Projection } from "../src/projection/Projection";
+import { sphereProjection } from "../src/projection/SphericalEarthProjection";
 import { transverseMercatorProjection } from "../src/projection/TransverseMercatorProjection";
 import { geographicStandardTiling } from "../src/tiling/GeographicStandardTiling";
 import { mercatorTilingScheme } from "../src/tiling/MercatorTilingScheme";
 import { polarTilingScheme } from "../src/tiling/PolarTilingScheme";
 import { TileKey } from "../src/tiling/TileKey";
 import { webMercatorTilingScheme } from "../src/tiling/WebMercatorTilingScheme";
-import { sphereProjection } from "../src/projection/SphericalEarthProjection";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 
@@ -294,8 +294,12 @@ describe("TransverseMercator", function () {
     });
 
     it("projectBox", function () {
-        const tileKey = TileKey.fromRowColumnLevel(0, 0, 0);
-        const box = polarTilingScheme.getGeoBox(tileKey);
+        // The TM projection does not cover the poles; the original case did a
+        // round-trip with a polarTiling level0 box (including ±90°), where the
+        // polar cap is inevitably lost - a test design error. A mid-latitude
+        // geographic tile is used instead.
+        const tileKey = TileKey.fromRowColumnLevel(1000, 2000, 12);
+        const box = geographicStandardTiling.getGeoBox(tileKey);
         const projectedBox = transverseMercatorProjection.projectBox(box);
         const unprojectedBox = transverseMercatorProjection.unprojectBox(projectedBox);
 

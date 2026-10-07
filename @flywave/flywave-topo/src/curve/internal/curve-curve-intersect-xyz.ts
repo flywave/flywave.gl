@@ -432,29 +432,29 @@ export class CurveCurveIntersectXYZ extends RecurseToCurvesGeometryHandler {
         extendB: boolean,
         reversed: boolean
     ): void {
-        // 创建圆弧所在平面
+        // Create the plane containing the arc
         const plane = Plane3dByOriginAndUnitNormal.create(arc.center, arc.perpendicularVector);
         if (plane === undefined) return;
 
-        // 计算B样条曲线与平面的交点
+        // Compute the intersections of the B-spline curve with the plane
         const intersections: CurveLocationDetail[] = [];
         bcurve.appendPlaneIntersectionPoints(plane, intersections);
 
-        // 验证交点是否在圆弧上
+        // Verify that each intersection lies on the arc
         for (const detail of intersections) {
             if (!this.acceptFraction(extendB, detail.fraction, extendB)) continue;
 
-            // 修复：使用closestPoint获取圆弧参数
+            // Fix: use closestPoint to obtain the arc parameter
             const closestDetail = arc.closestPoint(detail.point, extendA);
             const arcFraction = closestDetail.fraction;
             if (arcFraction === undefined) continue;
             if (!this.acceptFraction(extendA, arcFraction, extendA)) continue;
 
-            // 验证点重合
+            // Verify the points coincide
             const arcPoint = arc.fractionToPoint(arcFraction);
             if (!arcPoint.isAlmostEqualMetric(detail.point)) continue;
 
-            // 记录交点
+            // Record the intersection
             this.recordPointWithLocalFractions(
                 arcFraction,
                 arc,
@@ -474,18 +474,19 @@ export class CurveCurveIntersectXYZ extends RecurseToCurvesGeometryHandler {
         bcurveB: BSplineCurve3dBase,
         reversed: boolean
     ): void {
-        // 获取曲线A的贝塞尔段并断言为BezierCurve3d数组
+        // Get the Bezier spans of curve A and assert them as a BezierCurve3d array
         const bezierSpansA = bcurveA.collectBezierSpans(false) as BezierCurve3d[];
-        // 获取曲线B的贝塞尔段并断言为BezierCurve3d数组
+        // Get the Bezier spans of curve B and assert them as a BezierCurve3d array
         const bezierSpansB = bcurveB.collectBezierSpans(false) as BezierCurve3d[];
 
-        // 遍历所有贝塞尔段对
+        // Iterate over all Bezier span pairs
         for (const bezierA of bezierSpansA) {
             for (const bezierB of bezierSpansB) {
-                // 计算段对之间的交点（使用类型断言）
+                // Compute the intersections between the span pair (using type assertions)
                 const intersections = (bezierA as any).intersectBezier3d(bezierB);
                 for (const intersect of intersections) {
-                    // 映射回原始曲线参数（使用BSplineCurve3d的spanFractionToKnot方法）
+                    // Map back to the original curve parameters (using BSplineCurve3d's
+                    // spanFractionToKnot method)
                     const fractionA = (bcurveA as BSplineCurve3d).spanFractionToKnot(
                         bezierSpansA.indexOf(bezierA),
                         intersect.fractionA
@@ -495,11 +496,11 @@ export class CurveCurveIntersectXYZ extends RecurseToCurvesGeometryHandler {
                         intersect.fractionB
                     );
 
-                    // 检查参数有效性
+                    // Check that the parameters are valid
                     if (!this.acceptFraction(this._extendA, fractionA, this._extendA)) continue;
                     if (!this.acceptFraction(this._extendB, fractionB, this._extendB)) continue;
 
-                    // 记录交点
+                    // Record the intersection
                     this.recordPointWithLocalFractions(
                         fractionA,
                         bcurveA,
@@ -528,21 +529,21 @@ export class CurveCurveIntersectXYZ extends RecurseToCurvesGeometryHandler {
         extendB: boolean,
         reversed: boolean
     ): void {
-        // 创建线段方向向量
+        // Create the segment direction vector
         const lineDirection = Vector3d.createStartEnd(pointA0, pointA1);
-        // 创建线段平面（使用垂直向量）
+        // Create the segment plane (using the perpendicular vector)
         const plane = Plane3dByOriginAndUnitNormal.create(pointA0, lineDirection);
         if (plane === undefined) return;
 
-        // 计算B样条与平面交点
+        // Compute the intersections of the B-spline with the plane
         const intersections: CurveLocationDetail[] = [];
         bcurve.appendPlaneIntersectionPoints(plane, intersections);
 
-        // 处理每个交点
+        // Process each intersection
         for (const detail of intersections) {
             if (!this.acceptFraction(extendB, detail.fraction, extendB)) continue;
 
-            // 计算在线段上的参数
+            // Compute the parameter along the segment
             const lineFraction = SmallSystem.lineSegment3dClosestPointUnbounded(
                 pointA0,
                 pointA1,
@@ -551,11 +552,11 @@ export class CurveCurveIntersectXYZ extends RecurseToCurvesGeometryHandler {
             if (lineFraction === undefined) continue;
             if (!this.acceptFraction(extendA0, lineFraction, extendA1)) continue;
 
-            // 验证点重合
+            // Verify the points coincide
             const linePoint = pointA0.interpolate(lineFraction, pointA1);
             if (!linePoint.isAlmostEqualMetric(detail.point)) continue;
 
-            // 记录交点
+            // Record the intersection
             this.recordPointWithLocalFractions(
                 lineFraction,
                 cpA,
@@ -584,22 +585,22 @@ export class CurveCurveIntersectXYZ extends RecurseToCurvesGeometryHandler {
         const pointA1 = Point3d.create();
         const df = 1.0 / (numA - 1);
 
-        // 遍历折线所有线段
+        // Iterate over all segments of the polyline
         for (let i = 0; i < numA - 1; i++) {
             const f0 = i * df;
             const f1 = (i + 1) * df;
             lsA.pointAt(i, pointA0);
             lsA.pointAt(i + 1, pointA1);
 
-            // 处理每个线段与B样条的交点
+            // Process the intersections of each segment with the B-spline
             this.dispatchSegmentBsplineCurve(
                 lsA,
-                extendA && i === 0, // 起始扩展
+                extendA && i === 0, // start extension
                 pointA0,
                 f0,
                 pointA1,
                 f1,
-                extendA && i === numA - 2, // 结束扩展
+                extendA && i === numA - 2, // end extension
                 curveB,
                 extendB,
                 reversed

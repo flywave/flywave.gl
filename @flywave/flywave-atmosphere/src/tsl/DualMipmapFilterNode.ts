@@ -1,14 +1,16 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
 
+import { texture, uniform } from "three/tsl";
 import {
-    NodeMaterial,
-    QuadMesh,
-    RendererUtils,
     type NodeBuilder,
     type NodeFrame,
-    type TextureNode
+    type TextureNode,
+    NodeMaterial,
+    QuadMesh,
+    RendererUtils
 } from "three/webgpu";
-import { texture, uniform } from "three/tsl";
 
 import { FilterNode } from "./FilterNode";
 import type { Node } from "./node";

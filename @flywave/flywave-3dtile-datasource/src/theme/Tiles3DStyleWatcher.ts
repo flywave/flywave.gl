@@ -1,8 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    Style,
     type FlatTheme,
+    type Style,
     type StyleSet,
     type Theme
 } from "@flywave/flywave-datasource-protocol";
@@ -14,7 +14,7 @@ import { type MeshStandardNodeMaterial } from "three/webgpu";
 import { type ITile, Tile } from "../base/Tile";
 import { B3DMBatchMaterial } from "../materials/B3DMBatchMaterial";
 import { Observe3DTileChange } from "../ObserveTileChange";
-import { FlatThemeExtra, ThemeExtra, type BatchAnimation } from "../TileRenderDataSource";
+import { type BatchAnimation, type FlatThemeExtra, type ThemeExtra } from "../TileRenderDataSource";
 import { BatchStyleProcessor } from "./BatchStyleProcessor";
 
 /**
@@ -192,7 +192,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      * @returns The added style with generated identifier if needed.
      */
     addStyle(style: Style): Style {
-        let result = this.styleEvaluator.addStyle(style);
+        const result = this.styleEvaluator.addStyle(style);
         this.m_hasBatchStyles = true;
         this.nodifyActiveTiles();
         return result;
@@ -205,7 +205,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      * @returns `true` if style was found and removed, `false` otherwise.
      */
     removeStyleById(id: string): boolean {
-        let result = this.styleEvaluator.removeStyleById(id);
+        const result = this.styleEvaluator.removeStyleById(id);
         if (result && this.styleEvaluator.styleSet.length === 0) {
             this.m_hasBatchStyles = false;
         }
@@ -221,7 +221,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
      * @returns `true` if style was found and updated, `false` otherwise.
      */
     updateStyleById(id: string, updates: Partial<Style>): boolean {
-        let result = this.styleEvaluator.updateStyleById(id, updates);
+        const result = this.styleEvaluator.updateStyleById(id, updates);
         this.nodifyActiveTiles();
         return result;
     }
@@ -316,13 +316,17 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
     }
 
     /**
-     * 瓦片被逐出（disposeTile）时清理该瓦片的批材质登记。
+     * Cleans up the batch material registration for this tile when it is
+     * evicted (disposeTile).
      *
-     * 批材质实例随 cached.materials 别名由引擎在 disposeTile 中统一 dispose，
-     * 这里只清登记：让该瓦片重新解析后的首次激活重新求值样式并对全新 mesh
-     * 套批材质（首次挂载）。激活/失活路径保持零操作——已挂材质绝不触碰
-     * （three 0.185.1 下任何翻动材质都会全量重编译，见
-     * references/3dtile-styling.md「渲染路径零操作」铁律）。
+     * The batch material instances are disposed centrally by the engine in
+     * disposeTile through the cached.materials alias; here only the registration
+     * is cleared: the first activation after the tile is re-parsed re-evaluates
+     * the styles and applies batch materials to the brand-new mesh (first
+     * mount). The activation/deactivation paths stay zero-op — already-mounted
+     * materials are never touched (under three 0.185.1 any material churn causes
+     * a full recompilation, see the "zero-op render path" iron rule in
+     * references/3dtile-styling.md).
      * @param tile - Disposed tile instance
      */
     onTileDisposed(tile: ITile): void {
@@ -660,7 +664,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
             // Extract properties for current instance
             let instanceProperties: Record<string, any> = {
                 batchId: instanceId,
-                instanceId: instanceId
+                instanceId
             };
 
             // Extract properties from feature table and batch table

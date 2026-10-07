@@ -30,7 +30,7 @@ export class MapViewThemeManager {
     private m_abortControllers: AbortController[] = [];
     private readonly m_theme: Theme = {};
     private m_themeLoaded: boolean = false;
-    private m_themeReadyPromise: Promise<void>;
+    private readonly m_themeReadyPromise: Promise<void>;
     private m_themeReadyResolve: () => void = () => {};
 
     constructor(private readonly m_mapView: MapView, private readonly m_uriResolver?: UriResolver) {

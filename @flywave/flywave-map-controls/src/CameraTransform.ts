@@ -1,10 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { ElevationProvider, MapView } from "@flywave/flywave-mapview";
+import { type Projection } from "@flywave/flywave-geoutils";
+import { type ElevationProvider, type MapView } from "@flywave/flywave-mapview";
 import { Matrix4, Quaternion, Spherical, Vector3, Vector4 } from "three/webgpu";
 
 import { slerpMatrices, sphericalLerp } from "./math";
-import { Projection } from "@flywave/flywave-geoutils";
 
 /**
  * A camera controller that provides smooth transitions and advanced movement controls
@@ -54,12 +54,12 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
     public followMatrix(
         source: Matrix4,
         interpolationFactor: number,
-        referenceMatrix?: Matrix4 // 可选参数
+        referenceMatrix?: Matrix4 // optional parameter
     ): void {
-        // 1. 确定参考矩阵（优先用传入的，否则用当前相机矩阵）
+        // 1. Determine the reference matrix (prefer the passed-in one, otherwise the current camera matrix)
         const refMatrix = referenceMatrix || this.cameraToWorld;
 
-        // 2. 旋转插值（使用Three.js的Quaternion.slerp）
+        // 2. Rotation interpolation (using Three.js's Quaternion.slerp)
         const sourceQuat = new Quaternion().setFromRotationMatrix(source);
         const refQuat = new Quaternion().setFromRotationMatrix(refMatrix);
         const resultQuat = new Quaternion().slerpQuaternions(
@@ -68,12 +68,12 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
             interpolationFactor
         );
 
-        // 3. 位置插值（线性Lerp）
+        // 3. Position interpolation (linear lerp)
         const sourcePos = new Vector3().setFromMatrixPosition(source);
         const refPos = new Vector3().setFromMatrixPosition(refMatrix);
         const resultPos = refPos.lerp(sourcePos, interpolationFactor);
 
-        // 4. 组合结果
+        // 4. Combine the results
         this.cameraToWorld.makeRotationFromQuaternion(resultQuat).setPosition(resultPos);
     }
 
@@ -96,18 +96,18 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
         intermediateMatrix?: Matrix4,
         intermediateStart?: number
     ): void {
-        // 1. 提取起始和结束位置
+        // 1. Extract the start and end positions
         const startPos = new Vector3().setFromMatrixPosition(start);
         const endPos = new Vector3().setFromMatrixPosition(end);
 
-        // 2. 线性插值位置 (与原始版本一致)
+        // 2. Linearly interpolate the position (same as the original version)
         const interpPos = new Vector3(
             startPos.x + (endPos.x - startPos.x) * interpolationFactor,
             startPos.y + (endPos.y - startPos.y) * interpolationFactor,
             startPos.z + (endPos.z - startPos.z) * interpolationFactor
         );
 
-        // 3. 计算距离缩放因子 (与原始版本一致)
+        // 3. Compute the distance scale factor (same as the original version)
         const startDist = startPos.length();
         const endDist = endPos.length();
         const delta = new Vector3().subVectors(endPos, startPos);
@@ -121,7 +121,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
                 deltaLength * radius * scaleFactor) /
             interpPos.distanceTo(pivot);
 
-        // 4. 矩阵插值 (保持与原始版本相同的逻辑)
+        // 4. Matrix interpolation (keeps the same logic as the original version)
         let resultMatrix: Matrix4;
         if (intermediateMatrix) {
             if (intermediateStart === undefined) {
@@ -155,7 +155,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
             resultMatrix = slerpMatrices(this.cameraToWorld, end, interpolationFactor);
         }
 
-        // 5. 设置最终位置 (考虑缩放因子)
+        // 5. Set the final position (taking the scale factor into account)
         const finalPos = new Vector3(
             pivot.x + (interpPos.x - pivot.x) * scaleFactor,
             pivot.y + (interpPos.y - pivot.y) * scaleFactor,
@@ -234,7 +234,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
         const projMatrix = this.getCameraProjectionMatrix();
         const projElements = projMatrix.elements;
 
-        // 按照原始公式计算
+        // Compute using the original formula
         const ndcX = (((x / width) * 2 - 1 - projElements[8]) * depth) / projElements[0];
         const ndcY = (((-y / height) * 2 + 1 - projElements[9]) * depth) / projElements[5];
         const ndcZ = depth;
@@ -274,17 +274,17 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
     }
 
     /**
-     * 围绕球心点旋转并倾斜相机
-     * @param startX 起始X坐标
-     * @param startY 起始Y坐标
-     * @param startZ 起始Z坐标
-     * @param pivotX 球心X坐标
-     * @param pivotY 球心Y坐标
-     * @param pivotZ 球心Z坐标
-     * @param velocity 旋转速度（角度）
-     * @param tilt 倾斜角度
-     * @param maxTilt 最大倾斜角度限制（可选）
-     * @returns 是否进行了倾斜调整
+     * Rotate and tilt the camera around the sphere center point
+     * @param startX Starting X coordinate
+     * @param startY Starting Y coordinate
+     * @param startZ Starting Z coordinate
+     * @param pivotX Sphere center X coordinate
+     * @param pivotY Sphere center Y coordinate
+     * @param pivotZ Sphere center Z coordinate
+     * @param velocity Rotation velocity (angle)
+     * @param tilt Tilt angle
+     * @param maxTilt Maximum tilt angle limit (optional)
+     * @returns Whether a tilt adjustment was applied
      */
     public rotateAroundPivotAndTilt(
         startX: number,
@@ -299,23 +299,23 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
     ): boolean {
         const cameraMatrix = this.cameraToWorld;
 
-        // 1. 平移相机到相对原点
+        // 1. Translate the camera to the relative origin
         cameraMatrix.elements[12] -= startX;
         cameraMatrix.elements[13] -= startY;
         cameraMatrix.elements[14] -= startZ;
 
-        // 2. 绕球心方向旋转
+        // 2. Rotate around the sphere center direction
         this.rotateAxisAngleT(cameraMatrix, pivotX, pivotY, pivotZ, velocity);
 
-        // 3. 获取并标准化X轴方向
+        // 3. Obtain and normalize the X axis direction
         const xAxis = new Vector3().fromArray(cameraMatrix.elements).normalize().negate();
 
-        // 4. 绕X轴倾斜
+        // 4. Tilt around the X axis
         this.rotateAxisAngleT(cameraMatrix, xAxis.x, xAxis.y, xAxis.z, -tilt);
 
         let adjusted = false;
         if (maxTilt !== undefined) {
-            // 5. 检查并限制倾斜角度
+            // 5. Check and clamp the tilt angle
             const zComponent =
                 cameraMatrix.elements[8] * pivotX +
                 cameraMatrix.elements[9] * pivotY +
@@ -340,7 +340,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
             }
         }
 
-        // 6. 平移相机回原位置
+        // 6. Translate the camera back to its original position
         cameraMatrix.elements[12] += startX;
         cameraMatrix.elements[13] += startY;
         cameraMatrix.elements[14] += startZ;
@@ -349,20 +349,20 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
     }
 
     /**
-     * 限制相机相对于球心方向的倾斜角度
-     * @param centerPoint 地图中心点坐标 [x, y, z] (原参数 D)
-     * @param sphereDirection 球心方向向量 [x, y, z] (原参数 r)
-     * @param tiltLimit 最大倾斜角度限制 (原参数 E)
+     * Clamp the camera tilt angle relative to the sphere center direction
+     * @param centerPoint Map center point coordinates [x, y, z] (original parameter D)
+     * @param sphereDirection Sphere center direction vector [x, y, z] (original parameter r)
+     * @param tiltLimit Maximum tilt angle limit (original parameter E)
      */
     public applyTiltLimit(centerPoint: Vector3, sphereDirection: Vector3, tiltLimit: number): void {
         const cameraMatrix = this.cameraToWorld;
 
-        // 1. 平移相机到相对原点
+        // 1. Translate the camera to the relative origin
         cameraMatrix.elements[12] -= centerPoint.x;
         cameraMatrix.elements[13] -= centerPoint.y;
         cameraMatrix.elements[14] -= centerPoint.z;
 
-        // 2. 获取相机X轴方向并标准化
+        // 2. Obtain the camera X axis direction and normalize it
         const cameraXAxis = new Vector3(
             cameraMatrix.elements[0],
             cameraMatrix.elements[1],
@@ -371,7 +371,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
             .normalize()
             .negate();
 
-        // 3. 计算关键分量
+        // 3. Compute the key components
         const zComponent =
             cameraMatrix.elements[8] * sphereDirection.x +
             cameraMatrix.elements[9] * sphereDirection.y +
@@ -382,7 +382,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
             cameraMatrix.elements[5] * sphereDirection.y +
             cameraMatrix.elements[6] * sphereDirection.z;
 
-        // 4. 应用倾斜限制
+        // 4. Apply the tilt limit
         if (yComponent < 0) {
             if (zComponent > -Math.sin(tiltLimit)) {
                 const adjustDirection = yComponent > 0 ? -1 : 1;
@@ -406,17 +406,17 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
             );
         }
 
-        // 5. 平移相机回原位置
+        // 5. Translate the camera back to its original position
         cameraMatrix.elements[12] += centerPoint.x;
         cameraMatrix.elements[13] += centerPoint.y;
         cameraMatrix.elements[14] += centerPoint.z;
     }
 
     /**
-     * 智能平衡相机方向
-     * @param pivotPoint 支点坐标 [x, y, z] (原参数 F)
-     * @param sphereDirection 球心方向向量 [x, y, z] (原参数 r)
-     * @param balanceFactor 平衡系数 (原参数 D)
+     * Smartly balance the camera direction
+     * @param pivotPoint Pivot point coordinates [x, y, z] (original parameter F)
+     * @param sphereDirection Sphere center direction vector [x, y, z] (original parameter r)
+     * @param balanceFactor Balance factor (original parameter D)
      */
     public smartBalance(
         pivotPoint: Vector3,
@@ -426,7 +426,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
         const cameraMatrix = this.cameraToWorld;
         balanceFactor = Math.max(0.1, balanceFactor);
 
-        // 计算相机各轴在球心方向上的投影分量
+        // Compute the projection of each camera axis onto the sphere center direction
         const xProjection =
             cameraMatrix.elements[0] * sphereDirection.x +
             cameraMatrix.elements[1] * sphereDirection.y +
@@ -442,13 +442,13 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
             cameraMatrix.elements[9] * sphereDirection.y +
             cameraMatrix.elements[10] * sphereDirection.z;
 
-        // 限制投影值在[-1, 1]范围内
+        // Clamp the projection value to [-1, 1]
         const clampedProjection = Math.max(-1, Math.min(1, xProjection));
         const rotationAngle = Math.asin(clampedProjection) * balanceFactor;
 
-        // 根据主要倾斜方向选择旋转轴
+        // Choose the rotation axis based on the dominant tilt direction
         if (Math.abs(yProjection) > Math.abs(zProjection)) {
-            // 绕相机Z轴负方向旋转
+            // Rotate around the negative camera Z axis
             const rotationAxis = new Vector3(
                 -cameraMatrix.elements[8],
                 -cameraMatrix.elements[9],
@@ -464,7 +464,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
                 rotationAngle
             );
         } else {
-            // 绕相机Y轴旋转
+            // Rotate around the camera Y axis
             const rotationAxis = new Vector3(
                 cameraMatrix.elements[4],
                 cameraMatrix.elements[5],
@@ -483,7 +483,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
     }
 
     /**
-     * Three.js 版本的轴角旋转
+     * Three.js version of axis-angle rotation
      */
     private rotateAxisAngleT(
         matrix: Matrix4,
@@ -598,9 +598,9 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
         const elevationProvider = this.getElevationProvider();
         if (!elevationProvider || this.mapView.zoomLevel < 13) return -1;
 
-        const maxDistance = 2 * this.projection.unitScale; // 足够长的检测距离
+        const maxDistance = 2 * this.projection.unitScale; // long enough detection distance
         let currentDistance = 0;
-        const minStep = 1.0; // 米为单位
+        const minStep = 1.0; // in meters
 
         while (currentDistance <= maxDistance) {
             const currentPos = origin
@@ -611,12 +611,12 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
             if (geoPos) {
                 const terrainHeight = elevationProvider.getHeight(geoPos) ?? 0;
                 if (geoPos.altitude <= terrainHeight + 0.001) {
-                    // 小容差
+                    // small tolerance
                     result.copy(currentPos);
                     return currentDistance;
                 }
 
-                // 自适应步长
+                // adaptive step size
                 const step = Math.max(minStep, Math.min(geoPos.altitude - terrainHeight, 50));
                 currentDistance += step;
             } else {
@@ -625,6 +625,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
         }
         return -1;
     }
+
     /**
      * Gets a copy of the camera's world transformation matrix
      * @param outMatrix Optional matrix to store the result (avoids allocation if provided)

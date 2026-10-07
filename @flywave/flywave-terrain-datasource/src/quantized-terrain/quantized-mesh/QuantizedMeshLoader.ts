@@ -7,9 +7,9 @@ import {
     GeoCoordinates
 } from "@flywave/flywave-geoutils";
 import {
+    type DataTextureImageData,
     BufferAttribute,
     BufferGeometry,
-    type DataTextureImageData,
     DataTexture,
     LinearFilter,
     LinearMipMapLinearFilter,
@@ -23,8 +23,8 @@ import {
 } from "three/webgpu";
 
 import {
-    type SerializedHeightMapModifier,
-    type HeightMapModifier
+    type HeightMapModifier,
+    type SerializedHeightMapModifier
 } from "../../ground-modification-manager";
 import { type QuantizedMeshData, QuantizedMeshLoaderBase } from "./QuantizedMeshLoaderBase";
 import { QuantizedTerrainMesh } from "./QuantizedTerrainMesh";
@@ -135,7 +135,7 @@ export class QuantizedMeshLoader extends QuantizedMeshLoaderBase {
         const material = new MeshStandardMaterial();
         const mesh = new Mesh(geometry, material);
 
-        let tileCenter = this.ellipsoid.projectPoint(this.options.geoBox.center);
+        const tileCenter = this.ellipsoid.projectPoint(this.options.geoBox.center);
 
         mesh.position.copy(tileCenter);
 

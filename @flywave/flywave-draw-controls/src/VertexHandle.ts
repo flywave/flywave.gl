@@ -1,10 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { GeoCoordinates, ProjectionType } from "@flywave/flywave-geoutils";
-import { type MapView } from "@flywave/flywave-mapview";
+import { type GeoCoordinates, ProjectionType } from "@flywave/flywave-geoutils";
 import { type MapControls } from "@flywave/flywave-map-controls";
+import { type MapView } from "@flywave/flywave-mapview";
+import { type WindowEventHandler } from "@flywave/flywave-utils";
 import * as THREE from "three/webgpu";
-import { WindowEventHandler } from "@flywave/flywave-utils";
 
 import { HeightHandle } from "./HeightHandle";
 
@@ -45,7 +45,7 @@ export class VertexHandle extends THREE.Object3D {
     private readonly windowHandler: WindowEventHandler;
     private readonly mapControls: MapControls | undefined;
     private geoPosition: GeoCoordinates | null;
-    private worldPosition: THREE.Vector3;
+    private readonly worldPosition: THREE.Vector3;
     private useGeoCoordinates: boolean;
 
     private windowHandlerPanEnabledState: boolean = true;
@@ -62,13 +62,13 @@ export class VertexHandle extends THREE.Object3D {
     private readonly dragStartPoint: THREE.Vector2 = new THREE.Vector2();
     private hasDraggedDistance: boolean = false;
     private dragStartGeoCoord: GeoCoordinates | null = null;
-    private dragStartWorldPos: THREE.Vector3 = new THREE.Vector3();
+    private readonly dragStartWorldPos: THREE.Vector3 = new THREE.Vector3();
     private dragStartHeight: number | null = null;
     private heightAdjustStartHeight: number = 0;
     private readonly adjustmentPlane: THREE.Plane = new THREE.Plane();
     private readonly startIntersection: THREE.Vector3 = new THREE.Vector3();
 
-    private mapControlsEnabledState: boolean = true;
+    private readonly mapControlsEnabledState: boolean = true;
 
     private readonly normalColor: number;
     private readonly selectedColor: number;
@@ -204,7 +204,7 @@ export class VertexHandle extends THREE.Object3D {
         this.windowHandler.addEventListener("mouseup", this.onMouseUp as any);
     }
 
-    private onMouseDown = (event: MouseEvent): void => {
+    private readonly onMouseDown = (event: MouseEvent): void => {
         if (!this.isEnabled) return;
 
         const mousePoint = new THREE.Vector2(
@@ -231,7 +231,7 @@ export class VertexHandle extends THREE.Object3D {
         }
     };
 
-    private onMouseMove = (event: MouseEvent): void => {
+    private readonly onMouseMove = (event: MouseEvent): void => {
         if (!this.isEnabled) return;
 
         const mousePoint = new THREE.Vector2(
@@ -262,7 +262,7 @@ export class VertexHandle extends THREE.Object3D {
         this.updateHoverStates(mousePoint);
     };
 
-    private onMouseUp = (event: MouseEvent): void => {
+    private readonly onMouseUp = (event: MouseEvent): void => {
         if (this.isAdjustingHeight) {
             this.isAdjustingHeight = false;
             this.heightHandle.setActiveState(false);

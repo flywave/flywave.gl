@@ -40,7 +40,11 @@ export class HeightMapTileFactory extends TileFactory<TerrainResourceTile> {
             resTile = new TerrainResourceTile(dataSource as DEMTerrainSource, tileKey);
             dataSource.cacheTile(resTile);
         }
-        let tile = new ShadowTerrainResourceTile(dataSource as DEMTerrainSource, tileKey, resTile);
+        const tile = new ShadowTerrainResourceTile(
+            dataSource as DEMTerrainSource,
+            tileKey,
+            resTile
+        );
         tile.tileLoader = new HeightMapTileLoader(dataSource, tile);
         (tile.tileLoader as HeightMapTileLoader).updateView();
         return tile;

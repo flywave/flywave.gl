@@ -4,28 +4,22 @@
 // effect/node files: fogLight, TemporalAntialiasNode, bloom.)
 
 import {
-    Camera,
-    HalfFloatType,
-    LinearFilter,
-    RenderTarget,
-    Vector2,
-    NodeMaterial,
-    NodeUpdateType,
-    QuadMesh,
-    RendererUtils,
-    TempNode,
-    type TextureNode
-} from "three/webgpu";
+    cameraNear,
+    depthToViewZ,
+    inverseProjectionMatrix,
+    projectionMatrix,
+    screenToPositionView
+} from "@flywave/flywave-atmosphere";
 import {
     Break,
-    Fn,
-    If,
-    Loop,
     clamp,
     exp,
     float,
+    Fn,
     fract,
+    If,
     int,
+    Loop,
     max,
     min,
     mix,
@@ -41,15 +35,18 @@ import {
     vec3,
     vec4
 } from "three/tsl";
-import type { Node } from "three/webgpu";
-
+import type { type TextureNode, Camera, Node } from "three/webgpu";
 import {
-    cameraNear,
-    depthToViewZ,
-    inverseProjectionMatrix,
-    projectionMatrix,
-    screenToPositionView
-} from "@flywave/flywave-atmosphere";
+    HalfFloatType,
+    LinearFilter,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils,
+    RenderTarget,
+    TempNode,
+    Vector2
+} from "three/webgpu";
 
 /**
  * Screen-space reflections (SSR), ported from navara's ssr.frag / cone
@@ -483,7 +480,7 @@ export class SSRNode extends TempNode {
                             // navara's alpha fades, ported:
                             // iteration count, screen edge, eye direction,
                             // ray distance.
-                            let alpha = iterCount.div(MARCH_STEPS).oneMinus().toVar();
+                            const alpha = iterCount.div(MARCH_STEPS).oneMinus().toVar();
                             const hitNdc = hitUvFinal.mul(2).sub(1).toVar();
                             const maxNdc = max(hitNdc.x.abs(), hitNdc.y.abs()).toVar();
                             alpha.mulAssign(
@@ -569,9 +566,9 @@ export class SSRNode extends TempNode {
             const centerRoughness = ssrDataNode.sample(uv).w;
             const blurScale = max(centerRoughness.mul(5), 0.15).toVar();
 
-            let sumRgb = vec3(0).toVar();
-            let validW = float(0).toVar();
-            let totalW = float(0).toVar();
+            const sumRgb = vec3(0).toVar();
+            const validW = float(0).toVar();
+            const totalW = float(0).toVar();
 
             const rtSize = this.uRtSize;
             for (let k = 0; k < GAUSSIAN_5X5.length; k++) {

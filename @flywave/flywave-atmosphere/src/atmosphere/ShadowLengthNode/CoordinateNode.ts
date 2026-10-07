@@ -21,26 +21,25 @@
  * Modified from the original source code.
  */
 
+import { float, Fn, If, ivec2, mix, screenCoordinate, uv, vec3 } from "three/tsl";
 import {
-    HalfFloatType,
-    RenderTarget,
     type Camera,
-    type Vector2,
-    NodeMaterial,
-    NodeUpdateType,
-    QuadMesh,
-    RendererUtils,
     type NodeBuilder,
     type NodeFrame,
     type SampleNode,
     type TextureNode,
-    type UniformNode
+    type UniformNode,
+    type Vector2,
+    HalfFloatType,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils,
+    RenderTarget
 } from "three/webgpu";
-import { float, Fn, If, ivec2, mix, screenCoordinate, uv, vec3 } from "three/tsl";
 
-import { outputTexture } from "../../tsl/OutputTextureNode";
 import { Node } from "../../tsl/node";
-
+import { outputTexture } from "../../tsl/OutputTextureNode";
 import { getCameraZUnit, isValidScreenLocation, transformNDCToUV } from "./common";
 
 const { resetRendererState, restoreRendererState } = RendererUtils;

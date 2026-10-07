@@ -105,7 +105,7 @@ async function decompressPrimitive(
     );
 
     const decodedAttributes: Record<string, GLTFAccessor> = getGLTFAccessors(
-        decodedData.schema.attributes // 改为从 schema 获取属性
+        decodedData.schema.attributes // Take the attributes from the schema instead
     );
 
     // Restore min/max values
@@ -126,7 +126,7 @@ async function decompressPrimitive(
         // @ts-ignore
         primitive.indices = getGLTFAccessor({
             value: decodedData.schema.index.array,
-            size: 1 // 索引的 size 固定为 1
+            size: 1 // The size of indices is always 1
         });
     }
     // Extension has been processed, delete it

@@ -1,23 +1,22 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { screenUV } from "three/tsl";
 import {
+    type NodeBuilder,
+    type NodeFrame,
+    type TextureNode,
+    type UniformNode,
     HalfFloatType,
-    Vector2,
     NodeUpdateType,
     RendererUtils,
     RenderTarget,
     TempNode,
-    type NodeBuilder,
-    type NodeFrame,
-    type TextureNode,
-    type UniformNode
+    Vector2
 } from "three/webgpu";
-import { screenUV } from "three/tsl";
-
-import { outputTexture } from "../tsl/OutputTextureNode";
 
 import { DEFAULT_STARS_DATA_URL } from "../constants";
+import { outputTexture } from "../tsl/OutputTextureNode";
 import { getAtmosphereContext } from "./AtmosphereContext";
 import { Stars } from "./Stars";
 

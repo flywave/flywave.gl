@@ -5,10 +5,10 @@ import {
     type ImageTexture,
     getPropertyValue
 } from "@flywave/flywave-datasource-protocol";
-import { IconMaterial, type RendererCapabilities } from "@flywave/flywave-materials";
+import { type RendererCapabilities, IconMaterial } from "@flywave/flywave-materials";
 import { type MemoryUsage } from "@flywave/flywave-text-canvas";
-import type { Renderer } from "three/webgpu";
 import { assert, LoggerManager, Math2D } from "@flywave/flywave-utils";
+import type { Renderer } from "three/webgpu";
 import * as THREE from "three/webgpu";
 
 import { type ImageItem } from "../image/Image";

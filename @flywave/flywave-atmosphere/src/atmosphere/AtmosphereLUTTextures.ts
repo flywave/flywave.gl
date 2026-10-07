@@ -1,10 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { Matrix3, Vector3, type Renderer, type Texture } from "three/webgpu";
 import { uniform } from "three/tsl";
+import { type Renderer, type Texture, Matrix3, Vector3 } from "three/webgpu";
 
 import type { AnyFloatType } from "../tsl/types";
-
 import { AtmosphereContextBase } from "./AtmosphereContextBase";
 import type { AtmosphereLUTTexture3DName, AtmosphereLUTTextureName } from "./AtmosphereLUTTypes";
 import type { AtmosphereParameters } from "./AtmosphereParameters";

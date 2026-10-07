@@ -21,22 +21,7 @@
  * Modified from the original source code.
  */
 
-import {
-    Box2,
-    HalfFloatType,
-    RenderTarget,
-    RGFormat,
-    Vector2,
-    type NodeBuilder,
-    type NodeFrame,
-    type Renderer,
-    type TextureNode,
-    type UniformNode,
-    NodeMaterial,
-    NodeUpdateType,
-    QuadMesh,
-    RendererUtils
-} from "three/webgpu";
+import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
 import {
     and,
     floor,
@@ -51,7 +36,22 @@ import {
     vec2,
     vec4
 } from "three/tsl";
-import type { CSMShadowNode } from "three/examples/jsm/csm/CSMShadowNode.js";
+import {
+    type NodeBuilder,
+    type NodeFrame,
+    type Renderer,
+    type TextureNode,
+    type UniformNode,
+    Box2,
+    HalfFloatType,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils,
+    RenderTarget,
+    RGFormat,
+    Vector2
+} from "three/webgpu";
 
 import { Node } from "../../tsl/node";
 import { outputTexture } from "../../tsl/OutputTextureNode";

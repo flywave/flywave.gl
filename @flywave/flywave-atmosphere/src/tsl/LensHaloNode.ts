@@ -1,14 +1,15 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
+import { abs, distance, fract, min, mul, sub, uniform, uv, vec2, vec3 } from "three/tsl";
 import {
-    Vector2,
-    NodeUpdateType,
-    TempNode,
     type NodeBuilder,
     type NodeFrame,
-    type TextureNode
+    type TextureNode,
+    NodeUpdateType,
+    TempNode,
+    Vector2
 } from "three/webgpu";
-import { abs, distance, fract, min, mul, sub, uniform, uv, vec2, vec3 } from "three/tsl";
-
 import invariant from "tiny-invariant";
 
 import { FnLayout } from "./FnLayout";

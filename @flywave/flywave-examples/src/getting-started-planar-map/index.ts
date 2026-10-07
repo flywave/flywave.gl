@@ -1,14 +1,15 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
+    ArcGISTileProvider,
+    DEMTerrainSource,
     GeoCoordinates,
     MapControls,
-    DEMTerrainSource,
-    ArcGISTileProvider,
     MapControlsUI,
+    MapView,
     mercatorProjection
 } from "@flywave/flywave.gl";
 import { NodeBuilder } from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 // TODO(debug): temporary shader build/compile counters, remove after debug.
 // graphBuilds = NodeBuilder.build() calls (node graph recompute, one per
@@ -63,7 +64,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         zoomLevel: 6, // Initial zoom level
         tilt: 45, // Initial tilt angle
         heading: 1.5413763202653008, // Initial heading angle
-        canvas: canvas, // Specify render canvas
+        canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base.json" // Base theme configuration
         }

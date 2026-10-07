@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { ConcurrentDecoderFacade, ConcurrentTilerFacade } from "@flywave/flywave-mapview";
-import { baseUrl, UriResolver } from "@flywave/flywave-utils";
+import { type UriResolver, baseUrl } from "@flywave/flywave-utils";
 
 /**
  * Global declaration for flywave.gl resource base URL variables
@@ -58,7 +58,7 @@ class MapAssetsUriResolver implements UriResolver {
             return uri;
         }
 
-        let _baseResourceUrl = this.baseResourceUrl;
+        const _baseResourceUrl = this.baseResourceUrl;
 
         // If a base resource URL is specified, resolve relative to it
         if (_baseResourceUrl) {

@@ -2,31 +2,13 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    type NodeBuilder,
-    type NodeFrame,
-    type Renderer,
-    type TextureNode,
-    HalfFloatType,
-    LinearFilter,
-    NodeMaterial,
-    NodeUpdateType,
-    QuadMesh,
-    RenderTarget,
-    RendererUtils,
-    TempNode,
-    Texture,
-    Vector2,
-    Matrix4,
-    Vector3
-} from "three/webgpu";
-import {
     dot,
-    Fn,
     float,
     floor,
+    Fn,
     If,
-    ivec2,
     int,
+    ivec2,
     Loop,
     max,
     min,
@@ -37,31 +19,47 @@ import {
     screenCoordinate,
     screenUV,
     sqrt,
+    struct,
     texture,
     uniform,
     uniformTexture,
     vec2,
     vec3,
-    vec4,
-    struct
+    vec4
 } from "three/tsl";
+import {
+    type NodeBuilder,
+    type NodeFrame,
+    type Renderer,
+    type Texture,
+    type TextureNode,
+    HalfFloatType,
+    LinearFilter,
+    Matrix4,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils,
+    RenderTarget,
+    TempNode,
+    Vector2,
+    Vector3
+} from "three/webgpu";
 
+import { CascadedShadowMaps } from "../clouds/CascadedShadowMaps";
+import { type CloudLayerLike, CloudLayers } from "../clouds/CloudLayer";
+import { CloudTextures } from "../clouds/CloudTextures";
+import { createCloudRenderer } from "../clouds/cloudTsl";
+import { CloudUniforms } from "../clouds/CloudUniforms";
+import { type QualityPreset } from "../clouds/QualityPresets";
+import { resolveResourceUrl } from "../resourceResolver";
 import { inverseProjectionMatrix } from "../tsl/accessors";
-import { depthToViewZ } from "../tsl/transformations";
 import type { Node } from "../tsl/node";
 import { outputTexture } from "../tsl/OutputTextureNode";
 import { convertToTexture } from "../tsl/RenderTargetNode";
-
+import { stbn, stbnFrameUniform, stbnTexture } from "../tsl/STBNTextureNode";
+import { depthToViewZ } from "../tsl/transformations";
 import { getAtmosphereContext } from "./AtmosphereContext";
-
-import { CloudTextures } from "../clouds/CloudTextures";
-import { CloudLayers, type CloudLayerLike } from "../clouds/CloudLayer";
-import { CloudUniforms } from "../clouds/CloudUniforms";
-import { createCloudRenderer } from "../clouds/cloudTsl";
-import { CascadedShadowMaps } from "../clouds/CascadedShadowMaps";
-import { type QualityPreset } from "../clouds/QualityPresets";
-import { stbn, stbnTexture, stbnFrameUniform } from "../tsl/STBNTextureNode";
-import { resolveResourceUrl } from "../resourceResolver";
 
 const SHADOW_CASCADE_COUNT = 3;
 const SHADOW_MAX_FAR = 100000;
@@ -135,7 +133,7 @@ const sizeScratch = /*#__PURE__*/ new Vector2();
 
 const bayerIndices = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
-const bayerOffsets: [number, number][] = Array.from({ length: 16 }, (_, frame) => {
+const bayerOffsets: Array<[number, number]> = Array.from({ length: 16 }, (_, frame) => {
     for (let i = 0; i < 16; i++) {
         if (bayerIndices[i] === frame) {
             return [((i % 4) + 0.5) / 4, (Math.floor(i / 4) + 0.5) / 4];
@@ -196,8 +194,8 @@ export class CloudRenderNode extends TempNode {
 
     private frameIndex = 0;
     private prevFrameTime = 0;
-    private prevProjectionMatrix: Matrix4 = new Matrix4();
-    private prevViewMatrix: Matrix4 = new Matrix4();
+    private readonly prevProjectionMatrix: Matrix4 = new Matrix4();
+    private readonly prevViewMatrix: Matrix4 = new Matrix4();
     private readonly prevCamPos = new Vector3();
     private hasPrevCamTransform = false;
 
@@ -217,18 +215,18 @@ export class CloudRenderNode extends TempNode {
     private prevCamZ = 0;
     private hasPrevCam = false;
 
-    private lowResRT: RenderTarget;
+    private readonly lowResRT: RenderTarget;
     private historyRT: RenderTarget;
     private resolveRT: RenderTarget;
 
     // Single MRT RT for all shadow cascades: count = CASCADES
-    private shadowMRT!: RenderTarget;
+    private readonly shadowMRT!: RenderTarget;
     private shadowResolvedMRT!: RenderTarget;
     private shadowHistoryMRT!: RenderTarget;
 
     // Combined array texture: all cascade shadows in a single binding (for AtmosphereLightNode).
-    private shadowArrayTexture!: RenderTarget;
-    private shadowArrayNode!: TextureNode;
+    private readonly shadowArrayTexture!: RenderTarget;
+    private readonly shadowArrayNode!: TextureNode;
 
     private readonly lowResMaterial = new NodeMaterial();
     private readonly resolveMaterial = new NodeMaterial();
@@ -246,16 +244,16 @@ export class CloudRenderNode extends TempNode {
     private readonly lowResNode: TextureNode;
     private readonly velocityLowResNode: TextureNode;
     private readonly shadowLengthLowResNode: TextureNode;
-    private historyNode: TextureNode;
-    private historyShadowLengthNode: TextureNode;
-    private resolveNodeTex: TextureNode;
-    private compositeNode: TextureNode;
-    private compositeShadowLengthNode: TextureNode;
+    private readonly historyNode: TextureNode;
+    private readonly historyShadowLengthNode: TextureNode;
+    private readonly resolveNodeTex: TextureNode;
+    private readonly compositeNode: TextureNode;
+    private readonly compositeShadowLengthNode: TextureNode;
     private readonly shadowNodes: TextureNode[] = [];
     private readonly shadowHistoryNodes: TextureNode[] = [];
 
     private readonly _tmpAtlasOffset = new Vector3();
-    private prevShadowMatrices: Matrix4[] = [
+    private readonly prevShadowMatrices: Matrix4[] = [
         new Matrix4(),
         new Matrix4(),
         new Matrix4(),
@@ -284,6 +282,7 @@ export class CloudRenderNode extends TempNode {
     get shadowLengthTexture(): Texture {
         return this.resolveRT.textures[1];
     }
+
     constructor(colorNode: Node<"vec4">, depthNode?: Node | null, renderer?: Renderer) {
         super("vec4");
         this.updateBeforeType = NodeUpdateType.FRAME;
@@ -698,28 +697,28 @@ export class CloudRenderNode extends TempNode {
         const pos = this._tmpPos.setFromMatrixPosition(cam.matrixWorld);
         if (w2e) pos.applyMatrix4(w2e);
 
-        const a = 6378137.0,
-            b = 6356752.314245;
-        const a2 = a * a,
-            b2 = b * b;
-        const rx = 1 / a2,
-            ry = 1 / a2,
-            rz = 1 / b2;
-        const x2 = pos.x * pos.x * rx,
-            y2 = pos.y * pos.y * ry,
-            z2 = pos.z * pos.z * rz;
+        const a = 6378137.0;
+        const b = 6356752.314245;
+        const a2 = a * a;
+        const b2 = b * b;
+        const rx = 1 / a2;
+        const ry = 1 / a2;
+        const rz = 1 / b2;
+        const x2 = pos.x * pos.x * rx;
+        const y2 = pos.y * pos.y * ry;
+        const z2 = pos.z * pos.z * rz;
         const normSq = x2 + y2 + z2;
-        let corrX = 0,
-            corrY = 0,
-            corrZ = 0;
+        let corrX = 0;
+        let corrY = 0;
+        let corrZ = 0;
         if (Number.isFinite(normSq) && normSq >= 0.1) {
             const ratio = Math.sqrt(1 / normSq);
-            const ix = pos.x * ratio,
-                iy = pos.y * ratio,
-                iz = pos.z * ratio;
-            const gx = ix * rx * 2,
-                gy = iy * ry * 2,
-                gz = iz * rz * 2;
+            const ix = pos.x * ratio;
+            const iy = pos.y * ratio;
+            const iz = pos.z * ratio;
+            const gx = ix * rx * 2;
+            const gy = iy * ry * 2;
+            const gz = iz * rz * 2;
             const gLen = Math.sqrt(gx * gx + gy * gy + gz * gz);
             let lambda = ((1 - ratio) * pos.length()) / (gLen / 2);
             let correction = 0;
@@ -729,22 +728,22 @@ export class CloudRenderNode extends TempNode {
                 sx = 1 / (1 + lambda * rx);
                 sy = 1 / (1 + lambda * ry);
                 sz = 1 / (1 + lambda * rz);
-                const sx2 = sx * sx,
-                    sy2 = sy * sy,
-                    sz2 = sz * sz;
-                const sx3 = sx2 * sx,
-                    sy3 = sy2 * sy,
-                    sz3 = sz2 * sz;
+                const sx2 = sx * sx;
+                const sy2 = sy * sy;
+                const sz2 = sz * sz;
+                const sx3 = sx2 * sx;
+                const sy3 = sy2 * sy;
+                const sz3 = sz2 * sz;
                 error = x2 * sx2 + y2 * sy2 + z2 * sz2 - 1;
                 correction = error / ((x2 * sx3 * rx + y2 * sy3 * ry + z2 * sz3 * rz) * -2);
             } while (Math.abs(error) > 1e-12);
 
-            const surfX = pos.x * sx,
-                surfY = pos.y * sy,
-                surfZ = pos.z * sz;
-            const nx = surfX / a2,
-                ny = surfY / a2,
-                nz = surfZ / b2;
+            const surfX = pos.x * sx;
+            const surfY = pos.y * sy;
+            const surfZ = pos.z * sz;
+            const nx = surfX / a2;
+            const ny = surfY / a2;
+            const nz = surfZ / b2;
             const nLen = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
             const br = ctx.parameters.bottomRadius;
             corrX = nx * nLen * br - surfX;
@@ -753,9 +752,9 @@ export class CloudRenderNode extends TempNode {
         }
 
         this.cloudUniforms.altitudeCorrection.value.set(corrX, corrY, corrZ);
-        const cx = pos.x + corrX,
-            cy = pos.y + corrY,
-            cz = pos.z + corrZ;
+        const cx = pos.x + corrX;
+        const cy = pos.y + corrY;
+        const cz = pos.z + corrZ;
         this.cloudUniforms.cameraPosition.value.set(cx, cy, cz);
         this.cloudUniforms.cameraHeight.value =
             Math.sqrt(cx * cx + cy * cy + cz * cz) - ctx.parameters.bottomRadius;
@@ -773,9 +772,9 @@ export class CloudRenderNode extends TempNode {
         ctx._overrideAltitudeCorrectionECEF.set(corrX, corrY, corrZ);
 
         if (this.hasPrevCam) {
-            const dx = cx - this.prevCamX,
-                dy = cy - this.prevCamY,
-                dz = cz - this.prevCamZ;
+            const dx = cx - this.prevCamX;
+            const dy = cy - this.prevCamY;
+            const dz = cz - this.prevCamZ;
             this.cloudUniforms.cameraVelocity.value = Math.sqrt(dx * dx + dy * dy + dz * dz);
         }
         this.prevCamX = cx;
@@ -996,8 +995,8 @@ export class CloudRenderNode extends TempNode {
             jitterCamera.updateProjectionMatrix();
         }
 
-        let jitterDx = 0,
-            jitterDy = 0;
+        let jitterDx = 0;
+        let jitterDy = 0;
         const frame = this._cloudResolveFrameCount % 16;
         if (this.m_temporalUpscale) {
             const [ox, oy] = bayerOffsets[frame];

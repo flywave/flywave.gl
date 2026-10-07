@@ -1,17 +1,18 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
-    sphereProjection,
-    MapControls,
-    MapControlsUI,
-    DEMTerrainSource,
     ArcGISTileProvider,
     CopyrightElementHandler,
-    MapViewEventNames
+    DEMTerrainSource,
+    GeoCoordinates,
+    MapControls,
+    MapControlsUI,
+    MapView,
+    MapViewEventNames,
+    sphereProjection
 } from "@flywave/flywave.gl";
-import * as THREE from "three/webgpu";
 import { GUI } from "dat.gui";
+import * as THREE from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 // 免费全球 DEM：AWS Open Data 的 Terrarium 地形瓦片（无需 token，服务端开 CORS）。
 // encoding "terrarium"：高度 = R * 256 + G + B / 256 - 32768（米）。
@@ -63,7 +64,9 @@ const demTerrain = new DEMTerrainSource({ source: FREE_TERRARIUM_DEM, encoding: 
 mapView.setElevationSource(demTerrain);
 demTerrain.addWebTileDataSource(new ArcGISTileProvider({ minDataLevel: 0, maxDataLevel: 18 }));
 
-window.addEventListener("resize", () => mapView.resize(window.innerWidth, window.innerHeight));
+window.addEventListener("resize", () => {
+    mapView.resize(window.innerWidth, window.innerHeight);
+});
 mapView.resize(window.innerWidth, window.innerHeight);
 mapView.beginAnimation();
 
@@ -73,12 +76,12 @@ mapView.beginAnimation();
  * （场景根每帧清空，必须走 MapAnchor）。
  */
 class HitMarker {
-    private mesh: THREE.Mesh;
+    private readonly mesh: THREE.Mesh;
     public visible = false;
 
     constructor(
-        private mapView: MapView,
-        private anchor: GeoCoordinates,
+        private readonly mapView: MapView,
+        private readonly anchor: GeoCoordinates,
         gui: GUI,
         name: string,
         color: number
@@ -117,12 +120,12 @@ class HitMarker {
 }
 
 class CameraCollisionTest {
-    private rayMarker: HitMarker;
-    private fallbackMarker: HitMarker;
+    private readonly rayMarker: HitMarker;
+    private readonly fallbackMarker: HitMarker;
     private pendingMouseEvent: MouseEvent | null = null;
     private rafScheduled = false;
 
-    private stats = {
+    private readonly stats = {
         collisionEnabled: true,
         raycastStatus: "-",
         raycastDistance: "-",
@@ -134,7 +137,7 @@ class CameraCollisionTest {
         cameraAboveGround: "-"
     };
 
-    constructor(private mapView: MapView, private demTerrain: DEMTerrainSource) {
+    constructor(private readonly mapView: MapView, private readonly demTerrain: DEMTerrainSource) {
         const gui = new GUI({ width: 340 });
 
         const rayFolder = gui.addFolder("TerrainSource.raycast（数据源碰撞）");
@@ -202,7 +205,9 @@ class CameraCollisionTest {
         helpFolder.add(help, "step6").listen();
 
         this.setupMouseTracking();
-        this.mapView.addEventListener(MapViewEventNames.Render, () => this.updateCameraStats());
+        this.mapView.addEventListener(MapViewEventNames.Render, () => {
+            this.updateCameraStats();
+        });
     }
 
     private setupMouseTracking(): void {

@@ -3,7 +3,7 @@
 import * as THREE from "three/webgpu";
 
 /**
- * 三角形分组信息接口
+ * Triangle group information interface
  */
 interface TriangleGroup {
     start: number;
@@ -12,7 +12,7 @@ interface TriangleGroup {
 }
 
 /**
- * 几何体处理统计信息
+ * Geometry processing statistics
  */
 interface GeometryStats {
     originalVertices: number;
@@ -23,15 +23,15 @@ interface GeometryStats {
 }
 
 /**
- * 基于三角形的Geometry合并器
- * 通过整理三角形面片来合并几何体
+ * Triangle-based Geometry merger
+ * Merges geometries by reorganizing their triangle faces
  */
 export class TriangleGeometryMerger {
     /**
-     * 合并多个Geometry
-     * @param geometries - 要合并的geometry数组
-     * @param useGroups - 是否使用groups保持原始边界
-     * @returns 合并后的geometry
+     * Merge multiple Geometries
+     * @param geometries - the array of geometries to merge
+     * @param useGroups - whether to use groups to preserve the original boundaries
+     * @returns the merged geometry
      */
     static merge(
         geometries: THREE.BufferGeometry[],
@@ -44,7 +44,7 @@ export class TriangleGeometryMerger {
     }
 
     /**
-     * 通过三角形合并Geometry（核心方法）
+     * Merge Geometry by triangles (core method)
      */
     private static mergeByTriangles(
         geometries: THREE.BufferGeometry[],
@@ -53,10 +53,10 @@ export class TriangleGeometryMerger {
         const mergedGeometry = new THREE.BufferGeometry();
         const triangleGroups: TriangleGroup[] = [];
 
-        // 收集所有属性名称和类型
+        // Collect all attribute names and types
         const { attributeNames, attributeTypes } = this.collectAllAttributesInfo(geometries);
 
-        // 存储所有三角形的顶点数据
+        // Store the vertex data of all triangles
         const allTriangles: Record<string, number[][]> = {};
         for (const name of attributeNames) {
             allTriangles[name] = [];
@@ -66,12 +66,12 @@ export class TriangleGeometryMerger {
         let currentVertexIndex = 0;
         let currentTriangleOffset = 0;
 
-        // 处理每个geometry
+        // Process each geometry
         for (let geoIndex = 0; geoIndex < geometries.length; geoIndex++) {
             const geometry = geometries[geoIndex];
             const groupStart = currentTriangleOffset;
 
-            // 处理当前几何体的所有三角形
+            // Process all triangles of the current geometry
             const triangleCount = this.processGeometryTriangles(
                 geometry,
                 currentVertexIndex,
@@ -80,7 +80,7 @@ export class TriangleGeometryMerger {
                 indices
             );
 
-            // 记录分组信息
+            // Record the group information
             if (useGroups && triangleCount > 0) {
                 triangleGroups.push({
                     start: groupStart * 3,
@@ -89,11 +89,11 @@ export class TriangleGeometryMerger {
                 });
             }
 
-            currentVertexIndex += triangleCount * 3; // 每个三角形3个顶点
+            currentVertexIndex += triangleCount * 3; // 3 vertices per triangle
             currentTriangleOffset += triangleCount;
         }
 
-        // 设置合并后的属性
+        // Set the merged attributes
         this.setMergedAttributesFromTriangles(
             mergedGeometry,
             allTriangles,
@@ -101,13 +101,13 @@ export class TriangleGeometryMerger {
             attributeTypes
         );
 
-        // 设置索引
+        // Set the index
         if (indices.length > 0) {
             const indexArray = new Uint32Array(indices);
             mergedGeometry.setIndex(new THREE.BufferAttribute(indexArray, 1));
         }
 
-        // 设置分组
+        // Set the groups
         if (useGroups) {
             this.setMergedGroups(mergedGeometry, triangleGroups);
         }
@@ -116,7 +116,7 @@ export class TriangleGeometryMerger {
     }
 
     /**
-     * 收集所有geometry中的attribute名称和类型
+     * Collect the attribute names and types from all geometries
      */
     private static collectAllAttributesInfo(geometries: THREE.BufferGeometry[]): {
         attributeNames: string[];
@@ -130,7 +130,7 @@ export class TriangleGeometryMerger {
                 const attr = geometry.attributes[name];
                 if (attr instanceof THREE.BufferAttribute) {
                     names.add(name);
-                    // 记录属性类型
+                    // Record the attribute type
                     if (!types[name]) {
                         types[name] = attr.array.constructor as TypedArrayConstructor;
                     }
@@ -141,7 +141,7 @@ export class TriangleGeometryMerger {
     }
 
     /**
-     * 处理单个geometry的所有三角形
+     * Process all triangles of a single geometry
      */
     private static processGeometryTriangles(
         geometry: THREE.BufferGeometry,
@@ -160,7 +160,7 @@ export class TriangleGeometryMerger {
         let triangleCount = 0;
 
         if (geometry.index) {
-            // 处理索引几何体
+            // Handle an indexed geometry
             const indexArray = geometry.index.array;
             const indexCount = geometry.index.count;
 
@@ -170,7 +170,7 @@ export class TriangleGeometryMerger {
                 const vertexIndices = [indexArray[i], indexArray[i + 1], indexArray[i + 2]];
                 this.processTriangle(geometry, vertexIndices, allTriangles, attributeNames);
 
-                // 添加新的索引
+                // Append the new indices
                 indices.push(
                     vertexOffset + triangleCount * 3,
                     vertexOffset + triangleCount * 3 + 1,
@@ -180,7 +180,7 @@ export class TriangleGeometryMerger {
                 triangleCount++;
             }
         } else {
-            // 处理非索引几何体
+            // Handle a non-indexed geometry
             const vertexCount = positionAttr.count;
             for (let i = 0; i < vertexCount; i += 3) {
                 if (i + 2 >= vertexCount) break;
@@ -188,7 +188,7 @@ export class TriangleGeometryMerger {
                 const vertexIndices = [i, i + 1, i + 2];
                 this.processTriangle(geometry, vertexIndices, allTriangles, attributeNames);
 
-                // 添加新的索引
+                // Append the new indices
                 indices.push(
                     vertexOffset + triangleCount * 3,
                     vertexOffset + triangleCount * 3 + 1,
@@ -203,7 +203,7 @@ export class TriangleGeometryMerger {
     }
 
     /**
-     * 处理单个三角形
+     * Process a single triangle
      */
     private static processTriangle(
         geometry: THREE.BufferGeometry,
@@ -217,23 +217,23 @@ export class TriangleGeometryMerger {
             if (attr && attr.array && attr.array.length > 0) {
                 const itemSize = attr.itemSize;
 
-                // 处理每个顶点的属性数据
+                // Process the attribute data of each vertex
                 for (let i = 0; i < 3; i++) {
                     const vertexIndex = vertexIndices[i];
 
-                    // 检查顶点索引是否有效
+                    // Check that the vertex index is valid
                     if (vertexIndex >= attr.count) {
                         console.warn(
                             `Vertex index ${vertexIndex} out of bounds for attribute ${name} (count: ${attr.count})`
                         );
-                        // 填充默认值
+                        // Fill in a default value
                         const defaultData = new Array(itemSize).fill(0);
                         allTriangles[name].push(defaultData);
                         continue;
                     }
 
                     const start = vertexIndex * itemSize;
-                    // 检查数组边界
+                    // Check the array bounds
                     if (start + itemSize > attr.array.length) {
                         console.warn(
                             `Array bounds exceeded for attribute ${name} at index ${vertexIndex}`
@@ -252,7 +252,7 @@ export class TriangleGeometryMerger {
                     allTriangles[name].push(vertexData);
                 }
             } else {
-                // 为缺失的属性填充默认值
+                // Fill in default values for missing attributes
                 const defaultSize = this.getDefaultItemSize(name);
                 for (let i = 0; i < 3; i++) {
                     allTriangles[name].push(new Array(defaultSize).fill(0));
@@ -262,7 +262,7 @@ export class TriangleGeometryMerger {
     }
 
     /**
-     * 获取默认的属性itemSize
+     * Get the default attribute itemSize
      */
     private static getDefaultItemSize(attributeName: string): number {
         switch (attributeName) {
@@ -284,7 +284,7 @@ export class TriangleGeometryMerger {
     }
 
     /**
-     * 从三角形数据设置合并后的属性
+     * Set the merged attributes from the triangle data
      */
     private static setMergedAttributesFromTriangles(
         mergedGeometry: THREE.BufferGeometry,
@@ -295,7 +295,7 @@ export class TriangleGeometryMerger {
         for (const name of attributeNames) {
             if (allTriangles[name].length === 0) continue;
 
-            // 确定itemSize
+            // Determine the itemSize
             const firstVertex = allTriangles[name][0];
             if (!firstVertex || firstVertex.length === 0) {
                 console.warn(`Invalid data for attribute ${name}`);
@@ -305,13 +305,13 @@ export class TriangleGeometryMerger {
             const itemSize = firstVertex.length;
             const ArrayType = attributeTypes[name] || Float32Array;
 
-            // 展平所有顶点数据
+            // Flatten all vertex data
             const flatData: number[] = [];
             let validDataCount = 0;
 
             for (const vertexData of allTriangles[name]) {
                 if (!vertexData || vertexData.length !== itemSize) {
-                    // 填充无效数据的默认值
+                    // Fill in default values for invalid data
                     for (let i = 0; i < itemSize; i++) {
                         flatData.push(0);
                     }
@@ -328,14 +328,14 @@ export class TriangleGeometryMerger {
                 continue;
             }
 
-            // 使用正确的数组类型创建缓冲区
+            // Create the buffer with the correct array type
             const array = new ArrayType(flatData);
             mergedGeometry.setAttribute(name, new THREE.BufferAttribute(array, itemSize));
         }
     }
 
     /**
-     * 设置合并后的分组
+     * Set the merged groups
      */
     private static setMergedGroups(
         mergedGeometry: THREE.BufferGeometry,
@@ -347,7 +347,7 @@ export class TriangleGeometryMerger {
     }
 
     /**
-     * 调试方法：检查几何体数据
+     * Debug helper: inspect geometry data
      */
     static debugGeometry(geometry: THREE.BufferGeometry, name: string = "Geometry"): void {
         console.log(`=== ${name} Debug ===`);
@@ -358,7 +358,7 @@ export class TriangleGeometryMerger {
                 `Attribute ${attrName}: count=${attr.count}, itemSize=${attr.itemSize}, type=${attr.array.constructor.name}`
             );
 
-            // 检查最后几个值是否有NaN
+            // Check the last few values for NaN
             const array = attr.array;
             const checkCount = Math.min(10, array.length);
             for (let i = Math.max(0, array.length - checkCount); i < array.length; i++) {
@@ -382,7 +382,7 @@ export class TriangleGeometryMerger {
     }
 
     /**
-     * 获取合并统计信息
+     * Get merge statistics
      */
     static getMergeStats(geometries: THREE.BufferGeometry[]): GeometryStats {
         let originalVertices = 0;
@@ -420,7 +420,7 @@ export class TriangleGeometryMerger {
     }
 }
 
-// 定义类型数组构造函数的类型
+// Type of the typed array constructors
 type TypedArrayConstructor =
     | Float32ArrayConstructor
     | Uint32ArrayConstructor

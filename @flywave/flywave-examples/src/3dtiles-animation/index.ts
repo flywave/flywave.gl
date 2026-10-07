@@ -1,27 +1,26 @@
 import {
-    MapView,
-    GeoCoordinates,
-    ellipsoidProjection,
-    MapControls,
+    type Theme,
     CesiumIonDataSource,
+    ellipsoidProjection,
+    GeoCoordinates,
+    MapControls,
     MapControlsUI,
-    Theme,
-    WindowEventHandler,
-    TileRenderDataSource
+    MapView,
+    TileRenderDataSource,
+    WindowEventHandler
 } from "@flywave/flywave.gl";
-import { GeoJSONDrawControls, DrawMode } from "@flywave/flywave-draw-controls";
+import { DrawMode, GeoJSONDrawControls } from "@flywave/flywave-draw-controls";
 import {
-    MapViewMonitor,
     AtmosphereModule,
-    ToneMappingModule,
-    PostProcessingModule
+    MapViewMonitor,
+    PostProcessingModule,
+    ToneMappingModule
 } from "@flywave/flywave-inspector";
-
-import { PropertiesTable } from "./PropertiesTable.js";
+import { type GUI } from "dat.gui";
 import { Matrix4 } from "three/webgpu";
-import { GUI } from "dat.gui";
 
 import { installDebugErrorCapture, shouldForceWebGL } from "../common-webgl-debug";
+import { PropertiesTable } from "./PropertiesTable.js";
 
 installDebugErrorCapture();
 
@@ -105,7 +104,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         zoomLevel: 18, // Initial zoom level
         tilt: 70, // Initial tilt angle
         heading: 35.1, // Initial heading angle
-        canvas: canvas, // Specify render canvas
+        canvas, // Specify render canvas
         enableGpuPicking: true,
         theme: {
             atmosphere: {
@@ -374,10 +373,10 @@ const setupMouseClickHandler = (
 
     eventHandler.addEventListener("mouseclick", e => {
         // Get 3D Tiles objects at click position
-        let picks = dataSource.intersectMapObjects(e.layerX, e.layerY).sort((a, b) => {
+        const picks = dataSource.intersectMapObjects(e.layerX, e.layerY).sort((a, b) => {
             return a.distance - b.distance; // Sort by distance, nearest first
         });
-        let pick = picks[0];
+        const pick = picks[0];
 
         // Batch-table lookup through the datasource: tile is derived from
         // the intersection's object internally.

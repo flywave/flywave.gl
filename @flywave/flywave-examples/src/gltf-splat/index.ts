@@ -1,16 +1,16 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 /* Copyright (C) 2025 flywave.gl contributors */
-
 import {
-    MapView,
-    GeoCoordinates,
+    CopyrightElementHandler,
     ellipsoidProjection,
+    GeoCoordinates,
     MapControls,
     MapControlsUI,
-    CopyrightElementHandler
+    MapView
 } from "@flywave/flywave.gl";
-import { loadGLTF, GLTFLoader } from "@flywave/flywave.gl";
+import { GLTFLoader, loadGLTF } from "@flywave/flywave.gl";
 import * as THREE from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 // GLTF Splat model parameters
 interface GLTFSplatParams {
@@ -27,14 +27,14 @@ interface GLTFSplatParams {
 
 // GLTF Splat model controller
 class GLTFSplatController {
-    private mapView: MapView;
-    private mapControls: MapControls;
+    private readonly mapView: MapView;
+    private readonly mapControls: MapControls;
     private model: THREE.Object3D | null = null;
     private gltf: any = null;
     private params: GLTFSplatParams;
     private gui: any = null;
     private animationMixer: THREE.AnimationMixer | null = null;
-    private clock: THREE.Clock;
+    private readonly clock: THREE.Clock;
     private splatMaterial: THREE.ShaderMaterial | null = null;
 
     constructor() {
@@ -367,9 +367,25 @@ class GLTFSplatController {
 
         // Operation controls
         const operationFolder = this.gui.addFolder("Operations");
-        operationFolder.add({ reload: () => this.reloadModel() }, "reload").name("Reload");
         operationFolder
-            .add({ info: () => console.log("Model Info:", this.getModelInfo()) }, "info")
+            .add(
+                {
+                    reload: () => {
+                        this.reloadModel();
+                    }
+                },
+                "reload"
+            )
+            .name("Reload");
+        operationFolder
+            .add(
+                {
+                    info: () => {
+                        console.log("Model Info:", this.getModelInfo());
+                    }
+                },
+                "info"
+            )
             .name("Model Info");
 
         // Expand folders

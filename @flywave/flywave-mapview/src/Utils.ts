@@ -4,13 +4,13 @@ import {
     type GeoBox,
     type GeoCoordinatesLike,
     type Projection,
+    type SphereProjection,
     type Vector2Like,
     type Vector3Like,
     ellipsoidProjection,
     GeoCoordinates,
     OrientedBox3,
     ProjectionType,
-    SphereProjection,
     sphereProjection,
     TileKeyUtils
 } from "@flywave/flywave-geoutils";
@@ -556,7 +556,7 @@ export namespace MapViewUtils {
         } else {
             let result: THREE.Vector3 | null = new THREE.Vector3();
 
-            let sphere = projection as SphereProjection;
+            const sphere = projection as SphereProjection;
 
             if (
                 sphere.rayCast(
@@ -950,7 +950,7 @@ export namespace MapViewUtils {
             const actualDistance = targetPos.distanceTo(result);
 
             if (Math.abs(actualDistance - distance) > 1e-3) {
-                // 调整到正确距离
+                // Adjust to the correct distance
                 const direction = new THREE.Vector3().subVectors(result, targetPos).normalize();
                 result.copy(targetPos).add(direction.multiplyScalar(distance));
             }
@@ -1286,7 +1286,7 @@ export namespace MapViewUtils {
             groundPlane.constant -= elevation;
         }
 
-        let sphere = mapView.projection as SphereProjection;
+        const sphere = mapView.projection as SphereProjection;
         const worldPosition = new THREE.Vector3();
         const result =
             mapView.projection.type === ProjectionType.Planar

@@ -1,7 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type OrientedBox3 } from "./OrientedBox3";
 import * as THREE from "three/webgpu";
+
+import { type OrientedBox3 } from "./OrientedBox3";
 
 /**
  * A Three.js Object3D that visualizes an OrientedBox3 in the scene as a wireframe.

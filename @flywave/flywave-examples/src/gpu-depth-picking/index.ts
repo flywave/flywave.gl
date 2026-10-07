@@ -1,20 +1,21 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
-    ellipsoidProjection,
-    sphereProjection,
-    MapControls,
-    MapControlsUI,
-    DEMTerrainSource,
     ArcGISTileProvider,
     CopyrightElementHandler,
+    DEMTerrainSource,
+    ellipsoidProjection,
+    GeoCoordinates,
+    MapControls,
+    MapControlsUI,
+    MapView,
     MapViewEventNames,
-    ModularMapViewMonitor
+    ModularMapViewMonitor,
+    sphereProjection
 } from "@flywave/flywave.gl";
-import * as THREE from "three/webgpu";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { GUI } from "dat.gui";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import * as THREE from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 const CONFIG = {
     INITIAL_COORDS: new GeoCoordinates(36.48619699228674, 118.17270928364879, 500),
@@ -52,7 +53,9 @@ demTerrain.addWebTileDataSource(new ArcGISTileProvider({ minDataLevel: 0, maxDat
 
 new ModularMapViewMonitor(mapView);
 
-window.addEventListener("resize", () => mapView.resize(window.innerWidth, window.innerHeight));
+window.addEventListener("resize", () => {
+    mapView.resize(window.innerWidth, window.innerHeight);
+});
 mapView.resize(window.innerWidth, window.innerHeight);
 mapView.beginAnimation();
 
@@ -62,15 +65,15 @@ interface PlacedModel {
 }
 
 class GPUDepthPickExample {
-    private gui: GUI;
+    private readonly gui: GUI;
     private models: PlacedModel[] = [];
     private mouseMarker: THREE.Mesh | null = null;
-    private mouseMarkerGroup = new THREE.Group();
+    private readonly mouseMarkerGroup = new THREE.Group();
     private lastMouseNdc = new THREE.Vector2(0, 0);
-    private pendingDepthRead = false;
-    private clock = new THREE.Clock();
+    private readonly pendingDepthRead = false;
+    private readonly clock = new THREE.Clock();
 
-    private stats = {
+    private readonly stats = {
         gpuEnabled: true,
         depthHits: 0,
         depthMisses: 0,
@@ -82,7 +85,7 @@ class GPUDepthPickExample {
         source: "-"
     };
 
-    constructor(private mapView: MapView) {
+    constructor(private readonly mapView: MapView) {
         this.gui = new GUI({ width: 320 });
         // @ts-ignore
         this.mouseMarkerGroup.anchor = CONFIG.MODEL_ANCHOR;
@@ -122,10 +125,35 @@ class GPUDepthPickExample {
 
         const modelsFolder = this.gui.addFolder("Placed Models");
         modelsFolder
-            .add({ addBuilding: () => this.addRandomBox() }, "addBuilding")
+            .add(
+                {
+                    addBuilding: () => {
+                        this.addRandomBox();
+                    }
+                },
+                "addBuilding"
+            )
             .name("Add Building");
-        modelsFolder.add({ addGLTF: () => this.loadGLTFModel() }, "addGLTF").name("Add GLTF Model");
-        modelsFolder.add({ clearAll: () => this.clearModels() }, "clearAll").name("Clear All");
+        modelsFolder
+            .add(
+                {
+                    addGLTF: () => {
+                        this.loadGLTFModel();
+                    }
+                },
+                "addGLTF"
+            )
+            .name("Add GLTF Model");
+        modelsFolder
+            .add(
+                {
+                    clearAll: () => {
+                        this.clearModels();
+                    }
+                },
+                "clearAll"
+            )
+            .name("Clear All");
         modelsFolder.open();
     }
 
@@ -288,7 +316,9 @@ class GPUDepthPickExample {
                 console.log(`[GPU Depth] loaded ${name}`);
             },
             undefined,
-            err => console.error("[GPU Depth] GLTF load error:", err)
+            err => {
+                console.error("[GPU Depth] GLTF load error:", err);
+            }
         );
     }
 

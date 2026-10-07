@@ -2,6 +2,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
+    type Renderer,
+    type Texture,
     Data3DTexture,
     LinearFilter,
     LinearMipmapLinearFilter,
@@ -9,9 +11,7 @@ import {
     RedFormat,
     RepeatWrapping,
     TextureLoader,
-    UnsignedByteType,
-    type Texture,
-    type Renderer
+    UnsignedByteType
 } from "three/webgpu";
 
 import { resolveResourceUrl } from "../resourceResolver";

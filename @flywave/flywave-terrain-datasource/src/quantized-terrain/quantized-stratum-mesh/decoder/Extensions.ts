@@ -11,7 +11,7 @@ import {
     type SectionLineData
 } from "./types";
 
-// 扩展ID常量
+// Extension ID constants
 const STRATUM_MESH_MATERIALS_EXTENSION_ID = 1;
 const STRATUM_MESH_METADATA_EXTENSION_ID = 2;
 const STRATUM_MESH_FAULT_EXTENSION_ID = 3;
@@ -31,7 +31,7 @@ export function decodeExtensions(
         boreholes?: BoreholeData[];
         collapsePillars?: CollapsePillarData[];
         sectionLines?: SectionLineData[];
-        stratumLithology?: Record<string, string>; // 新增类型
+        stratumLithology?: Record<string, string>; // newly added type
     };
     extensionsEndPosition: number;
 } {
@@ -47,7 +47,7 @@ export function decodeExtensions(
     let pos = offset;
 
     while (pos < dataView.byteLength) {
-        // 读取扩展头
+        // Read the extension header
         const header: ExtensionHeader = {
             extensionId: dataView.getUint8(pos),
             extensionLength: dataView.getUint32(pos + 1, true)
@@ -135,20 +135,20 @@ function readMaterials(data: Uint8Array): { materials: Material[]; length: numbe
     const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
     let pos = 0;
 
-    // 读取材料数量
+    // Read the material count
     const count = dataView.getInt32(pos, true);
     pos += 4;
 
     const materials: Material[] = [];
     for (let i = 0; i < count; i++) {
-        // 读取颜色 (4 个 uint8)
+        // Read the color (4 x uint8)
         const r = dataView.getUint8(pos);
         const g = dataView.getUint8(pos + 1);
         const b = dataView.getUint8(pos + 2);
         const a = dataView.getUint8(pos + 3);
         pos += 4;
 
-        // 读取纹理矩形 (4 个 int32)
+        // Read the texture rectangle (4 x int32)
         const x0 = dataView.getInt32(pos, true);
         const y0 = dataView.getInt32(pos + 4, true);
         const x1 = dataView.getInt32(pos + 8, true);
@@ -179,7 +179,7 @@ function readFaultProfiles(data: Uint8Array): {
 
     const faults: FaultProfileData[] = [];
     for (let i = 0; i < count; i++) {
-        // 动态读取字符串字段
+        // Read the string fields dynamically
         const [id, idOffset] = readString(dataView, pos);
         pos += idOffset;
 
@@ -231,11 +231,11 @@ function readBoreholes(data: Uint8Array): { boreholes: BoreholeData[]; length: n
 
     const boreholes: BoreholeData[] = [];
     for (let i = 0; i < count; i++) {
-        // 读取钻孔ID
+        // Read the borehole ID
         const [id, idOffset] = readString(dataView, pos);
         pos += idOffset;
 
-        // 读取位置坐标
+        // Read the location coordinates
         const location: [number, number, number] = [
             dataView.getFloat64(pos, true),
             dataView.getFloat64(pos + 8, true),
@@ -254,7 +254,7 @@ function readBoreholes(data: Uint8Array): { boreholes: BoreholeData[]; length: n
         };
         pos += 24;
 
-        // 读取轨迹点
+        // Read the trajectory points
         const trajCount = dataView.getInt32(pos, true);
         pos += 4;
         borehole.trajectory = new Array(trajCount);
@@ -270,7 +270,7 @@ function readBoreholes(data: Uint8Array): { boreholes: BoreholeData[]; length: n
             pos += 48;
         }
 
-        // 读取地层信息
+        // Read the stratum information
         const stratumCount = dataView.getInt32(pos, true);
         pos += 4;
         const stratums: BoreholeStratum[] = [];
@@ -311,7 +311,7 @@ function readCollapsePillars(data: Uint8Array): {
     pos += 4;
 
     for (let i = 0; i < count; i++) {
-        // 动态读取每个字段（按Go的写入顺序）
+        // Read each field dynamically (in Go's write order)
         const [id, idOffset] = readString(dataView, pos);
         pos += idOffset;
 
@@ -373,14 +373,14 @@ function readSectionLines(data: Uint8Array): {
 
     const sections: SectionLineData[] = [];
     for (let i = 0; i < count; i++) {
-        // 读取ID和名称
+        // Read the ID and name
         const [id, idOffset] = readString(dataView, pos);
         pos += idOffset;
 
         const [name, nameOffset] = readString(dataView, pos);
         pos += nameOffset;
 
-        // 读取坐标点
+        // Read the coordinate points
         const pointsCount = dataView.getInt32(pos, true);
         pos += 4;
 
@@ -403,17 +403,17 @@ function readSectionLines(data: Uint8Array): {
     };
 }
 
-// 辅助函数：读取字符串
+// Helper: read a string
 function readString(dataView: DataView, startPos: number): [string, number] {
     const length = dataView.getInt32(startPos, true);
     const strBytes = new Uint8Array(dataView.buffer, dataView.byteOffset + startPos + 4, length);
     return [
         new TextDecoder().decode(strBytes),
-        4 + length // 总字节数 = 4字节长度 + 字符串内容长度
+        4 + length // total bytes = 4-byte length + string content length
     ];
 }
 
-// 新增岩性解析函数
+// Lithology parsing function
 function readStratumLithology(data: Uint8Array): {
     lithologyMap: Record<string, string>;
     length: number;
@@ -423,16 +423,16 @@ function readStratumLithology(data: Uint8Array): {
 
     const lithologyMap: Record<string, string> = {};
 
-    // 读取地层数量
+    // Read the stratum count
     const count = dataView.getInt32(pos, true);
     pos += 4;
 
     for (let i = 0; i < count; i++) {
-        // 读取地层ID
+        // Read the stratum ID
         const [id, idOffset] = readString(dataView, pos);
-        pos += idOffset; // 4字节长度 + 字符串内容
+        pos += idOffset; // 4-byte length + string content
 
-        // 读取岩性名称
+        // Read the lithology name
         const [lithology, lithologyOffset] = readString(dataView, pos);
         pos += lithologyOffset;
 

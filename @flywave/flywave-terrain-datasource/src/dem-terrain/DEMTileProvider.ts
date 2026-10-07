@@ -2,9 +2,9 @@
 
 // height-map/DemTileProgressiveLoader.ts
 import {
-    GeoBox,
-    GeoCoordinates,
+    type GeoBox,
     type TileKey,
+    GeoCoordinates,
     geographicTerrainStandardTiling,
     webMercatorTerrainTilingScheme
 } from "@flywave/flywave-geoutils";
@@ -183,7 +183,7 @@ export class DemTileResource extends TileValidResource {
      * @param geoBox - The geographic bounding box of the tile
      * @param _demData - The DEM data for this tile
      */
-    constructor(geoBox: GeoBox, private _demData: DEMData) {
+    constructor(geoBox: GeoBox, private readonly _demData: DEMData) {
         super(geoBox);
     }
 
@@ -303,9 +303,10 @@ export class DemTileResource extends TileValidResource {
 export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrainSource> {
     protected async connect(): Promise<void> {
         if (this.ready()) return;
-        // 假设 options.source 可以通过 this.options 访问
+        // The source is expected to be reachable via this.options
         await this.setSource(this.dem_options.source);
     }
+
     /**
      * Checks if the provider is ready to load tiles
      *

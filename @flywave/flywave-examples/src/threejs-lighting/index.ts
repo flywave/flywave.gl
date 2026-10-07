@@ -1,17 +1,18 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
-    ellipsoidProjection,
-    MapControls,
-    DEMTerrainSource,
     ArcGISTileProvider,
+    DEMTerrainSource,
+    ellipsoidProjection,
+    GeoCoordinates,
+    MapControls,
     MapControlsUI,
+    MapView,
     MapViewEventNames,
     sphereProjection
 } from "@flywave/flywave.gl";
-import * as THREE from "three/webgpu";
 import { GUI } from "dat.gui";
+import * as THREE from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 // Configuration constants
 const CONFIG = {
@@ -77,7 +78,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         target: CONFIG.INITIAL_COORDINATES,
         tilt: CONFIG.TILT,
         heading: CONFIG.HEADING,
-        canvas: canvas,
+        canvas,
         theme: {
             extends: "resources/tilezen_base_globe.json",
             lights: [],
@@ -138,7 +139,8 @@ class LightsManager extends THREE.Object3D {
         directionalLight?: THREE.DirectionalLight;
         spotLight?: THREE.SpotLight;
     } = {};
-    public helpers: { [key: string]: THREE.Object3D } = {};
+
+    public helpers: Record<string, THREE.Object3D> = {};
     public gui: GUI;
 
     // Spotlight related properties
@@ -323,7 +325,9 @@ class LightsManager extends THREE.Object3D {
         spotLightFolder
             .add(this.params, "spotLightIntensity", 0, 5)
             .name("Intensity")
-            .onChange((value: number) => this.setLightIntensity("spotLight", value));
+            .onChange((value: number) => {
+                this.setLightIntensity("spotLight", value);
+            });
         spotLightFolder
             .add(this.params, "spotLightDistance", 0, 20000)
             .name("Distance")
@@ -343,9 +347,9 @@ class LightsManager extends THREE.Object3D {
             .add(this.params, "spotLightDecay", 0, 2)
             .name("Decay")
             .onChange((value: number) => (this.lights.spotLight.decay = value));
-        spotLightFolder
-            .addColor(this.params, "spotLightColor")
-            .onChange((value: string) => this.setLightColor("spotLight", value));
+        spotLightFolder.addColor(this.params, "spotLightColor").onChange((value: string) => {
+            this.setLightColor("spotLight", value);
+        });
         spotLightFolder.add(this.lights.spotLight, "visible").name("Switch");
 
         // Point light controls
@@ -353,7 +357,9 @@ class LightsManager extends THREE.Object3D {
         pointLightFolder
             .add(this.params, "pointLightIntensity", 0, 5)
             .name("Intensity")
-            .onChange((value: number) => this.setLightIntensity("pointLight", value));
+            .onChange((value: number) => {
+                this.setLightIntensity("pointLight", value);
+            });
         pointLightFolder
             .add(this.params, "pointLightDistance", 0, 2000)
             .name("Distance")
@@ -366,9 +372,9 @@ class LightsManager extends THREE.Object3D {
             .onChange((value: number) => {
                 if (this.lights.pointLight) this.lights.pointLight.decay = value;
             });
-        pointLightFolder
-            .addColor(this.params, "pointLightColor")
-            .onChange((value: string) => this.setLightColor("pointLight", value));
+        pointLightFolder.addColor(this.params, "pointLightColor").onChange((value: string) => {
+            this.setLightColor("pointLight", value);
+        });
         pointLightFolder.add(this.lights.pointLight, "visible").name("Switch");
 
         // Global controls

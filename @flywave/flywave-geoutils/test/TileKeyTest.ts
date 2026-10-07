@@ -118,8 +118,10 @@ describe("Equirectangular", function () {
         const berlin = new GeoCoordinates(52.504951, 13.371806);
         const tileKey = geographicStandardTiling.getTileKey(berlin, 13) as TileKey;
         assert.isNotNull(tileKey);
-        assert.strictEqual(tileKey.row, 3242);
-        assert.strictEqual(tileKey.column, 4400);
+        // halfQuadTree：X = 2 << level = 16384，Y = 1 << level = 8192
+        // column = (13.371806 + 180) / 360 × 16384 = 8800；row = (52.504951 + 90) / 180 × 8192 = 6485
+        assert.strictEqual(tileKey.row, 6485);
+        assert.strictEqual(tileKey.column, 8800);
         assert.strictEqual(tileKey.level, 13);
     });
 });

@@ -2,17 +2,17 @@
 
 import { type ViewRanges } from "@flywave/flywave-datasource-protocol/ViewRanges";
 import {
+    type EllipsoidProjection,
     type Projection,
+    type SphereProjection,
     EarthConstants,
-    EllipsoidProjection,
-    ProjectionType,
-    SphereProjection
+    ProjectionType
 } from "@flywave/flywave-geoutils";
 import { assert } from "@flywave/flywave-utils";
 import * as THREE from "three/webgpu";
 
 import { CameraUtils } from "./CameraUtils";
-import { ElevationProvider } from "./ElevationProvider";
+import { type ElevationProvider } from "./ElevationProvider";
 import { MapViewUtils } from "./Utils";
 
 const epsilon = 0.000001;

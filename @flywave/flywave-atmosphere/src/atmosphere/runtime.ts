@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
 
 // Based on: https://github.com/ebruneton/precomputed_atmospheric_scattering/blob/master/atmosphere/functions.glsl
@@ -62,8 +64,7 @@ import { bool, If, mix, mul, PI, PI2, smoothstep, sqrt, struct, vec3, vec4 } fro
 
 import { FnVar } from "../tsl/FnVar";
 import type { Node } from "../tsl/node";
-
-import { getAtmosphereContext, type AtmosphereContext } from "./AtmosphereContext";
+import { type AtmosphereContext, getAtmosphereContext } from "./AtmosphereContext";
 import { getAtmosphereContextBase } from "./AtmosphereContextBase";
 import {
     clampRadius,
@@ -81,15 +82,15 @@ import {
     sqrtSafe
 } from "./common";
 import {
-    DimensionlessSpectrum,
-    Illuminance3,
-    IrradianceSpectrum,
-    Luminance3,
     type Dimensionless,
     type Direction,
     type Length,
     type Length2,
-    type Position
+    type Position,
+    DimensionlessSpectrum,
+    Illuminance3,
+    IrradianceSpectrum,
+    Luminance3
 } from "./dimensional";
 import { computeIndirectRadianceToPoint } from "./multiscattering";
 

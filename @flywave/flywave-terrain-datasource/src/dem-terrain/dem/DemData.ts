@@ -135,7 +135,7 @@ export default class DEMData extends TileValidResource {
         );
 
         demData.borderReady = serialized.borderReady;
-        // 如果序列化数据中包含四叉树，重建它
+        // Rebuild the quadtree if the serialized data includes one
         if (serialized.tree) {
             demData._tree = new DemMinMaxQuadTree(demData, serialized.tree);
         }
@@ -160,7 +160,7 @@ export default class DEMData extends TileValidResource {
             geoBox: this.geoBox.toJSON()
         };
 
-        // 如果存在四叉树，包含四叉树数据
+        // Include the quadtree data if one exists
         if (this._tree) {
             serialized.tree = {
                 minimums: this._tree._minimums,

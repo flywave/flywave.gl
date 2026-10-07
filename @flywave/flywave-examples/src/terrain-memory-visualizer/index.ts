@@ -1,17 +1,18 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    MapViewEventNames,
-    GeoCoordinates,
-    ellipsoidProjection,
-    MapControls,
-    DEMTerrainSource,
     ArcGISTileProvider,
-    MapControlsUI
+    DEMTerrainSource,
+    ellipsoidProjection,
+    GeoCoordinates,
+    MapControls,
+    MapControlsUI,
+    MapView,
+    MapViewEventNames
 } from "@flywave/flywave.gl";
-import { TileSnapshotCollector } from "./TileSnapshotCollector";
-import { TileOverviewCanvas } from "./TileOverviewCanvas";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 import { EventLog } from "./EventLog";
+import { TileOverviewCanvas } from "./TileOverviewCanvas";
+import { TileSnapshotCollector } from "./TileSnapshotCollector";
 
 const CANVAS_ID = "mapCanvas";
 

@@ -9,8 +9,8 @@ import {
     MapEnv,
     Pickability
 } from "@flywave/flywave-datasource-protocol";
-import * as THREE from "three/webgpu";
 import type { Renderer } from "three/webgpu";
+import * as THREE from "three/webgpu";
 
 import { BackgroundDataSource } from "./BackgroundDataSource";
 import { SolidLineMesh } from "./geometry/SolidLineMesh";

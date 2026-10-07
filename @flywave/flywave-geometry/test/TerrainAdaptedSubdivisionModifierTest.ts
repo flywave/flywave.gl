@@ -25,95 +25,95 @@ class TestTerrainAdaptedSubdivisionModifier extends TerrainAdaptedSubdivisionMod
 
 describe("TerrainAdaptedSubdivisionModifier", function () {
     it("updates elevation of all output points using elevation query", function () {
-        // 创建一个简单的高程映射
+        // Create a simple elevation map
         const elevationMap = new Map<string, number>();
-        elevationMap.set("0.000000,0.000000", 150); // 起点高程150米（不同于输入的100米）
-        elevationMap.set("0.000000,1.000000", 180); // 终点高程180米（不同于输入的200米）
+        elevationMap.set("0.000000,0.000000", 150); // start elevation: 150 meters (differs from the input 100 meters)
+        elevationMap.set("0.000000,1.000000", 180); // end elevation: 180 meters (differs from the input 200 meters)
 
-        const modifier = new TestTerrainAdaptedSubdivisionModifier(10000, elevationMap); // 使用较大的插值距离以避免细分
+        const modifier = new TestTerrainAdaptedSubdivisionModifier(10000, elevationMap); // Use a larger interpolation distance to avoid subdivision
 
-        // 创建两个点的线段（初始高度会被高程查询结果覆盖）
+        // Create a two-point segment (the initial altitudes will be overwritten by the elevation query results)
         const points = [
-            new GeoCoordinates(0, 0, 100), // 初始高度100米
-            new GeoCoordinates(0, 1, 200) // 初始高度200米
+            new GeoCoordinates(0, 0, 100), // initial altitude: 100 meters
+            new GeoCoordinates(0, 1, 200) // initial altitude: 200 meters
         ];
 
-        // 执行细分
+        // Run subdivision
         const result = modifier.modify(points);
 
-        // 验证所有点都使用了通过高程查询获取的高度
-        expect(result[0].altitude).to.equal(150); // 应该是150米，而不是初始的100米
-        expect(result[result.length - 1].altitude).to.equal(180); // 应该是180米，而不是初始的200米
+        // Verify that every point uses the altitude obtained from the elevation lookup
+        expect(result[0].altitude).to.equal(150); // should be 150 meters, not the initial 100 meters
+        expect(result[result.length - 1].altitude).to.equal(180); // should be 180 meters, not the initial 200 meters
     });
 
     it("performs interpolation based on distance", function () {
-        // 创建一个简单的高程映射
+        // Create a simple elevation map
         const elevationMap = new Map<string, number>();
-        elevationMap.set("0.000000,0.000000", 100); // 起点高程100米
-        elevationMap.set("0.000000,1.000000", 200); // 终点高程200米
+        elevationMap.set("0.000000,0.000000", 100); // start elevation: 100 meters
+        elevationMap.set("0.000000,1.000000", 200); // end elevation: 200 meters
 
-        // 使用较小的插值距离以确保细分
-        const modifier = new TestTerrainAdaptedSubdivisionModifier(50000, elevationMap); // 50公里插值间隔
+        // Use a smaller interpolation distance to ensure subdivision happens
+        const modifier = new TestTerrainAdaptedSubdivisionModifier(50000, elevationMap); // 50 km interpolation interval
 
-        // 创建两个点的线段，距离约111公里
+        // Create a two-point segment about 111 kilometers apart
         const points = [new GeoCoordinates(0, 0, 100), new GeoCoordinates(0, 1, 200)];
 
-        // 执行细分
+        // Run subdivision
         const result = modifier.modify(points);
 
-        // 验证确实进行了插值（结果点数应该大于2）
+        // Verify that interpolation actually happened (the result should have more than 2 points)
         expect(result.length).to.be.greaterThan(2);
 
-        // 验证所有点都使用了通过高程查询获取的高度
+        // Verify that every point uses the altitude obtained from the elevation lookup
         for (const point of result) {
             expect(point.altitude).to.not.be.undefined;
         }
 
-        // 验证起点和终点的高程
+        // Verify the elevations of the start and end points
         expect(result[0].altitude).to.equal(100);
         expect(result[result.length - 1].altitude).to.equal(200);
     });
 
     it("handles points without initial elevation", function () {
-        // 创建一个简单的高程映射
+        // Create a simple elevation map
         const elevationMap = new Map<string, number>();
-        elevationMap.set("0.000000,0.000000", 100); // 起点高程100米
-        elevationMap.set("0.000000,1.000000", 200); // 终点高程200米
+        elevationMap.set("0.000000,0.000000", 100); // start elevation: 100 meters
+        elevationMap.set("0.000000,1.000000", 200); // end elevation: 200 meters
 
         const modifier = new TestTerrainAdaptedSubdivisionModifier(10000, elevationMap);
 
-        // 创建两个没有初始高程的点
+        // Create two points without an initial elevation
         const points = [
-            new GeoCoordinates(0, 0), // 没有高程
-            new GeoCoordinates(0, 1) // 没有高程
+            new GeoCoordinates(0, 0), // no elevation
+            new GeoCoordinates(0, 1) // no elevation
         ];
 
-        // 执行细分
+        // Run subdivision
         const result = modifier.modify(points);
 
-        // 验证所有点都使用了通过高程查询获取的高度
+        // Verify that every point uses the altitude obtained from the elevation lookup
         expect(result[0].altitude).to.equal(100);
         expect(result[result.length - 1].altitude).to.equal(200);
     });
 
     it("calls progress callback", function () {
-        // 创建一个简单的高程映射
+        // Create a simple elevation map
         const elevationMap = new Map<string, number>();
         elevationMap.set("0.000000,0.000000", 100);
         elevationMap.set("0.000000,1.000000", 200);
 
         const modifier = new TestTerrainAdaptedSubdivisionModifier(10000, elevationMap);
 
-        // 创建两个点的线段
+        // Create a two-point segment
         const points = [new GeoCoordinates(0, 0, 100), new GeoCoordinates(0, 1, 200)];
 
-        // 创建进度回调的间谍
+        // Create a spy for the progress callback
         const progressCallback = sinon.spy();
 
-        // 执行细分
+        // Run subdivision
         modifier.modify(points, progressCallback);
 
-        // 验证进度回调被调用
+        // Verify that the progress callback was called
         expect(progressCallback.called).to.be.true;
     });
 });

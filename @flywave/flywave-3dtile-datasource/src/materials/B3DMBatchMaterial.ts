@@ -5,23 +5,23 @@ import {
     type Tile3DBatchMeshTechniqueParams,
     type TransitionValue
 } from "@flywave/flywave-datasource-protocol";
-import * as THREE from "three/webgpu";
-import { MeshStandardNodeMaterial } from "three/webgpu";
 import {
-    Fn,
     attribute,
+    clamp,
     float,
+    Fn,
+    greaterThanEqual,
+    mix,
+    positionLocal,
     texture,
     uniform,
+    varying,
     vec2,
     vec3,
-    vec4,
-    varying,
-    positionLocal,
-    mix,
-    clamp,
-    greaterThanEqual
+    vec4
 } from "three/tsl";
+import * as THREE from "three/webgpu";
+import { MeshStandardNodeMaterial } from "three/webgpu";
 
 import { type BatchAnimation } from "../TileRenderDataSource";
 import { BatchAnimationManager } from "./BatchAnimationManager";
@@ -179,7 +179,7 @@ interface VisualStyle {
  * from public properties at render time.
  */
 class B3DMBatchMaterial extends MeshStandardNodeMaterial {
-    private _batchStyles: Map<number, ExtendedBatchStyle> = new Map();
+    private readonly _batchStyles = new Map<number, ExtendedBatchStyle>();
     private _styleTexture: THREE.DataTexture | null = null;
     private _animationTexture: THREE.DataTexture | null = null;
     private readonly _animationManager: BatchAnimationManager;

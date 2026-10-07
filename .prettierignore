@@ -10,3 +10,7 @@ lerna.json
 .github/workflows
 .vscode/
 .history
+
+**/*.d.ts
+docs/build/
+/temp/

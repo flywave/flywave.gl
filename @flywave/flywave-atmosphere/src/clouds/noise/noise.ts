@@ -14,20 +14,20 @@
 import {
     abs,
     clamp,
-    Fn,
+    dot,
+    float,
     floor,
+    Fn,
     fract,
     max,
     min,
     mix,
     pow,
     sin,
-    dot,
     step,
     vec2,
     vec3,
-    vec4,
-    float
+    vec4
 } from "three/tsl";
 
 import type { Node } from "../../tsl/node";

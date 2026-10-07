@@ -1,8 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import type { TypedArray } from "three/src/core/BufferAttribute.js";
-import { type RendererCapabilities } from "@flywave/flywave-materials";
-
 import {
     type BufferAttribute,
     type Env,
@@ -27,6 +24,7 @@ import {
     getTechniqueAutomaticAttrs,
     getTechniqueDescriptor
 } from "@flywave/flywave-datasource-protocol/TechniqueDescriptors";
+import { type RendererCapabilities } from "@flywave/flywave-materials";
 import {
     CirclePointsMaterial,
     disableBlending,
@@ -38,6 +36,8 @@ import {
     SolidLineMaterial
 } from "@flywave/flywave-materials";
 import { assert, LoggerManager, pick } from "@flywave/flywave-utils";
+import type { TypedArray } from "three/src/core/BufferAttribute.js";
+import { SRGBColorSpace } from "three/webgpu";
 import * as THREE from "three/webgpu";
 
 import { DisplacedMesh } from "./geometry/DisplacedMesh";
@@ -797,7 +797,10 @@ export function applyBaseColorToMaterial(
         material.opacity = opacity;
     }
 
-    materialColor.setRGB(r, g, b);
+    // r/g/b are the display (sRGB) components of 0xTTRRGGBB; three r152+ setRGB
+    // interprets them as Linear by default, so sRGB must be specified explicitly
+    // or the output is brightened overall (e.g. #dac0de → #eee1f0)
+    materialColor.setRGB(r, g, b, SRGBColorSpace);
 
     const opaque = opacity >= 1.0;
     if (!opaque) {

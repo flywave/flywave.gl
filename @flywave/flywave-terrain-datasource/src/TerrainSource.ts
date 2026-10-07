@@ -3,25 +3,25 @@
 import { type FlatTheme, type Theme } from "@flywave/flywave-datasource-protocol";
 import {
     type GeoBox,
+    type SphereProjection,
     type TileAvailability,
+    type TilingScheme,
     geographicTerrainStandardTiling,
     OrientedBox3,
     OrientedBoxHelper,
     ProjectionType,
     sphereProjection,
-    SphereProjection,
     TileKey,
-    TilingScheme,
     webMercatorProjection,
     webMercatorTerrainTilingScheme
 } from "@flywave/flywave-geoutils";
 import {
-    DataSource,
+    type DataSource,
     type ElevationProvider,
-    ElevationRange,
+    type ElevationRange,
     type ElevationRangeSource,
     type MapView,
-    TerrainDataSource,
+    type TerrainDataSource,
     Tile
 } from "@flywave/flywave-mapview";
 import {
@@ -38,9 +38,9 @@ import debounce from "lodash.debounce";
 import {
     type Intersection,
     type Material,
+    type Mesh,
     type Raycaster,
     Matrix4,
-    Mesh,
     Object3D,
     Vector3
 } from "three/webgpu";
@@ -51,25 +51,26 @@ import { TERRAIN_TILE_DECODER_ID } from "./Constants";
 // satisfies the three Intersection contract. This raycast is consumed by
 // camera collision only and never enters picking results.
 const terrainCollisionObject = new Object3D();
+import {
+    type TileGeometryBuilder,
+    GeographicStandardTilingTileGeometryBuilder,
+    WebMercatorTileGeometryBuilder
+} from "@flywave/flywave-geometry";
+
 import { type TerrainLayerMesh, type TerrainTileState } from "./dem-terrain/TerrainLayerMesh";
 import { ExclusionManager } from "./ExclusionManager";
 import {
     HeightMapModifierManager,
     serializeHeightMapModifier
 } from "./ground-modification-manager";
-import { type IResourceProvider, type ResourceProvider } from "./ResourceProvider";
 import {
-    ProjectionSwitchController,
-    type ProjectionSwitchOptions
+    type ProjectionSwitchOptions,
+    ProjectionSwitchController
 } from "./ProjectionSwitchController";
 import { type ProjectorImageryProvider, ProjectorOverlayManager } from "./projector-overlay";
+import { type IResourceProvider, type ResourceProvider } from "./ResourceProvider";
 import { TileLRUCache, TileResourceManager } from "./TileResourceManager";
 import { type WebTileLoaderOptions, WebImageryTileProvider } from "./WebImageryTileProvider";
-import {
-    GeographicStandardTilingTileGeometryBuilder,
-    TileGeometryBuilder,
-    WebMercatorTileGeometryBuilder
-} from "@flywave/flywave-geometry";
 
 /**
  * Capacity (in tiles) of the warm layer-mesh cache that preserves materials
@@ -303,7 +304,9 @@ export class TerrainResourceTile extends Tile {
             this._cachedMesh = null;
         }
         if (this._layerMeshes) {
-            this._layerMeshes.forEach(layerMesh => layerMesh.dispose());
+            this._layerMeshes.forEach(layerMesh => {
+                layerMesh.dispose();
+            });
             this._layerMeshes = null;
         }
         if (this._layerTileState) {
@@ -322,7 +325,11 @@ export class TerrainResourceTile extends Tile {
 }
 
 export class ShadowTerrainResourceTile extends TerrainResourceTile {
-    constructor(dataSource: DataSource, tileKey: TileKey, private resTile: TerrainResourceTile) {
+    constructor(
+        dataSource: DataSource,
+        tileKey: TileKey,
+        private readonly resTile: TerrainResourceTile
+    ) {
         super(dataSource, tileKey);
         this.forceHasGeometry(true);
     }
@@ -482,7 +489,7 @@ export abstract class TerrainSource<
     private m_tileBaseGeometryBuilder?: TileGeometryBuilder;
 
     private m_showDebugInfo: boolean = false;
-    private m_debugObject?: Object3D = new Object3D();
+    private readonly m_debugObject?: Object3D = new Object3D();
 
     /**
      * Warm cache of layer meshes + tile state preserved across terrain-LRU
@@ -493,6 +500,7 @@ export abstract class TerrainSource<
         number,
         { meshes: Map<string, TerrainLayerMesh>; state: TerrainTileState }
     >();
+
     private m_disposing: boolean = false;
 
     private stageConfigs: LoadingStage[] = [];
@@ -744,7 +752,9 @@ export abstract class TerrainSource<
             const oldestKey = this.m_layerMeshCache.keys().next().value as number;
             const oldest = this.m_layerMeshCache.get(oldestKey)!;
             this.m_layerMeshCache.delete(oldestKey);
-            oldest.meshes.forEach(mesh => mesh.dispose());
+            oldest.meshes.forEach(mesh => {
+                mesh.dispose();
+            });
             oldest.state.dispose();
         }
     }
@@ -974,7 +984,7 @@ export abstract class TerrainSource<
      * Initializes the loading stages based on the total levels and the specified number of stages
      */
     private initializeStages(): void {
-        let [minZoom, maxZoom] = this.getTerrainLevelRange();
+        const [minZoom, maxZoom] = this.getTerrainLevelRange();
 
         const totalLevels = maxZoom - minZoom;
         const levelsPerStage = Math.ceil(totalLevels / this.m_loadingStages);
@@ -1066,7 +1076,9 @@ export abstract class TerrainSource<
         super.dispose();
         this.m_tileCache.removeAllTiles();
         this.m_layerMeshCache.forEach(preserved => {
-            preserved.meshes.forEach(mesh => mesh.dispose());
+            preserved.meshes.forEach(mesh => {
+                mesh.dispose();
+            });
             preserved.state.dispose();
         });
         this.m_layerMeshCache.clear();

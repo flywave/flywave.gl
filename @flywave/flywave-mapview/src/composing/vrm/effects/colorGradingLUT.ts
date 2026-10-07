@@ -21,15 +21,21 @@
  * a different class realm than the renderer.
  */
 
-import * as THREE from "three/webgpu";
 import { Fn, sRGBTransferEOTF, sRGBTransferOETF, texture3D, uniform, vec4 } from "three/tsl";
+import * as THREE from "three/webgpu";
 
 const NEUTRAL_LUT_SIZE = 8;
 
-type LoadedLut = { size: number; texture3D: THREE.Data3DTexture };
+interface LoadedLut {
+    size: number;
+    texture3D: THREE.Data3DTexture;
+}
 
 /** Raw cube table: `size³` RGBA8 texels, r-fastest / b-slowest order. */
-type LutTable = { size: number; data: Uint8Array };
+interface LutTable {
+    size: number;
+    data: Uint8Array;
+}
 
 /** RGBA Uint8 ramp: identity LUT — every output color maps to itself. */
 function createNeutralLutTexture(size = NEUTRAL_LUT_SIZE): THREE.Data3DTexture {

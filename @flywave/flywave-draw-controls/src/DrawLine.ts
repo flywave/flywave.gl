@@ -2,11 +2,11 @@
 
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { type MapView } from "@flywave/flywave-mapview";
+import { type WindowEventHandler } from "@flywave/flywave-utils";
+import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
+import { Line2 } from "three/examples/jsm/lines/webgpu/Line2.js";
 import * as THREE from "three/webgpu";
 import { Line2NodeMaterial } from "three/webgpu";
-import { Line2 } from "three/examples/jsm/lines/webgpu/Line2.js";
-import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
-import { WindowEventHandler } from "@flywave/flywave-utils";
 
 import { DrawableObject } from "./DrawableObject";
 import { VertexHandle } from "./VertexHandle";
@@ -44,7 +44,7 @@ export class DrawLine extends DrawableObject {
         this.update();
     }
 
-    private windowHandler: WindowEventHandler;
+    private readonly windowHandler: WindowEventHandler;
 
     protected createLineMaterial(color: number, linewidth: number): Line2NodeMaterial {
         const mat = new Line2NodeMaterial({

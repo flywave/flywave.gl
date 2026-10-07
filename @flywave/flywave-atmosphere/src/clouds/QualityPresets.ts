@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 import { Vector2 } from "three/webgpu";
 
 export type QualityPreset = "low" | "medium" | "high" | "ultra";

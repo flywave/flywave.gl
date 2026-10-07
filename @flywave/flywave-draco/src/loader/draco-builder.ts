@@ -18,14 +18,14 @@ import type { DracoMesh } from "./draco-types";
 
 export interface DracoBuildOptions {
     pointcloud?: boolean;
-    metadata?: { [key: string]: string };
+    metadata?: Record<string, string>;
     attributesMetadata?: {};
     log?: any;
 
     // draco encoding options
     speed?: [number, number];
     method?: string;
-    quantization?: { [attributeName: string]: number };
+    quantization?: Record<string, number>;
 }
 
 // Native Draco attribute names to GLTF attribute names.
@@ -90,7 +90,7 @@ export default class DracoBuilder {
 
     _getAttributesFromMesh(mesh: DracoMesh) {
         // Extract attributes from Three.js geometry
-        const attributes: { [key: string]: THREE.BufferAttribute } = {};
+        const attributes: Record<string, THREE.BufferAttribute> = {};
 
         // Iterate through all geometry attributes
         mesh.geometry.attributes = mesh.geometry.attributes || {};
@@ -434,7 +434,7 @@ export default class DracoBuilder {
      * @param dracoGeometry - WASM Draco Object
      * @param metadata
      */
-    _addGeometryMetadata(dracoGeometry: PointCloud, metadata: { [key: string]: string }) {
+    _addGeometryMetadata(dracoGeometry: PointCloud, metadata: Record<string, string>) {
         const dracoMetadata = new this.draco.Metadata();
         this._populateDracoMetadata(dracoMetadata, metadata);
         this.dracoMeshBuilder.AddMetadata(dracoGeometry, dracoMetadata);
@@ -449,7 +449,7 @@ export default class DracoBuilder {
     _addAttributeMetadata(
         dracoGeometry: PointCloud,
         uniqueAttributeId: number,
-        metadata: Map<string, string> | { [key: string]: string }
+        metadata: Map<string, string> | Record<string, string>
     ) {
         // Note: Draco JS IDL doesn't seem to expose draco.AttributeMetadata, however it seems to
         // create such objects automatically from draco.Metadata object.
@@ -471,7 +471,7 @@ export default class DracoBuilder {
      */
     _populateDracoMetadata(
         dracoMetadata: Metadata,
-        metadata: Map<string, string> | { [key: string]: string }
+        metadata: Map<string, string> | Record<string, string>
     ) {
         for (const [key, value] of getEntries(metadata)) {
             switch (typeof value) {

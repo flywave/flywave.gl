@@ -7,26 +7,26 @@ import type { GLTF, GLTFNode } from "../types/gltf-json-schema";
 const EXTENSION_NAME = "FLYWAVE_bim4d_metadata";
 export const name = EXTENSION_NAME;
 
-// 状态枚举定义
+// Status enum definition
 export enum WorkStatus {
     PENDING = "pending",
     IN_PROGRESS = "in_progress",
     COMPLETED = "completed"
 }
 
-// 生成类型枚举
+// Generation type enum
 export enum GenerateType {
     AUTO = "auto",
     MANUAL = "manual"
 }
 
-// 进度类型枚举
+// Progress type enum
 export enum ProgressType {
     PERCENTAGE = "percentage",
     ABSOLUTE = "absolute"
 }
 
-// 核心数据结构
+// Core data structure
 export interface WorkItem {
     id: string;
     name: string;
@@ -34,38 +34,38 @@ export interface WorkItem {
     status: WorkStatus;
     generateType: GenerateType;
     workType: "schedule" | "plan";
-    startTime: string; // ISO 8601格式
-    endTime: string; // ISO 8601格式
+    startTime: string; // ISO 8601 format
+    endTime: string; // ISO 8601 format
     scheduleStart?: string;
     scheduleEnd?: string;
     startValue: number;
     endValue: number;
     progressType: ProgressType;
     total: number;
-    metadata?: Record<string, any>; // 可选元数据
+    metadata?: Record<string, any>; // Optional metadata
 }
 
-// 节点扩展数据结构
+// Node extension data structure
 interface NodeBIM4dMetadata {
     works?: WorkItem[];
     currentWorkId?: string;
     version: string;
 }
 
-// 解码实现（节点级）
+// Decode implementation (node level)
 export async function decode(gltfData: { json: GLTF }, options: any = {}): Promise<void> {
     const scenegraph = new GLTFScenegraph(gltfData);
     const { logger = console } = options;
     const { nodes = [] } = gltfData.json;
 
-    // 遍历所有节点
+    // Iterate over all nodes
     for (const node of nodes) {
         const extension = scenegraph.getObjectExtension<NodeBIM4dMetadata>(node, EXTENSION_NAME);
         if (!extension) continue;
 
         const { works = [] } = extension;
 
-        // 从二进制数据解码metadata
+        // Decode the metadata from the binary data
         for (const work of works) {
             try {
                 const bufferViewIndex = (work as any).metadataBufferView;
@@ -90,7 +90,7 @@ export async function decode(gltfData: { json: GLTF }, options: any = {}): Promi
                         );
                     }
 
-                    // 删除临时字段
+                    // Delete the temporary field
                     delete (work as any).metadataBufferView;
                 }
             } catch (error) {
@@ -102,13 +102,13 @@ export async function decode(gltfData: { json: GLTF }, options: any = {}): Promi
             }
         }
 
-        // 将扩展数据保存到节点userData
+        // Store the extension data on the node's userData
         node.userData = node.userData || {};
         node.userData.bim4dMetadata = extension;
     }
 }
 
-// 编码实现（节点级）
+// Encode implementation (node level)
 export function encode(gltfData: { json: GLTF }, options: any = {}) {
     const scenegraph = new GLTFScenegraph(gltfData);
     const { logger = console } = options;
@@ -116,38 +116,38 @@ export function encode(gltfData: { json: GLTF }, options: any = {}) {
 
     let hasExtension = false;
 
-    // 遍历所有节点
+    // Iterate over all nodes
     for (const node of nodes) {
-        // 从userData获取扩展数据
+        // Get the extension data from userData
         const metadata = node.userData?.bim4dMetadata;
         if (!metadata) continue;
 
         hasExtension = true;
 
-        // 创建节点扩展数据的深拷贝
+        // Deep copy the node extension data
         const extensionClone: NodeBIM4dMetadata = {
             ...metadata,
             works: metadata.works ? metadata.works.map(work => ({ ...work })) : []
         };
 
-        // 处理元数据编码
+        // Handle metadata encoding
         if (extensionClone.works) {
             for (const work of extensionClone.works) {
-                // 跳过空元数据
+                // Skip empty metadata
                 if (!work.metadata || Object.keys(work.metadata).length === 0) {
                     delete work.metadata;
                     continue;
                 }
 
                 try {
-                    // 序列化元数据
+                    // Serialize the metadata
                     const jsonString = JSON.stringify(work.metadata);
                     const binaryData = new TextEncoder().encode(jsonString);
 
-                    // 添加到GLTF并获取缓冲视图索引
+                    // Add it to the glTF and get the buffer view index
                     const bufferViewIndex = scenegraph.addBufferView(binaryData);
 
-                    // 存储缓冲视图引用并删除原始元数据
+                    // Store the buffer view reference and drop the original metadata
                     (work as any).metadataBufferView = bufferViewIndex;
                     delete work.metadata;
                 } catch (error) {
@@ -161,11 +161,11 @@ export function encode(gltfData: { json: GLTF }, options: any = {}) {
             }
         }
 
-        // 添加节点扩展
+        // Add the node extension
         scenegraph.addObjectExtension(node, EXTENSION_NAME, extensionClone);
     }
 
-    // 如果需要，添加顶级扩展声明
+    // Add the top-level extension declaration when needed
     if (hasExtension) {
         scenegraph.addRequiredExtension(EXTENSION_NAME);
     }
@@ -173,7 +173,7 @@ export function encode(gltfData: { json: GLTF }, options: any = {}) {
     return scenegraph.gltf;
 }
 
-// 验证工作项的有效性
+// Validate a work item
 export function validateWorkItem(work: Partial<WorkItem>): work is WorkItem {
     return (
         typeof work.id === "string" &&
@@ -190,7 +190,7 @@ export function validateWorkItem(work: Partial<WorkItem>): work is WorkItem {
     );
 }
 
-// 属性转换方法（带验证）
+// Property conversion helper (with validation)
 export function createWorkItem(info: any): WorkItem | null {
     const workItem: Partial<WorkItem> = {
         id: info.id,
@@ -213,12 +213,12 @@ export function createWorkItem(info: any): WorkItem | null {
     return validateWorkItem(workItem) ? (workItem as WorkItem) : null;
 }
 
-// 节点扩展操作API
+// Node extension operation API
 export class BIM4dNodeExtension {
     /**
-     * 为节点添加工作项
-     * @param node 目标节点
-     * @param workItem 工作项数据
+     * Add a work item to a node
+     * @param node the target node
+     * @param workItem the work item data
      */
     static addWorkItem(node: GLTFNode, workItem: WorkItem) {
         node.userData = node.userData || {};
@@ -233,18 +233,18 @@ export class BIM4dNodeExtension {
     }
 
     /**
-     * 获取节点的工作项
-     * @param node 目标节点
-     * @returns 工作项数组
+     * Get the work items of a node
+     * @param node the target node
+     * @returns the array of work items
      */
     static getWorkItems(node: GLTFNode): WorkItem[] {
         return node.userData?.bim4dMetadata?.works || [];
     }
 
     /**
-     * 设置节点的当前工作项
-     * @param node 目标节点
-     * @param workId 工作项ID
+     * Set the current work item of a node
+     * @param node the target node
+     * @param workId the work item ID
      */
     static setCurrentWorkItem(node: GLTFNode, workId: string) {
         node.userData = node.userData || {};
@@ -257,9 +257,9 @@ export class BIM4dNodeExtension {
     }
 
     /**
-     * 获取节点的当前工作项
-     * @param node 目标节点
-     * @returns 当前工作项或null
+     * Get the current work item of a node
+     * @param node the target node
+     * @returns the current work item or null
      */
     static getCurrentWorkItem(node: GLTFNode): WorkItem | null {
         const metadata = node.userData?.bim4dMetadata;
@@ -272,10 +272,10 @@ export class BIM4dNodeExtension {
     }
 
     /**
-     * 更新工作项进度
-     * @param node 目标节点
-     * @param workId 工作项ID
-     * @param progress 新进度值
+     * Update the progress of a work item
+     * @param node the target node
+     * @param workId the work item ID
+     * @param progress the new progress value
      */
     static updateWorkProgress(node: GLTFNode, workId: string, progress: number) {
         const workItem = BIM4dNodeExtension.getWorkItemById(node, workId);
@@ -285,10 +285,10 @@ export class BIM4dNodeExtension {
     }
 
     /**
-     * 按ID获取工作项
-     * @param node 目标节点
-     * @param workId 工作项ID
-     * @returns 工作项或null
+     * Get a work item by ID
+     * @param node the target node
+     * @param workId the work item ID
+     * @returns the work item or null
      */
     static getWorkItemById(node: GLTFNode, workId: string): WorkItem | null {
         const works = BIM4dNodeExtension.getWorkItems(node);
@@ -296,9 +296,9 @@ export class BIM4dNodeExtension {
     }
 
     /**
-     * 计算工作项进度百分比
-     * @param work 工作项
-     * @returns 进度百分比
+     * Compute the progress percentage of a work item
+     * @param work the work item
+     * @returns the progress percentage
      */
     static calculateWorkProgress(work: WorkItem): number {
         if (work.progressType === ProgressType.PERCENTAGE) {

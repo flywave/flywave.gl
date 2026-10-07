@@ -14,8 +14,8 @@ import {
     exp,
     float,
     floor,
-    fract,
     Fn,
+    fract,
     If,
     int,
     length,
@@ -44,17 +44,16 @@ import {
     vec4
 } from "three/tsl";
 
-import type { CloudUniforms } from "./CloudUniforms";
-import { stbn, stbnFixed } from "../tsl/STBNTextureNode";
+import { getAtmosphereContext } from "../atmosphere/AtmosphereContext";
+import { getAtmosphereContextBase } from "../atmosphere/AtmosphereContextBase";
+import { getIrradiance, miePhaseFunction, rayleighPhaseFunction } from "../atmosphere/common";
 import {
     getIndirectLuminanceToPoint,
     getSplitScalarIlluminance,
     getSplitScalarIrradiance
 } from "../atmosphere/runtime";
-import { getAtmosphereContext } from "../atmosphere/AtmosphereContext";
-import { rayleighPhaseFunction, miePhaseFunction, getIrradiance } from "../atmosphere/common";
-import { getAtmosphereContextBase } from "../atmosphere/AtmosphereContextBase";
-import { getAtmosphereContext } from "../atmosphere/AtmosphereContext";
+import { stbn, stbnFixed } from "../tsl/STBNTextureNode";
+import type { CloudUniforms } from "./CloudUniforms";
 
 const RECIPROCAL_PI = 1.0 / Math.PI;
 const RECIPROCAL_PI4 = 1.0 / (4.0 * Math.PI);
@@ -1150,7 +1149,7 @@ export const createApproximateHaze = (u: CloudUniforms) => {
 
             // Sun inscatter with phase function and shadow awareness
             const phase = phaseFunction(cosTheta, float(1.0), u);
-            let inscatter = sunIrr.mul(phase).mul(shadowTransmittance);
+            const inscatter = sunIrr.mul(phase).mul(shadowTransmittance);
             // Sky inscatter (isotropic)
             inscatter.addAssign(
                 skyIrr.mul(float(RECIPROCAL_PI4)).mul(u.skyLightScale).mul(transmittance)

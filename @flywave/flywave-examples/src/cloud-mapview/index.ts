@@ -1,11 +1,12 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
     ellipsoidProjection,
+    GeoCoordinates,
+    MapControls,
     MapControlsUI,
-    MapControls
+    MapView
 } from "@flywave/flywave.gl";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 /**
  * Example-only access to MapView internals for live camera/AA/sun-time
@@ -79,10 +80,12 @@ const getMapCanvas = (): HTMLCanvasElement => {
         push("warn", args);
         origWarn(...args);
     };
-    window.addEventListener("error", e => push("uncaught", [e.message, e.filename, e.lineno]));
-    window.addEventListener("unhandledrejection", e =>
-        push("rejection", [(e as PromiseRejectionEvent).reason])
-    );
+    window.addEventListener("error", e => {
+        push("uncaught", [e.message, e.filename, e.lineno]);
+    });
+    window.addEventListener("unhandledrejection", e => {
+        push("rejection", [(e as PromiseRejectionEvent).reason]);
+    });
 }
 
 const canvas = getMapCanvas();
@@ -97,7 +100,7 @@ const mapView = new MapView({
     zoomLevel: 0,
     tilt: 0,
     heading: 0,
-    canvas: canvas,
+    canvas,
     theme: {
         atmosphere: {
             enabled: true,
@@ -239,7 +242,7 @@ btn.addEventListener("click", () => {
 };
 
 // Anti-aliasing toggle button: cycles none → smaa → taa → none for A/B compare
-const aaModes: ("none" | "smaa" | "taa")[] = ["none", "smaa", "taa"];
+const aaModes: Array<"none" | "smaa" | "taa"> = ["none", "smaa", "taa"];
 let _aaIndex = aaModes.indexOf("smaa"); // default matches postEffects config
 const aaBtn = document.createElement("button");
 aaBtn.textContent = `AA: ${aaModes[_aaIndex]}`;

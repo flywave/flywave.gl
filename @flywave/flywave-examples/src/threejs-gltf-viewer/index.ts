@@ -1,20 +1,19 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
+    CopyrightElementHandler,
+    createThreeSceneFromGLTF,
     ellipsoidProjection,
+    GeoCoordinates,
+    GLTFLoader,
+    loadGLTF,
     MapControls,
     MapControlsUI,
-    CopyrightElementHandler
+    MapView,
+    postProcessGLTF
 } from "@flywave/flywave.gl";
-import {
-    loadGLTF,
-    GLTFLoader,
-    postProcessGLTF,
-    createThreeSceneFromGLTF
-} from "@flywave/flywave.gl";
-import * as THREE from "three/webgpu";
 import { GLTFLoader as ThreeGLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import * as THREE from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 const MODEL_URL = "cctv.glb";
 const ANCHOR_LEFT = new GeoCoordinates(40.721603666587, -73.96050108689394, 0);
@@ -83,7 +82,9 @@ threeLoader.load(
         window.threeModel = model;
     },
     undefined,
-    error => console.error("[three.js GLTFLoader] Error:", error)
+    error => {
+        console.error("[three.js GLTFLoader] Error:", error);
+    }
 );
 
 loadFlywaveGLTF();

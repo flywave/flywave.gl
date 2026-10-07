@@ -41,11 +41,15 @@ export class ToneMappingModule {
             .add(this.currentData, "exposure", 0, 10)
             .step(0.01)
             .name("Exposure")
-            .onChange(() => this.applyChanges());
+            .onChange(() => {
+                this.applyChanges();
+            });
         this.folder
             .add(this.currentData, "mode", TONE_MAPPING_MODES)
             .name("Mode")
-            .onChange(() => this.applyChanges());
+            .onChange(() => {
+                this.applyChanges();
+            });
     }
 
     private applyChanges(): void {

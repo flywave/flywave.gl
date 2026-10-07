@@ -6,9 +6,9 @@ import {
     type Sphere,
     BufferAttribute,
     BufferGeometry,
+    LineBasicNodeMaterial,
     LineSegments,
-    Vector3,
-    LineBasicNodeMaterial
+    Vector3
 } from "three/webgpu";
 
 const _vector = new Vector3();

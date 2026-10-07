@@ -1,7 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    ITranslucentLayerConfig,
     type IBloomEffect,
     type IBrightnessContrastEffect,
     type IColorGradingLUTEffect,
@@ -10,17 +9,17 @@ import {
     type IOutlineEffect,
     type ISepiaEffect,
     type ISSREffect,
+    type ITranslucentLayerConfig,
     type IVignetteEffect
 } from "@flywave/flywave-datasource-protocol";
-import * as THREE from "three/webgpu";
-import { mrt, diffuseColor, normalView, vec4 } from "three/tsl";
+import { diffuseColor, mrt, normalView, uniform, vec3, vec4 } from "three/tsl";
 import type { Renderer } from "three/webgpu";
-import { uniform, vec3 } from "three/tsl";
+import type * as THREE from "three/webgpu";
 
 import { type IPassManager } from "./IPassManager";
-import { type IViewRenderManager, type AntialiasingMode, type IFogLightDef } from "./vrm";
-import { TranslucentLayerEffect, OUTLINE_LAYER_BIT } from "./vrm/TranslucentLayerEffect";
+import { type AntialiasingMode, type IFogLightDef, type IViewRenderManager } from "./vrm";
 import { packOctahedralNormal } from "./vrm/effects/ssr";
+import { OUTLINE_LAYER_BIT, TranslucentLayerEffect } from "./vrm/TranslucentLayerEffect";
 
 /**
  * Per-surface reflection parameters stored on `mat.userData.__ssrParams` and
@@ -280,7 +279,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     private m_dynamicMsaaSamplingLevel: MSAASampling;
     private m_staticMsaaSamplingLevel: MSAASampling;
     private m_lowResPixelRatio?: number;
-    private m_customEffects: Map<string, ICustomEffect> = new Map();
+    private readonly m_customEffects = new Map<string, ICustomEffect>();
     private m_pendingBloomObjects: THREE.Object3D[] = [];
     private m_pendingOutlineObjects: THREE.Object3D[] = [];
     /**
@@ -291,13 +290,14 @@ export class MapRenderingManager implements IMapRenderingManager {
      * (no stray ssrData entry left in an MRT-less pass).
      */
     private m_reflectiveObjects: THREE.Object3D[] = [];
-    private m_pendingFogLights: { def: IFogLightDef; world: THREE.Vector3 }[] = [];
+    private m_pendingFogLights: Array<{ def: IFogLightDef; world: THREE.Vector3 }> = [];
     private m_gpuPicking: boolean = false;
 
     private _viewRenderManager?: IViewRenderManager;
     get viewRenderManager(): IViewRenderManager | undefined {
         return this._viewRenderManager;
     }
+
     set viewRenderManager(vrm: IViewRenderManager | undefined) {
         this._viewRenderManager = vrm;
         if (vrm) vrm.gpuPicking = this.m_gpuPicking;
@@ -310,6 +310,7 @@ export class MapRenderingManager implements IMapRenderingManager {
             this._viewRenderManager.needsUpdate = true;
         }
     }
+
     get gpuPicking(): boolean {
         return this.m_gpuPicking;
     }
@@ -493,6 +494,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         vrm.bloomObjects.add(object);
         this.applyBloomMrtNode(object, 1);
     }
+
     removeBloomObject(object: THREE.Object3D): void {
         this.m_pendingBloomObjects = this.m_pendingBloomObjects.filter(o => o !== object);
         const vrm = this.viewRenderManager;
@@ -520,6 +522,7 @@ export class MapRenderingManager implements IMapRenderingManager {
     ): void {
         this.viewRenderManager?.updateFogLights(cameraWorldPosition, cameraWorldMatrixInverse);
     }
+
     private applyBloomMrtNode(object: THREE.Object3D, intensity: number): void {
         object.traverse(child => {
             const mat = (child as THREE.Mesh).material as BloomMrtMaterial | undefined;
@@ -530,6 +533,7 @@ export class MapRenderingManager implements IMapRenderingManager {
             }
         });
     }
+
     addIgnoreBloomObject(object: THREE.Object3D): void {
         this.viewRenderManager?.bloomIgnoreObjects.add(object);
     }
@@ -612,7 +616,10 @@ export class MapRenderingManager implements IMapRenderingManager {
             // `uniform()` overload infers `unknown` and fails vec4()'s
             // Node<"float"> overload.
             type FloatUniform = THREE.Node<"float"> & { value: number };
-            type SsrUniforms = { reflectivity: FloatUniform; roughness: FloatUniform };
+            interface SsrUniforms {
+                reflectivity: FloatUniform;
+                roughness: FloatUniform;
+            }
             let u = mat.userData.__ssrUniforms as SsrUniforms | undefined;
             if (u == null) {
                 u = {
@@ -632,6 +639,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         mat.mrtNode = Object.keys(entries).length > 0 ? mrt(entries) : null;
         mat.needsUpdate = true;
     }
+
     removeIgnoreBloomObject(object: THREE.Object3D): void {
         this.viewRenderManager?.bloomIgnoreObjects.delete(object);
     }
@@ -707,6 +715,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         });
         if (wasEmpty && this.viewRenderManager) this.viewRenderManager.needsUpdate = true;
     }
+
     removeTranslucentObject(object: THREE.Object3D): void {
         this.m_translucentLayerEffect?.removeObject(object);
         object.traverse(child => {
@@ -719,15 +728,18 @@ export class MapRenderingManager implements IMapRenderingManager {
         const isEmpty = this.m_translucentLayerEffect?.hasObjects === false;
         if (isEmpty && this.viewRenderManager) this.viewRenderManager.needsUpdate = true;
     }
+
     addTranslucentLayer(layer: string, layerConfig: ITranslucentLayerConfig): void {
         this.m_translucentLayerEffect?.addLayer(layer, layerConfig);
     }
+
     updateTranslucentLayer(
         layer: string,
         config: { mixFactor?: number; blendMode?: "mix" | "add" | "multiply" | "screen" }
     ): void {
         this.m_translucentLayerEffect?.updateLayer(layer, config);
     }
+
     removeTranslucentLayer(layer: string): void {
         this.m_translucentLayerEffect?.removeLayer(layer);
     }
@@ -735,12 +747,15 @@ export class MapRenderingManager implements IMapRenderingManager {
     addCustomEffect(customEffect: ICustomEffect): void {
         this.m_customEffects.set(customEffect.id, customEffect);
     }
+
     removeCustomEffect(effectId: string): boolean {
         return this.m_customEffects.delete(effectId);
     }
+
     getCustomEffect(effectId: string): ICustomEffect | undefined {
         return this.m_customEffects.get(effectId);
     }
+
     setCustomEffectEnabled(effectId: string, enabled: boolean): boolean {
         const e = this.m_customEffects.get(effectId);
         if (e) {
@@ -749,6 +764,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
         return false;
     }
+
     updateCustomEffect(effectId: string, updater: (effect: ICustomEffect) => void): boolean {
         const e = this.m_customEffects.get(effectId);
         if (e) {
@@ -757,6 +773,7 @@ export class MapRenderingManager implements IMapRenderingManager {
         }
         return false;
     }
+
     getAllCustomEffects(): ICustomEffect[] {
         return Array.from(this.m_customEffects.values());
     }
@@ -770,24 +787,31 @@ export class MapRenderingManager implements IMapRenderingManager {
     set dynamicMsaaSamplingLevel(samplingLevel: MSAASampling) {
         this.m_dynamicMsaaSamplingLevel = samplingLevel;
     }
+
     get dynamicMsaaSamplingLevel(): MSAASampling {
         return this.m_dynamicMsaaSamplingLevel;
     }
+
     set msaaEnabled(value: boolean) {
         this.m_msaaEnabled = value;
     }
+
     get msaaEnabled(): boolean {
         return this.m_msaaEnabled;
     }
+
     set staticMsaaSamplingLevel(samplingLevel: MSAASampling) {
         this.m_staticMsaaSamplingLevel = samplingLevel;
     }
+
     get staticMsaaSamplingLevel(): MSAASampling {
         return this.m_staticMsaaSamplingLevel;
     }
+
     get lowResPixelRatio(): number | undefined {
         return this.m_lowResPixelRatio;
     }
+
     set lowResPixelRatio(pixelRatio: number | undefined) {
         this.m_lowResPixelRatio = pixelRatio;
     }

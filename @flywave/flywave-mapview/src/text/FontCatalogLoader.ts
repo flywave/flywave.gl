@@ -13,7 +13,7 @@ export async function loadFontCatalog(
     onSuccess: FontCatalogCallback,
     onError?: (error: Error) => void
 ): Promise<void> {
-    return await FontCatalog.load(fontCatalogConfig.url, 1024)
+    await FontCatalog.load(fontCatalogConfig.url, 1024)
         .then<void>(onSuccess.bind(undefined, fontCatalogConfig.name))
         .catch((error: Error) => {
             logger.error("Failed to load FontCatalog: ", fontCatalogConfig.name, error);

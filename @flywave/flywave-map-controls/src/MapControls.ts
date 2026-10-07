@@ -1,21 +1,21 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { ProjectionType } from "@flywave/flywave-geoutils";
-import { type MapView } from "@flywave/flywave-mapview";
+import { type ICameraCollidable, type MapView } from "@flywave/flywave-mapview";
 import { PickingRaycaster } from "@flywave/flywave-mapview/PickingRaycaster";
-import { type ICameraCollidable } from "@flywave/flywave-mapview";
 import { type Intersection, Vector2, Vector3 } from "three/webgpu";
 
-import { BaseMapControls, BaseMapControlsOptions, EventNames } from "./BaseMapControls";
+import { type BaseMapControlsOptions, BaseMapControls, EventNames } from "./BaseMapControls";
+import { type CameraTransform } from "./CameraTransform";
 import { EllipsoidCameraTransform } from "./EllipsoidCameraTransform";
 import { PlanarCameraTransform } from "./PlanerCameraTransform";
-import { CameraTransform } from "./CameraTransform";
 
 export class MapControls extends BaseMapControls {
     /**
-     * zoom 高频碰撞防护：滚轮连拍期间光标不动（±2px）→ 复用锁定的碰撞点，
-     * 射线只在光标移动后执行一次并重新入锁；点击/拖拽/旋转等其他操作
-     * 走经典射线路径，不消费锁。
+     * High-frequency collision guard for zoom: while the wheel is being spammed and the
+     * cursor stays still (+-2px), reuse the locked collision point; the ray is cast only
+     * after the cursor moves and then re-locks. Other operations (click / drag / rotate)
+     * take the classic ray path and do not consume the lock.
      */
     private m_collisionLock: Vector3 | null = null;
     private m_collisionLockX: number = 0;
@@ -31,7 +31,7 @@ export class MapControls extends BaseMapControls {
     ): number {
         const weh = this.windowEventHandler;
 
-        // zoom（滚轮）：光标未离开锁定像素 → 本拍零碰撞，直接复用锁定点。
+        // zoom (wheel): if the cursor has not left the locked pixel -> zero collision cost this tick, reuse the locked point directly.
         if (
             noFallback &&
             this.m_collisionLock !== null &&
@@ -42,8 +42,9 @@ export class MapControls extends BaseMapControls {
             return this.mapView.camera.position.distanceTo(this.m_collisionLock);
         }
 
-        // 一级：数据源射线检测（地形/3D Tiles 等按 enableCameraCollision
-        // 参与，地形源默认参与）。命中点是 render 空间，平移回 geo 帧。
+        // Tier 1: data source raycast (terrain / 3D Tiles etc. participate according to
+        // enableCameraCollision; terrain sources participate by default). The hit point is
+        // in render space and is translated back to the geo frame.
         const canvasClientSize = this.mapView.getCanvasClientSize();
         const rayCaster = new PickingRaycaster(
             new Vector2(canvasClientSize.width, canvasClientSize.height)
@@ -68,12 +69,15 @@ export class MapControls extends BaseMapControls {
             return intersection[0].distance;
         }
 
-        // 二级兜底：MapView 屏幕取点。坐标约定：getWorldPositionAt 需要
-        // "真实屏幕" client 坐标（即 lastMouseX/Y）；controls 内部流转的
-        // mouseX/Y 是 canvasWidth/Height 翻转后的坐标，勿透传——显式坐标
-        // 只由 pickPoint 这类自带换算的入口提供。GPU 深度命中上一帧渲染
-        // 表面（含地形/建筑网格）；手势期间深度槽因相机移动而冷，自动退化
-        // 为数学表面（球面 / z=0 平面）求交。返回 geo 帧坐标，无需再平移。
+        // Tier 2 fallback: MapView screen-space picking. Coordinate convention:
+        // getWorldPositionAt expects "real screen" client coordinates (i.e. lastMouseX/Y);
+        // the mouseX/Y passed around inside the controls are flipped by canvasWidth/Height
+        // and must not be passed through -- explicit coordinates are only provided by
+        // entry points like pickPoint that do the conversion themselves. GPU depth hits the
+        // surface rendered in the previous frame (including terrain / building meshes);
+        // during a gesture the depth slot goes stale as the camera moves, so it
+        // automatically degenerates to intersecting the mathematical surface (sphere /
+        // z=0 plane). Returns geo-frame coordinates, so no further translation is needed.
         const worldPos = this.mapView.getWorldPositionAt(
             screenX ?? weh.lastMouseX,
             screenY ?? weh.lastMouseY,
@@ -97,8 +101,8 @@ export class MapControls extends BaseMapControls {
         ) as unknown as ICameraCollidable[];
     }
 
-    private m_cameraTransformPlanar: CameraTransform;
-    private m_cameraTransformEllipsoid: CameraTransform;
+    private readonly m_cameraTransformPlanar: CameraTransform;
+    private readonly m_cameraTransformEllipsoid: CameraTransform;
 
     constructor(mapView: MapView, options?: BaseMapControlsOptions) {
         super(mapView, options);
@@ -134,8 +138,8 @@ export class MapControls extends BaseMapControls {
             this.canvasHeight - y,
             -1
         );
-        // unproject 用 canvasWidth - x / canvasHeight - y 构造射线，GPU
-        // 兜底查同一像素，保证射线与深度读数一致。
+        // unproject builds the ray with canvasWidth - x / canvasHeight - y, and the GPU
+        // fallback samples the same pixel, keeping the ray and the depth reading consistent.
         const distance = this.rayCastWorld(
             result,
             origin,

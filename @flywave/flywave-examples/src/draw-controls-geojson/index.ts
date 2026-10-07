@@ -1,20 +1,19 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 /*
  * Copyright (C) 2025 flywave.gl contributors.
  * SPDX-License-Identifier: Apache-2.0
  */
-
 import {
-    MapView,
-    GeoCoordinates,
+    ArcGISTileProvider,
+    CesiumWorldTerrainSource,
     ellipsoidProjection,
+    GeoCoordinates,
     MapControls,
     MapControlsUI,
-    CesiumWorldTerrainSource,
-    ArcGISTileProvider
+    MapView
 } from "@flywave/flywave.gl";
+import { DrawMode, GeoJSONDrawControls } from "@flywave/flywave-draw-controls";
 
-import { GeoJSONDrawControls, DrawMode } from "@flywave/flywave-draw-controls";
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 /**
  * Get map canvas element
@@ -41,7 +40,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
     return new MapView({
         forceWebGL: shouldForceWebGL(),
         projection: ellipsoidProjection,
-        canvas: canvas,
+        canvas,
         target: initialLocation,
         enablePolarDataSource: false,
         zoomLevel: 14,

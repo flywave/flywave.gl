@@ -1,8 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    QuantizedTerrainSource,
-    type QuantizedTerrainSourceOptions
+    type QuantizedTerrainSourceOptions,
+    QuantizedTerrainSource
 } from "./QuantizedTerrainSource";
 
 /**

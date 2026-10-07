@@ -6,13 +6,13 @@ import { ellipsoidProjection } from "../projection/EllipsoidProjection";
 import { type Projection } from "../projection/Projection";
 
 /**
- * 将 ECEF 坐标转换为目标投影的坐标，并返回变换矩阵
- * @param ecefPos - ECEF 坐标（EPSG:4979，单位：米）
- * @param targetProjection - 目标投影（如 SphereProjection）
- * @param isEllipsoid - 是否为椭球体投影，默认为 true
- * @returns 包含投影坐标和变换矩阵的对象
- * @returns projectedPos - 目标投影下的坐标
- * @returns transformMatrix - 变换矩阵（将 ECEF 的旋转/缩放适配到目标投影）
+ * Convert ECEF coordinates into the target projection and return the transform matrix
+ * @param ecefPos - ECEF coordinates (EPSG:4979, unit: meters)
+ * @param targetProjection - the target projection (e.g. SphereProjection)
+ * @param isEllipsoid - whether an ellipsoidal projection is used, defaults to true
+ * @returns an object containing the projected coordinates and the transform matrix
+ * @returns projectedPos - coordinates in the target projection
+ * @returns transformMatrix - transform matrix (adapts the ECEF rotation/scale to the target projection)
  */
 export function convertEllipsoidToProjection(
     ecefPos: THREE.Vector3,
@@ -22,7 +22,7 @@ export function convertEllipsoidToProjection(
     projectedPos: THREE.Vector3;
     transformMatrix: THREE.Matrix4;
 } {
-    // 处理非椭球体情况
+    // Handle the non-ellipsoidal case
     if (!isEllipsoid) {
         return {
             projectedPos: ecefPos,
@@ -30,17 +30,17 @@ export function convertEllipsoidToProjection(
         };
     }
 
-    // 1. 将 ECEF 坐标转换为地理坐标
+    // 1. Convert the ECEF coordinates to geodetic coordinates
     const geoCoords = ellipsoidProjection.unprojectPoint(ecefPos);
 
-    // 2. 计算目标投影下的坐标
+    // 2. Compute the coordinates in the target projection
     const projectedPos = new THREE.Vector3();
     targetProjection.projectPoint(geoCoords, projectedPos);
 
-    // 3. 计算变换矩阵
+    // 3. Compute the transform matrix
     const transformMatrix = new THREE.Matrix4();
 
-    // 3.1 获取 ECEF 下的局部切空间
+    // 3.1 Get the local tangent space in ECEF
     const ecefTangentSpace = {
         position: new THREE.Vector3(),
         xAxis: new THREE.Vector3(),
@@ -49,7 +49,7 @@ export function convertEllipsoidToProjection(
     };
     ellipsoidProjection.localTangentSpace(ecefPos, ecefTangentSpace);
 
-    // 3.2 获取目标投影下的局部切空间
+    // 3.2 Get the local tangent space in the target projection
     const targetTangentSpace = {
         position: new THREE.Vector3(),
         xAxis: new THREE.Vector3(),
@@ -58,7 +58,7 @@ export function convertEllipsoidToProjection(
     };
     targetProjection.localTangentSpace(geoCoords, targetTangentSpace);
 
-    // 3.3 构建从 ECEF 到目标投影的旋转矩阵
+    // 3.3 Build the rotation matrix from ECEF to the target projection
     const ecefRotation = new THREE.Matrix4().makeBasis(
         new THREE.Vector3().copy(ecefTangentSpace.xAxis),
         new THREE.Vector3().copy(ecefTangentSpace.yAxis),
@@ -71,7 +71,7 @@ export function convertEllipsoidToProjection(
         new THREE.Vector3().copy(targetTangentSpace.zAxis)
     );
 
-    // 3.4 组合平移和旋转
+    // 3.4 Combine the translation and rotation
     transformMatrix
         .makeTranslation(projectedPos.x, projectedPos.y, projectedPos.z)
         .multiply(targetRotation)

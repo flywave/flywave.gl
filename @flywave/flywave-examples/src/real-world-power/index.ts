@@ -1,17 +1,18 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
+    ArcGISTileProvider,
+    DEMTerrainSource,
     GeoCoordinates,
+    GUI,
     MapControls,
     MapControlsUI,
-    TileRenderDataSource,
-    sphereProjection,
-    ModularMapViewMonitor,
-    DEMTerrainSource,
-    ArcGISTileProvider,
+    MapView,
     MapViewEventNames,
-    GUI
+    ModularMapViewMonitor,
+    sphereProjection,
+    TileRenderDataSource
 } from "@flywave/flywave.gl";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 // Project configuration constants
 const PROJECT_CONFIG = {
@@ -54,7 +55,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         zoomLevel: 18, // Initial zoom level
         tilt: 70, // Initial tilt angle
         heading: 35.1, // Initial heading angle
-        canvas: canvas, // Specify render canvas
+        canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
             lights: [

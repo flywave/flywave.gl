@@ -21,14 +21,13 @@
  * Modified from the original source code.
  */
 
-import type { Camera, SampleNode, TextureNode } from "three/webgpu";
 import { float, vec2, vec3, vec4 } from "three/tsl";
+import type { Camera, SampleNode, TextureNode } from "three/webgpu";
 
 import { cameraFar, inverseProjectionMatrix, inverseViewMatrix } from "../../tsl/accessors";
 import { FnLayout } from "../../tsl/FnLayout";
 import { FnVar } from "../../tsl/FnVar";
 import type { Node } from "../../tsl/node";
-
 import { getAtmosphereContext } from "../AtmosphereContext";
 
 export const FLOAT_MAX = 3.402823466e38;

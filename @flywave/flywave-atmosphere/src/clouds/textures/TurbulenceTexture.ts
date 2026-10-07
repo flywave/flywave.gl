@@ -1,20 +1,20 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { float, Fn, globalId, If, Return, textureStore, uvec2, vec3, vec4 } from "three/tsl";
 import {
     type ComputeNode,
     type Renderer,
-    StorageTexture,
-    NoColorSpace,
     HalfFloatType,
-    RepeatWrapping
+    NoColorSpace,
+    RepeatWrapping,
+    StorageTexture
 } from "three/webgpu";
-import { Fn, If, Return, vec3, vec4, float, globalId, uvec2, textureStore } from "three/tsl";
 
+import type { AnyFloatType } from "../../tsl/types";
+import { reinterpretType } from "../../tsl/types";
 import { CLOUD_TURBULENCE_TEXTURE_SIZE } from "../cloudConstants";
 import { perlinNoise } from "../noise/noise";
-import { reinterpretType } from "../../tsl/types";
-import type { AnyFloatType } from "../../tsl/types";
 
 function perlin3d(point: any): any {
     const perlin1 = perlinNoise(point, 12.0, 3);

@@ -43,9 +43,11 @@ export const installDebugErrorCapture = (): string[] => {
         push("warn", args);
         origWarn(...args);
     };
-    window.addEventListener("error", e => push("uncaught", [e.message, e.filename, e.lineno]));
-    window.addEventListener("unhandledrejection", e =>
-        push("rejection", [(e as PromiseRejectionEvent).reason])
-    );
+    window.addEventListener("error", e => {
+        push("uncaught", [e.message, e.filename, e.lineno]);
+    });
+    window.addEventListener("unhandledrejection", e => {
+        push("rejection", [(e as PromiseRejectionEvent).reason]);
+    });
     return log;
 };

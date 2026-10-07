@@ -1,17 +1,17 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 /* Copyright (C) 2025 flywave.gl contributors */
-
 import {
-    MapView,
-    GeoCoordinates,
-    GeoBox,
+    ArcGISTileProvider,
+    CesiumWorldTerrainSource,
+    DEMTerrainSource,
     ellipsoidProjection,
+    GeoBox,
+    GeoCoordinates,
     MapControls,
     MapControlsUI,
-    CesiumWorldTerrainSource,
-    ArcGISTileProvider,
-    DEMTerrainSource
+    MapView
 } from "@flywave/flywave.gl";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 import { CESIUM_ION_TOKEN } from "../token-config";
 
 // Configuration constants
@@ -42,7 +42,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         target: CONFIG.INITIAL_COORDINATES,
         zoomLevel: CONFIG.ZOOM_LEVEL,
         projection: ellipsoidProjection,
-        canvas: canvas,
+        canvas,
         theme: {
             extends: "resources/tilezen_base.json"
         }

@@ -1,5 +1,6 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
-import { type NodeBuilder, type TextureNode, TempNode } from "three/webgpu";
 import {
     add,
     Fn,
@@ -13,7 +14,7 @@ import {
     vec4,
     viewportSize
 } from "three/tsl";
-
+import { type NodeBuilder, type TextureNode, TempNode } from "three/webgpu";
 import invariant from "tiny-invariant";
 
 import { DownsampleThresholdNode } from "./DownsampleThresholdNode";

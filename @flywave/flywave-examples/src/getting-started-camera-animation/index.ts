@@ -1,25 +1,26 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 /*
  * Copyright (C) 2020-2021 HERE Europe B.V.
  * Licensed under Apache 2.0, see full license in LICENSE
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
-    MapView,
-    GeoCoordinates,
-    ellipsoidProjection,
-    MapControls,
-    DEMTerrainSource,
     ArcGISTileProvider,
-    MapControlsUI,
-    mercatorProjection,
-    sphereProjection,
     CameraAnimationBuilder,
     CameraKeyTrackAnimation,
-    ControlPoint
+    ControlPoint,
+    DEMTerrainSource,
+    ellipsoidProjection,
+    GeoCoordinates,
+    MapControls,
+    MapControlsUI,
+    MapView,
+    mercatorProjection,
+    sphereProjection
 } from "@flywave/flywave.gl";
 import { GUI } from "dat.gui";
 import * as THREE from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 // Define geographic location type
 type GeoLocations = Record<string, GeoCoordinates>;

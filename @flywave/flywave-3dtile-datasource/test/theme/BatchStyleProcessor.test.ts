@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { expect } from "chai";
+
 import { BatchStyleProcessor } from "../../src/theme/BatchStyleProcessor";
 
 function makeProcessor(styles: any[]): BatchStyleProcessor {
@@ -102,13 +103,14 @@ describe("BatchStyleProcessor（样式求值与合并）", function () {
         expect(processor.getBatchStyle({ batchId: 0, height: 3 }).color).to.equal(undefined);
         expect(processor.getBatchStyle({ batchId: 0, height: 20 }).color).to.equal(undefined);
         expect(processor.getBatchStyle({ batchId: 0, height: 35 }).color).to.equal("#9966ff");
-        // 40–50 同时命中紫/橙两档：后者覆盖前者
+        // 40–50 hits both the purple and orange bands: the latter overrides the former
         expect(processor.getBatchStyle({ batchId: 0, height: 45 }).color).to.equal("#ff9900");
     });
 
     it("when 解析失败 fail-closed：非法表达式永不命中（不静默染所有要素）", function () {
-        // `*` 不受 when 文法支持 → 解析失败；fail-closed 语义下该样式必须永不命中，
-        // 而不是退化成无条件命中（会把所有要素染成 #9966ff）
+        // `*` is not supported by the when grammar → parse failure; under fail-closed
+        // semantics this style must never match, rather than degenerating into an
+        // unconditional match (which would tint every feature #9966ff)
         const processor = makeProcessor([
             { when: "height * 2 >= 60", technique: "tile3d", color: "#9966ff" },
             { when: "height >= 30", technique: "tile3d", color: "#00cccc" }

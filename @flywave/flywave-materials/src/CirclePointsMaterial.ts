@@ -1,9 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
+import { Fn, fwidth, length, pointUV, smoothstep, uniform, vec2, vec3, vec4 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
-import { Fn, fwidth, length, smoothstep, uniform, vec2, vec3, vec4, pointUV } from "three/tsl";
 
 export interface CirclePointsMaterialParameters {
     size?: number;
@@ -15,9 +15,9 @@ export interface CirclePointsMaterialParameters {
 export class CirclePointsMaterial extends NodeMaterial {
     static readonly DEFAULT_CIRCLE_SIZE = 1;
 
-    private m_sizeUniform = uniform(CirclePointsMaterial.DEFAULT_CIRCLE_SIZE);
-    private m_colorUniform = uniform(new THREE.Color());
-    private m_opacityUniform = uniform(1.0);
+    private readonly m_sizeUniform = uniform(CirclePointsMaterial.DEFAULT_CIRCLE_SIZE);
+    private readonly m_colorUniform = uniform(new THREE.Color());
+    private readonly m_opacityUniform = uniform(1.0);
 
     constructor(parameters?: CirclePointsMaterialParameters) {
         super();
@@ -64,7 +64,15 @@ export class CirclePointsMaterial extends NodeMaterial {
     }
 
     get opacity(): number {
-        return this.m_opacityUniform.value;
+        return this.m_opacityUniform?.value ?? 1.0;
+    }
+
+    // The three Material base class assigns this.opacity inside super() (before field
+    // initialization, when m_opacityUniform is still undefined); assignments during that
+    // window are silently discarded, and at the end of the constructor parameters.opacity
+    // overwrites the real value.
+    set opacity(value: number) {
+        if (this.m_opacityUniform != null) this.m_opacityUniform.value = value;
     }
 
     setOpacity(value: number) {

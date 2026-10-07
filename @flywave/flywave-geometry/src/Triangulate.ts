@@ -2,10 +2,10 @@
 
 import { GeoCoordinates, GeoPolygon, mercatorProjection } from "@flywave/flywave-geoutils";
 import * as turf from "@turf/turf";
+import earcut from "earcut";
 import { makeCCW, quickDecomp } from "poly-decomp-es";
 import { ELEMENT, tesselate, WINDING } from "tess2-ts";
 import * as THREE from "three/webgpu";
-import earcut from "earcut";
 
 // Define Point and Polygon types to match definitions in PolygonDecomposer
 type Point = [number, number];
@@ -95,7 +95,7 @@ export function triangulateWithEarcut(
     // Return result, maintaining the same interface as the original triangulate function
     return {
         positions: [...polygon, ...(holes ? holes.flat() : [])],
-        indices: indices,
+        indices,
         originalVertexIndices: Array.from(
             { length: polygon.length + (holes ? holes.flat().length : 0) },
             (_, i) => i

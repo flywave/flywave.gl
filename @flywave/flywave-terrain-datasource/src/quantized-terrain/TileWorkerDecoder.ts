@@ -1,7 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 // TileDecoderUtils.ts
+import { getProjection, getProjectionName } from "@flywave/flywave-datasource-protocol";
 import { type GeoBoxArray, type Projection, GeoBox, TileKey } from "@flywave/flywave-geoutils";
+import { SerializableGeometryData } from "@flywave/flywave-utils/bufferGeometryTransfer";
+import { Vector3 } from "three/webgpu";
 
 import {
     type SerializedStratumClipRegion,
@@ -21,9 +24,6 @@ import {
 } from "./quantized-mesh/QuantizedTerrainMesh";
 import { createStratumTileFromBuffer } from "./quantized-stratum-mesh/stratum-tile";
 import { type DecodedStratumTileData } from "./quantized-stratum-mesh/stratum-tile/StratumTileData";
-import { SerializableGeometryData } from "@flywave/flywave-utils/bufferGeometryTransfer";
-import { Vector3 } from "three/webgpu";
-import { getProjection, getProjectionName } from "@flywave/flywave-datasource-protocol";
 
 /**
  * Processes raw quantized mesh data into terrain mesh format
@@ -219,7 +219,7 @@ export const processReProjectTileGeometry = (
 ): TileGeometryReprojectionData => {
     const { position, center, targetTileCenter, sourceProjectionName } = params;
 
-    let sourceProjection = getProjection(sourceProjectionName);
+    const sourceProjection = getProjection(sourceProjectionName);
     // Validate input data
     if (position.itemSize !== 3) {
         throw new Error("Position data must have itemSize of 3 for 3D coordinates");
@@ -267,6 +267,6 @@ export const processReProjectTileGeometry = (
             itemSize: 3
         },
         targetProjectionName: getProjectionName(targetProjection),
-        sourceProjectionName: sourceProjectionName
+        sourceProjectionName
     };
 };

@@ -1,15 +1,16 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
-    GeoCoordinates,
+    ArcGISTileProvider,
+    CesiumWorldTerrainSource,
     ellipsoidProjection,
+    FrustumCullingModule,
+    GeoCoordinates,
     MapControls,
     MapControlsUI,
-    CesiumWorldTerrainSource,
-    ArcGISTileProvider,
-    FrustumCullingModule
+    MapView
 } from "@flywave/flywave.gl";
 import { GUI } from "dat.gui";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 /**
  * Get map canvas element
@@ -46,7 +47,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         heading: -125.79565303507096, // Initial heading angle
         tilt: 56.60060867291795, // Initial tilt angle
         // zoomLevel: 18,                  // Initial zoom level
-        canvas: canvas, // Specify render canvas
+        canvas, // Specify render canvas
         theme: {
             // extends: "resources/tilezen_base_globe.json", // Base theme configuration
             atmosphere: {
@@ -233,7 +234,9 @@ try {
         moved = true;
         setTimeout(() => {
             dumpStats("after move (5s)");
-            setTimeout(() => dumpStats("after move (10s)"), 5000);
+            setTimeout(() => {
+                dumpStats("after move (10s)");
+            }, 5000);
         }, 5000);
     });
 
@@ -243,7 +246,9 @@ try {
         moveTo(DEFAULT_VIEW);
         setTimeout(() => {
             dumpStats("after return (5s)");
-            setTimeout(() => dumpStats("after return (10s)"), 5000);
+            setTimeout(() => {
+                dumpStats("after return (10s)");
+            }, 5000);
         }, 5000);
     });
 
@@ -252,7 +257,9 @@ try {
     });
 
     // Auto snapshot every 5 seconds
-    setInterval(() => dumpStats("auto"), 5000);
+    setInterval(() => {
+        dumpStats("auto");
+    }, 5000);
 
     console.log(
         "%c[Tile Monitor] Buttons added: Move Away / Return / Snapshot",

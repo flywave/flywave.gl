@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 export const simpleLightingShadowChunk = `
     struct PhysicalMaterial {
         vec3 diffuseColor;
@@ -45,7 +47,7 @@ export const simpleLightingShadowChunk = `
         #endif
     };
 
-    // 临时变量声明（与新版本保持一致）
+    // Temporary variable declarations (kept in sync with the new version)
     vec3 clearcoatSpecularDirect = vec3( 0.0 );
     vec3 clearcoatSpecularIndirect = vec3( 0.0 );
     vec3 sheenSpecularDirect = vec3( 0.0 );
@@ -61,14 +63,14 @@ export const simpleLightingShadowChunk = `
         const in PhysicalMaterial material,
         inout ReflectedLight reflectedLight ) {
         
-        // 保持你的简化光照逻辑
+        // Keep your simplified lighting logic
         #if defined(USE_SHADOWMAP)
             reflectedLight.directDiffuse = (0.5 * directLight.color + vec3(0.5,0.5,0.5)) * material.diffuseColor;
         #else
             reflectedLight.directDiffuse = material.diffuseColor;
         #endif
         
-        // 禁用直接高光
+        // Disable direct specular
         reflectedLight.directSpecular = vec3(0.0);
         
         #ifdef USE_CLEARCOAT
@@ -88,7 +90,7 @@ export const simpleLightingShadowChunk = `
         const in PhysicalMaterial material,
         inout ReflectedLight reflectedLight ) {
         
-        // 禁用间接漫反射影响
+        // Disable the indirect diffuse contribution
         // reflectedLight.indirectDiffuse += vec3(0.0);
     }
 
@@ -102,7 +104,7 @@ export const simpleLightingShadowChunk = `
         const in PhysicalMaterial material,
         inout ReflectedLight reflectedLight) {
         
-        // 禁用镜面反射
+        // Disable specular reflection
         reflectedLight.indirectSpecular = vec3(0.0);
         
         #ifdef USE_CLEARCOAT
@@ -114,7 +116,7 @@ export const simpleLightingShadowChunk = `
         #endif
     }
 
-    // 矩形区域光函数（禁用）
+    // Rect area light functions (disabled)
     #if NUM_RECT_AREA_LIGHTS > 0
     void RE_Direct_RectArea_Physical( const in RectAreaLight rectAreaLight, 
         const in vec3 geometryPosition, 
@@ -124,7 +126,7 @@ export const simpleLightingShadowChunk = `
         const in PhysicalMaterial material, 
         inout ReflectedLight reflectedLight ) {
         
-        // 禁用矩形区域光
+        // Disable rect area light
         reflectedLight.directDiffuse = vec3(0.0);
         reflectedLight.directSpecular = vec3(0.0);
     }

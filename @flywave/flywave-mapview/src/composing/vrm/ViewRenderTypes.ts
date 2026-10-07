@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import * as THREE from "three/webgpu";
 import type { GeoCoordinates } from "@flywave/flywave-geoutils";
+import type * as THREE from "three/webgpu";
 
 export interface IBloomConfig {
     enabled: boolean;

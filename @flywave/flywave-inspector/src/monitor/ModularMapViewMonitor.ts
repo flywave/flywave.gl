@@ -3,21 +3,21 @@
 import { type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
 import { GUI } from "dat.gui";
 
-import { AnimationModule, type AnimationData } from "../modules/AnimationModule";
+import { type AnimationData, AnimationModule } from "../modules/AnimationModule";
 import { AtmosphereModule } from "../modules/AtmosphereModule";
-import { CameraModule, type CameraData } from "../modules/CameraModule";
-import { DataSourceModule, type DataSourceData } from "../modules/DataSourceModule";
-import { EnhancedTileModule, type EnhancedTileData } from "../modules/EnhancedTileModule";
-import { EnvironmentModule, type EnvironmentData } from "../modules/EnvironmentModule";
+import { type CameraData, CameraModule } from "../modules/CameraModule";
+import { type DataSourceData, DataSourceModule } from "../modules/DataSourceModule";
+import { type EnhancedTileData, EnhancedTileModule } from "../modules/EnhancedTileModule";
+import { type EnvironmentData, EnvironmentModule } from "../modules/EnvironmentModule";
 import { FogGUIModule } from "../modules/FogGUIModule";
-import { MemoryModule, type MemoryData } from "../modules/MemoryModule";
-import { PerformanceModule, type PerformanceData } from "../modules/PerformanceModule";
+import { type MemoryData, MemoryModule } from "../modules/MemoryModule";
+import { type PerformanceData, PerformanceModule } from "../modules/PerformanceModule";
 import { PostProcessingGUIModule } from "../modules/PostProcessingGUIModule";
-import { RenderingModule, type RenderingData } from "../modules/RenderingModule";
-import { TextModule, type TextData } from "../modules/TextModule";
-import { TileModule, type TileData } from "../modules/TileModule";
+import { type RenderingData, RenderingModule } from "../modules/RenderingModule";
+import { type TextData, TextModule } from "../modules/TextModule";
+import { type TileData, TileModule } from "../modules/TileModule";
 import { ToneMappingModule } from "../modules/ToneMappingModule";
-import { VisibleTileSetModule, type VisibleTileSetData } from "../modules/VisibleTileSetModule";
+import { type VisibleTileSetData, VisibleTileSetModule } from "../modules/VisibleTileSetModule";
 
 export class ModularMapViewMonitor {
     private readonly gui: GUI;
@@ -199,45 +199,59 @@ export class ModularMapViewMonitor {
     getPerformanceFolder(): GUI {
         return this.performanceFolder;
     }
+
     getCameraFolder(): GUI {
         return this.cameraFolder;
     }
+
     getRenderingFolder(): GUI {
         return this.renderingFolder;
     }
+
     getMemoryFolder(): GUI {
         return this.memoryFolder;
     }
+
     getTileFolder(): GUI {
         return this.tileFolder;
     }
+
     getEnhancedTileFolder(): GUI {
         return this.enhancedTileFolder;
     }
+
     getVisibleTileSetFolder(): GUI {
         return this.visibleTileSetFolder;
     }
+
     getDataSourceFolder(): GUI {
         return this.dataSourceFolder;
     }
+
     getTextFolder(): GUI {
         return this.textFolder;
     }
+
     getAnimationFolder(): GUI {
         return this.animationFolder;
     }
+
     getEnvironmentFolder(): GUI {
         return this.environmentFolder;
     }
+
     getAtmosphereFolder(): GUI {
         return this.atmosphereFolder;
     }
+
     getToneMappingFolder(): GUI {
         return this.toneMappingFolder;
     }
+
     getPostProcessingFolder(): GUI {
         return this.postProcessingFolder;
     }
+
     getFogFolder(): GUI {
         return this.fogFolder;
     }

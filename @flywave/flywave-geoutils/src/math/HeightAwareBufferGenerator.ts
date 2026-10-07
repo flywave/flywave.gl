@@ -54,7 +54,7 @@ export class HeightAwareBufferGenerator {
     }
 
     /**
-     * 创建覆盖末端半圆形的裁切矩形
+     * Create a clip rectangle covering the semicircular end cap
      */
     private createClipRectangle(
         endPoint: number[],
@@ -126,7 +126,7 @@ export class HeightAwareBufferGenerator {
     }
 
     /**
-     * 创建带裁切末端的缓冲区
+     * Create a buffer with clipped end caps
      */
     private createClippedBuffer(
         line: turf.Feature<turf.LineString>,

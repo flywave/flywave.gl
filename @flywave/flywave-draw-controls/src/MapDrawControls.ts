@@ -1,9 +1,10 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type GeoJson, type FeatureGeometry } from "@flywave/flywave-datasource-protocol";
+import { type FeatureGeometry, type GeoJson } from "@flywave/flywave-datasource-protocol";
 import { GeoCoordinates, ProjectionType } from "@flywave/flywave-geoutils";
 import { type MapControls } from "@flywave/flywave-map-controls";
-import { type MapView, MapViewEventNames, type ICameraCollidable } from "@flywave/flywave-mapview";
+import { type ICameraCollidable, type MapView, MapViewEventNames } from "@flywave/flywave-mapview";
+import { type WindowEventHandler } from "@flywave/flywave-utils";
 import * as THREE from "three/webgpu";
 import { EventDispatcher } from "three/webgpu";
 
@@ -13,7 +14,6 @@ import { DrawLine } from "./DrawLine";
 import { DrawMode } from "./DrawMode";
 import { DrawPolygon } from "./DrawPolygon";
 import { PointObject } from "./PointObject";
-import { WindowEventHandler } from "@flywave/flywave-utils";
 import { VertexHandle } from "./VertexHandle";
 
 interface MapDrawControlsEventMap {
@@ -71,7 +71,7 @@ export class MapDrawControls extends EventDispatcher<MapDrawControlsEventMap> {
         this.rootObject.visible = visible;
     }
 
-    private onFrameUpdate = (): void => {
+    private readonly onFrameUpdate = (): void => {
         this.rootObject.position.copy(this.mapView.camera.position).negate();
     };
 

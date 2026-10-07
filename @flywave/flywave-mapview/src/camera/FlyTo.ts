@@ -1,9 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import {
-    type GeoCoordinatesLike,
     type GeoBox,
     type GeoBoxExtentLike,
+    type GeoCoordinatesLike,
     type GeoPolygon
 } from "@flywave/flywave-geoutils";
 

@@ -409,7 +409,7 @@ export class MeasureToolControls extends MapDrawControls {
     /**
      * Camera position change event handling
      */
-    private onCameraPositionChanged = (event: CameraPositionChangedEvent): void => {
+    private readonly onCameraPositionChanged = (event: CameraPositionChangedEvent): void => {
         // Only update measurement label coordinates, do not recreate labels
         this.updateMeasureLabelPositions();
         // Only update temporary measurement label coordinates, do not recreate labels
@@ -660,7 +660,7 @@ export class MeasureToolControls extends MapDrawControls {
     /**
      * Drawing completion event handling
      */
-    private onDrawEnd = (event: DrawEvent): void => {
+    private readonly onDrawEnd = (event: DrawEvent): void => {
         // Clean up temporary labels
         if (this.tempMeasureLabel) {
             this.tempMeasureLabel = null;
@@ -673,7 +673,7 @@ export class MeasureToolControls extends MapDrawControls {
     /**
      * Object modification event handling
      */
-    private onObjectModified = (event: DrawEvent): void => {
+    private readonly onObjectModified = (event: DrawEvent): void => {
         // Update all measurement labels (may need to recreate labels)
         this.updateMeasureLabels();
     };

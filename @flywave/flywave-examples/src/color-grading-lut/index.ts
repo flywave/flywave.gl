@@ -1,16 +1,16 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
+    ArcGISTileProvider,
+    DEMTerrainSource,
     GeoCoordinates,
     MapControls,
     MapControlsUI,
-    DEMTerrainSource,
-    ArcGISTileProvider,
+    MapView,
     MapViewEventNames
 } from "@flywave/flywave.gl";
 import { GUI } from "dat.gui";
-
 import { BoxGeometry, Color, Mesh, MeshBasicNodeMaterial } from "three/webgpu";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 /**
  * Built-in LUT presets shipped in `flywave-map-theme/resources/lut/` and

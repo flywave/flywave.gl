@@ -57,7 +57,7 @@ describe("DataProviders", function () {
             dataProvider: mockDataProvider
         });
         assert.equal(omvDataSource.dataProvider(), mockDataProvider);
-        expect(assert.isTrue(omvDataSource.dataProvider() instanceof MockDataProvider)).to.be.true;
+        assert.isTrue(omvDataSource.dataProvider() instanceof MockDataProvider);
     });
 
     it("Creates a OmvDataSource with a REST based DataProvider with proper params", function () {
@@ -93,7 +93,7 @@ describe("DataProviders", function () {
             authenticationCode: "123",
             dataProvider: mockDataProvider
         });
-        expect(assert.isTrue(omvDataSource.dataProvider() instanceof MockDataProvider)).to.be.true;
+        assert.isTrue(omvDataSource.dataProvider() instanceof MockDataProvider);
     });
 
     it("supports deprecated minZoomLevel and maxZoomLevel in constructor", function () {

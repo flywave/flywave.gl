@@ -150,8 +150,9 @@ function extractInstancedAttributes(
 
         instancePosition.copy(position);
 
-        // Get the instance rotation（NORMAL_* 为可选属性：缺失时 getProperty 返回
-        // undefined，必须先 hasProperty 守卫，否则 fromArray(undefined) 崩溃）
+        // Get the instance rotation (NORMAL_* are optional properties: when
+        // missing, getProperty returns undefined, so it must be guarded with
+        // hasProperty first, otherwise fromArray(undefined) crashes)
         let hasCustomOrientation = false;
         if (featureTable.hasProperty("NORMAL_UP")) {
             if (!featureTable.hasProperty("NORMAL_RIGHT")) {

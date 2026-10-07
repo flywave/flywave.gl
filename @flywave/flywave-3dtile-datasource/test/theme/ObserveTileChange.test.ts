@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { expect } from "chai";
+
 import { Observe3DTileChange } from "../../src/ObserveTileChange";
 
 function mockTile(uri: string): any {

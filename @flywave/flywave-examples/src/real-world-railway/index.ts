@@ -1,17 +1,18 @@
-import { shouldForceWebGL } from "../common-webgl-debug";
 import {
-    MapView,
+    ArcGISTileProvider,
+    DEMTerrainSource,
     GeoCoordinates,
+    GUI,
     MapControls,
     MapControlsUI,
-    TileRenderDataSource,
-    sphereProjection,
-    DEMTerrainSource,
-    ArcGISTileProvider,
-    ModularMapViewMonitor,
+    MapView,
     MapViewEventNames,
-    GUI
+    ModularMapViewMonitor,
+    sphereProjection,
+    TileRenderDataSource
 } from "@flywave/flywave.gl";
+
+import { shouldForceWebGL } from "../common-webgl-debug";
 
 // Project configuration constants
 const PROJECT_CONFIG = {
@@ -52,7 +53,7 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         projection: sphereProjection, // Use spherical projection
         target: initialLocation, // Initial target position
         zoomLevel: 15, // Initial zoom level
-        canvas: canvas, // Specify render canvas
+        canvas, // Specify render canvas
         theme: {
             extends: "resources/tilezen_base_globe.json", // Base theme configuration
             lights: [

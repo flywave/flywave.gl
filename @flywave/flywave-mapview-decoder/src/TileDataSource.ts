@@ -13,15 +13,15 @@ import {
     type CopyrightInfo,
     type CopyrightProvider,
     type DataSourceOptions,
+    type Tile,
     ConcurrentDecoderFacade,
     DataSource,
-    Tile,
     TileLoaderState
 } from "@flywave/flywave-mapview";
 import { ThemeLoader } from "@flywave/flywave-mapview/ThemeLoader";
 import { type ILogger, LoggerManager } from "@flywave/flywave-utils";
 
-import { DataProvider } from "./DataProvider";
+import { type DataProvider } from "./DataProvider";
 import { TileInfoLoader, TileLoader } from "./TileLoader";
 
 /**
@@ -159,9 +159,9 @@ export class TileDataSource<
         this.useGeometryLoader = true;
         this.cacheable = true;
 
-        this.m_unregisterClearTileCache = this.dataProvider()?.onDidInvalidate?.(() =>
-            this.mapView.markTilesDirty(this)
-        );
+        this.m_unregisterClearTileCache = this.dataProvider()?.onDidInvalidate?.(() => {
+            this.mapView.markTilesDirty(this);
+        });
     }
 
     /** @override */

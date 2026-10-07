@@ -3,7 +3,7 @@
 import { type DisplayParams } from "../../common/render/primitives/display-params";
 import { type Point3d } from "../../core-geometry";
 
-// 辅助类型定义
+// Helper type definitions
 export type PreparedGeometry =
     | PreparedPointGeometry
     | PreparedLineGeometry

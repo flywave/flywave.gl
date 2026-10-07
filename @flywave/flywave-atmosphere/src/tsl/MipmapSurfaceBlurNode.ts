@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
 import { add, Fn, mix, uniform, uv, vec2, vec4 } from "three/tsl";
 import type { NodeBuilder, TextureNode } from "three/webgpu";

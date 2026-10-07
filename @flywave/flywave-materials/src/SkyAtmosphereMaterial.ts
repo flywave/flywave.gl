@@ -222,14 +222,14 @@ void main(void)
     float fOuterRadius = u_atmosphereEnv.y;
     float fCameraHeight = u_atmosphereEnv.z;
 
-    // 计算当前片段的世界位置（球体表面位置）
+    // Compute the world position of the current fragment (sphere surface position)
     vec3 fragmentWorldPos = u_eyePositionWorld - v_vertToCamera;
     
-    // 计算从相机到片段的视线方向
+    // Compute the view direction from the camera to the fragment
     vec3 rayOrigin = u_eyePositionWorld;
     vec3 rayDirection = normalize(fragmentWorldPos - rayOrigin);
     
-    // 计算视线与地球表面的交点
+    // Compute the intersection of the view ray with the earth surface
     vec3 earthCenter = vec3(0.0);
     float earthRadius = fInnerRadius;
     
@@ -257,22 +257,22 @@ void main(void)
                 float horizonDistance = t;
                 float fragmentDistance = distToFragment;
                 
-                // 增大过渡幅度：从地平线开始，在大气层厚度的50%范围内渐变
-                float transitionRange = (fOuterRadius - fInnerRadius) * 0.5; // 增大过渡范围
+                // Widen the transition: start at the horizon and blend within 50% of the atmosphere thickness
+                float transitionRange = (fOuterRadius - fInnerRadius) * 0.5; // widened transition range
                 transition = clamp((fragmentDistance - horizonDistance) / (fOuterRadius * 0.3), 0.0, 1.0);
                 
-                // 或者使用更平滑的过渡曲线
+                // Or use a smoother transition curve
                 // transition = smoothstep(0.0, 1.0, (fragmentDistance - horizonDistance) / transitionRange);
             }
         }
     }
     
     if (belowHorizon) {
-        // 使用更平缓的透明度曲线
+        // Use a more gradual opacity curve
         float alpha = 1.0 - transition;
         
-        // 调整透明度衰减曲线，让消失更平缓
-        alpha = pow(alpha, 0.5); // 使用平方根让衰减更平缓
+        // Adjust the opacity falloff curve so the fade-out is more gradual
+        alpha = pow(alpha, 0.5); // use the square root to soften the falloff
         
         if (alpha < 0.01) {
             gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
@@ -302,7 +302,7 @@ void main(void)
             cRgb = correctColor(cRgb, u_hsvCorrection);
         #endif
 
-        // 地平线以下的颜色强度也使用平缓衰减
+        // Below the horizon, the color intensity also uses a gradual falloff
         cRgb *= alpha;
         
         float fAtmosphereAlpha = clamp((fOuterRadius - fCameraHeight) /
@@ -313,7 +313,7 @@ void main(void)
         return;
     }
 
-    // 正常的大气计算（地平线以上）
+    // Normal atmospheric computation (above the horizon)
     #ifdef DYNAMIC_LIGHT
         vec3 vLightDir = u_lightDirectionWorld;
         float fNightAlpha = clamp(dot(normalize(u_eyePositionWorld), vLightDir), 0.0, 1.0);

@@ -1,9 +1,9 @@
 import type { TileEvent } from "./types";
 
 export class EventLog {
-    private container: HTMLElement;
-    private log: HTMLDivElement;
-    private maxLines = 40;
+    private readonly container: HTMLElement;
+    private readonly log: HTMLDivElement;
+    private readonly maxLines = 40;
 
     constructor(container: HTMLElement) {
         this.container = container;

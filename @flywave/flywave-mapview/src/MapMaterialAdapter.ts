@@ -8,6 +8,7 @@ import {
     TEXTURE_PROPERTY_KEYS
 } from "@flywave/flywave-datasource-protocol";
 import { disableBlending, enableBlending, RawShaderMaterial } from "@flywave/flywave-materials";
+import { SRGBColorSpace } from "three/webgpu";
 import * as THREE from "three/webgpu";
 
 import { evaluateColorProperty } from "./DecodedTileHelpers";
@@ -300,7 +301,9 @@ export class MapMaterialAdapter {
             this.material.opacity = actualOpacity;
         }
 
-        (this.material as any).color.setRGB(r, g, b);
+        // r/g/b are sRGB display components; three r152+ setRGB defaults to Linear,
+        // so sRGB must be specified explicitly
+        (this.material as any).color.setRGB(r, g, b, SRGBColorSpace);
 
         const opaque = actualOpacity >= 1.0;
         if (!opaque) {

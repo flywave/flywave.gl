@@ -6,7 +6,7 @@ import { type PolylineParams } from "../common/render/primitives/polyline-params
 import type { Point3d, Range3d } from "../core-geometry";
 import { type RenderGeometry } from "./render-geometry";
 
-// 折线类型标志
+// Polyline type flags
 export enum PolylineTypeFlags {
     Normal = 0,
     Edge = 1,
@@ -14,13 +14,13 @@ export enum PolylineTypeFlags {
 }
 
 export class PolylineGeometry extends THREE.BufferGeometry implements RenderGeometry {
-    // 新增需要实现的接口属性
+    // Newly added interface properties that must be implemented
     public readonly isPlanar: boolean;
     public readonly uniformColor?: THREE.Vector4;
     public readonly vertexColors: boolean;
     public readonly colorInfo?: { hasTranslucency: boolean };
 
-    // 保留原有属性
+    // Original properties kept as-is
     public readonly lineWeight: number;
     public readonly lineCode: number;
     public readonly ptype: PolylineTypeFlags;
@@ -42,18 +42,18 @@ export class PolylineGeometry extends THREE.BufferGeometry implements RenderGeom
     }) {
         super();
 
-        // 手动创建几何体属性
+        // Create the geometry attributes manually
         this.setAttribute("position", new THREE.BufferAttribute(options.positions, 3));
         if (options.indices) {
             this.setIndex(new THREE.BufferAttribute(options.indices, 1));
         }
 
-        // 初始化新增属性
+        // Initialize the newly added attributes
         this.isPlanar = options.isPlanar ?? false;
         this.uniformColor = options.uniformColor;
         this.vertexColors = options.vertexColors ?? false;
 
-        // 保留原有赋值
+        // Original assignments kept as-is
         this.lineWeight = options.lineWeight;
         this.lineCode = options.lineCode;
         this.ptype = options.type;
@@ -66,10 +66,10 @@ export class PolylineGeometry extends THREE.BufferGeometry implements RenderGeom
 
     public static create(params: PolylineParams, viOrigin?: Point3d): PolylineGeometry | undefined {
         try {
-            // 转换顶点数据为 Float32Array
+            // Convert the vertex data to a Float32Array
             const positions = new Float32Array(params.vertices.data);
 
-            // 转换索引数据
+            // Convert the index data
             let indices: Uint16Array | Uint32Array | undefined;
             if (params.polyline.indices) {
                 const indexData = params.polyline.indices.data;
@@ -80,7 +80,7 @@ export class PolylineGeometry extends THREE.BufferGeometry implements RenderGeom
                 }
             }
 
-            // 转换视图独立原点
+            // Convert the view-independent origin
             const viewIndependentOrigin = viOrigin
                 ? new THREE.Vector3(viOrigin.x, viOrigin.y, viOrigin.z)
                 : undefined;
@@ -100,16 +100,16 @@ export class PolylineGeometry extends THREE.BufferGeometry implements RenderGeom
     }
 
     private static lineCodeFromPixels(pixels: number): number {
-        // 简化实现：实际应根据像素值计算线型代码
+        // Simplified implementation: the line style code should be derived from the pixel value
         return pixels > 1 ? 1 : 0;
     }
 
-    // 实现基类要求的抽象方法
+    // Implement the abstract method required by the base class
     public get asPolyline() {
         return this;
     }
 
     public get asMesh() {
-        return undefined; // 折线几何体不提供网格形式
+        return undefined; // polyline geometry does not provide a mesh form
     }
 }

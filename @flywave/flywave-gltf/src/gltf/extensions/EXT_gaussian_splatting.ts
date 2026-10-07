@@ -8,18 +8,17 @@ import type {
     GLTF_KHR_gaussian_splatting,
     GLTFMeshPrimitive
 } from "../types/gltf-json-schema";
-
-// 导入 SPZ 压缩模块
+// Import the SPZ compression module
 import { decompressSPZ, EXT_SPZ_COMPRESSION, validateSPZExtension } from "./utils/spz-compression";
 
-// 扩展常量
+// Extension constants
 const EXT_GAUSSIAN_SPLATTING = "KHR_gaussian_splatting";
 const EXT_MESHOPT_COMPRESSION = "EXT_meshopt_compression";
 const EXT_MESH_QUANTIZATION = "KHR_mesh_quantization";
 
 export const name = EXT_GAUSSIAN_SPLATTING;
 
-// 属性常量
+// Attribute constants
 const REQUIRED_ATTRIBUTES = {
     POSITION: "POSITION",
     COLOR_0: "COLOR_0",
@@ -31,20 +30,20 @@ const OPTIONAL_ATTRIBUTES = {
     OPACITY: "_OPACITY"
 } as const;
 
-// 主解码函数
+// Main decode function
 export async function decode(
     gltfData: { json: GLTF; buffers?: any[] },
     options: GLTFLoaderOptions
 ): Promise<void> {
     const scenegraph = new GLTFScenegraph(gltfData);
 
-    // 保存原始状态用于检测是否需要重新打包
+    // Remember the original state to detect whether repacking is needed
     const originalSourceBuffersCount = scenegraph.sourceBuffers.length;
     const originalByteLength = scenegraph.byteLength;
 
     await decodeExtGaussianSplatting(scenegraph, options);
 
-    // 检查是否有新的 buffer 数据被添加
+    // Check whether new buffer data has been added
     const hasNewBufferData =
         scenegraph.sourceBuffers.length > originalSourceBuffersCount ||
         scenegraph.byteLength > originalByteLength;
@@ -69,7 +68,7 @@ async function decodeExtGaussianSplatting(
     const promises: Array<Promise<void>> = [];
 
     for (const primitive of makeMeshPrimitiveIterator(scenegraph)) {
-        // 使用统一的扩展检测函数
+        // Use the unified extension detection function
         if (hasGaussianSplattingExtension(primitive, scenegraph)) {
             promises.push(processPrimitive(scenegraph, primitive, options));
         }
@@ -77,14 +76,15 @@ async function decodeExtGaussianSplatting(
 
     await Promise.all(promises);
 
-    // 只有在确实处理了扩展时才移除
+    // Only remove it if the extension was actually processed
     if (promises.length > 0) {
         scenegraph.removeExtension(EXT_GAUSSIAN_SPLATTING);
     }
 }
 
 /**
- * 检测图元是否包含高斯泼溅相关扩展（支持深度嵌套）
+ * Detect whether a primitive carries Gaussian splatting related extensions
+ * (supports deeply nested ones)
  */
 function hasGaussianSplattingExtension(
     primitive: GLTFMeshPrimitive,
@@ -95,22 +95,22 @@ function hasGaussianSplattingExtension(
 }
 
 /**
- * 获取统一的高斯泼溅扩展数据（支持深度嵌套）
+ * Get the unified Gaussian splatting extension data (supports deep nesting)
  */
 function getGaussianSplattingExtension(
     primitive: GLTFMeshPrimitive,
     scenegraph: GLTFScenegraph
 ): { main?: any; spz?: any } {
-    // 1. 获取主扩展
+    // 1. Get the main extension
     const main = scenegraph.getObjectExtension(primitive, EXT_GAUSSIAN_SPLATTING);
 
-    // 2. 获取独立 SPZ 扩展
+    // 2. Get the standalone SPZ extension
     const standaloneSpz = scenegraph.getObjectExtension(primitive, EXT_SPZ_COMPRESSION);
 
-    // 3. 获取嵌套在主扩展中的 SPZ 扩展
+    // 3. Get the SPZ extension nested inside the main extension
     const nestedSpz = main?.extensions?.[EXT_SPZ_COMPRESSION];
 
-    // 4. 获取深度嵌套的 SPZ 扩展
+    // 4. Get the deeply nested SPZ extension
     const deeplyNestedSpz =
         main?.extensions?.[EXT_GAUSSIAN_SPLATTING]?.extensions?.[EXT_SPZ_COMPRESSION];
 
@@ -121,7 +121,7 @@ function getGaussianSplattingExtension(
 }
 
 /**
- * 记录扩展检测结果用于调试
+ * Log the extension detection result for debugging
  */
 function logExtensionDetection(
     primitive: GLTFMeshPrimitive,
@@ -158,57 +158,57 @@ async function processPrimitive(
     primitive: GLTFMeshPrimitive,
     options: GLTFLoaderOptions
 ): Promise<void> {
-    // 使用统一的扩展获取函数
+    // Use the unified extension getter
     const extensions = getGaussianSplattingExtension(primitive, scenegraph);
 
-    // 记录检测结果用于调试
+    // Log the detection result for debugging
     logExtensionDetection(primitive, extensions, scenegraph);
 
     const { main: mainExtension, spz: spzExtension } = extensions;
 
-    // 如果没有找到任何高斯泼溅相关扩展，直接返回
+    // Return early when no Gaussian splatting related extension is found
     if (!mainExtension && !spzExtension) {
         console.log("No Gaussian splatting extensions found, skipping primitive");
         return;
     }
 
     try {
-        // 1. 首先清理可能存在的旧扩展属性
+        // 1. First clean up any stale extension attributes
         cleanupLegacyAttributes(primitive);
 
-        // 2. 处理压缩数据 - 优先处理 SPZ 压缩
+        // 2. Handle compressed data - SPZ compression takes priority
         if (spzExtension) {
             console.log("Processing SPZ compression extension");
 
-            // 验证 SPZ 扩展数据
+            // Validate the SPZ extension data
             validateSPZExtension(spzExtension);
 
-            // 使用 SPZ 解压模块
+            // Use the SPZ decompression module
             await decompressSPZ(scenegraph, primitive, spzExtension, {
                 mergeAlphaToColor: true,
                 preserveSHData: true
             });
 
-            // 清理 SPZ 扩展
+            // Clean up the SPZ extension
             await cleanupSPZExtension(primitive, scenegraph, mainExtension, spzExtension);
         } else if (mainExtension?.bufferView !== undefined && mainExtension.bufferView !== -1) {
-            // 处理其他压缩格式
+            // Handle other compression formats
             await decompressPrimitive(scenegraph, primitive, mainExtension, options);
         } else {
-            // 处理未压缩数据的不透明度
+            // Handle opacity of uncompressed data
             processUncompressedOpacity(scenegraph, primitive);
         }
 
-        // 3. 再次清理，确保没有遗留的扩展属性
+        // 3. Clean up again to make sure no extension attributes are left behind
         cleanupLegacyAttributes(primitive);
 
-        // 4. 验证解压后的图元属性
+        // 4. Validate the decompressed primitive attributes
         validateDecompressedPrimitive(scenegraph, primitive);
 
-        // 5. 处理解量化（KHR_mesh_quantization）
+        // 5. Handle dequantization (KHR_mesh_quantization)
         await dequantizePrimitive(scenegraph, primitive);
 
-        // 6. 处理球谐系数
+        // 6. Handle spherical harmonics coefficients
         if (mainExtension?.sphericalHarmonics) {
             processSphericalHarmonics(primitive, mainExtension.sphericalHarmonics);
         }
@@ -224,13 +224,13 @@ async function processPrimitive(
         console.error(`Failed to process Gaussian splatting primitive:`, error);
         throw error;
     } finally {
-        // 确保最后移除所有相关扩展
+        // Make sure all related extensions are removed at the end
         await cleanupAllGaussianExtensions(primitive, scenegraph);
     }
 }
 
 /**
- * 清理 SPZ 扩展（处理各种嵌套情况）
+ * Clean up the SPZ extension (handles all nesting cases)
  */
 async function cleanupSPZExtension(
     primitive: GLTFMeshPrimitive,
@@ -238,10 +238,10 @@ async function cleanupSPZExtension(
     mainExtension: any,
     spzExtension: any
 ): Promise<void> {
-    // 移除独立 SPZ 扩展
+    // Remove the standalone SPZ extension
     scenegraph.removeObjectExtension(primitive, EXT_SPZ_COMPRESSION);
 
-    // 移除嵌套在主扩展中的 SPZ 扩展
+    // Remove the SPZ extension nested inside the main extension
     if (mainExtension?.extensions?.[EXT_SPZ_COMPRESSION]) {
         delete mainExtension.extensions[EXT_SPZ_COMPRESSION];
         if (Object.keys(mainExtension.extensions).length === 0) {
@@ -249,7 +249,7 @@ async function cleanupSPZExtension(
         }
     }
 
-    // 移除深度嵌套的 SPZ 扩展
+    // Remove the deeply nested SPZ extension
     if (mainExtension?.extensions?.[EXT_GAUSSIAN_SPLATTING]?.extensions?.[EXT_SPZ_COMPRESSION]) {
         delete mainExtension.extensions[EXT_GAUSSIAN_SPLATTING].extensions[EXT_SPZ_COMPRESSION];
         if (Object.keys(mainExtension.extensions[EXT_GAUSSIAN_SPLATTING].extensions).length === 0) {
@@ -262,7 +262,7 @@ async function cleanupSPZExtension(
 }
 
 /**
- * 清理所有高斯泼溅相关扩展
+ * Clean up all Gaussian splatting related extensions
  */
 async function cleanupAllGaussianExtensions(
     primitive: GLTFMeshPrimitive,
@@ -273,14 +273,14 @@ async function cleanupAllGaussianExtensions(
 }
 
 /**
- * 清理遗留的扩展属性
+ * Clean up leftover extension attributes
  */
 function cleanupLegacyAttributes(primitive: GLTFMeshPrimitive): void {
     const attributes = primitive.attributes;
     const legacyAttributePatterns = [
-        /^KHR_gaussian_splatting:/, // 以扩展名开头的属性
-        /^SH_DEGREE_\d+_COEF_\d+$/, // 球谐系数属性
-        /^SH_COEFFS_\d+$/ // 其他球谐系数格式
+        /^KHR_gaussian_splatting:/, // Attributes prefixed with the extension name
+        /^SH_DEGREE_\d+_COEF_\d+$/, // Spherical harmonics coefficient attributes
+        /^SH_COEFFS_\d+$/ // Other spherical harmonics formats
     ];
 
     let cleanedCount = 0;
@@ -295,13 +295,13 @@ function cleanupLegacyAttributes(primitive: GLTFMeshPrimitive): void {
     }
 }
 
-// 验证解压后的图元属性
+// Validate the decompressed primitive attributes
 function validateDecompressedPrimitive(
     scenegraph: GLTFScenegraph,
     primitive: GLTFMeshPrimitive
 ): void {
     const attributes = primitive.attributes;
-    // 验证必需属性
+    // Validate the required attributes
     const requiredAttributes = ["POSITION", "COLOR_0", "_SCALE", "_ROTATION"];
     for (const attrName of requiredAttributes) {
         if (attributes[attrName] === undefined) {
@@ -313,13 +313,13 @@ function validateDecompressedPrimitive(
             throw new Error(`Invalid accessor for attribute: ${attrName}`);
         }
 
-        // 验证数据有效性
+        // Validate that the data is usable
         if (accessor.count === 0) {
             throw new Error(`Empty accessor for attribute: ${attrName}`);
         }
     }
 
-    // 确保没有遗留的扩展属性
+    // Make sure no extension attributes are left behind
     for (const attrName in attributes) {
         if (attrName.startsWith("KHR_gaussian_splatting:")) {
             console.warn(`Found legacy extension attribute after cleanup: ${attrName}`);
@@ -346,7 +346,7 @@ function validateAttributeDataType(
         );
     }
 
-    // 验证组件类型为 FLOAT
+    // Validate that the component type is FLOAT
     if (accessor.componentType !== 5126) {
         throw new Error(
             `Expected FLOAT component type for attribute, found: ${accessor.componentType}`
@@ -354,13 +354,13 @@ function validateAttributeDataType(
     }
 }
 
-// 原有的验证函数（用于压缩前的验证）
+// Original validation function (used to validate before compression)
 function validateGaussianPrimitive(scenegraph: GLTFScenegraph, primitive: GLTFMeshPrimitive): void {
     const attributes = primitive.attributes;
 
-    // 对于压缩数据，只需要验证基本的属性存在性
+    // For compressed data only the basic attribute presence needs to be validated
     for (const [attrKey, attrName] of Object.entries(REQUIRED_ATTRIBUTES)) {
-        // 对于 SCALE 和 ROTATION，在压缩数据中可能不存在，由解压过程创建
+        // SCALE and ROTATION may be absent in compressed data; they are created by decompression
         if (attrKey === "SCALE" || attrKey === "ROTATION") {
             continue;
         }
@@ -396,7 +396,7 @@ async function dequantizePrimitive(
 }
 
 function getQuantizationBits(attributeName: string, ext: any): number {
-    // 简化的量化位深获取逻辑
+    // Simplified quantization bit depth lookup
     const quantizationMap: Record<string, number> = {
         POSITION: ext.POSITION ?? 14,
         POSITION_0: ext.POSITION ?? 14,
@@ -448,7 +448,7 @@ async function dequantizeAccessor(
     const stride =
         bufferView.byteStride || componentCount * getComponentSize(accessor.componentType);
 
-    // 创建解量化后的浮点数据
+    // Create the dequantized floating point data
     const floatData = new Float32Array(count * componentCount);
     const maxIntegerValue = Math.pow(2, bits) - 1;
 
@@ -464,7 +464,7 @@ async function dequantizeAccessor(
                 accessor.normalized
             );
 
-            // 解量化计算
+            // Dequantization computation
             const normalized = accessor.normalized ? rawValue : rawValue / maxIntegerValue;
             const floatValue = accessor.min[c] + (accessor.max[c] - accessor.min[c]) * normalized;
 
@@ -472,7 +472,7 @@ async function dequantizeAccessor(
         }
     }
 
-    // 创建新的 buffer view 和 accessor
+    // Create a new buffer view and accessor
     const newBufferViewIndex = createAlignedBufferView(scenegraph, floatData);
 
     const newAccessor = {
@@ -489,7 +489,7 @@ async function dequantizeAccessor(
     return scenegraph.addAccessor(newBufferViewIndex, newAccessor);
 }
 
-// 统一的字节对齐 buffer view 创建函数
+// Unified byte-aligned buffer view creation helper
 function createAlignedBufferView(scenegraph: GLTFScenegraph, data: Float32Array): number {
     const sourceBuffer = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
     const alignedByteLength = Math.ceil(sourceBuffer.byteLength / 4) * 4;
@@ -497,7 +497,7 @@ function createAlignedBufferView(scenegraph: GLTFScenegraph, data: Float32Array)
     if (alignedByteLength > sourceBuffer.byteLength) {
         const alignedBuffer = new Uint8Array(alignedByteLength);
         alignedBuffer.set(sourceBuffer);
-        // 填充剩余字节为 0
+        // Pad the remaining bytes with 0
         for (let i = sourceBuffer.byteLength; i < alignedByteLength; i++) {
             alignedBuffer[i] = 0;
         }
@@ -580,12 +580,12 @@ async function decompressPrimitive(
     extension: GLTF_KHR_gaussian_splatting,
     options: GLTFLoaderOptions
 ): Promise<void> {
-    // 检查是否有 meshopt 压缩
+    // Check for meshopt compression
     if (extension.bufferView !== undefined && extension.bufferView !== -1) {
         const bufferView = scenegraph.getBufferView(extension.bufferView);
         if (!bufferView) throw new Error(`Invalid bufferView index: ${extension.bufferView}`);
 
-        // 检查 meshopt 压缩
+        // Check for meshopt compression
         const meshoptExt = scenegraph.getObjectExtension(bufferView, EXT_MESHOPT_COMPRESSION);
         if (meshoptExt) {
             await decompressMeshopt(scenegraph, primitive, bufferView, meshoptExt);
@@ -594,19 +594,19 @@ async function decompressPrimitive(
         }
     }
 
-    // 如果没有支持的压缩扩展，但有 bufferView，抛出错误
+    // If there is a bufferView but no supported compression extension, throw an error
     if (extension.bufferView !== undefined && extension.bufferView !== -1) {
         throw new Error("Unsupported compression format for Gaussian splatting");
     }
 
-    // 如果既没有 SPZ 扩展也没有 bufferView，说明是未压缩数据
-    // 这种情况下，属性应该已经在 primitive.attributes 中了
+    // If there is neither an SPZ extension nor a bufferView, the data is uncompressed;
+    // in that case the attributes should already be present in primitive.attributes
 }
 
 function processUncompressedOpacity(scenegraph: GLTFScenegraph, primitive: GLTFMeshPrimitive) {
-    // 保持原有实现
+    // Keep the original implementation
     console.log("Processing uncompressed opacity data");
-    // 这里可以添加处理未压缩不透明度数据的逻辑
+    // Logic for handling uncompressed opacity data can be added here
 }
 
 async function decompressMeshopt(
@@ -616,8 +616,8 @@ async function decompressMeshopt(
     meshoptExt: any
 ) {
     console.log("Decompressing meshopt compressed data");
-    // 保持原有实现
-    // 这里应该包含 meshopt 解压缩逻辑
+    // Keep the original implementation
+    // The meshopt decompression logic should go here
 }
 
 function processSphericalHarmonics(

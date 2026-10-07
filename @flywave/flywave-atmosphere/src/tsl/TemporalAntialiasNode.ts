@@ -1,21 +1,6 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
-import {
-    type Camera,
-    DepthTexture,
-    HalfFloatType,
-    Matrix4,
-    RenderTarget,
-    Vector2,
-    type NodeBuilder,
-    type NodeFrame,
-    type Renderer,
-    type TextureNode,
-    NodeMaterial,
-    NodeUpdateType,
-    QuadMesh,
-    RendererUtils,
-    TempNode
-} from "three/webgpu";
 import {
     and,
     float,
@@ -35,6 +20,23 @@ import {
     vec3,
     vec4
 } from "three/tsl";
+import {
+    type Camera,
+    type NodeBuilder,
+    type NodeFrame,
+    type Renderer,
+    type TextureNode,
+    DepthTexture,
+    HalfFloatType,
+    Matrix4,
+    NodeMaterial,
+    NodeUpdateType,
+    QuadMesh,
+    RendererUtils,
+    RenderTarget,
+    TempNode,
+    Vector2
+} from "three/webgpu";
 
 import { cameraFar, cameraNear } from "./accessors";
 import { FnLayout } from "./FnLayout";

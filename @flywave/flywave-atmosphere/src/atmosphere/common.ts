@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // @ts-nocheck
 
 // Based on: https://github.com/ebruneton/precomputed_atmospheric_scattering/blob/master/atmosphere/functions.glsl
@@ -83,7 +85,6 @@ import type { Texture3DNode, TextureNode } from "three/webgpu";
 import { FnLayout } from "../tsl/FnLayout";
 import { FnVar } from "../tsl/FnVar";
 import type { Node } from "../tsl/node";
-
 import {
     atmosphereParametersStruct,
     densityProfileLayerStruct,
@@ -92,14 +93,14 @@ import {
     makeDestructible
 } from "./AtmosphereContextBase";
 import {
+    type AbstractSpectrum,
     Area,
     Dimensionless,
     DimensionlessSpectrum,
     InverseSolidAngle,
     IrradianceSpectrum,
     Length,
-    RadianceSpectrum,
-    type AbstractSpectrum
+    RadianceSpectrum
 } from "./dimensional";
 
 export const clampCosine = /*#__PURE__*/ FnLayout({

@@ -2,15 +2,14 @@
 
 import { GeoCoordinates, mercatorProjection } from "@flywave/flywave-geoutils";
 import { MapView } from "@flywave/flywave-mapview";
+import {
+    type CameraKeyTrackAnimationOptions,
+    CameraAnimationBuilder,
+    ControlPoint
+} from "@flywave/flywave-mapview";
 import { assert } from "chai";
 import * as sinon from "sinon";
 import * as THREE from "three/webgpu";
-
-import {
-    CameraAnimationBuilder,
-    type CameraKeyTrackAnimationOptions,
-    ControlPoint
-} from "@flywave/flywave-mapview";
 
 //    Mocha discourages using arrow functions, see https://mochajs.org/#arrow-functions
 

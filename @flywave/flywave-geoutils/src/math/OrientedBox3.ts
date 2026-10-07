@@ -354,15 +354,15 @@ export class OrientedBox3 implements OrientedBox3Like {
     }
 
     /**
-     * 将OrientedBox3转换为GeoBox
-     * @param projection 使用的投影系统
-     * @returns 转换后的地理包围盒
+     * Convert this OrientedBox3 to a GeoBox
+     * @param projection the projection system to use
+     * @returns the resulting geographic bounding box
      */
     toGeoBox(projection: Projection): GeoBox {
-        // 获取定向包围盒的8个角点
+        // Get the 8 corners of the oriented bounding box
         const corners = this.getCorners();
 
-        // 初始化地理坐标范围
+        // Initialize the geographic coordinate ranges
         let minLat = Infinity;
         let maxLat = -Infinity;
         let minLng = Infinity;
@@ -370,7 +370,7 @@ export class OrientedBox3 implements OrientedBox3Like {
         let minAlt = Infinity;
         let maxAlt = -Infinity;
 
-        // 将每个角点转换为地理坐标并计算范围
+        // Convert every corner to geographic coordinates and accumulate the ranges
         corners.forEach(corner => {
             const geoCoord = projection.unprojectPoint(corner);
 
@@ -385,15 +385,15 @@ export class OrientedBox3 implements OrientedBox3Like {
             }
         });
 
-        // 处理经度环绕
+        // Handle longitude wrapping
         if (maxLng - minLng > 180) {
-            // 如果经度范围超过180度，可能需要调整
+            // If the longitude span exceeds 180 degrees, it may need adjustment
             const tempMinLng = minLng;
             minLng = maxLng - 360;
             maxLng = tempMinLng;
         }
 
-        // 创建并返回GeoBox
+        // Create and return the GeoBox
         const southWest = new GeoCoordinates(minLat, minLng, isFinite(minAlt) ? minAlt : undefined);
         const northEast = new GeoCoordinates(maxLat, maxLng, isFinite(maxAlt) ? maxAlt : undefined);
 
@@ -401,19 +401,19 @@ export class OrientedBox3 implements OrientedBox3Like {
     }
 
     /**
-     * 获取定向包围盒的8个角点
-     * @returns 8个角点的世界坐标数组
+     * Get the 8 corners of the oriented bounding box
+     * @returns an array of world-space coordinates of the 8 corners
      */
     private getCorners(): Vector3[] {
         const corners: Vector3[] = [];
         const { position, xAxis, yAxis, zAxis, extents } = this;
 
-        // 计算半轴向量
+        // Compute the half-axis vectors
         const dx = new Vector3().copy(xAxis).multiplyScalar(extents.x);
         const dy = new Vector3().copy(yAxis).multiplyScalar(extents.y);
         const dz = new Vector3().copy(zAxis).multiplyScalar(extents.z);
 
-        // 生成所有组合
+        // Generate all sign combinations
         for (let i = -1; i <= 1; i += 2) {
             for (let j = -1; j <= 1; j += 2) {
                 for (let k = -1; k <= 1; k += 2) {
@@ -568,20 +568,20 @@ export class OrientedBox3 implements OrientedBox3Like {
     }
 
     /**
-     * 获取定向包围盒的8个角点
-     * @param box 定向包围盒
-     * @returns 8个角点的世界坐标数组
+     * Get the 8 corners of an oriented bounding box
+     * @param box the oriented bounding box
+     * @returns an array of world-space coordinates of the 8 corners
      */
     private getOrientedBoxCorners(box: OrientedBox3): Vector3[] {
         const corners: Vector3[] = [];
         const { position, xAxis, yAxis, zAxis, extents } = box;
 
-        // 计算8个角点的相对位置
+        // Compute the relative offsets of the 8 corners
         const dx = new Vector3().copy(xAxis).multiplyScalar(extents.x);
         const dy = new Vector3().copy(yAxis).multiplyScalar(extents.y);
         const dz = new Vector3().copy(zAxis).multiplyScalar(extents.z);
 
-        // 生成所有组合
+        // Generate all sign combinations
         for (let x = -1; x <= 1; x += 2) {
             for (let y = -1; y <= 1; y += 2) {
                 for (let z = -1; z <= 1; z += 2) {
@@ -599,8 +599,8 @@ export class OrientedBox3 implements OrientedBox3Like {
     }
 
     /**
-     * 从3D Tiles orientedBox数组初始化OrientedBox3
-     * @param array 12元素数组 [中心X,Y,Z, X轴X,Y,Z, Y轴X,Y,Z, Z轴X,Y,Z]
+     * Initialize an OrientedBox3 from a 3D Tiles orientedBox array
+     * @param array a 12-element array [centerX,Y,Z, xAxisX,Y,Z, yAxisX,Y,Z, zAxisX,Y,Z]
      */
     static fromArray(array: number[]): OrientedBox3 {
         const position = new Vector3(array[0], array[1], array[2]);
@@ -609,13 +609,13 @@ export class OrientedBox3 implements OrientedBox3Like {
         const yAxis = new Vector3(array[6], array[7], array[8]);
         const zAxis = new Vector3(array[9], array[10], array[11]);
 
-        // 创建临时矩阵用于提取缩放值
+        // Create a temporary matrix to extract the scale values
         const matrix = new Matrix4();
         matrix.makeBasis(xAxis, yAxis, zAxis);
         const scale = new Vector3();
         matrix.decompose(new Vector3(), new Quaternion(), scale);
 
-        // 标准化轴向向量
+        // Normalize the axis vectors
         xAxis.normalize();
         yAxis.normalize();
         zAxis.normalize();
@@ -632,12 +632,12 @@ export class OrientedBox3 implements OrientedBox3Like {
     }
 
     /**
-     * 转换为3D Tiles orientedBox数组格式
-     * @returns 12元素数组 [中心X,Y,Z, X轴X,Y,Z, Y轴X,Y,Z, Z轴X,Y,Z]
+     * Convert to the 3D Tiles orientedBox array format
+     * @returns a 12-element array [centerX,Y,Z, xAxisX,Y,Z, yAxisX,Y,Z, zAxisX,Y,Z]
      */
     toArray(): number[] {
         const matrix = this.getRotationMatrix();
-        matrix.scale(this.extents); // 将缩放值应用到轴向
+        matrix.scale(this.extents); // Apply the scale values to the axes
 
         return [
             this.position.x,

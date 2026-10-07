@@ -2,9 +2,9 @@
 
 import { GeoCoordinates } from "@flywave/flywave-geoutils";
 import { MathUtils } from "@flywave/flywave-geoutils/math/MathUtils";
-import { type LookAtParams, type MapView } from "../MapView";
 import * as THREE from "three/webgpu";
 
+import { type LookAtParams, type MapView } from "../MapView";
 import { type CameraKeyTrackAnimationOptions, ControlPoint } from "./CameraKeyTrackAnimation";
 
 export class CameraAnimationBuilder {

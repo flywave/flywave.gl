@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { DataSource, type MapView } from "@flywave/flywave-mapview";
-import { ProjectionType, type Projection } from "@flywave/flywave-geoutils";
+import { type Projection, ProjectionType } from "@flywave/flywave-geoutils";
+import { type DataSource, type MapView } from "@flywave/flywave-mapview";
 
 /**
  * Configuration options for ProjectionSwitchController

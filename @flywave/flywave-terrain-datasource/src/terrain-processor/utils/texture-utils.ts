@@ -1,12 +1,13 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { type GeoBox, GeoBox as GeoBoxType, GeoCoordinates } from "@flywave/flywave-geoutils";
+import * as turf from "@turf/turf";
+import earcut from "earcut";
+import * as THREE from "three/webgpu";
+
 import { type RenderEnvironment } from "../core/RenderEnvironment";
 import { type DistanceTextureResult } from "../core/types";
 import { CoordinateUtils } from "./coordinate-utils";
-import * as THREE from "three/webgpu";
-import * as turf from "@turf/turf";
-import earcut from "earcut";
 
 // Shader code: Fragment shader that only renders the red channel
 const singleChannelFragmentShader = `
@@ -106,7 +107,7 @@ export class TextureUtils {
                 const flippedY = height - 1 - y;
                 const index = y * width + x;
                 const flippedIndex = flippedY * width + x;
-                const value = pixels[flippedIndex]; // 获取红色通道的值
+                const value = pixels[flippedIndex]; // red channel value
 
                 // If the pixel value is 0, do not process
                 if (value === 0) {
@@ -233,21 +234,21 @@ export class TextureUtils {
 
         let minDistance = Number.MAX_VALUE;
 
-        // 遍历每条边
+        // Iterate over every edge
         for (let i = 0; i < polygon.length; i++) {
             const startPoint = polygon[i];
             const endPoint = polygon[(i + 1) % polygon.length];
 
-            // 创建线段
+            // Build the line segment
             const line = turf.lineString([
                 [startPoint.longitude, startPoint.latitude],
                 [endPoint.longitude, endPoint.latitude]
             ]);
 
-            // 创建点
+            // Build the point
             const turfPoint = turf.point([point.longitude, point.latitude]);
 
-            // 计算点到线段的最短距离
+            // Shortest distance from the point to the segment
             const distance = turf.pointToLineDistance(turfPoint, line, { units: "meters" });
 
             if (distance < minDistance) {

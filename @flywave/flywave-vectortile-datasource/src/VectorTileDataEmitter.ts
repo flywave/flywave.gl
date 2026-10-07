@@ -40,10 +40,10 @@ import {
     textureCoordinateType
 } from "@flywave/flywave-datasource-protocol";
 import {
-    StyleSetEvaluator,
     type Env,
     type IMeshBuffers,
-    type Value
+    type Value,
+    StyleSetEvaluator
 } from "@flywave/flywave-datasource-protocol/index-decoder";
 import {
     type AttrEvaluationContext,

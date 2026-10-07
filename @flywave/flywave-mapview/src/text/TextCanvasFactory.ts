@@ -1,9 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { type RendererCapabilities } from "@flywave/flywave-materials";
 import { type FontCatalog, TextCanvas } from "@flywave/flywave-text-canvas";
 import { assert } from "@flywave/flywave-utils";
 import type { Renderer } from "three/webgpu";
-import { type RendererCapabilities } from "@flywave/flywave-materials";
 
 export class TextCanvasFactory {
     private m_minGlyphCount: number = 0; //Min amount of glyphs each [[TextCanvas]] layer can store.

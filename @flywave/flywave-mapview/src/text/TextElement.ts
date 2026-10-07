@@ -503,9 +503,9 @@ export class TextElement {
     }
 
     /**
-     * 转换坐标到目标投影坐标系
-     * @param sourceProj - 源投影坐标系
-     * @param targetProj - 目标投影坐标系
+     * Transforms coordinates into the target projection coordinate system.
+     * @param sourceProj - The source projection coordinate system.
+     * @param targetProj - The target projection coordinate system.
      */
     transformCoordinates(sourceProj: THREE.Matrix4, targetProj: THREE.Matrix4) {
         if (this.points instanceof Array) {

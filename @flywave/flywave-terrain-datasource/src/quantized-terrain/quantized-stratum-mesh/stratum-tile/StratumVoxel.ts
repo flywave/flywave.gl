@@ -134,13 +134,13 @@ export class StratumVoxel extends BspObject {
             return new THREE.Sphere(new THREE.Vector3(0, 0, 0), 0);
         }
 
-        // 一次性计算中心点和最大半径
+        // Compute the center and max radius in one go
         const center = new THREE.Vector3(0, 0, 0);
         let vertexCount = 0;
         const vertex = new THREE.Vector3();
         let maxRadiusSq = 0;
 
-        // 第一遍：计算中心点
+        // Pass 1: compute the center
         for (let i = 0; i < indices.length; i++) {
             const vertexIndex = indices[i];
             vertex.fromArray(positions, vertexIndex * 3);
@@ -150,7 +150,7 @@ export class StratumVoxel extends BspObject {
 
         center.divideScalar(vertexCount);
 
-        // 第二遍：计算最大半径平方（避免开方运算）
+        // Pass 2: compute the max squared radius (avoids the square root)
         for (let i = 0; i < indices.length; i++) {
             const vertexIndex = indices[i];
             vertex.fromArray(positions, vertexIndex * 3);

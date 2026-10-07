@@ -2,22 +2,22 @@
 
 import {
     type TileGeometryBuilder,
-    TileGeometryWithTransform,
+    type TileGeometryWithTransform,
     type TileTransformation
 } from "@flywave/flywave-geometry";
-import { GeoBox, type TilingScheme, TileKey } from "@flywave/flywave-geoutils";
+import { type TilingScheme, GeoBox, TileKey } from "@flywave/flywave-geoutils";
 import { type Tile } from "@flywave/flywave-mapview";
+import { SurfaceType } from "@flywave/flywave-mapview";
 import { DataTexture, Mesh, Quaternion, RGBAFormat, Vector2, Vector3, Vector4 } from "three/webgpu";
 import * as THREE from "three/webgpu";
-import { SurfaceType } from "@flywave/flywave-mapview";
 
 import { type HeightMapModifierManager } from "../ground-modification-manager";
-import { ProjectionSwitchController } from "../ProjectionSwitchController";
+import { type ProjectionSwitchController } from "../ProjectionSwitchController";
 import { type DEMLayerKind, emptyOpaqueTex } from "./DEMTileLayerMaterial";
 
 const zAxis = new Vector3(0, 0, 1);
 const ORIGIN = new Vector3();
-/** mapbox terrain-rgb 解码常数，作为未显式提供 DEM 编码时的默认解包向量 */
+/** mapbox terrain-rgb decoding constants; default unpack vector when no DEM encoding is given explicitly */
 const DEFAULT_DEM_UNPACK = new Vector4(6553.6, 25.6, 0.1, 10000.0);
 
 function computeHeightMapPos(tileKey: TileKey, demTileKey: TileKey, yDown: boolean): Vector3 {
@@ -68,15 +68,15 @@ export class TerrainTileState {
     private m_modifierManager?: HeightMapModifierManager;
     private m_modifierVersion: number = -1;
     private m_modifierTexture: THREE.Texture | null = null;
-    private m_modifierUVBounds: Vector4 = new Vector4();
+    private readonly m_modifierUVBounds: Vector4 = new Vector4();
     private m_modifierOp: number = 0;
     private m_mergedTexture: DataTexture | null = null;
 
     private m_heightMapTexture: THREE.Texture | null = null;
-    private m_heightMapPos: Vector4 = new Vector4(1, 0, 0, 0);
-    private m_texSize: Vector2 = new Vector2(1, 1);
-    /** 当前 DEM 纹理的编码解包向量（跟随 DEMData.encoding；默认 mapbox） */
-    private m_demUnpack: Vector4 = DEFAULT_DEM_UNPACK.clone();
+    private readonly m_heightMapPos: Vector4 = new Vector4(1, 0, 0, 0);
+    private readonly m_texSize: Vector2 = new Vector2(1, 1);
+    /** Unpack vector for the current DEM texture's encoding (follows DEMData.encoding; mapbox by default) */
+    private readonly m_demUnpack: Vector4 = DEFAULT_DEM_UNPACK.clone();
 
     private m_lastProjFactor: number = Number.NaN;
     private m_frameDirty: boolean = true;
@@ -149,9 +149,10 @@ export class TerrainTileState {
         );
         texture.flipY = this.m_yDown;
         this.m_heightMapTexture = texture;
-        // DEM 纹理像素保持源编码上传（见 DemData._buildTexture），解码常数必须
-        // 跟随编码（terrarium 的 (256,1,1/256,32768) 与 mapbox 完全不同比例，
-        // 硬编码 mapbox 会把 terrarium 地形解成几十万米）
+        // DEM texture pixels are uploaded in their source encoding (see DemData._buildTexture),
+        // so the decoding constants must follow that encoding (terrarium's
+        // (256,1,1/256,32768) has a completely different scale from mapbox —
+        // hardcoding mapbox would decode terrarium terrain into hundreds of km)
         if (demUnpack) {
             this.m_demUnpack.copy(demUnpack);
         }

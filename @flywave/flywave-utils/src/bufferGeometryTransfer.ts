@@ -12,7 +12,7 @@ import {
 } from "three/webgpu";
 
 /**
- * 可序列化的几何体数据结构（增强版，包含类型信息）
+ * Serializable geometry data structure (extended, includes type information)
  */
 export interface SerializableGeometryData {
     attributes: Record<
@@ -22,7 +22,7 @@ export interface SerializableGeometryData {
             itemSize: number;
             normalized: boolean;
             usage?: number;
-            arrayType: string; // 保存数组类型信息
+            arrayType: string; // stores the array type information
         }
     >;
     index?: {
@@ -30,7 +30,7 @@ export interface SerializableGeometryData {
         itemSize: number;
         normalized: boolean;
         usage?: number;
-        arrayType: string; // 保存数组类型信息
+        arrayType: string; // stores the array type information
     };
     groups: Array<{
         start: number;
@@ -53,9 +53,9 @@ export interface SerializableGeometryData {
 }
 
 /**
- * 将 BufferGeometry 转换为可序列化数据（用于 Worker 传输）
- * @param geometry 要序列化的 BufferGeometry
- * @returns 可序列化的几何体数据
+ * Convert a BufferGeometry into serializable data (for Worker transfer)
+ * @param geometry the BufferGeometry to serialize
+ * @returns the serializable geometry data
  */
 export function serializeBufferGeometry(geometry: BufferGeometry): SerializableGeometryData {
     const data: SerializableGeometryData = {
@@ -65,12 +65,12 @@ export function serializeBufferGeometry(geometry: BufferGeometry): SerializableG
         userData: geometry.userData ? JSON.parse(JSON.stringify(geometry.userData)) : {}
     };
 
-    // 序列化顶点属性
+    // Serialize the vertex attributes
     for (const name in geometry.attributes) {
         const attribute = geometry.attributes[name];
 
         if (attribute instanceof BufferAttribute) {
-            // 处理普通的 BufferAttribute
+            // Handle a plain BufferAttribute
             const arrayBuffer = attribute.array.buffer.slice(
                 attribute.array.byteOffset,
                 attribute.array.byteOffset + attribute.array.byteLength
@@ -81,10 +81,10 @@ export function serializeBufferGeometry(geometry: BufferGeometry): SerializableG
                 itemSize: attribute.itemSize,
                 normalized: attribute.normalized,
                 usage: attribute.usage,
-                arrayType: attribute.array.constructor.name // 保存类型信息
+                arrayType: attribute.array.constructor.name // stores the type information
             };
         } else if (attribute instanceof InterleavedBufferAttribute) {
-            // 处理交错缓冲区属性
+            // Handle an interleaved buffer attribute
             const interleavedBuffer = attribute.data;
             const arrayBuffer = interleavedBuffer.array.buffer.slice(
                 interleavedBuffer.array.byteOffset,
@@ -96,12 +96,12 @@ export function serializeBufferGeometry(geometry: BufferGeometry): SerializableG
                 itemSize: attribute.itemSize,
                 normalized: attribute.normalized,
                 usage: interleavedBuffer.usage,
-                arrayType: interleavedBuffer.array.constructor.name // 保存类型信息
+                arrayType: interleavedBuffer.array.constructor.name // stores the type information
             };
         }
     }
 
-    // 序列化索引
+    // Serialize the index
     if (geometry.index) {
         const arrayBuffer = geometry.index.array.buffer.slice(
             geometry.index.array.byteOffset,
@@ -113,11 +113,11 @@ export function serializeBufferGeometry(geometry: BufferGeometry): SerializableG
             itemSize: geometry.index.itemSize,
             normalized: geometry.index.normalized,
             usage: geometry.index.usage,
-            arrayType: geometry.index.array.constructor.name // 保存类型信息
+            arrayType: geometry.index.array.constructor.name // stores the type information
         };
     }
 
-    // 序列化包围盒
+    // Serialize the bounding box
     if (geometry.boundingBox) {
         data.boundingBox = {
             min: [
@@ -133,7 +133,7 @@ export function serializeBufferGeometry(geometry: BufferGeometry): SerializableG
         };
     }
 
-    // 序列化包围球
+    // Serialize the bounding sphere
     if (geometry.boundingSphere) {
         data.boundingSphere = {
             center: [
@@ -149,17 +149,17 @@ export function serializeBufferGeometry(geometry: BufferGeometry): SerializableG
 }
 
 /**
- * 从序列化数据恢复 BufferGeometry（在 Worker 中使用）
- * @param data 序列化的几何体数据
- * @returns 恢复的 BufferGeometry
+ * Restore a BufferGeometry from serialized data (used in a Worker)
+ * @param data the serialized geometry data
+ * @returns the restored BufferGeometry
  */
 export function deserializeBufferGeometry(data: SerializableGeometryData): BufferGeometry {
     const geometry = new BufferGeometry();
 
-    // 恢复顶点属性
+    // Restore the vertex attributes
     for (const name in data.attributes) {
         const attrData = data.attributes[name];
-        const TypedArray = getTypedArrayByType(attrData.arrayType); // 使用正确的类型
+        const TypedArray = getTypedArrayByType(attrData.arrayType); // use the correct type
 
         const array = new TypedArray(attrData.array as ArrayBuffer);
         const attribute = new BufferAttribute(array, attrData.itemSize, attrData.normalized);
@@ -171,9 +171,9 @@ export function deserializeBufferGeometry(data: SerializableGeometryData): Buffe
         geometry.setAttribute(name, attribute);
     }
 
-    // 恢复索引
+    // Restore the index
     if (data.index) {
-        const TypedArray = getTypedArrayByType(data.index.arrayType); // 使用正确的类型
+        const TypedArray = getTypedArrayByType(data.index.arrayType); // use the correct type
 
         const array = new TypedArray(data.index.array as ArrayBuffer);
         const indexAttribute = new BufferAttribute(
@@ -189,18 +189,18 @@ export function deserializeBufferGeometry(data: SerializableGeometryData): Buffe
         geometry.setIndex(indexAttribute);
     }
 
-    // 恢复组信息
+    // Restore the group information
     geometry.groups = [...data.groups];
 
-    // 恢复绘制范围
+    // Restore the draw range
     geometry.drawRange = { ...data.drawRange };
 
-    // 恢复用户数据
+    // Restore the user data
     if (data.userData) {
         geometry.userData = JSON.parse(JSON.stringify(data.userData));
     }
 
-    // 恢复包围盒
+    // Restore the bounding box
     if (data.boundingBox) {
         geometry.boundingBox = new Box3(
             new Vector3(...data.boundingBox.min),
@@ -208,7 +208,7 @@ export function deserializeBufferGeometry(data: SerializableGeometryData): Buffe
         );
     }
 
-    // 恢复包围球
+    // Restore the bounding sphere
     if (data.boundingSphere) {
         geometry.boundingSphere = new Sphere(
             new Vector3(...data.boundingSphere.center),
@@ -220,9 +220,9 @@ export function deserializeBufferGeometry(data: SerializableGeometryData): Buffe
 }
 
 /**
- * 根据类型名称获取对应的 TypedArray 构造函数
- * @param type 类型名称
- * @returns 对应的 TypedArray 构造函数
+ * Get the corresponding TypedArray constructor from a type name
+ * @param type the type name
+ * @returns the corresponding TypedArray constructor
  */
 export function getTypedArrayByType(type: string): any {
     switch (type) {
@@ -250,4 +250,4 @@ export function getTypedArrayByType(type: string): any {
     }
 }
 
-// 删除旧的不可靠的 getTypedArrayConstructor 函数
+// Removed the old unreliable getTypedArrayConstructor function

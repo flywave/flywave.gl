@@ -5,7 +5,8 @@
 // by Don McCurdy / https://www.donmccurdy.com / MIT license
 
 import { loadLibrary } from "@flywave/flywave-utils";
-import { DracoLoaderOptions } from "../draco-loader";
+
+import { type DracoLoaderOptions } from "../draco-loader";
 
 const DRACO_DECODER_VERSION = "1.5.6";
 const DRACO_ENCODER_VERSION = "1.4.1";
@@ -146,7 +147,9 @@ function initializeDracoDecoder(DracoDecoderModule, wasmBinary) {
     return new Promise(resolve => {
         DracoDecoderModule({
             ...options,
-            onModuleLoaded: draco => resolve({ draco }) // Module is Promise-like. Wrap in object to avoid loop.
+            onModuleLoaded: draco => {
+                resolve({ draco });
+            } // Module is Promise-like. Wrap in object to avoid loop.
         });
     });
 }
@@ -169,7 +172,9 @@ async function loadDracoEncoder(options) {
 
     return await new Promise(resolve => {
         DracoEncoderModule({
-            onModuleLoaded: draco => resolve({ draco }) // Module is Promise-like. Wrap in object to avoid loop.
+            onModuleLoaded: draco => {
+                resolve({ draco });
+            } // Module is Promise-like. Wrap in object to avoid loop.
         });
     });
 }

@@ -10,8 +10,8 @@ import {
 import { type Texture } from "three/webgpu";
 
 import {
-    WebTileDataProvider,
     type WebTileDataSourceOptions,
+    WebTileDataProvider,
     WebTileDataSource
 } from "./WebTileDataSource";
 
@@ -101,6 +101,7 @@ export class OpenStreetTileProvider extends WebTileDataProvider {
         // OSM doesn't have a copyright API, so we use a static provider
         this.m_copyrightProvider = new UrlCopyrightProvider("", "topo");
     }
+
     /** @override */
     async getTexture(tile: Tile, abortSignal?: AbortSignal): Promise<[Texture, CopyrightInfo[]]> {
         const { column, row, level } = tile.tileKey;

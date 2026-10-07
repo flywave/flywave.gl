@@ -4,7 +4,7 @@ export function zigZagDecode(value: number): number {
     return (value >> 1) ^ -(value & 1);
 }
 
-// 类型定义
+// Type definitions
 interface QuantizedMeshHeader {
     center: [number, number, number];
     minHeight: number;

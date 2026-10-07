@@ -9,20 +9,18 @@
  * Open: http://localhost:8080/cloud-textures-preview.html
  */
 
+import { CloudTextures } from "@flywave/flywave-atmosphere";
+import { GUI } from "dat.gui";
+import { Fn, texture, texture3D, uniform, uv, vec3, vec4 } from "three/tsl";
 import {
+    Mesh,
+    NodeMaterial,
     OrthographicCamera,
     PlaneGeometry,
-    Mesh,
     Scene,
     Vector3,
-    WebGPURenderer,
-    NodeMaterial
+    WebGPURenderer
 } from "three/webgpu";
-import { texture, texture3D, uv, vec3, vec4, Fn, uniform } from "three/tsl";
-
-import { GUI } from "dat.gui";
-
-import { CloudTextures } from "@flywave/flywave-atmosphere";
 
 const CANVAS_ID = "mapCanvas";
 

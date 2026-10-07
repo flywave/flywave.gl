@@ -41,7 +41,7 @@ export class QuantizedTerrainTileFactory extends TileFactory<TerrainResourceTile
             resourceTile = new TerrainResourceTile(dataSource as QuantizedTerrainSource, tileKey);
             dataSource.cacheTile(resourceTile);
         }
-        let shadowTile = new ShadowTerrainResourceTile(dataSource, tileKey, resourceTile);
+        const shadowTile = new ShadowTerrainResourceTile(dataSource, tileKey, resourceTile);
         shadowTile.tileLoader = new QuantizedTerrainTileLoader(dataSource, shadowTile);
         (shadowTile.tileLoader as QuantizedTerrainTileLoader).updateView();
         return shadowTile;
@@ -82,7 +82,7 @@ export class QuantizedStratumTileFactory extends TileFactory<TerrainResourceTile
             dataSource.cacheTile(resourceTile);
         }
 
-        let shadowTile = new ShadowTerrainResourceTile(dataSource, tileKey, resourceTile);
+        const shadowTile = new ShadowTerrainResourceTile(dataSource, tileKey, resourceTile);
         shadowTile.tileLoader = new QuantizedStratumTileLoader(dataSource, shadowTile);
         (shadowTile.tileLoader as QuantizedStratumTileLoader).updateView();
         return shadowTile;

@@ -1,8 +1,8 @@
 /* Copyright (C) 2026 flywave.gl contributors */
 
-import { MapView, MapViewEventNames, type RenderEvent } from "@flywave/flywave-mapview";
+import { type MapView, type RenderEvent, MapViewEventNames } from "@flywave/flywave-mapview";
+import { uniform, vec4 } from "three/tsl";
 import * as THREE from "three/webgpu";
-import { vec4, uniform } from "three/tsl";
 
 import { SurfaceType } from "./SurfaceTypes";
 
@@ -52,7 +52,9 @@ export class SurfaceCapturePass {
 
     constructor(mapView: MapView) {
         this.m_mapView = mapView;
-        this.m_willRenderListener = () => this.render();
+        this.m_willRenderListener = () => {
+            this.render();
+        };
         mapView.addEventListener(MapViewEventNames.WillRender, this.m_willRenderListener);
     }
 

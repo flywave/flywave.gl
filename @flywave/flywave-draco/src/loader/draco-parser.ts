@@ -32,13 +32,13 @@ export interface DracoParseOptions {
     /** Specify which attribute metadata entry stores the attribute name */
     attributeNameEntry?: string;
     /** Names and ids of extra attributes to include in the output */
-    extraAttributes?: { [uniqueId: string]: number };
+    extraAttributes?: Record<string, number>;
     /** Skip transforms specific quantized attributes */
     quantizedAttributes?: Array<"POSITION" | "NORMAL" | "COLOR" | "TEX_COORD" | "GENERIC">;
     /** Skip transforms specific octahedron encoded  attributes */
     octahedronAttributes?: Array<"POSITION" | "NORMAL" | "COLOR" | "TEX_COORD" | "GENERIC">;
     /** Attribute name mapping */
-    attributeMap?: { [key: string]: string };
+    attributeMap?: Record<string, string>;
 }
 
 // @ts-ignore
@@ -194,8 +194,8 @@ export default class DracoParser {
     _getDracoAttributes(
         dracoGeometry: Mesh | PointCloud,
         options: DracoParseOptions
-    ): { [unique_id: number]: DracoAttribute } {
-        const dracoAttributes: { [unique_id: number]: DracoAttribute } = {};
+    ): Record<number, DracoAttribute> {
+        const dracoAttributes: Record<number, DracoAttribute> = {};
 
         for (let attributeId = 0; attributeId < dracoGeometry.num_attributes(); attributeId++) {
             // Note: Draco docs do not seem clear on `GetAttribute` ids just being a zero-based index,
@@ -287,8 +287,8 @@ export default class DracoParser {
         loaderData: DracoLoaderData,
         dracoGeometry: Mesh | PointCloud,
         options: DracoParseOptions
-    ): { [attributeName: string]: THREE.BufferAttribute } {
-        const attributes: { [key: string]: THREE.BufferAttribute } = {};
+    ): Record<string, THREE.BufferAttribute> {
+        const attributes: Record<string, THREE.BufferAttribute> = {};
 
         for (const loaderAttribute of Object.values(loaderData.attributes)) {
             const attributeName = this._deduceAttributeName(loaderAttribute, options);
@@ -468,7 +468,7 @@ export default class DracoParser {
      * @param dracoMetadata
      * @returns
      */
-    _getDracoMetadata(dracoMetadata: Metadata): { [entry: string]: DracoMetadataEntry } {
+    _getDracoMetadata(dracoMetadata: Metadata): Record<string, DracoMetadataEntry> {
         // The not so wonderful world of undocumented Draco APIs :(
         if (!dracoMetadata || !dracoMetadata.ptr) {
             return {};

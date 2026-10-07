@@ -1,6 +1,7 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
+import { Fn, nodeImmutable, screenCoordinate, uniform, vec3 } from "three/tsl";
 import {
     type NodeBuilder,
     Data3DTexture,
@@ -9,10 +10,9 @@ import {
     RepeatWrapping,
     Texture3DNode
 } from "three/webgpu";
-import { Fn, nodeImmutable, screenCoordinate, uniform, vec3 } from "three/tsl";
 
-import { STBNLoader } from "../STBNLoader";
 import { resolveResourceUrl } from "../resourceResolver";
+import { STBNLoader } from "../STBNLoader";
 import { hashString } from "./utils";
 
 const emptyTexture3D = /*#__PURE__*/ (() => {

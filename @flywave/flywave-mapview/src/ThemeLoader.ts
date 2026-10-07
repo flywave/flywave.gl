@@ -26,9 +26,9 @@ import {
     getOptionValue,
     RelativeUriResolver
 } from "@flywave/flywave-utils";
+import { threadId } from "worker_threads";
 
 import { SKY_CUBEMAP_FACE_COUNT, SkyCubemapFaceId } from "./SkyCubemapTexture";
-import { threadId } from "worker_threads";
 
 /**
  * @internal
