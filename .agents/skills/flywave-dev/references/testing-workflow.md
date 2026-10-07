@@ -52,6 +52,67 @@
 打包（CJS require 不了 ESM-only 子路径）。新增用例放 `test/theme/*.test.ts`
 即被自动拾取。
 
+**✅ 例外（2026-09-26 修复）：`@flywave/flywave-atmosphere` 的
+`pnpm --filter @flywave/flywave-atmosphere test` 已打通**（同 3dtiles 模板，
+64 用例全绿）：覆盖 QualityPresets 预设不变量/CloudLayer 与 CloudLayers 打包
+算法（packIntervalHeights 区间扫描）/CloudUniforms 层打包与边界回退/
+applyQualityPreset/CascadedShadowMaps 矩阵互逆与 interval 覆盖/splitFrustum
+三模式/FrustumCorners reversed-Z 角点语义（测试用
+`makePerspective(..., WebGPUCoordinateSystem, true)` 构造投影，勿用默认
+PerspectiveCamera 的 WebGL 矩阵）/constants/resourceResolver。
+atmosphere 零 @flywave 运行时依赖，webpack 无需跨包 alias。
+
+**✅ karma 主链（2026-09-26 复活）**：`karma.options.js` 已重建，
+`pnpm test` 可用。要点：
+- pnpm 严格隔离下 karma 的 `karma-*` 自动发现失效，`karma.options.js`
+  必须**显式 `require.resolve` 各插件**（karma-mocha/chai/chrome-launcher/
+  webpack）。改回 `plugins: ['karma-*']` 即断。
+- karma-webpack + ts-loader（transpileOnly）直接编译各包 `test/*.ts` 源码；
+  `EXCLUDE_PATTERNS` 维护已知不可跑文件（每条注明原因，修复后移出）。
+- 测试资源静态服务：DefinePlugin 注入 `TEST_RESOURCES_DIR="/base/"` +
+  served patterns（`test/resources/`、`resources/`、`theme.schema.json`），
+  `loadTestResource`（web 变体）经 `/base/<包名>/<路径>` fetch。
+  `@flywave/flywave-test-utils` alias 到 `src/index.web.ts`。
+- **坑 1**：必须在仓库根目录跑 karma——从包目录跑会拿到空默认配置
+  （files/browsers 全空、launcher 不启动、日志只有 "No captured browser"）。
+- **坑 2**：文件顶层的 uncaught（如模块加载即崩的重集成测试）会杀死
+  Chrome 会话拖垮整个套件；`EXCLUDE_PATTERNS` 里的条目都有成因注释。
+- **坑 3**：`KARMA_SCOPE=utils npx karma start` 可按包名片段缩小收集范围
+  （二分定位挂住的测试用）。
+- 剩余红色用例（数值断言类，约 30 个）见下方「已知失败」节，属
+  "实现变化后断言待人工裁决"，勿为凑绿改断言。
+
+### ⚠️ karma「已知失败」清单（2026-09-26 第二轮裁决定稿，1 个）
+
+| 用例 | 根因 | 说明 |
+|---|---|---|
+| mapview/TextElementsRendererTest 首个用例的 beforeEach hook | sinon `yieldOn` 时序敏感：`loadFontCatalog` stub 在首个用例的 setUp 中未被调用（模块级懒初始化），yieldOn 抛 "cannot yield"；后续 35 个用例正常 | **两次修复尝试（callsFake 立即回调 / 条件跳过 yieldOn）都会引发 35 用例连锁失败**——该 fixture 的 onSuccess 必须在 updateTextStyles 之后、waitLoaded 之前精确触发。原状态即最稳状态，保留 1 红；修复需重新设计 fixture 加载时序 |
+
+第二轮已修复定论（21→1，含 **4 个真实现 bug**）：
+1. **SubdivisionModifier**：three r185 把 `BufferAttribute.count` 从 getter 改为
+   构造时字段，替换 `.array` 后 count 不更新 → 细分顶点被静默截断（实机渲染
+   同样受影响）。已同步更新 count（position/uv/edge/wall 四处）。
+2. **FrustumGeoAreaTester 侧面法线翻转**：全局 shoelace winding 判定对含闭合
+   噪声的多边形在某转折边产出反向法线（内部误判 OUTSIDE）。已改为逐边质心
+   定向（凸/近凸区域稳健）。
+3. **MapMaterialAdapter.applyMaterialBaseColor + DecodedTileHelpers.applyBase
+   ColorToMaterial 的 `setRGB`**：sRGB 分量被按 Linear 解释，样式色整体提亮
+   （#dac0de→#eee1f0）。已显式传 SRGBColorSpace（与 hsl 修复同根）。
+4. **TextureLoader**：`THREE.RGBFormat` 已被 three r137 移除，仍按 JPEG 分支
+   设置；改为一律 RGBAFormat。
+
+其余为测试侧过期：TileGeometryLoader 4 用例未跟上 waitFinished 的
+Canceled/Disposed reject 语义（改为显式消化 rejection）；UtilsTest 轨道用例
+断言 1e-9 米（纳米级）超出 double 在 6.4e6 米坐标下的可表达精度（放宽到
+毫米级）；EdgeLengthGeometrySubdivisionModifier normalizedEquirect 用例的
+顶点数 magic number 对浮点分裂路径敏感（改为 >4 + 边长校验兜底）；
+BatchStyleProcessorTest 的 `===` 在 karma 打包环境求值有类型歧义（改 `==`，
+⚠️ 若生产样式用 `===` 需关注表达式引擎的打包一致性）。
+
+`pnpm test` 以非零码退出即有失败，当前为**预期状态**（2065/2066）。
+
+### ❌ 文档幻觉（不存在，勿引用）
+
 ### ❌ 文档幻觉（不存在，勿引用）
 
 `docs/docs/development/*.md` 里的 Jest、`jest.config.js`、`pnpm test:watch`、

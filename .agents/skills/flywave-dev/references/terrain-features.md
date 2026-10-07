@@ -40,10 +40,14 @@ manager.getModifiedElevation(baseHeight, lon, lat);   // CPU 采样（拾取/高
 
 **高度编码（三处必须一致的硬约定）**：RGBA8 纹理，RGB = mapbox
 terrain-rgb 式 `(r*65536 + g*256 + b)/10 - 10000`（米），A = 掩膜权重。
-参考实现：CPU 解码 `HeightMapModifierManager.ts`；笔刷编码
-`flywave-heightmap-painter/src/utils/brushEngine.ts`；GPU 混合
+参考实现：CPU 解码 `HeightMapModifierManager.ts`；编码范例
+`@flywave/flywave-examples/src/heightmap-overlay/index.ts` 的
+`encodeMapboxHeight`（向量 `[6553.6, 25.6, 0.1, 10000]` 即同一公式）；GPU 混合
 `DEMTileMeshMaterial.ts` 的 `applyModifier`（add → `h + modH*alpha`；
-replace → `mix(h, modH, alpha)`）。
+replace → `mix(h, modH, alpha)`）。笔刷算法引擎是
+`@flywave/flywave-terrain-datasource/heightmap-core.ts`（`BrushEngine` /
+`HeightmapGenerator`，raise/lower/smooth/flatten/noise/erode 六种笔刷）——
+注意该文件在**包根目录**而非 src/，且当前无源码引用（孤立模块，现状如实报告）。
 
 **数据流**：DEM 路径纯 GPU（网格每帧比对 `manager.version` 懒刷新 uniforms，
 零 tile 重载）；quantized 路径在 worker 里把修改器烘进 DEM（相交 tile 失效
@@ -87,24 +91,24 @@ bottomAltitude }` 挤成垂直棱柱做布尔减——从地形网格凿洞/挖�
 **边界**：侧面永远垂直（无边坡）、只有 SUBTRACTION、仓库内当前无调用方
 （试验性工具）。
 
-## 影像叠加与 HeightmapPainter
+## 影像叠加与笔刷
 
 - 影像：`terrainSource.addWebTileDataSource(new ArcGISTileProvider({...}))`
   ——tiling scheme 不一致时自动跨瓦片拼接，每 provider 100 条 ImageBitmap LRU。
-- 笔刷组件 `@flywave/flywave-heightmap-painter`（React）：
-  `new HeightmapPainter({ mapView, terrainSource, container, mapControls })`；
-  事件 `brushStart/Move/End`、`heightmapChange`、`export({imageData, geoBox})`；
-  内部就是 `brushEngine.getTexture()` → `manager.updateModifierTexture()`——
-  **不重建几何，靠 DEM shader 实时位移**。按住 Space 切换绘制模式。
+- 笔刷写入口只有一个：`manager.updateModifierTexture(id, DataTexture)` 直接换
+  GPU 纹理（**不重建几何，靠 DEM shader 实时位移**）。笔刷算法可用
+  `heightmap-core.ts` 的 `BrushEngine.applyBrushOperation` 在 CPU 生成高度图，
+  再经 `HeightMapModifierTypes` 的序列化器（`serializeHeightMapModifier[WithTransfer]`）
+  走 worker 传输。⚠️ `@flywave/flywave-heightmap-painter`（React 笔刷组件）**本仓
+  不存在**，不要引用该包名。
 
 ## 黄金示例
 
 | 示例 | 演示 |
 |---|---|
-| `examples/src/real-world-pumped-storage/` | 开挖+贴图全流程：纯代码生成 trench 高度图（距离场 + mapbox 编码 + alpha 衰减）→ addModifier → addLayer 贴图 |
-| `examples/src/heightmap-painter/` | HeightmapPainter 标准接法（Cesium 地形 + export 事件回灌 modifier） |
-| `examples/src/heightmap-overlay/` | 最短的手写 ImageData 高度图示例（quantized 地形也能用地面修改的证明） |
+| `examples/src/real-world-pumped-storage/` | 投影贴图全流程：`getProjectorOverlayManager().addLayer` 校准贴图 + 柱体放置；地形用 DEM/quantized 二选一 |
+| `examples/src/heightmap-overlay/` | 最短的手写 ImageData 高度图示例（`encodeMapboxHeight` + `addModifier`，quantized 地形也能用地面修改的证明） |
 | `examples/src/getting-started-dem-terrain/` | 最小 DEM + 影像叠加 |
+| `examples/src/terrain-brush-modification/` | ⚠️ 只剩 `index.d.ts`/`config.d.ts` 残骸（无源码），**不要引用** |
 
-⚠️ `terrain-brush-modification/`、`terrain-tools/` 等旧示例目录只剩陈旧
-`.d.ts` 残骸（无源码），**不要引用**——功能已被 heightmap-painter 取代。
+⚠️ `terrain-tools/`、`brush-processor-test/` 等目录也只有 `.d.ts` 残骸，同上。

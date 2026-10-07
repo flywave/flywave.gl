@@ -40,7 +40,7 @@
 ## Tile 管理与 LOD
 
 - 瓦片身份 = `TileKey`（莫顿码，四叉树，定义在
-  `@flywave/flywave-geoutools/src/tiling/TileKey.ts`）+ offset。
+  `@flywave/flywave-geoutils/src/tiling/TileKey.ts`）+ offset。
 - `Tile`（`Tile.ts`）implements `CachedResource`：持有 `tileKey`、
   `dependencies: TileKey[]`、`decodedTile`（setter 内更新包围盒与几何高度）、
   `tileLoader`、`objects`。

@@ -1,11 +1,14 @@
 ---
 name: flywave-dev
 description: >
-  flywave.gl 3D 地图引擎（three/webgpu + TSL）的架构知识与开发工作流。
-  在本仓库做任何读码、改码、排障、扩展任务之前使用——涉及渲染循环
-  (render loop)、数据源 (DataSource)、主题 (Theme)、瓦片 (Tile)、拾取
-  (picking)、相机 (camera)、坐标系 (RTE/geo)、WebGPU/TSL、Worker 解码、
-  测试或构建的任务都必须先读本 skill。
+  flywave.gl 3D 地图引擎（three/webgpu + TSL）monorepo 的架构知识与开发工作流。
+  Use for ANY task in this repository involving @flywave/ packages: reading,
+  modifying, debugging, or extending engine code — rendering loop, DataSource,
+  Theme/styling, Tile/LOD, picking, camera, coordinates (RTE/geo), WebGPU/TSL
+  materials, worker decoding, post-processing, tests, builds, examples.
+  即使用户没有提到 flywave 或 skill，只要任务发生在本仓库——改源码、排查渲染
+  不刷新/瓦片不显示/坐标偏移/文字不显示/性能卡顿、新增数据源或示例、跑测试
+  lint 构建——都必须先读本 skill 再动手。
 ---
 
 # flywave.gl 引擎开发
@@ -79,38 +82,47 @@ flywave.gl 是基于 **three/webgpu**（`WebGPURenderer` + TSL 节点材质，�
 
 | 你要做什么 | 先读 |
 |---|---|
+| **引擎对外能力/API 面**：MapViewOptions / 方法 / 事件 / 核心类型 / 合成层 | `references/api-surface.md` |
+| **某能力在哪个包** / 逐包能力与接口清单 / 防幻觉清单（不存在的包与导出） | `references/package-map.md` |
 | 渲染不刷新 / 瓦片不显示 / 帧流程 / 性能 / Tile 生命周期 / Worker 模型 | `references/architecture.md` |
 | 坐标换算 / 放置持久对象 / RTE 与 geo 帧转换 | `references/coordinates.md`（配合铁律 1/2） |
-| 新增或修改数据源（DataProvider / Decoder / 栅格源 / 地形） | `references/datasource-guide.md`；从零新建用 `assets/datasource-template/` 四件套 |
+| 新增或修改数据源（DataProvider / Decoder / 栅格源 / 地形） | `references/datasource-guide.md`（含逐源接口明细）；从零新建用 `assets/datasource-template/` 四件套 |
 | 主题 / 样式 / Expr / patchTheme | `references/theming.md` |
 | 拾取 / 相机碰撞 / GPU 深度 / 阴影 | `references/picking-collision.md`（配合铁律 1/7） |
 | 跑测试 / 验证改动 / lint / 渲染回归 / 贡献流程 | `references/testing-workflow.md`；先跑 `scripts/check-env.sh` 看实时可用链路 |
-| 新增示例 demo | `assets/example-template/`（glob 自动发现，无需注册） |
+| 相机交互 / 绘制测量 / Inspector 面板 / React 封装 / glTF·Draco·泼溅 / atlas·theme·webpack CLI / topo | `references/controls-tooling.md` |
+| 新增示例 demo | `assets/example-template/`（glob 自动发现，无需注册）+ `references/controls-tooling.md` 示例节 |
 | 3D Tiles 样式 / batch 属性配色 / 动态高亮 | `references/3dtile-styling.md`（不走 styleSet 解码管线，是独立机制） |
 | 文字/POI 不显示 / 字体 / FontCatalog / 标注排障 | `references/text-rendering.md` |
 | 后处理 / bloom / 抗锯齿 / 描边 outline / 调色 LUT（内置预设清单）/ 大气云太阳 / 改 ViewRenderManager | `references/postprocessing-vrm.md` |
 | 性能 / 卡顿 / 帧统计 / 缓存与 LOD 调参 | `references/performance-tuning.md` |
-| 地形开挖 / 刷高程 / 投影贴图 / 地层 / HeightmapPainter | `references/terrain-features.md` |
+| 地形开挖 / 刷高程 / 投影贴图 / 地层 / 笔刷 | `references/terrain-features.md` |
 | **聚合包 `@flywave/flywave.gl`**（对外使用核心）：re-export 面 / decoder bundle / 双格式构建 / 发布 / 外部应用接入 | `references/aggregate-package.md` |
 | 资源 404 / 字体图标天空盒不显示 / decoder 脚本找不到 / `FLYWAVE_BASE_URL` / 资源部署 | `references/asset-paths.md` |
-| 用引擎写应用（非本仓库源码开发） | `references/aggregate-package.md` 的接入指引 + `docs/docs/` 用户指南 + `@flywave/flywave-examples/src/`（46 个示例） |
+| 用引擎写应用（非本仓库源码开发） | `references/aggregate-package.md` 的接入指引 + `docs/docs/` 用户指南 + `@flywave/flywave-examples/src/`（约 45 个示例） |
 
 ## 包拓扑速查
 
 依赖方向（左依赖右）：`datasource-protocol` ← `geoutils`/`utils` ← `mapview`
-← 各数据源/控件 ← `flywave.gl`（顶层聚合包）。
+← 各数据源/控件 ← `flywave.gl`（顶层聚合包）。逐包能力与接口明细见
+`references/package-map.md`。
 
 - **底座（无 @flywave 运行时依赖）**：utils、lrucache、transfer-manager、fetch、
   geoutils、geometry、materials、text-canvas、datasource-protocol、atmosphere、
-  lines、mapview-decoder
-- **核心**：`flywave-mapview`（MapView/Tile/渲染循环，改动最常发生地）
+  lines、mapview-decoder、map-theme（纯资源包）
+- **核心**：`flywave-mapview`（MapView/Tile/渲染循环，改动最常发生地）；
+  对外 API 面速查见 `references/api-surface.md`
 - **中间层**：各数据源（vectortile/geojson/webtile/terrain/3dtile/features/debug）、
-  map-controls、draw-controls、inspector、gltf、splats、topo、heightmap-painter、react
+  map-controls、draw-controls、inspector、gltf、draco、splats、topo、react
+- **工具**：atlas-tools、theme-tools、webpack-utils、test-utils、examples
 - **聚合出口（对外使用核心）**：`@flywave/flywave.gl` —— 全仓唯一发布包。
   re-export 几乎所有包 + 包装版 `MapView`（自动注入 `mapAssetsUriResolver`）
   + decoder worker bundle。**改公共 API 后记得**：顶层包 re-export 是否要加、
   `pnpm docs` 重新生成（`docs/docs/api/` 是机器生成的，勿手改）。细节见
   `references/aggregate-package.md`。
+- **防幻觉**：`flywave-clouds`（空壳目录）、`flywave-heightmap-painter`（不存在）、
+  `GooglePhotorealistic3DTilesDataSource`（注释提及但无类）等假想符号清单见
+  `references/package-map.md` 的「不存在/空壳」节。
 
 ## 代码规范速查
 
@@ -122,12 +134,17 @@ flywave.gl 是基于 **three/webgpu**（`WebGPURenderer` + TSL 节点材质，�
 - prettier：printWidth 100、4 空格；eslint：`simple-import-sort`、
   `no-console`、`max-len 100` 是硬规则。修复命令见
   `references/testing-workflow.md`。
-- 注释与提交信息中英混排是仓库惯例，中文注释集中在相机/坐标变换模块。
+- 源码注释一律用英文（与 `MapView.ts` 基线一致）；字符串字面量里的用户可见文案可保留中文。提交信息中英混排是惯例。
 
 ## 维护本 skill
 
 - 锚点用「文件 + 符号名」而非行号（行号会腐烂）；重构后 grep 验证锚点仍存在。
+  批量校验：`scripts/verify-anchors.sh`（抽取本目录 md 里 `@flywave/…/Xxx.ts`
+  与「`符号`」的引用，grep 源码验证仍存在）。
 - 架构行为变化后同步更新对应 reference；测试链路修复/断裂后更新
   `references/testing-workflow.md` 的命令诚实性清单。
-- 仍可扩展：package-map 详细版、verify-anchors.sh（批量校验本 skill 引用的
-  符号仍存在于源码）。写新 reference 前先确认内容量大到值得拆分。
+- 发现新的幻觉符号（README/注释宣称但源码不存在的 API）时，登记到
+  `references/package-map.md` 的「不存在/空壳」节。
+- 详细 API 变化后同步 `references/api-surface.md`；新包/新能力先落
+  `references/package-map.md` 再在任务路由挂链。写新 reference 前先确认
+  内容量大到值得拆分。
