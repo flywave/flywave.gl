@@ -93,6 +93,11 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
                 // The decoding constants must follow the DEM encoding (terrarium
                 // and mapbox use completely different unpack vectors)
                 state.setHeightMap(texture, demTile.tileKey, demTile.resource.demData.unpackVector);
+                // Data-driven skirt depth: the tile's own elevation span makes
+                // skirts cover T-junction bends against coarser neighbors and
+                // the hard cliffs at DEM patch boundaries (memoized scan).
+                const { min, max } = demTile.resource.demData.getMinMaxElevation();
+                state.setSkirtExtra(max - min);
             }
         }
 

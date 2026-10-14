@@ -13,8 +13,7 @@ import {
     arrayBufferToImage,
     arrayBufferToImageBitmap,
     browser,
-    offscreenCanvasSupported,
-    prevPowerOfTwo
+    offscreenCanvasSupported
 } from "@flywave/flywave-utils";
 import { Box2, Vector2 } from "three/webgpu";
 
@@ -27,7 +26,10 @@ import { ResourceProvider } from "../ResourceProvider";
 import type { DecodedTerrainTile } from "../TerrainDecoderWorker";
 import { type ITerrainSource } from "../TerrainSource";
 import { TileValidResource } from "../TileResourceManager";
+import { computeDemTileGrid } from "./dem-patch/DemPatchComposite";
+import { type DemPatchSnapshot } from "./dem-patch/DemPatchTypes";
 import DEMData, { type DEMEncoding, type SerializedDEMData } from "./dem/DemData";
+import { type DemSourceDescription } from "./dem/DemSourceDescription";
 import { type DEMTerrainSource } from "./DEMTerrainSource";
 
 /**
@@ -37,137 +39,12 @@ export const DEMDataResourceType = "demData";
 
 const tempBox = new Box2();
 /**
- * Description of a DEM data source
- *
- * This interface describes the structure of a DEM data source, including
- * the tile URL templates, tiling scheme, geographic bounds, zoom levels,
- * and tile size information.
+ * Description of a DEM data source (tile URL templates, tiling scheme,
+ * geographic bounds, zoom levels, tile size, …). Defined in
+ * {@link ./dem/DemSourceDescription.ts} and shared with the DEM patch
+ * (elevation override) layers; re-exported here for backward compatibility.
  */
-export interface DemSourceDescription {
-    /**
-     * Array of tile URL templates
-     * Supports placeholders like {z}/{x}/{y} or {zoom}/{x}/{y}
-     * Example: ['https://example.com/terrain/{z}/{x}/{y}.png']
-     */
-    tiles: string[];
-
-    /**
-     * Tile coordinate system scheme
-     * - "xyz": Standard Web Mercator tile scheme (most common)
-     * - "tms": TMS tile scheme with flipped Y-axis
-     * - "custom": Custom coordinate system
-     */
-    scheme: "xyz" | "tms" | "custom";
-
-    /**
-     * Geographic bounds [west, south, east, north] in degrees
-     * Example: [-180, -85.0511, 180, 85.0511] for global coverage
-     */
-    bounds: [number, number, number, number];
-
-    /**
-     * Minimum zoom level (0-22)
-     * The minimum zoom level at which tiles are available
-     */
-    minzoom: number;
-
-    /**
-     * Maximum zoom level (0-22)
-     * The maximum zoom level at which tiles are available
-     */
-    maxzoom: number;
-
-    /**
-     * Tile size in pixels
-     * Typically 256 or 512
-     * Modern map services often use 512x512 tiles
-     */
-    tileSize: number;
-
-    /**
-     * Data source type
-     * For terrain data, must be set to "raster-dem"
-     */
-    type: "raster-dem";
-
-    /**
-     * Data source attribution
-     * Copyright information displayed on the map
-     */
-    attribution?: string;
-
-    /**
-     * Volatility flag
-     * If true, indicates tile content may change frequently, cache strategy will be more aggressive
-     */
-    volatile?: boolean;
-
-    /**
-     * Tile coordinate system definition
-     * Transformation matrix for custom coordinate systems
-     * Typically [1, -1, -1, 1] or [1, 0, 0, 1], etc.
-     */
-    tileSystem?: number[];
-
-    /**
-     * CORS cross-origin settings
-     * - "anonymous": Anonymous cross-origin requests, no credentials sent
-     * - "use-credentials": Cross-origin requests with credentials
-     */
-    crossOrigin?: "anonymous" | "use-credentials";
-
-    /**
-     * Elevation data units
-     * - "meters": Meters (default)
-     * - "feet": Feet
-     */
-    units?: "meters" | "feet";
-
-    /**
-     * Maximum tile cache size
-     * Controls the number of tiles cached in memory, affects performance
-     */
-    maxCacheSize?: number;
-
-    /**
-     * Retry count
-     * Number of retries when tile loading fails
-     */
-    retries?: number;
-
-    /**
-     * Minimum tile recognizability
-     * Controls the detail level threshold for tile loading
-     */
-    minimumTileRecognizability?: number;
-
-    /**
-     * Request parameters
-     * Additional query parameters appended to tile URLs
-     */
-    queryParameters?: Record<string, string>;
-
-    /**
-     * Request headers
-     * HTTP headers for tile requests
-     */
-    headers?: Record<string, string>;
-
-    /**
-     * Error handling callback
-     * Handler function when tile loading fails
-     */
-    onError?: (error: Error, tile: { z: number; x: number; y: number }) => void;
-
-    /**
-     * Preprocessing function
-     * Function to preprocess loaded tile data
-     */
-    preprocess?: (
-        data: ArrayBuffer,
-        tile: { z: number; x: number; y: number }
-    ) => ArrayBuffer | Promise<ArrayBuffer>;
-}
+export type { DemSourceDescription } from "./dem/DemSourceDescription";
 
 /**
  * DEM tile resource representing decoded elevation data for a specific tile
@@ -178,6 +55,20 @@ export interface DemSourceDescription {
  */
 export class DemTileResource extends TileValidResource {
     /**
+     * Version of the patch (elevation override) set this tile was baked
+     * with; 0 when baked without patches. The terrain source compares this
+     * against the patch manager version to detect stale bakes.
+     */
+    public patchVersion: number = 0;
+
+    /**
+     * Pre-composite pixel copy (the pristine base bake), kept when the tile
+     * was decoded with patch layers. It is the in-memory re-bake source for
+     * patch-set changes; consumers must not mutate it.
+     */
+    private m_pristine: { pixels: Uint8Array; width: number; height: number } | null = null;
+
+    /**
      * Creates a new DEM tile resource
      *
      * @param geoBox - The geographic bounding box of the tile
@@ -187,6 +78,16 @@ export class DemTileResource extends TileValidResource {
         super(geoBox);
     }
 
+    /** Stores the pre-composite pixel copy carried from the worker decode */
+    attachPristinePixels(pixels: Uint8Array, width: number, height: number): void {
+        this.m_pristine = { pixels, width, height };
+    }
+
+    /** The pristine base bake for in-memory re-baking, or null when absent */
+    getPristinePixels(): { pixels: Uint8Array; width: number; height: number } | null {
+        return this.m_pristine;
+    }
+
     /**
      * Disposes of the underlying DEM data resources
      *
@@ -194,16 +95,18 @@ export class DemTileResource extends TileValidResource {
      * that all allocated resources (textures, buffers, etc.) are properly released.
      */
     protected disposeResources(): void {
+        this.m_pristine = null;
         this.demData.dispose();
     }
 
     /**
-     * Gets the memory usage of this resource in bytes
+     * Gets the memory usage of this resource in bytes (baked pixels plus the
+     * pristine re-bake copy when present — honest accounting)
      *
      * @returns The number of bytes used by this resource
      */
     getBytesUsed(): number {
-        return this.demData.getBytesUsed();
+        return this.demData.getBytesUsed() + (this.m_pristine?.pixels.byteLength ?? 0);
     }
 
     /**
@@ -218,23 +121,25 @@ export class DemTileResource extends TileValidResource {
      *
      * This static method processes raw imagery data (typically from a tile request)
      * and converts it into a fully decoded DEM tile resource. It handles image
-     * processing, ground modifications, and neighboring tile backfilling.
+     * processing, ground modifications, patch baking, and neighboring tile
+     * backfilling.
      *
      * @param imgData - The source image data (Image, ImageBitmap, or ImageData)
      * @param tileKey - The tile key identifying this tile
      * @param terrainSource - The terrain data source
      * @param encoding - The DEM encoding format
+     * @param patchSnapshot - Patch layers to bake into this tile (ascending
+     * priority order); omitted when the source has no patch layers
      * @returns A promise that resolves to a new DemTileResource
      */
     static async createDemTileResourceFromImageryData(
         imgData: HTMLImageElement | ImageBitmap | ImageData,
         tileKey: TileKey,
         terrainSource: ITerrainSource,
-        encoding: DEMEncoding
+        encoding: DEMEncoding,
+        patchSnapshot?: DemPatchSnapshot
     ) {
-        const buffer = (imgData.width - prevPowerOfTwo(imgData.width)) / 2;
-        const padding = 1 - buffer;
-        const borderReady = padding < 1;
+        const { decodePadding: padding, borderReady } = computeDemTileGrid(imgData.width);
 
         let imageData: ImageData;
         if (imgData instanceof ImageData) {
@@ -264,7 +169,8 @@ export class DemTileResource extends TileValidResource {
                     terrainSourceId: terrainSource.name,
                     height: imgData.height,
                     width: imgData.width,
-                    flipY: (terrainSource.dataProvider() as DemTileProvider).isElevationMapFlipY()
+                    flipY: (terrainSource.dataProvider() as DemTileProvider).isElevationMapFlipY(),
+                    patches: patchSnapshot?.patches
                 },
                 tileKey,
                 terrainSource.projection
@@ -288,7 +194,12 @@ export class DemTileResource extends TileValidResource {
                         }
                     );
                 }
-                return new DemTileResource(geoBox, dem);
+                const resource = new DemTileResource(geoBox, dem);
+                resource.patchVersion = patchSnapshot?.version ?? 0;
+                if (data.pristine) {
+                    resource.attachPristinePixels(data.pristine, data.width, data.height);
+                }
+                return resource;
             });
     }
 }
@@ -471,14 +382,28 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
     /**
      * Gets a tile resource for the specified tile key
      *
-     * This method fetches the raw tile data, processes it into an image,
-     * and then creates a DEM tile resource from that image data.
+     * This method fetches the raw tile data, resolves the DEM patch
+     * (elevation override) snapshot in parallel, and decodes the tile with
+     * the patches baked in. If the patch set changes while decoding, the
+     * bake is redone (bounded) so a resource never lands stamped with a
+     * stale patch version.
      *
      * @param tileKey - The tile key to load
      * @param abortSignal - Optional abort signal for cancellation
      * @returns A promise that resolves to the DEM tile resource
      */
     async getTile(tileKey: TileKey, abortSignal?: AbortSignal): Promise<DemTileResource> {
+        const patchManager = this.terrainSource?.getDemPatchManager();
+        const hasPatches = (patchManager?.getPatchCount() ?? 0) > 0;
+        const baseGeoBox = this.terrainSource.getTilingScheme().getGeoBox(tileKey);
+        // Patch resolution (network/LRU phase, dimension-free) starts in
+        // parallel with the base tile download — the bake never waits for
+        // sum(base, patch), only for max(base, patch).
+        let patchesPromise =
+            hasPatches && patchManager
+                ? patchManager.preparePatchTiles(tileKey, baseGeoBox, abortSignal)
+                : null;
+
         const dbuffer = await this._fetchTileData(tileKey, abortSignal);
         const img: HTMLImageElement | ImageBitmap = await new Promise(resolve => {
             if (window.createImageBitmap) {
@@ -493,12 +418,38 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
         });
 
         if (!img) return await Promise.resolve(undefined);
-        return await DemTileResource.createDemTileResourceFromImageryData(
-            img,
-            tileKey,
-            this.terrainSource,
-            this.encoding
-        );
+
+        const { dim } = computeDemTileGrid(img.width);
+        let resource: DemTileResource | undefined;
+        // Bounded re-bake on patch-set changes mid-decode; patch images are
+        // LRU-cached so retries only redo resampling + decode.
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const collection =
+                patchesPromise ??
+                (hasPatches && patchManager
+                    ? patchManager.preparePatchTiles(tileKey, baseGeoBox, abortSignal)
+                    : null);
+            patchesPromise = null;
+            const snapshot = collection
+                ? patchManager.resamplePatchTiles(await collection, tileKey, dim)
+                : undefined;
+            resource = await DemTileResource.createDemTileResourceFromImageryData(
+                img,
+                tileKey,
+                this.terrainSource,
+                this.encoding,
+                snapshot
+            );
+            if (
+                !collection ||
+                !patchManager ||
+                snapshot.version === patchManager.version ||
+                attempt === 2
+            ) {
+                break;
+            }
+        }
+        return resource as DemTileResource;
     }
 
     /**

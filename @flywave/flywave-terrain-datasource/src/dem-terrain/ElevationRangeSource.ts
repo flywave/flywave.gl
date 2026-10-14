@@ -122,6 +122,14 @@ class ElevationRangeSource implements IElevationRangeSource {
     }
 
     /**
+     * Drops all cached min/max results. Called when the baked DEM contents
+     * change (DEM patch re-bake) so ranges are recomputed from the new pixels.
+     */
+    invalidateCache(): void {
+        this._lurCache.clear();
+    }
+
+    /**
      * Gets the elevation range for a specific tile key
      *
      * This method returns the minimum and maximum elevation values for a tile,

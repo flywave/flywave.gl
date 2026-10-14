@@ -15,9 +15,51 @@
 | 功能 | DEMTerrainSource | Quantized / CesiumWorld | QuantizedStratumSource |
 |---|---|---|---|
 | 地面修改（开挖/刷高程） | ✅ 实时 GPU 顶点位移（最佳） | ✅ 解码时烘 DEM + 回退 DEM 网格 | ⚠️ 有解码钩子，运行时 change 抛"未实现" |
+| **DEM 修正层（优先级覆盖）** | ✅ 解码期烘焙进瓦片像素 | ❌（manager 存在但仅 DEM 解码路径消费） | ❌ |
 | 投影贴图 ProjectorOverlay | ✅ | ❌ 材质无 projectorState | ❌ |
 | 影像叠加 addWebTileDataSource | ✅ | ✅（最多 5 张 + uv transform） | ✅ |
 | CSG 裁剪 clipTerrainMesh | 独立工具函数，任意 BufferGeometry | 同左 | 用 StratumClipRegion 替代 |
+
+## DEM 修正层：DemPatchManager（多套 raster-dem 数据按优先级覆盖）
+
+与 HeightMapModifier（笔刷、叠加/混合语义）**不同的独立子系统**：数据集级的
+raster-dem 服务，其值**硬替换**基础地形高程（就是新高程），多套按 `priority`
+数值裁决（高者胜；实现为"按优先级升序逐像素覆写，后写胜"）。
+
+```typescript
+const manager = terrainSource.getDemPatchManager();   // 仅 DEM 解码路径消费
+manager.addPatch({
+    id: "survey-2024",
+    source: url | DemSourceDescription,   // 复用基础 DEM 的服务描述结构
+    encoding: "mapbox",                    // 可与主 DEM 不同
+    priority: 10,                          // 冲突时数值大者胜
+    enabled: true
+});
+manager.removePatch(id); manager.updatePatch(id, { priority | enabled | source });
+manager.getAllPatches(); manager.clear(); manager.version;   // 变更计数
+manager.addEventListener("change", ({ changeType, affectedIds, affectedBounds }) => …);
+```
+
+**机制**（纯主线程取数 + Worker 解码期烘焙，GPU/材质零改动）：
+- 烘焙在 `processDEMTile` 内、四叉树/边框构建**之前**完成 → 位移、
+  `ElevationProvider`（拾取/相机碰撞）、`ElevationRangeSource` 三方天然一致；
+- 层级规则 `selectPatchTileLevel`：`baseLevel < minzoom` → 无覆盖；否则取
+  `min(baseLevel, maxzoom)` 级（本级 miss 向上回溯祖先，最近邻上采样）；
+  **修正可见精度 ≤ 该处基础资源可达层级**；
+- alpha < 1 的修正像素 = 无数据，基础透出（与笔刷掩膜约定一致）；
+- 跨编码：按修正层 encoding 解码、按基础 encoding 重编码写入（0.1m 量化）；
+- 变更/晚到：`change` 事件 → 数据源 debounce 后对受影响烘焙资源**后台重烘焙 +
+  原子替换**（旧件渲染到替换完成，退休件延迟 30 帧才 dispose——`setResource`
+  覆盖不销毁；`RangeSource` 缓存随动失效）。修正瓦片首次取到（`onTileLoaded`）
+  也触发重烘焙（晚到细化）；取数失败负缓存 30s TTL。
+
+代码锚点：`dem-terrain/dem-patch/`（`DemPatchComposite.ts` 纯函数：网格度量/
+层级选择/重采样/合成；`DemPatchLayer` 取数+LRU+负缓存；`DemPatchManager`）；
+接线在 `TileWorkerDecoder.processDEMTile`、`DEMTileProvider.getTile`（快照与
+基础下载并行 + 版本不符重试）、`DEMTerrainSource`（失效链）。单测
+`test/dem-patch/*.test.ts`（karma `KARMA_SCOPE=terrain` 可单跑，32 用例）。
+⚠️ 附带修复：`DEMData.pack` 原用 `vector[3]`/`vector[2]` 数字下标访问
+`THREE.Vector4`（恒 undefined→NaN→写 0），已改 `.w`/`.z` 访问器。
 
 ## 地面修改：HeightMapModifierManager（开挖 / 刷高程）
 

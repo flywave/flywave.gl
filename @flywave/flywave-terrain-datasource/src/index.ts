@@ -10,6 +10,8 @@ export {
     type DEMLayerKind
 } from "./dem-terrain/DEMTileLayerMaterial";
 export { TerrainLayerMesh, TerrainTileState } from "./dem-terrain/TerrainLayerMesh";
+export type { DemSourceDescription } from "./dem-terrain/dem/DemSourceDescription";
 export * from "./projector-overlay";
 export * from "./quantized-terrain";
 export * from "./TerrainSource";
+export * from "./dem-terrain/dem-patch";

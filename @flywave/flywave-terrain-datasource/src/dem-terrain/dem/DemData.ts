@@ -37,6 +37,12 @@ export interface SerializedDEMData {
         childOffsets: Int32Array;
         leaves: Uint8Array;
     };
+    /**
+     * Copy of the pixel buffer before DEM patch compositing, present only
+     * when patches were baked. It is the in-memory re-bake source for
+     * patch-set changes (no network round trip).
+     */
+    pristine?: Uint8Array;
 }
 
 /**
@@ -56,6 +62,7 @@ export default class DEMData extends TileValidResource {
     public sourceImage?: HTMLImageElement | ImageBitmap | ImageData;
     public texture?: THREE.DataTexture;
     private _tree?: DemMinMaxQuadTree;
+    private _minMaxElevation?: { min: number; max: number };
 
     private _neighboringTiles: Record<number, { backfilled: boolean }> | undefined;
 
@@ -245,17 +252,20 @@ export default class DEMData extends TileValidResource {
         return this._unpackFn(r, g, b);
     }
 
-    /** Scan all pixels and return {min, max} elevation */
+    /** Scan all pixels and return {min, max} elevation (memoized — the scan is O(w·h)) */
     getMinMaxElevation(): { min: number; max: number } {
-        let min = Infinity;
-        let max = -Infinity;
-        const px = this.pixels;
-        for (let i = 0; i < px.length; i += 4) {
-            const elev = this._unpackFn(px[i], px[i + 1], px[i + 2]);
-            if (elev < min) min = elev;
-            if (elev > max) max = elev;
+        if (!this._minMaxElevation) {
+            let min = Infinity;
+            let max = -Infinity;
+            const px = this.pixels;
+            for (let i = 0; i < px.length; i += 4) {
+                const elev = this._unpackFn(px[i], px[i + 1], px[i + 2]);
+                if (elev < min) min = elev;
+                if (elev > max) max = elev;
+            }
+            this._minMaxElevation = { min, max };
         }
-        return { min, max };
+        return { ...this._minMaxElevation };
     }
 
     /**
@@ -342,7 +352,9 @@ export default class DEMData extends TileValidResource {
     ): [number, number, number, number] {
         const color: [number, number, number, number] = [0, 0, 0, 0];
         const vector = DEMData.getUnpackVector(encoding);
-        let v = Math.floor((altitude + vector[3]) / vector[2]);
+        // NOTE: Vector4 has no numeric index access — use the .z/.w accessors
+        // (numeric indexing silently yields undefined → NaN → 0 bytes).
+        let v = Math.floor((altitude + vector.w) / vector.z);
         color[2] = v % 256;
         v = Math.floor(v / 256);
         color[1] = v % 256;

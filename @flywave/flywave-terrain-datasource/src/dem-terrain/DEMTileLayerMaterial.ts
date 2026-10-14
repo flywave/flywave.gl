@@ -148,6 +148,17 @@ const _hasModifier = uniform(0);
 _hasModifier.onObjectUpdate(({ object }) => object.hasModifier ?? 0);
 
 /**
+ * Data-driven skirt extension on top of the fixed geometry skirt depth.
+ * Set per tile from the tile's own elevation span (max - min) so the skirt
+ * always reaches below the tile's lowest elevation — this is what hides
+ * T-junction gaps against coarser neighbors (their straight edges cut
+ * across terrain the finer edge bends around) and the hard cliffs at DEM
+ * patch boundaries, regardless of how steep the data is.
+ */
+const _skirtExtra = uniform(0);
+_skirtExtra.onObjectUpdate(({ object }) => object.skirtExtra ?? 0);
+
+/**
  * Shared vertex-stage terrain displacement graph.
  *
  * Built EXACTLY ONCE and assigned to ALL layer variants (base / overlay /
@@ -232,7 +243,13 @@ const s_sharedNodes = (() => {
             const p2 = _patchPos2.add(_patchPos3.mul(dx));
             const bp = p1.add(p2.sub(p1).mul(fPos.y));
             const tn = normalize(cross(_patchPos0.xyz, _patchPos3.xyz));
-            const skirtH = select(fPos.z.lessThan(0), _skirtHeight.negate(), fPos.z);
+            // Skirt vertices (fPos.z < 0) extend by the fixed geometry depth
+            // PLUS the tile's elevation span — see _skirtExtra.
+            const skirtH = select(
+                fPos.z.lessThan(0),
+                _skirtHeight.negate().sub(_skirtExtra),
+                fPos.z
+            );
             const hi = smoothElevationVertex(fUv);
             const height = hi.add(skirtH);
             result.assign(bp.add(vec4(tn.mul(height), 0.0)));

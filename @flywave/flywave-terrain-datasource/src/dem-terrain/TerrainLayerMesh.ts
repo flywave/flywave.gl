@@ -77,6 +77,11 @@ export class TerrainTileState {
     private readonly m_texSize: Vector2 = new Vector2(1, 1);
     /** Unpack vector for the current DEM texture's encoding (follows DEMData.encoding; mapbox by default) */
     private readonly m_demUnpack: Vector4 = DEFAULT_DEM_UNPACK.clone();
+    /**
+     * Data-driven skirt extension (the tile's elevation span) pushed into the
+     * shared displacement graph — see _skirtExtra in DEMTileLayerMaterial.
+     */
+    private m_skirtExtra: number = 0;
 
     private m_lastProjFactor: number = Number.NaN;
     private m_frameDirty: boolean = true;
@@ -174,6 +179,18 @@ export class TerrainTileState {
      */
     invalidateElevation(): void {
         this.m_heightMapTexture = null;
+        this.m_skirtExtra = 0;
+        this.m_frameDirty = true;
+    }
+
+    /**
+     * Sets the data-driven skirt extension for the current DEM bake (the
+     * tile's own elevation span). Skirts then always reach below the tile's
+     * lowest elevation, hiding T-junction gaps against coarser neighbors and
+     * the hard cliffs at DEM patch boundaries.
+     */
+    setSkirtExtra(extra: number): void {
+        this.m_skirtExtra = Math.max(0, extra);
         this.m_frameDirty = true;
     }
 
@@ -234,11 +251,13 @@ export class TerrainTileState {
             mesh.demUnpack.copy(this.m_demUnpack);
             mesh.heightMapPos.copy(this.m_heightMapPos);
             mesh.texSize.copy(this.m_texSize);
+            mesh.skirtExtra = this.m_skirtExtra;
         } else {
             mesh.heightMapTexture = null;
             mesh.demUnpack.set(0, 0, 0, 0);
             mesh.heightMapPos.set(1, 0, 0, 0);
             mesh.texSize.set(1, 1);
+            mesh.skirtExtra = 0;
         }
 
         if (this.m_modifierTexture) {
@@ -470,6 +489,8 @@ export class TerrainLayerMesh extends Mesh {
     public heightMapPos: Vector4 = new Vector4(1, 0, 0, 0);
     public texSize: Vector2 = new Vector2(1, 1);
     public skirtHeight: number = 0;
+    /** Data-driven skirt extension (tile elevation span) — see _skirtExtra */
+    public skirtExtra: number = 0;
     public projectionFactor: number = 0;
     public modifierUVBounds: Vector4 = new Vector4();
     public modifierOp: number = 0;

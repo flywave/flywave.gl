@@ -67,6 +67,7 @@ import {
     type ProjectionSwitchOptions,
     ProjectionSwitchController
 } from "./ProjectionSwitchController";
+import { DemPatchManager } from "./dem-terrain/dem-patch";
 import { type ProjectorImageryProvider, ProjectorOverlayManager } from "./projector-overlay";
 import { type IResourceProvider, type ResourceProvider } from "./ResourceProvider";
 import { TileLRUCache, TileResourceManager } from "./TileResourceManager";
@@ -160,6 +161,14 @@ export interface ITerrainSource<ProviderType extends DataProvider = DataProvider
     getLayerProviders(): Array<ResourceProvider<any, ITerrainSource>>;
 
     getGroundModificationManager(): HeightMapModifierManager;
+
+    /**
+     * Gets the DEM patch (elevation override) manager. Patch layers replace
+     * base terrain elevation where they have data, resolved by priority.
+     * The layers are consumed by the DEM decode path (DEMTerrainSource);
+     * quantized/stratum sources expose the manager but ignore it.
+     */
+    getDemPatchManager(): DemPatchManager;
 
     /**
      * Gets the projector overlay manager that owns all ground-projected
@@ -485,6 +494,7 @@ export abstract class TerrainSource<
     private readonly m_loadingQueue = new PriorityQueue<TileType>();
     private readonly m_tileCache = new TileLRUCache<TileType>(this);
     private readonly m_groundModificationManager: HeightMapModifierManager;
+    private readonly m_demPatchManager: DemPatchManager;
     private readonly m_projectorOverlayManager: ProjectorOverlayManager;
     private m_tileBaseGeometryBuilder?: TileGeometryBuilder;
 
@@ -501,7 +511,7 @@ export abstract class TerrainSource<
         { meshes: Map<string, TerrainLayerMesh>; state: TerrainTileState }
     >();
 
-    private m_disposing: boolean = false;
+    protected m_disposing: boolean = false;
 
     private stageConfigs: LoadingStage[] = [];
     /** Number of loading stages for progressive loading */
@@ -532,6 +542,10 @@ export abstract class TerrainSource<
 
         // Create ground modification manager
         this.m_groundModificationManager = new HeightMapModifierManager();
+
+        // DEM patch (elevation override) manager. Created eagerly so callers
+        // can add patch layers before connect().
+        this.m_demPatchManager = new DemPatchManager();
 
         // Per-source projector overlay manager. Created eagerly so callers
         // can add layers before connect().
@@ -657,6 +671,18 @@ export abstract class TerrainSource<
 
     getGroundModificationManager(): HeightMapModifierManager {
         return this.m_groundModificationManager;
+    }
+
+    getDemPatchManager(): DemPatchManager {
+        return this.m_demPatchManager;
+    }
+
+    /**
+     * Snapshot of every tile in the terrain LRU (used by the DEM patch
+     * invalidation to find baked resources needing a re-bake).
+     */
+    protected getCachedTerrainTiles(): TileType[] {
+        return this.m_tileCache.getAllTiles();
     }
 
     getProjectorOverlayManager(): ProjectorOverlayManager {

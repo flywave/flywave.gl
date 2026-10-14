@@ -213,8 +213,13 @@ export class TerrainTileDecoder implements ITileDecoder {
 
             // Handle raster DEM (Digital Elevation Model) data
             case TaskType.RasterDEM: {
-                const { dem } = await processDEMTile(data as unknown as DecodeTileParams);
-                tileTerrain = dem.serialize();
+                const params = data as unknown as DecodeTileParams;
+                const { dem, pristine } = await processDEMTile(params);
+                const serialized = dem.serialize();
+                if (pristine) {
+                    serialized.pristine = pristine;
+                }
+                tileTerrain = serialized;
                 break;
             }
 

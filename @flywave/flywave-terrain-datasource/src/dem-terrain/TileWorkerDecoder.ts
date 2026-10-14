@@ -3,6 +3,8 @@
 import { type GeoBoxArray, GeoBox } from "@flywave/flywave-geoutils";
 import { Texture } from "three/webgpu";
 
+import { composeDemTilePixels } from "./dem-patch/DemPatchComposite";
+import { type SerializedDemPatchTile } from "./dem-patch/DemPatchTypes";
 import { type DEMEncoding, DEMData } from "./dem/DemData";
 
 /**
@@ -17,6 +19,13 @@ export interface DecodeTileParams {
     buildQuadTree: boolean;
     flipY: boolean;
     terrainSourceId?: string;
+    /**
+     * DEM patch (elevation override) layers already resampled into this
+     * tile's inner grid, in ascending priority order — the composite
+     * overwrites covered pixels entry by entry, so later (higher priority)
+     * entries win. Absent or empty means a pure base tile.
+     */
+    patches?: SerializedDemPatchTile[];
 }
 
 /**
@@ -25,6 +34,13 @@ export interface DecodeTileParams {
 export interface DecodeTileResult {
     /** The decoded DEM data */
     dem: DEMData;
+    /**
+     * Copy of the pixel buffer BEFORE patch compositing (the pristine base
+     * bake). Present only when patches were applied; it is the re-bake
+     * source for patch-set changes so runtime changes never re-fetch the
+     * base tile over the network.
+     */
+    pristine?: Uint8Array;
     /** Array of geometries (empty for DEM tiles) */
     geometries: unknown[];
     /** Array of techniques (empty for DEM tiles) */
@@ -76,10 +92,22 @@ export const processDEMTile = async (params: DecodeTileParams): Promise<DecodeTi
 
     const imagePixels = await getImageData(params.imageData, params.padding);
 
+    // Bake patch layers into the pixel buffer BEFORE the quad tree and the
+    // border fill are built, so min/max trees, borders and every downstream
+    // consumer (displacement, elevation query, elevation range) all see the
+    // final, patched elevations. The pre-composite buffer is copied out as
+    // the pristine bake — the re-bake source for later patch-set changes.
+    let pristine: Uint8Array | undefined;
+    if (params.patches && params.patches.length > 0) {
+        pristine = new Uint8Array(imagePixels.data.buffer.slice(0));
+        composeDemTilePixels(imagePixels, encoding, params.patches, 1);
+    }
+
     const dem = new DEMData(uid, imagePixels, GeoBox.fromArray(geoBox), encoding, false, true);
 
     return {
         dem,
+        pristine,
         geometries: [],
         techniques: []
     };
