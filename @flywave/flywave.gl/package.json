@@ -1,88 +1,108 @@
 {
-    "name": "@flywave/flywave.gl",
-    "version": "0.0.11",
-    "type": "module",
-    "description": "WebGl GIS",
-    "exports": {
-        ".": {
-            "import": "./dist/flywave.gl.module.js",
-            "require": "./dist/flywave.gl.cjs.js",
-            "types": "./dist/flywave.d.ts"
-        },
-        "./package.json": "./package.json",
-        "./decoder": {
-            "import": "./dist/flywave-decoders.js",
-            "require": "./dist/flywave-decoders.js"
-        }
+  "name": "@flywave/flywave.gl",
+  "version": "0.0.11",
+  "type": "module",
+  "description": "WebGl GIS",
+  "exports": {
+    ".": {
+      "import": "./dist/flywave.gl.module.js",
+      "require": "./dist/flywave.gl.cjs.js",
+      "types": "./dist/flywave.d.ts"
     },
-    "typesVersions": {
-        "*": {
-            "*": [
-                "./dist/flywave.d.ts"
-            ]
-        }
-    },
-    "files": [
-        "dist/**/*",
-        "README.md"
-    ],
-    "scripts": {
-        "tsc": "tsc --build",
-        "build": "webpack --mode production && npm run build-typings",
-        "prepare": "webpack --mode production && npm run build-typings",
-        "build-typings": "tsc --build && api-extractor run --local && node -e \"const fs = require('fs'); fs.appendFileSync('dist/flywave.d.ts', 'export as namespace flywave;\\n'); if(fs.existsSync('temp')) fs.rmSync('temp', { recursive: true, force: true })\"",
-        "debug": "webpack"
-    },
-    "keywords": [
-        "3d",
-        "webgl",
-        "gis",
-        "map",
-        "geospatial"
-    ],
-    "author": "flywave",
-    "license": "Apache-2.0",
-    "homepage": "https://github.com/flywave/flywave.gl#readme",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/flywave/flywave.gl.git"
-    },
-    "bugs": {
-        "url": "https://github.com/flywave/flywave.gl/issues"
-    },
-    "peerDependencies": {
-        "three": ">= 0.184.0"
-    },
-    "publishConfig": {
-        "access": "public"
-    },
-    "devDependencies": {
-        "@flywave/flywave-3dtile-datasource": "workspace:*",
-        "@flywave/flywave-datasource-protocol": "workspace:*",
-        "@flywave/flywave-draw-controls": "workspace:*",
-        "@flywave/flywave-features-datasource": "workspace:*",
-        "@flywave/flywave-geojson-datasource": "workspace:*",
-        "@flywave/flywave-geometry": "workspace:*",
-        "@flywave/flywave-geoutils": "workspace:*",
-        "@flywave/flywave-gltf": "workspace:*",
-        "@flywave/flywave-inspector": "workspace:*",
-        "@flywave/flywave-map-controls": "workspace:*",
-        "@flywave/flywave-mapview": "workspace:*",
-        "@flywave/flywave-mapview-decoder": "workspace:*",
-        "@flywave/flywave-terrain-datasource": "workspace:*",
-        "@flywave/flywave-transfer-manager": "workspace:*",
-        "@flywave/flywave-utils": "workspace:*",
-        "@flywave/flywave-vectortile-datasource": "workspace:*",
-        "@flywave/flywave-webpack-utils": "workspace:*",
-        "@flywave/flywave-webtile-datasource": "workspace:*",
-        "copy-webpack-plugin": "catalog:",
-        "cross-env": "catalog:",
-        "expose-loader": "5.0.1",
-        "tsconfig-paths-webpack-plugin": "catalog:",
-        "typescript": "catalog:",
-        "webpack": "catalog:",
-        "webpack-cli": "catalog:",
-        "webpack-merge": "catalog:"
-    },
-    "gitHead": "31ea639ccb9a06d4595f4325396c21ba4164c454"
+    "./package.json": "./package.json",
+    "./decoder": {
+      "import": "./dist/flywave-decoders.js",
+      "require": "./dist/flywave-decoders.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/flywave.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
+  "scripts": {
+    "tsc": "tsc --build",
+    "build": "webpack --mode production && npm run build-typings",
+    "prepare": "webpack --mode production && npm run build-typings",
+    "build-typings": "tsc --build && api-extractor run --local && node -e \"const fs = require('fs'); fs.appendFileSync('dist/flywave.d.ts', 'export as namespace flywave;\\n'); if(fs.existsSync('temp')) fs.rmSync('temp', { recursive: true, force: true })\"",
+    "debug": "webpack"
+  },
+  "keywords": [
+    "3d",
+    "webgl",
+    "gis",
+    "map",
+    "geospatial"
+  ],
+  "author": "flywave",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/flywave/flywave.gl#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/flywave/flywave.gl.git"
+  },
+  "bugs": {
+    "url": "https://github.com/flywave/flywave.gl/issues"
+  },
+  "peerDependencies": {
+    "three": ">= 0.184.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@flywave/flywave-3dtile-datasource": "workspace:*",
+    "@flywave/flywave-datasource-protocol": "workspace:*",
+    "@flywave/flywave-draw-controls": "workspace:*",
+    "@flywave/flywave-features-datasource": "workspace:*",
+    "@flywave/flywave-geojson-datasource": "workspace:*",
+    "@flywave/flywave-geometry": "workspace:*",
+    "@flywave/flywave-geoutils": "workspace:*",
+    "@flywave/flywave-gltf": "workspace:*",
+    "@flywave/flywave-inspector": "workspace:*",
+    "@flywave/flywave-map-controls": "workspace:*",
+    "@flywave/flywave-mapview": "workspace:*",
+    "@flywave/flywave-mapview-decoder": "workspace:*",
+    "@flywave/flywave-terrain-datasource": "workspace:*",
+    "@flywave/flywave-transfer-manager": "workspace:*",
+    "@flywave/flywave-utils": "workspace:*",
+    "@flywave/flywave-vectortile-datasource": "workspace:*",
+    "@flywave/flywave-webpack-utils": "workspace:*",
+    "@flywave/flywave-webtile-datasource": "workspace:*",
+    "copy-webpack-plugin": "catalog:",
+    "cross-env": "catalog:",
+    "expose-loader": "5.0.1",
+    "tsconfig-paths-webpack-plugin": "catalog:",
+    "typescript": "catalog:",
+    "webpack": "catalog:",
+    "webpack-cli": "catalog:",
+    "webpack-merge": "catalog:"
+  },
+  "gitHead": "31ea639ccb9a06d4595f4325396c21ba4164c454",
+  "dependencies": {
+    "@flywave/flywave-3dtile-datasource": "workspace:*",
+    "@flywave/flywave-datasource-protocol": "workspace:*",
+    "@flywave/flywave-draw-controls": "workspace:*",
+    "@flywave/flywave-features-datasource": "workspace:*",
+    "@flywave/flywave-geojson-datasource": "workspace:*",
+    "@flywave/flywave-geometry": "workspace:*",
+    "@flywave/flywave-geoutils": "workspace:*",
+    "@flywave/flywave-gltf": "workspace:*",
+    "@flywave/flywave-inspector": "workspace:*",
+    "@flywave/flywave-map-controls": "workspace:*",
+    "@flywave/flywave-mapview": "workspace:*",
+    "@flywave/flywave-mapview-decoder": "workspace:*",
+    "@flywave/flywave-terrain-datasource": "workspace:*",
+    "@flywave/flywave-text-canvas": "workspace:*",
+    "@flywave/flywave-transfer-manager": "workspace:*",
+    "@flywave/flywave-utils": "workspace:*",
+    "@flywave/flywave-vectortile-datasource": "workspace:*",
+    "@flywave/flywave-webtile-datasource": "workspace:*"
+  }
 }
