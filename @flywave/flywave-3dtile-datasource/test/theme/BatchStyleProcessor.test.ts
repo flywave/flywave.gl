@@ -144,4 +144,32 @@ describe("BatchStyleProcessor（样式求值与合并）", function () {
         expect(style.opacity).to.equal(0);
         expect(style.visible).to.equal(true);
     });
+
+    it("visible 透传：后者未声明 visible 不冲掉前者显式的 visible:false", function () {
+        // Regression: the conversion layer used to coerce a missing `visible` into
+        // `true`, so a later matching style (e.g. tint/highlight without visibility)
+        // flipped an earlier style's explicit `visible: false` back to visible.
+        const processor = makeProcessor([
+            { id: "hide", when: "height >= 0", technique: "tile3d", visible: false },
+            { id: "tint", when: "height >= 0", technique: "tile3d", color: "#00cccc" }
+        ]);
+
+        const style = processor.getBatchStyle({ batchId: 0, height: 10 });
+        expect(style.color).to.equal("#00cccc");
+        expect(style.visible).to.equal(false);
+    });
+
+    it("visible 合并优先级：后者显式声明仍按序覆盖前者", function () {
+        const laterTrue = makeProcessor([
+            { id: "hide", when: "height >= 0", technique: "tile3d", visible: false },
+            { id: "show", when: "height >= 0", technique: "tile3d", visible: true }
+        ]);
+        expect(laterTrue.getBatchStyle({ batchId: 0, height: 10 }).visible).to.equal(true);
+
+        const laterFalse = makeProcessor([
+            { id: "show", when: "height >= 0", technique: "tile3d", visible: true },
+            { id: "hide", when: "height >= 0", technique: "tile3d", visible: false }
+        ]);
+        expect(laterFalse.getBatchStyle({ batchId: 0, height: 10 }).visible).to.equal(false);
+    });
 });

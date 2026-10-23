@@ -95,7 +95,7 @@ export class BatchStyleProcessor extends StyleSetEvaluator {
             const batchInfo: Tile3DBatchMeshTechniqueParams = {
                 color: technique.color,
                 opacity: this.extractOpacity(technique.opacity),
-                visible: technique.visible !== undefined ? Boolean(technique.visible) : true,
+                visible: technique.visible !== undefined ? Boolean(technique.visible) : undefined,
                 roughness: technique.roughness,
                 metalness: technique.metalness,
                 emissive: technique.emissive,
