@@ -7912,3 +7912,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 修复方向**：road-base fill 不可渲染的根因=fillHdMode 的 fill-elevation-reference 门控在无高程数据时的处理——需要 fill 侧 renderFlat 回落（与 g178 线侧同款，fill 侧尚无）。
 
 **④ 状态**：夹具还原; 单测 310; 台账 g198。
+
+### §885 g199: 色彩空间排除——three.js 0.178.0 ColorManagement 默认启用, sRGB↔linear 自动; mc-ne/retc 暗色需 fixture-specific runtime 调试（2026-10-25 第一百一十轮）
+
+**① 色彩空间排除**：three.js 0.178.0（ColorManagement.enabled=true, renderer.outputColorSpace=SRGBColorSpace 默认）——sRGB 输入自动转 linear 渲染再转 sRGB 输出, round trip 恒等。mc-ne 路色 (161,178,198) 正确渲染证实全局色彩管线正常。
+
+**② road-extend-tilecover 154k 暗色**：路色 (77,85,94) ≈ 48% 亮度——与 mc-ne 路色正确形成对比。该 fixture 使用 fallback 瓦（无原生 z18 数据, §511 父回退），可能存在 fallback 瓦特有内容/层缺失。
+
+**③ 域收口**：照明/着色域需 fixture-specific runtime 调试（非全局色彩空间问题）。G10 域阻塞于 mgl 私有源。SolidLine shader 阻塞于 GPU 级调试。fog 精度阻塞于逐参数对照。
+
+**④ 状态**：零代码; 单测 310; 树净; 台账 g199。
