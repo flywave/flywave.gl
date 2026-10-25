@@ -864,11 +864,24 @@ export class MBElevatedStructures {
         //  - mask  = tunnel structures + NON-tunnel roads — flattened to the
         //    ground plane with GREATER depth mode these carve the
         //    "see-through" holes so tunnels read as sunken 3D forms.
+        // §885 g163: the mask ALSO carves the TUNNEL road triangles' plan.
+        // mgl's literal mask excludes them (tunnel_structures + non_tunnel_
+        // roads), which leaves a deep tunnel's own pixels blocked by its own
+        // initialize ground projection — mgl still renders them (expected),
+        // so its effective carve coverage must reach them through the same-
+        // bucket geometry we cannot replicate until the structures intake
+        // unifies with the deck emission (g162④). Behavioral equivalence:
+        // carving the full road plan lets the tunnel colors repaint (they
+        // pass vs far) while the initialize's ground occlusion keeps hiding
+        // content BELOW the tunnels; the mgl draw order (roads 9.6 → walls
+        // 9.65/9.7) is preserved, so no structearly inversion is needed.
         const tunnelQuads = indices.slice(tunnelQuadStart, tunnelQuadEnd);
         const depthIndices = [
             ...tunnelQuads, ...this.m_unevalTriangles, ...this.m_unevalTunnelTriangles,
         ];
-        const maskIndices = [...tunnelQuads, ...this.m_unevalTriangles];
+        const maskIndices = [
+            ...tunnelQuads, ...this.m_unevalTriangles, ...this.m_unevalTunnelTriangles,
+        ];
 
         // mgl shadow caster segment (es.ts:405-411): the caster segment
         // opens before the bridge structures and closes AFTER a third copy

@@ -7478,3 +7478,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 状态**：三文件小改（emitter 旋钮/test 桥/runner 转发）; 单测影响零（渲染路径）; 台账 g162b。
 
 ### §885 g162c: structearly 扩展到 hd-road-base（9.53）——stacked 45,202→**35,483**（+18.5k 回归基本收复, 残 +902）; tfd 60,702→59,804（罚分来自墙前置分量, −898 由路前置部分回吐）。混合收益（stacked/enterance 族收复 vs tfd +10.4k）⇒ 维持默认关; 转正需 geometry 相等价物消解 tfd 罚分后全家族 A/B（2026-10-25 第七十六轮）
+
+### §885 g163: mask 全平面车削 + ground 相 discard——家族再 −29,080（1,955,970→**1,926,890**）; stacked +18.5k 回归收复 9.8k 且零代价; line-labels-tunnel 再 −18.4k（2026-10-25 第七十七轮）
+
+**① 改动两件**：⑴ `MBElevatedStructures.construct()` mask 索引纳入 **tunnel 三角形**（全道路平面车削, 不再排除 tunnel 类）——mgl 字面 mask 排除隧道但 expected 证明其深层路可见=其有效 carve 覆盖必达（同桶几何）, 我方在 intake 统一前以行为等价覆盖替代; ⑵ ground 相片元 **`v_height≥0 discard`**（mgl 字面; prepass 几何新增 elevAttr/aMBElev; mask 保持全平面无 discard）——实测对 stacked 中性（桥梁带非洞源）, 保留为 mgl 字面对齐。
+
+**② 全家族 A/B（vs g161 默认态, 73 夹具）**：总量 **−29,080**。收益：elevated-line-labels-tunnel 47,342→**28,932（−18.4k）**、stacked-underground 53,130→**43,374（−9.8k）**、elevated-line-pattern 35,919→34,315（g161 回归再回收 −1.6k）、tfd 49,381→49,344。回归仅 symbols-mixed(+430)×2 噪声级。**守门全绿**：ortho-camera-tunnel 保持 **8 PASS**、circles-tunnel 3,644、shadows-tunnel 47,985、wireframe 63,312。
+
+**③ structearly 处置**：mask-all 已以零罚分方式收回 stacked 大头, structearly（墙/路前置, tfd +10.4k 罚分）失去转正理由, **维持默认关**留作实验旋钮; tunnel-enterance(+2.6k)/separate-layer 残余与其同源, 挂账 intake 统一专项。
+
+**④ 状态**：三文件（MBElevatedStructures/MBMaterialPatchManager/MBTileDataEmitter）; tsc 零新增（33 既有）; 单测 310 passing; 台账 g163。

@@ -2696,21 +2696,27 @@ export class MBTileDataEmitter {
         const prepassOff = (globalThis as any).__mbPrepassOff === true;
         if (!prepassOff && mesh.underground && (mesh.depthIndices.length > 0 || mesh.maskIndices.length > 0)) {
             const world: number[] = new Array(mesh.positions.length);
+            const heights: number[] = new Array(mesh.positions.length / 3);
             for (let i = 0; i < mesh.positions.length; i += 3) {
                 const w = this.project(new THREE.Vector2(
                     mesh.positions[i] * scale, mesh.positions[i + 1] * scale + yDelta));
                 world[i] = w.x; world[i + 1] = w.y; world[i + 2] = w.z + mesh.positions[i + 2];
+                heights[i / 3] = mesh.positions[i + 2];
             }
-            if (mesh.minHeight < 1.0) this.emitElevPrepass('ground', mesh.depthIndices, world);
-            if (mesh.minHeight < 0.0) this.emitElevPrepass('mask', mesh.maskIndices, world);
+            if (mesh.minHeight < 1.0) this.emitElevPrepass('ground', mesh.depthIndices, world, heights);
+            if (mesh.minHeight < 0.0) this.emitElevPrepass('mask', mesh.maskIndices, world, heights);
         }
     }
 
-    private emitElevPrepass(kind: 'ground' | 'mask', indices: number[], flat: number[]): void {
+    private emitElevPrepass(kind: 'ground' | 'mask', indices: number[], flat: number[], heights: number[]): void {
         if (indices.length === 0) return;
         const geo = this.getOrCreateGeometry(`__mb-elev-prepass-${kind}`);
         if (geo.positions.length === 0) {
             for (let i = 0; i < flat.length; i++) geo.positions.push(flat[i]);
+            // §885 g163: per-vertex raw height (meters) — mgl a_height, the
+            // reconstruct fragment's v_height (ground-pass discard).
+            geo.elevAttr = geo.elevAttr ?? [];
+            for (let i = 0; i < heights.length; i++) geo.elevAttr.push(heights[i]);
         }
         const groupStart = geo.indices.length;
         for (let i = 0; i < indices.length; i++) geo.indices.push(indices[i]);

@@ -1644,6 +1644,25 @@ export class MBMaterialPatchManager {
             if (origOnCompile) origOnCompile.call(material, shader);
             shader.uniforms.uMBGroundZ = groundZUniform;
             shader.uniforms.uMBDepthBias = { value: depthBias };
+            // §885 g163 (mgl elevated_structures_depth_reconstruct fragment):
+            // under DEPTH_RECONSTRUCTION only fragments with v_height < 0
+            // survive — ABOVE-ground geometry (bridge decks at +14m) must not
+            // write the ground-plane depth: their view-ray projection lands
+            // in displaced bands across the trench and buries the below-grade
+            // roads/walls (stacked-underground jagged holes, mbhide=ground
+            // bit-exact restore). Scoped to the 'ground' pass: the 'mask'
+            // pass keeps its full flattened plan carve (no discard) so the
+            // trench stays open.
+            if (kind === 'ground') {
+                shader.vertexShader = ('attribute float aMBElev;\nvarying float vMBPreH;\n'
+                    + shader.vertexShader).replace(
+                    '#include <project_vertex>',
+                    'vMBPreH = aMBElev;\n#include <project_vertex>');
+                shader.fragmentShader = ('varying float vMBPreH;\n' + shader.fragmentShader)
+                    .replace('void main() {',
+                        `void main() {
+                         if (vMBPreH >= 0.0) { discard; }`);
+            }
             shader.vertexShader = ('uniform float uMBGroundZ;\nuniform float uMBDepthBias;\n' + shader.vertexShader)
                 .replace(
                     '#include <project_vertex>',
