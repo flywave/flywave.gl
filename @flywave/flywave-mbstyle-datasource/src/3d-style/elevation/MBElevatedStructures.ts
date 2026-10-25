@@ -188,6 +188,10 @@ export class MBElevatedStructures {
     private m_underground = false;
     /** g171: the current intake feature's data id (color-parity probe). */
     private m_currentFeatureId: string | number | null = null;
+    /** g174: the running global minimum of the height pool (the two-pass
+     * intake doubled the pool, so the construct()'s first-4096 slice
+     * approximation stopped covering every entry). */
+    private m_globalMinHeight = Infinity;
     /** §516: consumer key of this tile (for the deferred-curve report). */
     private m_consumerKey = '';
     /** Exterior-vertex posHash → hashes of the edges it connects (mgl vertexHashLookup). */
@@ -825,7 +829,15 @@ export class MBElevatedStructures {
                 for (let i = 0; i < open.length; i++) {
                     flattened.push(open[i].x, open[i].y);
                     this.m_unevalPositions.push(open[i].x, open[i].y);
-                    this.m_unevalHeights.push((heights[i] ?? 0) + zOff);
+                    const hPush = (heights[i] ?? 0) + zOff;
+                    this.m_unevalHeights.push(hPush);
+                    // §885 g174: running global min — the two-pass intake
+                    // doubles the pool, so the construct()'s first-4096
+                    // slice no longer covers every height (the deepest
+                    // tunnel curve could land in the second block, flipping
+                    // the prepass gates and skipping the mask carve:
+                    // road-markups-clipping-underground +54k).
+                    if (hPush < this.m_globalMinHeight) this.m_globalMinHeight = hPush;
                 }
                 if (start > 0) holeIndices.push(start);
                 // §885 g114 (mgl literal): mgl emits count-1 edges and NEVER
@@ -1026,7 +1038,9 @@ export class MBElevatedStructures {
         return {
             positions, normals, indices, tunnelStart, bridgeSections, tunnelSections,
             depthIndices, maskIndices, shadowCasterIndices, underground: this.m_underground,
-            minHeight: this.m_unevalHeights.length ? Math.min(...this.m_unevalHeights.slice(0, 4096)) : 0,
+            minHeight: this.m_globalMinHeight !== Infinity
+                ? this.m_globalMinHeight
+                : this.m_unevalHeights.length ? Math.min(...this.m_unevalHeights.slice(0, 4096)) : 0,
         };
     }
 

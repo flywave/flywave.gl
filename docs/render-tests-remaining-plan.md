@@ -7604,3 +7604,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 下轮主案（唯一路径）**：G10 完整战役=martinez 输入环预处理（稠密/退化清理）+ 薄四边形几何校准 + 转正验收——需要专项会话（input 清理不当已两次灾难: g60 +36k / g168 +420k）。
 
 **⑤ 状态**：零代码（分析轮）; 单测 310; 树净; 台账 g173。
+
+### §885 g174: minHeight 全局最小修复（双遍池正确性）落地——默认态中性逐位 g163; martinez 态 markups-clipping 仍不收敛(98,655), 墙 carve 差异独立于 prepass 门（2026-10-25 第八十九轮）
+
+**① 修复（保留）**：G10 两遍 intake 使高度池倍增, construct() 的 `Math.min(...slice(0, 4096))` 前 4096 近似不再覆盖全部高度（深隧道高度落在第二块=prepass 门 minHeight<0/1.0 可能翻转）。改为 intake 期运行全局最小 `m_globalMinHeight`（mgl 字面精确语义）, construct 优先使用。
+
+**② 实测**：默认态（structures 半平面）三夹具**逐位=g163**（24,693/43,374/49,344, 中性安全）; martinez 态 markups-clipping 98,655（比 buggy 79,143 更差=正确 minHeight 使 prepass 门全开, 但墙 quad carve 差异依旧）——**markups-clipping 的 martinez 回归独立于 prepass 门**, 收敛仍阻塞于薄四边形减法几何（g169 裁决不变）。
+
+**③ 状态**：MBElevatedStructures 单文件（运行最小字段+construct 优先使用）; 单测 310; 默认态逐位 g163; 台账 g174。
