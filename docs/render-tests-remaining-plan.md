@@ -7646,3 +7646,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 量级重估（>30 低阈值口径）**: fog 48.5k / tooling-support 37.2k / munich-close 41.8k / road-islands 32.4k / guard-rail-color-fd 32k / las-vegas 23k / road-markups 26.2k / palo-alto 16.1k / tunnel-ortho 6.3k / road-markups-no-elevation 9.2k——**非 G10 域合计远超 G10 域残余**, 下一战役应转向这些域。
 
 **④ 状态**：分析轮零代码; 单测 310; 树净; 台账 g177。
+
+### §885 g178: 道路多画域首案——无曲线线层平坦回落落地(mgl renderFlat 字面); 线不可见残余转入线材质新域（2026-10-25 第九十三轮）
+
+**① 根因**：road-markups-no-elevation 的线层全部 `line-elevation-reference: hd-road-markup` 但该区无高程曲线——我方 prepareLineGeometry `resolveElevation` 失败返回 null=**72/76 条线被丢弃**（[MBLineHD] plan=NO 遥测）; mgl 语义=无曲线覆盖的 elevated line **平地渲染不丢弃**（与 fill 的 renderFlat 同款）。
+
+**② 修复（保留）**：prepareLineGeometry 无 feature 时返回平坦 plan（点原样透传=无 canonical 往返, 高度=0+markup bias 0.05）。遥测复核=**全部线 plan=yes 并发射**。
+
+**③ 残余转域**：IBCT 逐位不变（2,872）=线仍不可见——几何已产出但光栅化不可见 ⇒ **线材质/光栅化新域**（SolidLine stencil 状态/线宽单位/markup band 深度——test harness 3219 行注释: stencil 缺失致线全隐的先例）。非 G10, 下轮首查。
+
+**④ 门**：mc-ne 2,872（不变）; road-markups 10,705 / stacked 43,374 / tfd 49,344 全部无回归; 单测 310; 台账 g178。

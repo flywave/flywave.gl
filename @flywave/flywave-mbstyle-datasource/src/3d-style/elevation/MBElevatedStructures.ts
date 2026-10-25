@@ -585,6 +585,20 @@ export class MBElevatedStructures {
         tileExtent: number,
     ): LineElevationPlan | null {
         const feature = this.resolveElevation(properties);
+        // §885 g178: mgl renderFlat semantics — an elevated line with NO
+        // curve coverage renders FLAT at the ground plane (+markup lift),
+        // not dropped (road-markups-no-elevation: 72/76 lane lines dropped,
+        // the white markings missing from the bottom tile).
+        if (!feature && points.length >= 2) {
+            // No sampling → no canonical round trip: the points pass through
+            // in the caller's extent frame unchanged.
+            const bias0 = isMarkup ? Number((globalThis as any).__mbMarkupBias ?? MARKUP_ELEVATION_BIAS) : 0;
+            return {
+                feature: undefined as any,
+                points: points.map(p => ({ x: p.x, y: p.y })),
+                heights: points.map(() => this.biased(0, bias0)),
+            };
+        }
         if (!feature || points.length < 2) return null;
 
         const scale = tileExtent > 0 && tileExtent !== ELEVATION_EXTENT
