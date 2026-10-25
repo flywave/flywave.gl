@@ -7754,3 +7754,16 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 修复方案**：dump fallback 瓦的 worldHalfWidth 值（decodedbg 探针， [MBLineHD] 增 worldHalfWidth 输出）→ 确认 0/NaN → 修 mppScaled 计算。
 
 **④ 状态**：夹具已还原; 单测 310; 树净; 台账 g186。
+
+### §885 g187: worldHalfWidth 探针结果——非零（零宽假设否决）; mc-ne 线不可见需 GPU 级专项调试（2026-10-25 第一百零四轮）
+
+**① 探针结果**：worldHalfWidth 非零（[MBWHW] 零命中=条件不满足）——零宽挤出假设否决。线 mesh 的 ribbon 几何有正确宽度。
+
+**② 排除域终版**：G10 切分/深度/stencil/顺序/颜色/宽度——全部排除。mc-ne 线不可见的根因需要 **GPU 级专项调试**（RenderDoc/Chrome GPU 面板/逐顶点 shader 调试），超出 IBCT/静态分析/探针能力范围。
+
+**③ 可行动项（留给专项会话）**：
+- Chrome DevTools → Rendering → paint flashing → 定位线 draw 是否被 GPU rasterizer 接收
+- SPECTOR.js 完整帧捕获（需修复 bundle 加载）
+- 分裂测试：SolidLineMaterial 替换为 MeshBasicMaterial（烘焙 ribbon）→ 隔离 shader  vs 几何
+
+**④ 状态**：探针移除树净; 单测 310; 台账 g187。

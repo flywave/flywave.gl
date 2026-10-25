@@ -4195,6 +4195,7 @@ export class MBTileDataEmitter {
                 const worldHalfWidth = widthUnit === 'meters'
                     ? (lineWidthPx / 2) * secLat * metersOverscale
                     : lineWidthPx * mppScaled / 2;
+
                 // NOTE: blurring would want the ribbon geometry widened by
                 // the blur radius, but in dense road networks the widened
                 // ribbons overlap and stack into large black regions —
