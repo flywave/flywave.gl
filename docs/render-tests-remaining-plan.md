@@ -7439,3 +7439,18 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 修复规格（下轮首案, 预期 111k 大幅收敛）**: 结构几何改 **tile 局部系**（emit 时减 tile 中心——与 fill 一致的约定）或挂载时对 __mb-elevated 组清零平移; 二选一需对照 fill 的实际约定（fill v0 亦局部长度级 −967=junction fill 同域 ⇒ fill=局部系+组平移 ✓, 结构=世界系+组平移 ✗ = 不一致即根因）。
 
 **④ 状态**：探针弃置树净; 单测 310; 零代码改动。**会话终局: 56 轮台账 g106-g160, tunnel-fd 根因闭环至"结构世界系 vs 挂载局部系双重变换"。**
+
+### §885 g161: S6 深度链三重落地——prepass 混帧修复（RTE×绝对系）+ mask 平面拍平 + plain fill 禁写深度（mgl 逐层深度带语义）⇒ tunnel-fd 111,810→49,381 / ortho-camera-tunnel 209,418→**8 PASS** / 家族总量 −324.5k（2026-10-25 第七十三轮）
+
+**① g160 修复规格证伪**：`(81,−10,−29)` 并非"深埋地下"——引擎 `TileObjectRenderer.render()` 每帧对 tile.objects 执行 `position = tile.center + worldOffsetX − cameraPosition` 后挂渲染根（所有瓦片对象同式），读数为**渲染后残留的相机相对坐标**（z=−29≈−相机高度），非双重变换。"结构世界系+组平移"假设不成立（fill 与结构同经 `project()`=tile 中心相对系，同帧）。g157/g158/g160 的投影读数伪影同理（traverse 时点矩阵≠渲染时点）。
+
+**② 真根因三件套**（IBCT 行为二分定位）：
+- **A. prepass 顶点补丁混帧**：`patchElevPrepassDepth` 的 reconstruct 把 `modelMatrix*transformed`（=RTE 相机相对顶点）当绝对系与 `uMBEye`（shadow 链绝对眼位, 无阴影夹具恒 (0,0,0)）混算 ⇒ 全部顶点投影到百万米外/原点 ⇒ **ground/mask 两相自 g53 落地以来从未栅格化过一个像素**（E2 prepassoff / E3 mbhide mask 与基线逐位一致的实证）。修复=场景系内等价 mgl 公式：相机在 RTE 原点、地面 z=uMBGroundZ=−mapView.m_camera.position.z（每帧 patchTile 刷新；球面投影门跳过）。
+- **B. mask 语义修正**：mgl `elevated_structures_depth_reconstruct.vertex.glsl` 的 reset 相 `u_height_scale=0`（GitHub 权威源）=**顶点拍平 z→地面、x/y 保持**（平面轮廓；非隧道道路多边形自上方盖住堑区=车削孔），非视射线投影。`draw_elevated_fill.ts` 三相语义（initialize=重建投影/ reset=拍平+z=w+GREATER / **geometry=真实道路深度**）已对源核正。
+- **C. plain fill 深度写入越权**：mgl `depthModeForSublayer` 将每层深度钳入 **depthEpsilon 逐层远端深度带**——flat shade 的 z=0 写入永远挡不住更近的后绘层。我方 shade 真实 z=0 全程 LEQUAL 写入=掩埋整个隧道族（E1 隐 shade −55k / E4 plainfilldepth=0 −55k 双向实证）。修复=HD 瓦内 plain fill（非 __elev/非 hdElevation）`depthWrite=false`（保 g107 的 depthTest=true；`plainfilldepth=0` 整体回退门保留）。
+
+**③ 家族 A/B（同 commit stash 对照, 73 可跑夹具）**：总量 **2,280,499→1,955,970（−324,529, −14.2%）**。大额收益：ortho-camera-tunnel 209,418→8 **PASS**、tunnel-color-fd 111,810→49,381、elevated-circles-tunnel 61,407→3,644、elevated-line-labels-tunnel 68,752→47,342、shadows-tunnel 54,984→47,985、elevated-wireframe 69,539→63,312。**回归挂账（下一轮首案）**：stacked-underground-roads 34,581→53,130（+18.5k, prepassoff=1 逐位还原=全部来自新激活的 prepass；疑我方 mask 平面覆盖不及 mgl=深层道路无上方非隧道平面盖覆时 ground 深度拒色——G10 裁剪域差异）、tunnel-enterance(+2.6k)/-color(+3.8k)/separate-layer(+2.6k)、elevated-line-pattern(+4.0k)、guard-rail-caps(+2.8k)、symbols-mixed(+1.1k×2)。
+
+**④ tfd 残余 49.4k 定性**：堑区路面+车道线已透出（主症状消除）；残余=墙带屏幕位置偏移+分段色序（id%3 featureId 映射/墙边选择, g134 挂账域）与背景照明带（g147-g151 域）。
+
+**⑤ 状态**：零探针新增；`MBMaterialPatchManager.ts` 单文件落地；tsc 新增错误 0（HEAD 既有 33）；单测 310 passing；A/B 图像存 `rendering-test-results/mb-3di-{before,after,reg1,e1-e4,fix1-fix4}`。**会话终局：57 轮台账 g106-g161, S6 深度链从"零栅格化"修复至生产生效。**

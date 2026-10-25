@@ -907,6 +907,16 @@ export class MBMaterialPatchManager {
                         ? THREE.GreaterDepth
                         : THREE.LessEqualDepth;
                     this.patchElevPrepassDepth(material, prepass);
+                    // §885 g161: keep the ground-plane z in step with the
+                    // camera (zoom/center altitude changes) — MapView.m_camera
+                    // is the same world-frame cameraPosition the engine's tile
+                    // mount subtracts.
+                    const mvAny2 = (this.m_dataSource as any).mapView as any;
+                    const camZ2 = Number(mvAny2?.m_camera?.position?.z ?? NaN);
+                    if (Number.isFinite(camZ2) && camZ2 > 0
+                        && mvAny2?.projection?.type !== 1) {
+                        ((material as any).__mbPrepassGroundZ as { value: number }).value = -camZ2;
+                    }
                     material.needsUpdate = true;
                     (material as any).__mbPatched = true;
                 }
@@ -981,6 +991,14 @@ export class MBMaterialPatchManager {
             // styles keep draw-order behavior; coplanar ground fills are
             // unaffected (LEQUAL ties go to the later draw). Knob
             // `plainfilldepth=0` reverts.
+            // §885 g161: plain fills must also NOT WRITE depth. mgl
+            // depthModeForSublayer clamps every layer's depth writes into a
+            // per-layer far band (depthEpsilon partitioning), so a flat z=0
+            // ground fill can never block a later NEARER layer (the sunken
+            // tunnel road under a flat shade). Our plain shade wrote real
+            // z=0 depth with full-range LEQUAL and buried the whole
+            // tunnel-corridor family (tunnel-color-fd 111,810; hiding the
+            // shade or dropping its write each recovered ≈55k px).
             if (hdActiveInTile &&
                 (tech as any).technique === 'fill' &&
                 (tech as any)._hdElevation === undefined && !(tech as any).__elev &&
@@ -988,6 +1006,10 @@ export class MBMaterialPatchManager {
                 for (const material of materials) {
                     if (material.depthTest !== true) {
                         material.depthTest = true;
+                        material.needsUpdate = true;
+                    }
+                    if (material.depthWrite !== false) {
+                        material.depthWrite = false;
                         material.needsUpdate = true;
                     }
                 }
@@ -1602,20 +1624,46 @@ export class MBMaterialPatchManager {
         const mixV = Math.min(pitchDeg / 15, 1);
         const biasRaw = isOrtho ? 0.0001 + (0.01 - 0.0001) * Math.pow(mixV, 5) : 0.01;
         const depthBias = 2.0 * biasRaw;
-        const seedEye = (this.m_dataSource as any).m_shadowRenderer
-            ?.getShadowUniforms?.()?.eye?.clone?.() ?? new THREE.Vector3();
+        // §885 g161: the ground plane's z IN THE SCENE (RTE) frame — the
+        // engine mounts every tile object with position = tile.center −
+        // cameraPosition (MapView.m_camera), so `modelMatrix * transformed`
+        // yields CAMERA-RELATIVE vertices with the ground plane at
+        // z = −cameraWorldZ. Refreshed per frame in patchTile. The shadow
+        // chain's eye is NOT usable here: it stays (0,0,0) whenever shadows
+        // are disabled (getShadowUniforms() null), which collapsed every
+        // prepass vertex to the origin — the whole S6 pass rasterized
+        // nothing (tunnel-color-fd mask carve inert, 111,810 baseline).
+        const mapViewAny = mapView as any;
+        const spherical = mapViewAny?.projection?.type === 1;
+        const camZ = Number(mapViewAny?.m_camera?.position?.z ?? 0);
+        const groundZUniform = { value: spherical || !Number.isFinite(camZ) ? 0 : -camZ } as { value: number };
+        (material as any).__mbPrepassGroundZ = groundZUniform;
+        (material as any).__mbPrepassSpherical = spherical;
         const origOnCompile = material.onBeforeCompile;
         material.onBeforeCompile = (shader: any) => {
             if (origOnCompile) origOnCompile.call(material, shader);
-            shader.uniforms.uMBEye = { value: seedEye };
+            shader.uniforms.uMBGroundZ = groundZUniform;
             shader.uniforms.uMBDepthBias = { value: depthBias };
-            shader.vertexShader = ('uniform vec3 uMBEye;\nuniform float uMBDepthBias;\n' + shader.vertexShader)
+            shader.vertexShader = ('uniform float uMBGroundZ;\nuniform float uMBDepthBias;\n' + shader.vertexShader)
                 .replace(
                     '#include <project_vertex>',
-                    `// mgl elevated_structures_depth_reconstruct.vertex.glsl
+                    `// mgl elevated_structures_depth_reconstruct.vertex.glsl,
+                     // in the scene (RTE) frame.
+                     //  - 'ground' (initialize, DEPTH_RECONSTRUCTION+scale 1):
+                     //    project each vertex onto the ground plane along its
+                     //    camera ray — the camera sits at the RTE origin so
+                     //    the projection is a plain scale t = zGround/z.
+                     //  - 'mask' (reset, scale 0): mgl flattens a_height·0,
+                     //    keeping x/y — the plan-view footprint (non-tunnel
+                     //    road polygons cover the trench floor from above).
+                     //    Here: snap z to the ground plane, keep x/y.
+                     // Skipped entirely on the sphere projection (no z=0
+                     // ground plane there).
                      vec3 mbpW = (modelMatrix * vec4(transformed, 1.0)).xyz;
-                     if (uMBEye.z > mbpW.z) {
-                         mbpW -= (uMBEye - mbpW) * (mbpW.z / (uMBEye.z - mbpW.z));
+                     if (uMBGroundZ < 0.0) {
+                         ${kind === 'mask'
+                            ? 'mbpW.z = uMBGroundZ;'
+                            : 'if (mbpW.z < 0.0) { mbpW *= uMBGroundZ / mbpW.z; }'}
                      }
                      gl_Position = projectionMatrix * viewMatrix * vec4(mbpW, 1.0);`
                         + (kind === 'mask'
