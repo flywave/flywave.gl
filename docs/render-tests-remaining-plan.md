@@ -7807,3 +7807,22 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 归属**：G10 域（墙段几何定位=切分实现质量）。与 markups-clipping/tfd 色序同根因。无独立修复路径。
 
 **④ 状态**：分析轮零代码; 单测 310; 树净; 台账 g191。
+
+### §885 g192: 未归档夹具残余分析完成——fog/guard-rail-color-fd 域定性; 全残余归因矩阵完整（2026-10-25 第一百零六轮补充）
+
+**① fog 域（IBCT 6,953; >30 阈 48.5k 均匀色调 uniformity 0.89）**：fog spec {range:[-2.124,5.99], horizon-blend:0.2} 无 color 键=默认白; fog 色彩/alpha/range/blend 全部从 style 解析（applyFog→evalThemed/evalZoom→m_fogState）。均匀色调偏移=**fog opacity 公式/pitch smoothstep/range km 换算的精度差异**，需逐参数对照（fog_opacity(t)=color.a·min(1,1.00747·(1-exp(-6t))³) vs 我方实现）——专项会话。
+
+**② guard-rail-color-fd 域（IBCT 22k）**：逐行分析（g191）确认=guard rail 段**几何定位偏移**（非颜色指派），G10 域。与 markups-clipping/stacked 同根因。
+
+**③ mc-ne 线不可见（IBCT 2,872）**：SolidLine shader 内部（g180/g181），GPU 级专项挂账。
+
+**④ 全残余归因矩阵（完整）**：
+| 域 | IBCT | 根因 | 修复路径 |
+|---|---|---|---|
+| G10 切分质量 | ~130k（stacked+mc+grc-fd+line-labels-tunnel 等） | 半平面切分碎片化 | martinez 输入预处理+几何校准（G10 完整战役） |
+| mc-ne 线不可见 | 2,872 | SolidLine shader 零 fragments | GPU 级专项调试 |
+| fog 均匀色调 | 6,953 | fog opacity/range 精度 | 逐参数对照修正 |
+| symbols-mixed | +430×2 | 亚阈值噪声 | 无需修复 |
+| guard-rail-color-fd | 22k | 几何定位偏移 | G10 域 |
+
+**⑤ 状态**：分析轮零代码; 单测 310; 树净; 台账 g192。
