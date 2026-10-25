@@ -7476,3 +7476,5 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 处置**：默认关（g161 默认态不变）; 转默认开前须全家族 A/B（重点 junction/ortho-camera-tunnel/circles-tunnel 守门）。剩余 stacked +10.6k = 深层路面色被自身投影 G 阻挡——需我方架构下的 geometry 相等价物（道路先写真实深度排序, 或 intake 统一后按 mgl ReadOnly 编舞）, 与 tfd 墙带位置/featureId 色序并列为下轮主案。
 
 **④ 状态**：三文件小改（emitter 旋钮/test 桥/runner 转发）; 单测影响零（渲染路径）; 台账 g162b。
+
+### §885 g162c: structearly 扩展到 hd-road-base（9.53）——stacked 45,202→**35,483**（+18.5k 回归基本收复, 残 +902）; tfd 60,702→59,804（罚分来自墙前置分量, −898 由路前置部分回吐）。混合收益（stacked/enterance 族收复 vs tfd +10.4k）⇒ 维持默认关; 转正需 geometry 相等价物消解 tfd 罚分后全家族 A/B（2026-10-25 第七十六轮）

@@ -1228,7 +1228,12 @@ export class MBTileDataEmitter {
                     // mgl draws them in a late pass above the coverage quads
                     // (whose renderOrder lands at 2..9 in the clearColor+quad
                     // pipeline); the default 3D priority (ro=1) buries them.
-                    props.renderOrder = fillElevRef === 'hd-road-markup' ? 9.8 : 9.6;
+                    // §885 g162: structearly=1 also moves hd-road-base fills
+                    // ahead of the ground prepass — same self-projection-depth
+                    // argument as the walls (experiment).
+                    props.renderOrder = fillElevRef === 'hd-road-markup'
+                        ? 9.8
+                        : (globalThis as any).__mbStructEarly === true ? 9.53 : 9.6;
                 }
                 if (l.visibility === 'none') props.enabled = false;
                 break;
