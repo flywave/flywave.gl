@@ -664,6 +664,11 @@ function discoverTests(): TestEntry[] {
     // §885 g168c: polysubstructmartinez=1 — structures intake uses the
     // martinez sparse-cut pieces (default off: the wall-quad carve bands
     // regress markups-clipping-underground family-wide).
+    {
+        const wm = (window as any).__karma__?.config?.args
+            ?.find?.((a: string) => a.startsWith('polysubw='))?.slice('polysubw='.length);
+        if (wm !== undefined) (globalThis as any).__mbPolySubW = Number(wm);
+    }
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "polysubspan=1")) {
         (globalThis as any).__mbPolySubSpan = true;
     }

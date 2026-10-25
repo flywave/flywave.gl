@@ -163,8 +163,11 @@ export function polygonSubdivision(
             if (len === 0) continue;
             const ux = dx / len, uy = dy / len;
             const px = -uy, py = ux;
-            // martinez needs a nonzero width; mgl's caller passes 0.1.
-            const w = edgeExtension > 0 ? edgeExtension : 0.1;
+            // g169 sweep: the half-width is parameterizable
+            // (polysubw=<v>) — wider quads eat plan area (markups-clipping
+            // regressed monotonically with width).
+            const w = Number((globalThis as any).__mbPolySubW
+                ?? (edgeExtension > 0 ? edgeExtension : 0.1));
             const quadRing: number[][] = [
                 [e.ax - ux * w + px * w, e.ay - uy * w + py * w],
                 [e.bx + ux * w + px * w, e.by + uy * w + py * w],

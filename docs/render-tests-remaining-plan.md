@@ -7564,3 +7564,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 裁决**：两路均证伪 ⇒ 我方薄四边形构造（宽度/形状）与 mgl polygon_clipping_hd.ts 的实际减法几何不一致, 而该源文件属 mapbox 私有 HD 域（vendored 树仅 .d.ts 壳）不可考。**G10 martinez 移植保持 `polysubstructmartinez=1` 旋钮态**（tfd −14.3k/enterance 族 −26k 可复现）, 默认态维持 g163（家族最优, 1,926,890）。转正前置=获得 mgl 真实减法几何（上游私有源或以 expected 反推拟合）。
 
 **④ 状态**：两实验回退（bundle/源文件树净=HEAD g168 态）; 单测 310; 台账 g169。
+
+### §885 g170: 宽度扫描裁决——mc 回归与薄四边形宽度无关（各宽度恒 +55~65k）, structures martinez 转正无参数窗口; polysubw 旋钮工具入库（2026-10-25 第八十五轮）
+
+**① 扫描**（polysubw 半宽, structures martinez 开）: w=0.01/0.001 → mc **89,236 恒定**（w=0.1 时 79,143 更优!）/ tfd **37,416 恒定**（w=0.1 时 35,064 更优）; w=1.0 → mc 108,954 / tfd 44,203 更差。**宽度单调性与收敛窗口均不存在**。
+
+**② 裁决**：markups-clipping +55~65k 与 tfd +2~3k 的 structures-martinez 偏差**与薄四边形宽度无关**=martinez SPLIT 本身（细分拓扑/段间关系）在该夹具的交互差异。转正前置确认为**必须获得 mgl polygon_clipping_hd.ts 的真实减法构造**（mapbox 私有域不可考）——纯参数扫描无解, G10 移植保持旋钮态（polysubstructmartinez=1）。
+
+**③ 状态**：polysubw 参数化+karma/runner 旋钮入库（默认 0.1=惰性, 默认态不受影响）; 单测 310; 树净; 台账 g170。
