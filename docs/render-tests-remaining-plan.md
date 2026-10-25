@@ -7892,3 +7892,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **⑤ 量级重估**：road-extend-tilecover 154k + shadows-underpass 163k + elevated-symbols-* 族 ~400k + tunnel-enterance-color 134k = **这些照明/着色域残余远超 G10 域 ~130k**。家族残差的主要构成已从 G10 切分质量转向**照明/着色精度**。
 
 **⑥ 修复优先序**：照明/着色域（road-extend-tilecover 154k + shadows-underpass 163k + elevated-symbols 族 ~400k） > fog 精度 6,953 > G10 域 130k（阻塞于私有源）。
+
+### §885 g197: road-extend-tilecover 154k 定性——路面亮度恒定 48% = 色彩空间或照明管线系统性问题（2026-10-25 第一百零九轮补充）
+
+**① 色彩分析**：exp 路色 (159,176,196) → 我方 (77,85,94)——**比率恒定 0.48**（R/G/B 三通道一致）= 系统性亮度减半，非随机噪声。夹具无 fog 键（排除 fog）。
+
+**② 根因候选**：色彩空间转换（sRGB↔linear 双重转换）、fill-z-offset 影响 ambient 评估、或 TILE BOUNDARY 填充重叠区域双混合衰减。此 fixture 名含 "tilecover" = 跨瓦覆盖测试，可能存在瓦间填充重叠导致的暗化。
+
+**③ 与 mc-ne/tfd 的区别**：tfd 路色正确 (161,178,198)，本 fixture 路色系统性过暗 ⇒ 域独立（非 G10、非 fog、非 prepass），需 road-extend-tilecover 专项。
+
+**④ 状态**：夹具还原; 零代码; 单测 310; 台账 g197。
