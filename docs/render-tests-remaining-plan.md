@@ -7656,3 +7656,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 残余转域**：IBCT 逐位不变（2,872）=线仍不可见——几何已产出但光栅化不可见 ⇒ **线材质/光栅化新域**（SolidLine stencil 状态/线宽单位/markup band 深度——test harness 3219 行注释: stencil 缺失致线全隐的先例）。非 G10, 下轮首查。
 
 **④ 门**：mc-ne 2,872（不变）; road-markups 10,705 / stacked 43,374 / tfd 49,344 全部无回归; 单测 310; 台账 g178。
+
+### §885 g179: 线不可见收敛至 road-base 覆盖——rmstyle 隔离证明线在光栅化（全 fill 隐藏后完整显现）; 深度/stencil 机制下轮首查（2026-10-25 第九十四轮）
+
+**① rmstyle 隔离**：移除 road-base/bridge/hatched 全部 fill → **全部白色线标记完整显现**（车道虚线/人行横道/停止线/转向箭头, 底半幅 6,370 近白像素）——flat-fallback 线几何**在光栅化**, 非发射/网格问题。
+
+**② 覆盖机制二分**：markupbias=5（+5m 巨幅抬升）仍不可见 ⇒ 非简单 z-fight（5m 抬升必过深度精度）; 线 ro=9.75 > 路 ro=9.6（后画）⇒ 非绘制顺序。剩余嫌疑=**road-base fill 的深度/stencil 写入在线片段上的拦截**（fill 的 stencil 写/深度精度/或 fill 材质深度语义）——线材质域深查。
+
+**③ 状态**：flat-fallback 修复保留（mgl renderFlat 字面, 遥测全 plan=yes）; rmstyle 隔离证明线在光栅化; mc-ne 残 2,872 不变; 其余无回归; 单测 310; 台账 g179。
