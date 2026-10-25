@@ -7510,3 +7510,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 与我方对拍结论**：我方同族墙网格 1400 顶点/7 色桶（blue×3 green×3 yellow×1）, 像素级色序左移一段+右半缺失 ⇒ **我方 unevalEdges 的边选择/切分集合与 mgl 不同**（多建墙但错选边/错分段）, featureId→颜色映射本身无误。下轮=prepareEdges 输入集对拍（mgl 12/14/16/18 号 feature 的哪些边 vs 我方对应 feature 的边集）, 修边选择后色序/覆盖应同时收敛。
 
 **④ 状态**：oracle 数据存 tmp/mgl-wallprobe-tfd3.json; bundle 已还原; harness 提交; 台账 g164b。
+
+### §885 g165: prepareEdges 输入集逐边对拍完成——几何 superset 实锤（median NN 0.0）, 差异收敛至类型指派/分段; 帧变换 (x/2, 4096−y/2) 精确解（2026-10-25 第八十轮）
+
+**① 对拍基建**：我方 `__mbEdges` 探针升级（tile 键+extent 坐标+polygonIdx, MBElevatedStructures intake 处）; MBStyleDataSource decodedbg dump 增 `edges` 字段经结果服务器落盘; mgl 端 wallprobe 增 `unevalEdges` 全量 dump（fi/type/端点索引+int16 直读坐标）。bundle destroy 补丁按需打/还原（本轮两度）。
+
+**② 帧变换精确解**：mgl 边坐标为 **8192 overzoom 帧**（road-base y 达 8049、bridge x 达 8202）; 我方为 4096 帧 y-up。变换 **(x/2, 4096−y/2)** 下 mgl 全部 152 端点 median NN=**0.0**（152/152 <3u）——两帧关系线性精确, tile 键语义一致（同 512px z18 地面域）。
+
+**③ 逐边对拍结论（tile 18-41948-101472）**：我方 intake 103 边（94 唯一）⊇ mgl 76 边（51 唯一）——**全部 76 条（71 none+3 entrance+2 polygon）端点 NN=0.0**; 我方多 27 条（细分/重复边）。类型词汇一致（none/entrance/polygon）; 差异=**prepareEdges 后类型指派与分段**（我方 'polygon' 11-22/瓦 vs mgl 2; 'none' 墙集与 featureIndex 分段边界不同）⇒ 墙带色序左移/右半缺失为分段产物, 非几何缺失。
+
+**④ 下轮首案（精确到字段）**：我方 post-prepareEdges 逐边 type dump（tile 18-41948-101472, 变换回 mgl 帧后与 mgl 71/3/2 指派逐边 diff）→ 修 portal 图 type 指派或 construct 分段; 验收=tfd 墙带色序 G→Y→B 与右半 x248-512 覆盖收敛。
+
+**⑤ 状态**：MBElevatedStructures/MBStyleDataSource 探针改动+wallprobe html 升级提交; oracle 数据 tmp/mgl-wallprobe-tfd{4,5}.json + tmp/our-edges-tfd.json; 单测 310; 树净（bundle 已还原）。

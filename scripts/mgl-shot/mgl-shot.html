@@ -367,6 +367,18 @@
                                 bridgeSections: es.bridgeFeatureSections ?? null,
                                 tunnelSeg: seg(es.renderableTunnelSegments),
                                 bridgeSeg: seg(es.renderableBridgeSegments),
+                                // g165: full edge set — featureIndex/type/endpoints
+                                // (vertex indices into vertexPositions) for the
+                                // prepareEdges input parity diff.
+                                edges: (es.unevalEdges ?? []).map(e => ({
+                                    fi: e.featureInfo ? e.featureInfo.featureIndex : null,
+                                    t: e.type, a: e.a, b: e.b,
+                                    pol: e.polygonIdx, tun: e.isTunnel,
+                                    ax: (es.vertexPositions && es.vertexPositions.int16 && e.a * 4 < es.vertexPositions.int16.length) ? es.vertexPositions.int16[e.a * 4] : null,
+                                    ay: (es.vertexPositions && es.vertexPositions.int16 && e.a * 4 + 1 < es.vertexPositions.int16.length) ? es.vertexPositions.int16[e.a * 4 + 1] : null,
+                                    bx: (es.vertexPositions && es.vertexPositions.int16 && e.b * 4 < es.vertexPositions.int16.length) ? es.vertexPositions.int16[e.b * 4] : null,
+                                    by: (es.vertexPositions && es.vertexPositions.int16 && e.b * 4 + 1 < es.vertexPositions.int16.length) ? es.vertexPositions.int16[e.b * 4 + 1] : null,
+                                })),
                                 features: (bucket.features ?? []).slice(0, 60).map(f => ({
                                     id: f && f.id,
                                     keys: f ? Object.keys(f).slice(0, 6) : [],

@@ -1311,7 +1311,7 @@ export class MBElevatedStructures {
                 c.offered++;
                 if (c.offered % 400 === 0) console.log(`[MBEdge] offered=${c.offered} kept=${c.kept}`);
                 const ed = (globalThis as any).__mbEdges ??= [];
-                if (ed.length < 4000) ed.push([Math.round(vax * 2) / 2, Math.round(vay * 2) / 2, Math.round(vbx * 2) / 2, Math.round(vby * 2) / 2]);
+                if (ed.length < 8000) ed.push([this.m_consumerKey, Math.round(vax * 2) / 2, Math.round(vay * 2) / 2, Math.round(vbx * 2) / 2, Math.round(vby * 2) / 2, polygonIdx]);
             }
             const edgeHash = edgeHashOf(va, vb);
             let portalHash = this.m_vertexHashLookup.get(posHashOf(va))?.next

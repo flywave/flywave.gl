@@ -3165,6 +3165,10 @@ export class MBStyleDataSource extends TileDataSource {
                                 },
                                 elev: elevSamples, yellow: yellowSamples,
                                 black: blackSamples, samples, inventory,
+                                // g165: per-tile wall-edge intake set (tile key
+                                // + extent coords + source polygonIdx) for the
+                                // mgl unevalEdges parity diff.
+                                edges: (globalThis as any).__mbEdges ?? [],
                                 shaders: (globalThis as any).__mbShaderProbe ?? [],
                                 ribbonShaders: (globalThis as any).__mbRibbonProbe ?? [],
                             };
