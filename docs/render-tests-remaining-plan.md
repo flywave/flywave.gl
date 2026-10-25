@@ -7454,3 +7454,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ tfd 残余 49.4k 定性**：堑区路面+车道线已透出（主症状消除）；残余=墙带屏幕位置偏移+分段色序（id%3 featureId 映射/墙边选择, g134 挂账域）与背景照明带（g147-g151 域）。
 
 **⑤ 状态**：零探针新增；`MBMaterialPatchManager.ts` 单文件落地；tsc 新增错误 0（HEAD 既有 33）；单测 310 passing；A/B 图像存 `rendering-test-results/mb-3di-{before,after,reg1,e1-e4,fix1-fix4}`。**会话终局：57 轮台账 g106-g161, S6 深度链从"零栅格化"修复至生产生效。**
+
+### §885 g162: S6 两缺失件实测净负证伪 + stacked 二分矩阵闭环——discard/geometry 相不落地; 洞=ground 相写入单独造成; 真修复=structures intake 与 deck 发射域统一（2026-10-25 第七十四轮）
+
+**① mgl 权威件补齐（GitHub 源码）**：reconstruct 片元 `if (v_height >= 0.0) discard;`（initialize+reset 仅真地下负高片段写地面深度）; 'geometry' 相（draw_elevated_fill.ts:274-280, 无 heightRange 门, 真实 3D 深度 LEQUAL+bias, 无 DEPTH_RECONSTRUCTION）; `depthRangeFor3D=[0, 1−(层数+2)·numSublayers·depthEpsilon]`（2D 层带钳在远端带=3D 域整体更近——shade 越权问题 mgl 用区间分段解决, 我方 g161-C 禁写等效）。
+
+**② 两件落地实测（已回退）**：stacked 55,180（vs g161 53,130 更差）/ tunnel-enterance 47,163（vs 41,275 更差）/ separate-layer 同 / enterance-color 133,906 持平差。**根因=体系不同构**：mgl road color 为 DepthMode.ReadOnly（深度全靠 prepass 编舞, discard/geometry 是其必要件）; 我方 road color 自写深度（§515）, prepass 仅承担 carve/遮挡, mgl 字面件在此架构下净负。**不落地, 留档**。
+
+**③ stacked 二分矩阵（g161 码态）**：hide-ground=**34,581（逐位=基线, 完全复原）**; hide-mask=57,135（比 g161 略差=mask 车削在净缓解）; prepassoff=34,581; markupstructs=1=53,130（markup 门排除）; polygonclip=0=53,130（G10 覆盖排除）; isTunnel 分类与 mgl 字面一致。**定性=洞完全由 ground 相的地面投影深度写入造成**（深层路/墙自身被自身投影深度阻挡; mgl 靠同桶几何的精确 carve 覆盖解消——其 mask 与 road color 出自同一 addGeometry 输出）。
+
+**④ 真修复方向（下轮专项）**：统一 structures intake 与 deck 发射域（我方 addElevatedFeature 有 markup 门/guardRail 门/zOff 加高, deck 走 plan.pieces 另路）——mask 覆盖必须与实际重绘集合一致才能安全保留 ground 相; 或按 mgl 终形态把 road color 改 ReadOnly+prepass 全编舞。附带疑点待 oracle：mgl expected 中深层路/墙在非覆盖区为何可见（纯源码推演已穷尽, 需 scripts/mgl-shot 实机对拍 depth 状态）。
+
+**⑤ 状态**：两实验改动全部回退树净（git checkout）; 零提交代码; 台账 g162。
