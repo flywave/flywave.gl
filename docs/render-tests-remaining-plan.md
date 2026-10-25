@@ -7582,3 +7582,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ Y↔G 色序互换最终收窄**：分段几何边界已对齐（91/160 vs 62/147）、type 指派正确、featureId 链正确 ⇒ 残余=**碎片化片的 section 分组归属**（我方 7 组 vs mgl 4 组, 碎片归组与 mgl 连续段不同）——该分组由碎片化产生, martinez 旋钮态（polysubstructmartinez=1, 稀疏分段=4 组）已修复此层, 默认态转正仍受 G10 carve 带阻塞（g169）。
 
 **④ 状态**：featureId 探针提交（addElevatedFeature featureId 参数+实例字段+edges dump 7 元组）; 单测 310; 树净; 台账 g171。
+
+### §885 g172: piece 拓扑对照完成——mgl 358 顶点=tileToMeter 往返专用墙顶点 vs 我方 90=环顶点复用（表示差异非几何差异）; carve 收敛战役收口（2026-10-25 第八十七轮）
+
+**① 拓扑对照（structures martinez 态 decodedbg）**：我方 4 瓦 census verts=1596/90/928/1218, edges={none:220/80/154/166, polygon:17/33/35, entrance:/border:6}；mgl 同域 tile=358 顶点/76 边（none 71+entrance 3+polygon 2）。**mgl 每边 ~4.7 专属顶点**（addVertex tileToMeter 往返=audit G5/G14 米↔tile 变换的专用墙顶点, 不复用环顶点）; **我方每边 ~1.1**（复用环顶点）——内部表示差异, 非几何差异（g165 边集变换匹配 median 0.0 已证边集一致）。
+
+**② 新发现**：我方 census 含 **'border' 类型边**（6-7/瓦, mgl 无此类型）——瓦边指派差异; 不建墙（partition('none') 后归 rest）无视觉影响, 但属 intake/指派域差异记档。
+
+**③ 战役收口**：carve 带收敛在现可考信息下无解（mgl 减法几何+墙顶点变换均为私有域）; G10 martinez 移植保持旋钮态（polysubstructmartinez=1: tfd −14.3k/enterance 族 −26k/右半覆盖收敛✓）; 默认态=g163（家族最优）; 转正前置永久挂账=mgl polygon_clipping_hd.ts 私有源获取或 expected 深度反推工程。
+
+**④ 状态**：零代码改动（纯对拍分析）; 单测 310; 树净; 台账 g172。
