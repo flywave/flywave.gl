@@ -225,6 +225,7 @@ function main() {
             ...(process.env.MBSTYLE_POLYSUBW ? [`polysubw=${process.env.MBSTYLE_POLYSUBW}`] : []),
             ...(process.env.MBSTYLE_SPECTRCAPTURE ? [`spectrcapture=${process.env.MBSTYLE_SPECTRCAPTURE}`] : []),
             ...(process.env.MBSTYLE_POLYSUBCLEAN === "1" ? ["polysubclean=1"] : []),
+            ...(process.env.MBSTYLE_LINESPLIT === "1" ? ["linesplit=1"] : []),
             ...(process.env.MBSTYLE_GLCATCH ? [`glcatch=${process.env.MBSTYLE_GLCATCH}`] : []),
             // §885 g90: mkuptwin=0 — markup lines curve-only height (no level twin).
             ...(process.env.MBSTYLE_MKUPTWIN ? [`mkuptwin=${process.env.MBSTYLE_MKUPTWIN}`] : []),
