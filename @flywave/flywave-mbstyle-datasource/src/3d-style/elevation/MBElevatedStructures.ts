@@ -97,6 +97,10 @@ export interface FillElevationPlan {
     isTunnel: boolean;
     /** Subdivided exterior pieces with their attached subdivided holes. */
     pieces: FillElevationPiece[];
+    /** g168b: the half-plane canonical pieces — depth/mask triangle source
+     * when the structures intake runs on martinez pieces; undefined
+     * otherwise (the intake then runs the single-pass g163 form). */
+    piecesCanonicalHP?: CanonicalPiece[];
     /** Clipped pre-subdivision rings (exterior first) — portal candidates. */
     clippedRings: ClipPoint[][];
     /** Same pieces in canonical extent space (structures mesh frame). */
@@ -475,8 +479,24 @@ export class MBElevatedStructures {
 
         // Subdivide the exterior; subdivide each hole with the same edges
         // and re-attach it to the exterior piece containing it.
-        const exteriorPieces = polygonSubdivision([clipped[0]], edges as SubdivisionEdge[]);
-        const holePieces = clipped.slice(1).map(ring => polygonSubdivision([ring], edges as SubdivisionEdge[]));
+        // §885 g168: SPLIT subdivisions — the DECK render pieces keep the
+        // gap-free half-plane cuts (martinez's real thin-quad gaps delete
+        // deck area: +420k family-wide with martinez decks), while the
+        // STRUCTURES intake (walls; piecesCanonical → unevalEdges) uses the
+        // mgl-literal martinez sparse cut — the sparse wall-edge set fixes
+        // the tunnel-color-fd band fragmentation/color shift.
+        // §885 g168c: DEFAULT OFF — the martinez wall-quad carve bands still
+        // regress markups-clipping-underground (+54k) / circles-tunnel (+6k)
+        // family-wide; polysubstructmartinez=1 flips on per-experiment.
+        const structMartinez = (globalThis as any).__mbPolyStructMartinez === true;
+        const exteriorPieces = polygonSubdivision([clipped[0]], edges as SubdivisionEdge[], 0.1, false);
+        const holePieces = clipped.slice(1).map(ring => polygonSubdivision([ring], edges as SubdivisionEdge[], 0.1, false));
+        const exteriorPiecesStruct = structMartinez
+            ? polygonSubdivision([clipped[0]], edges as SubdivisionEdge[], 0.1, true)
+            : exteriorPieces;
+        const holePiecesStruct = structMartinez
+            ? clipped.slice(1).map(ring => polygonSubdivision([ring], edges as SubdivisionEdge[], 0.1, true))
+            : holePieces;
 
         // §885 终三一九b2: hole→piece re-attachment via the hole piece's
         // VERTEX CENTROID. part[0] (the first vertex) can sit exactly on a
@@ -495,23 +515,38 @@ export class MBElevatedStructures {
             return { x: sx / part.length, y: sy / part.length };
         };
 
+        const piecesCanonicalHP: CanonicalPiece[] = [];
         for (const piece of exteriorPieces) {
             const holes: FillElevationPiece['holes'] = [];
-            const holesCanonical: ClipPoint[][] = [];
-            const holeHeightsCanonical: number[][] = [];
             for (const parts of holePieces) {
                 for (const part of parts) {
                     const probe = holeProbe(part);
                     if (pointInRing(probe, piece)) {
                         const hs = part.map(sample);
                         holes.push({ ring: back(part), heights: hs });
+                    }
+                }
+            }
+            const ringHeights = piece.map(sample);
+            pieces.push({ ring: back(piece), heights: ringHeights, holes });
+        }
+
+        // Structures canonical pieces: the martinez sparse-cut pieces when
+        // enabled (the wall-edge set mgl builds from); heights per vertex.
+        for (const piece of exteriorPiecesStruct) {
+            const holesCanonical: ClipPoint[][] = [];
+            const holeHeightsCanonical: number[][] = [];
+            for (const parts of holePiecesStruct) {
+                for (const part of parts) {
+                    const probe = holeProbe(part);
+                    if (pointInRing(probe, piece)) {
+                        const hs = part.map(sample);
                         holesCanonical.push(part);
                         holeHeightsCanonical.push(hs);
                     }
                 }
             }
             const ringHeights = piece.map(sample);
-            pieces.push({ ring: back(piece), heights: ringHeights, holes });
             piecesCanonical.push({
                 ring: piece,
                 ringHeights,
@@ -525,6 +560,7 @@ export class MBElevatedStructures {
             feature, isTunnel: feature.isTunnel(),
             pieces,
             piecesCanonical,
+            piecesCanonicalHP: structMartinez ? piecesCanonicalHP : undefined,
             clippedRings: clipped.map(back),
             clippedRingsCanonical: clipped,
         };
@@ -715,11 +751,16 @@ export class MBElevatedStructures {
         guardRailEnabled: boolean;
         isTunnel: boolean;
         pieces: CanonicalPiece[];
+        /** g168b: the half-plane canonical pieces for the depth/mask road
+         * triangles (full plan footprint); defaults to `pieces` — when
+         * absent the intake runs the single-pass g163 form. */
+        triPieces?: CanonicalPiece[];
         zOffset?: number;
         /** mgl addRenderableRing's `area` (elevation.safeArea) — G3. */
         safeArea?: { minX: number; minY: number; maxX: number; maxY: number };
     }): void {
         const { featureIndex, guardRailEnabled, isTunnel, pieces, safeArea } = params;
+        const triPieces = params.triPieces ?? pieces;
         // §885 g52f: the deck geometry renders at project() + zOffset +
         // sampledHeight — project() folds m_currentZOffset (the g13
         // properties.level compensation, +1.0 for these bridges) into EVERY
@@ -743,7 +784,15 @@ export class MBElevatedStructures {
                 console.log(`[MBFeatH] feat=${featureIndex} guard=${guardRailEnabled} tunnel=${isTunnel} pieces=${pieces.length} ringH=[${lo.toFixed(2)}..${hi.toFixed(2)}] n=${n}`);
             } catch {}
         }
-        for (const piece of pieces) {
+        // §885 g168b: two passes when the structures intake runs on the
+        // martinez pieces — 'edges' builds the wall/rail rings from them;
+        // 'tris' builds the depth/mask road triangles from the half-plane
+        // pieces (full footprint). With triPieces absent this is the
+        // single-pass g163 form (both from `pieces`).
+        const intakeModes: Array<'edges' | 'tris' | 'both'> = params.triPieces ? ['edges', 'tris'] : ['both'];
+        for (const intakeMode of intakeModes) {
+        const srcPieces = intakeMode === 'tris' ? triPieces : pieces;
+        for (const piece of srcPieces) {
             for (const h of piece.ringHeights) {
                 if (h < 1.0) this.m_underground = true;  // mgl heightMargin 1.0
             }
@@ -786,17 +835,22 @@ export class MBElevatedStructures {
 
             const tri = earcut(flattened, holeIndices.length > 0 ? holeIndices : null, 2);
             const vOffset = this.m_unevalHeights.length - flattened.length / 2;
-            const outTriangles = isTunnel ? this.m_unevalTunnelTriangles : this.m_unevalTriangles;
-            for (const idx of tri) outTriangles.push(idx + vOffset);
-
-            for (const [offset, count, wasClosed] of ringRanges) {
-                if ((globalThis as any).__mbDecodeDbg) {
-                    const rl = (globalThis as any).__mbRingTags ??= [];
-                    if (rl.length < 500) rl.push([featureIndex, offset, count, this.m_unevalHeights[vOffset + offset] ?? 0]);
-                }
-                this.addRenderableRing(
-                    featureIndex, vOffset + offset, count, isTunnel, guardRailEnabled, safeArea, wasClosed !== false);
+            if (intakeMode !== 'edges') {
+                const outTriangles = isTunnel ? this.m_unevalTunnelTriangles : this.m_unevalTriangles;
+                for (const idx of tri) outTriangles.push(idx + vOffset);
             }
+
+            if (intakeMode !== 'tris') {
+                for (const [offset, count, wasClosed] of ringRanges) {
+                    if ((globalThis as any).__mbDecodeDbg) {
+                        const rl = (globalThis as any).__mbRingTags ??= [];
+                        if (rl.length < 500) rl.push([featureIndex, offset, count, this.m_unevalHeights[vOffset + offset] ?? 0]);
+                    }
+                    this.addRenderableRing(
+                        featureIndex, vOffset + offset, count, isTunnel, guardRailEnabled, safeArea, wasClosed !== false);
+                }
+            }
+        }
         }
     }
 

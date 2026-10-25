@@ -40,17 +40,19 @@ function createDecodeInfo(tileKey: TileKey): any {
 
 describe('MBPolygonClippingHD', () => {
     it('polygonSubdivision splits a rectangle across the mid line', () => {
-        // Square split by the vertical line x=50.
+        // Square split by the vertical line x=50. §885 g168: the martinez
+        // cut removes a thin quad (edgeExtension 0.1 → 0.2 wide × ~200 tall
+        // sliver ≈ 20 units²) — each piece ≈ 4990.
         const square = [
             { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }, { x: 0, y: 0 },
         ];
         const pieces = polygonSubdivision([square], [
             { ax: 50, ay: -200, bx: 50, by: 200 },
-        ]);
+        ], 0.1);
         expect(pieces.length).to.equal(2);
         const areas = pieces.map(p => Math.abs(shoelace(p))).sort((a, b) => a - b);
-        expect(areas[0]).to.be.closeTo(5000, 1);
-        expect(areas[1]).to.be.closeTo(5000, 1);
+        expect(areas[0]).to.be.closeTo(5000, 25);
+        expect(areas[1]).to.be.closeTo(5000, 25);
     });
 
     it('polygonSubdivision keeps polygons untouched without edges', () => {

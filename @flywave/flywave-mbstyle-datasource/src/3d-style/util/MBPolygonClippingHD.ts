@@ -18,7 +18,11 @@
  *    sliver martinez removes along the cut line has no height-equivalent.
  *
  * All positions are plain `{x, y}` in canonical elevation-extent units.
+ *
+ * §885 g168: the cut engine is the vendored martinez DIFF (thin quad
+ * subtraction, martinezVendor.ts) — matching mgl's polygonSubdivision.
  */
+import { martinezDiff } from './martinezVendor';
 
 export interface ClipPoint {
     x: number;
@@ -145,9 +149,53 @@ function clipRingHalfPlane(
  */
 export function polygonSubdivision(
     polygons: ClipPoint[][], subdivisionEdges: SubdivisionEdge[], edgeExtension = 0,
+    useMartinez = true,
 ): ClipPoint[][] {
-    void edgeExtension;
     if (subdivisionEdges.length === 0) return polygons;
+
+    if (useMartinez) {
+        let current = polygons.map(ring => ring.slice());
+        for (const e of subdivisionEdges) {
+            if (e.ax === e.bx && e.ay === e.by) continue;
+            const dx = e.bx - e.ax;
+            const dy = e.by - e.ay;
+            const len = Math.hypot(dx, dy);
+            if (len === 0) continue;
+            const ux = dx / len, uy = dy / len;
+            const px = -uy, py = ux;
+            // martinez needs a nonzero width; mgl's caller passes 0.1.
+            const w = edgeExtension > 0 ? edgeExtension : 0.1;
+            const quadRing: number[][] = [
+                [e.ax - ux * w + px * w, e.ay - uy * w + py * w],
+                [e.bx + ux * w + px * w, e.by + uy * w + py * w],
+                [e.bx + ux * w - px * w, e.by + uy * w - py * w],
+                [e.ax - ux * w - px * w, e.ay - uy * w - py * w],
+                [e.ax - ux * w + px * w, e.ay - uy * w + py * w],
+            ];
+            const subject = current.map(ring => {
+                const out = ring.map(p => [p.x, p.y]);
+                const first = out[0];
+                const last = out[out.length - 1];
+                if (first[0] !== last[0] || first[1] !== last[1]) out.push([first[0], first[1]]);
+                return out;
+            });
+            const diffed = martinezDiff(subject, [quadRing]) as number[][][];
+            const next: ClipPoint[][] = [];
+            for (const poly of diffed) {
+                for (let r = 0; r < poly.length; r++) {
+                    if (r > 0) continue; // subdivision cuts create no holes
+                    const ring = poly[r];
+                    const pts: ClipPoint[] = [];
+                    for (let i = 0; i + 1 < ring.length; i++) pts.push({ x: ring[i][0], y: ring[i][1] });
+                    const kept = normalizeRing(pts);
+                    if (kept) next.push(kept);
+                }
+            }
+            if (next.length === 0) return [];
+            current = next;
+        }
+        return current;
+    }
 
     let current = polygons.map(ring => normalizeRing(ring) ?? ring);
     // §885 g167: mgl clips with the thin quad of the subdivision SEGMENT
@@ -156,7 +204,14 @@ export function polygonSubdivision(
     // every straddling edge (the dense mid-edge insertions that fragmented
     // the structure walls and shifted the fill-tunnel-structure-color
     // section boundaries). `polysubline=1` reverts to the infinite line.
-    const bounded = (globalThis as any).__mbPolySubLine !== true;
+    // §885 g168d: default off — bit-exact with the pre-g167 cuts; the
+    // span-bounded variant measured +4k on road-markups-clipping-underground
+    // (polysubspan=1 enables it; polysubline=1 still forces the raw line).
+    // §885 g168d: default off — bit-exact with the pre-g167 cuts; the
+    // span-bounded variant measured +4k on road-markups-clipping-underground
+    // (polysubspan=1 enables it; polysubline=1 still forces the raw line).
+    const bounded = (globalThis as any).__mbPolySubSpan === true
+        && (globalThis as any).__mbPolySubLine !== true;
     for (const e of subdivisionEdges) {
         // Degenerate edges (isolated curve vertices have no direction) do
         // not cut — clipping to both sides of a point would duplicate the

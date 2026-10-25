@@ -661,6 +661,15 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "markupstructs=1")) {
         (globalThis as any).__mbMarkupStructs = true;
     }
+    // §885 g168c: polysubstructmartinez=1 — structures intake uses the
+    // martinez sparse-cut pieces (default off: the wall-quad carve bands
+    // regress markups-clipping-underground family-wide).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "polysubspan=1")) {
+        (globalThis as any).__mbPolySubSpan = true;
+    }
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "polysubstructmartinez=1")) {
+        (globalThis as any).__mbPolyStructMartinez = true;
+    }
     // §885 g167: polysubline=1 — revert polygonSubdivision to the infinite
     // cut line (the span-bounded thin-quad semantics is the default).
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "polysubline=1")) {

@@ -7542,3 +7542,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 机制定性收口**：原始 MVT extent=**8192**（HD 标准, 自研 protobuf 解码实测）, 环线原始顶点稀疏（首特征 geometry 仅 17 字节）; mgl 墙=martinez 薄四边形减法下的稀疏直边, 我方=半平面切分的密集碎片——**架构性差异, 线裁剪守卫不可修**; 真修复= martinez-polygon-clipping 布尔移植（G10 ⭐⭐⭐⭐⭐, 与台账既有大型工程项并案）或等效的拓扑保持切分。
 
 **④ 状态**：MBPolygonClippingHD 单文件（跨度限定默认开+回退门+polysubline 旋钮链）; tsc 零新增（25 既有）; 单测 310 passing; tfd/stacked 逐位回到 g163 态; 台账 g167。
+
+### §885 g168: G10 martinez 布尔裁剪移植落地（默认关, 旋钮态 tfd −14k/enterance 族 −26k; 家族默认态逐位=g163）（2026-10-25 第八十三轮）
+
+**① 移植落地**：`martinezVendor.ts`（新）内嵌 vendored **martinez-polygon-clipping 0.8.1（MIT）**+ splaytree 0.1.4（MIT）+ robust-predicates 2.0.4（Unlicense）+ tinyqueue 3.0.0（ISC）（取自本地 mapbox-gl-js/node_modules, eval-registry 自包含免资产拷贝; tinyqueue ESM 剥 export default 补 module.exports）。`MBPolygonClippingHD.polygonSubdivision` 增 useMartinez 模式：**薄四边形（段延伸 0.1+半宽 0.1）martinez DIFF 减法**=mgl polygonSubdivision 字面; 调用方（prepareFillGeometry）传 SUBDIVISION_EDGE_EXTENSION=0.1。
+
+**② SPLIT 架构（g168b）**：DECK 渲染片=半平面无缝切（martinez 真缝隙删减 deck 面积, 家族 +420k 灾难的教训）; STRUCTURES intake（墙边集）=martinez 稀疏切（mgl 字面）——addElevatedFeature 双遍 intake（edges=墙环遍历 / tris=mask/depth 三角形遍历）+ triPieces 参数（prepareFillGeometry 产出 piecesCanonicalHP 半平面 canonical 件）。空结果防御回落半平面。
+
+**③ 旋钮态实测（polysubstructmartinez=1）**：tunnel-color-fd 49,344→**35,064（−14.3k）**、tunnel-separate-layer/enterance 41,275→**30,671（−10.6k）**、enterance-color 133,871→**118,305（−15.6k）**——**tfd 墙带右半 x248-512 覆盖收敛（B[160-512]/B[204-512] ✓）, 分段边界对齐（91/160 vs 62/147）, 残余=首段 Y↔G 色序互换（featureId 指派细节）**。家族其余仍有 markups-clipping +54k / circles-tunnel +6k / wireframe +5.2k（墙 quad carve 带差异）。
+
+**④ 默认处置**：structures martinez **默认关**（polysubstructmartinez=1 开）; 跨度限定**默认关**（polysubspan=1 开; markups-clipping +4k 实测）; **默认态与 g163 逐位一致**（tfd 49,344 / stacked 43,374 / markups-clipping 24,693 三夹具复核）。G10 移植完整在库, 转正前置=carve 覆盖收敛（wall-quad 带与 mask 足迹对齐）。
+
+**⑤ 状态**：六文件（martinezVendor 新/MBPolygonClippingHD/MBElevatedStructures/MBStyleDataSource/MBTileDataEmitter/测试+runner 旋钮）; tsc 零新增（25 既有）; 单测 310 passing（含薄四边形 sliver 容差修正的 polygonSubdivision 单测）; 树净; 台账 g168。
