@@ -7902,3 +7902,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 与 mc-ne/tfd 的区别**：tfd 路色正确 (161,178,198)，本 fixture 路色系统性过暗 ⇒ 域独立（非 G10、非 fog、非 prepass），需 road-extend-tilecover 专项。
 
 **④ 状态**：夹具还原; 零代码; 单测 310; 台账 g197。
+
+### §885 g198: road-base fill 纯红替换零像素——fill 完全不可见(非过暗); "路面暗色"来源=非 road-base; 下轮查实际路面来源（2026-10-25 第一百一十轮）
+
+**① 纯红替换实验**：road-base fill-color→#ff0000 → **红色像素=0** — road-base fill 完全不渲染。但 g163 渲染中存在 (161,178,198) 路色 = 来自非 road-base 源。
+
+**② 路面来源推断**：mc-ne 的路蓝 (161,178,198) = road-base-bridge 或 road-hatched-area fill。road-extend-tilecover 同理——**road-base fill 本身在该 fixture 不渲染**（可能技术门/zoom 门/或 fill-elevation-reference 门控跳过了 fill）。
+
+**③ 修复方向**：road-base fill 不可渲染的根因=fillHdMode 的 fill-elevation-reference 门控在无高程数据时的处理——需要 fill 侧 renderFlat 回落（与 g178 线侧同款，fill 侧尚无）。
+
+**④ 状态**：夹具还原; 单测 310; 台账 g198。
