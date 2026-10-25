@@ -7612,3 +7612,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 实测**：默认态（structures 半平面）三夹具**逐位=g163**（24,693/43,374/49,344, 中性安全）; martinez 态 markups-clipping 98,655（比 buggy 79,143 更差=正确 minHeight 使 prepass 门全开, 但墙 quad carve 差异依旧）——**markups-clipping 的 martinez 回归独立于 prepass 门**, 收敛仍阻塞于薄四边形减法几何（g169 裁决不变）。
 
 **③ 状态**：MBElevatedStructures 单文件（运行最小字段+construct 优先使用）; 单测 310; 默认态逐位 g163; 台账 g174。
+
+### §885 g175: 长度延伸去除实验逐位无差——martinez 输出对薄四边形几何细节不敏感(近退化 quad 一致 snap); G10 几何变体全谱穷尽, 战役终局收口（2026-10-25 第九十轮）
+
+**① 实验**：薄四边形去除长度方向延伸（quad 精确 a→b, 仅保留宽度 w）——markups-clipping 98,655 / stacked 44,274 / tfd 37,775, 与带延伸版**逐位相同**。martinez 对近退化薄 quad 的 snap 使几何微变无效。
+
+**② G10 几何变体全谱穷尽清单（全部证伪/中性）**：宽度 0.001–1.0 扫描（g170）、批量单次 DIFF（g169）、长度延伸有无（本轮）、跨度限定（g167 中性）、近平行抑制（g167 灾难）。**结论最终化**：martinez 薄四边形减法在所有可调变体下都产生 markups-clipping +55~75k 的 piece 结构回归, 同时给出 tfd −14k/enterance 族 −26k——两者不可兼得, 除非获得 mgl 私有减法算法（polygon_clipping_hd.ts）。
+
+**③ 最终架构态（=HEAD g168）**：默认态=g163 逐位（家族最优 1,926,890）; G10 martinez 移植+SPLIT 架构完整在库, `polysubstructmartinez=1` 旋钮态（tfd 35,064/enterance 30,671/color 118,305）永久可用; minHeight 全局最小修复（g174）保留。
+
+**④ 状态**：单文件回退树净; 单测 310; 台账 g175。G10 转正前置战役终局。
