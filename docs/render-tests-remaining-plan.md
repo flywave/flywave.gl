@@ -7724,3 +7724,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 不可见定位**：HighPrecisionLines shader/material 域——RTE（relative-to-eye）相机 uniform/属性管线在该内容/相机状态下的失效（顶点位置重建错误→三角形退化/飞出视锥）。深查=HP Lines 的 per-frame uniform 更新链（eye/resolution）+ 属性数据（extrusion 坐标）dump 对拍。
 
 **④ 状态**：零代码分析轮（flat-fallback 修复保留: mgl renderFlat 语义正确）; 单测 310; 树净; 台账 g183。
+
+### §885 g184: HP Lines 域修正——线 mesh 实为 SolidLine 双通道（MeshBasic 烘焙 ribbon + ShaderMaterial SolidLine shader）, 非 HighPrecisionLines 类; 下轮探针=逐 draw 几何身份捕获（2026-10-25 第一百零一轮）
+
+**① 域修正**：flywave-lines/HighPrecisionLines（RTE updateHpUniforms 管线）为 wireframe/辅助线渲染类——mc-ne 的线 mesh **非该类**：inventory 双材质 = SolidLine 双通道（MeshBasicMaterial=烘焙 ribbon fill 拷贝 + ShaderMaterial=SolidLine pre-extruded shader 挤出），均由 TileGeometryCreator/TileObjectsRenderer 常规路径渲染，无 RTE 管线。
+
+**② 排除更新**：HP Lines RTE 管线失效假设**撤销**（该类不参与）; 双通道 mesh 全部正常（vis/cw/色/位置/ro）。零光栅化的最后可能域 = **draw-call 级几何身份**（哪个 draw 对应哪个 mesh、其顶点数据是否被 GPU 端正确消费——需 SPECTOR bundle（网络不可得）或 glcatch 扩展捕获 attribute 数据）。
+
+**③ 工具方案（下轮）**：glcatch 模式 5 = 逐 draw 捕获（program+attribute dump+drawcall 参数）→ 以 attribute 数据定位零光栅化根因（宽度 attribute=0/索引越界/顶点 NaN）。
+
+**④ 状态**：分析轮零代码; 单测 310; 树净; 台账 g184。
