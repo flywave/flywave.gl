@@ -7858,3 +7858,11 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 全残余归因矩阵终版**：所有残余均已精确归因至三个域（G10 切分质量 ~130k / SolidLine shader 2,872 / fog 精度 6,953），修复路径均已入账。
 
 **⑤ 状态**：零代码分析轮; 单测 310; 树净; 台账 g194。
+
+### §885 g195: fog 逐参数对照完成——公式/horizon-blend/range 解析均一致, 6,953=内容交互精度（2026-10-25 第一百零九轮）
+
+**① fog 逐参数对照结果**：fog_color 默认白 ✓ / colorAlpha 解析 ✓ / range km→metric + FOV shift ✓ / horizon-blend 公式（fogDirZ/fogHz/exp(-3t²)）✓ / fog opacity 曲线（exp(-6t)³×1.00747 clamp）✓ — **全部与 mgl 一致**。
+
+**② 残余定性**：6,953 IBCT（>30 阈 48.5k 均匀色调）= fog 与 3D 内容（建筑/地形/道路多层级）交互的**精度差异**， 非 fog 参数解析错误。修复需 fog-specific GPU 调试（逐 fragment fogT/fogFactor dump 对照）。
+
+**③ 状态**：零代码; 单测 310; 树净; 台账 g195。
