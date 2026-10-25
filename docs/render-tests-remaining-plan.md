@@ -7704,3 +7704,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 修复方向**：线层 renderOrder 骑乘同一 fallback 层级偏移（+1.0），或 fallback fill 不获得偏移；+1.0 源头=引擎 tile 级 technique.renderOrder 组装（grep 未命中, 下轮首 grep TileDataSource/renderOrder 组装链）。
 
 **④ 状态**：drawstate 探针+spectrcapture 转发+runner 旋钮入库; mc-ne 残 2,872 不变; 单测 310; 台账 g182。
+
+### §885 g181b: mc-ne 白 pattern 区机制再收口——road-hatched-area markup fill 在场景中缺失（inventory 无 hatched fill）; sprite 帧存在=非资源问题; 域=markup fill 发射（2026-10-25 第九十六轮补充）
+
+**① 场景清单再读（g178b inventory 25 对象精确分组）**：fill=road-base/bridge（9.6/9.65, 145 顶点）+ 线 9.75（516+40+172+368 顶点）+ 未知层 10 个（10.6/10.75）——**road-hatched-area 的 markup fill 不在场景中**（expected 的白色 pattern 区 244,244,244 在我方显示为路=markup fill 未发射/未渲染）。
+
+**② 排除**：sprite 帧存在（hatched-pattern/-yellow 在 3d_intersections sprite）=非资源问题；g182 的"10.6 覆盖"说法修正——10.x 层为未知层名对象（非 road-base fill）。mc-ne 残 2,872 中 940 样白→路 = **markup fill 缺失**；线缺失（symbol 可见线不可见）为第二独立残余。
+
+**③ 下轮首查**：road-hatched-area fill 的发射路径（fillElevRef='hd-road-markup' + fill-pattern, 无曲线 → prepareFillGeometry null → 平坦 fill 回落是否存在——fill 侧 renderFlat 与 g178 线侧同款修复）。
+
+**④ 状态**：分析轮零代码; 单测 310; 树净; 台账 g181b。
