@@ -7500,3 +7500,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 顶点级提取受阻留档**：StructArray 视图上传即毁; destroy-hook stash 方案触发渲染器 Target closed（stash 体置空仍崩=setStyle 重解码路径崩, 非 hook 所致; 原 mgl-shot 页双地图并发解码亦可能 OOM）; 下轮=改 gitignore 的 dist bundle 直改（destroy 空操作/或 upload 前 dump 钩子）或轻量单地图页分阶段 dump。
 
 **⑤ 状态**：harness 工件提交（wallprobe/扩展 html）; vendored 树填充属 gitignore 区不管理; 单测 310; 树净。
+
+### §885 g164b: mgl 墙顶点 oracle 完整提取成功——358 顶点(平面 extent+高度 −3.5..0)/4 分段, 与我方 1400 顶点/7 色桶实锤不同构; 边选择集合差异定位为 tfd 残余主因（2026-10-25 第七十九轮）
+
+**① 顶点提取破局**：gitignore 的 vendored bundle 本地补丁 StructArray 基类 destroy 为空操作（备份 /tmp/mapbox-gl.js.bak; 用后可还原）→ 上传后 CPU 视图存活 → wallprobe 直接读 `vp.int16`（x,y extent, 步长 4 槽/顶点）与 `vp.float32`（height, 步长 2 槽/顶点）。
+
+**② mgl 端硬数据（tile 18/41948/101472 road-base 桶）**：358 顶点（x 241..2482 / y −1..3187 extent 单位, h −3.5..0 含 −0.581/−0.049 等插值交叉点=prepareEdgePoints 过零插值字面）; idxLen=218, tunnelSeg={off:0,len:142}（47 三角形）, tunnelSections featureIndex [12,14,16,18]+null 顶点起点 [0,86,178,194,278]。expected 墙带色序 G→Y→B（=id%3: 2,0,1）与 4 分段吻合。
+
+**③ 与我方对拍结论**：我方同族墙网格 1400 顶点/7 色桶（blue×3 green×3 yellow×1）, 像素级色序左移一段+右半缺失 ⇒ **我方 unevalEdges 的边选择/切分集合与 mgl 不同**（多建墙但错选边/错分段）, featureId→颜色映射本身无误。下轮=prepareEdges 输入集对拍（mgl 12/14/16/18 号 feature 的哪些边 vs 我方对应 feature 的边集）, 修边选择后色序/覆盖应同时收敛。
+
+**④ 状态**：oracle 数据存 tmp/mgl-wallprobe-tfd3.json; bundle 已还原; harness 提交; 台账 g164b。
