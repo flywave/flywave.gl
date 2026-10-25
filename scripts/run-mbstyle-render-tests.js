@@ -221,7 +221,7 @@ function main() {
             ...(process.env.MBSTYLE_POLYSUBLINE === "1" ? ["polysubline=1"] : []),
             ...(process.env.MBSTYLE_POLYSUBSTRUCTMARTINEZ === "1" ? ["polysubstructmartinez=1"] : []),
             ...(process.env.MBSTYLE_POLYSUBSPAN === "1" ? ["polysubspan=1"] : []),
-            ...(process.env.MBSTYLE_DRAWSTATE === "1" ? ["drawstate=1"] : []),
+            ...(process.env.MBSTYLE_DRAWSTATE ? [`drawstate=${process.env.MBSTYLE_DRAWSTATE}`] : []),
             ...(process.env.MBSTYLE_POLYSUBW ? [`polysubw=${process.env.MBSTYLE_POLYSUBW}`] : []),
             ...(process.env.MBSTYLE_SPECTRCAPTURE ? [`spectrcapture=${process.env.MBSTYLE_SPECTRCAPTURE}`] : []),
             ...(process.env.MBSTYLE_POLYSUBCLEAN === "1" ? ["polysubclean=1"] : []),

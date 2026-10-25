@@ -7734,3 +7734,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 工具方案（下轮）**：glcatch 模式 5 = 逐 draw 捕获（program+attribute dump+drawcall 参数）→ 以 attribute 数据定位零光栅化根因（宽度 attribute=0/索引越界/顶点 NaN）。
 
 **④ 状态**：分析轮零代码; 单测 310; 树净; 台账 g184。
+
+### §885 g185b: 顶点 buffer 探针结果——129 draws ext 全零(疑似 GPU 同步过期读数)但 rmstyle 证明线在光栅化(矛盾); 调查转 render-overlay 法（2026-10-25 第一百零二轮）
+
+**① vbuf 探针实测**（drawstate=2, getBufferSubData 读位置 attribute）: 129 draws **ext=[0,0,0,0,0,0]**（位置全零=零面积三角形=零光栅化候选）+ 13 draws 实坐标（ext [-249..255] 等=正常数据）。
+
+**② 可靠性质疑**：WebGL2 getBufferSubData 无 fence 同步读 GPU buffer 可返回过期数据；且 rmstyle 实验（fills 隐藏后线完整显现 6370px）证明同批 buffer **有数据在光栅化**——两者矛盾 ⇒ 探针读数不可靠（绑定状态/同步时序问题）。
+
+**③ 下轮方案（render-overlay 法）**: 在 emitter 给 mc-ne 的回落线材质设**纯红 diffuse**（代码级临时改）→ 渲染 → 红色像素位置=线的实际落点 → 定位被盖/飞出/退化。该法无 GPU 同步问题, 一次 IBCT 即可裁决。
+
+**④ 状态**：探针工具保留（drawstate=2）; 单测 310; 树净; 台账 g185b。

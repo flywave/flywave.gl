@@ -3272,7 +3272,7 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 {
                     const drawstateArg = (window as any).__karma__?.config?.args
                         ?.find?.((a: string) => a.startsWith("drawstate="))?.slice("drawstate=".length);
-                    if (drawstateArg === "1" && ctx) {
+                    if ((drawstateArg === "1" || drawstateArg === "2") && ctx) {
                         const st = {
                             stencilTest: 0, stencilFunc: 0, stencilRef: 0,
                             depthTest: 0, depthFunc: 0, prog: 0, draws: [] as any[],
@@ -3305,12 +3305,78 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                 sr: st.stencilRef, dt: st.depthTest, df: st.depthFunc,
                             });
                         });
+                        // §885 g185: drawstate=2 — per-draw width-uniform dump
+                        // (the zero-rasterization probe: capture the line
+                        // width uniforms + draw range at every draw).
+                        if (drawstateArg === "2") {
+                            // g185b: per-draw vertex buffer NaN/extent probe —
+                            // read the position attribute data for small-count
+                            // draws (the line ribbons) and flag NaN/zero-extent
+                            // geometry (the zero-rasterization candidates).
+                            wrap("drawElements", (a) => {
+                                try {
+                                    const count = a[1] as number;
+                                    if (count < 6 || count > 3000) return;
+                                    const st2 = (window as any).__mbDrawState;
+                                    if (st2.draws.length > 300) return;
+                                    let nan = 0, minx = 1e30, maxx = -1e30, miny = 1e30, maxy = -1e30, minz = 1e30, maxz = -1e30;
+                                    for (let attr = 0; attr < 8; attr++) {
+                                        const en = (ctx as any).getVertexAttrib(attr, (ctx as any).VERTEX_ATTRIB_ARRAY_ENABLED);
+                                        if (!en) continue;
+                                        const buf = (ctx as any).getVertexAttrib(attr, (ctx as any).VERTEX_ATTRIB_ARRAY_BUFFER_BINDING);
+                                        if (!buf) continue;
+                                        const size = (ctx as any).getVertexAttrib(attr, (ctx as any).VERTEX_ATTRIB_ARRAY_SIZE) || 3;
+                                        const stride = (ctx as any).getVertexAttrib(attr, (ctx as any).VERTEX_ATTRIB_ARRAY_STRIDE) || 0;
+                                        const type = (ctx as any).getVertexAttrib(attr, (ctx as any).VERTEX_ATTRIB_ARRAY_TYPE);
+                                        if (type !== (ctx as any).FLOAT) continue;
+                                        // max vertex index × size × 4 bytes
+                                        let maxIdx = 0;
+                                        for (let i = 0; i < count; i++) {
+                                            const idxBuf = (a[0] as any);
+                                            void idxBuf;
+                                        }
+                                        // read via bind + getBufferSubData
+                                        const bytes = (count + 4) * 4 * (size + 2);
+                                        const tmp = new Float32Array(bytes / 4 + 64);
+                                        (ctx as any).bindBuffer((ctx as any).ARRAY_BUFFER, buf);
+                                        (ctx as any).getBufferSubData((ctx as any).ARRAY_BUFFER, 0, tmp);
+                                        for (let k = 0; k + size <= tmp.length; k += size) {
+                                            for (let c2 = 0; c2 < size; c2++) {
+                                                const val = tmp[k + c2];
+                                                if (Number.isNaN(val)) nan++;
+                                            }
+                                            if (size >= 2) {
+                                                if (tmp[k] < minx) minx = tmp[k];
+                                                if (tmp[k] > maxx) maxx = tmp[k];
+                                                if (tmp[k+1] < miny) miny = tmp[k+1];
+                                                if (tmp[k+1] > maxy) maxy = tmp[k+1];
+                                            }
+                                            if (size >= 3) {
+                                                if (tmp[k+2] < minz) minz = tmp[k+2];
+                                                if (tmp[k+2] > maxz) maxz = tmp[k+2];
+                                            }
+                                        }
+                                        st2.draws.push({
+                                            draw: 'vbuf', attr, nan,
+                                            ext: [+(minx===1e30?0:minx.toFixed(1)), +(maxx===-1e30?0:maxx.toFixed(1)), +(miny===1e30?0:miny.toFixed(1)), +(maxy===-1e30?0:maxy.toFixed(1)), +(minz===1e30?0:minz.toFixed(1)), +(maxz===-1e30?0:maxz.toFixed(1))],
+                                            c: count,
+                                        });
+                                        (ctx as any).bindBuffer((ctx as any).ARRAY_BUFFER, null);
+                                        break; // only attribute 0 (position)
+                                    }
+                                } catch (e) {
+                                    (window as any).__mbDrawState.draws.push({ vbufErr: String(e).slice(0, 100) });
+                                }
+                            });
+                        }
                         // g182: periodic state histogram (the page may
                         // unload before a one-shot timeout fires).
                         setInterval(() => {
                             try {
                                 const by = st.draws.reduce((m: any, d: any) => {
-                                    const k = `st=${d.st} sf=${d.sf} sr=${d.sr} dt=${d.dt} df=${d.df}`;
+                                    const k = d.draw === 'vbuf'
+                                        ? `VBUF nan=${d.nan} ext=[${(d.ext ?? []).join(',')}]`
+                                        : `st=${d.st} sf=${d.sf} sr=${d.sr} dt=${d.dt} df=${d.df}`;
                                     m[k] = (m[k] ?? 0) + 1;
                                     return m;
                                 }, {});
