@@ -7714,3 +7714,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮首查**：road-hatched-area fill 的发射路径（fillElevRef='hd-road-markup' + fill-pattern, 无曲线 → prepareFillGeometry null → 平坦 fill 回落是否存在——fill 侧 renderFlat 与 g178 线侧同款修复）。
 
 **④ 状态**：分析轮零代码; 单测 310; 树净; 台账 g181b。
+
+### §885 g183: 线不可见深查收口——宽度/位置/材质状态全部正常（静态排除穷尽）; 不可见定位 HighPrecisionLines shader/material 域（2026-10-25 第一百轮）
+
+**① 静态排除穷尽**：线宽 1–3px ✓（style interpolate 实测）; worldHalfWidth=0.27m ✓ 非零; ribbon 烘焙挤出 ✓（verts 循环 ±biTangent×hw）; 材质状态 ✓（vis=1/cw=1/白 0.9/ro=9.75/dt=1 LEQUAL）; stencil ✗（全 draw 禁用）; draw 顺序 ✗（9.75>9.6 后画）。
+
+**② 线 mesh 双材质结构**：MeshBasicMaterial（tessellated ribbons, nvert 48/40/152/12 — 烘焙宽度）+ ShaderMaterial（nvert 160 = HighPrecisionLines, shader 挤出）——两类并存。rmstyle 隔离证明两类都可光栅化。
+
+**③ 不可见定位**：HighPrecisionLines shader/material 域——RTE（relative-to-eye）相机 uniform/属性管线在该内容/相机状态下的失效（顶点位置重建错误→三角形退化/飞出视锥）。深查=HP Lines 的 per-frame uniform 更新链（eye/resolution）+ 属性数据（extrusion 坐标）dump 对拍。
+
+**④ 状态**：零代码分析轮（flat-fallback 修复保留: mgl renderFlat 语义正确）; 单测 310; 树净; 台账 g183。
