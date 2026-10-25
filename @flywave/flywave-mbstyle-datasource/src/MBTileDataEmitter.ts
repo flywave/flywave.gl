@@ -2787,8 +2787,18 @@ export class MBTileDataEmitter {
                 // until the rail selection rule matches mgl. Rails sit above
                 // the base surface (9.6), tunnel walls below the markup pass
                 // (9.8).
-                renderOrder: mode === 'bridge' ? 9.65 : 9.7,
-                _renderOrder: mode === 'bridge' ? 9.65 : 9.7,
+                // §885 g162: structearly=1 draws the walls BEFORE the S6
+                // ground pass (9.55) — the below-ground wall fragments lose
+                // to their own ground-projected depth (mbhide=ground restores
+                // stacked-underground bit-exact), so the color must land
+                // first; the ground then overwrites DEPTH only, preserving
+                // ground occlusion for everything behind the walls.
+                renderOrder: (globalThis as any).__mbStructEarly === true
+                    ? (mode === 'bridge' ? 9.51 : 9.52)
+                    : (mode === 'bridge' ? 9.65 : 9.7),
+                _renderOrder: (globalThis as any).__mbStructEarly === true
+                    ? (mode === 'bridge' ? 9.51 : 9.52)
+                    : (mode === 'bridge' ? 9.65 : 9.7),
                 _layerId: layer?.id ?? '__mb-elevated',
                 __elev: true,
                 _mbGlobalLayerOrder: true,

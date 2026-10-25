@@ -665,6 +665,13 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "tunnelstructs=0")) {
         (globalThis as any).__mbNoTunnelStructs = true;
     }
+    // §885 g162: structearly=1 — draw the structure walls BEFORE the S6
+    // ground pass (walls paint their color first; the ground then overwrites
+    // depth with the ground-plane projection, keeping ground occlusion while
+    // the below-ground wall fragments survive their own projected depth).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "structearly=1")) {
+        (globalThis as any).__mbStructEarly = true;
+    }
     // §885 g113: atmos=1 — enable the mgl Atmosphere glow overlay (default
     // OFF since g113: the port over-draws portal interiors at high pitch).
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "atmos=1")) {
