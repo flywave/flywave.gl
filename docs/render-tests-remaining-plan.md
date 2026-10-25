@@ -7767,3 +7767,19 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 - 分裂测试：SolidLineMaterial 替换为 MeshBasicMaterial（烘焙 ribbon）→ 隔离 shader  vs 几何
 
 **④ 状态**：探针移除树净; 单测 310; 台账 g187。
+
+### §885 g189: mc-ne 线不可见排查终局——NaN 修复无效、linesplit 隔离无效、所有可静态诊断路径穷尽; 残余 2,872 挂账为 GPU 级专项（2026-10-25 第一百零五轮）
+
+**① 排查总结（mc-ne 线不可见, 残 2,872）**：
+- flat-fallback（mgl renderFlat）✓ 语义正确但线仍不光栅化
+- linesplit 纯红隔离 ✓ 红色 16px 仅底部边缘=geometry 本身退化/飞出
+- NaN line-width 修复 ✗ 无效（生产路径不走该 branch）
+- stencil ✗（全 draw DISABLED）
+- 深度 ✗（bias=5 不变）
+- 顺序 ✗（ro 9.75 > 9.6）
+- 宽度 ✗（worldHalfWidth 非零）
+- 输入清理 ✗（原始环本已干净）
+
+**② 定性**：mc-ne 的 HD 线不可见需要 **GPU 级专项调试**（RenderDoc/SPECTOR/Chrome GPU 面板/逐顶点 shader 调试），超出 IBCT/静态分析/console 探针能力范围。残余 2,872 挂账为 GPU 级专项。
+
+**③ 状态**：全部实验代码回退树净（HEAD=g187+knob 工具）; 单测 310; 台账 g189。G10 转正永久挂账于 mgl 私有源（g169/g175/g176 闭环）。g177 路线图（数据驱动护栏色/雾域/markup pattern）排队待专项。
