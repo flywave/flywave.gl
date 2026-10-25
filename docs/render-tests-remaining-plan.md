@@ -7694,3 +7694,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 矛盾点精化**：同批线 rmstyle（无 fill）态光栅化正常、全渲染态消失——填充的某种状态（深度写入/stencil/材质）在**线绘制时**拦截; 且 markupbias=5（+5m）不变=拦截与深度无关 ⇒ **拦截在非深度域**（stencil/color/或 fill 的 pre-pass 对线 draw 的掩蔽）——SolidLine 的 NotEqual 1 测试 vs fill 写入的 stencil 值交互（g180 DepthPrePass 发现: pre-pass 写 0xff, 线 NotEqual-1 应通过...除非 pre-pass 清零后线 ref=1 与 0 比对 NotEqual 通过...仍矛盾）——需逐 draw-call stencil 状态捕获（glcatch 扩展）。
 
 **④ 状态**：零代码（检验轮）; 单测 310; 树净; 台账 g181。
+
+### §885 g182: 逐 draw GL 状态捕获——stencil 理论否决（全部 draw stencil test=DISABLED）; fallback 瓦 fill ro=10.6 vs 线 9.75=白标记被盖的机制实锤（2026-10-25 第九十八轮）
+
+**① drawstate=1 逐 draw 状态捕获落地**：canvas ctx 包装（enable/disable/stencilFunc/depthFunc/useProgram/drawElements/drawArrays），周期直方图 [MBDrawS]。实测：**全部 1,043 draws stencil test=DISABLED（st=0, sf=0）**——g181 的 stencil 交互理论**否决**；923 draws depth-test=LEQUAL + **120 draws depth-test=DISABLED**（无条件顶层绘制=透明叠层）。
+
+**② 场景清单机制实锤（g178b inventory 深挖）**：road-base fill（fallback 瓦）**ro=10.6** vs 线层 **ro=9.75**——**fallback 瓦的 fill（无原生 z18 数据, §511 父回退）获得 +1.0 层级 renderOrder 偏移, 画在 markup 线（9.75）之上** = 白色车道标记被 fill 覆盖 ✓（mc-ne 残 2,872 的机制; 非新回归——g163 基线同态）。线 9.75 未获该偏移 ⇒ 顺序反转。
+
+**③ 修复方向**：线层 renderOrder 骑乘同一 fallback 层级偏移（+1.0），或 fallback fill 不获得偏移；+1.0 源头=引擎 tile 级 technique.renderOrder 组装（grep 未命中, 下轮首 grep TileDataSource/renderOrder 组装链）。
+
+**④ 状态**：drawstate 探针+spectrcapture 转发+runner 旋钮入库; mc-ne 残 2,872 不变; 单测 310; 台账 g182。

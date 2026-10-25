@@ -1984,15 +1984,19 @@ async function renderFrames(
     {
         const spy = (window as any).__karma__?.config?.args?.find?.((a: string) =>
             a.startsWith("spectrcapture="))?.slice("spectrcapture=".length);
-        if (spy === "1" && hasModel) {
+        if (spy === "1" || spy === "2") {
+            // g182: spy=2 — the stencil/depth state capture for ANY fixture
+            // (the line-invisibility probe); spy=1 keeps the model gate.
             const mv: any = mapView;
             (window as any).__mbMV = mv;
             const canvas: HTMLCanvasElement = mv.canvas ?? mv.renderer?.domElement;
             try {
                 const bundleUrl = "/base/@flywave/flywave-mbstyle-datasource/test/vendor/spector.bundle.js";
                 const text = await fetch(bundleUrl).then((r) => r.text());
-                // eslint-disable-next-line no-new-func
-                (0, eval)(text + "\n;window.SPECTOR = SPECTOR;");
+                // g182: Function-scope eval (the indirect eval broke on the
+                // minified bundle's labels in strict contexts).
+                const SPECTORFactory = new Function(text + "\n;return SPECTOR;");
+                (window as any).SPECTOR = SPECTORFactory();
                 const spector = new (window as any).SPECTOR.Spector();
                 (window as any).__mbSpector = spector;
                 spector.spyCanvases();
@@ -2041,11 +2045,23 @@ async function renderFrames(
                     let curProg: any = "?";
                     const lastMatByLoc: Record<string, string> = {};
                     let drawIdx = 0;
+                    // g182: stencil/depth state tracking through the command
+                    // stream, emitted at every draw call.
+                    let stenTest = -1, stenFunc = -1, stenRef = -1, depthMask = -1, stenW = -1;
+                    const progKind: Record<string, string> = {};
                     for (const c of cmds) {
                         const name = c.name ?? "";
                         const args: any = c.commandArguments;
                         if (name === "useProgram") {
                             curProg = args?.[0]?.__SPECTOR_Object_TAG?.id ?? curProg;
+                        } else if (name === "enable" || name === "disable") {
+                            const cap = args?.[0];
+                            if (cap === 2960) stenTest = name === "enable" ? 1 : 0;
+                            if (cap === 2929) depthMask = name === "enable" ? 1 : 0;
+                        } else if (name === "stencilFunc") {
+                            stenFunc = args?.[0] ?? -1; stenRef = args?.[1] ?? -1;
+                        } else if (name === "stencilMask") {
+                            stenW = args?.[0] ?? -1;
                         } else if (name === "uniformMatrix4fv") {
                             const m = args?.[2];
                             const loc = args?.[0]?.__SPECTOR_Object_TAG?.id ?? "?";
@@ -2058,9 +2074,10 @@ async function renderFrames(
                             const cnt = args?.[1] ?? "?";
                             const mats = Object.keys(lastMatByLoc).map((k) => `L${k}:${lastMatByLoc[k]}`).join(" ");
                             // eslint-disable-next-line no-console
-                            console.log("[MBSpec] D" + drawIdx + " prog=" + curProg + " cnt=" + cnt + " " + mats);
+                            console.log(`[MBSpecS] D${drawIdx} prog=${curProg} cnt=${cnt} sten(test=${stenTest},func=${stenFunc},ref=${stenRef},mask=${stenW}) depthMask=${depthMask} ${mats}`);
                         }
                     }
+                    void progKind;
                     // eslint-disable-next-line no-console
                     console.log("[MBSpec] DONE draws=" + drawIdx);
                 }
@@ -3249,6 +3266,60 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                 const ctx =
                     canvas.getContext("webgl2", { stencil: true, antialias: true, preserveDrawingBuffer: true, alpha: true }) as any ??
                     canvas.getContext("webgl", { stencil: true, antialias: true, preserveDrawingBuffer: true, alpha: true }) as any;
+                // §885 g182: drawstate=1 — per-draw-call GL state capture
+                // (the line-invisibility probe: stencil/depth state at every
+                // drawElements, dumped to console as [MBDrawS]).
+                {
+                    const drawstateArg = (window as any).__karma__?.config?.args
+                        ?.find?.((a: string) => a.startsWith("drawstate="))?.slice("drawstate=".length);
+                    if (drawstateArg === "1" && ctx) {
+                        const st = {
+                            stencilTest: 0, stencilFunc: 0, stencilRef: 0,
+                            depthTest: 0, depthFunc: 0, prog: 0, draws: [] as any[],
+                        };
+                        (window as any).__mbDrawState = st;
+                        const wrap = (fname: string, body: (args: any[]) => void) => {
+                            const orig = (ctx as any)[fname].bind(ctx);
+                            (ctx as any)[fname] = (...args: any[]) => { body(args); return orig(...args); };
+                        };
+                        wrap("enable", (a) => {
+                            if (a[0] === 2960) st.stencilTest = 1;
+                            if (a[0] === 2929) st.depthTest = 1;
+                        });
+                        wrap("disable", (a) => {
+                            if (a[0] === 2960) st.stencilTest = 0;
+                            if (a[0] === 2929) st.depthTest = 0;
+                        });
+                        wrap("stencilFunc", (a) => { st.stencilFunc = a[0]; st.stencilRef = a[1]; });
+                        wrap("depthFunc", (a) => { st.depthFunc = a[0]; });
+                        wrap("useProgram", (a) => { st.prog = a[0] ? 1 : 0; });
+                        wrap("drawElements", (a) => {
+                            if (st.draws.length < 4000) st.draws.push({
+                                c: a[1], st: st.stencilTest, sf: st.stencilFunc,
+                                sr: st.stencilRef, dt: st.depthTest, df: st.depthFunc,
+                            });
+                        });
+                        wrap("drawArrays", (a) => {
+                            if (st.draws.length < 4000) st.draws.push({
+                                c: a[1], st: st.stencilTest, sf: st.stencilFunc,
+                                sr: st.stencilRef, dt: st.depthTest, df: st.depthFunc,
+                            });
+                        });
+                        // g182: periodic state histogram (the page may
+                        // unload before a one-shot timeout fires).
+                        setInterval(() => {
+                            try {
+                                const by = st.draws.reduce((m: any, d: any) => {
+                                    const k = `st=${d.st} sf=${d.sf} sr=${d.sr} dt=${d.dt} df=${d.df}`;
+                                    m[k] = (m[k] ?? 0) + 1;
+                                    return m;
+                                }, {});
+                                // eslint-disable-next-line no-console
+                                console.log('[MBDrawS] ' + JSON.stringify(by));
+                            } catch (e) {}
+                        }, 2000);
+                    }
+                }
                 // §885 g140: WebGL interception directly on the pre-created
                 // context (glcatch=1) — six object-model layers proved
                 // unreachable (g125-g139); capture the actual color provenance.
