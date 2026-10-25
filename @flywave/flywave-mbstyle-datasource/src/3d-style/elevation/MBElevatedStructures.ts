@@ -845,6 +845,15 @@ export class MBElevatedStructures {
             for (let i = 0; i < edDump.length; i += 100) console.log(`[MBEdge] ${JSON.stringify(edDump.slice(i, i + 100))}`);
             console.log(`[MBRingTag] ${JSON.stringify((globalThis as any).__mbRingTags ?? [])}`);
             console.log(`[MBStruct] ringCnt=${JSON.stringify((globalThis as any).__mbRingCnt ?? {})} edgeCnt=${JSON.stringify((globalThis as any).__mbEdgeCnt ?? {})} prune=${JSON.stringify((globalThis as any).__mbPrune ?? {})} noArea=${(globalThis as any).__mbNoArea ?? 0} areas=${JSON.stringify(((globalThis as any).__mbAreaList ?? []).slice(0, 8))} verts=${positions.length / 3} idxSoFar(wall)=${wallIdxEnd} edges=${JSON.stringify(counts)} triN=${this.m_unevalTriangles?.length ?? 0} tunnelTriN=${this.m_unevalTunnelTriangles?.length ?? 0}`);
+            // §885 g166: post-prepareEdges per-edge typed dump for the mgl
+            // 71/3/2 assignment parity diff (endpoints in the canonical
+            // frame; the mgl comparison applies (2x, (4096-y)*2)).
+            const te = (globalThis as any).__mbTypedEdges ??= [];
+            for (const e of this.m_unevalEdges) {
+                const ax = this.m_unevalPositions[e.a * 2], ay = this.m_unevalPositions[e.a * 2 + 1];
+                const bx = this.m_unevalPositions[e.b * 2], by = this.m_unevalPositions[e.b * 2 + 1];
+                te.push([this.m_consumerKey, e.type, Math.round(ax * 2) / 2, Math.round(ay * 2) / 2, Math.round(bx * 2) / 2, Math.round(by * 2) / 2, e.featureIndex ?? null]);
+            }
         }
 
         const tunnelStart = indices.length;

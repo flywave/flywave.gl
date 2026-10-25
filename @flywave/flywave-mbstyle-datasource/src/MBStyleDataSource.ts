@@ -3169,6 +3169,9 @@ export class MBStyleDataSource extends TileDataSource {
                                 // + extent coords + source polygonIdx) for the
                                 // mgl unevalEdges parity diff.
                                 edges: (globalThis as any).__mbEdges ?? [],
+                                // g166: post-prepareEdges per-edge typed set
+                                // (tile key + type + coords + featureIndex).
+                                typedEdges: (globalThis as any).__mbTypedEdges ?? [],
                                 shaders: (globalThis as any).__mbShaderProbe ?? [],
                                 ribbonShaders: (globalThis as any).__mbRibbonProbe ?? [],
                             };

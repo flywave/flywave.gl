@@ -7522,3 +7522,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 下轮首案（精确到字段）**：我方 post-prepareEdges 逐边 type dump（tile 18-41948-101472, 变换回 mgl 帧后与 mgl 71/3/2 指派逐边 diff）→ 修 portal 图 type 指派或 construct 分段; 验收=tfd 墙带色序 G→Y→B 与右半 x248-512 覆盖收敛。
 
 **⑤ 状态**：MBElevatedStructures/MBStyleDataSource 探针改动+wallprobe html 升级提交; oracle 数据 tmp/mgl-wallprobe-tfd{4,5}.json + tmp/our-edges-tfd.json; 单测 310; 树净（bundle 已还原）。
+
+### §885 g166: post-prepareEdges 逐边 type 对拍闭环——几何 superset 确认(走廊分段幸存), 机制=我方环线细分密度≫mgl(曲线逐采样插点 vs mgl 仅交叉点插点)致墙碎化与分段漂移（2026-10-25 第八十一轮）
+
+**① 逐边 type 对拍（tile 18-41948-101472, 我方 88 typed vs mgl 76）**：类型计数 {none:82,entrance:3,polygon:3} vs {71,3,2}; 几何覆盖双向度量——mgl→ours: 68 full+3 partial+2 full(polygon)+2full/1partial(entrance), 仅 3 条 fi=12/16 长墙 cov=0.22; ours→mgl: **61/88 条我方墙片不在 mgl**（含 fi=6/10 两个 mgl 没有的 polygon 门户）。
+
+**② 机制实锤**：mgl fi=12 长墙 (1801,626)-(1817,2628) 与 (1817,2628)-(1781,557)（8192 帧, ~2000u 近直线, 我方帧 (900.5,3783)-(908.5,2782)-(890.5,3817.5)）vs 我方 fi=7 细分段链 (915.5,2712.5)→(908.5,2782)→(900,2854.5)→(889,2929.5)→(875.5,3006.5)…——**同路径但 mgl 两端点直线、我方逐采样曲线**（y=2782 处 x 相同=908.5, y=2929.5 处偏差 18u>4u 阈=覆盖测量掉 78%）。我方环线被 prepareFillGeometry 沿曲线加密插点, mgl polygonSubdivision 只在曲线交叉点切分并保留原始顶点 ⇒ 墙碎化 + 分段边界漂移 + 门户指派漂移 = 色序左移与右半覆盖缺失的完整机制。
+
+**③ 下轮主案（代码修复）**：prepareFillGeometry/环线细分密度对齐 mgl——沿曲线仅在交叉点插入切分顶点, 保留原始 MVT 顶点, 高度按既有采样器在保留顶点上取; 验收=tfd 墙带色序 G→Y→B + 右半 x248-512 覆盖 + 家族回归（junction/stacked/enterance 守门）。
+
+**④ 状态**：`__mbTypedEdges` 探针+dump 字段提交; 单测 310; 树净; oracle 数据 tmp/our-typed-edges-tfd.json + tmp/mgl-wallprobe-tfd5.json。
