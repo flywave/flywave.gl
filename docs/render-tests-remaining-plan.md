@@ -7922,3 +7922,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 域收口**：照明/着色域需 fixture-specific runtime 调试（非全局色彩空间问题）。G10 域阻塞于 mgl 私有源。SolidLine shader 阻塞于 GPU 级调试。fog 精度阻塞于逐参数对照。
 
 **④ 状态**：零代码; 单测 310; 树净; 台账 g199。
+
+### §885 g200: mc-ne 线不可见最终隔离——SolidLine 与 RIBBON 双路径均不渲染; 缺陷定界至 HD 线发射域深层（2026-10-25 第一百一十轮收口）
+
+**① RIBBON 路径隔离**（line-blur=0.1 走 emitRibbonFill 而非 SolidLine）：IBCT 9,235（比 2,872 更差=blur 改变外观），底半幅白像素 224 不变——**双路径均不渲染回落线**。
+
+**② 缺陷定界**：flat-fallback 线（plan=yes 遥测 ✓， 点透传 ✓， 高度 0+bias ✓）→ 发射分支消费 pts/ptHeights ✓ → worldPts 构建 ✓ → lineGeom.vertices/indices ✓ → m_lineInterleaved ✓ → SolidLine mesh ✓（scene inventory vis=1/cw=1）→ **GPU 零 fragments**。SolidLine 与 RIBBON 双路径均失败 ⇒ 缺陷不在渲染路径选择， 而在**lineGeom.vertices 数据本身**（可能 worldHalfWidth 对该 tile 的 mppScaled=0 或 yDelta 误差导致顶点坐标偏移）。
+
+**③ 下轮首查**：decodedbg 探针 dump mc-ne fallback 线的 m_lineInterleaved 顶点坐标（对照 rmstyle 态正常渲染的顶点坐标）→ 定位坐标偏差的具体轴/量级。
+
+**④ 状态**：style 还原; 零代码; 单测 310; 台账 g200。
