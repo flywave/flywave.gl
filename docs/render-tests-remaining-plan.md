@@ -7488,3 +7488,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ structearly 处置**：mask-all 已以零罚分方式收回 stacked 大头, structearly（墙/路前置, tfd +10.4k 罚分）失去转正理由, **维持默认关**留作实验旋钮; tunnel-enterance(+2.6k)/separate-layer 残余与其同源, 挂账 intake 统一专项。
 
 **④ 状态**：三文件（MBElevatedStructures/MBMaterialPatchManager/MBTileDataEmitter）; tsc 零新增（33 既有）; 单测 310 passing; 台账 g163。
+
+### §885 g164: mgl oracle 管线建立 + tfd 墙带色序/覆盖差异量化——色序整段左移+右半缺失=边选择集合差异（非纯颜色映射）（2026-10-25 第七十八轮）
+
+**① oracle 管线**：`scripts/mgl-shot/mgl-wallprobe.cjs`（新增）+ mgl-shot.html `?wallprobe=1`——定向 `style._mergedSourceCaches→cache._tiles(Map)→tile.getBucket→hdExt.elevatedStructures`，dump 结构网格元数据（esKind=Yl StructArray, length, renderableTunnelSegments{off,len}, tunnelFeatureSections featureIndex→vertexStart, bucket features）；tfd 需把夹具 style/tiles(.mvt)/sprites 拷入 vendored integration 树（gitignore 区, 原为空壳目录）。像素级：`MGL_SHOT_SCALE=1 mgl-shot.cjs` 出 mgl-live 图对拍 expected。
+
+**② 已取 oracle 数据（tile 18/41948/101472 road-base 桶）**：mgl 结构网格 StructArray length=358, idxLen=218, tunnelSeg={off:0,len:142}（47 三角形）, tunnelSections=[{fi:12,vs:0},{fi:14,86},{fi:16,178},{fi:18,194},{null,278}]。对照我方（g158 dump）：同族墙网格 n=1400 顶点、色桶 blue×3/green×3/yellow×1——**网格规模与分段数均不同构**。
+
+**③ 像素级色序/位置量化（tfd 墙带行扫描）**：expected 上排 `G[0-62] Y[62-147] B[147-512]` 下排 `B[0-75] G[75-94] Y[94-149] B[149-512]`；我方 上排 `Y[5-91] B[91-248]` 下排 `G[0-6] Y[6-91] B[91-248] +断口+ B[346-512]`。**结论=①整条色序左移一段（首段 G 缺失）②右半墙带（x248-512 上排）缺失**——分段边界与颜色同步偏移 ⇒ 我方墙的**边选择/分段切分集合**与 mgl 不同（g134 under-every-edge 悬案的正主），非 featureId→颜色映射错位。
+
+**④ 顶点级提取受阻留档**：StructArray 视图上传即毁; destroy-hook stash 方案触发渲染器 Target closed（stash 体置空仍崩=setStyle 重解码路径崩, 非 hook 所致; 原 mgl-shot 页双地图并发解码亦可能 OOM）; 下轮=改 gitignore 的 dist bundle 直改（destroy 空操作/或 upload 前 dump 钩子）或轻量单地图页分阶段 dump。
+
+**⑤ 状态**：harness 工件提交（wallprobe/扩展 html）; vendored 树填充属 gitignore 区不管理; 单测 310; 树净。

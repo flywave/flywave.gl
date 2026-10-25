@@ -4,6 +4,17 @@
     <meta charset="utf-8"/>
     <link rel="stylesheet" href="/mapbox-gl-js/dist/mapbox-gl.css"/>
     <script src="/mapbox-gl-js/dist/mapbox-gl.js"></script>
+    <script>
+        // §885 g164: capture mapbox's swallowed logger output (shader
+        // compile failures / render exceptions surface here, not in console).
+        try {
+            mapboxgl.setLogger({
+                debug: () => {}, info: () => {},
+                warn: (...a) => (window.__mbLogs = window.__mbLogs ?? []).push(['W', a.map(String).join(' ').slice(0, 300)]),
+                error: (...a) => (window.__mbLogs = window.__mbLogs ?? []).push(['E', a.map(String).join(' ').slice(0, 300)]),
+            });
+        } catch (e) {}
+    </script>
     <style>
         html, body { margin: 0; padding: 0; background: #ffffff; }
         #map { width: 512px; height: 512px; }
@@ -85,6 +96,25 @@
             interactive: false,
         });
         window.__mbMap = map;
+        // §885 g164: ?renderdbg=1 — wrap painter.render to surface the
+        // per-frame swallowed exception (blank-frame diagnosis).
+        if (params.get('renderdbg') === '1') {
+            const p = map.painter;
+            if (p) {
+                const orig = p.render.bind(p);
+                let n = 0;
+                p.render = function (...a) {
+                    try {
+                        const r = orig(...a);
+                        if (++n <= 3 || n % 200 === 0) (window.__renderLog = window.__renderLog ?? []).push(['ok', n]);
+                        return r;
+                    } catch (e) {
+                        (window.__renderLog = window.__renderLog ?? []).push(['THROW', String(e).slice(0, 400), (e.stack ?? '').split('\n').slice(0, 6).join(' | ')]);
+                        throw e;
+                    }
+                };
+            }
+        }
         const done = () => { window.__shotReady = true; };
         map.on('idle', done);
         map.on('error', (e) => { (window.__mbErrors = window.__mbErrors ?? []).push(String(e && e.error || e)); });
@@ -225,6 +255,127 @@
                 } catch (e) { window.__modelProbe = { err: String(e), stack: e.stack }; }
             };
             setTimeout(dumpModel, 3000);
+        }
+        // §885 g164: ?wallprobe=1 — walk map → tiles → fill buckets →
+        // hdExt.elevatedStructures and dump the structure mesh (vertices in
+        // extent units + raw heights, tunnel/bridge feature sections, render
+        // segments, bucket feature ids) for the wall-band/featureId parity
+        // diff against our [MBElevVerts]/[MBFeatH]/[MBElevObj] dumps.
+        if (params.get('wallprobe') === '1') {
+            const dumpWalls = () => {
+                try {
+                    const map = window.__mbMap;
+                    const tiles = [];
+                    const style = map.style;
+                    const caches = style && (style._mergedSourceCaches ?? style.sourceCaches ?? {});
+                    const cacheEntries = caches instanceof Map
+                        ? Array.from(caches.entries())
+                        : Object.entries(caches ?? {});
+                    for (const [cname, cache] of cacheEntries) {
+                        const tmap = cache && (cache._tiles ?? cache.tiles);
+                        const tvals = tmap instanceof Map ? Array.from(tmap.values())
+                            : tmap && typeof tmap === 'object' ? Object.values(tmap) : [];
+                        for (const tile of tvals) {
+                            if (tile && typeof tile.getBucket === 'function') {
+                                tiles.push({ obj: tile, path: 'cache.' + cname });
+                            }
+                        }
+                    }
+                    const dump = { nTiles: tiles.length, tiles: [] };
+                    const layers = (map.style && (map.style._layers ?? map.style.layers)) ?? {};
+                    const layerList = typeof layers === 'object' && !Array.isArray(layers) ? Object.values(layers) : (layers ?? []);
+                    dump.meta = {
+                        layersKind: Array.isArray(layers) ? 'array' : typeof layers,
+                        nLayers: layerList.length,
+                        layerIds: layerList.map(l => l && l.id).slice(0, 30),
+                        styleKeys: map.style ? Object.keys(map.style).filter(k => /layer|source|cache/i.test(k)).slice(0, 20) : [],
+                    };
+                    const seg = (sv) => {
+                        const s = sv && (sv.segments ?? sv);
+                        const a = Array.isArray(s) ? s[0] : s;
+                        return a ? { off: a.primitiveOffset, len: a.primitiveLength } : null;
+                    };
+                    const asNums = (vp, n) => {
+                        try {
+                            if (Array.isArray(vp)) return vp.slice(0, n);
+                            if (ArrayBuffer.isView(vp)) return Array.from(vp.slice(0, n));
+                            for (const k of ['float32Array', 'float64Array', 'int32Array', 'uint8Array', 'int16Array', 'array', 'values',
+                                'int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32', 'float32']) {
+                                if (vp && vp[k] && ArrayBuffer.isView(vp[k])) return Array.from(vp[k].slice(0, n));
+                            }
+                            if (vp && typeof vp === 'object') return Object.values(vp).slice(0, n);
+                        } catch (e) {}
+                        return [];
+                    };
+                    const structInfo = (vp) => {
+                        if (!vp) return null;
+                        const info = { kind: (vp.constructor && vp.constructor.name) || typeof vp, keys: Object.keys(vp).slice(0, 14) };
+                        for (const k of ['length']) if (vp[k] !== undefined) info[k] = vp[k];
+                        for (const k of ['int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32', 'float32', 'float32Array', 'uint8Array']) {
+                            if (vp[k] && ArrayBuffer.isView(vp[k])) info[k + 'Len'] = vp[k].length;
+                        }
+                        return info;
+                    };
+                    for (const { obj: tile, path } of tiles) {
+                        let probed = null;
+                        try { probed = tile.getBucket(layerList.find(l => l.id === 'road-base')); }
+                        catch (e) { probed = { err: String(e) }; }
+                        dump.tiles.push({
+                            path,
+                            diag: 'tile-probe',
+                            keys: Object.keys(tile).slice(0, 14),
+                            roadBaseBucket: probed && !probed.err
+                                ? { present: !!probed, hasHdExt: !!probed.hdExt,
+                                    hdExtKeys: probed.hdExt ? Object.keys(probed.hdExt).slice(0, 10) : [] }
+                                : { err: probed && probed.err },
+                        });
+                        for (const layer of layerList) {
+                            let bucket = null;
+                            try { bucket = tile.getBucket(layer); } catch (e) { continue; }
+                            const es = bucket && bucket.hdExt && bucket.hdExt.elevatedStructures;
+                            if (!es) {
+                                // g164 diagnostics: why no structures — bucket
+                                // missing vs hdExt missing vs es missing.
+                                if (bucket && (layer.type === 'fill')) {
+                                    dump.tiles.push({
+                                        path, layer: layer.id, diag: 'no-es',
+                                        hasHdExt: !!bucket.hdExt,
+                                        bucketKeys: bucket.keys ? bucket.keys.length : undefined,
+                                        nFeatures: bucket.features ? bucket.features.length : undefined,
+                                        layoutRef: (layer.layout && layer.layout['fill-elevation-reference']) ?? null,
+                                    });
+                                }
+                                continue;
+                            }
+                            const vp = es.vertexPositions;
+                            const ia = es.indexArray;
+                            const idxArr = ia && (ia.length !== undefined ? ia : (ia.array ?? null));
+                            dump.tiles.push({
+                                path, layer: layer.id,
+                                key: tile.tileID && tile.tileID.canonical
+                                    ? `${tile.tileID.canonical.z}/${tile.tileID.canonical.x}/${tile.tileID.canonical.y}`
+                                    : String(tile.tileID && tile.tileID.key),
+                                esKind: vp ? (vp.constructor && vp.constructor.name) : 'null',
+                                esStruct: structInfo(vp),
+                                nVert: vp ? (vp.length !== undefined ? vp.length / 3 : (vp.float32Array ? vp.float32Array.length / 3 : -1)) : -1,
+                                verts: asNums(vp, 360),
+                                idxLen: idxArr ? (idxArr.length ?? -1) : -1,
+                                idxHead: idxArr ? Array.from(idxArr.slice ? idxArr.slice(0, 60) : []).map(Number) : [],
+                                tunnelSections: es.tunnelFeatureSections ?? null,
+                                bridgeSections: es.bridgeFeatureSections ?? null,
+                                tunnelSeg: seg(es.renderableTunnelSegments),
+                                bridgeSeg: seg(es.renderableBridgeSegments),
+                                features: (bucket.features ?? []).slice(0, 60).map(f => ({
+                                    id: f && f.id,
+                                    keys: f ? Object.keys(f).slice(0, 6) : [],
+                                })),
+                            });
+                        }
+                    }
+                    window.__wallDump = dump;
+                } catch (e) { window.__wallDump = { err: String(e), stack: e.stack }; }
+            };
+            setTimeout(dumpWalls, 5000);
         }
     })();
 </script>
