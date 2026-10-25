@@ -7466,3 +7466,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 真修复方向（下轮专项）**：统一 structures intake 与 deck 发射域（我方 addElevatedFeature 有 markup 门/guardRail 门/zOff 加高, deck 走 plan.pieces 另路）——mask 覆盖必须与实际重绘集合一致才能安全保留 ground 相; 或按 mgl 终形态把 road color 改 ReadOnly+prepass 全编舞。附带疑点待 oracle：mgl expected 中深层路/墙在非覆盖区为何可见（纯源码推演已穷尽, 需 scripts/mgl-shot 实机对拍 depth 状态）。
 
 **⑤ 状态**：两实验改动全部回退树净（git checkout）; 零提交代码; 台账 g162。
+
+### §885 g162b: structearly=1 门控实验落地——墙先于 ground 着色收回三夹具回归（默认关; tfd 变差不平衡, 默认开待全家族验证）（2026-10-25 第七十五轮）
+
+**① 机制**：`structearly=1` 把结构墙 ro 从 9.65/9.7 提到 9.51/9.52（ground 9.55 之前）——墙颜色先落屏, ground 相随后仅覆写**深度**为地面投影 G（colorWrite 关）, 保留"墙后内容按 G 遮挡"的 mgl 地面遮挡语义, 同时墙片段不再输给自身投影深度。
+
+**② 四夹具 A/B**：stacked 53,130→**45,202**（收回 +18.5k 中的 7.9k; after 图墙体米色 376px→恢复）; tunnel-enterance 41,275→**38,911**（低于 BEFORE 38,642, +2.6k 回归收复）; tunnel-enterance-color 133,871→**130,771**（+3.8k 回归收复）; **tunnel-color-fd 49,381→60,702（+11.3k 变差**——tfd 的堑区编舞依赖墙后置, 其墙/路交互在 g161-C 态已达平衡）。四夹具净 −8k。
+
+**③ 处置**：默认关（g161 默认态不变）; 转默认开前须全家族 A/B（重点 junction/ortho-camera-tunnel/circles-tunnel 守门）。剩余 stacked +10.6k = 深层路面色被自身投影 G 阻挡——需我方架构下的 geometry 相等价物（道路先写真实深度排序, 或 intake 统一后按 mgl ReadOnly 编舞）, 与 tfd 墙带位置/featureId 色序并列为下轮主案。
+
+**④ 状态**：三文件小改（emitter 旋钮/test 桥/runner 转发）; 单测影响零（渲染路径）; 台账 g162b。
