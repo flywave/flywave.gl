@@ -7632,3 +7632,17 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 最终结论（三阶段完整）**：G10 martinez 移植在所有可考维度（几何变体/参数扫描/输入清理）下, structures-martinez 态对 markups-clipping-underground 均为 +55~75k 不可收敛回归——**收敛的唯一路径=mgl 私有源 polygon_clipping_hd.ts**。移植保持旋钮态永久可用（polysubstructmartinez=1: tfd −14.3k/enterance 族 −26k）; 默认态=g163（家族最优 1,926,890）。
 
 **④ 状态**：polysubclean 旋钮入库（门控惰性）; 单测 310; 树净; 台账 g176。
+
+### §885 g177: 未归档失败夹具批量分类——四大非 G10 域信号（道路多画/雾色调/数据驱动护栏色/markup pattern）路线图（2026-10-25 第九十二轮）
+
+**① 批量分类方法**：>30 阈 diff 的逐像素颜色对（exp→ours）+ 行直方图均匀度（uniformity≈1=成簇, <1=均匀色调）。
+
+**② 四域信号**：
+- **道路多画域**（exp 背景/白 → 我方路蓝 hsl(212,25%,71%)）: road-markups-no-elevation（940 样! 白 pattern 区画成路）、palo-alto（387+166）、munich-close（527）、road-islands（部分）——特征选择/层序/markup 可见性域, **非 G10**。
+- **雾域**（均匀色调偏移, uniformity 0.89）: fog 48.5k（>30 阈; IBCT 6.9k 为高阈值口径）——fog 颜色/alpha 应用差异, **非 G10**（g150 背景照明域延伸）。
+- **数据驱动护栏色域**: guard-rail-color-fd exp 蓝(0,0,227)→我方绿/底色（551+505+368 样）——与 tfd id%3 同族的特征指派问题, 独立可攻。
+- **markup pattern 域**: tooling-support 黄图案多画（206 样）+ 暗路面缺失。
+
+**③ 量级重估（>30 低阈值口径）**: fog 48.5k / tooling-support 37.2k / munich-close 41.8k / road-islands 32.4k / guard-rail-color-fd 32k / las-vegas 23k / road-markups 26.2k / palo-alto 16.1k / tunnel-ortho 6.3k / road-markups-no-elevation 9.2k——**非 G10 域合计远超 G10 域残余**, 下一战役应转向这些域。
+
+**④ 状态**：分析轮零代码; 单测 310; 树净; 台账 g177。
