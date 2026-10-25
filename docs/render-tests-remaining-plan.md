@@ -7532,3 +7532,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮主案（代码修复）**：prepareFillGeometry/环线细分密度对齐 mgl——沿曲线仅在交叉点插入切分顶点, 保留原始 MVT 顶点, 高度按既有采样器在保留顶点上取; 验收=tfd 墙带色序 G→Y→B + 右半 x248-512 覆盖 + 家族回归（junction/stacked/enterance 守门）。
 
 **④ 状态**：`__mbTypedEdges` 探针+dump 字段提交; 单测 310; 树净; oracle 数据 tmp/our-typed-edges-tfd.json + tmp/mgl-wallprobe-tfd5.json。
+
+### §885 g167: 细分密度对齐实验闭环——跨度限定落地(中性, mgl-lean); 近平行抑制证伪(junction 灾难); 真修复=martinez 布尔移植(G10 大项)（2026-10-25 第八十二轮）
+
+**① 跨度限定落地（默认开）**：`polygonSubdivision` 切分由无限直线改为**段跨度有界**（t∈[−0.1, 1.1], mgl edgeExtension=0.1 字面）——A/B 与 g163 逐位一致（tfd 49,344 / stacked 43,374）= 中性, 保留为 mgl-lean 语义（`polysubline=1` 回退门）。
+
+**② 近平行抑制证伪（已回退）**：切分点处按环边与切线夹角 <~3° 抑制插入——tfd 102,720 / stacked 64,985 / enterance 128,406 / **junction 143,944（灾难性, 浅角切分是 junction/va decks 的承重结构）**; 修正阈值后数字逐位相同=曲线段与环边夹角全 <3°（曲线沿路敷设, 近共线是常态而非伪影）。两版均回退。
+
+**③ 机制定性收口**：原始 MVT extent=**8192**（HD 标准, 自研 protobuf 解码实测）, 环线原始顶点稀疏（首特征 geometry 仅 17 字节）; mgl 墙=martinez 薄四边形减法下的稀疏直边, 我方=半平面切分的密集碎片——**架构性差异, 线裁剪守卫不可修**; 真修复= martinez-polygon-clipping 布尔移植（G10 ⭐⭐⭐⭐⭐, 与台账既有大型工程项并案）或等效的拓扑保持切分。
+
+**④ 状态**：MBPolygonClippingHD 单文件（跨度限定默认开+回退门+polysubline 旋钮链）; tsc 零新增（25 既有）; 单测 310 passing; tfd/stacked 逐位回到 g163 态; 台账 g167。

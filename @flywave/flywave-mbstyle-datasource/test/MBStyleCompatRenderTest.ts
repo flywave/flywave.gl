@@ -661,6 +661,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "markupstructs=1")) {
         (globalThis as any).__mbMarkupStructs = true;
     }
+    // §885 g167: polysubline=1 — revert polygonSubdivision to the infinite
+    // cut line (the span-bounded thin-quad semantics is the default).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "polysubline=1")) {
+        (globalThis as any).__mbPolySubLine = true;
+    }
     // §885 g113: tunnelstructs=0 — drop the tunnel wall/portal structure segment.
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "tunnelstructs=0")) {
         (globalThis as any).__mbNoTunnelStructs = true;

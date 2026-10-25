@@ -80,14 +80,24 @@ function normalizeRing(ring: ClipPoint[]): ClipPoint[] | null {
  * (Sutherland–Hodgman against a convex half-plane; concave subjects come
  * back bridged along the cut line, which is invisible after per-vertex
  * height sampling). `keepPositive` selects the left/right side; vertices
- * on the line belong to both sides.
+ * on the line belong to both sides. When `tMin`/`tMax` are given the cut
+ * only applies where the crossing projects WITHIN that parameter span of
+ * the a→b segment — ring edges whose crossing falls outside stay whole
+ * (mgl clips with the thin segment quad, not the infinite line).
  */
 function clipRingHalfPlane(
     ring: ClipPoint[], ax: number, ay: number, bx: number, by: number, keepPositive: boolean,
+    span?: { dx: number; dy: number; l2: number; tMin: number; tMax: number },
 ): ClipPoint[] | null {
     const n = ring.length >= 2 && ring[0].x === ring[ring.length - 1].x && ring[0].y === ring[ring.length - 1].y
         ? ring.length - 1
         : ring.length;
+
+    const inSpan = (px: number, py: number): boolean => {
+        if (!span) return true;
+        const t = ((px - ax) * span.dx + (py - ay) * span.dy) / span.l2;
+        return t >= span.tMin && t <= span.tMax;
+    };
 
     let anyIn = false;
     let anyOut = false;
@@ -110,7 +120,13 @@ function clipRingHalfPlane(
         if (inCur) out.push(cur);
         if (inCur !== inNxt) {
             const hit = lineHit(ax, ay, bx, by, cur.x, cur.y, nxt.x, nxt.y);
-            if (hit) out.push(hit);
+            // §885 g167: crossing insertion is span-bounded (see above). A
+            // near-parallel suppression was REFUTED (g167c): the shallow-
+            // angle crossings are load-bearing for the junction/va decks
+            // (shadows-junction 18k→144k with suppression) — the tfd wall
+            // fragmentation fix is the martinez boolean port (G10), not a
+            // line-clipping guard.
+            if (hit && inSpan(hit.x, hit.y)) out.push(hit);
         }
     }
     return normalizeRing(out);
@@ -134,15 +150,29 @@ export function polygonSubdivision(
     if (subdivisionEdges.length === 0) return polygons;
 
     let current = polygons.map(ring => normalizeRing(ring) ?? ring);
+    // §885 g167: mgl clips with the thin quad of the subdivision SEGMENT
+    // (extended by `edgeExtension` = 0.1), not the infinite line — a curve
+    // segment nearly coincident with the ring must not intersect it at
+    // every straddling edge (the dense mid-edge insertions that fragmented
+    // the structure walls and shifted the fill-tunnel-structure-color
+    // section boundaries). `polysubline=1` reverts to the infinite line.
+    const bounded = (globalThis as any).__mbPolySubLine !== true;
     for (const e of subdivisionEdges) {
         // Degenerate edges (isolated curve vertices have no direction) do
         // not cut — clipping to both sides of a point would duplicate the
         // ring and every shared edge would prune away in prepareEdges.
         if (e.ax === e.bx && e.ay === e.by) continue;
+        const dx = e.bx - e.ax;
+        const dy = e.by - e.ay;
+        const l2 = dx * dx + dy * dy || 1;
+        const ext = 0.1;
+        const span = bounded
+            ? { dx, dy, l2, tMin: -ext, tMax: 1 + ext }
+            : undefined;
         const next: ClipPoint[][] = [];
         for (const ring of current) {
-            const left = clipRingHalfPlane(ring, e.ax, e.ay, e.bx, e.by, true);
-            const right = clipRingHalfPlane(ring, e.ax, e.ay, e.bx, e.by, false);
+            const left = clipRingHalfPlane(ring, e.ax, e.ay, e.bx, e.by, true, span);
+            const right = clipRingHalfPlane(ring, e.ax, e.ay, e.bx, e.by, false, span);
             if (left) next.push(left);
             if (right) next.push(right);
         }
