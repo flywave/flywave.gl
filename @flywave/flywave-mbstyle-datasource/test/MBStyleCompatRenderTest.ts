@@ -661,6 +661,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "markupstructs=1")) {
         (globalThis as any).__mbMarkupStructs = true;
     }
+    // §885 g176: polysubclean=1 — clean the martinez input rings
+    // (consecutive-dup drop + near-collinear middle-vertex removal).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "polysubclean=1")) {
+        (globalThis as any).__mbPolySubClean = true;
+    }
     // §885 g168c: polysubstructmartinez=1 — structures intake uses the
     // martinez sparse-cut pieces (default off: the wall-quad carve bands
     // regress markups-clipping-underground family-wide).

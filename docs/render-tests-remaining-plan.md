@@ -7622,3 +7622,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 最终架构态（=HEAD g168）**：默认态=g163 逐位（家族最优 1,926,890）; G10 martinez 移植+SPLIT 架构完整在库, `polysubstructmartinez=1` 旋钮态（tfd 35,064/enterance 30,671/color 118,305）永久可用; minHeight 全局最小修复（g174）保留。
 
 **④ 状态**：单文件回退树净; 单测 310; 台账 g175。G10 转正前置战役终局。
+
+### §885 g176: G10 输入环预处理证伪——cleanRing 空操作（原始环本已干净稀疏）; 输入质量假设最终否决（2026-10-25 第九十一轮）
+
+**① 实现**：`cleanRing`（连续重复点去重+闭合重复点删除+近共线中点删除 <1e-3 相对叉积）挂 `polysubclean=1` 门, martinez 输入环前处理。
+
+**② 实测**：clean+martinez 与 noClean **逐位相同**（markups-clipping 98,655 / stacked 44,274 / tfd 37,775）——原始 MVT 环本就稀疏干净（17 字节/首特征, 4-6 顶点）, 无稠密/退化可清理。**输入质量假设最终否决**：markups-clipping 的 martinez +74k 回归非输入环质量问题, 而是**薄四边形减法在该夹具的 piece 结构产物**（所有几何变体已穷尽, g170/g175）。
+
+**③ 最终结论（三阶段完整）**：G10 martinez 移植在所有可考维度（几何变体/参数扫描/输入清理）下, structures-martinez 态对 markups-clipping-underground 均为 +55~75k 不可收敛回归——**收敛的唯一路径=mgl 私有源 polygon_clipping_hd.ts**。移植保持旋钮态永久可用（polysubstructmartinez=1: tfd −14.3k/enterance 族 −26k）; 默认态=g163（家族最优 1,926,890）。
+
+**④ 状态**：polysubclean 旋钮入库（门控惰性）; 单测 310; 树净; 台账 g176。

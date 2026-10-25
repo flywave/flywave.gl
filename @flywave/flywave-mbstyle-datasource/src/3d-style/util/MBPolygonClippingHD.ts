@@ -153,8 +153,41 @@ export function polygonSubdivision(
 ): ClipPoint[][] {
     if (subdivisionEdges.length === 0) return polygons;
 
+    // §885 g176: input-ring cleanup — drop consecutive duplicates and
+    // near-collinear middle vertices before the boolean diff (degenerate
+    // runs perturb the sweep-line piece topology).
+    const cleanRing = (ring: ClipPoint[]): ClipPoint[] => {
+        const COLLINEAR_EPS = 1e-3;
+        const out: ClipPoint[] = [];
+        for (const p of ring) {
+            const last = out[out.length - 1];
+            if (last && Math.abs(last.x - p.x) < 1e-9 && Math.abs(last.y - p.y) < 1e-9) continue;
+            out.push(p);
+        }
+        if (out.length > 2 && out[0].x === out[out.length - 1].x && out[0].y === out[out.length - 1].y) {
+            out.pop();
+        }
+        if (out.length < 3) return out;
+        const kept: ClipPoint[] = [];
+        for (let i = 0; i < out.length; i++) {
+            const a = kept[kept.length - 1] ?? out[out.length - 1];
+            const b = out[i];
+            const c = out[(i + 1) % out.length];
+            const c1x = b.x - a.x, c1y = b.y - a.y;
+            const c2x = c.x - b.x, c2y = c.y - b.y;
+            const cross = c1x * c2y - c1y * c2x;
+            const scale = Math.hypot(c1x, c1y) * Math.hypot(c2x, c2y);
+            if (scale > 0 && Math.abs(cross) / scale < COLLINEAR_EPS) continue;
+            kept.push(b);
+        }
+        return kept.length >= 3 ? kept : out;
+    };
+
     if (useMartinez) {
-        let current = polygons.map(ring => ring.slice());
+        let current = polygons.map(ring => {
+            const cleaned = (globalThis as any).__mbPolySubClean === true ? cleanRing(ring) : ring.slice();
+            return cleaned;
+        });
         for (const e of subdivisionEdges) {
             if (e.ax === e.bx && e.ay === e.by) continue;
             const dx = e.bx - e.ax;
