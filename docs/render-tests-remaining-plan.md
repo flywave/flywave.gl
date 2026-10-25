@@ -7744,3 +7744,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮方案（render-overlay 法）**: 在 emitter 给 mc-ne 的回落线材质设**纯红 diffuse**（代码级临时改）→ 渲染 → 红色像素位置=线的实际落点 → 定位被盖/飞出/退化。该法无 GPU 同步问题, 一次 IBCT 即可裁决。
 
 **④ 状态**：探针工具保留（drawstate=2）; 单测 310; 树净; 台账 g185b。
+
+### §885 g186: mc-ne 线不可见最终裁决——半透明路测试排除深度/覆盖; 线 truly 零 fragments; 根因=ribbon geometry 零宽或 mesh 空（2026-10-25 第一百零三轮）
+
+**① 半透明路测试**：road-base fill-opacity=0.3 → 白标记仍不存在（ours=224 vs expected=2650, IBCT 逐位 2,872 不变）⇒ **线不是被深度/覆盖遮挡而是 truly 零 fragments**——ribbon geometry 产生零面积三角形（顶点全在中心线=零宽挤出）或 mesh 空。
+
+**② 排除链最终版**：发射 ✓（plan=yes 遥测）→ mesh ✓（vis/cw/nvert/位置）→ 光栅化 ✗（零 fragments）⇒ 缺陷在 ribbon geometry 的宽度烘焙（worldHalfWidth→verts 挤出后顶点=中心线， 零宽三角形→GPU 零 fragments）。worldHalfWidth 计算链（lineWidthPx × mppScaled / 2）中 mppScaled 在该 fallback 瓦的值待验证（可能=0 或 NaN）。
+
+**③ 修复方案**：dump fallback 瓦的 worldHalfWidth 值（decodedbg 探针， [MBLineHD] 增 worldHalfWidth 输出）→ 确认 0/NaN → 修 mppScaled 计算。
+
+**④ 状态**：夹具已还原; 单测 310; 树净; 台账 g186。
