@@ -7878,3 +7878,17 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 修复路径**：与 tfd 色序/markups-clipping 同根因 = G10 切分质量（martinez 移植可修但当前版本仍劣于半平面）。**独立修复无路径**。
 
 **⑤ 状态**：分析轮零代码; 单测 310; 树净; 台账 g196。
+
+### §885 g196b: 四大未分析残余域空间定性——量级重估与根因分类（2026-10-25 第一百零八轮补充）
+
+**① road-extend-tilecover（154k, 家族最大单一残余）**：exp 路色(159,176,196) → 我方**暗蓝(77,85,94)** = 路面照明过暗（fog/lighting 域）。exp(240,240,240)白 → 我方暗 = 白色内容同样过暗。⇒ **照明/着色过暗域**，非 G10。
+
+**② tunnel-enterance-color（134k）**：exp 蓝墙(170,188,209) → 我方**过亮蓝(208,229,254)** = 隧道入口墙颜色过亮。exp 红(250,0,0) → 我方白(255,255,255) = 红色入口标记缺失。⇒ **隧道入口墙色+标记域**。
+
+**③ shadows-underpass（163k）**：exp 灰(113,117,116) → 我方背景(229,238,235) + 反向——明暗双向偏移 = 阴影/光照域。
+
+**④ elevated-symbols-lighting-text-terrain-enabled（205k）**：exp 暗色(57,63,70) → 我方更暗(44,49,55) = 地形上符号照明过暗域。
+
+**⑤ 量级重估**：road-extend-tilecover 154k + shadows-underpass 163k + elevated-symbols-* 族 ~400k + tunnel-enterance-color 134k = **这些照明/着色域残余远超 G10 域 ~130k**。家族残差的主要构成已从 G10 切分质量转向**照明/着色精度**。
+
+**⑥ 修复优先序**：照明/着色域（road-extend-tilecover 154k + shadows-underpass 163k + elevated-symbols 族 ~400k） > fog 精度 6,953 > G10 域 130k（阻塞于私有源）。
