@@ -7674,3 +7674,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮首查**：a) 76/178 intake 过滤（为何 102 特征未进 HD 路径——class 过滤/hd-road-markup 门?）；b) 发射下游 worldPts→mesh 构建对拍（rmstyle 态 vs 全渲染态的线 mesh 顶点数）。
 
 **④ 状态**：两修保留（mgl renderFlat 语义正确+stub 防御）；mc-ne 2,872 不变无回归; 单测 310; 台账 g179b。
+
+### §885 g180: 场景清单反转——线与 fill 同 z(-96=瓦片正常放置)/同可见性/同色, mesh 全部正常但零光栅化 ⇒ 不可见在线 shader 宽度/光栅化内部; dsdisable=全白非手术（2026-10-25 第九十六轮）
+
+**① 场景清单对拍（g178b decodedbg inventory）**：线 mesh 10 个（solid/double/dashed/stopline/crossing, nvert 12-160, MeshBasicMaterial+ShaderMaterial 混合, ro=9.75, vis=1, cw=1, matc=0.9 白 ✓）；**fill w0 z 同 = −96**（road-base ro=9.6/9.65 w0=[-3,-57,-96] 等）——z=-96 为该瓦正常世界放置（fill 渲染正确证实）, 非"线深埋"。
+
+**② dsdisable=1 证伪**：整帧全白=渲染管线整体依赖 depth pre-pass, 非手术探针（不可用作隔离）。
+
+**③ 机制收口**：线 mesh 存在/可见/位置正确/颜色正确但**零光栅化** ⇒ 不可见于 SolidLine shader 内部——rib bon 宽度挤出（width uniform/attribute 在该 zoom/相机下的解析）、或 shader 变体在该内容下的编译/ discard 路径。**线光栅化域深查=SolidLine shader 内部专项**（vertex shader 宽度挤出与 discreteZoom 解析、discard 分支）。
+
+**④ 状态**：flat-fallback 修复保留（mgl renderFlat 语义）; mc-ne 残 2,872 不变; 无回归; 单测 310; 台账 g180。
