@@ -7554,3 +7554,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 默认处置**：structures martinez **默认关**（polysubstructmartinez=1 开）; 跨度限定**默认关**（polysubspan=1 开; markups-clipping +4k 实测）; **默认态与 g163 逐位一致**（tfd 49,344 / stacked 43,374 / markups-clipping 24,693 三夹具复核）。G10 移植完整在库, 转正前置=carve 覆盖收敛（wall-quad 带与 mask 足迹对齐）。
 
 **⑤ 状态**：六文件（martinezVendor 新/MBPolygonClippingHD/MBElevatedStructures/MBStyleDataSource/MBTileDataEmitter/测试+runner 旋钮）; tsc 零新增（25 既有）; 单测 310 passing（含薄四边形 sliver 容差修正的 polygonSubdivision 单测）; 树净; 台账 g168。
+
+### §885 g169: carve 收敛尝试证伪——宽度×10 更差、批量单次 diff 不收敛; G10 转正阻塞于 mgl 私有源; 移植保持旋钮态（2026-10-25 第八十四轮）
+
+**① 宽度扫描**：薄四边形半宽 0.1→1.0（10×, 视觉仍亚像素）——markups-clipping 79,143→**108,954 更差**、circles-tunnel 9,309→9,309、tfd 35,064→44,203——宽度非伪影源, 反而扩大减法面积。
+
+**② 批量单次 DIFF**：全部薄四边形合并为单一 clipping MultiPolygon 一次减法（消除逐边顺序伪影复合）——circles-tunnel 9,309→**8,563（微改善）**、markups-clipping 79,143→**98,869（更差）**、tfd 35,064→**37,775（更差）**——不收敛。
+
+**③ 裁决**：两路均证伪 ⇒ 我方薄四边形构造（宽度/形状）与 mgl polygon_clipping_hd.ts 的实际减法几何不一致, 而该源文件属 mapbox 私有 HD 域（vendored 树仅 .d.ts 壳）不可考。**G10 martinez 移植保持 `polysubstructmartinez=1` 旋钮态**（tfd −14.3k/enterance 族 −26k 可复现）, 默认态维持 g163（家族最优, 1,926,890）。转正前置=获得 mgl 真实减法几何（上游私有源或以 expected 反推拟合）。
+
+**④ 状态**：两实验回退（bundle/源文件树净=HEAD g168 态）; 单测 310; 台账 g169。
