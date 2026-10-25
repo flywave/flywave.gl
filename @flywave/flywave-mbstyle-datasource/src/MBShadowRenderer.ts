@@ -1322,6 +1322,31 @@ export class MBShadowRenderer {
                     posArr: +(obj as any).position?.x?.toFixed(2),
                     matAuto: (obj as any).matrixAutoUpdate,
                 });
+                // §885 g201: phantom-caster hunt — dump the 3 highest-z and
+                // 3 lowest-z vertices (world frame) of each caster; the
+                // road-extend-tilecover band traced to a 41-unit-tall
+                // caster footprint that no legit rail/tunnel roof can make.
+                try {
+                    const gAny: any = (obj as any).geometry;
+                    const pa2 = gAny?.attributes?.position;
+                    if (pa2) {
+                        obj.updateWorldMatrix?.(true, false);
+                        const vs: Array<{ z: number; x: number; y: number }> = [];
+                        const n2 = Math.min(pa2.count, 60000);
+                        for (let vi = 0; vi < n2; vi++) {
+                            const v2 = new THREE.Vector3(
+                                pa2.getX(vi), pa2.getY(vi), pa2.getZ(vi));
+                            if ((obj as any).matrixWorld) v2.applyMatrix4((obj as any).matrixWorld);
+                            vs.push({ z: v2.z, x: v2.x, y: v2.y });
+                        }
+                        vs.sort((a2, b2) => b2.z - a2.z);
+                        const top3 = vs.slice(0, 3).map(v2 =>
+                            [+v2.x.toFixed(1), +v2.y.toFixed(1), +v2.z.toFixed(1)]);
+                        const bot3 = vs.slice(-3).map(v2 =>
+                            [+v2.x.toFixed(1), +v2.y.toFixed(1), +v2.z.toFixed(1)]);
+                        rows.push({ castVerts: { n: n2, top3, bot3 } });
+                    }
+                } catch { /* probe only */ }
                 if (rows.length >= 8) break;
             }
             const rteA = (this.m_mapView as any).getRteCamera?.();

@@ -320,6 +320,13 @@ export function createMaterial(
             (material as any).__mbGroundRadBase = [mc.r, mc.g, mc.b];
             if (kLin) {
                 mc.setRGB(mc.r * kLin[0], mc.g * kLin[1], mc.b * kLin[2]);
+                // §885 g201: tell the datasource's own ground-lighting wraps
+                // (injectGroundLighting / the sRGB-radiance block) that THIS
+                // material's lighting is already baked into its base color —
+                // both appliers firing squares the radiance (deck rendered
+                // rad² = 0.906 instead of rad = 0.952; road-extend-tilecover
+                // road at (156,172,191) vs expected (159,176,196)).
+                (material as any).__mbGroundRadBaked = true;
             }
         }
     }

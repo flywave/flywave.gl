@@ -177,6 +177,7 @@ function main() {
             ...(process.env.MBSTYLE_TESTTIMEOUT ? [`testtimeout=${process.env.MBSTYLE_TESTTIMEOUT}`] : []),
             ...(process.env.MBSTYLE_SHRES ? [`shres=${process.env.MBSTYLE_SHRES}`] : []),
             ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),
+            ...(process.env.MBSTYLE_GRRADDEDUP ? ["mbgrdedup=1"] : []),
             ...(process.env.MBSTYLE_SHOFF ? [`shoff=${process.env.MBSTYLE_SHOFF}`] : []),
             ...(process.env.MBSTYLE_FOGMUL ? [`fogmul=${process.env.MBSTYLE_FOGMUL}`] : []),
             ...(process.env.MBSTYLE_FOGDISTK ? [`fogdistk=${process.env.MBSTYLE_FOGDISTK}`] : []),
@@ -239,6 +240,7 @@ function main() {
             // §885 终三十九g50c: gshade=<e> → ground shadow-factor exponent.
             ...(process.env.MBSTYLE_GSHEXP ? [`gshade=${process.env.MBSTYLE_GSHEXP}`] : []),
             ...(process.env.MBSTYLE_SHCASTAUDIT ? ["shcastaudit=1"] : []),
+            ...(process.env.MBSTYLE_GRRADDEDUP ? ["mbgrdedup=1"] : []),
             ...(process.env.MBSTYLE_SHKAPPA ? [`shkappa=${process.env.MBSTYLE_SHKAPPA}`] : []),
             ...(process.env.MBSTYLE_SHADOWANALYTIC ? ["shadowanalytic=1"] : []),
             ...(process.env.MBSTYLE_BANDLINE ? ["shbandline=1"] : []),

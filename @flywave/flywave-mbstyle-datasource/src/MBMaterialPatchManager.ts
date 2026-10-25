@@ -1520,6 +1520,21 @@ export class MBMaterialPatchManager {
      */
     private injectGroundLighting(material: THREE.Material, technique: any, techName: string): void {
         if ((material as any).__mbGroundLitHandler) return;
+        // §885 g201: with cast-shadows active the engine's creation bake
+        // (DecodedTileHelpers) already multiplied the ground radiance into
+        // the base color — the shader-side multiply on top squares it
+        // (road-extend-tilecover deck rad² = (156,172,191) vs expected
+        // rad = (159,176,196); cast-shadows A/B exact). Non-shadow
+        // 3D-lights styles keep the legacy double chain: the whole
+        // cast-shadows=0 cohort REGRESSES without it (family A/B:
+        // elevated-symbols-pitched 35.5k→60.7k, -oriented 20.2k→29.6k,
+        // ortho-camera 32.7k→77.8k with the dedup ungated; every
+        // regression fixture is cast-shadows=0 and every big g168→g201
+        // winner is unrelated to this dedup — all cast-shadows=0 too).
+        if ((material as any).__mbGroundRadBaked
+            && (globalThis as any).__mbGrRadDedup === true) {
+            return;
+        }
         (material as any).__mbGroundLitHandler = true;
 
         const paint = technique._paint ?? {};
@@ -4052,7 +4067,8 @@ export class MBMaterialPatchManager {
             // (ortho-camera road rendered raw×1.0794² = (190,209,233) vs
             // expected raw×1.0794 = (176,194,216)). Share the
             // __mbGroundLitHandler flag so exactly one chain applies.
-            if (ls && !(material as any).__mbGroundLitHandler) {
+            if (ls && !(material as any).__mbGroundLitHandler
+                && (globalThis as any).__mbGrRadDedup === true) {
                 (material as any).__mbGroundLitHandler = true;
                 const gr = ls.groundRadiance;
                 const origCompile = material.onBeforeCompile;

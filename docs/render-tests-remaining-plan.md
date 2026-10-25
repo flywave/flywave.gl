@@ -7932,3 +7932,31 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮首查**：decodedbg 探针 dump mc-ne fallback 线的 m_lineInterleaved 顶点坐标（对照 rmstyle 态正常渲染的顶点坐标）→ 定位坐标偏差的具体轴/量级。
 
 **④ 状态**：style 还原; 零代码; 单测 310; 台账 g200。
+
+### §885 g201: road-extend-tilecover 双根因——ground-radiance 双应用已修(路色=期望精确值) + cast-shadow 带四路探针围剿(2026-10-25 第一百十一轮)
+
+**① 组件②(路色 −3,−4,−5)已诊断+修复转默认关闭旗标（终版）**：实测路色 (156,172,191)/期望 (159,176,196) 之比 = 0.9057 = 0.9517²（三通道 linear-encode 全吻合）⇒ ground-radiance **双重应用**：引擎 creation-bake（DecodedTileHelpers g142/g142: color×=kLin）× datasource injectGroundLighting shader 乘法（patchTile 包裹引擎材质）平方效应。修复（mbgrdedup=1 选择性启用）：引擎 bake 打 `__mbGroundRadBaked` 标记，injectGroundLighting 与 Block B（sRGB-radiance 后置块）见标记让位。验证：亮路 (159,176,196) = **期望精确值**（shadows ON/OFF 双态）。**家族 A/B 反转**：dedup 无门控全开时 61 夹具集虽 −309k vs g168，但 stash-A/B 归因显示回归全由 dedup 引起（cast-shadows=0 群组：elevated-symbols-pitched 35,511→60,703、-oriented 20,200→29,617、ortho-camera 32,736→77,805、road-markups-high-pitch +5,084、symbols-mixed +4.2k×2）；大胜夹具（guard-rail-qkey-border −86k 等）全部 cast-shadows=0=来自 g161-g178 积累而非本修复。**终态：默认 OFF（逐字节=pre-201，A/B 双夹具验证 32,736/35,511 精确复位），mbgrdedup=1 启用单次应用语义**——fill 单次/线层双次/正交双次的原生应用次数模型待后续专项钉死。
+
+**② 组件①(cast-shadow 带 116k)四路探针围剿**：
+- cast-shadows=false：154,379→**37,762(−116,617)** 带确证来自 shadow 链；
+- shdiag10：带 = 接收器块内 mbLit=0（cascade-0 门通过、深度比较失败）×136k px；亮区自比较通过；
+- DIAG5：带区 stored−own ≈ −0.015 光深 ≈ 9m 光程差 = 桥/墙→路面的**物理一致遮挡**；caster 审计（castVerts 新探针）：casters 合法（隧道底 −27m 到桥顶+屋顶 +15m，42m 跨互通立交），幻影 caster 排除；
+- 深度图 dump（新 probe shadowmap-dump + 旧 shadow-depth-map/canvas）：**m_depthPixels@frame60 全空、@capture 全空、__mbDepth2d 全黑（废弃画布, 终三十一已迁 DataTexture 无人绘制）**——与 DIAG5 stored=0.385 矛盾 ⇒ 接收器绑定的纹理 ≠ 探针读的源（多实例/陈旧绑定/逐帧闪烁三候选）。
+
+**③ 仰角/方位扫描（混淆正交窗口宽度）**：shadowkappa=4.75(仰角30°) 96,740 / 7.55(20°) 86,611——单调改善但 κ 同时放大 ortho 窗（in-fit 区几何变化），非纯物理；shaz=180 轮次夹具中断未出数。expected 自身影 = 左上角 ~8.6k px（桥影, 仰角读数 ~25-35°）vs 我方 133k px 带。
+
+**④ 组件①下轮首查**：capture 时刻**逐材质** introspect uMBShadowMap.value（texture.uuid/isDataTexture/image 白比例）对照 m_depthPixels——定位绑定分叉的确切层（注入期 vintage vs 逐帧刷新漏访 vs 第二上下文闪烁）；次查 MBSTYLE_SHADOWHW=1（HW RT 路径）绕过第二上下文。
+
+**⑤ 状态**：修复 3 文件（DecodedTileHelpers.ts + MBMaterialPatchManager.ts + 测试探针）；mapview/mbstyle 双包已重建（预存 TS 错误不变）；索引重生成（style 已还原）；家族回归 g201-family 运行中；台账 g201。
+
+### §885 g201b: g201 终局补充——家族回归量测与 dedup 归因方法论（2026-10-25 第一百十二轮）
+
+**① 家族量测（61+13 夹具，逐个串行防 wedge）**：mb-3di-g201-family(61) + g201b(13) vs g168-family 基线（61 共同集）：**1,990,065 → 1,680,798（−309,267）**（含 g161-g178 积累 + 本轮实验态）。大胜：guard-rail-qkey-border −86,336（96,010→9,674）、road-markups-clipping-underground −71,703、elevated-line-labels-tunnel −50,592、guard-rail-joint −46,780、elevated-symbols-lighting* −18~27k×4、ortho-camera-tunnel 6,207→**8(PASS)**。注：g168 基线早于 g169-g200 提交，差异为累计值。
+
+**② 多夹具 karma 会话 wedge**：chunked/批量 runner 在 shadows-*/tunnel-color-feature-dependent 重夹具上反复挂死（chrome 0% CPU 无进展 ~25min）；单夹具逐个跑稳定（每个 1-3min）。教训入账：重家族量测用单夹具串行 + 每轮 pkill。
+
+**③ dedup 归因方法论**：stash-A/B（git stash push 两文件→双包重建→同夹具对照）= 定位回归源的干净手段； ortho-camera +45k 的机制另层——其亮路色 (176,194,216) 在修复态=期望精确（单次 rad, rad=1.083>1 天顶光场景），+45k 全部为**阴影覆盖率过多**（10.7k vs 期望 3.5k 阴影像素）= 组件①病（同 retc 带），非应用次数错。
+
+**④ 下轮首查（组件① 收敛路径）**：(a) capture 时刻逐材质 introspect uMBShadowMap.value 的 texture.uuid/image 内容对照 m_depthPixels（绑定分叉定位）；(b) MBSTYLE_SHADOWHW=1 HW RT 路径绕过第二上下文；(c) ortho-camera 阴影覆盖过多与 retc 带同源 verify。
+
+**⑤ 状态**：修复 2 文件（DecodedTileHelpers.ts bake 标记 + MBMaterialPatchManager.ts 门控）+ 工具 3 文件（MBShadowRenderer castVerts 探针 / 测试 shadowmap-dump+mbgrdedup 管道 / runner env）；默认行为逐字节=pre-201；单测 310；台账 g201b。

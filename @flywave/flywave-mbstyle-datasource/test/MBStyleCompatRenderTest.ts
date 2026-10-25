@@ -410,6 +410,17 @@ function discoverTests(): TestEntry[] {
         // requiring SHADOW>=4 — clean-gate attribution experiments.
         if (sdg === "2") (globalThis as any).__mbShadowDbg4 = true;
     }
+    // §885 g201: mbgrdedup=1 → opt-in ground-radiance dedup (the engine
+    // creation bake wins, the datasource shader multiply stands down).
+    // DEFAULT OFF: the A/B family sweep measured the dedup as a wash —
+    // road-extend-tilecover decks land exactly on expected with it (rad
+    // instead of rad²), but the cast-shadows=0 cohort regresses hard
+    // (elevated-symbols-pitched 35.5k→60.7k, ortho-camera 32.7k→77.8k),
+    // so the single-application semantics stay a per-run experiment until
+    // the native application-count model is pinned down.
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "mbgrdedup=1")) {
+        (globalThis as any).__mbGrRadDedup = true;
+    }
     // §885 终七十二: shoff=<x>,<y> → world-XY offset of the shadow sphere
     // center (dark-centroid calibration against expected).
     const sho = (window as any).__karma__?.config?.args?.find?.((a: string) =>
@@ -4288,6 +4299,56 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                 body: JSON.stringify({ probe: "recv-uniform-sample",
                                     sample, hasDepthMatRef: !!depthMat }),
                             });
+                            // §885 g201: shadow-map VISUAL dump — the packed
+                            // depth canvas + the light matrix/fit, so the
+                            // band region can be matched against the stored
+                            // casters offline (road-extend-tilecover band).
+                            try {
+                                const sr2: any = (dataSource as any)?.m_shadowRenderer
+                                    ?? depthMat;
+                                // §885 终三十一: the live shadow map is the
+                                // readPixels DataTexture (m_depthPixels), NOT
+                                // the vestigial __mbDepth2d canvas.
+                                const dp: Uint8Array | undefined = sr2?.m_depthPixels;
+                                const texSize = sr2?.m_shTex?.image?.width ?? 2048;
+                                let depthUrl: string | null = null;
+                                if (dp && dp.length === texSize * texSize * 4) {
+                                    // 512² R-only downsample — the full 2048²
+                                    // RGBA dataURL exceeds the probe POST
+                                    // budget and was silently dropped.
+                                    const DS = 4;
+                                    const s2 = texSize / DS;
+                                    const c3 = document.createElement('canvas');
+                                    c3.width = s2;
+                                    c3.height = s2;
+                                    const id = c3.getContext('2d')!.createImageData(s2, s2);
+                                    for (let yy = 0; yy < s2; yy++) {
+                                        for (let xx = 0; xx < s2; xx++) {
+                                            const src = ((yy * DS) * texSize + (xx * DS)) * 4;
+                                            const di = (yy * s2 + xx) * 4;
+                                            id.data[di] = dp[src];
+                                            id.data[di + 1] = dp[src + 1];
+                                            id.data[di + 2] = dp[src + 2];
+                                            id.data[di + 3] = 255;
+                                        }
+                                    }
+                                    c3.getContext('2d')!.putImageData(id, 0, 0);
+                                    depthUrl = c3.toDataURL('image/png');
+                                }
+                                await fetch(`${fbC}/mb-probe-dump`, {
+                                    method: "POST",
+                                    headers: { "content-type": "application/json" },
+                                    body: JSON.stringify({ probe: "shadowmap-dump",
+                                        depth2d: depthUrl,
+                                        size: [texSize, texSize],
+                                        matrix: sr2 ? (sr2 as any).m_matrix?.elements ?? null : null,
+                                        fit: (globalThis as any).__mbC1Fit ?? null,
+                                        lightDir: (sr2 as any)?.__mbShLightDir?.toArray?.() ?? null,
+                                        shInfo: (globalThis as any).__mbShadowInfo ?? null,
+                                        info: (globalThis as any).__mbShadowAnalyticInfo ?? null,
+                                    }),
+                                });
+                            } catch { /* probe only */ }
                         } catch { /* probe only */ }
                         // §885 g51f: dump the ACTUAL GPU-executed receiver
                         // shader source via raw WebGL (getAttachedShaders) —
