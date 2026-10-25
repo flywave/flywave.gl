@@ -7793,3 +7793,17 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 下轮**：dump 我方 guard rail 各段的实际 featureIndex+color 与 expected 色序对照 → 定位指派偏移的具体 feature/segment → 修 section 归属。该域独立于 G10 可单独收敛。
 
 **④ 状态**：零代码; 单测 310; 树净; 台账 g190。
+
+### §885 g191: guard-rail-color-fd 逐行分析——绿/蓝均存在但边界偏移=几何定位（G10 依赖）, 非颜色指派错误（2026-10-25 第一百零五轮补充）
+
+**① 逐行颜色分析**（rows 100/200/300/400, 4 域色计数）：
+- row 100: exp 绿=376 vs ours 绿+蓝=204+33（exp 无蓝 at 此行）
+- row 200: exp 蓝=420 vs ours 蓝=341+绿=68
+- row 300: exp 蓝=411 vs ours 蓝=329+杂
+- row 400: exp 蓝+绿=437 vs ours 蓝+绿=440
+
+**② 定性**：绿/蓝均存在但**边界位置与面积比偏移** = guard rail 各段的**几何定位偏移**（墙段的长度/起点/终点与 mgl 不同），非颜色指派错误。featureId→颜色链正确（g171 验证），颜色品种正确（蓝/绿均出现）——仅位置/长度偏移。22k IBCT 为 PRE-EXISTING residual（g163 前后稳定）。
+
+**③ 归属**：G10 域（墙段几何定位=切分实现质量）。与 markups-clipping/tfd 色序同根因。无独立修复路径。
+
+**④ 状态**：分析轮零代码; 单测 310; 树净; 台账 g191。
