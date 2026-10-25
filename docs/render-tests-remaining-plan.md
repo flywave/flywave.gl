@@ -7664,3 +7664,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 覆盖机制二分**：markupbias=5（+5m 巨幅抬升）仍不可见 ⇒ 非简单 z-fight（5m 抬升必过深度精度）; 线 ro=9.75 > 路 ro=9.6（后画）⇒ 非绘制顺序。剩余嫌疑=**road-base fill 的深度/stencil 写入在线片段上的拦截**（fill 的 stencil 写/深度精度/或 fill 材质深度语义）——线材质域深查。
 
 **③ 状态**：flat-fallback 修复保留（mgl renderFlat 字面, 遥测全 plan=yes）; rmstyle 隔离证明线在光栅化; mc-ne 残 2,872 不变; 其余无回归; 单测 310; 台账 g179。
+
+### §885 g179b: 平坦 plan 已达发射但线不光栅化——丢弃点在发射链更深处; stub feature 无效; 域收口（2026-10-25 第九十五轮）
+
+**① 排除链完整**：无曲线线层平坦回落（点透传+零高+markup bias）→ 遥测全 plan=yes → 发射分支消费 pts/ptHeights（不消费 plan.feature, stub feature 实测无效 144 不变）→ **线仍零光栅化**（bias=5 与 0.05 全帧近白 135≈144）⇒ 丢弃点在发射链更深处（emission 下游的 mesh 构建/材质/或该 76 intake 本身只是子集——hd_road_line 178 特征仅 76 进 HD 路径）。
+
+**② 域定界**：非 elevation plan 层（本轮两修均无效）；非 G10（与切分无关，rmstyle 隔离证明线在无 fill 时正常光栅化）；= **HD 线发射/材质域**（hd_road_line 178→76 的 intake 过滤 + 发射下游 mesh 质量）。
+
+**③ 下轮首查**：a) 76/178 intake 过滤（为何 102 特征未进 HD 路径——class 过滤/hd-road-markup 门?）；b) 发射下游 worldPts→mesh 构建对拍（rmstyle 态 vs 全渲染态的线 mesh 顶点数）。
+
+**④ 状态**：两修保留（mgl renderFlat 语义正确+stub 防御）；mc-ne 2,872 不变无回归; 单测 310; 台账 g179b。

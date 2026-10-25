@@ -594,7 +594,11 @@ export class MBElevatedStructures {
             // in the caller's extent frame unchanged.
             const bias0 = isMarkup ? Number((globalThis as any).__mbMarkupBias ?? MARKUP_ELEVATION_BIAS) : 0;
             return {
-                feature: undefined as any,
+                // g179b: a LIVE stub — an undefined feature made the line
+                // emission throw downstream and the try/catch silently
+                // dropped every flat line (zero pixels at any markup bias).
+                feature: { constantHeight: 0, isTunnel: false, id: undefined,
+                    safeArea: undefined } as any,
                 points: points.map(p => ({ x: p.x, y: p.y })),
                 heights: points.map(() => this.biased(0, bias0)),
             };
