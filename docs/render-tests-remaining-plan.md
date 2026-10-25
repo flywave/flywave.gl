@@ -7572,3 +7572,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 裁决**：markups-clipping +55~65k 与 tfd +2~3k 的 structures-martinez 偏差**与薄四边形宽度无关**=martinez SPLIT 本身（细分拓扑/段间关系）在该夹具的交互差异。转正前置确认为**必须获得 mgl polygon_clipping_hd.ts 的真实减法构造**（mapbox 私有域不可考）——纯参数扫描无解, G10 移植保持旋钮态（polysubstructmartinez=1）。
 
 **③ 状态**：polysubw 参数化+karma/runner 旋钮入库（默认 0.1=惰性, 默认态不受影响）; 单测 310; 树净; 台账 g170。
+
+### §885 g171: featureId→id%3 链验证正确——逐边 type 69/76 同型（差异=零长度退化边）; Y↔G 色序互换收窄为碎片化片的 section 分组归属（2026-10-25 第八十六轮）
+
+**① 我方 featureId 链验证**：addElevatedFeature 增 featureId 参数（实例字段入 __mbEdges dump）; tile 18-41948-101472 我方 polygonIdx→原始 id 实测：pol4=4632831835806823(%3=1 蓝)/pol5=681489287465609(%3=2 绿)/pol6=1382432363458806(%3=0 黄)/pol7=4098764553820945(蓝)/pol8=8953118143090754(绿)/pol9=6124225098472056(黄)/pol10=6483352353234100(蓝)——与原始 mvt id 表逐条吻合 ⇒ **我方 featureId→id%3→颜色链正确**。
+
+**② 逐边 type 指派对拍（几何匹配, 变换 (x/2,4096−y/2)）**：**69/76 同型**（全部 'none' 墙边一一对应）; 4 差异=mgl 零长度退化边（fi14/16/18 的 entrance/polygon 零长边→我方 none, 双方均不可见）; 3 无匹配=fi12 长边碎片。⇒ **类型指派基本正确, 非色序漂移源**。
+
+**③ Y↔G 色序互换最终收窄**：分段几何边界已对齐（91/160 vs 62/147）、type 指派正确、featureId 链正确 ⇒ 残余=**碎片化片的 section 分组归属**（我方 7 组 vs mgl 4 组, 碎片归组与 mgl 连续段不同）——该分组由碎片化产生, martinez 旋钮态（polysubstructmartinez=1, 稀疏分段=4 组）已修复此层, 默认态转正仍受 G10 carve 带阻塞（g169）。
+
+**④ 状态**：featureId 探针提交（addElevatedFeature featureId 参数+实例字段+edges dump 7 元组）; 单测 310; 树净; 台账 g171。

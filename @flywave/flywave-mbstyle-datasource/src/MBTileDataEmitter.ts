@@ -2151,6 +2151,7 @@ export class MBTileDataEmitter {
                                 isTunnel: plan.isTunnel,
                                 pieces: plan.piecesCanonical,
                                 triPieces: plan.piecesCanonicalHP,
+                                featureId,
                                 // §885 g55 (audit G3): mgl addRenderableRing's
                                 // `area` = the feature elevation's safeArea.
                                 safeArea: plan.feature.safeArea,

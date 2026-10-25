@@ -186,6 +186,8 @@ export class MBElevatedStructures {
     private m_unevalEdges: ElevatedEdge[] = [];
     /** Any sampled road height dips to/below the ground plane (mgl heightRange). */
     private m_underground = false;
+    /** g171: the current intake feature's data id (color-parity probe). */
+    private m_currentFeatureId: string | number | null = null;
     /** §516: consumer key of this tile (for the deferred-curve report). */
     private m_consumerKey = '';
     /** Exterior-vertex posHash → hashes of the edges it connects (mgl vertexHashLookup). */
@@ -755,11 +757,14 @@ export class MBElevatedStructures {
          * triangles (full plan footprint); defaults to `pieces` — when
          * absent the intake runs the single-pass g163 form. */
         triPieces?: CanonicalPiece[];
+        /** g171: the data feature id (color-parity probe). */
+        featureId?: string | number;
         zOffset?: number;
         /** mgl addRenderableRing's `area` (elevation.safeArea) — G3. */
         safeArea?: { minX: number; minY: number; maxX: number; maxY: number };
     }): void {
         const { featureIndex, guardRailEnabled, isTunnel, pieces, safeArea } = params;
+        this.m_currentFeatureId = params.featureId ?? null;
         const triPieces = params.triPieces ?? pieces;
         // §885 g52f: the deck geometry renders at project() + zOffset +
         // sampledHeight — project() folds m_currentZOffset (the g13
@@ -1374,7 +1379,7 @@ export class MBElevatedStructures {
                 c.offered++;
                 if (c.offered % 400 === 0) console.log(`[MBEdge] offered=${c.offered} kept=${c.kept}`);
                 const ed = (globalThis as any).__mbEdges ??= [];
-                if (ed.length < 8000) ed.push([this.m_consumerKey, Math.round(vax * 2) / 2, Math.round(vay * 2) / 2, Math.round(vbx * 2) / 2, Math.round(vby * 2) / 2, polygonIdx]);
+                if (ed.length < 8000) ed.push([this.m_consumerKey, Math.round(vax * 2) / 2, Math.round(vay * 2) / 2, Math.round(vbx * 2) / 2, Math.round(vby * 2) / 2, polygonIdx, this.m_currentFeatureId ?? null]);
             }
             const edgeHash = edgeHashOf(va, vb);
             let portalHash = this.m_vertexHashLookup.get(posHashOf(va))?.next
