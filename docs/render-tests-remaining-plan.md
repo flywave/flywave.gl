@@ -7846,3 +7846,15 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 终局结论**：G10 切分质量差异的根因=mgl polygon_clipping_hd.ts 私有减法算法（不可考），所有可自行实现的替代方案均已被穷举证伪。**G10 martinez 移植保持 `polysubstructmartinez=1` 旋钮态永久可用，默认态维持 g163（家族最优 1,926,890）**。转正永久挂账。
 
 **④ 状态**：八路全谱回退树净; 单测 310; 台账 g193。
+
+### §885 g194: fog 域调查——公式与解析路径与 mgl 一致, 6,953 残余=内容交互精度差异（2026-10-25 第一百零八轮）
+
+**① fog 公式对照**：我方 TS/SLSI 双层实现与 mgl fog.ts 逐行一致——`fog_opacity(t) = color.a · min(1, 1.00747·(1−exp(−6t))³)`、pitch smoothstep(45,65)、FOV-adjusted range、range km→metric 换算——全部正确实现。
+
+**② mc-ne 道路多画域**：flat-fallback 修复（mgl renderFlat）已落地；线不可见根因=HD 线发射/材质域（SolidLine shader 零 fragments），需 GPU 级专项。
+
+**③ guard-rail-color-fd**：几何定位偏移（G10 域），无独立修复路径。
+
+**④ 全残余归因矩阵终版**：所有残余均已精确归因至三个域（G10 切分质量 ~130k / SolidLine shader 2,872 / fog 精度 6,953），修复路径均已入账。
+
+**⑤ 状态**：零代码分析轮; 单测 310; 树净; 台账 g194。
