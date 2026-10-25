@@ -7684,3 +7684,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **③ 机制收口**：线 mesh 存在/可见/位置正确/颜色正确但**零光栅化** ⇒ 不可见于 SolidLine shader 内部——rib bon 宽度挤出（width uniform/attribute 在该 zoom/相机下的解析）、或 shader 变体在该内容下的编译/ discard 路径。**线光栅化域深查=SolidLine shader 内部专项**（vertex shader 宽度挤出与 discreteZoom 解析、discard 分支）。
 
 **④ 状态**：flat-fallback 修复保留（mgl renderFlat 语义）; mc-ne 残 2,872 不变; 无回归; 单测 310; 台账 g180。
+
+### §885 g181: zoomab 检验无效（偏移语义改变取景）; 线不可见定性为**全夹具全局现象**（symbol 层可见、全部 line 层不可见——与 tile/G10/切分无关）（2026-10-25 第九十七轮）
+
+**① zoomab=20.5 检验**：zoomab 为 camera zoom **偏移**语义（+20.5 → zoom 39 深入）——整帧蓝路面, 检验无效（宽度 zoom 偏移假设未获验证）。
+
+**② 全局现象定性**：本夹具 ALL line 型层（solid/double/dashed/stopline/crossing）全幅不可见; symbol 型层（turnlane-arrow）可见——**不可见=HD SolidLine 线渲染管线对该夹具线内容的全局失败**, 与 tile 分区/G10 切分/曲率无关（g178 遥测: 76 intake 全 plan=yes 已发射; rmstyle 隔离: 几何在光栅化）。
+
+**③ 矛盾点精化**：同批线 rmstyle（无 fill）态光栅化正常、全渲染态消失——填充的某种状态（深度写入/stencil/材质）在**线绘制时**拦截; 且 markupbias=5（+5m）不变=拦截与深度无关 ⇒ **拦截在非深度域**（stencil/color/或 fill 的 pre-pass 对线 draw 的掩蔽）——SolidLine 的 NotEqual 1 测试 vs fill 写入的 stencil 值交互（g180 DepthPrePass 发现: pre-pass 写 0xff, 线 NotEqual-1 应通过...除非 pre-pass 清零后线 ref=1 与 0 比对 NotEqual 通过...仍矛盾）——需逐 draw-call stencil 状态捕获（glcatch 扩展）。
+
+**④ 状态**：零代码（检验轮）; 单测 310; 树净; 台账 g181。
