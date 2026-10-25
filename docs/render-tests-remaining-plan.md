@@ -7783,3 +7783,13 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **② 定性**：mc-ne 的 HD 线不可见需要 **GPU 级专项调试**（RenderDoc/SPECTOR/Chrome GPU 面板/逐顶点 shader 调试），超出 IBCT/静态分析/console 探针能力范围。残余 2,872 挂账为 GPU 级专项。
 
 **③ 状态**：全部实验代码回退树净（HEAD=g187+knob 工具）; 单测 310; 台账 g189。G10 转正永久挂账于 mgl 私有源（g169/g175/g176 闭环）。g177 路线图（数据驱动护栏色/雾域/markup pattern）排队待专项。
+
+### §885 g190: guard-rail-color-fd martinez 效果微弱（22093→21728, −365）——数据驱动护栏色域独立于 G10 切分（2026-10-25 第一百零三轮）
+
+**① 实验**：structures martinez 开/关对比 guard-rail-color-feature-dependent——22093→21728（−365, 远小于预期）。martinez 稀疏墙段不解决该夹具的颜色指派问题。
+
+**② 定性**：exp 蓝(0,0,227)→我方绿(0,127,0)/shade(212,219,217) 的颜色偏差 = **guard rail 的 featureIndex→颜色表达式求值链独立问题**（非碎片化/非 G10）——数据驱动 `fill-bridge-guard-rail-color` 的 per-section 求值在墙段碎片化后 featureIndex 仍正确（g171 验证），但**实际渲染颜色不匹配** ⇒ 求值链下游（technique color→material color→shader）或表达式本身的 feature 匹配差异。
+
+**③ 下轮**：dump 我方 guard rail 各段的实际 featureIndex+color 与 expected 色序对照 → 定位指派偏移的具体 feature/segment → 修 section 归属。该域独立于 G10 可单独收敛。
+
+**④ 状态**：零代码; 单测 310; 树净; 台账 g190。
