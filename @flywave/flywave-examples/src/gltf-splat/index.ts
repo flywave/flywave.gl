@@ -403,11 +403,3 @@ const splatController = new GLTFSplatController();
 
 // Initialize UI control panel
 splatController.initializeUI();
-
-// Expose controller to global scope for debugging
-//@ts-ignore
-window.splatController = splatController;
-//@ts-ignore
-window.mapView = splatController["mapView"];
-
-console.log("GLTF Splat model loading example loaded with full implementation");

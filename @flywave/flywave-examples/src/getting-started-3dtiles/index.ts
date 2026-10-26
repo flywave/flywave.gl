@@ -1,95 +1,76 @@
-import {
-    CesiumIonDataSource,
-    ellipsoidProjection,
-    GeoCoordinates,
-    MapControls,
-    MapControlsUI,
-    MapView
-} from "@flywave/flywave.gl";
+/* Copyright (C) 2025 flywave.gl contributors */
 
-import { shouldForceWebGL } from "../common-webgl-debug";
+import { CesiumIonDataSource } from "@flywave/flywave.gl";
+import { applyPanelStyle, checkIonToken, createExampleMap, logExampleInfo } from "../common";
 
 /**
- * Get map canvas element
- * @returns HTMLCanvasElement Map canvas element
+ * Bilingual guidance card shown when no Cesium Ion token is configured.
+ * The example intentionally does not initialize the map in that case: the
+ * asset cannot load without a token.
  */
-const getMapCanvas = (): HTMLCanvasElement => {
+function showIonTokenCard(): void {
+    const card = document.createElement("div");
+    card.innerHTML = [
+        "<b>3D Tiles from Cesium Ion requires an access token.</b>",
+        "Set one before this page loads, then reload:",
+        "<ol>",
+        '<li><code>window.CESIUM_ION_TOKEN = "&lt;your token&gt;";</code> in the browser console, or</li>',
+        "<li>build the examples with the <code>CESIUM_ION_TOKEN</code> environment variable.</li>",
+        "</ol>",
+        'Get a free token at <a href="https://ion.cesium.com/tokens" target="_blank">ion.cesium.com/tokens</a>.',
+        "<hr>",
+        "<b>This example requires a Cesium Ion access token.</b>",
+        "Configure a token before the page loads, then refresh:",
+        "<ol>",
+        '<li>Run <code>window.CESIUM_ION_TOKEN = \"<your token>\";</code> in the browser console, or</li>',
+        "<li>Inject it at build time via the CESIUM_ION_TOKEN environment variable.</li>",
+        "</ol>",
+        'Get a free token: <a href="https://ion.cesium.com/tokens" target="_blank">ion.cesium.com/tokens</a>。'
+    ].join("\n");
+    card.style.cssText =
+        "position:absolute;left:50%;top:50%;transform:translate(-50%, -50%);" +
+        "max-width:560px;padding:20px 24px;font:13px/1.6 sans-serif;color:#e8eaed;" +
+        "text-align:left;";
+    applyPanelStyle(card, { zIndex: "200" });
+    document.body.appendChild(card);
+}
+
+/**
+ * 3D Tiles getting-started example: load a photogrammetry asset from Cesium
+ * Ion on top of a globe view. Kept deliberately small - the interesting
+ * wiring all lives in `CesiumIonDataSource`, which resolves the asset
+ * endpoint from the access token on connect.
+ */
+async function main(): Promise<void> {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
-    if (!canvas) {
-        throw new Error(
-            "Map canvas element not found, please ensure there is a canvas element with id 'mapCanvas' in HTML"
-        );
+
+    // Pre-flight check: degrade to a guidance card instead of failing at
+    // data source connect time when no token is configured.
+    const accessToken = checkIonToken();
+    if (accessToken === undefined) {
+        showIonTokenCard();
+        return;
     }
-    return canvas;
-};
 
-/**
- * Initialize map view configuration
- * @param canvas Map canvas element
- * @returns Configured MapView instance
- */
-const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
-    // Set initial map position and viewpoint (New York City, near Statue of Liberty)
-    const initialLocation = new GeoCoordinates(40.6959, -74.0162);
-
-    return new MapView({
-        forceWebGL: shouldForceWebGL(),
-        projection: ellipsoidProjection, // Use ellipsoidal projection
-        target: initialLocation, // Initial target position
-        zoomLevel: 18, // Initial zoom level
-        tilt: 70, // Initial tilt angle
-        heading: 35.1, // Initial heading angle
-        canvas, // Specify render canvas
-        theme: {
-            extends: "resources/tilezen_base_globe.json" // Base theme configuration
+    const { mapView } = await createExampleMap(canvas, {
+        theme: "resources/tilezen_base_globe.json",
+        lookAt: {
+            target: { lat: 40.6959, lng: -74.0162 },
+            zoomLevel: 17,
+            tilt: 70,
+            heading: 35.1
         }
     });
-};
+    logExampleInfo("getting-started-3dtiles", mapView);
 
-/**
- * Initialize map control component
- * @param mapView Map view instance
- * @param canvas Map canvas element
- */
-const initializeMapControls = (mapView: MapView, canvas: HTMLCanvasElement): void => {
-    const controls = new MapControls(mapView);
-    const ui = new MapControlsUI(controls);
-    canvas.parentElement!.appendChild(ui.domElement);
-};
-
-/**
- * Create Cesium Ion data source
- * @param mapView Map view instance
- * @returns Configured CesiumIonDataSource instance
- */
-const createCesiumIonDataSource = (mapView: MapView): CesiumIonDataSource => {
-    const cesiumIonDataSource = new CesiumIonDataSource({
-        // Note: In production environments, this token should be managed using environment variables or configuration files
-        accessToken: CESIUM_ION_TOKEN, // Use unified configured access token
-        assetId: 75343 // Data asset ID
-    });
-
-    mapView.addDataSource(cesiumIonDataSource);
-
-    return cesiumIonDataSource;
-};
-
-// ==================== Main execution flow ====================
-
-try {
-    // 1. Get map canvas element
-    const canvas = getMapCanvas();
-
-    // 2. Initialize map view
-    const mapView = initializeMapView(canvas);
-
-    // 3. Initialize map controls
-    initializeMapControls(mapView, canvas);
-
-    // 4. Create Cesium Ion data source
-    const cesiumDataSource = createCesiumIonDataSource(mapView);
-
-    console.log("3D Tiles getting started example initialized successfully");
-} catch (error) {
-    console.error("Error occurred while initializing 3D Tiles getting started example:", error);
+    // Statue of Liberty photogrammetry dataset (Cesium Ion asset 75343).
+    await mapView.addDataSource(
+        new CesiumIonDataSource({
+            accessToken,
+            assetId: 75343
+        })
+    );
+    mapView.update();
 }
+
+main().catch(err => console.error("getting-started-3dtiles failed:", err));

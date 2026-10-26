@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 import {
     ArcGISTileProvider,
     DEMTerrainSource,

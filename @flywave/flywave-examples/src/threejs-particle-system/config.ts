@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 import thumbnail from "./thumbnail.png";
 
 export default {
@@ -6,6 +8,6 @@ export default {
     description: "Example showing how to create particle systems using THREE.js with flywave.gl",
     descriptionZh: "展示如何使用 THREE.js 与 flywave.gl 创建粒子系统的示例",
     thumbnail,
-    code: "threejs-integration",
+    code: "models-integration",
     order: 10
 };

@@ -1,11 +1,24 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
+import type { ExampleConfig } from "../common";
 import thumbnail from "./thumbnail.png";
 
-export default {
-    title: "Camera Animation Example",
-    titleZh: "相机动画示例",
-    description: "Example showing how to animate camera movements in flywave.gl",
-    descriptionZh: "展示如何在 flywave.gl 中动画化相机移动的示例",
+const config: ExampleConfig = {
+    title: "Camera Animation",
+    titleZh: "相机动画",
+    description:
+        "Animate the camera with CameraKeyTrackAnimation: orbit the current target, fly a " +
+        "Jinan -> Beijing landmark route and tune interpolation, loop and repetitions live.",
+    descriptionZh:
+        "使用 CameraKeyTrackAnimation 制作相机动画：环绕当前目标、沿济南->北京地标航线飞行，并实时调节插值、循环与重复次数。",
     thumbnail,
     code: "getting-started",
-    order: 9
+    order: 3,
+    level: "intermediate",
+    tags: ["camera", "animation", "orbit", "flyto", "keytrack"],
+    apis: ["CameraKeyTrackAnimation", "CameraAnimationBuilder", "ControlPoint", "MapView.flyTo"],
+    concerns: ["U29"],
+    dataPolicy: "open-data"
 };
+
+export default config;
