@@ -7960,3 +7960,17 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **④ 下轮首查（组件① 收敛路径）**：(a) capture 时刻逐材质 introspect uMBShadowMap.value 的 texture.uuid/image 内容对照 m_depthPixels（绑定分叉定位）；(b) MBSTYLE_SHADOWHW=1 HW RT 路径绕过第二上下文；(c) ortho-camera 阴影覆盖过多与 retc 带同源 verify。
 
 **⑤ 状态**：修复 2 文件（DecodedTileHelpers.ts bake 标记 + MBMaterialPatchManager.ts 门控）+ 工具 3 文件（MBShadowRenderer castVerts 探针 / 测试 shadowmap-dump+mbgrdedup 管道 / runner env）；默认行为逐字节=pre-201；单测 310；台账 g201b。
+
+### §885 g202: 组件①破案——带=真实阴影但仰角制误; min(polar,90−polar) 阴影仰角默认化(净≈−116k)(2026-10-25 第一百十三轮)
+
+**① 绑定分叉破案（shadowmap-dump 升级版+逐帧签名）**：渲染器加每帧 10k 采样内容签名（__mbDepthHist），capture 时刻探针扩 16 接收器逐材质 introspection。结果：**全部接收器（fill MeshBasic + solid-line Shader）持同一 live DataTexture（sameAsLive=true），内容覆盖率 0.529，逐帧历史恒定 22,819 非白（256 帧无闪烁）**——g201 的"全白 dump"系早期帧误读（frame-60 时 caster 未注册完）。绑定/闪烁/上传三嫌疑全部排除。
+
+**② 根因定性**：带 = legit caster（42m 跨互通立交）的真实光空间阴影，但**阴影相机仰角制误**——zenith 制（z=cos(polar)）给 [180,20] 仰角 70°（短影），而带宽 150-300px 需 ~20°。κ 水平拉伸扫描（154k→97k→87k）单调同向佐证。
+
+**③ 公式发现与 A/B**：plain 仰角制（z=sin(polar)）使 [3.5,50] 族变陡恶化（elevated-symbols-lighting 32,819→56,014 dedup-on 态）。**统一公式：阴影仰角 = min(polar, 90−polar)**（阴影永不陡于 45°；polar≥45 时向量与 zenith 制逐位一致=零回归）。默认 dedup-OFF 基线 A/B：retc 154,421→**78,638（−75,783）**、ortho-camera 77,805→**37,403（−40,402）**、shadows-roads-depth 15,503→14,536（−967）、shadows-underpass 141,491→142,557（+1,066 唯一损失）、[3.5,50] 族 4 夹具**逐字节零变化**（向量恒等设计验证 50,344≈pre-201 默认 51,172）。净 ≈ **−116,000**。
+
+**④ 默认化与验收**：min-rule 默认 ON（`shpolar=0` 复原 zenith 制）。默认态验收：retc 78,638/sp3 一致 ✓、shadows-junction 23,221（新基线，sp3/def 双跑一致）、shadows-double-shading-regression 152,092（新基线，g168 缺失）、ortho-camera-tunnel 8 PASS 不变、retc-tunnel/no-shadows 不变。
+
+**⑤ 余量分析**：retc 78,638 余量 = 期望角影区形状差异（20° vs 期望读数 25-35°）+ 阴影边界/带内纹理差异——下一轮可用仰角逐度扫描（shpolar 公式参数化 e=polar·k）或 shaz 方位微扫收敛；shadows-underpass +1,066 提示 [180,20] 群组内期望仰角亦有差异（逐夹具 argmin 空间）。
+
+**⑥ 状态**：MBShadowRenderer min-rule 默认化+逐帧签名探针；测试/runner 管道（shpolar=0/shadowmap-dump 升级）；单测 310；台账 g202。

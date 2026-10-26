@@ -421,6 +421,11 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "mbgrdedup=1")) {
         (globalThis as any).__mbGrRadDedup = true;
     }
+    // §885 g202: shpolar=0 → restore the legacy zenith-form shadow light
+    // axis (default is the min(polar, 90−polar) elevation form).
+    if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shpolar=0")) {
+        (globalThis as any).__mbShPolarElev = 0;
+    }
     // §885 终七十二: shoff=<x>,<y> → world-XY offset of the shadow sphere
     // center (dark-centroid calibration against expected).
     const sho = (window as any).__karma__?.config?.args?.find?.((a: string) =>
@@ -4335,6 +4340,71 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                     c3.getContext('2d')!.putImageData(id, 0, 0);
                                     depthUrl = c3.toDataURL('image/png');
                                 }
+                                // §885 g202: per-receiver BINDING introspection
+                                // at capture time — which texture object each
+                                // receiver's uMBShadowMap actually holds, its
+                                // type/vintage, whether it is the renderer's
+                                // live texture, and its CONTENT white ratio
+                                // (DataTexture sampled from image.data,
+                                // CanvasTexture drawn to a 16² scratch canvas).
+                                // Settles binding divergence vs flicker: the
+                                // renderer's per-frame non-white history rides
+                                // along.
+                                const liveTex: any = sr2?.m_shTex;
+                                const sampleTex = (t: any): number | null => {
+                                    try {
+                                        if (!t) return null;
+                                        if (t.isDataTexture && t.image?.data) {
+                                            const d2: Uint8Array = t.image.data;
+                                            let nw = 0, n2 = 0;
+                                            for (let i = 0; i < d2.length; i += 4 * 149) {
+                                                n2++;
+                                                if (d2[i] < 250 || d2[i + 1] < 250) nw++;
+                                            }
+                                            return n2 ? nw / n2 : null;
+                                        }
+                                        if (t.image instanceof HTMLCanvasElement
+                                            || t.image instanceof ImageBitmap) {
+                                            const c4 = document.createElement('canvas');
+                                            c4.width = 16; c4.height = 16;
+                                            const cx3 = c4.getContext('2d')!;
+                                            cx3.drawImage(t.image, 0, 0, 16, 16);
+                                            const im = cx3.getImageData(0, 0, 16, 16).data;
+                                            let nw = 0, n2 = 0;
+                                            for (let i = 0; i < im.length; i += 4) {
+                                                n2++;
+                                                if (im[i] < 250 || im[i + 1] < 250) nw++;
+                                            }
+                                            return n2 ? nw / n2 : null;
+                                        }
+                                    } catch { /* probe only */ }
+                                    return null;
+                                };
+                                const recv: any[] = [];
+                                try {
+                                    (mapView as any).m_scene?.traverse?.((o: any) => {
+                                        if (recv.length >= 16) return;
+                                        const ms = Array.isArray(o?.material)
+                                            ? o.material : (o?.material ? [o.material] : []);
+                                        for (const m of ms) {
+                                            const u2 = m?.__mbShadowUniforms;
+                                            if (u2?.uMBShadowMap && recv.length < 16) {
+                                                const t2: any = u2.uMBShadowMap.value;
+                                                recv.push({
+                                                    mat: String(m.type),
+                                                    tech: String(o?.userData?.technique?.name ?? ''),
+                                                    tex: String(t2?.uuid ?? 'null').slice(0, 8),
+                                                    data: !!(t2?.isDataTexture),
+                                                    canvas: !!(t2?.isCanvasTexture),
+                                                    sameAsLive: t2 === liveTex,
+                                                    w: t2?.image?.width ?? null,
+                                                    nonWhite: sampleTex(t2),
+                                                    int: u2.uMBShadowIntensity?.value,
+                                                });
+                                            }
+                                        }
+                                    });
+                                } catch { /* probe only */ }
                                 await fetch(`${fbC}/mb-probe-dump`, {
                                     method: "POST",
                                     headers: { "content-type": "application/json" },
@@ -4345,6 +4415,15 @@ describe("MBStyleDataSource render-tests compatibility", function () {
                                         fit: (globalThis as any).__mbC1Fit ?? null,
                                         lightDir: (sr2 as any)?.__mbShLightDir?.toArray?.() ?? null,
                                         shInfo: (globalThis as any).__mbShadowInfo ?? null,
+                                        live: {
+                                            tex: String(liveTex?.uuid ?? 'null').slice(0, 8),
+                                            data: !!liveTex?.isDataTexture,
+                                            nonWhite: sampleTex(liveTex),
+                                            lastNonWhite: (sr2 as any)?.__mbDepthLastNonWhite ?? null,
+                                            histTail: ((sr2 as any)?.__mbDepthHist ?? []).slice(-40),
+                                            histLen: ((sr2 as any)?.__mbDepthHist ?? []).length,
+                                        },
+                                        receivers: recv,
                                         info: (globalThis as any).__mbShadowAnalyticInfo ?? null,
                                     }),
                                 });

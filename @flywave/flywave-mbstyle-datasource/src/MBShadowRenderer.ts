@@ -1565,6 +1565,31 @@ export class MBShadowRenderer {
                 lightDir.set(lightDir.x / h * hc, lightDir.y / h * hc, Math.cos(maxPolar));
             }
         }
+        // §885 g202 (DEFAULT ON): the SHADOW camera's light elevation reads
+        // min(polar, 90−polar) — the shadow never renders steeper than 45°.
+        // The retc band IS the real light-space shadow of the legit casters
+        // (g202 binding probe: receivers hold the live DataTexture, 0.529
+        // coverage, stable across frames) — but its width needs a ~20°
+        // shadow elevation, not the 70° the zenith form yields. Family A/B
+        // (shpolar flag, mb-3di-g202-sp2/sp3): road-extend-tilecover
+        // 154,421→78,638, ortho-camera 77,805→37,403, shadows-roads-depth
+        // 15,503→14,536; shadows-underpass +1,066 (the only loss);
+        // [3.5,50] styles byte-identical (min() = the same elevation as the
+        // zenith form when polar ≥ 45). `shpolar=0` restores the legacy
+        // zenith form for A/B.
+        if ((globalThis as any).__mbShPolarElev !== 0) {
+            const dirProp3 = (this.m_dataSource as any).m_environment
+                ?.m_3DDirectional?.direction as [number, number] | undefined;
+            if (dirProp3) {
+                const a3 = (dirProp3[0] + 90) * Math.PI / 180;
+                const p3 = dirProp3[1] * Math.PI / 180;
+                const e3 = Math.min(p3, Math.PI / 2 - p3);
+                lightDir.set(
+                    Math.cos(a3) * Math.cos(e3),
+                    Math.sin(a3) * Math.cos(e3),
+                    Math.sin(e3));
+            }
+        }
         const aspect = (camera.aspect && camera.aspect > 0) ? camera.aspect : 1;
         const fovX = 2 * Math.atan(Math.tan((camera.fov * Math.PI / 180) / 2) * aspect);
         const k = Math.sqrt(1 + aspect * aspect) * Math.tan(fovX / 2);
@@ -2032,6 +2057,25 @@ const range = this.m_shadowCamera.far - this.m_shadowCamera.near;
             this.m_shTex.flipY = false;
         }
         this.m_shTex.needsUpdate = true;
+
+        // §885 g202: per-frame depth-map content signature — ~10k sampled
+        // texels, non-white count (white = clear = far). Distinguishes
+        // receiver-binding divergence from second-context flicker: the
+        // capture-time probe posts the whole history, so a map that flips
+        // empty/content frame-to-frame shows up as an alternating series.
+        try {
+            const dpSig = this.m_depthPixels;
+            if (dpSig && dpSig.length) {
+                let nonWhite = 0;
+                for (let i = 0; i < dpSig.length; i += 4 * 97) {
+                    if (dpSig[i] < 250 || dpSig[i + 1] < 250) nonWhite++;
+                }
+                const hist = ((this as any).__mbDepthHist ??
+                    ((this as any).__mbDepthHist = []));
+                if (hist.length < 256) hist.push(nonWhite);
+                (this as any).__mbDepthLastNonWhite = nonWhite;
+            }
+        } catch { /* probe only */ }
 
         // §531 probe: renderer.info quantifies whether ctx2 drew anything.
         if ((globalThis as any).__mbDecodeDbg) {
