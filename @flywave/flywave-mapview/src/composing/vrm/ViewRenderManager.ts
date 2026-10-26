@@ -423,10 +423,23 @@ export class ViewRenderManager implements IViewRenderManager {
 
         this.mrtKeys = Object.keys(mrtEntries);
 
+        // Scene pass sample count: follow renderer.samples (MSAA) so every
+        // pass render target stays in the same pipeline-cache bucket — the
+        // r185 WebGPUBackend.getRenderCacheKey includes the context sample
+        // count, and a diverging RT would split the cache. EXCEPTION: the
+        // WebGPU backend has no depth resolve, so a multisampled depth
+        // attachment can be neither copied nor sampled; every depth-consuming
+        // feature (TAA history copy, SSR depth raymarch, outline depth
+        // morphology) forces single-sampled scene passes. TAA provides its
+        // own AA, so nothing is lost in that mode.
+        const sceneSamples =
+            this.config.antialiasing === "taa" || ssrEnabled || outlineEnabled
+                ? 0
+                : this.renderer.samples;
         this.passNode =
             Object.keys(mrtEntries).length > 1
-                ? pass(scene, camera, { samples: 0 }).setMRT(mrt(mrtEntries))
-                : pass(scene, camera, { samples: 0 });
+                ? pass(scene, camera, { samples: sceneSamples }).setMRT(mrt(mrtEntries))
+                : pass(scene, camera, { samples: sceneSamples });
 
         const colorNode = this.passNode.getTextureNode("output");
         const depthNode = this.passNode.getTextureNode("depth");
@@ -456,7 +469,7 @@ export class ViewRenderManager implements IViewRenderManager {
                 maskMat.blending = THREE.NoBlending;
                 this.m_outlineMaskMaterial = maskMat;
             }
-            this.outlineMaskPassNode = pass(scene, camera, { samples: 0 });
+            this.outlineMaskPassNode = pass(scene, camera, { samples: sceneSamples });
             this.outlineMaskPassNode.setLayers(outlineLayers);
             this.outlineMaskPassNode.overrideMaterial = this.m_outlineMaskMaterial;
         } else {
@@ -669,7 +682,7 @@ export class ViewRenderManager implements IViewRenderManager {
             })();
             _buildingColorMat.transparent = true;
             _buildingColorMat.blending = THREE.NoBlending;
-            this.buildingColorPassNode = pass(scene, camera, { samples: 0 });
+            this.buildingColorPassNode = pass(scene, camera, { samples: sceneSamples });
             this.buildingColorPassNode.setLayers(buildingLayers);
             this.buildingColorPassNode.overrideMaterial = _buildingColorMat;
             const buildingColorNode = this.buildingColorPassNode.getTextureNode("output");

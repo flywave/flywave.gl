@@ -283,10 +283,15 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
     addBackgroundDatasource?: boolean;
 
     /**
-     * Whether the native WebGL antialiasing should be enabled. It is better to disable it if the
-     * MapView's MSAA is enabled.
+     * Whether the native renderer antialiasing (MSAA) should be enabled.
      *
-     * @default `false`
+     * With MSAA enabled the renderer samples default to 4 and every VRM scene
+     * pass render target inherits that sample count (PassNode.setup), so the
+     * whole frame renders in a single pipeline-cache bucket. The default used
+     * to be `false` because MSAA used to fragment the pipeline cache; that
+     * mismatch is fixed by the inheritance, so it is back to `true`.
+     *
+     * @default `true`
      */
     enableNativeWebglAntialias?: boolean;
 
@@ -2280,13 +2285,13 @@ export class MapView extends EventDispatcher {
     }
 
     /**
-     * Returns `true` if the native WebGL antialiasing is enabled.
+     * Returns `true` if the native renderer antialiasing (MSAA) is enabled.
      *
-     * @default `false`
+     * @default `true`
      */
     get nativeWebglAntialiasEnabled(): boolean {
         return this.m_options.enableNativeWebglAntialias === undefined
-            ? false
+            ? true
             : this.m_options.enableNativeWebglAntialias;
     }
 
