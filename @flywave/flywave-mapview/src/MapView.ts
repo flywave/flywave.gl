@@ -1134,6 +1134,27 @@ export class MapView extends EventDispatcher {
             })
             .then(() => {
                 this.m_rendererInitialized = true;
+                // Re-apply the theme-driven environment once the renderer
+                // exists. An inline theme object resolves instantly, so its
+                // clear color / sky / lights may have been applied BEFORE
+                // `m_renderer` was initialized and silently lost (updates hit
+                // an uninitialized renderer). Same re-apply as
+                // `onWebGLContextRestored`. String themes load over HTTP and
+                // are unaffected, which is why they never showed this.
+                this.getTheme()
+                    .then(theme => {
+                        this.m_sceneEnvironment.updateClearColor(
+                            theme.clearColor,
+                            theme.clearAlpha
+                        );
+                        this.m_sceneEnvironment.updateSkyBackground(theme.sky, theme.clearColor);
+                        this.m_sceneEnvironment.updateLighting(theme.lights);
+                        this.m_sceneEnvironment.updateAtmosphere(theme.atmosphere);
+                        this.update();
+                    })
+                    .catch(() => {
+                        // No theme set (or load failed): engine defaults apply.
+                    });
             });
 
         this.m_renderer.autoClear = false;

@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import { Fn, fwidth, length, pointUV, smoothstep, uniform, vec2, vec3, vec4 } from "three/tsl";
+import { float, Fn, fwidth, length, pointUV, smoothstep, uniform, vec2, vec3, vec4 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
 

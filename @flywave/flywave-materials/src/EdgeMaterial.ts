@@ -4,6 +4,7 @@
 import {
     attribute,
     cameraProjectionMatrix,
+    float,
     Fn,
     mix as tslMix,
     modelViewPosition,
