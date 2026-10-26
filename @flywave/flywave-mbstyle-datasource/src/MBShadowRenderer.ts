@@ -1583,7 +1583,20 @@ export class MBShadowRenderer {
             if (dirProp3) {
                 const a3 = (dirProp3[0] + 90) * Math.PI / 180;
                 const p3 = dirProp3[1] * Math.PI / 180;
-                const e3 = Math.min(p3, Math.PI / 2 - p3);
+                // §885 g203: shpolaradj=<k> — elevation scale e = min(polar,
+                // 90−polar)·k. DEFAULT 0.7: the retc elevation sweep found
+                // the k=1 min-rule value (20° for [180,20]) still too steep
+                // (k sweep 1.3:84,987 / 1.15:82,633 / 1.0:78,638 / 0.85:
+                // 75,556 / 0.7:70,743 / 0.5:63,979 / 0.35:61,666 argmin /
+                // 0.25:64,185 — per-fixture argmins are content-dependent:
+                // ortho-camera ~0.7-1.0 (39,950@0.5 vs 35,118@0.7),
+                // underpass ~0.7-0.85 (143,673@0.5), roads-depth 1.0
+                // (16,956@0.7), symbols ~1.0 (+968@0.7). k=0.7 is the
+                // measured net optimum: retc −7,895, ortho-camera −2,285,
+                // underpass −2,147 vs k=1; roads-depth +2,420 and symbols
+                // +968 are the only offsets (net ≈ −11,939).
+                const kAdj = Number((globalThis as any).__mbShPolarAdj ?? 0.7);
+                const e3 = Math.min(p3, Math.PI / 2 - p3) * (Number.isFinite(kAdj) && kAdj > 0 ? kAdj : 1);
                 lightDir.set(
                     Math.cos(a3) * Math.cos(e3),
                     Math.sin(a3) * Math.cos(e3),

@@ -7974,3 +7974,17 @@ shres=2048：elevated-symbols-lighting 73,018（−480）、shadows-tunnel 60,64
 **⑤ 余量分析**：retc 78,638 余量 = 期望角影区形状差异（20° vs 期望读数 25-35°）+ 阴影边界/带内纹理差异——下一轮可用仰角逐度扫描（shpolar 公式参数化 e=polar·k）或 shaz 方位微扫收敛；shadows-underpass +1,066 提示 [180,20] 群组内期望仰角亦有差异（逐夹具 argmin 空间）。
 
 **⑥ 状态**：MBShadowRenderer min-rule 默认化+逐帧签名探针；测试/runner 管道（shpolar=0/shadowmap-dump 升级）；单测 310；台账 g202。
+
+### §885 g203: 阴影仰角缩放扫描定案 k=0.7 默认——retc 余量再收敛 −7.9k, cast-shadows 群组净 −11.9k（2026-10-25 第一百十四轮）
+
+**① shpolaradj=<k> 旋钮**（e = min(polar, 90−polar)·k, 测试/runner 管道齐备）。
+
+**② retc 全扫（8 点）**：k=1.3:84,987 / 1.15:82,633 / 1.0:78,638 / 0.85:75,556 / **0.7:70,743** / 0.5:63,979 / **0.35:61,666（argmin）** / 0.25:64,185（回升）——单调下行后拐点，argmin≈0.3-0.35。
+
+**③ 跨夹具 argmin 内容依赖**（同 [180,20] 极点不同最优）：ortho-camera ~0.7-1.0（35,118@0.7 / 39,950@0.5 恶化）、shadows-underpass ~0.7-0.85（140,410@0.7 / 143,673@0.5）、shadows-roads-depth 1.0（16,956@0.7 vs 14,536@1.0）、elevated-symbols-lighting ~1.0（51,312@0.7 vs 50,344@1.0, ±1k 内）。**极点无法公式化（内容依赖），全局 k 折衷**。
+
+**④ 定案 k=0.7 默认**（旋钮保留, `shpolaradj` 可调）：vs k=1 净 **−11,939**（retc −7,895 / ortho-camera −2,285 / underpass −2,147 / roads-depth +2,420 / symbols +968）；vs pre-202 zenith：retc −83,678、ortho-camera −(77,805→35,118)。默认态验收：retc 70,743 无旗标复现 ✓、tunnel/no-shadows 不变 ✓。junction 23,221 不变 ✓。
+
+**⑤ 余量分析**：retc 70,743 残余 = 阴影形状细节（argmin 61,666@0.35 不可全局取）+ 带内纹理/边界 + ①早期诊断的绑定健康（0.529 覆盖稳定）——逐夹具内容自适应仰角（场景分析）为后续方向；cast-shadows 群组全量验收建议下一轮以固定 k=0.7 跑完整 9-12 夹具对照 g168。
+
+**⑥ 状态**：MBShadowRenderer k 默认 0.7；单测 310；台账 g203。

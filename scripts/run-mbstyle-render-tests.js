@@ -179,6 +179,7 @@ function main() {
             ...(process.env.MBSTYLE_SHDIAG ? [`shdiag=${process.env.MBSTYLE_SHDIAG}`] : []),
             ...(process.env.MBSTYLE_GRRADDEDUP ? ["mbgrdedup=1"] : []),
             ...(process.env.MBSTYLE_SHPOLAR ? ["shpolar=1"] : []),
+            ...(process.env.MBSTYLE_SHPOLARADJ ? [`shpolaradj=${process.env.MBSTYLE_SHPOLARADJ}`] : []),
             ...(process.env.MBSTYLE_SHOFF ? [`shoff=${process.env.MBSTYLE_SHOFF}`] : []),
             ...(process.env.MBSTYLE_FOGMUL ? [`fogmul=${process.env.MBSTYLE_FOGMUL}`] : []),
             ...(process.env.MBSTYLE_FOGDISTK ? [`fogdistk=${process.env.MBSTYLE_FOGDISTK}`] : []),

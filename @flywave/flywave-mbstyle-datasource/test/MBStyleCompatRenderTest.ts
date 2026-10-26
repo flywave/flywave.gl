@@ -426,6 +426,13 @@ function discoverTests(): TestEntry[] {
     if ((window as any).__karma__?.config?.args?.some?.((a: string) => a === "shpolar=0")) {
         (globalThis as any).__mbShPolarElev = 0;
     }
+    // §885 g203: shpolaradj=<k> → elevation scale on the min-rule shadow
+    // elevation (e = min(polar, 90−polar)·k).
+    {
+        const spa = (window as any).__karma__?.config?.args?.find?.(
+            (a: string) => a.startsWith("shpolaradj="))?.slice("shpolaradj=".length);
+        if (spa !== undefined && spa !== "") (globalThis as any).__mbShPolarAdj = Number(spa);
+    }
     // §885 终七十二: shoff=<x>,<y> → world-XY offset of the shadow sphere
     // center (dark-centroid calibration against expected).
     const sho = (window as any).__karma__?.config?.args?.find?.((a: string) =>
