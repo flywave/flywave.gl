@@ -8,6 +8,7 @@ import {
 } from "@flywave/flywave-webpack-utils/scripts/WebpackConfig";
 import CopyWebpackPlugin from "copy-webpack-plugin";
 import HtmlWebpackPlugin from "html-webpack-plugin";
+import * as fs from "fs";
 import { createRequire } from "module";
 import * as path from "path";
 import { fileURLToPath } from "url";
@@ -17,6 +18,7 @@ import { merge } from "webpack-merge";
 const require = createRequire(import.meta.url);
 const webpack = require("webpack");
 const glob = require("glob");
+const typescript = require("typescript");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -136,7 +138,10 @@ const webpackEntries = glob
     .sync(path.join(__dirname, "./src/*.{ts,tsx}"))
     .reduce((result: Record<string, string>, entry: string) => {
         const name = path.basename(entry).replace(/.tsx?$/, "");
-        if (name.startsWith("common")) {
+        // Only these two are real top-level app pages. Every other top-level
+        // module (token-config, example-categories, …) is shared
+        // infrastructure and must NOT become a browsable example page.
+        if (name !== "example-browser" && name !== "codebrowser") {
             return result;
         }
         result[name] = entry;
@@ -148,6 +153,11 @@ const exampleFolders = glob
     .sync(path.join(__dirname, "./src/*/index.ts"))
     .reduce((result: Record<string, string>, entry: string) => {
         const folderName = path.basename(path.dirname(entry));
+        // A folder counts as an example only when it carries a config.ts;
+        // shared barrels like src/common/index.ts must not become pages.
+        if (!fs.existsSync(path.join(path.dirname(entry), "config.ts"))) {
+            return result;
+        }
         result[folderName] = entry;
         return result;
     }, {});
@@ -215,7 +225,9 @@ const browserConfig = merge(commonConfig, {
 
 const exampleBrowserConfig = merge(commonConfig, {
     entry: {
-        "example-browser": "./example-browser.ts"
+        "example-browser": "./example-browser.ts",
+        // Source viewer page (codebrowser.html) expected alongside the browser.
+        codebrowser: "./codebrowser.ts"
     },
     output: {
         libraryTarget: "module"
@@ -239,17 +251,143 @@ browserConfig.plugins!.push(
 const allEntries = Object.assign({}, webpackEntries, htmlEntries);
 
 /**
+ * A single entry of the generated `example-definitions.js` map.
+ *
+ * `src` is the source path consumed by the code browser; all other fields are
+ * optional v2 metadata picked from the example's `config.ts`. The example
+ * browser treats every field except `src` as optional.
+ */
+interface ExampleDefinition {
+    src: string;
+    title?: string;
+    titleZh?: string;
+    category?: string;
+    level?: string;
+    dataPolicy?: string;
+    tags?: string[];
+    apis?: string[];
+    concerns?: string[];
+    internal?: boolean;
+    order?: number;
+}
+
+const IMAGE_FILE_PATTERN = /\.(png|jpe?g|gif|svg)$/i;
+const LEVELS = ["beginner", "intermediate", "advanced"];
+const DATA_POLICIES = ["offline", "open-data", "token"];
+
+function pickStringArray(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const result = value.filter((item): item is string => typeof item === "string");
+    return result.length > 0 ? result : undefined;
+}
+
+/**
+ * Evaluates a per-example `config.ts` at build time.
+ *
+ * Example configs are plain object literals that may import a thumbnail
+ * image; image imports are stubbed out because only metadata is needed here.
+ * Returns `undefined` when the file is missing or cannot be evaluated so the
+ * example simply falls back to the name-based defaults in the browser.
+ */
+function loadExampleConfig(entryPath: string): Record<string, unknown> | undefined {
+    const configPath = path.join(path.dirname(entryPath), "config.ts");
+    if (!fs.existsSync(configPath)) {
+        return undefined;
+    }
+    try {
+        const transpiled = typescript.transpileModule(fs.readFileSync(configPath, "utf8"), {
+            compilerOptions: {
+                module: typescript.ModuleKind.CommonJS,
+                target: typescript.ScriptTarget.ES2019,
+                esModuleInterop: true
+            }
+        }).outputText;
+        const configModule = { exports: {} as Record<string, unknown> };
+        const configRequire = (request: string) => {
+            if (IMAGE_FILE_PATTERN.test(request)) {
+                return { default: "" };
+            }
+            throw new Error(`unsupported import in example config: ${request}`);
+        };
+        new Function("require", "module", "exports", transpiled)(
+            configRequire,
+            configModule,
+            configModule.exports
+        );
+        const exported = configModule.exports as { default?: unknown };
+        if (typeof exported.default === "object" && exported.default !== null) {
+            return exported.default as Record<string, unknown>;
+        }
+    } catch (error) {
+        // Malformed configs must never break the whole examples build; the
+        // browser falls back to defaults for this example.
+    }
+    return undefined;
+}
+
+/**
+ * Builds the definition object of one example, merging the entry source path
+ * with the v2 metadata fields collected from the example's `config.ts`.
+ */
+function buildExampleDefinition(pageUrl: string, entryPath: string): ExampleDefinition {
+    const definition: ExampleDefinition = { src: path.relative(__dirname, entryPath) };
+    const config = loadExampleConfig(entryPath);
+    if (config === undefined) {
+        return definition;
+    }
+    if (typeof config.title === "string") {
+        definition.title = config.title;
+    }
+    if (typeof config.titleZh === "string") {
+        definition.titleZh = config.titleZh;
+    }
+    // `code` is the legacy name of the category field, keep accepting both.
+    if (typeof config.code === "string") {
+        definition.category = config.code;
+    } else if (typeof config.category === "string") {
+        definition.category = config.category;
+    }
+    if (LEVELS.includes(config.level as string)) {
+        definition.level = config.level as string;
+    }
+    if (DATA_POLICIES.includes(config.dataPolicy as string)) {
+        definition.dataPolicy = config.dataPolicy as string;
+    }
+    const tags = pickStringArray(config.tags);
+    if (tags !== undefined) {
+        definition.tags = tags;
+    }
+    const apis = pickStringArray(config.apis);
+    if (apis !== undefined) {
+        definition.apis = apis;
+    }
+    const concerns = pickStringArray(config.concerns);
+    if (concerns !== undefined) {
+        definition.concerns = concerns;
+    }
+    if (typeof config.internal === "boolean") {
+        definition.internal = config.internal;
+    }
+    if (typeof config.order === "number") {
+        definition.order = config.order;
+    }
+    return definition;
+}
+
+/**
  * Generate example definitions for 'index.html' in following form:
  *
  * {
- *     [examplePage: string]: string // maps example page to example source
+ *     [examplePage: string]: ExampleDefinition // page url to example metadata
  * }
  */
 const exampleDefs = Object.keys(allEntries).reduce(function (
-    r: Record<string, string>,
+    r: Record<string, ExampleDefinition>,
     entry: string
 ) {
-    r[entry + ".html"] = path.relative(__dirname, allEntries[entry]);
+    r[entry + ".html"] = buildExampleDefinition(entry + ".html", allEntries[entry]);
     return r;
 },
 {});

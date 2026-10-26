@@ -1,11 +1,5 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-/*
- * Copyright (C) 2018-2021 HERE Europe B.V.
- * Licensed under Apache 2.0, see full license in LICENSE
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import { assert } from "chai";
 import * as fs from "fs";
 import * as glob from "glob";

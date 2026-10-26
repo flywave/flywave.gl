@@ -828,6 +828,9 @@ importers:
 
   '@flywave/flywave-examples':
     dependencies:
+      '@flywave/flywave-react':
+        specifier: workspace:^
+        version: link:../flywave-react
       '@turf/turf':
         specifier: 'catalog:'
         version: 5.1.6
@@ -837,6 +840,12 @@ importers:
       earcut:
         specifier: 'catalog:'
         version: 2.2.4
+      react:
+        specifier: '19'
+        version: 19.2.4
+      react-dom:
+        specifier: '19'
+        version: 19.2.4(react@19.2.4)
       three-nebula:
         specifier: 10.0.3
         version: 10.0.3(three@0.185.1)

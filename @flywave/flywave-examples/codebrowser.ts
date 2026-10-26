@@ -1,6 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import "style-loader!css-loader!highlight.js/styles/default.css";
+// highlight.js styles are handled by the css rule of the webpack base config.
+import "highlight.js/styles/default.css";
 
 import * as hljs from "highlight.js";
 

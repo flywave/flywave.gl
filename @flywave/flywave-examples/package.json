@@ -61,9 +61,12 @@
         "access": "public"
     },
     "dependencies": {
+        "@flywave/flywave-react": "workspace:^",
         "@turf/turf": "catalog:",
         "@types/earcut": "catalog:",
         "earcut": "catalog:",
+        "react": "19",
+        "react-dom": "19",
         "three-nebula": "10.0.3"
     },
     "private": true

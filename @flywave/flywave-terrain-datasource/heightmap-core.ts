@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 /**
  * Heightmap Generation Core System
  * Implements the complete workflow from brush operations to final elevation map

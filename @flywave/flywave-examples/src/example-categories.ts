@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 // Example category definitions
 export interface ExampleCategory {
     name: string; // Category name (English)

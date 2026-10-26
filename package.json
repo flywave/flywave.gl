@@ -25,6 +25,7 @@
     "scripts": {
         "pre-test": "pnpm run code-pre-tests --forbid-only && pnpm run prettier && pnpm eslint",
         "code-pre-tests": "ts-mocha --no-timeouts ./test/*.ts",
+        "check-examples": "ts-node ./scripts/check-examples.ts",
         "test": "pnpm karma-headless",
         "test-debug": "karma start --browser ChromeDebug --no-single-run --auto-watch",
         "test-browser": "pnpm karma-browser",

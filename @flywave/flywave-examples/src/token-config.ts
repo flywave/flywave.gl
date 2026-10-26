@@ -1,3 +1,5 @@
+/* Copyright (C) 2025 flywave.gl contributors */
+
 /**
  * flywave.gl token configuration file
  * Unified management of all access tokens
