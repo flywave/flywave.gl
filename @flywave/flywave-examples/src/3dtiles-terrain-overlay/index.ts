@@ -41,7 +41,6 @@ const initializeMapView = (canvas: HTMLCanvasElement): MapView => {
         zoomLevel: 18, // Initial zoom level
         tilt: 70, // Initial tilt angle
         heading: 35.1, // Initial heading angle
-        enableNativeWebglAntialias: false,
         canvas, // Specify render canvas
         theme: {
             // extends: "resources/tilezen_base_globe.json"
@@ -109,6 +108,9 @@ const createCesiumIonDataSource = (mapView: MapView): CesiumIonDataSource => {
     });
 
     mapView.addDataSource(cesiumIonDataSource);
+
+    // TODO(debug): temporary runtime handle for profiling, remove after debug
+    (window as unknown as Record<string, unknown>).__mapView = mapView;
 
     return cesiumIonDataSource;
 };
