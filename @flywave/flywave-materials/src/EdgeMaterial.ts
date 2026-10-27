@@ -7,6 +7,7 @@ import {
     float,
     Fn,
     mix as tslMix,
+    modelViewMatrix,
     modelViewPosition,
     normalize,
     normalLocal,

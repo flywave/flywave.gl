@@ -33,7 +33,6 @@ import {
     tan as tslTan,
     texture,
     uniform,
-    uv as uvNode,
     varying,
     vec2,
     vec3,
@@ -200,7 +199,14 @@ export class SolidLineMaterial extends NodeMaterial {
         const extrusionCoord = attribute("extrusionCoord", "vec3");
         const biTangent = attribute("biTangent", "vec4");
         const tangent = attribute("tangent", "vec3");
-        const texUv = uvNode();
+        // Corner factors come from the geometry itself: the two vertices of
+        // each vertex pair carry opposite signs in `extrusionCoord.y`, so
+        // sign() yields the across-line factor (-1/+1) without requiring the
+        // optional `uv` attribute. Reading `uvNode()` here made the whole
+        // line vanish on geometries without uvs (NaN position -> culled
+        // primitives, no error).
+        const acrossCorner = sign(extrusionCoord.y);
+        const alongCorner = float(0);
 
         const extrusionWidth = this.m_extrusionWidthU;
         const outlineWidth = this.m_outlineWidthU;
@@ -222,14 +228,14 @@ export class SolidLineMaterial extends NodeMaterial {
             const hasAngle = angle.notEqual(0);
 
             const posAngle = pos.add(
-                texUv.y
+                acrossCorner
                     .mul(totalWidth)
                     .mul(biTangent.xyz)
                     .div(tslCos(angle.div(2)))
             );
             const posNoAngle = pos
-                .add(texUv.y.mul(totalWidth).mul(biTangent.xyz))
-                .add(texUv.x.mul(totalWidth).mul(tangent));
+                .add(acrossCorner.mul(totalWidth).mul(biTangent.xyz))
+                .add(alongCorner.mul(totalWidth).mul(tangent));
             pos = tslMix(posNoAngle, posAngle, hasAngle);
 
             pos = pos.add(

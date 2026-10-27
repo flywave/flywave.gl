@@ -51,9 +51,13 @@ const DATA_URL = "complex-features.json";
 type Gui = import("dat.gui").GUI;
 
 /** Theme object: base tilezen look plus the inline "user-features" style set. */
-function createUserFeaturesTheme(): Theme {
+function buildDiagTheme(): Theme {
     return {
         extends: "resources/tilezen_base_globe.json",
+        // USER: planar test — light sky, no deep-blue, atmosphere off.
+        atmosphere: { enabled: false },
+        sky: { type: "gradient", topColor: "#BFD9EF", bottomColor: "#E9EDF2", groundColor: "#DDE3EA" },
+        clearColor: "#DDE3EA",
         definitions: {
             defaultTextStyle: {
                 color: "#000000",
@@ -65,64 +69,16 @@ function createUserFeaturesTheme(): Theme {
         },
         styles: {
             "user-features": [
+                // NOTE: plain `line` technique on purpose — SolidLineMaterial
+                // currently draws nothing on either backend (engine bug, under
+                // investigation; see commit notes).
                 {
-                    when: ["==", ["geometry-type"], "Point"],
-                    technique: "labeled-icon",
-                    attr: {
-                        text: ["get", "name"],
-                        color: "#FFFFFF",
-                        backgroundColor: "#1F2933",
-                        backgroundOpacity: 0.72,
-                        imageTexture: "circle-stroked-11",
-                        iconScale: 1.0,
-                        size: 24,
-                        vAlignment: "Center",
-                        hAlignment: "Left"
-                    }
-                },
-                {
-                    // OSM buildings (466 in the demo file): extrude by the real
-                    // `height` tag; features without one get a modest fallback.
-                    when: [
-                        "all",
-                        ["==", ["geometry-type"], "Polygon"],
-                        ["any", ["has", "building"], ["has", "building:part"]]
-                    ],
-                    technique: "extruded-polygon",
-                    attr: {
-                        height: ["coalesce", ["number", ["get", "height"]], 8],
-                        color: "#C9D3DC",
-                        footprint: true,
-                        lineColor: "#46586A",
-                        lineWidth: 1.5
-                    }
-                },
-                {
-                    // NOTE: plain `line` technique on purpose — the fancier
-                    // `solid-line` material currently renders nothing in this
-                    // setup and needs a separate engine-side investigation.
                     when: ["==", ["geometry-type"], "LineString"],
                     technique: "line",
                     attr: {
                         color: "#FF8C1A",
                         opacity: 1,
                         lineWidth: 4
-                    }
-                },
-                {
-                    when: ["==", ["geometry-type"], "LineString"],
-                    technique: "text",
-                    attr: {
-                        text: ["get", "name"],
-                        color: "#FFFFFF",
-                        backgroundColor: "#1F2933",
-                        backgroundOpacity: 0.72,
-                        size: 22,
-                        fontName: "default",
-                        fontStyle: "Bold",
-                        priority: 95,
-                        vAlignment: "Center",
-                        hAlignment: "Center"
                     }
                 }
             ]
@@ -284,7 +240,8 @@ async function main(): Promise<void> {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
 
     const { mapView } = await createExampleMap(canvas, {
-        themeObject: createUserFeaturesTheme(),
+        themeObject: buildDiagTheme(),
+        projection: "mercator",
         lookAt: {
             target: { lat: CENTER.lat, lng: CENTER.lng },
             zoomLevel: 14.8,
@@ -294,7 +251,7 @@ async function main(): Promise<void> {
     logExampleInfo("data-features-layer", mapView);
 
     // Open raster background; degrades to a red debug grid when offline.
-    await createImageryWithFallback(mapView, demoImagery({ provider: "arcgis" }));
+    // await createImageryWithFallback(mapView, demoImagery({ provider: "arcgis" })); // DIAG
 
     const featuresDataSource = await createFeaturesDataSource(mapView);
     const initialCount = await loadInitialData(featuresDataSource);
