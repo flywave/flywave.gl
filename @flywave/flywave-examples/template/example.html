@@ -57,6 +57,10 @@
 </head>
 <script>
     window.FLYWAVE_BASE_URL = "./";
+    // DIAGNOSTIC: earliest possible error capture (module-eval failures).
+    window.__errors = [];
+    window.addEventListener("error", e => window.__errors.push(String(e.message)));
+    window.addEventListener("unhandledrejection", e => window.__errors.push("rejection: " + String(e.reason)));
 </script>
 
 <body>

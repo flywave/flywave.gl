@@ -279,6 +279,8 @@ async function main(): Promise<void> {
         }
     });
     logExampleInfo("data-features-layer", mapView);
+    // TEMP DEBUG (remove when solid-line investigation concludes).
+    (window as any).__dbg = mapView;
 
     // Open raster background; degrades to a red debug grid when offline.
     await createImageryWithFallback(mapView, demoImagery({ provider: "arcgis" }));
