@@ -88,8 +88,6 @@ function createUserFeaturesTheme(): Theme {
                 {
                     // Road network: solid-line ribbons in pixel units (with the
                     // outline/dash capabilities of the solid-line material).
-                    // NOTE: plain `line` caps at 1px (WebGL ignores lineWidth);
-                    // for meter-wide road ribbons use `extruded-line` instead.
                     when: ["==", ["geometry-type"], "LineString"],
                     technique: "solid-line",
                     attr: {
@@ -97,6 +95,21 @@ function createUserFeaturesTheme(): Theme {
                         opacity: 1,
                         lineWidth: 4,
                         metricUnit: "Pixel"
+                    }
+                },
+                {
+                    // Road names rendered along the line geometry.
+                    when: ["==", ["geometry-type"], "LineString"],
+                    technique: "text",
+                    attr: {
+                        text: ["get", "name"],
+                        color: "#7C3A03",
+                        size: 20,
+                        fontName: "default",
+                        fontStyle: "Bold",
+                        priority: 90,
+                        vAlignment: "Center",
+                        hAlignment: "Center"
                     }
                 },
                 {
