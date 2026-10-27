@@ -138,14 +138,33 @@ export class SolidLineMaterial extends NodeMaterial {
 
     opacity: number = 1.0;
     fog: boolean = true;
-    fadeNear: number = -1.0;
-    fadeFar: number = -1.0;
     displacementMap: THREE.Texture | null = null;
     displacementMapUvMatrix: THREE.Matrix3 | null = null;
     stencilWrite: boolean = false;
     stencilFunc: any = THREE.NotEqualStencilFunc;
     stencilZPass: any = THREE.ReplaceStencilOp;
     stencilRef: number = 1;
+
+    /**
+     * Camera distance where fading starts. Fading is disabled while
+     * `fadeNear === fadeFar` (the default `-1 / -1` sentinel).
+     */
+    get fadeNear(): number {
+        return this.m_fadeNearU.value;
+    }
+
+    set fadeNear(value: number) {
+        this.m_fadeNearU.value = value;
+    }
+
+    /** Camera distance where fading completes, see [[fadeNear]]. */
+    get fadeFar(): number {
+        return this.m_fadeFarU.value;
+    }
+
+    set fadeFar(value: number) {
+        this.m_fadeFarU.value = value;
+    }
 
     constructor(params?: SolidLineMaterialParameters) {
         super();
@@ -244,8 +263,20 @@ export class SolidLineMaterial extends NodeMaterial {
             return pos;
         })();
 
-        // === Fragment Node ===
-        this.fragmentNode = Fn(() => {
+        // === Fragment (color/alpha) Nodes ===
+        // NOTE: the computed vec4 is routed through `colorNode`/`opacityNode`,
+        // NOT `fragmentNode`. In three r185 `NodeMaterial.setup()` only wraps
+        // the output in the renderer's MRT node when `fragmentNode === null`;
+        // a custom fragmentNode emits exactly one fragment output. The scene
+        // is rendered into an MRT pass (ViewRenderManager: `output` +
+        // `pickDepth` color targets), so a single-output pipeline is invalid:
+        // WebGPU rejects it ("Color target has no corresponding fragment
+        // stage output but writeMask ... is not zero", targets[1]), the
+        // command buffer is invalidated and the WHOLE frame is lost; WebGL2
+        // renders the line into a mismatched draw buffer. The standard
+        // colorNode path produces one output per MRT target and keeps
+        // NodeMaterial.setupFog applied to the line color.
+        const fragmentColor = Fn(() => {
             const SEGMENT_OFFSET = float(0.1);
             const segment = abs(extrusionCoord.xy).sub(SEGMENT_OFFSET);
             const segmentPos = sign(extrusionCoord.x).div(2).add(0.5);
@@ -355,11 +386,29 @@ export class SolidLineMaterial extends NodeMaterial {
 
             // Fading
             const mvDepth = modelViewPosition.z.negate();
-            const fadeFactor = smoothstep(this.m_fadeNearU, this.m_fadeFarU, mvDepth);
+            // The disabled-fade sentinel is fadeNear == fadeFar (both default
+            // to -1). `smoothstep` with equal edges divides by zero
+            // ((x - e0) / (e1 - e0) = +Inf for every depth in front of the
+            // camera, clamped to 1), which multiplied alpha by 0 and made the
+            // whole line invisible on both backends without any error. Emit a
+            // constant 0 instead while fading is disabled.
+            const fadeDisabled = this.m_fadeNearU.equal(this.m_fadeFarU);
+            const fadeFactor = select(
+                fadeDisabled,
+                float(0),
+                smoothstep(this.m_fadeNearU, this.m_fadeFarU, mvDepth)
+            );
             alpha = alpha.mul(float(1).sub(fadeFactor));
 
             return vec4(outputDiffuse, alpha);
         })();
+        this.colorNode = fragmentColor;
+        // The alpha above already contains `m_opacityU` (kept in sync with
+        // the engine-facing `opacity` by the constructor / setOpacity). Pin
+        // opacityNode to 1 so `Material.opacity` — which the tile builder
+        // also writes directly (applyBaseColorToMaterial) — cannot multiply
+        // the same opacity factor a second time.
+        this.opacityNode = float(1);
     }
 
     get color(): THREE.Color {

@@ -116,7 +116,14 @@ export class EdgeMaterial extends NodeMaterial {
             return clipPos;
         })();
 
-        this.fragmentNode = Fn(() => {
+        // NOTE: the result is routed through `colorNode`, NOT `fragmentNode`.
+        // In three r185 a custom fragmentNode bypasses the renderer's MRT
+        // wrapping in NodeMaterial.setup(), so the pipeline emits a single
+        // fragment output while ViewRenderManager's scene pass provides two
+        // color targets (`output` + `pickDepth`) — WebGPU rejects the
+        // pipeline and the WHOLE frame is lost. See SolidLineMaterial for
+        // the full comment.
+        const fragmentColor = Fn(() => {
             let edgeCol = this.m_edgeColorU;
             if (useVertexColors) {
                 const vertColor = attribute("color", "vec4");
@@ -130,6 +137,10 @@ export class EdgeMaterial extends NodeMaterial {
 
             return vec4(edgeCol, alpha);
         })();
+        this.colorNode = fragmentColor;
+        // The fragment output previously ignored Material.opacity; pin
+        // opacityNode to 1 to keep that exact behavior.
+        this.opacityNode = float(1);
     }
 
     get color(): THREE.Color {

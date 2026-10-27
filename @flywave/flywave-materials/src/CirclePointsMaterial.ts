@@ -36,7 +36,11 @@ export class CirclePointsMaterial extends NodeMaterial {
             this.m_opacityUniform.value = parameters.opacity;
         }
 
-        this.fragmentNode = Fn(() => {
+        // NOTE: routed through `colorNode`, NOT `fragmentNode` — a custom
+        // fragmentNode bypasses the renderer's MRT wrapping in three r185
+        // (see SolidLineMaterial.setupNodes for the full comment) and makes
+        // the WebGPU pipeline invalid in the MRT scene pass.
+        const fragmentColor = Fn(() => {
             const radius = float(0.5);
             const coords = pointUV.sub(vec2(0.5));
             const len = length(coords);
@@ -45,6 +49,10 @@ export class CirclePointsMaterial extends NodeMaterial {
             const alpha = this.m_opacityUniform.mul(threshold);
             return vec4(this.m_colorUniform, alpha);
         })();
+        this.colorNode = fragmentColor;
+        // Alpha above already includes m_opacityUniform (aliased by the
+        // `opacity` accessor); pin opacityNode to 1 to avoid double-multiply.
+        this.opacityNode = float(1);
     }
 
     get size(): number {

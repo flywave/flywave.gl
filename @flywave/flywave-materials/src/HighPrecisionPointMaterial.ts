@@ -113,12 +113,20 @@ export class HighPrecisionPointMaterial extends PointsNodeMaterial {
 
         this.sizeNode = float(this.size);
 
-        this.fragmentNode = Fn(() => {
+        // NOTE: routed through `colorNode`, NOT `fragmentNode` — a custom
+        // fragmentNode bypasses the renderer's MRT wrapping in three r185
+        // (see SolidLineMaterial.setupNodes for the full comment) and makes
+        // the WebGPU pipeline invalid in the MRT scene pass.
+        const fragmentColor = Fn(() => {
             const mapColor = texture(this.m_mapU, pointUV);
             const rgb = this.m_diffuseColorU.mul(mapColor.rgb);
             const alpha = this.m_opacityU.mul(mapColor.a);
             return vec4(rgb, alpha);
         })();
+        this.colorNode = fragmentColor;
+        // Alpha above already contains m_opacityU; pin opacityNode to 1 so
+        // Material.opacity cannot multiply the same factor twice.
+        this.opacityNode = float(1);
     }
 
     private updateTransparency() {

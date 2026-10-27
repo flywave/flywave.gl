@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import { attribute, Fn, uniform, vec3, vec4 } from "three/tsl";
+import { attribute, float, Fn, uniform, vec3, vec4 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
 
@@ -93,9 +93,17 @@ export class HighPrecisionLineMaterial extends NodeMaterial {
             return this.m_mvpU.mul(vec4(pos, 1.0));
         })();
 
-        this.fragmentNode = Fn(() => {
+        // NOTE: routed through `colorNode`, NOT `fragmentNode` — a custom
+        // fragmentNode bypasses the renderer's MRT wrapping in three r185
+        // (see SolidLineMaterial.setupNodes for the full comment) and makes
+        // the WebGPU pipeline invalid in the MRT scene pass.
+        const fragmentColor = Fn(() => {
             return vec4(this.m_diffuseColorU.mul(vertColor.rgb), this.m_opacityU);
         })();
+        this.colorNode = fragmentColor;
+        // Alpha above already contains m_opacityU; pin opacityNode to 1 so
+        // Material.opacity cannot multiply the same factor twice.
+        this.opacityNode = float(1);
     }
 
     get color(): THREE.Color {
