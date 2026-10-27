@@ -86,16 +86,17 @@ function createUserFeaturesTheme(): Theme {
                     }
                 },
                 {
-                    // Extruded-line = a real triangulated ribbon mesh, so the
-                    // width is honored (plain `line` is capped at 1px by WebGL
-                    // and SolidLineMaterial is currently broken, see commit notes).
+                    // Road network: solid-line ribbons in pixel units (with the
+                    // outline/dash capabilities of the solid-line material).
+                    // NOTE: plain `line` caps at 1px (WebGL ignores lineWidth);
+                    // for meter-wide road ribbons use `extruded-line` instead.
                     when: ["==", ["geometry-type"], "LineString"],
-                    technique: "extruded-line",
+                    technique: "solid-line",
                     attr: {
                         color: "#FF8C1A",
                         opacity: 1,
-                        lineWidth: 6,
-                        shading: "basic"
+                        lineWidth: 4,
+                        metricUnit: "Pixel"
                     }
                 },
                 {
@@ -279,8 +280,6 @@ async function main(): Promise<void> {
         }
     });
     logExampleInfo("data-features-layer", mapView);
-    // TEMP DEBUG (remove when solid-line investigation concludes).
-    (window as any).__dbg = mapView;
 
     // Open raster background; degrades to a red debug grid when offline.
     await createImageryWithFallback(mapView, demoImagery({ provider: "arcgis" }));
