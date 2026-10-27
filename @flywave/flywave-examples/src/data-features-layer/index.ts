@@ -281,7 +281,7 @@ async function main(): Promise<void> {
     logExampleInfo("data-features-layer", mapView);
 
     // Open raster background; degrades to a red debug grid when offline.
-    // await createImageryWithFallback(mapView, demoImagery({ provider: "arcgis" })); // DIAG
+    await createImageryWithFallback(mapView, demoImagery({ provider: "arcgis" }));
 
     const featuresDataSource = await createFeaturesDataSource(mapView);
     const initialCount = await loadInitialData(featuresDataSource);
