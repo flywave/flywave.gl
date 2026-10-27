@@ -25,7 +25,7 @@ const config: ExampleConfig = {
         "createImageryWithFallback"
     ],
     concerns: ["U20"],
-    dataPolicy: "open-data"
+    dataPolicy: "offline"
 };
 
 export default config;

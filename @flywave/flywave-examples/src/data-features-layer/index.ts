@@ -36,8 +36,6 @@ import {
     applyPanelStyle,
     createExampleGui,
     createExampleMap,
-    createImageryWithFallback,
-    demoImagery,
     logExampleInfo
 } from "../common";
 
@@ -296,8 +294,8 @@ async function main(): Promise<void> {
     });
     logExampleInfo("data-features-layer", mapView);
 
-    // Open raster background; degrades to a red debug grid when offline.
-    await createImageryWithFallback(mapView, demoImagery({ provider: "arcgis" }));
+    // No basemap imagery: this example is about the FEATURES themselves —
+    // extrusions, roads and labels read cleanly on the light stage.
 
     const featuresDataSource = await createFeaturesDataSource(mapView);
     const initialCount = await loadInitialData(featuresDataSource);
