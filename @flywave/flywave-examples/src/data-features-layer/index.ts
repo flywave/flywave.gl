@@ -80,22 +80,58 @@ function createUserFeaturesTheme(): Theme {
                     }
                 },
                 {
-                    when: ["==", ["geometry-type"], "Polygon"],
-                    technique: "fill",
+                    // OSM buildings (466 in the demo file): extrude by the real
+                    // `height` tag; features without one get a modest fallback.
+                    when: [
+                        "all",
+                        ["==", ["geometry-type"], "Polygon"],
+                        ["any", ["has", "building"], ["has", "building:part"]]
+                    ],
+                    technique: "extruded-polygon",
                     attr: {
-                        color: "#7FB3D5",
-                        opacity: 0.55
+                        height: ["coalesce", ["number", ["get", "height"]], 8],
+                        color: "#C9D3DC",
+                        footprint: true,
+                        lineColor: "#46586A",
+                        lineWidth: 1.5
                     }
                 },
                 {
-                    when: ["==", ["geometry-type"], "LineString"],
-                    technique: "solid-line",
+                    // Water polygons (the moat): flat blue fill.
+                    when: [
+                        "all",
+                        ["==", ["geometry-type"], "Polygon"],
+                        ["==", ["get", "natural"], "water"]
+                    ],
+                    technique: "fill",
                     attr: {
-                        color: "#F59E0B",
-                        outlineWidth: 2,
-                        metricUnit: "Pixel",
-                        lineWidth: 3,
-                        outlineColor: "#78350F"
+                        color: "#7FB3D5",
+                        opacity: 0.6
+                    }
+                },
+                {
+                    // Gardens / landuse: subtle green fill.
+                    when: [
+                        "all",
+                        ["==", ["geometry-type"], "Polygon"],
+                        ["any", ["has", "leisure"], ["has", "landuse"]]
+                    ],
+                    technique: "fill",
+                    attr: {
+                        color: "#8FBF8F",
+                        opacity: 0.35
+                    }
+                },
+                {
+                    // NOTE: plain `line` technique on purpose — the fancier
+                    // `solid-line` material currently renders nothing in this
+                    // setup and needs a separate engine-side investigation.
+                    when: ["==", ["geometry-type"], "LineString"],
+                    technique: "line",
+                    attr: {
+                        color: "#E67E22",
+                        opacity: 0.9,
+                        lineWidth: 2
                     }
                 },
                 {
@@ -275,7 +311,8 @@ async function main(): Promise<void> {
         themeObject: createUserFeaturesTheme(),
         lookAt: {
             target: { lat: CENTER.lat, lng: CENTER.lng },
-            zoomLevel: 14
+            zoomLevel: 14.8,
+            tilt: 40
         }
     });
     logExampleInfo("data-features-layer", mapView);
