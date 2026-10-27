@@ -54,7 +54,7 @@ type Gui = import("dat.gui").GUI;
 function createUserFeaturesTheme(): Theme {
     return {
         extends: "resources/tilezen_base_globe.json",
-        atmosphere: { enabled: false },
+        atmosphere: { enabled: true },
         sky: { type: "gradient", topColor: "#BFD9EF", bottomColor: "#E9EDF2", groundColor: "#DDE3EA" },
         clearColor: "#DDE3EA",
         definitions: {
@@ -285,7 +285,7 @@ async function main(): Promise<void> {
 
     const { mapView } = await createExampleMap(canvas, {
         themeObject: createUserFeaturesTheme(),
-        projection: "mercator",
+        projection: "globe",
         lookAt: {
             target: { lat: CENTER.lat, lng: CENTER.lng },
             zoomLevel: 14.8,
