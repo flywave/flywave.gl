@@ -51,28 +51,44 @@ const DATA_URL = "complex-features.json";
 type Gui = import("dat.gui").GUI;
 
 /** Theme object: base tilezen look plus the inline "user-features" style set. */
-function buildDiagTheme(): Theme {
+function createUserFeaturesTheme(): Theme {
     return {
         extends: "resources/tilezen_base_globe.json",
-        // USER: planar test — light sky, no deep-blue, atmosphere off.
         atmosphere: { enabled: false },
         sky: { type: "gradient", topColor: "#BFD9EF", bottomColor: "#E9EDF2", groundColor: "#DDE3EA" },
         clearColor: "#DDE3EA",
         definitions: {
             defaultTextStyle: {
-                color: "#000000",
+                color: "#1F2933",
                 backgroundOpacity: 0,
-                fontSize: 28,
+                fontSize: 26,
                 fontName: "Noto Sans",
                 fontStyle: "Bold"
             }
         },
         styles: {
             "user-features": [
-                // NOTE: plain `line` technique on purpose — SolidLineMaterial
-                // currently draws nothing on either backend (engine bug, under
-                // investigation; see commit notes).
                 {
+                    // OSM buildings: extrude by the real `height` tag, with a
+                    // fallback for features lacking one.
+                    when: [
+                        "all",
+                        ["==", ["geometry-type"], "Polygon"],
+                        ["any", ["has", "building"], ["has", "building:part"]]
+                    ],
+                    technique: "extruded-polygon",
+                    attr: {
+                        height: ["coalesce", ["get", "height"], 8],
+                        color: "#C9D3DC",
+                        footprint: true,
+                        lineColor: "#46586A",
+                        lineWidth: 1.5
+                    }
+                },
+                {
+                    // NOTE: plain `line` technique on purpose — SolidLineMaterial
+                    // currently draws nothing on either backend (engine bug under
+                    // separate investigation).
                     when: ["==", ["geometry-type"], "LineString"],
                     technique: "line",
                     attr: {
@@ -80,12 +96,25 @@ function buildDiagTheme(): Theme {
                         opacity: 1,
                         lineWidth: 4
                     }
+                },
+                {
+                    when: ["==", ["geometry-type"], "Point"],
+                    technique: "labeled-icon",
+                    attr: {
+                        text: ["get", "name"],
+                        color: "#1F2933",
+                        backgroundOpacity: 0,
+                        imageTexture: "circle-stroked-11",
+                        iconScale: 1.0,
+                        size: 24,
+                        vAlignment: "Center",
+                        hAlignment: "Left"
+                    }
                 }
             ]
         }
     };
 }
-
 /**
  * Create the runtime features data source. `styleSetName` binds it to the
  * "user-features" style set declared in the theme above.
@@ -240,7 +269,7 @@ async function main(): Promise<void> {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
 
     const { mapView } = await createExampleMap(canvas, {
-        themeObject: buildDiagTheme(),
+        themeObject: createUserFeaturesTheme(),
         projection: "mercator",
         lookAt: {
             target: { lat: CENTER.lat, lng: CENTER.lng },
