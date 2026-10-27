@@ -55,6 +55,10 @@ function createUserFeaturesTheme(): Theme {
     return {
         extends: "resources/tilezen_base_globe.json",
         atmosphere: { enabled: true },
+        // Globe + atmosphere: clear the inherited theme lights — the
+        // atmosphere sun provides the (physically-based) lighting; static
+        // ambient/directional lights would fight it and wash out the imagery.
+        lights: [],
         sky: { type: "gradient", topColor: "#BFD9EF", bottomColor: "#E9EDF2", groundColor: "#DDE3EA" },
         clearColor: "#DDE3EA",
         definitions: {
