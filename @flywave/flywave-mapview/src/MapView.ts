@@ -1107,12 +1107,19 @@ export class MapView extends EventDispatcher {
                 ? undefined
                 : (this.m_options.powerPreference as "low-power" | "high-performance");
 
+        const forceWebGL = this.m_options.forceWebGL === true;
+
         const rendererParams: WebGPURendererParameters = {
             canvas: this.canvas,
-            forceWebGL: this.m_options.forceWebGL === true,
+            forceWebGL,
             antialias: this.nativeWebglAntialiasEnabled,
             alpha: this.m_options.alpha,
-            reversedDepthBuffer: true,
+            // Reversed depth works on the WebGPU backend. On the WebGL2
+            // compatibility backend the multisample depth/stencil resolve blit
+            // fails GL validation ("Depth/stencil buffer format combination
+            // not allowed for blit"), which kills every frame — so the WebGL
+            // path keeps the conventional depth convention.
+            reversedDepthBuffer: !forceWebGL,
             ...(powerPreference !== undefined ? { powerPreference } : {}),
             requiredLimits: {}
         };

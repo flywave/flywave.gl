@@ -86,15 +86,16 @@ function createUserFeaturesTheme(): Theme {
                     }
                 },
                 {
-                    // NOTE: plain `line` technique on purpose — SolidLineMaterial
-                    // currently draws nothing on either backend (engine bug under
-                    // separate investigation).
+                    // Extruded-line = a real triangulated ribbon mesh, so the
+                    // width is honored (plain `line` is capped at 1px by WebGL
+                    // and SolidLineMaterial is currently broken, see commit notes).
                     when: ["==", ["geometry-type"], "LineString"],
-                    technique: "line",
+                    technique: "extruded-line",
                     attr: {
                         color: "#FF8C1A",
                         opacity: 1,
-                        lineWidth: 4
+                        lineWidth: 6,
+                        shading: "basic"
                     }
                 },
                 {
