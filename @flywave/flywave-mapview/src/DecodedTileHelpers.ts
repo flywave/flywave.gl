@@ -266,6 +266,14 @@ export function createMaterial(
         (material as MapMeshStandardMaterial).flatShading = true;
     }
 
+    // Extruded-line ribbons lie flat on the ground, but their triangle winding
+    // flips with the direction of each line (the bitangent is derived from a
+    // cross product with the line direction). Render them double-sided so
+    // half of the segments don't vanish at glancing viewing angles.
+    if (technique.name === "extruded-line") {
+        material.side = THREE.DoubleSide;
+    }
+
     material.depthTest = isExtrudedPolygonTechnique(technique) && technique.depthTest !== false;
 
     if (supportsTextures(technique)) {

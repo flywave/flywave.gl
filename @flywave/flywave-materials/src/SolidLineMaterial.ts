@@ -101,7 +101,12 @@ export class SolidLineMaterial extends NodeMaterial {
     static DEFAULT_DRAW_RANGE_START: number = 0.0;
     static DEFAULT_DRAW_RANGE_END: number = 1.0;
     static DEFAULT_DASH_SIZE: number = 1.0;
-    static DEFAULT_GAP_SIZE: number = 1.0;
+    // harp.gl also defaults the gapSize UNIFORM to 1, but compiles its dash
+    // code out unless the gapSize SETTER ran with a value > 0 (the
+    // USE_DASHED_LINE define). This port gates dashes at runtime on
+    // `gapSize > 0` instead, so the default must be 0 or every solid line
+    // renders with a 1m/1m dash pattern.
+    static DEFAULT_GAP_SIZE: number = 0.0;
     static DEFAULT_OFFSET: number = 0.0;
 
     private readonly m_diffuseColorU = uniform(new THREE.Color(SolidLineMaterial.DEFAULT_COLOR));
@@ -219,48 +224,70 @@ export class SolidLineMaterial extends NodeMaterial {
         const biTangent = attribute("biTangent", "vec4");
         const tangent = attribute("tangent", "vec3");
         // Corner factors come from the geometry itself: the two vertices of
-        // each vertex pair carry opposite signs in `extrusionCoord.y`, so
-        // sign() yields the across-line factor (-1/+1) without requiring the
-        // optional `uv` attribute. Reading `uvNode()` here made the whole
-        // line vanish on geometries without uvs (NaN position -> culled
-        // primitives, no error).
+        // each vertex pair carry opposite signs in `extrusionCoord.y`, and
+        // `extrusionCoord.x` flips sign between a quad's start and end
+        // vertex pairs, so sign() yields the across/along corner factors
+        // without requiring the optional `uv` attribute. Reading `uvNode()`
+        // here made the whole line vanish on geometries without uvs (NaN
+        // position -> culled primitives, no error).
         const acrossCorner = sign(extrusionCoord.y);
-        const alongCorner = float(0);
+        const alongCorner = sign(extrusionCoord.x);
 
         const extrusionWidth = this.m_extrusionWidthU;
         const outlineWidth = this.m_outlineWidthU;
         const offsetU = this.m_offsetU;
         const drawRange = this.m_drawRangeU;
+        const totalWidth = extrusionWidth.add(outlineWidth);
+        const tanHalfAngle = tslTan(biTangent.w.div(2));
+        const hasAngle = biTangent.w.notEqual(0);
+
+        // Vertex-stage values the fragment SDF consumes through varyings.
+        // This restores the harp.gl `extrudeLine` inout-uv contract, which
+        // rewrites the corner-factor vector BEFORE it reaches the fragment:
+        // x becomes the along-line position extended by one total width past
+        // the segment ends (the quads overlap the joints, giving the round
+        // fragment caps geometry to cut into), and y becomes the signed
+        // total width. Deriving these per fragment from the raw attribute
+        // instead made vCoords.x a near-zero constant while vCoords.zw kept
+        // the real arc length, so the segment-cap distance grew with arc
+        // length and discarded every quad past a polyline's first corner —
+        // regular gaps that look exactly like a dashed line.
+        const SEGMENT_OFFSET = float(0.1);
+        const segment = abs(extrusionCoord.xy).sub(SEGMENT_OFFSET);
+        const segmentPos = sign(extrusionCoord.x).div(2).add(0.5);
+        const linePos = tslMix(segment.x, segment.y, segmentPos);
+        const alongCoord = tslMix(
+            linePos.add(alongCorner.mul(totalWidth)),
+            linePos.add(alongCorner.mul(acrossCorner).mul(totalWidth).mul(tanHalfAngle)),
+            hasAngle
+        );
+        const acrossCoord = acrossCorner.mul(totalWidth);
+        const extrusionFactor = acrossCorner.mul(tanHalfAngle);
+        const vAlongCoord = varying(alongCoord);
+        const vAcrossCoord = varying(acrossCoord);
+        const vExtrusionFactor = varying(extrusionFactor);
+        // vCoords.zw (the per-vertex start/end arc lengths) must ALSO come
+        // from the vertex stage: computing `abs(interpolated attribute)`
+        // per fragment dips to zero at the ribbon centerline, which trips
+        // the segment end mask along the whole line and hollows out the
+        // ribbon center (bright edges around a background-colored core).
+        const vSegment = varying(segment);
 
         // === Position Node ===
         this.positionNode = Fn(() => {
-            const SEGMENT_OFFSET = float(0.1);
-            const segment = abs(extrusionCoord.xy).sub(SEGMENT_OFFSET);
-            const segmentPos = sign(extrusionCoord.x).div(2).add(0.5);
-            const linePos = tslMix(segment.x, segment.y, segmentPos);
-            const extrusionDir = sign(extrusionCoord.xy);
-            const tanHalfAngle = tslTan(biTangent.w.div(2));
-            const totalWidth = extrusionWidth.add(outlineWidth);
-
-            let pos = positionLocal;
-            const angle = biTangent.w;
-            const hasAngle = angle.notEqual(0);
-
-            const posAngle = pos.add(
+            const posAngle = positionLocal.add(
                 acrossCorner
                     .mul(totalWidth)
                     .mul(biTangent.xyz)
-                    .div(tslCos(angle.div(2)))
+                    .div(tslCos(biTangent.w.div(2)))
             );
-            const posNoAngle = pos
+            const posNoAngle = positionLocal
                 .add(acrossCorner.mul(totalWidth).mul(biTangent.xyz))
                 .add(alongCorner.mul(totalWidth).mul(tangent));
-            pos = tslMix(posNoAngle, posAngle, hasAngle);
-
-            pos = pos.add(
+            const pos = tslMix(posNoAngle, posAngle, hasAngle);
+            return pos.add(
                 biTangent.xyz.mul(offsetU).mul(sqrt(float(1).add(tslPow(abs(tanHalfAngle), 2))))
             );
-            return pos;
         })();
 
         // === Fragment (color/alpha) Nodes ===
@@ -277,18 +304,15 @@ export class SolidLineMaterial extends NodeMaterial {
         // colorNode path produces one output per MRT target and keeps
         // NodeMaterial.setupFog applied to the line color.
         const fragmentColor = Fn(() => {
-            const SEGMENT_OFFSET = float(0.1);
-            const segment = abs(extrusionCoord.xy).sub(SEGMENT_OFFSET);
-            const segmentPos = sign(extrusionCoord.x).div(2).add(0.5);
-            const linePos = tslMix(segment.x, segment.y, segmentPos);
-            const extrusionDir = sign(extrusionCoord.xy);
-            const tanHalfAngle = tslTan(biTangent.w.div(2));
-            const extrusionFactor = extrusionDir.y.mul(tanHalfAngle);
+            const extrusionFactor = vExtrusionFactor;
             const totalWidth = extrusionWidth.add(outlineWidth);
 
             const vRangeX = extrusionCoord.z;
-            const vRange = vec3(vRangeX, extrusionWidth, extrusionFactor);
-            const vCoords = vec4(extrusionDir.div(vRange.xy), segment.div(vRangeX));
+            const vCoords = vec4(
+                vAlongCoord.div(vRangeX),
+                vAcrossCoord.div(extrusionWidth),
+                vSegment.div(vRangeX)
+            );
 
             // roundEdgesAndAddCaps
             const widthRatio = extrusionWidth.div(vRangeX);
@@ -308,7 +332,15 @@ export class SolidLineMaterial extends NodeMaterial {
                 )
             );
 
-            // Caps for non-ROUND modes
+            // Caps for non-ROUND modes. harp.gl compiles this whole block
+            // out for CAPS_ROUND (#if CAPS_MODE != CAPS_ROUND) — round joints
+            // rely only on the per-segment end circles above. The runtime
+            // select chain has no Round branch and would fall through to the
+            // TRIANGLE_IN distance, carving a triangle notch into every
+            // joint overlap zone: once the width reaches screen pixels the
+            // line turns into a dotted/dashed chain with one hole per
+            // polyline vertex.
+            const useCapsBlock = this.m_capsModeU.notEqual(LineCapsModes.CAPS_ROUND);
             const capRangeMask = clamp(float(1).sub(ceil(extrusionFactor.sub(drawRange.y))), 0, 1);
             const beginCapMask = clamp(ceil(drawRange.x.sub(vCoords.x)), 0, 1);
             const endCapMask = clamp(ceil(vCoords.x.sub(drawRange.y)), 0, 1);
@@ -338,7 +370,7 @@ export class SolidLineMaterial extends NodeMaterial {
                     )
                 )
             );
-            dist = tslMix(dist, capDistMode, capMask);
+            dist = select(useCapsBlock, tslMix(dist, capDistMode, capMask), dist);
 
             // Edge distance and opacity
             const distToEdge = dist.sub(totalWidth.div(extrusionWidth));
@@ -377,8 +409,16 @@ export class SolidLineMaterial extends NodeMaterial {
             const outlineW = fwidth(distToOutline);
             const outlineBlendFactor = smoothstep(outlineW.negate(), outlineW, distToOutline);
 
-            // Color mixing
-            let outputDiffuse = tslMix(this.m_diffuseColorU, this.m_dashColorU, dashBlendFactor);
+            // Color mixing. The dash tint is gated on `useDashed` exactly as
+            // harp.gl's #ifdef did: with dashes disabled the mix is compiled
+            // out there, while a runtime `gapSize === 0` still evaluates
+            // `dashBlendFactor`, whose mod() pattern would periodically tint
+            // the line toward dashColor (red) along its length.
+            let outputDiffuse = select(
+                useDashed,
+                tslMix(this.m_diffuseColorU, this.m_dashColorU, dashBlendFactor),
+                this.m_diffuseColorU
+            );
             outputDiffuse = tslMix(outputDiffuse, this.m_outlineColorU, outlineBlendFactor);
 
             // Dash alpha

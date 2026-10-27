@@ -886,6 +886,9 @@ export class MapView extends EventDispatcher {
     private m_pitch = 0;
     private m_roll = 0;
     private m_targetDistance = 0;
+    // Consecutive frames whose derived center distance jumped implausibly
+    // far from the accepted value (see updateLookAtSettings).
+    private m_centerOutlierFrames = 0;
     private m_targetGeoPos = GeoCoordinates.fromObject(MapViewDefaults.target!);
     // Focus point world coords may be calculated after setting projection, use dummy value here.
     private readonly m_targetWorldPos = new THREE.Vector3();
@@ -3762,13 +3765,14 @@ export class MapView extends EventDispatcher {
         // miss (cold slot / sky / degenerate) → take getTargetAndDistance's pure math
         // branch (analytic ground/sphere intersection + elevation), no collidables
         // passed, no raycast run against any enableCameraCollision data source.
-        const gpuDepth = this.mapRenderingManager?.readDepth(new THREE.Vector2(0, 0)) ?? null;
+        const viewRenderManager = this.mapRenderingManager?.viewRenderManager;
+        const gpuDepth = viewRenderManager?.readDepth(new THREE.Vector2(0, 0)) ?? null;
         let target: THREE.Vector3;
         let distance: number;
         let final: boolean;
         let altitude: number | undefined;
 
-        const renderCam = this.mapRenderingManager?.viewRenderManager?.renderCamera;
+        const renderCam = viewRenderManager?.renderCamera;
         let gpuTargetUsed = false;
         if (
             gpuDepth !== null &&
@@ -3808,6 +3812,31 @@ export class MapView extends EventDispatcher {
             final = result.final;
             altitude = result.altitude;
         }
+
+        // Temporal coherence guard on the derived center distance. The two
+        // sources above disagree systematically (the analytic fallback
+        // intersects the equatorial sphere, which sits kilometers away from
+        // the rendered ellipsoid surface at mid/high latitudes), and the GPU
+        // center pixel itself flips between surfaces when it sits on a depth
+        // edge (building silhouette / line ribbon / text quad). The
+        // alternation flipped $pixelToMeters every other frame, making every
+        // pixel-sized style (solid-line widths, text sizes) pulse between two
+        // sizes. A real camera distance never doubles within one damped
+        // frame, so keep the previous accepted state on implausible jumps;
+        // accept after a few consecutive outliers so genuine large moves
+        // (lookAt teleports, zoom buttons) still converge.
+        if (this.m_targetDistance > 0) {
+            const jump = Math.abs(distance - this.m_targetDistance) / this.m_targetDistance;
+            if (jump > 0.3 && this.m_centerOutlierFrames < 3) {
+                this.m_centerOutlierFrames++;
+                const { yaw, pitch, roll } = this.extractAttitude();
+                this.m_yaw = yaw;
+                this.m_pitch = pitch;
+                this.m_roll = roll;
+                return;
+            }
+        }
+        this.m_centerOutlierFrames = 0;
 
         if (!final) {
             this.update();

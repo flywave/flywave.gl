@@ -49,7 +49,7 @@ const DATA_URL = "complex-features.json";
 type Gui = import("dat.gui").GUI;
 
 /** Theme object: base tilezen look plus the inline "user-features" style set. */
-function createUserFeaturesTheme(): Theme {
+function createUserFeaturesTheme(lineWidthPx = 4, caps = "Round", withText = true): Theme {
     return {
         extends: "resources/tilezen_base_globe.json",
         atmosphere: { enabled: true },
@@ -93,25 +93,30 @@ function createUserFeaturesTheme(): Theme {
                     attr: {
                         color: "#FF8C1A",
                         opacity: 1,
-                        lineWidth: 4,
-                        metricUnit: "Pixel"
+                        lineWidth: lineWidthPx,
+                        metricUnit: "Pixel",
+                        caps
                     }
                 },
-                {
-                    // Road names rendered along the line geometry.
-                    when: ["==", ["geometry-type"], "LineString"],
-                    technique: "text",
-                    attr: {
-                        text: ["get", "name"],
-                        color: "#7C3A03",
-                        size: 20,
-                        fontName: "default",
-                        fontStyle: "Bold",
-                        priority: 90,
-                        vAlignment: "Center",
-                        hAlignment: "Center"
-                    }
-                },
+                ...(withText
+                    ? [
+                          {
+                              // Road names rendered along the line geometry.
+                              when: ["==", ["geometry-type"], "LineString"],
+                              technique: "text",
+                              attr: {
+                                  text: ["get", "name"],
+                                  color: "#7C3A03",
+                                  size: 20,
+                                  fontName: "default",
+                                  fontStyle: "Bold",
+                                  priority: 90,
+                                  vAlignment: "Center",
+                                  hAlignment: "Center"
+                              }
+                          }
+                      ]
+                    : []),
                 {
                     when: ["==", ["geometry-type"], "Point"],
                     technique: "labeled-icon",
@@ -150,6 +155,25 @@ async function loadInitialData(featuresDataSource: FeaturesDataSource): Promise<
     geojsonData.features = geojsonData.features.filter(
         feature => feature.properties?.name !== undefined
     );
+    // The OSM data carries true-asl elevation in the coordinate z (~40m for
+    // Beijing). This page has no terrain, so features would float ~40m above
+    // the ground plane — flatten every coordinate to a small positive offset
+    // (2m avoids z-fighting with the ground plane at 0).
+    const flatten = (coords: number[] | number[][] | number[][][]): void => {
+        if (typeof coords[0] === "number") {
+            coords[2] = 2;
+            return;
+        }
+        for (const c of coords as number[][]) {
+            flatten(c);
+        }
+    };
+    for (const feature of geojsonData.features) {
+        if (feature.geometry.type === "GeometryCollection") {
+            continue;
+        }
+        flatten(feature.geometry.coordinates as number[] | number[][] | number[][][]);
+    }
     featuresDataSource.setFromGeojson(geojsonData);
     return geojsonData.features.length;
 }
@@ -293,6 +317,8 @@ async function main(): Promise<void> {
         }
     });
     logExampleInfo("data-features-layer", mapView);
+    // Live-inspection handle (console: `__dbg.lookAt(...)`, scene probes).
+    (window as any).__dbg = mapView;
 
     // No basemap imagery: this example is about the FEATURES themselves —
     // extrusions, roads and labels read cleanly on the light stage.
@@ -304,4 +330,89 @@ async function main(): Promise<void> {
     setupRuntimeGui(featuresDataSource, state, createCountHud());
 }
 
-void main();
+/**
+ * TEMP debug mode (`?lineTest`): one thick solid-line through an empty
+ * scene, with GUI controls for width/caps, to debug the line material
+ * against expectations in isolation. Not part of the example's story.
+ */
+async function lineTestMain(): Promise<void> {
+    const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
+
+    const view = { lat: 39.9115, lng: 116.4, zoomLevel: 15.8, tilt: 55 };
+    const { mapView } = await createExampleMap(canvas, {
+        themeObject: createUserFeaturesTheme(20, "Round", false),
+        projection: "globe",
+        lookAt: {
+            target: { lat: view.lat, lng: view.lng },
+            zoomLevel: view.zoomLevel,
+            tilt: view.tilt
+        }
+    });
+    (window as any).__dbg = mapView;
+
+    const featuresDataSource = await createFeaturesDataSource(mapView);
+    // One polyline with two gentle bends — straight runs AND joints.
+    const feature = new MapViewLineFeature(
+        [
+            [116.385, 39.906],
+            [116.395, 39.914],
+            [116.407, 39.91],
+            [116.418, 39.917]
+        ],
+        { name: "line-test" }
+    );
+    featuresDataSource.add(feature);
+
+    const state = { width: 20, caps: "Round" };
+    // setTheme restarts an async theme update; dragging the slider fires
+    // onChange per tick, so debounce and swallow the intentional
+    // "signal is aborted without reason" from superseded updates.
+    let applyTimer: ReturnType<typeof setTimeout> | undefined;
+    const applyTheme = (): void => {
+        if (applyTimer !== undefined) {
+            clearTimeout(applyTimer);
+        }
+        applyTimer = setTimeout(() => {
+            try {
+                const pending = mapView.setTheme(
+                    createUserFeaturesTheme(state.width, state.caps as any, false)
+                ) as { catch?: (fn: () => void) => void } | undefined;
+                pending?.catch?.(() => {});
+            } catch {
+                // Superseded by a newer setTheme call (AbortSignal aborted).
+            }
+        }, 250);
+    };
+
+    const gui: Gui = createExampleGui();
+    applyPanelStyle(gui.domElement);
+    const folder = gui.addFolder("Line Test");
+    folder.add(state, "width", 2, 60, 1).onChange(applyTheme).name("width (px)");
+    folder
+        .add(state, "caps", ["Round", "Square", "None", "TriangleIn", "TriangleOut"])
+        .onChange(applyTheme)
+        .name("caps");
+    folder
+        .add(
+            {
+                resetView: () => {
+                    void mapView.lookAt({
+                        target: { lat: view.lat, lng: view.lng },
+                        zoomLevel: view.zoomLevel,
+                        tilt: view.tilt
+                    });
+                    mapView.update();
+                }
+            },
+            "resetView"
+        )
+        .name("Reset camera");
+    folder.open();
+}
+
+const params = new URLSearchParams(location.search);
+if (params.has("lineTest")) {
+    void lineTestMain();
+} else {
+    void main();
+}
