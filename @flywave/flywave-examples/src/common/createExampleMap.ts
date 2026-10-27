@@ -56,6 +56,14 @@ export interface ExampleMapOptions {
     lookAt?: IExampleLookAt;
     /** Enable shadow casting. @default false */
     enableShadows?: boolean;
+    /**
+     * Keep the theme's inherited lights on globe scenes. By default the
+     * factory clears them on globes (the atmosphere sun provides physically
+     * based lighting; inherited ambient/directional lights double-light the
+     * scene). Set `true` for atmosphere-less globes that need flat lighting.
+     * @default false
+     */
+    keepThemeLights?: boolean;
     /** Create {@link MapControls} bound to the view. @default true */
     controls?: boolean;
     /**
@@ -216,10 +224,36 @@ export async function createExampleMap(
 
     try {
         await mapView.ready;
+        await applyGlobeLightingRule(mapView, options);
         options.onReady?.(mapView);
     } catch (err) {
         onError(err instanceof Error ? err : new Error(String(err)));
     }
 
     return { mapView, controls, dispose };
+}
+
+/**
+ * Lighting rule for globe scenes: with the physical atmosphere enabled, the
+ * atmosphere sun provides the lighting and any inherited theme lights
+ * (ambient/directional from the tilezen base themes) are redundant — they
+ * double-light the scene and wash out draped imagery. Clear them.
+ *
+ * Planar scenes and atmosphere-less globes keep their theme lights: without
+ * the atmosphere there is no sun, and a scene without lights renders black.
+ *
+ * Opt out with {@link ExampleMapOptions.keepThemeLights}.
+ */
+async function applyGlobeLightingRule(
+    mapView: MapView,
+    options: ExampleMapOptions
+): Promise<void> {
+    const isGlobe = (options.projection ?? "globe") === "globe";
+    if (options.keepThemeLights === true || !isGlobe) {
+        return;
+    }
+    // getTheme() awaits the theme load; patchTheme throws before it.
+    await mapView.getTheme();
+    mapView.patchTheme({ lights: [] });
+    mapView.update();
 }
