@@ -70,8 +70,9 @@ function createUserFeaturesTheme(): Theme {
                     technique: "labeled-icon",
                     attr: {
                         text: ["get", "name"],
-                        color: "#000000",
-                        backgroundOpacity: 0,
+                        color: "#FFFFFF",
+                        backgroundColor: "#1F2933",
+                        backgroundOpacity: 0.72,
                         imageTexture: "circle-stroked-11",
                         iconScale: 1.0,
                         size: 24,
@@ -97,41 +98,15 @@ function createUserFeaturesTheme(): Theme {
                     }
                 },
                 {
-                    // Water polygons (the moat): flat blue fill.
-                    when: [
-                        "all",
-                        ["==", ["geometry-type"], "Polygon"],
-                        ["==", ["get", "natural"], "water"]
-                    ],
-                    technique: "fill",
-                    attr: {
-                        color: "#7FB3D5",
-                        opacity: 0.6
-                    }
-                },
-                {
-                    // Gardens / landuse: subtle green fill.
-                    when: [
-                        "all",
-                        ["==", ["geometry-type"], "Polygon"],
-                        ["any", ["has", "leisure"], ["has", "landuse"]]
-                    ],
-                    technique: "fill",
-                    attr: {
-                        color: "#8FBF8F",
-                        opacity: 0.35
-                    }
-                },
-                {
                     // NOTE: plain `line` technique on purpose — the fancier
                     // `solid-line` material currently renders nothing in this
                     // setup and needs a separate engine-side investigation.
                     when: ["==", ["geometry-type"], "LineString"],
                     technique: "line",
                     attr: {
-                        color: "#E67E22",
-                        opacity: 0.9,
-                        lineWidth: 2
+                        color: "#FF8C1A",
+                        opacity: 1,
+                        lineWidth: 4
                     }
                 },
                 {
@@ -139,13 +114,14 @@ function createUserFeaturesTheme(): Theme {
                     technique: "text",
                     attr: {
                         text: ["get", "name"],
-                        color: "#000000",
-                        backgroundOpacity: 0,
-                        size: 24,
+                        color: "#FFFFFF",
+                        backgroundColor: "#1F2933",
+                        backgroundOpacity: 0.72,
+                        size: 22,
                         fontName: "default",
                         fontStyle: "Bold",
                         priority: 95,
-                        vAlignment: "Above",
+                        vAlignment: "Center",
                         hAlignment: "Center"
                     }
                 }
