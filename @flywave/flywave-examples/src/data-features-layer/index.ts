@@ -22,7 +22,9 @@ import { type GUI } from "dat.gui";
 
 import {
     type FeatureCollection,
+    type LineCaps,
     type MapViewFeature,
+    type Style,
     type Theme,
     FeaturesDataSource,
     GeoCoordinates,
@@ -49,7 +51,11 @@ const DATA_URL = "complex-features.json";
 type Gui = import("dat.gui").GUI;
 
 /** Theme object: base tilezen look plus the inline "user-features" style set. */
-function createUserFeaturesTheme(lineWidthPx = 4, caps = "Round", withText = true): Theme {
+function createUserFeaturesTheme(
+    lineWidthPx = 4,
+    caps: LineCaps = "Round",
+    withText = true
+): Theme {
     return {
         extends: "resources/tilezen_base_globe.json",
         atmosphere: { enabled: true },
@@ -99,7 +105,7 @@ function createUserFeaturesTheme(lineWidthPx = 4, caps = "Round", withText = tru
                     }
                 },
                 ...(withText
-                    ? [
+                    ? ([
                           {
                               // Road names rendered along the line geometry.
                               when: ["==", ["geometry-type"], "LineString"],
@@ -115,11 +121,11 @@ function createUserFeaturesTheme(lineWidthPx = 4, caps = "Round", withText = tru
                                   hAlignment: "Center"
                               }
                           }
-                      ]
+                      ] as Style[])
                     : []),
                 {
                     when: ["==", ["geometry-type"], "Point"],
-                    technique: "labeled-icon",
+                    technique: "labeled-icon" as const,
                     attr: {
                         text: ["get", "name"],
                         color: "#1F2933",

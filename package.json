@@ -59,8 +59,8 @@
         "publish-from-package": "lerna publish from-package"
     },
     "devDependencies": {
-        "@microsoft/api-extractor": "catalog:",
         "@microsoft/api-documenter": "catalog:",
+        "@microsoft/api-extractor": "catalog:",
         "@types/chai": "catalog:",
         "@types/copy-webpack-plugin": "catalog:",
         "@types/express": "catalog:",
@@ -97,6 +97,7 @@
         "karma-coverage-istanbul-reporter": "catalog:",
         "karma-mocha": "catalog:",
         "karma-webpack": "^5.0.1",
+        "lerna": "catalog:",
         "lodash.isequal": "catalog:",
         "mkpath": "catalog:",
         "mocha": "catalog:",
@@ -107,7 +108,6 @@
         "querystring-es3": "catalog:",
         "semver": "catalog:",
         "sinon": "catalog:",
-        "lerna": "catalog:",
         "stream-browserify": "catalog:",
         "three": "catalog:",
         "ts-loader": "catalog:",

@@ -194,7 +194,7 @@ if (exampleFilter) {
 const browserConfig = merge(commonConfig, {
     //@ts-ignore
     devServer: {
-        port: 8080,
+        port: 8082,
         headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Credentials": "true" },
         proxy: [
             {

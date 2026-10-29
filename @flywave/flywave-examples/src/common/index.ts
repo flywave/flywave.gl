@@ -12,6 +12,7 @@ export * from "./createExampleMap";
 export * from "./datasources";
 export * from "./debug";
 export * from "./exampleConfig";
+export * from "./forest-layer";
 export * from "./gui-theme";
 export * from "./info-window";
 export * from "./lut-presets";
