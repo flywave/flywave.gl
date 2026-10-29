@@ -170,9 +170,40 @@ export class TileObjectRenderer {
             return stableSort(a, b);
         };
 
+        // three r185 `RenderList.sort()` REVERSES the sorted opaque and
+        // transparent lists when the camera renders into a reversed depth
+        // buffer (the WebGPU backend here). The comparator therefore has to
+        // produce the mirror image of the intended order so the reversal
+        // lands on it — otherwise every renderOrder-based layering flips
+        // (ground planes drawn over water fills, casings over road fills).
+        const reversedDepth =
+            (this.m_renderer as { reversedDepthBuffer?: boolean }).reversedDepthBuffer === true;
+        const sign = reversedDepth ? -1 : 1;
+        const transparentSort = (a: RenderItem, b: RenderItem): number => {
+            const groupOrderA = a.groupOrder ?? 0;
+            const groupOrderB = b.groupOrder ?? 0;
+            if (groupOrderA !== groupOrderB) {
+                return groupOrderA - groupOrderB;
+            }
+            const renderOrderA = a.renderOrder ?? 0;
+            const renderOrderB = b.renderOrder ?? 0;
+            if (renderOrderA !== renderOrderB) {
+                return renderOrderA - renderOrderB;
+            }
+            if (a.z !== b.z) {
+                return (b.z ?? 0) - (a.z ?? 0);
+            }
+            return (a.id ?? 0) - (b.id ?? 0);
+        };
+
         // Temporary workaround due to incorrect comparator type definition:
         // https://github.com/three-types/three-ts-types/issues/41
-        this.m_renderer.setOpaqueSort(painterSortStable);
+        this.m_renderer.setOpaqueSort(
+            (a: RenderItem, b: RenderItem) => sign * painterSortStable(a, b)
+        );
+        this.m_renderer.setTransparentSort(
+            (a: RenderItem, b: RenderItem) => sign * transparentSort(a, b)
+        );
     }
 
     private updateStencilRef(object: TileObject) {

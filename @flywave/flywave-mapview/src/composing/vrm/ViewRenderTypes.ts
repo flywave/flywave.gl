@@ -112,6 +112,7 @@ export interface ICloudsConfig {
 }
 
 export type ToneMappingMode =
+    | "none"
     | "linear"
     | "reinhard"
     | "cineon"

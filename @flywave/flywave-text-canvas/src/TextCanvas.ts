@@ -436,6 +436,14 @@ export class TextCanvas {
             oldTarget = this.m_renderer.getRenderTarget();
             this.m_renderer.setRenderTarget(target);
         }
+        // The background plate and the glyphs live in two scenes and are drawn
+        // as two passes. With autoClear left on (the caller's default), the
+        // glyph pass ERASES the background pass, so plates behind text vanish
+        // whenever the caller has not disabled autoClear (harp.gl renders one
+        // combined scene and never hits this). Disable it around both passes;
+        // the caller owns the initial clear (pass clear === true).
+        const oldAutoClear = this.m_renderer.autoClear;
+        this.m_renderer.autoClear = false;
         if (clear === true) {
             this.m_renderer.clear(true);
         }
@@ -451,6 +459,7 @@ export class TextCanvas {
                 }
             }
         }
+        this.m_renderer.autoClear = oldAutoClear;
         if (target !== undefined) {
             this.m_renderer.setRenderTarget(oldTarget);
         }

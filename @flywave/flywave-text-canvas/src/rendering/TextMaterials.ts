@@ -184,63 +184,51 @@ export class SdfTextMaterial extends NodeMaterial {
         this.fragmentNode = Fn(() => {
             const color = isBackground ? aBgColor : aColor;
 
-            let opacityNode;
-            if (isBackground) {
-                // Solid rectangular plate covering the glyph quad (ink + atlas margin).
-                // Dilating the glyph SDF instead draws a plate-colored outline around every
-                // stroke, which turns thin-stroke CJK glyphs into doubled/blurry shapes; a
-                // rect plate renders a clean label strip and never samples the clipped
-                // field near the patch boundary (the detached "ghost frame" artifact).
-                const luv = attribute("aLocalUv", "vec2");
-                const ex = min(luv.x, float(1).sub(luv.x)).div(max(abs(dFdx(luv.x)), float(1e-6)));
-                const ey = min(luv.y, float(1).sub(luv.y)).div(max(abs(dFdy(luv.y)), float(1e-6)));
-                const coverage = clamp(min(ex, ey).add(0.5), 0, 1);
-                // backgroundSize = 0 keeps meaning "no plate".
-                opacityNode = coverage.mul(aBgWeight.greaterThan(0.0).select(1, 0));
-            } else {
-                const texSample = sdfTex;
-                let dist = isMsdf
-                    ? max(
-                          min(texSample.r, texSample.g),
-                          min(max(texSample.r, texSample.g), texSample.b)
-                      )
-                    : texSample.r;
+            // Single SDF path for both passes, exactly as harp.gl's fragment:
+            // `color.a *= getOpacity(vec2(0), vWeight)` with vWeight = bgWeight
+            // for the background pass — the plate is the glyph ink dilated by
+            // backgroundSize, NOT a rectangular slab over the glyph quad.
+            const texSample = sdfTex;
+            let dist = isMsdf
+                ? max(
+                      min(texSample.r, texSample.g),
+                      min(max(texSample.r, texSample.g), texSample.b)
+                  )
+                : texSample.r;
 
-                const rotUvX = cos(aRotation).mul(aUv.x).sub(sin(aRotation).mul(aUv.y));
-                const rotUvY = sin(aRotation).mul(aUv.x).add(cos(aRotation).mul(aUv.y));
-                const rotUvXAbs = abs(rotUvX);
-                const rotUvYAbs = abs(rotUvY);
+            const rotUvX = cos(aRotation).mul(aUv.x).sub(sin(aRotation).mul(aUv.y));
+            const rotUvY = sin(aRotation).mul(aUv.x).add(cos(aRotation).mul(aUv.y));
+            const rotUvXAbs = abs(rotUvX);
+            const rotUvYAbs = abs(rotUvY);
 
-                const dx = dFdx(rotUvXAbs).mul(sdfParams.x);
-                const dy = dFdy(rotUvYAbs).mul(sdfParams.y);
-                const toPixels = sdfParams.w.mul(inverseSqrt(dx.mul(dx).add(dy.mul(dy))));
+            const dx = dFdx(rotUvXAbs).mul(sdfParams.x);
+            const dy = dFdy(rotUvYAbs).mul(sdfParams.y);
+            const toPixels = sdfParams.w.mul(inverseSqrt(dx.mul(dx).add(dy.mul(dy))));
 
-                // Font atlas pages clip the SDF field at the patch border: for CJK the ink can
-                // reach the last texel with values >= iso, and the interpolated coverage then
-                // saturates over the whole quad-edge column (vertical/horizontal hairlines
-                // around every glyph). Clamping the sampled distance by the geometric distance
-                // to the patch border (in the same px-per-distanceRange units) removes exactly
-                // the clipped region without touching interior coverage.
-                const aUvRect = attribute("aUvRect", "vec4");
-                const borderTexels = min(
-                    aUv.sub(aUvRect.xy).mul(sdfParams.x),
-                    aUvRect.zw.sub(aUv).mul(sdfParams.y)
-                );
-                const borderPx = min(borderTexels.x, borderTexels.y);
-                dist = min(dist, borderPx.div(sdfParams.w));
+            // Font atlas pages clip the SDF field at the patch border: for CJK the ink can
+            // reach the last texel with values >= iso, and the interpolated coverage then
+            // saturates over the whole quad-edge column (vertical/horizontal hairlines
+            // around every glyph). Clamping the sampled distance by the geometric distance
+            // to the patch border (in the same px-per-distanceRange units) removes exactly
+            // the clipped region without touching interior coverage.
+            const aUvRect = attribute("aUvRect", "vec4");
+            const borderTexels = min(
+                aUv.sub(aUvRect.xy).mul(sdfParams.x),
+                aUvRect.zw.sub(aUv).mul(sdfParams.y)
+            );
+            const borderPx = min(borderTexels.x, borderTexels.y);
+            dist = min(dist, borderPx.div(sdfParams.w));
 
-                // Keep in sync with main: the dilation weight must not exceed the safe
-                // upper bound, otherwise the iso-contour crosses outside the clipped
-                // patch border field and forms a solid opaque ring around the edge.
-                const weight = min(aWeight, float(0.5).sub(float(1).div(sdfParams.w)));
+            // The dilation weight must not exceed the safe upper bound, otherwise the
+            // iso-contour crosses outside the clipped patch border field and forms a
+            // solid opaque ring around the edge.
+            const weight = min(
+                isBackground ? aBgWeight : aWeight,
+                float(0.5).sub(float(1).div(sdfParams.w))
+            );
 
-                // The SDF field at the glyph patch edge is clipped by the atlas (border
-                // values ~0.06-0.18); the foreground iso-contour (0.5) still has margin
-                // from the border. The background dilation weight must be tightened (see
-                // the rectangular slab implementation in the background branch).
-                const adjustedDist = dist.add(weight).sub(0.5);
-                opacityNode = clamp(adjustedDist.mul(toPixels).add(0.5), 0, 1);
-            }
+            const adjustedDist = dist.add(weight).sub(0.5);
+            const opacityNode = clamp(adjustedDist.mul(toPixels).add(0.5), 0, 1);
 
             return vec4(color.rgb, color.a.mul(opacityNode));
         })();

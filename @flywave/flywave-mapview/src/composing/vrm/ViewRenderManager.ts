@@ -702,7 +702,12 @@ export class ViewRenderManager implements IViewRenderManager {
             finalNode = vec4(hasObject.select(undergroundBlend, finalNode.rgb), 1);
         }
 
-        finalNode = finalNode.add(dithering);
+        // Dithering hides banding introduced by tone mapping; in the "none"
+        // pass-through mode (harp.gl parity) it would instead scatter flat
+        // authored fills across ±2 LSB — skip it there.
+        if (this.config.toneMappingMode !== "none") {
+            finalNode = finalNode.add(dithering);
+        }
 
         this.pipeline = new RenderPipeline(
             this.renderer,
@@ -721,6 +726,11 @@ export class ViewRenderManager implements IViewRenderManager {
 
     private applyToneMapping(color: any, mode?: string, exposure: any = this.exposure): any {
         const tmMode = mode ?? this.config.toneMappingMode;
+        // Pass-through: authored (unlit) colors reach the output unchanged,
+        // as in harp.gl which never tone-maps the map.
+        if (tmMode === "none") {
+            return vec4(color.rgb, 1);
+        }
         if (tmMode === "agx-punchy") {
             return vec4(agxPunchyToneMapping(color.rgb, exposure), 1);
         }

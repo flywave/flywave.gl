@@ -87,38 +87,42 @@ export namespace FadingFeature {
             material: FadingFeature
         ) => void
     ) {
-        object.onBeforeRender = (
-            renderer,
-            scene: THREE.Scene,
-            camera: THREE.Camera,
-            geometry: THREE.BufferGeometry,
-            material: THREE.Material & FadingFeature,
-            group: THREE.Group
-        ) => {
-            const fadingMaterial = material as FadingFeature;
-            fadingMaterial.fadeNear =
-                fadeNear === undefined || fadeNear === FadingFeature.DEFAULT_FADE_NEAR
-                    ? FadingFeature.DEFAULT_FADE_NEAR
-                    : cameraToWorldDistance(fadeNear, viewRanges);
-            fadingMaterial.fadeFar =
-                fadeFar === undefined || fadeFar === FadingFeature.DEFAULT_FADE_FAR
-                    ? FadingFeature.DEFAULT_FADE_FAR
-                    : cameraToWorldDistance(fadeFar, viewRanges);
+        object.onBeforeRender = chainOnBeforeRender(
+            object.onBeforeRender,
+            (renderer, scene, camera, geometry, material, group) => {
+                const fadingMaterial = material as FadingFeature;
+                fadingMaterial.fadeNear =
+                    fadeNear === undefined || fadeNear === FadingFeature.DEFAULT_FADE_NEAR
+                        ? FadingFeature.DEFAULT_FADE_NEAR
+                        : cameraToWorldDistance(fadeNear, viewRanges);
+                fadingMaterial.fadeFar =
+                    fadeFar === undefined || fadeFar === FadingFeature.DEFAULT_FADE_FAR
+                        ? FadingFeature.DEFAULT_FADE_FAR
+                        : cameraToWorldDistance(fadeFar, viewRanges);
 
-            if (FadingFeature.isEnabled(fadingMaterial)) {
-                const dist = object.position.distanceTo(camera.position);
-                const t = THREE.MathUtils.smoothstep(
-                    dist,
-                    fadingMaterial.fadeNear!,
-                    fadingMaterial.fadeFar!
-                );
-                material.opacity = 1.0 - t;
-                material.transparent = material.opacity < 1.0;
+                if (additionalCallback !== undefined) {
+                    additionalCallback(renderer, material as THREE.Material & FadingFeature);
+                }
             }
+        );
+    }
 
-            if (additionalCallback !== undefined) {
-                additionalCallback(renderer, material);
-            }
+    type OnBeforeRender = NonNullable<THREE.Object3D["onBeforeRender"]>;
+
+    /**
+     * harp.gl `chainCallbacks`: the fading helper must not clobber an
+     * `onBeforeRender` another feature installed on the same object.
+     */
+    function chainOnBeforeRender(
+        previous: THREE.Object3D["onBeforeRender"] | undefined,
+        next: OnBeforeRender
+    ): OnBeforeRender {
+        if (previous === undefined) {
+            return next;
+        }
+        return function (this: THREE.Object3D, ...args: Parameters<OnBeforeRender>) {
+            previous.apply(this, args);
+            next.apply(this, args);
         };
     }
 }

@@ -197,7 +197,10 @@ export class AtmosphereSystem {
 
             if (!this.isSpherical) {
                 this.m_toneMappingExposure = 1;
-                this.m_toneMappingMode = "aces";
+                // Planar default; a mode the theme set explicitly wins.
+                if (this.m_toneMappingMode === undefined) {
+                    this.m_toneMappingMode = "aces";
+                }
             }
 
             const vrm = new ViewRenderManager(renderer);
