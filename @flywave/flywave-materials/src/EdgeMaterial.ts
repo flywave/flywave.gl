@@ -3,16 +3,17 @@
 
 import {
     attribute,
-    cameraProjectionMatrix,
     float,
     Fn,
     mix as tslMix,
-    modelViewMatrix,
     modelViewPosition,
+    modelViewProjection,
     normalize,
     normalLocal,
     positionLocal,
+    select,
     smoothstep,
+    step,
     texture,
     uniform,
     uv as uvNode,
@@ -23,6 +24,8 @@ import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
 
 import { ExtrusionFeatureDefs } from "./MapMeshMaterialsDefs";
+
+import { enforceBlending } from "./Utils";
 
 export interface EdgeMaterialParameters {
     color?: number | string;
@@ -37,6 +40,18 @@ export interface EdgeMaterialParameters {
 }
 
 export class EdgeMaterial extends NodeMaterial {
+    /**
+     * See SolidLineMaterial.customProgramCacheKey: NodeMaterial's default key
+     * hashes per-instance node ids, forcing a full TSL rebuild for every
+     * tile's material. The graph here branches only on flags the renderer's
+     * material-property iteration already captures (vertexColors), so a
+     * constant per-class key shares one built state across instances;
+     * per-instance uniform values still upload at draw time.
+     */
+    public override customProgramCacheKey(): string {
+        return "flywave:" + this.type;
+    }
+
     static DEFAULT_COLOR: number = 0x000000;
     static DEFAULT_COLOR_MIX: number = 0.0;
 
@@ -56,9 +71,6 @@ export class EdgeMaterial extends NodeMaterial {
         )
     );
 
-    fadeNear: number = -1.0;
-    fadeFar: number = -1.0;
-    extrusionRatio: number = ExtrusionFeatureDefs.DEFAULT_RATIO_MAX;
     displacementMap: THREE.Texture | null = null;
     displacementMapUvMatrix: THREE.Matrix3 | null = null;
     linewidth: number = 1;
@@ -67,21 +79,21 @@ export class EdgeMaterial extends NodeMaterial {
         super();
         this.name = "EdgeMaterial";
         this.depthWrite = false;
-        this.transparent = true;
+        // Same as SolidLineMaterial: CustomBlending, transparent stays false
+        // so building edges sort with the opaque geometry (harp.gl
+        // `enforceBlending`).
+        enforceBlending(this);
 
         if (params?.color !== undefined) this.m_edgeColorU.value.set(params.color as any);
         if (params?.colorMix !== undefined) this.m_colorMixU.value = params.colorMix;
         if (params?.fadeNear !== undefined) {
             this.fadeNear = params.fadeNear;
-            this.m_fadeNearU.value = params.fadeNear;
         }
         if (params?.fadeFar !== undefined) {
             this.fadeFar = params.fadeFar;
-            this.m_fadeFarU.value = params.fadeFar;
         }
         if (params?.extrusionRatio !== undefined) {
             this.extrusionRatio = params.extrusionRatio;
-            this.m_extrusionRatioU.value = params.extrusionRatio;
         }
         if (params?.displacementMap) {
             this.displacementMap = params.displacementMap;
@@ -93,7 +105,7 @@ export class EdgeMaterial extends NodeMaterial {
 
     private setupNodes(useVertexColors: boolean) {
         const extrusionAxis = attribute("extrusionAxis", "vec4");
-        const EDGE_DEPTH_OFFSET = float(0.0001);
+        const EDGE_DEPTH_OFFSET = float(0.0004);
 
         this.positionNode = Fn(() => {
             let pos = positionLocal;
@@ -105,14 +117,27 @@ export class EdgeMaterial extends NodeMaterial {
             return pos;
         })();
 
-        // Apply depth offset after projection to prevent z-fighting with ground
-        const originalPositionNode = this.positionNode;
-        this.positionNode = Fn(() => {
-            const transformed = originalPositionNode;
-            const mvPosition = modelViewMatrix.mul(vec4(transformed, 1.0));
-            const clipPos = cameraProjectionMatrix.mul(mvPosition);
-            const depthOffset = clipPos.z.negate().div(clipPos.w).step(-1.0).mul(EDGE_DEPTH_OFFSET);
-            clipPos.z = clipPos.z.sub(depthOffset);
+        // harp.gl: `gl_Position.z -= step(-1.0, -gl_Position.z / gl_Position.w)
+        // * EDGE_DEPTH_OFFSET` — a clip-space depth offset against the ground.
+        // That is `vertexNode` (the clip-space output) in TSL; `positionNode`
+        // is LOCAL space and gets the model-view-projection applied on top, so
+        // returning clip coordinates from it projected the edges twice (nothing
+        // visible). `step(edge, x)` also takes the edge FIRST, as in GLSL.
+        // Start from the renderer's own clip position (`modelViewProjection`
+        // goes through builder.context.setupModelViewProjection, which the
+        // engine's render context owns — recomputing it from
+        // cameraProjectionMatrix × modelViewMatrix bypassed that and the
+        // edges never reached the screen inside MapView). With a reversed
+        // depth buffer "towards the camera" is +z, so the offset flips sign.
+        this.vertexNode = Fn((_inputs: unknown, builder: { renderer: { reversedDepthBuffer?: boolean } }) => {
+            const clipPos = modelViewProjection.toVar();
+            const ndcDepth = clipPos.z.negate().div(clipPos.w);
+            const depthOffset = step(float(-1.0), ndcDepth).mul(EDGE_DEPTH_OFFSET);
+            if (builder.renderer.reversedDepthBuffer === true) {
+                clipPos.z.addAssign(depthOffset);
+            } else {
+                clipPos.z.subAssign(depthOffset);
+            }
             return clipPos;
         })();
 
@@ -130,8 +155,16 @@ export class EdgeMaterial extends NodeMaterial {
                 edgeCol = tslMix(this.m_edgeColorU, vertColor.rgb, this.m_colorMixU);
             }
 
+            // harp.gl compiles the fade out entirely (#ifdef USE_FADING) unless
+            // fadeNear/fadeFar were set; with the -1/-1 defaults a bare
+            // smoothstep(-1, -1, depth) is 1 and the edge vanishes.
             const mvDepth = modelViewPosition.z.negate();
-            const fadeFactor = smoothstep(this.m_fadeNearU, this.m_fadeFarU, mvDepth);
+            const fadeDisabled = this.m_fadeNearU.equal(this.m_fadeFarU);
+            const fadeFactor = select(
+                fadeDisabled,
+                float(0),
+                smoothstep(this.m_fadeNearU, this.m_fadeFarU, mvDepth)
+            );
             const extrusionAlpha = smoothstep(float(0), float(0.25), this.m_extrusionRatioU);
             const alpha = float(1).sub(fadeFactor).mul(extrusionAlpha);
 
@@ -141,6 +174,38 @@ export class EdgeMaterial extends NodeMaterial {
         // The fragment output previously ignored Material.opacity; pin
         // opacityNode to 1 to keep that exact behavior.
         this.opacityNode = float(1);
+    }
+
+    /**
+     * fadeNear/fadeFar/extrusionRatio drive shader uniforms. They must be
+     * accessors: FadingFeature.addRenderHelper assigns the camera-relative
+     * distances every frame and AnimatedExtrusionHandler assigns the ratio —
+     * as plain fields those writes never reached the uniforms, which kept the
+     * theme's raw fade FRACTIONS (e.g. -0.75 / 1) and faded every edge to
+     * alpha 0 (smoothstep(-0.75, 1, viewDepth) == 1).
+     */
+    get fadeNear(): number {
+        return this.m_fadeNearU.value;
+    }
+
+    set fadeNear(value: number) {
+        this.m_fadeNearU.value = value;
+    }
+
+    get fadeFar(): number {
+        return this.m_fadeFarU.value;
+    }
+
+    set fadeFar(value: number) {
+        this.m_fadeFarU.value = value;
+    }
+
+    get extrusionRatio(): number {
+        return this.m_extrusionRatioU.value;
+    }
+
+    set extrusionRatio(value: number) {
+        this.m_extrusionRatioU.value = value;
     }
 
     get color(): THREE.Color {

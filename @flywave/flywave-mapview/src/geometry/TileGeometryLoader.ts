@@ -343,8 +343,27 @@ export class TileGeometryLoader {
 
         tile.clear();
         // Set up techniques which should be processed.
+        const __t0 = performance.now();
         geometryCreator.initDecodedTile(decodedTile, enabledKinds, disabledKinds);
-        await geometryCreator.createAllGeometries(tile, decodedTile);
+        const __t1 = performance.now();
+        const __texPromise = geometryCreator.createAllGeometries(tile, decodedTile);
+        const __t2 = performance.now();
+        await __texPromise;
+        const __t2b = performance.now();
+        if (typeof window !== "undefined") {
+            (window as any).__geoSplit =
+                (window as any).__geoSplit ||
+                { initMs: 0, createMs: 0, n: 0, createTop: [], syncMs: 0, texMs: 0 };
+            const g = (window as any).__geoSplit;
+            g.initMs += __t1 - __t0;
+            g.createMs += __t2b - __t1;
+            g.syncMs += __t2 - __t1;
+            g.texMs += __t2b - __t2;
+            g.n++;
+            g.createTop.push(+(__t2b - __t1).toFixed(1));
+            g.createTop.sort((a: number, b: number) => b - a);
+            g.createTop = g.createTop.slice(0, 12);
+        }
         if (stats.enabled) {
             this.addStats(stats, now);
         }

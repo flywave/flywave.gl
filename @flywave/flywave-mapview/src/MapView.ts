@@ -889,6 +889,12 @@ export class MapView extends EventDispatcher {
     // Consecutive frames whose derived center distance jumped implausibly
     // far from the accepted value (see updateLookAtSettings).
     private m_centerOutlierFrames = 0;
+    // Camera matrix at the time the current center bookkeeping was accepted.
+    // Guards that center reuse/outlier-rejection only apply while the camera
+    // itself has not moved; after a lookAt/drag the book must follow the new
+    // camera immediately (m_lastCamMatrixValid false until first accept).
+    private readonly m_lastCamMatrix = new THREE.Matrix4();
+    private m_lastCamMatrixValid = false;
     private m_targetGeoPos = GeoCoordinates.fromObject(MapViewDefaults.target!);
     // Focus point world coords may be calculated after setting projection, use dummy value here.
     private readonly m_targetWorldPos = new THREE.Vector3();
@@ -3822,10 +3828,13 @@ export class MapView extends EventDispatcher {
         // alternation flipped $pixelToMeters every other frame, making every
         // pixel-sized style (solid-line widths, text sizes) pulse between two
         // sizes. A real camera distance never doubles within one damped
-        // frame, so keep the previous accepted state on implausible jumps;
-        // accept after a few consecutive outliers so genuine large moves
-        // (lookAt teleports, zoom buttons) still converge.
-        if (this.m_targetDistance > 0) {
+        // frame, so keep the previous accepted state on implausible jumps —
+        // but ONLY while the camera itself has not moved: after a lookAt /
+        // drag the new distance is legitimate and rejecting it would lock
+        // the book (and with it zoom, styles, loaded tiles) at the old view.
+        const cameraMoved =
+            !this.m_lastCamMatrixValid || !this.camera.matrixWorld.equals(this.m_lastCamMatrix);
+        if (this.m_targetDistance > 0 && !cameraMoved) {
             const jump = Math.abs(distance - this.m_targetDistance) / this.m_targetDistance;
             if (jump > 0.3 && this.m_centerOutlierFrames < 3) {
                 this.m_centerOutlierFrames++;
@@ -3855,6 +3864,8 @@ export class MapView extends EventDispatcher {
         this.m_targetGeoPos = this.projection.unprojectPoint(this.m_targetWorldPos);
         this.m_targetDistance = distance;
         this.m_zoomLevel = MapViewUtils.calculateZoomLevelFromDistance(this, this.m_targetDistance);
+        this.m_lastCamMatrix.copy(this.camera.matrixWorld);
+        this.m_lastCamMatrixValid = true;
 
         const { yaw, pitch, roll } = this.extractAttitude();
         this.m_yaw = yaw;
@@ -4027,7 +4038,14 @@ export class MapView extends EventDispatcher {
         this.updateCameras();
         this.updateEnv();
 
-        this.m_renderer.clear();
+        // NOTE: no renderer.clear() here. On WebGPU, clear() renders through
+        // the default-framebuffer path at samples=0 (needsFrameBufferTarget),
+        // while the post-processing output quad runs at renderer.samples —
+        // three r185 rebuilt the canvas depth buffer on EVERY pass
+        // transition (~15-30MB GPU alloc/free per frame). The fullscreen
+        // output quad repaints the whole canvas anyway; depth is cleared
+        // after the quad instead (see the depth-only clear below, matched
+        // to the post pass sample count).
 
         // clear the scenes
         this.m_sceneRoot.children.length = 0;
@@ -4148,6 +4166,15 @@ export class MapView extends EventDispatcher {
             !this.isDynamicFrame,
             this.m_previousFrameTimeStamp
         );
+
+        // NOTE: deliberately no depth clear here. renderer.clear() always
+        // renders through the internal framebuffer-target path (samples=0 —
+        // needsFrameBufferTarget), which would re-trigger the sample-count
+        // flip-flop with the samples=N post quad and recreate the canvas
+        // depth buffer every pass. The freshly-recreated (zeroed) depth
+        // buffer of the old per-frame clear was, in reversed-depth terms,
+        // equivalent to "no depth constraint" for the text/overlay passes —
+        // skipping the clear preserves that exact behavior.
 
         if (gatherStatistics) {
             drawTime = PerformanceTimer.now();

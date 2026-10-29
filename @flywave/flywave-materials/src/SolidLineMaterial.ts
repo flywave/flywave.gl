@@ -41,6 +41,8 @@ import {
 import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
 
+import { enforceBlending } from "./Utils";
+
 export enum LineCapsModes {
     CAPS_NONE = 0,
     CAPS_SQUARE,
@@ -94,6 +96,25 @@ export interface SolidLineMaterialParameters {
 }
 
 export class SolidLineMaterial extends NodeMaterial {
+    /**
+     * `NodeMaterial.customProgramCacheKey` hashes every node instance id
+     * (`Node.customCacheKey() → this.id`), so structurally identical
+     * instances never share a built state: every tile's material paid a full
+     * NodeBuilder.build/analyze/generate (~1-3ms for this large dash/SDF
+     * graph; 66% of frame time in DevTools profiles during tile streaming,
+     * on BOTH backends — WebGL runs the same NodeManager path).
+     *
+     * This graph branches only on flags the renderer's material-property
+     * iteration already captures (e.g. `vertexColors`), so a constant
+     * per-class key lets equal-technique instances share one built state.
+     * Per-instance uniform VALUES are unaffected — uniform upload reads each
+     * instance's nodes at draw time (verified in-page: 40 value-distinct
+     * instances, 1 built state, every color rendered correctly).
+     */
+    public override customProgramCacheKey(): string {
+        return "flywave:" + this.type;
+    }
+
     static DEFAULT_COLOR: number = 0xff0000;
     static DEFAULT_WIDTH: number = 1.0;
     static DEFAULT_OUTLINE_WIDTH: number = 0.0;
@@ -112,6 +133,12 @@ export class SolidLineMaterial extends NodeMaterial {
     private readonly m_diffuseColorU = uniform(new THREE.Color(SolidLineMaterial.DEFAULT_COLOR));
     private readonly m_outlineColorU = uniform(new THREE.Color(SolidLineMaterial.DEFAULT_COLOR));
     private readonly m_dashColorU = uniform(new THREE.Color(SolidLineMaterial.DEFAULT_COLOR));
+    // harp.gl only mixes dashColor into the line when the theme explicitly
+    // provides one (the USE_DASH_COLOR shader define, set by the dashColor
+    // setter). Without it the dash shows purely through alpha. The uniform
+    // mirrors that gate: without it every dashed line would tint toward
+    // DEFAULT_COLOR (red) and render pink.
+    private readonly m_hasDashColorU = uniform(0);
     private readonly m_extrusionWidthU = uniform(SolidLineMaterial.DEFAULT_WIDTH / 2);
     private readonly m_outlineWidthU = uniform(SolidLineMaterial.DEFAULT_OUTLINE_WIDTH);
     private readonly m_offsetU = uniform(SolidLineMaterial.DEFAULT_OFFSET);
@@ -174,14 +201,21 @@ export class SolidLineMaterial extends NodeMaterial {
     constructor(params?: SolidLineMaterialParameters) {
         super();
         this.name = "SolidLineMaterial";
-        this.transparent = true;
+        // harp.gl `enforceBlending`: CustomBlending with transparent staying
+        // FALSE so lines remain in the OPAQUE render list and layer by
+        // renderOrder. transparent=true (the old port) pushed every line into
+        // the transparent pass, which draws after ALL opaque geometry — roads
+        // with depthTest=false then painted over buildings.
+        enforceBlending(this);
 
         if (params) {
             if (params.color !== undefined) this.m_diffuseColorU.value.set(params.color as any);
             if (params.outlineColor !== undefined)
                 this.m_outlineColorU.value.set(params.outlineColor as any);
-            if (params.dashColor !== undefined)
+            if (params.dashColor !== undefined) {
                 this.m_dashColorU.value.set(params.dashColor as any);
+                this.m_hasDashColorU.value = 1;
+            }
             if (params.lineWidth !== undefined) this.m_extrusionWidthU.value = params.lineWidth / 2;
             if (params.outlineWidth !== undefined) this.m_outlineWidthU.value = params.outlineWidth;
             if (params.opacity !== undefined) {
@@ -386,8 +420,12 @@ export class SolidLineMaterial extends NodeMaterial {
             const d = this.m_dashSizeU.div(vRangeX);
             const g = this.m_gapSizeU.div(vRangeX);
             const distToDashOrigin = mod(vCoords.x, d.add(g)).div(d);
+            // harp.gl: `0.5 - distance(distToDashOrigin, (d + g) / d * 0.5)` with
+            // SCALAR operands, i.e. |a - b|. Promoting the operands to vec2
+            // (vec2(x) vs a scalar splat) measures the diagonal and scales the
+            // distance by sqrt(2), which shrinks every dash to 0.707 x dashSize.
             const distDashBase = float(0.5).sub(
-                tslDistance(vec2(distToDashOrigin), d.add(g).div(d).mul(0.5))
+                abs(distToDashOrigin.sub(d.add(g).div(d).mul(0.5)))
             );
             const distToDashEdge = select(
                 this.m_dashesModeU.equal(LineDashesModes.DASHES_ROUND),
@@ -409,20 +447,37 @@ export class SolidLineMaterial extends NodeMaterial {
             const outlineW = fwidth(distToOutline);
             const outlineBlendFactor = smoothstep(outlineW.negate(), outlineW, distToOutline);
 
-            // Color mixing. The dash tint is gated on `useDashed` exactly as
-            // harp.gl's #ifdef did: with dashes disabled the mix is compiled
-            // out there, while a runtime `gapSize === 0` still evaluates
-            // `dashBlendFactor`, whose mod() pattern would periodically tint
-            // the line toward dashColor (red) along its length.
+            // Color mixing. harp.gl's USE_DASH_COLOR define gated two things
+            // at once: the dash tint mix AND the dash alpha cut (without it
+            // the dash shows via `alpha *= 1 - dashBlendFactor` on the plain
+            // diffuse color). Reproduce both: tint only when the theme
+            // supplied a dashColor, cut alpha only when it did not — mixing
+            // the default red dashColor into every dashed line rendered the
+            // ferry/rail dashes pink.
+            const useDashColor = this.m_hasDashColorU.greaterThan(0.5);
             let outputDiffuse = select(
-                useDashed,
+                useDashed.and(useDashColor),
                 tslMix(this.m_diffuseColorU, this.m_dashColorU, dashBlendFactor),
                 this.m_diffuseColorU
             );
-            outputDiffuse = tslMix(outputDiffuse, this.m_outlineColorU, outlineBlendFactor);
+            // Outline tint. harp.gl compiled this whole block out unless
+            // USE_OUTLINE (outlineWidth > 0). Without the gate the antialiased
+            // line edge (distToOutline ≈ 0) blended ~50% toward the default
+            // RED outlineColor on every line — the ubiquitous pink edge halo.
+            outputDiffuse = select(
+                useOutline,
+                tslMix(outputDiffuse, this.m_outlineColorU, outlineBlendFactor),
+                outputDiffuse
+            );
 
-            // Dash alpha
-            alpha = select(useDashed, alpha.mul(float(1).sub(dashBlendFactor)), alpha);
+            // Dash alpha. harp.gl only cuts alpha by the dash pattern when
+            // NO dashColor was provided (#if USE_DASHED_LINE && !USE_DASH_COLOR)
+            // — with a dashColor the dash shows via the tint mix instead.
+            alpha = select(
+                useDashed.and(useDashColor.not()),
+                alpha.mul(float(1).sub(dashBlendFactor)),
+                alpha
+            );
 
             // Fading
             const mvDepth = modelViewPosition.z.negate();
@@ -473,6 +528,7 @@ export class SolidLineMaterial extends NodeMaterial {
 
     set dashColor(value: THREE.Color) {
         this.m_dashColorU.value.copy(value);
+        this.m_hasDashColorU.value = 1;
     }
 
     get lineWidth(): number {
@@ -565,5 +621,43 @@ export class SolidLineMaterial extends NodeMaterial {
         this.opacity = opacity;
         this.m_opacityU.value = opacity;
         this.stencilWrite = opacity < 0.98;
+    }
+
+    /**
+     * `Material.clone()` is `new SolidLineMaterial().copy(source)`.
+     * `NodeMaterial.copy` would assign the source's node graph (positionNode,
+     * colorNode, opacityNode, …) to this instance; that graph closes over the
+     * SOURCE's uniform nodes, so both materials end up driving one set of
+     * uniforms and writing the clone's color/lineWidth rewrites the original.
+     * harp.gl's secondary-line outline material is exactly such a clone: every
+     * road with a `secondaryColor` lost its fill color to the casing. Copy only
+     * the base Material state and the uniform VALUES; the node graph built over
+     * this instance's own uniforms in the constructor stays in place.
+     */
+    override copy(source: this): this {
+        THREE.Material.prototype.copy.call(this, source);
+        this.fog = source.fog;
+        this.m_diffuseColorU.value.copy(source.m_diffuseColorU.value);
+        this.m_outlineColorU.value.copy(source.m_outlineColorU.value);
+        this.m_dashColorU.value.copy(source.m_dashColorU.value);
+        this.m_hasDashColorU.value = source.m_hasDashColorU.value;
+        this.m_extrusionWidthU.value = source.m_extrusionWidthU.value;
+        this.m_outlineWidthU.value = source.m_outlineWidthU.value;
+        this.m_offsetU.value = source.m_offsetU.value;
+        this.m_opacityU.value = source.m_opacityU.value;
+        this.m_tileSizeU.value.copy(source.m_tileSizeU.value);
+        this.m_fadeNearU.value = source.m_fadeNearU.value;
+        this.m_fadeFarU.value = source.m_fadeFarU.value;
+        this.m_drawRangeU.value.copy(source.m_drawRangeU.value);
+        this.m_dashSizeU.value = source.m_dashSizeU.value;
+        this.m_gapSizeU.value = source.m_gapSizeU.value;
+        this.m_capsModeU.value = source.m_capsModeU.value;
+        this.m_dashesModeU.value = source.m_dashesModeU.value;
+        this.displacementMap = source.displacementMap;
+        this.displacementMapUvMatrix = source.displacementMapUvMatrix;
+        if (source.displacementMap) {
+            this.m_displacementMapNode.value = source.displacementMap;
+        }
+        return this;
     }
 }

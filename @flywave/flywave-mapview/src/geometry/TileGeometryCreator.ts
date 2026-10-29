@@ -82,6 +82,7 @@ import { PathBlockingElement } from "../PathBlockingElement";
 import { TextElementBuilder } from "../text/TextElementBuilder";
 import { type Tile, type TileFeatureData } from "../Tile";
 import { addGroundPlane } from "./AddGroundPlane";
+import { computeVertexNormalsFast } from "./ComputeVertexNormalsFast";
 import { registerTileObject } from "./RegisterTileObject";
 
 const logger = LoggerManager.instance.create("TileGeometryCreator");
@@ -220,7 +221,7 @@ export class TileGeometryCreator {
     }
 
     /**
-     *  Creates an instance of TileGeometryCreator. Access is allowed only through `instance`.
+     * Creates an instance of TileGeometryCreator. Access is allowed only through `instance`.
      */
     private constructor() {
         //
@@ -300,9 +301,18 @@ export class TileGeometryCreator {
                     .catch(() => {}) // Keep waiting for the other textures even if one fails.
             ]);
         };
+        const __a0 = performance.now();
         this.createObjects(tile, decodedTile, onNewTexture, filter);
+        const __a1 = performance.now();
 
         this.preparePois(tile, decodedTile);
+        const __a2 = performance.now();
+        if (typeof window !== "undefined") {
+            (window as any).__createSplit = (window as any).__createSplit || { objectsMs: 0, poisMs: 0, textMs: 0, rejectMs: 0 };
+            const g = (window as any).__createSplit;
+            g.objectsMs += __a1 - __a0;
+            g.poisMs += __a2 - __a1;
+        }
 
         // TextElements do not get their geometry created by Tile, but are managed on a
         // higher level.
@@ -317,8 +327,13 @@ export class TileGeometryCreator {
             return filter(technique);
         };
         this.createTextElements(tile, decodedTile, textFilter);
-
+        const __a3 = performance.now();
         this.createLabelRejectionElements(tile, decodedTile);
+        const __a4 = performance.now();
+        if (typeof window !== "undefined") {
+            const g = (window as any).__createSplit;
+            if (g) { g.textMs += __a3 - __a2; g.rejectMs += __a4 - __a3; }
+        }
 
         // FLYWAVE-7899, disable ground plane for globe
         if (tile.dataSource.addGroundPlane && tile.projection.type === ProjectionType.Planar) {
@@ -574,6 +589,18 @@ export class TileGeometryCreator {
         const viewRanges = mapView.viewRanges;
         const elevationEnabled = mapView.elevationProvider !== undefined;
 
+        // Frustum culling calls `computeBoundingSphere` on every geometry
+        // that has none — an O(vertices) full position scan per arriving
+        // tile geometry (548ms self time, ~11% of the frame, in DevTools
+        // profiles during tile streaming). The tile's world-space bounding
+        // box already contains every attachment geometry, so precompute ONE
+        // sphere for the tile and share it: O(1) per geometry, and the
+        // culling granularity is unchanged (the tile itself is culled by
+        // the same test). The sphere is read-only after this point — three
+        // only mutates it inside the compute call we just avoided.
+        const tileBoundingSphere = new THREE.Sphere();
+        tile.boundingBox.getBoundingSphere(tileBoundingSphere);
+
         for (const attachment of this.getAttachments(decodedTile)) {
             const srcGeometry = attachment.geometry;
             const groups = attachment.info.groups;
@@ -625,6 +652,7 @@ export class TileGeometryCreator {
 
                 let material: THREE.Material | undefined = materials[techniqueIndex];
 
+                const __m0 = performance.now();
                 if (material === undefined) {
                     material = createMaterial(
                         mapView.capabilities,
@@ -644,6 +672,7 @@ export class TileGeometryCreator {
                     }
                     materials[techniqueIndex] = material;
                 }
+                const __m1 = performance.now();
 
                 const techniqueKind = technique.kind;
 
@@ -654,6 +683,7 @@ export class TileGeometryCreator {
 
                 const bufferGeometry = new THREE.BufferGeometry();
 
+                const __s0 = performance.now();
                 srcGeometry.vertexAttributes?.forEach(vertexAttribute => {
                     const buffer = attachment.getBufferAttribute(vertexAttribute);
                     bufferGeometry.setAttribute(vertexAttribute.name, buffer);
@@ -671,12 +701,33 @@ export class TileGeometryCreator {
                 if (index) {
                     bufferGeometry.setIndex(attachment.getBufferAttribute(index));
                 }
+                const __s1 = performance.now();
 
                 if (!bufferGeometry.getAttribute("normal") && needsVertexNormals(technique)) {
-                    bufferGeometry.computeVertexNormals();
+                    if (!computeVertexNormalsFast(bufferGeometry)) {
+                        bufferGeometry.computeVertexNormals();
+                    }
+                }
+                const __s2 = performance.now();
+                {
+                    const g =
+                        ((window as any).__objSplit ??= {
+                            matMs: 0,
+                            attrMs: 0,
+                            normalsMs: 0,
+                            nGeo: 0
+                        });
+                    g.matMs += __m1 - __m0;
+                    g.attrMs += __s1 - __s0;
+                    g.normalsMs += __s2 - __s1;
+                    g.nGeo++;
                 }
 
                 bufferGeometry.addGroup(start, count);
+
+                // Share the tile sphere (see the note above): skips three's
+                // O(vertices) computeBoundingSphere on first frustum cull.
+                bufferGeometry.boundingSphere = tileBoundingSphere;
 
                 if (isSolidLineTechnique(technique)) {
                     // TODO: Unify access to shader defines via SolidLineMaterial setters
@@ -806,7 +857,11 @@ export class TileGeometryCreator {
                     isRenderDepthPrePassEnabled(technique, discreteZoomEnv);
 
                 if (renderDepthPrePass) {
-                    const depthPassMesh = createDepthPrePassMesh(object as THREE.Mesh);
+                    const depthPassMesh = createDepthPrePassMesh(
+                        object as THREE.Mesh,
+                        (mapView.renderer as { reversedDepthBuffer?: boolean })
+                            .reversedDepthBuffer === true
+                    );
                     this.addUserData(tile, srcGeometry, technique, depthPassMesh);
                     // Set geometry kind for depth pass mesh so that it gets the displacement map
                     // for elevation overlay.
@@ -875,6 +930,7 @@ export class TileGeometryCreator {
                     edgeGeometry.setIndex(
                         attachment.getBufferAttribute(attachment.info.edgeIndex!)
                     );
+                    edgeGeometry.boundingSphere = tileBoundingSphere;
 
                     // Read the uniforms from the technique values (and apply the default values).
                     const extrudedPolygonTechnique = technique as ExtrudedPolygonTechnique;
@@ -966,6 +1022,7 @@ export class TileGeometryCreator {
                     outlineGeometry.setIndex(
                         attachment.getBufferAttribute(attachment.info.edgeIndex!)
                     );
+                    outlineGeometry.boundingSphere = tileBoundingSphere;
 
                     const fillTechnique = technique as FillTechnique;
 

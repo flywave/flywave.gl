@@ -54,8 +54,29 @@ export interface ExampleMapOptions {
     projection?: ExampleProjection;
     /** Initial camera pose. */
     lookAt?: IExampleLookAt;
+    /**
+     * Maximum zoom level the view accepts. The engine default is 20, which on a
+     * flat (mercator) projection corresponds to a camera height of about 20 m —
+     * too far to inspect a ground-level detail layer. Passed straight to
+     * `MapViewOptions.maxZoomLevel`.
+     */
+    maxZoomLevel?: number;
+    /**
+     * Minimum camera height above the ground in meters. The engine default is
+     * 20. Note the camera *altitude* is clamped, so at high tilt this also caps
+     * how far you can pitch down towards the surface.
+     */
+    minCameraHeight?: number;
     /** Enable shadow casting. @default false */
     enableShadows?: boolean;
+    /**
+     * Add the engine's BackgroundDataSource (per-tile ground plane colored by
+     * the theme clearColor). Off by default in the engine; vector basemaps
+     * whose data has no land polygons (e.g. OpenMapTiles) need it, otherwise
+     * the sky shows through wherever no fill is drawn.
+     * @default false
+     */
+    addBackgroundDatasource?: boolean;
     /**
      * Keep the theme's inherited lights on globe scenes. By default the
      * factory clears them on globes (the atmosphere sun provides physically
@@ -165,8 +186,16 @@ export async function createExampleMap(
         forceWebGL: shouldForceWebGL(),
         projection: resolveProjection(options.projection),
         enableShadows: options.enableShadows === true,
+        addBackgroundDatasource: options.addBackgroundDatasource === true,
+        enableStatistics: true,
         theme: options.themeObject ?? options.theme
     };
+    if (options.maxZoomLevel !== undefined) {
+        mapViewOptions.maxZoomLevel = options.maxZoomLevel;
+    }
+    if (options.minCameraHeight !== undefined) {
+        mapViewOptions.minCameraHeight = options.minCameraHeight;
+    }
     if (lookAt?.target !== undefined) {
         mapViewOptions.target = new GeoCoordinates(
             lookAt.target.lat,
@@ -244,10 +273,7 @@ export async function createExampleMap(
  *
  * Opt out with {@link ExampleMapOptions.keepThemeLights}.
  */
-async function applyGlobeLightingRule(
-    mapView: MapView,
-    options: ExampleMapOptions
-): Promise<void> {
+async function applyGlobeLightingRule(mapView: MapView, options: ExampleMapOptions): Promise<void> {
     const isGlobe = (options.projection ?? "globe") === "globe";
     if (options.keepThemeLights === true || !isGlobe) {
         return;
