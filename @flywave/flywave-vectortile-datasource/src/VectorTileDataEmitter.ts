@@ -35,6 +35,7 @@ import {
     isSpecialDashesLineTechnique,
     isStandardTechnique,
     isTextTechnique,
+    isWaterTechnique,
     scaleHeight,
     TextureCoordinateType,
     textureCoordinateType
@@ -855,11 +856,13 @@ export class VectorTileDataEmitter {
             const isExtruded = isExtrudedPolygonTechnique(technique);
             const isFilled = isFillTechnique(technique);
             const isStandard = isStandardTechnique(technique);
+            const isWater = isWaterTechnique(technique);
 
             const isPolygon =
                 isExtruded ||
                 isFilled ||
                 isStandard ||
+                isWater ||
                 (isShaderTechnique(technique) && technique.primitive === "mesh");
 
             const computeTexCoords = this.getComputeTexCoordsFunc(technique, objectBounds);

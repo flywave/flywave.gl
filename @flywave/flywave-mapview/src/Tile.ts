@@ -214,6 +214,13 @@ export class Tile implements CachedResource {
     frameNumLastVisible: number = -1;
 
     /**
+     * True when this tile contains time-animated materials (currently the
+     * `water` technique). MapView keeps the render loop producing frames while
+     * any rendered tile has this flag, so their TSL `time` nodes advance.
+     */
+    hasAnimatedMaterials: boolean = false;
+
+    /**
      * After removing from cache, this is the number of frames the `Tile` was visible.
      */
     numFramesVisible: number = 0;

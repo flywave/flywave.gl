@@ -19,6 +19,7 @@ import {
     type TextTechniqueParams,
     type TextureCoordinateType,
     type Tile3DBatchMeshTechniqueParams,
+    type WaterTechniqueParams,
     isTextureBuffer
 } from "./TechniqueParams";
 import { type StylePriority } from "./Theme";
@@ -69,6 +70,7 @@ export type Technique =
     | SegmentsTechnique
     | SolidLineTechnique
     | FillTechnique
+    | WaterTechnique
     | StandardTechnique
     | TerrainTechnique
     | Tile3DTechnique
@@ -159,6 +161,14 @@ export interface LineTechnique extends MakeTechniqueAttrs<LineTechniqueParams> {
  */
 export interface FillTechnique extends MakeTechniqueAttrs<FillTechniqueParams> {
     name: "fill";
+}
+
+/**
+ * Technique used to render water bodies with an animated surface.
+ * For technique parameters see `WaterTechniqueParams`.
+ */
+export interface WaterTechnique extends MakeTechniqueAttrs<WaterTechniqueParams> {
+    name: "water";
 }
 
 /**
@@ -375,6 +385,13 @@ export function isFillTechnique(technique: Technique): technique is FillTechniqu
 }
 
 /**
+ * Type guard to check if an object is an instance of `WaterTechnique`.
+ */
+export function isWaterTechnique(technique: Technique): technique is WaterTechnique {
+    return technique.name === "water";
+}
+
+/**
  * Type guard to check if an object is an instance of `ExtrudedPolygonTechnique`.
  */
 export function isExtrudedPolygonTechnique(
@@ -440,9 +457,15 @@ export function needsVertexNormals(technique: Technique): boolean {
  */
 export function supportsTextures(
     technique: Technique
-): technique is FillTechnique | StandardTechnique | ExtrudedPolygonTechnique | TerrainTechnique {
+): technique is
+    | FillTechnique
+    | WaterTechnique
+    | StandardTechnique
+    | ExtrudedPolygonTechnique
+    | TerrainTechnique {
     return (
         isFillTechnique(technique) ||
+        isWaterTechnique(technique) ||
         isStandardTechnique(technique) ||
         isExtrudedPolygonTechnique(technique) ||
         isTerrainTechnique(technique)
@@ -451,9 +474,14 @@ export function supportsTextures(
 
 /**
  * Get the texture coordinate type if the technique supports it.
+ *
+ * @remarks
+ * `water` supports textures (its normal map) but generates no texture
+ * coordinates: the material derives its UVs from the world-space position.
  */
 export function textureCoordinateType(technique: Technique): TextureCoordinateType | undefined {
-    return supportsTextures(technique) || isShaderTechnique(technique)
+    return (supportsTextures(technique) && !isWaterTechnique(technique)) ||
+        isShaderTechnique(technique)
         ? technique.textureCoordinateType
         : undefined;
 }
@@ -465,7 +493,8 @@ export function addBuffersToTransferList(technique: Technique, transferList: Arr
     if (
         isStandardTechnique(technique) ||
         isExtrudedPolygonTechnique(technique) ||
-        isTerrainTechnique(technique)
+        isTerrainTechnique(technique) ||
+        isWaterTechnique(technique)
     ) {
         for (const texturePropertyKey of TEXTURE_PROPERTY_KEYS) {
             const textureProperty = (technique as any)[texturePropertyKey];

@@ -2787,12 +2787,30 @@ export class MapView extends EventDispatcher {
             this.m_animatedExtrusionHandler.isAnimating ||
             this.m_textElementsRenderer.isUpdatePending ||
             this.m_textElementsRenderer.loading ||
+            this.hasAnimatedTiles ||
             this.m_sceneEnvironment?.isSunTimeAnimating === true ||
             // Post-processing pipeline rebuilds requested outside the frame
             // loop (e.g. an async LUT/cloud texture finishing its load) must
             // keep the loop alive until vrm.render() consumed the flag.
             this.mapRenderingManager.viewRenderManager?.needsUpdate === true
         );
+    }
+
+    /**
+     * True when any currently rendered tile contains time-animated materials
+     * (e.g. the `water` technique). The render loop must keep producing frames
+     * for their TSL `time` nodes to advance while they are on screen — and may
+     * stop once no animated tile is rendered anymore.
+     */
+    get hasAnimatedTiles(): boolean {
+        for (const { renderedTiles } of this.m_visibleTiles.dataSourceTileList) {
+            for (const tile of renderedTiles.values()) {
+                if (tile.hasAnimatedMaterials) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

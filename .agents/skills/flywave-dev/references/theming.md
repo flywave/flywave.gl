@@ -24,8 +24,11 @@
 
 `Style` = 匹配条件（styleSet / layer / renderOrder 等）+ technique 名 + 参数。
 约 20 种技法（全集见 protocol 的 `Techniques.ts`）：squares / circles / poi /
-line / fill / standard / extruded-polygon / text / terrain / tile3d /
-shader…。
+line / fill / water / standard / extruded-polygon / text / terrain / tile3d /
+shader…。`water` 与 fill 同几何路径（平面多边形），换 `WaterMaterial`
+（TSL time 节点动画水面，参数 waterColor/skyColor/normalMap/textureScale
+等，全部 TechniqueRendering scope 的 uniform）；瓦片含水时
+`Tile.hasAnimatedMaterials` 驱动 `MapView.isDynamicFrame` 持续出帧。
 
 关键机制：**数据源解码时按 StyleSetEvaluator 把要素匹配到 technique**——新
 数据源必须在 theme 里准备 `styles["<你的styleSetName>"]`，否则没有可渲染的

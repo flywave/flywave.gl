@@ -260,8 +260,14 @@ export interface LensFlareThemeConfig {
 
 /**
  * Tone mapping modes supported by the renderer.
+ *
+ * @remarks
+ * `"none"` is the pass-through mode: authored (unlit) colors reach the output
+ * unchanged, matching classic renderers that never tone-map the map (the
+ * `ViewRenderManager` output pass handles it and skips the dithering step).
  */
 export type ToneMappingMode =
+    | "none"
     | "linear"
     | "reinhard"
     | "cineon"

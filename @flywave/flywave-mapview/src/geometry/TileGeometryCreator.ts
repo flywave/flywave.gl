@@ -37,6 +37,7 @@ import {
     isStandardTechnique,
     isTerrainTechnique,
     isTextTechnique,
+    isWaterTechnique,
     MapEnv,
     needsVertexNormals,
     Pickability,
@@ -57,7 +58,8 @@ import {
     hasExtrusionFeature,
     isHighPrecisionLineMaterial,
     MapMeshDepthMaterial,
-    setDisplacementMapToMaterial
+    setDisplacementMapToMaterial,
+    WaterMaterial
 } from "@flywave/flywave-materials";
 import { assert, LoggerManager } from "@flywave/flywave-utils";
 import * as THREE from "three/webgpu";
@@ -308,7 +310,12 @@ export class TileGeometryCreator {
         this.preparePois(tile, decodedTile);
         const __a2 = performance.now();
         if (typeof window !== "undefined") {
-            (window as any).__createSplit = (window as any).__createSplit || { objectsMs: 0, poisMs: 0, textMs: 0, rejectMs: 0 };
+            (window as any).__createSplit = (window as any).__createSplit || {
+                objectsMs: 0,
+                poisMs: 0,
+                textMs: 0,
+                rejectMs: 0
+            };
             const g = (window as any).__createSplit;
             g.objectsMs += __a1 - __a0;
             g.poisMs += __a2 - __a1;
@@ -332,7 +339,10 @@ export class TileGeometryCreator {
         const __a4 = performance.now();
         if (typeof window !== "undefined") {
             const g = (window as any).__createSplit;
-            if (g) { g.textMs += __a3 - __a2; g.rejectMs += __a4 - __a3; }
+            if (g) {
+                g.textMs += __a3 - __a2;
+                g.rejectMs += __a4 - __a3;
+            }
         }
 
         // FLYWAVE-7899, disable ground plane for globe
@@ -671,6 +681,18 @@ export class TileGeometryCreator {
                         addToExtrudedMaterials(material, extrudedMaterials);
                     }
                     materials[techniqueIndex] = material;
+                    if (isWaterTechnique(technique)) {
+                        const waterMaterial = material as WaterMaterial;
+                        // Anchor the surface UVs to this tile's world meters
+                        // (tile geometry is placed by a translation-only
+                        // transform, see TileObjectsRenderer).
+                        waterMaterial.setTileCenter(tile.center);
+                        // The water surface animates through the TSL `time`
+                        // node: mark the tile so MapView keeps producing
+                        // frames while the tile is on screen (see
+                        // MapView.isDynamicFrame).
+                        tile.hasAnimatedMaterials = true;
+                    }
                 }
                 const __m1 = performance.now();
 
@@ -710,13 +732,12 @@ export class TileGeometryCreator {
                 }
                 const __s2 = performance.now();
                 {
-                    const g =
-                        ((window as any).__objSplit ??= {
-                            matMs: 0,
-                            attrMs: 0,
-                            normalsMs: 0,
-                            nGeo: 0
-                        });
+                    const g = ((window as any).__objSplit ??= {
+                        matMs: 0,
+                        attrMs: 0,
+                        normalsMs: 0,
+                        nGeo: 0
+                    });
                     g.matMs += __m1 - __m0;
                     g.attrMs += __s1 - __s0;
                     g.normalsMs += __s2 - __s1;
@@ -835,7 +856,8 @@ export class TileGeometryCreator {
                 if (
                     isExtrudedPolygonTechnique(technique) ||
                     isStandardTechnique(technique) ||
-                    isFillTechnique(technique)
+                    isFillTechnique(technique) ||
+                    isWaterTechnique(technique)
                 ) {
                     // filled polygons are normal meshes, and need transparency only when fading or
                     // dynamic properties is defined.

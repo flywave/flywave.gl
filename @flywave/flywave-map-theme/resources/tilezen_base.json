@@ -1239,9 +1239,13 @@
                 "layer": "water",
                 "description": "water",
                 "when": ["==", ["geometry-type"], "Polygon"],
-                "technique": "fill",
+                "technique": "water",
                 "renderOrder": 5,
-                "color": ["ref", "waterColor"]
+                "color": ["ref", "waterColor"],
+                "opacity": 0.88,
+                "normalMap": "waternormals.jpg",
+                "textureScale": 24,
+                "distortionScale": 26
             },
             {
                 "description": "water",

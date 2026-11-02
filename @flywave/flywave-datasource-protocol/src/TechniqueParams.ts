@@ -1212,6 +1212,84 @@ export interface FillTechniqueParams extends BaseTechniqueParams, PolygonalTechn
 }
 
 /**
+ * Technique used to draw water bodies with an animated surface.
+ *
+ * The geometry is assembled exactly like {@link FillTechniqueParams} (planar
+ * polygons); the difference is the material: a TSL node material that animates
+ * a procedurally perturbed surface normal and blends the water body color with
+ * a fresnel-weighted sky reflection.
+ */
+export interface WaterTechniqueParams extends BaseTechniqueParams {
+    /**
+     * Base color of the water body. Follows the shared base-color conventions:
+     * an alpha component in the hex value also drives `transparent`/`opacity`.
+     */
+    color?: DynamicProperty<StyleColor>;
+
+    /**
+     * Opacity of the water surface. Default is `0.9`.
+     */
+    opacity?: DynamicProperty<number>;
+
+    /**
+     * Whether the water surface is rendered transparent. Water is always
+     * rendered as a transparent mesh; this flag only enables the corresponding
+     * blending state explicitly. Default is `true`.
+     */
+    transparent?: DynamicProperty<boolean>;
+
+    /**
+     * Color of the sky reflected by the surface at grazing angles.
+     * Default is `0x8fb6cc`.
+     */
+    skyColor?: DynamicProperty<StyleColor>;
+
+    /**
+     * Color of the sun specular highlights (glints). Default is `0xffffff`.
+     */
+    sunColor?: DynamicProperty<StyleColor>;
+
+    /**
+     * Direction of the sun light as `[x, y, z]` in world space (z is up on
+     * planar projections). Default is `[0.35, -0.45, 0.82]`.
+     */
+    sunDirection?: DynamicProperty<number[]>;
+
+    /**
+     * Normal-map tiling density, in repeats per world meter. Values around
+     * `20`-`30` give visibly animated ripples on a lake looked at from above;
+     * the default `2` yields an almost flat sheet.
+     */
+    textureScale?: DynamicProperty<number>;
+
+    /**
+     * Amplitude of the normal-map driven surface perturbation. Higher values
+     * give choppier, more broken reflections. Default is `20`.
+     */
+    distortionScale?: DynamicProperty<number>;
+
+    /**
+     * Strength of the reflected-light term (fresnel weighted sky/specular
+     * mix), clamped to `[0, 1]`. `0` renders the diffuse water body only.
+     * Default is `1`.
+     */
+    reflectionStrength?: DynamicProperty<number>;
+
+    /**
+     * Animation speed multiplier of the surface waves. Default is `1`.
+     */
+    speed?: DynamicProperty<number>;
+
+    /**
+     * URL or texture buffer of the water normal map used to build the animated
+     * surface normals. The map is sampled at four scrolling offsets, so it
+     * should wrap seamlessly.
+     */
+    normalMap?: DynamicProperty<string | TextureBuffer>;
+    normalMapProperties?: DynamicProperty<TextureProperties>;
+}
+
+/**
  * Technique used to draw a geometry as an extruded polygon, for example extruded buildings.
  */
 export interface ExtrudedPolygonTechniqueParams extends StandardTechniqueParams {

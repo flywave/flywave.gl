@@ -17,7 +17,8 @@ import {
     type SquaresTechnique,
     type StandardTechnique,
     type Technique,
-    type TextTechnique
+    type TextTechnique,
+    type WaterTechnique
 } from "./Techniques";
 
 export enum AttrScope {
@@ -317,6 +318,25 @@ const shaderTechniqueDescriptor = mergeTechniqueDescriptor<ShaderTechnique>(
     }
 );
 
+const waterTechniqueDescriptor = mergeTechniqueDescriptor<WaterTechnique>(
+    baseTechniqueParamsDescriptor,
+    {
+        attrDescriptors: {
+            color: { scope: AttrScope.TechniqueRendering, automatic: true },
+            opacity: { scope: AttrScope.TechniqueRendering, automatic: true },
+            transparent: { scope: AttrScope.TechniqueRendering, automatic: true },
+            skyColor: { scope: AttrScope.TechniqueRendering },
+            sunColor: { scope: AttrScope.TechniqueRendering },
+            sunDirection: { scope: AttrScope.TechniqueRendering },
+            textureScale: { scope: AttrScope.TechniqueRendering },
+            distortionScale: { scope: AttrScope.TechniqueRendering },
+            reflectionStrength: { scope: AttrScope.TechniqueRendering },
+            speed: { scope: AttrScope.TechniqueRendering },
+            normalMap: { scope: AttrScope.TechniqueRendering, automatic: true }
+        }
+    }
+);
+
 const techniqueDescriptors: TechniqueDescriptorRegistry = {
     "extruded-polygon": extrudedPolygonTechniqueDescriptor,
     "line-marker": lineMarkerTechniquePropTypes,
@@ -330,6 +350,7 @@ const techniqueDescriptors: TechniqueDescriptorRegistry = {
     line: lineTechniqueDescriptor,
     segments: lineTechniqueDescriptor,
     fill: fillTechniqueDescriptor,
+    water: waterTechniqueDescriptor,
     text: textTechniqueDescriptor,
     shader: shaderTechniqueDescriptor
 };

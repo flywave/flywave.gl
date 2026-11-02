@@ -8,6 +8,7 @@ import {
     type TextureBuffer,
     type TextureProperties,
     type Value,
+    type WaterTechnique,
     ColorUtils,
     Expr,
     getPropertyValue,
@@ -15,6 +16,7 @@ import {
     isExtrudedPolygonTechnique,
     isShaderTechnique,
     isTextureBuffer,
+    isWaterTechnique,
     parseStringEncodedColor,
     supportsTextures,
     TEXTURE_PROPERTY_KEYS,
@@ -33,7 +35,8 @@ import {
     MapMeshBasicMaterial,
     MapMeshStandardMaterial,
     RawShaderMaterial,
-    SolidLineMaterial
+    SolidLineMaterial,
+    WaterMaterial
 } from "@flywave/flywave-materials";
 import { assert, LoggerManager, pick } from "@flywave/flywave-utils";
 import type { TypedArray } from "three/src/core/BufferAttribute.js";
@@ -285,7 +288,12 @@ export function createMaterial(
         });
     }
 
-    if (isShaderTechnique(technique)) {
+    if (isWaterTechnique(technique)) {
+        // Special case for WaterTechnique: apply its rendering attributes once
+        // at creation (no runtime adapter — water parameters are static per
+        // technique; a theme change rebuilds the materials anyway).
+        applyWaterTechniqueToMaterial(technique, material as WaterMaterial, options.env);
+    } else if (isShaderTechnique(technique)) {
         // Special case for ShaderTechnique.
         applyShaderTechniqueToMaterial(technique, material);
     } else {
@@ -391,6 +399,7 @@ export function buildObject(
         case "standard":
         case "extruded-polygon":
         case "fill":
+        case "water":
             return elevationEnabled
                 ? new DisplacedMesh(geometry, material, () => ({
                       min: tile.elevationRange.minElevation,
@@ -493,6 +502,9 @@ export function getMaterialConstructor(
 
         case "fill":
             return shadowsEnabled ? MapMeshStandardMaterial : MapMeshBasicMaterial;
+
+        case "water":
+            return WaterMaterial;
 
         case "squares":
             return THREE.PointsMaterial;
@@ -628,6 +640,56 @@ export function evaluateBaseColorProperty(technique: Technique, env: Env): numbe
         return evaluateColorProperty(baseColorProp, env);
     }
     return undefined;
+}
+
+/**
+ * Apply `WaterTechnique` parameters to material.
+ *
+ * Mirrors the `ShaderTechnique` handling: attributes are applied once at
+ * creation instead of being bound through a `MapMaterialAdapter`. The base
+ * `color` (and its `opacity` mixing) follows the shared technique base-color
+ * conventions, so themes can restyle water exactly like a fill.
+ *
+ * @param technique - the `WaterTechnique` which requires special handling
+ * @param material - the `WaterMaterial` to which technique will be applied
+ * @param env - environment used to evaluate `Expr` based properties
+ *
+ * @internal
+ */
+function applyWaterTechniqueToMaterial(
+    technique: WaterTechnique,
+    material: WaterMaterial,
+    env: Env
+) {
+    const WATER_RENDERING_PROPS: ReadonlyArray<keyof WaterTechnique> = [
+        "skyColor",
+        "sunColor",
+        "sunDirection",
+        "textureScale",
+        "distortionScale",
+        "reflectionStrength",
+        "speed"
+    ];
+    const attrs = technique as unknown as Record<string, Value>;
+    for (const propertyName of WATER_RENDERING_PROPS) {
+        const value = attrs[propertyName];
+        if (value !== undefined) {
+            applyTechniquePropertyToMaterial(material, propertyName, value, env);
+        }
+    }
+
+    // Base color and the transparency it carries (RGBA alpha mixed with the
+    // technique `opacity`) go through the shared base-color path.
+    const baseColorPropName = getBaseColorPropName(technique);
+    if (baseColorPropName !== undefined && baseColorPropName in technique) {
+        applyBaseColorToMaterial(
+            material,
+            material.color,
+            technique,
+            attrs[baseColorPropName],
+            env
+        );
+    }
 }
 
 /**

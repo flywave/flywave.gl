@@ -22,5 +22,6 @@ export * from "./SkyAtmosphereMaterial";
 export * from "./SolidLineMaterial";
 export * from "./Utils";
 export * from "./VisualBatchMaterial";
+export * from "./WaterMaterial";
 
 export * from "./ShaderChunks/AtmosphericScatteringChunks";
