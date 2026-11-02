@@ -208,12 +208,44 @@ export interface TreeTags {
 /** The four greens the reference tints tree instances with (`module 685`). */
 export const TREE_COLORS = ["#75824a", "#7aa768", "#5d8a4c", "#7c7b47"];
 
+/** Radians per degree. */
+const DEG_TO_RAD = Math.PI / 180;
+
+/** Earth radius used by the mercator projection. */
+const EARTH_RADIUS = 6378137;
+
+/**
+ * Web-mercator northings in 900913 metres for a latitude.
+ *
+ * The reference's bloom-season thresholds and latitude cutoffs are all written
+ * against this unit, so the tag-reading helpers need it even though the scene's
+ * own world units differ.
+ */
+function mercatorY900913(latitudeDeg: number): number {
+    const phi = latitudeDeg * DEG_TO_RAD;
+    return EARTH_RADIUS * Math.log(Math.tan(Math.PI / 4 + phi / 2));
+}
+
+/**
+ * `getScaleFromLatitude` (module 805).
+ *
+ * The reference evaluates `cosh(π·y / R)` on a 900913 northing, which is
+ * identically `sec(latitude)`. Working from the latitude directly keeps the
+ * factor correct whatever world units the projection uses.
+ */
+function latitudeScale(latitudeDeg: number): number {
+    const cos = Math.cos(latitudeDeg * DEG_TO_RAD);
+    // Mercator's northings run to infinity at the poles; clamp before inverting.
+    return cos < 0.01 ? 100 : 1 / cos;
+}
+
 /**
  * Blossom-season test (`a` in module 692): decides whether a flowering cherry
- * shows blooms or plain leaves, from the feature's mercator latitude and the
- * current month.
+ * shows blooms or plain leaves, from the feature's latitude and the current
+ * month.
  */
-function isBloomSeason(mercatorY: number, date: Date): boolean {
+function isBloomSeason(latitudeDeg: number, date: Date): boolean {
+    const mercatorY = mercatorY900913(latitudeDeg);
     if (mercatorY > 7361866) {
         return false;
     }
@@ -237,17 +269,17 @@ function isBloomSeason(mercatorY: number, date: Date): boolean {
  * tags say nothing, in which case the caller falls back to
  * {@link randomTreeType}.
  */
-export function realTreeType(tags: TreeTags, mercatorY: number, date: Date): TreeSpecies | null {
+export function realTreeType(tags: TreeTags, latitudeDeg: number, date: Date): TreeSpecies | null {
     if (tags["xmas:feature"] === "tree") {
         return "coniferous";
     }
 
     const scientific = [tags.species, tags.taxon, tags.genus].filter(Boolean).join(" ");
     if (/prunus (japonica|serrulata|prostrata)/i.test(scientific)) {
-        return isBloomSeason(mercatorY, date) ? "pink-cherry" : "cherry";
+        return isBloomSeason(latitudeDeg, date) ? "pink-cherry" : "cherry";
     }
     if (/prunus (cerasus|avium|padus|serotina|mahaleb|virginiana)/i.test(scientific)) {
-        return isBloomSeason(mercatorY, date) ? "white-cherry" : "cherry";
+        return isBloomSeason(latitudeDeg, date) ? "white-cherry" : "cherry";
     }
 
     if (tags.crown_type) {
@@ -313,8 +345,8 @@ export function realTreeType(tags: TreeTags, mercatorY: number, date: Date): Tre
  * that means roughly one palm in five, which is the reference's behaviour
  * rather than a judgement about where palms grow.
  */
-export function randomTreeType(mercatorY: number, rng: F4Random): TreeSpecies {
-    const latitude = Math.abs((mercatorY * 180) / Math.PI / 6378137);
+export function randomTreeType(latitudeDeg: number, rng: F4Random): TreeSpecies {
+    const latitude = Math.abs(latitudeDeg);
     if (latitude > 45) {
         if (latitude > 70) {
             return "coniferous";
@@ -337,11 +369,11 @@ export function randomTreeType(mercatorY: number, rng: F4Random): TreeSpecies {
 /** `getSingleTreeType`: OSM tags win, latitude is the fallback. */
 export function getSingleTreeType(
     tags: TreeTags,
-    mercatorY: number,
+    latitudeDeg: number,
     date: Date,
     rng: F4Random
 ): TreeSpecies {
-    return realTreeType(tags, mercatorY, date) ?? randomTreeType(mercatorY, rng);
+    return realTreeType(tags, latitudeDeg, date) ?? randomTreeType(latitudeDeg, rng);
 }
 
 // ---------------------------------------------------------------------------
@@ -364,6 +396,17 @@ const ORCHARD_SPACING = {
     x: { min: 10, max: 10 },
     y: { min: 10, max: 10 }
 };
+
+/**
+ * Edge length in world units of the grid cells instances are bucketed into.
+ *
+ * The reference groups instances per tile and keeps a bounding sphere per
+ * group, which is what makes its LOD test meaningful; a chunk spanning the
+ * whole data set would have a near point that says nothing about any tree in
+ * it. One kilometre keeps each cell's bounding sphere comparable to the 500 m
+ * LOD distance.
+ */
+const CHUNK_EXTENT = 1000;
 
 /**
  * Scanline crossings of a horizontal line at `y` with the rings, sorted by x.
@@ -613,11 +656,6 @@ function pointInRing(x: number, y: number, ring: number[][]): boolean {
     return inside;
 }
 
-/** `getScaleFromLatitude` (module 805): mercator latitude scale correction. */
-function latitudeScale(mercatorY: number): number {
-    return Math.cosh((Math.PI * mercatorY) / 20037508.34);
-}
-
 /**
  * A forest built from OSM polygons, rendered as instanced tree meshes with a
  * distance-driven billboard LOD.
@@ -797,6 +835,15 @@ export class ForestLayer extends Group {
 
         for (const { feature, tags, rings: ringsWorld } of projected) {
             const bounds = ringBounds(ringsWorld);
+            // The reference works in mercator northings; recover the feature's
+            // latitude from the projection so the tag readers and the latitude
+            // scale correction both see real degrees.
+            const midGeo = this.m_projection.unprojectPoint(
+                new Vector3((bounds.minX + bounds.maxX) / 2, bounds.midY, 0)
+            );
+            const latitude = midGeo.latitude;
+            const latScale = latitudeScale(latitude);
+
             // The reference keys the scatter RNG off the feature's own world
             // position (`new Random(position.x + position.y)`), so the same OSM
             // way always grows the same trees.
@@ -806,15 +853,15 @@ export class ForestLayer extends Group {
             const treeRng = new F4Random(featureHash(feature));
 
             const scaleConfig =
-                SPECIES_ASSETS[realTreeType(tags, bounds.midY, date) ?? DEFAULT_TREE_TYPE];
-            const scale = resolveScale(tags, scaleConfig, treeRng) * latitudeScale(bounds.midY);
-            const minZ = (parseFloat(tags.min_height ?? "0") || 0) * latitudeScale(bounds.midY);
+                SPECIES_ASSETS[realTreeType(tags, latitude, date) ?? DEFAULT_TREE_TYPE];
+            const scale = resolveScale(tags, scaleConfig, treeRng) * latScale;
+            const minZ = (parseFloat(tags.min_height ?? "0") || 0) * latScale;
 
             const emit = (x: number, y: number): void => {
                 if (exclusionRings.some(ring => pointInRing(x, y, ring))) {
                     return;
                 }
-                const species = getSingleTreeType(tags, y, date, treeRng);
+                const species = getSingleTreeType(tags, latitude, date, treeRng);
                 instances.push({
                     x: x - this.m_anchorWorld.x,
                     y: y - this.m_anchorWorld.y,
@@ -832,13 +879,13 @@ export class ForestLayer extends Group {
             };
 
             if (tags.natural === "tree_row") {
-                sampleRings(ringsWorld, 10 * latitudeScale(bounds.midY), emit);
+                sampleRings(ringsWorld, 10 * latScale, emit);
             } else if (tags.landuse === "orchard") {
                 sampleShape(
                     ringsWorld,
                     bounds,
-                    scaleRange(ORCHARD_SPACING.x, latitudeScale(bounds.midY) * spacingScale),
-                    scaleRange(ORCHARD_SPACING.y, latitudeScale(bounds.midY) * spacingScale),
+                    scaleRange(ORCHARD_SPACING.x, latScale * spacingScale),
+                    scaleRange(ORCHARD_SPACING.y, latScale * spacingScale),
                     true,
                     scatterRng,
                     emit
@@ -847,8 +894,8 @@ export class ForestLayer extends Group {
                 sampleShape(
                     ringsWorld,
                     bounds,
-                    scaleRange(FOREST_SPACING.x, latitudeScale(bounds.midY) * spacingScale),
-                    scaleRange(FOREST_SPACING.y, latitudeScale(bounds.midY) * spacingScale),
+                    scaleRange(FOREST_SPACING.x, latScale * spacingScale),
+                    scaleRange(FOREST_SPACING.y, latScale * spacingScale),
                     false,
                     scatterRng,
                     emit
@@ -875,14 +922,20 @@ export class ForestLayer extends Group {
         farMaterial: Map<TreeSpecies, MeshLambertNodeMaterial>,
         maxCountPerMesh: number
     ): void {
-        // Group by species so every mesh shares one geometry and one material.
-        const bySpecies = new Map<TreeSpecies, TreeInstance[]>();
+        // The reference groups instances per *tile* and keeps a bounding sphere
+        // per group, which is what makes its LOD test meaningful. Bucketing by
+        // a spatial grid as well as by species reproduces that: without it a
+        // chunk can span the whole data set and its near point is useless.
+        const byCell = new Map<string, TreeInstance[]>();
         for (const instance of instances) {
-            const bucket = bySpecies.get(instance.species);
+            const cellX = Math.floor(instance.x / CHUNK_EXTENT);
+            const cellY = Math.floor(instance.y / CHUNK_EXTENT);
+            const key = `${instance.species}|${cellX}|${cellY}`;
+            const bucket = byCell.get(key);
             if (bucket) {
                 bucket.push(instance);
             } else {
-                bySpecies.set(instance.species, [instance]);
+                byCell.set(key, [instance]);
             }
         }
 
@@ -892,7 +945,8 @@ export class ForestLayer extends Group {
         const scaleVector = new Vector3();
         const upAxis = new Vector3(0, 0, 1);
 
-        for (const [species, list] of bySpecies) {
+        for (const [key, list] of byCell) {
+            const species = key.split("|")[0] as TreeSpecies;
             for (let offset = 0; offset < list.length; offset += maxCountPerMesh) {
                 const slice = list.slice(offset, offset + maxCountPerMesh);
                 const bounds = instanceBounds(slice);

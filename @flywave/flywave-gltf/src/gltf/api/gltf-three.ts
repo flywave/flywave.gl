@@ -64,6 +64,13 @@ import type {
 interface ConversionOptions {
     preserveHierarchy?: boolean;
     includeInvisible?: boolean;
+    /**
+     * Up axis of the source asset. The engine world is Z-up (map convention);
+     * the scene root is rotated accordingly so spec-compliant glTF assets
+     * (Y-up) stand upright. Defaults to "y" per the glTF specification,
+     * mirroring the 3D Tiles gltfUpAxis handling.
+     */
+    upAxis?: "x" | "y" | "z";
     createMaterial?: (
         gltfMaterial: GLTFMaterialPostprocessed,
         textureMap: Map<string, Texture>
@@ -73,6 +80,7 @@ interface ConversionOptions {
 const DEFAULT_OPTIONS: Required<ConversionOptions> = {
     preserveHierarchy: true,
     includeInvisible: false,
+    upAxis: "y",
     createMaterial: undefined as any
 };
 
@@ -107,6 +115,8 @@ function createThreeSceneFromGLTF(
 
     processSkins(gltf, nodeMap);
     processAnimations(gltf, animations, nodeMap);
+
+    applyUpAxisRotation(scene, mergedOptions.upAxis);
 
     applyEnvMap(scene, gltf.extras, textureArray);
 
@@ -798,15 +808,17 @@ function processSkins(gltf: GLTFPostprocessed, nodeMap: Map<string, Object3D>): 
 function collectJoints(gltfSkin: any, nodeMap: Map<string, Object3D>): Bone[] {
     const joints: Bone[] = [];
 
-    for (const jointId of gltfSkin.joints) {
-        const jointNode = nodeMap.get(jointId.toString());
+    // Post-processor resolves skin joints to node references; look them up
+    // through their `id` (nodeMap is keyed by the resolved string id).
+    for (const jointNodeRef of gltfSkin.joints) {
+        const jointNode = nodeMap.get(jointNodeRef?.id?.toString() ?? "");
 
         if (jointNode instanceof Bone) {
             joints.push(jointNode);
         } else if (jointNode) {
             const bone = convertNodeToBone(jointNode);
             joints.push(bone);
-            nodeMap.set(jointId.toString(), bone);
+            nodeMap.set(jointNodeRef.id.toString(), bone);
         }
     }
 
@@ -897,7 +909,8 @@ function createAnimationTrack(
     gltfAnimation: GLTFAnimationPostprocessed,
     nodeMap: Map<string, Object3D>
 ): any {
-    const targetNode = nodeMap.get(channel.target.node?.toString() || "");
+    // Post-processor resolves the channel target node to a node reference.
+    const targetNode = nodeMap.get(channel.target.node?.id?.toString() ?? "");
     if (!targetNode) return null;
 
     const sampler = gltfAnimation.samplers[channel.sampler];
@@ -942,6 +955,18 @@ function createAnimationTrack(
     );
 
     return track;
+}
+
+// Up-axis conversion (asset up → engine Z-up), mirroring the 3D Tiles
+// gltfUpAxis handling in flywave-3dtile-datasource TilesRenderer.
+function applyUpAxisRotation(scene: Scene, upAxis: "x" | "y" | "z"): void {
+    if (upAxis === "y") {
+        // glTF spec default: +Y up → rotate about X so +Y maps to +Z.
+        scene.rotation.x = Math.PI / 2;
+    } else if (upAxis === "x") {
+        scene.rotation.y = -Math.PI / 2;
+    }
+    // "z": already Z-up, no rotation.
 }
 
 function applyEnvMap(scene: Scene, extras: any, textures: Texture[]): void {

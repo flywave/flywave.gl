@@ -139,8 +139,9 @@ export interface AnimationChannelTarget {
     // GLTF attributes (possibly overridden)
     /**
      * The index of the node to target.
+     * Resolved to a node reference by the post-processor (indexed → tree contract).
      */
-    node?: GlTfId;
+    node?: GLTFNodePostprocessed;
     /**
      * The name of the node's TRS property to modify, or the "weights" of the Morph Targets it instantiates. For the "translation" property, the values that are provided by the sampler are the translation along the x, y, and z axes. For the "rotation" property, the values are a quaternion in the order (x, y, z, w), where w is the scalar. For the "scale" property, the values are the scaling factors along the x, y, and z axes.
      */
@@ -691,8 +692,9 @@ export interface GLTFSkinPostprocessed {
     skeleton?: GlTfId;
     /**
      * Indices of skeleton nodes, used as joints in this skin.
+     * Resolved to node references by the post-processor (indexed → tree contract).
      */
-    joints: GlTfId[];
+    joints: GLTFNodePostprocessed[];
     name?: any;
     extensions?: any;
     extras?: any;

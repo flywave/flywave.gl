@@ -85,6 +85,16 @@ export class MapControlsUI {
     private readonly m_screenshotConfig: ScreenshotConfig;
 
     /**
+     * Last zoom text written to the zoom level element, used to skip redundant DOM updates.
+     */
+    private m_lastZoomText: string | null = null;
+
+    /**
+     * Last text written to the geoCenter element, used to skip redundant DOM updates.
+     */
+    private m_lastGeoCenterText: string | null = null;
+
+    /**
      * Removes focus from input element.
      */
     private readonly m_onWindowClick: (event: MouseEvent) => void = (event: MouseEvent) => {
@@ -110,6 +120,13 @@ export class MapControlsUI {
         }
 
         const zoom = this.controls.mapView.zoomLevel.toFixed(1);
+
+        // Skip redundant DOM updates: setting innerHTML/value re-parses the node even when
+        // the content is identical, and this handler runs on every render event.
+        if (zoom === this.m_lastZoomText) {
+            return;
+        }
+        this.m_lastZoomText = zoom;
 
         if (this.m_zoomLevelElement.tagName === "INPUT") {
             (this.m_zoomLevelElement as HTMLInputElement).value = zoom;
@@ -150,7 +167,16 @@ export class MapControlsUI {
         const tilt = this.controls.mapView.tilt.toFixed(1);
         const heading = this.controls.mapView.heading.toFixed(1);
 
-        this.m_geoCenterElement.innerHTML = `${lat}°, ${lng}°${altitude}<br>Tilt: ${tilt}°, Hdg: ${heading}°`;
+        const text = `${lat}°, ${lng}°${altitude}<br>Tilt: ${tilt}°, Hdg: ${heading}°`;
+
+        // Skip redundant DOM updates: setting innerHTML re-parses the node even when the
+        // content is identical, and this handler runs on every render event.
+        if (text === this.m_lastGeoCenterText) {
+            return;
+        }
+        this.m_lastGeoCenterText = text;
+
+        this.m_geoCenterElement.innerHTML = text;
     };
 
     /**

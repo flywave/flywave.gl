@@ -857,7 +857,11 @@ export abstract class TilesRenderer extends TilesRendererBase {
         const res =
             extension === "pnts"
                 ? this.createPointsScene(metadata)
-                : createThreeSceneFromGLTF(metadata.gltf);
+                : // Opt out of the conversion's default Y-up→Z-up rotation: tile
+                  // orientation here is defined by the tileset transforms (note
+                  // this renderer's own _upRotationMatrix is built but never
+                  // applied, so keep the historical behavior unchanged).
+                  createThreeSceneFromGLTF(metadata.gltf, { upAxis: "z" });
 
         const instances: InstancedMesh[] = [];
         const meshes: Array<Mesh | InstancedMesh> = [];

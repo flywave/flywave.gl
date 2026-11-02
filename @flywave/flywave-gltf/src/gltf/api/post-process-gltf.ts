@@ -5,6 +5,7 @@ import type { ParseGLTFOptions } from "../parsers/parse-gltf";
 import type {
     GLTF,
     GLTFAccessor,
+    GLTFAnimation,
     GLTFBufferView,
     GLTFCamera,
     GLTFImage,
@@ -17,6 +18,7 @@ import type {
     GLTFTexture
 } from "../types/gltf-json-schema";
 import type {
+    GLTFAnimationPostprocessed,
     GLTFAccessorPostprocessed,
     GLTFBufferPostprocessed,
     GLTFBufferViewPostprocessed,
@@ -171,12 +173,30 @@ class GLTFPostProcessor {
         if (gltf.meshes) {
             json.meshes = gltf.meshes.map((mesh, i) => this._resolveMesh(mesh, i));
         }
+        // Resolve order follows dependency order: nodes reference skins
+        // (node.skin), skins reference nodes (skin.joints). Skins are resolved
+        // first WITHOUT their joints so that node.skin points at the final
+        // resolved skin object (same identity + id); the joints index → node
+        // resolution happens in a post-pass once nodes exist.
+        if (gltf.skins) {
+            json.skins = gltf.skins.map((skin, i) => this._resolveSkin(skin, i));
+        }
         if (gltf.nodes) {
             json.nodes = gltf.nodes.map((node, i) => this._resolveNode(node, i));
             json.nodes = json.nodes.map((node, i) => this._resolveNodeChildren(node));
         }
         if (gltf.skins) {
-            json.skins = gltf.skins.map((skin, i) => this._resolveSkin(skin, i));
+            for (const skin of json.skins) {
+                // Still raw node indices at this point (schema type predates
+                // this pass); resolve them to node references now.
+                const rawJoints = (skin.joints || []) as unknown as number[];
+                skin.joints = rawJoints.map(joint => this.getNode(joint));
+            }
+        }
+        if (gltf.animations) {
+            json.animations = gltf.animations.map((animation, i) =>
+                this._resolveAnimation(animation, i)
+            );
         }
         if (gltf.scenes) {
             json.scenes = gltf.scenes.map((scene, i) => this._resolveScene(scene, i));
@@ -308,10 +328,44 @@ class GLTFPostProcessor {
                 ? this.getAccessor(gltfSkin.inverseBindMatrices)
                 : undefined;
 
+        // NOTE: joints stay as raw node indices here — nodes are not resolved
+        // yet (this runs before _resolveNode). The joints index → node
+        // resolution happens in the _resolveTree post-pass after nodes exist;
+        // the cast is valid only after that post-pass has run.
         return {
             ...gltfSkin,
             id: gltfSkin.id || `skin-${index}`,
             inverseBindMatrices
+        } as unknown as GLTFSkinPostprocessed;
+    }
+
+    _resolveAnimation(gltfAnimation: GLTFAnimation, index: number): GLTFAnimationPostprocessed {
+        // Resolve channel target node indices to node references, consistent
+        // with the indexed → tree contract applied to skins above. Channels
+        // and samplers have no ids in the raw glTF spec; assign synthetic ones.
+        const channels = (gltfAnimation.channels || []).map((channel, i) => ({
+            ...channel,
+            id: `channel-${i}`,
+            target: {
+                ...channel.target,
+                id: `channel-${i}-target`,
+                node:
+                    channel.target?.node !== undefined
+                        ? this.getNode(channel.target.node)
+                        : undefined
+            }
+        }));
+
+        const samplers = (gltfAnimation.samplers || []).map((sampler, i) => ({
+            ...sampler,
+            id: `sampler-${i}`
+        }));
+
+        return {
+            ...gltfAnimation,
+            id: `animation-${index}`,
+            channels,
+            samplers
         };
     }
 
