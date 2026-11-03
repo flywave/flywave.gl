@@ -259,6 +259,9 @@ export async function createExampleMap(
         onError(err instanceof Error ? err : new Error(String(err)));
     }
 
+    // Debug handle for browser-console tooling (engine debugging, harness scripts).
+    (window as any).__flywave = { mapView, controls, dispose };
+
     return { mapView, controls, dispose };
 }
 

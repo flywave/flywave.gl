@@ -86,6 +86,10 @@ async function processNode(scenegraph: GLTFScenegraph, node: GLTFNode, options: 
 
     try {
         const attributes = await loadInstanceAttributes(scenegraph, extension.attributes);
+        // glTF JSON nodes carry no userData field (loaders.gl parse output) —
+        // initialize before writing, gltf-three's createNode() reads it back
+        // to build the InstancedMesh.
+        node.userData = node.userData ?? {};
         node.userData.instance = attributes;
     } finally {
         scenegraph.removeObjectExtension(node, EXT_NAME);
@@ -104,10 +108,12 @@ async function loadInstanceAttributes(
         if (!accessor) continue;
 
         const promise = (async () => {
-            const bufferView = scenegraph.getBufferView(accessor.bufferView!);
-            if (!bufferView) throw new Error(`BufferView not found for accessor ${accessorIndex}`);
-
-            const data = scenegraph.getTypedArrayForBufferView(bufferView);
+            // Read through the ACCESSOR (byteOffset/count/type aware). Reading
+            // the whole bufferView instead mixes in data of other accessors
+            // packed into the same view (VERDANT-style assets share one view
+            // across nodes/attributes), which inflates instance counts and
+            // corrupts positions/scales.
+            const data = scenegraph.getTypedArrayForAccessor(accessor);
             const componentCount = getComponentCount(accessor.type);
 
             attributes[name] = new InstancedBufferAttribute(

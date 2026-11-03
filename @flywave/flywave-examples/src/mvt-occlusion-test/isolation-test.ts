@@ -611,7 +611,7 @@ export async function runIsolationTest(): Promise<void> {
         stripRenderer.setClearColor(0xede7e1, 1);
         const fontCatalog = await FontCatalog.load("resources/fonts/Default_FontCatalog.json", 1024);
         const textCanvas = new TextCanvas({
-            renderer: stripRenderer as unknown as Parameters<typeof TextCanvas>[0]["renderer"],
+            renderer: stripRenderer as unknown as ConstructorParameters<typeof TextCanvas>[0]["renderer"],
             rendererCapabilities: { isWebGL2: false, logarithmicDepthBuffer: false },
             fontCatalog,
             minGlyphCount: 8,
@@ -620,7 +620,7 @@ export async function runIsolationTest(): Promise<void> {
         // FontCatalog.load 不预载字形位图，必须先 loadCharset 再 addText
         await fontCatalog.loadCharset(
             "ManhattanNew York 123中文",
-            new TextRenderStyle({ fontSize: { unit: FontUnit.Pixel, size: 32 } })
+            new TextRenderStyle({ fontSize: { unit: FontUnit.Pixel, size: 32, backgroundSize: 0 } })
         );
         const samples = [
             { text: "Manhattan", size: 24, color: 0x333333, cx: STRIP_W * 0.1 },

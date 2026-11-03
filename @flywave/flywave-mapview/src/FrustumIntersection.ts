@@ -3,6 +3,7 @@
 import {
     type Projection,
     type TilingScheme,
+    EarthConstants,
     geographicStandardTiling,
     geographicTerrainStandardTiling,
     OrientedBox3,
@@ -23,8 +24,16 @@ import { MapTileCuller } from "./MapTileCuller";
 import { type MapView } from "./MapView";
 import { MapViewUtils } from "./Utils";
 
-const tmpVectors3 = [new THREE.Vector3(), new THREE.Vector3()];
+const tmpVectors3 = [
+    new THREE.Vector3(),
+    new THREE.Vector3(),
+    new THREE.Vector3(),
+    new THREE.Vector3()
+];
 const tmpVector4 = new THREE.Vector4();
+
+/** WGS84 polar radius, derived from the equatorial radius and the inverse flattening. */
+const POLAR_RADIUS = EarthConstants.EQUATORIAL_RADIUS * (1 - 1 / 298.257223563);
 
 /**
  * Represents a unique TileKey and the area it takes up on screen.
@@ -387,14 +396,54 @@ export class FrustumIntersection {
         }
 
         const center = tileBounds.getCenter(tmpVectors3[0]);
+        const size = tileBounds.getSize(tmpVectors3[1]);
+
+        // Spherical projections: cull tiles that lie entirely beyond the horizon. The culling
+        // frustum may extend far past the horizon (the far plane covers the whole globe), and
+        // for boxes behind the camera the clip-space w goes negative, which would turn the
+        // screen-size estimate below into a bogus large value and drive deep subdivision of the
+        // far-side ring just past the horizon. The ellipsoid is normalized to a unit sphere by
+        // scaling with 1/radii; a box is then fully hidden when its bounding sphere lies below
+        // the horizon plane: dot(M, C) + rho * |C| < 1 in scaled space (Cesium-style occluder
+        // test). The bounding radius is scaled with the polar radius to stay conservative
+        // (under-culls, never over-culls).
+        if (this.mapView.projection.type === ProjectionType.Spherical) {
+            const cameraPos = this.m_camera.position;
+            const invEquatorial = 1 / EarthConstants.EQUATORIAL_RADIUS;
+            const invPolar = 1 / POLAR_RADIUS;
+            const scaledCenter = tmpVectors3[2];
+            scaledCenter.set(
+                center.x * invEquatorial,
+                center.y * invEquatorial,
+                center.z * invPolar
+            );
+            const scaledCamera = tmpVectors3[3];
+            scaledCamera.set(
+                cameraPos.x * invEquatorial,
+                cameraPos.y * invEquatorial,
+                cameraPos.z * invPolar
+            );
+            const boundingRadius = 0.5 * size.length() * invPolar;
+            if (scaledCenter.dot(scaledCamera) + boundingRadius * scaledCamera.length() < 1) {
+                return {
+                    area: 0,
+                    distance: Infinity
+                };
+            }
+        }
+
         const projectedPoint = tmpVector4
             .set(center.x, center.y, center.z, 1.0)
             .applyMatrix4(this.m_viewProjectionMatrix);
 
         // Estimate objects screen space size with diagonal of bounds
-        // Dividing by w projects object size to screen space
-        const size = tileBounds.getSize(tmpVectors3[1]);
-        const objectSize = (0.5 * size.length()) / projectedPoint.w;
+        // Dividing by w projects object size to screen space. For boxes whose center lies
+        // behind the camera (w <= 0) fall back to the euclidean camera distance, keeping the
+        // estimate positive and meaningful (such boxes straddle the near plane and legitimately
+        // deserve deep subdivision).
+        const perspectiveDepth =
+            projectedPoint.w > 0 ? projectedPoint.w : center.distanceTo(this.m_camera.position);
+        const objectSize = (0.5 * size.length()) / perspectiveDepth;
 
         return {
             area: objectSize * objectSize,

@@ -706,7 +706,15 @@ function createInstancedMesh(
 
     if (instanceCount === 0) return new InstancedMesh(sourceMesh.geometry, sourceMesh.material, 0);
 
-    const geometry = sourceMesh.geometry.clone();
+    // Share geometry unless custom (non-TRS) instance attributes must be
+    // attached to it. Cloning the full geometry per instanced node is the
+    // main load-jank source when a source mesh is shared by many nodes
+    // (grassland.glb: 566 nodes referencing 40 meshes).
+    const customAttrNames = Object.keys(instanceAttributes).filter(
+        name => name !== "TRANSLATION" && name !== "ROTATION" && name !== "SCALE"
+    );
+    const geometry =
+        customAttrNames.length > 0 ? sourceMesh.geometry.clone() : sourceMesh.geometry;
     const material = sourceMesh.material;
     const instancedMesh = new InstancedMesh(geometry, material, instanceCount);
 
@@ -718,9 +726,8 @@ function createInstancedMesh(
     instancedMesh.instanceMatrix.needsUpdate = true;
 
     // Apply other instance attributes
-    for (const [name, attr] of Object.entries(instanceAttributes)) {
-        if (name === "TRANSLATION" || name === "ROTATION" || name === "SCALE") continue;
-
+    for (const name of customAttrNames) {
+        const attr = instanceAttributes[name];
         geometry.setAttribute(name, attr);
         attr.setUsage(DynamicDrawUsage);
     }

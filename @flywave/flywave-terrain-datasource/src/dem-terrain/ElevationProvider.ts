@@ -129,10 +129,15 @@ class ElevationProvider implements InnerElevationProvider {
         const i = Math.floor(x);
         const j = Math.floor(y);
 
+        const c00 = dem.get(i, j);
+        const c01 = dem.get(i, j + 1);
+        const c10 = dem.get(i + 1, j);
+        const c11 = dem.get(i + 1, j + 1);
+
         return {
             altitude: interpolate(
-                interpolate(dem.get(i, j), dem.get(i, j + 1), y - j),
-                interpolate(dem.get(i + 1, j), dem.get(i + 1, j + 1), y - j),
+                interpolate(c00, c01, y - j),
+                interpolate(c10, c11, y - j),
                 x - i
             ),
             tileKey: demTile.tileKey

@@ -265,24 +265,48 @@ export class MapViewEnvironment {
                 directionalLight.updateMatrixWorld();
                 directionalLight.shadow.updateMatrices(directionalLight);
 
+                // Fixed-ortho mode (theme `shadowOrthoSize`): keep the shadow
+                // camera box stable around the map target instead of following
+                // the view frustum — shadow boundaries stay put while the
+                // camera moves (model/asset preview use case). Otherwise the
+                // box is fitted to the frustum below every frame, which makes
+                // shadow density/boundaries jump while navigating.
+                const fixedOrtho = (directionalLight as unknown as {
+                    userData?: { shadowOrthoSize?: number };
+                }).userData?.shadowOrthoSize;
                 const camera = directionalLight.shadow.camera;
-                const pointsInLightSpace = transformedPoints.map(p =>
-                    this.viewToLightSpace(p.clone(), camera)
-                );
+                if (fixedOrtho !== undefined && fixedOrtho > 0) {
+                    camera.left = -fixedOrtho;
+                    camera.right = fixedOrtho;
+                    camera.top = fixedOrtho;
+                    camera.bottom = -fixedOrtho;
+                    camera.near = -fixedOrtho * 2;
+                    camera.far = fixedOrtho * 4;
+                    camera.updateProjectionMatrix();
+                    // shadow.updateMatrices() above ran with the PREVIOUS
+                    // projection — the shadow matrix must be rebuilt after the
+                    // ortho box changes, otherwise sampling is garbled and the
+                    // whole covered area is misclassified as shadowed.
+                    directionalLight.shadow.updateMatrices(directionalLight);
+                } else {
+                    const pointsInLightSpace = transformedPoints.map(p =>
+                        this.viewToLightSpace(p.clone(), camera)
+                    );
 
-                const box = new THREE.Box3();
-                pointsInLightSpace.forEach(point => {
-                    box.expandByPoint(point);
-                });
-                camera.left = box.min.x;
-                camera.right = box.max.x;
-                camera.top = box.max.y;
-                camera.bottom = box.min.y;
-                // Moving back to the light the near plane in order to catch high buildings, that
-                // are not visible by the camera, but existing on the scene.
-                camera.near = -box.max.z * 0.95;
-                camera.far = -box.min.z;
-                camera.updateProjectionMatrix();
+                    const box = new THREE.Box3();
+                    pointsInLightSpace.forEach(point => {
+                        box.expandByPoint(point);
+                    });
+                    camera.left = box.min.x;
+                    camera.right = box.max.x;
+                    camera.top = box.max.y;
+                    camera.bottom = box.min.y;
+                    // Moving back to the light the near plane in order to catch high buildings, that
+                    // are not visible by the camera, but existing on the scene.
+                    camera.near = -box.max.z * 0.95;
+                    camera.far = -box.min.z;
+                    camera.updateProjectionMatrix();
+                }
             }
         });
     }

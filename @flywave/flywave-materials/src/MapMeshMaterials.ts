@@ -23,6 +23,30 @@ export interface MixinShaderProperties {
     shaderUniforms?: UniformsType;
 }
 
+
+/**
+ * Feature 参数（fade/extrusion/displacement/shadow 等子类自管字段）不透传
+ * 基类构造——THREE.Material.setValues 会对基类不认识的 key 逐条警告
+ * （如 "'removeDiffuseLight' is not a property of THREE.MeshStandardMaterial"），
+ * 纯控制台噪音；子类字段在各自构造体内自行赋值。
+ */
+const FEATURE_PARAM_KEYS = [
+    'fadeNear',
+    'fadeFar',
+    'extrusionRatio',
+    'zFightingWorkaround',
+    'removeDiffuseLight',
+    'displacementMap',
+    'displacementMapUvMatrix'
+];
+
+function stripFeatureParams<T>(params?: T): T | undefined {
+    if (!params) return params;
+    const rest = { ...(params as Record<string, unknown>) };
+    for (const key of FEATURE_PARAM_KEYS) delete rest[key];
+    return rest as T;
+}
+
 export interface FadingFeatureParameters {
     fadeNear?: number;
     fadeFar?: number;
@@ -164,7 +188,7 @@ export class MapMeshBasicMaterial
             ExtrusionFeatureParameters &
             DisplacementFeatureParameters
     ) {
-        super(params);
+        super(stripFeatureParams(params));
 
         this.fadeNear = params?.fadeNear ?? FadingFeature.DEFAULT_FADE_NEAR;
         this.fadeFar = params?.fadeFar ?? FadingFeature.DEFAULT_FADE_FAR;
@@ -193,7 +217,7 @@ export class MapMeshDepthMaterial extends THREE.MeshDepthMaterial implements Ext
     extrusionRatio: number = ExtrusionFeatureDefs.DEFAULT_RATIO_MAX;
 
     constructor(params?: THREE.MeshDepthMaterialParameters & ExtrusionFeatureParameters) {
-        super(params);
+        super(stripFeatureParams(params));
         this.extrusionRatio = params?.extrusionRatio ?? ExtrusionFeatureDefs.DEFAULT_RATIO_MAX;
     }
 
@@ -225,7 +249,7 @@ export class MapMeshStandardMaterial
             ExtrusionFeatureParameters &
             ShadowFeatureParameters
     ) {
-        super(params);
+        super(stripFeatureParams(params));
 
         this.fadeNear = params?.fadeNear ?? FadingFeature.DEFAULT_FADE_NEAR;
         this.fadeFar = params?.fadeFar ?? FadingFeature.DEFAULT_FADE_FAR;

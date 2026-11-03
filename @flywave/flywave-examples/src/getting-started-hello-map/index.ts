@@ -62,15 +62,28 @@ async function main(): Promise<void> {
     mapView.update();
 
     // A single camera flight to show motion: approach the local DEM area
-    // from an oblique angle.
-    void mapView.flyTo({
-        target: { latitude: 36.48, longitude: 118.18 },
-        zoomLevel: 14,
-        tilt: 55,
-        heading: 30,
-        duration: 6,
-        curve: "bow"
-    });
+    // from an oblique angle. `?flyto=lat,lng,distance,tilt,heading` overrides it
+    // (engine debugging, e.g. grazing-angle clip-plane checks).
+    const [pLat, pLng, pDist, pTilt, pHdg] =
+        new URLSearchParams(window.location.search).get("flyto")?.split(",").map(Number) ?? [];
+    void mapView.flyTo(
+        Number.isFinite(pLat)
+            ? {
+                  target: { latitude: pLat, longitude: pLng },
+                  distance: pDist,
+                  tilt: pTilt,
+                  heading: pHdg,
+                  duration: 2
+              }
+            : {
+                  target: { latitude: 36.48, longitude: 118.18 },
+                  zoomLevel: 14,
+                  tilt: 55,
+                  heading: 30,
+                  duration: 6,
+                  curve: "bow"
+              }
+    );
 
     addRendererFootnote();
     logExampleInfo("getting-started-hello-map", mapView);

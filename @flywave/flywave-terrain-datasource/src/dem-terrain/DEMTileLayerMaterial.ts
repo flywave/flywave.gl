@@ -130,6 +130,12 @@ _heightMapPos.onObjectUpdate(({ object }) => object.heightMapPos ?? _heightMapPo
 const _texSize = uniform(new THREE.Vector2(1, 1));
 _texSize.onObjectUpdate(({ object }) => object.texSize ?? _texSize.value);
 
+// Border/texel-center offset used by tileUvToDemSample. Calibrated
+// empirically (Baotou coarse-fallback sweep, 2026-11): 0.5 puts the displaced
+// mesh exactly on the height-query surface; 1.5 read one texel south
+// (~+220 m on the L3 fallback grid).
+const _demSampleOffset = uniform(0.5);
+
 const _skirtHeight = uniform(0);
 _skirtHeight.onObjectUpdate(({ object }) => object.skirtHeight ?? 0);
 
@@ -198,9 +204,22 @@ const s_sharedNodes = (() => {
     });
 
     const tileUvToDemSample = Fn(([t]: [ReturnType<typeof vec2>]) => {
-        return vec2(
+        // The DEM texture carries a 1-texel border (size = core grid + 2, see
+        // DemData._buildTexture), so tile-uv [0, 1] across the core grid maps
+        // to texture-uv (tileUv * (texSize - 2) + K) / texSize with the
+        // texel-center constant K = 0.5 (empirically calibrated — see the
+        // uniform comment). Sampling raw tile-uv instead drifts the sampled
+        // position across the tile — sub-meter on fine grids, tens of
+        // kilometers (hundreds of meters of elevation) on coarse fallback
+        // tiles.
+        const sample = vec2(
             t.x.mul(_heightMapPos.x).add(_heightMapPos.z),
             t.y.mul(_heightMapPos.x).add(_heightMapPos.y)
+        );
+        const core = _texSize.x.sub(2);
+        return vec2(
+            sample.x.mul(core).add(_demSampleOffset.x).div(_texSize.x),
+            sample.y.mul(_texSize.y.sub(2)).add(_demSampleOffset.x).div(_texSize.y)
         );
     });
 

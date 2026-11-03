@@ -127,6 +127,24 @@ export function createLight(lightDescription: Light): THREE.Light {
                 light.shadow.bias = 0.00001;
                 light.shadow.mapSize.width = 1024;
                 light.shadow.mapSize.height = 1024;
+                // Curved-surface self-shadow acne: offset the sample along the
+                // surface normal. Must scale with scene units (directional shadow
+                // camera spans the whole map view). Opt-in via theme, off by
+                // default to keep large map scenes unchanged.
+                if (lightDescription.shadowNormalBias !== undefined) {
+                    light.shadow.normalBias = lightDescription.shadowNormalBias;
+                }
+                if (lightDescription.shadowBias !== undefined) {
+                    light.shadow.bias = lightDescription.shadowBias;
+                }
+                if (lightDescription.shadowMapSize !== undefined) {
+                    light.shadow.mapSize.width = lightDescription.shadowMapSize;
+                    light.shadow.mapSize.height = lightDescription.shadowMapSize;
+                }
+                // Fixed-ortho mode marker, consumed by MapViewEnvironment.updateLights
+                if (lightDescription.shadowOrthoSize !== undefined) {
+                    light.userData.shadowOrthoSize = lightDescription.shadowOrthoSize;
+                }
             }
             light.position.set(
                 lightDescription.direction.x,

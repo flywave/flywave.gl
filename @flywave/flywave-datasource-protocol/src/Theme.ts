@@ -844,6 +844,37 @@ export interface DirectionalLight extends BaseLight {
      * @defaultValue false
      */
     castShadow?: boolean;
+
+    /**
+     * Offset shadow lookup along the surface normal; the primary mitigation
+     * for curved-surface self-shadow acne. Scale with scene units.
+     *
+     * @defaultValue undefined (engine default, no normal offset)
+     */
+    shadowNormalBias?: number;
+
+    /**
+     * Depth bias of the shadow lookup.
+     *
+     * @defaultValue 0.00001
+     */
+    shadowBias?: number;
+
+    /**
+     * Square shadow map resolution (width = height).
+     *
+     * @defaultValue 1024
+     */
+    shadowMapSize?: number;
+
+    /**
+     * Fixed ortho extent (half-width, world units) of the shadow camera.
+     * When set, the shadow camera covers a fixed box around the map target
+     * instead of following the view frustum — stable shadow boundaries while
+     * the camera moves (model/asset previews), at the cost of not shadowing
+     * the whole frustum.
+     */
+    shadowOrthoSize?: number;
 }
 
 /**

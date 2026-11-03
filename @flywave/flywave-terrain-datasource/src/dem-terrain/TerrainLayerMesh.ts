@@ -147,11 +147,16 @@ export class TerrainTileState {
     }
 
     setHeightMap(texture: THREE.Texture, demTileKey: TileKey, demUnpack?: THREE.Vector4): void {
-        const pos = computeHeightMapPos(
-            this.m_tileKey,
-            demTileKey,
-            this.m_tilingSchemeTileGrid.isYAxisDown()
-        );
+        // The yDown row flip is REQUIRED here: the dem texture buffer rows run
+        // south-up (buffer end = north), while the rendered tile rows address
+        // the parent grid from the north edge, so the parent-case uv offset
+        // must mirror into the south-up fraction (verified numerically at
+        // Baotou: correct dem uv.y = 0.9887; sampling uv.y = 0.0112 lands
+        // ~3700 km away on the coarse fallback grid). The flip is an identity
+        // no-op when dem level == tile level, which is why fine local data
+        // never exposed it.
+        const yDown = this.m_tilingSchemeTileGrid.isYAxisDown();
+        const pos = computeHeightMapPos(this.m_tileKey, demTileKey, yDown);
         texture.flipY = this.m_yDown;
         this.m_heightMapTexture = texture;
         // DEM texture pixels are uploaded in their source encoding (see DemData._buildTexture),

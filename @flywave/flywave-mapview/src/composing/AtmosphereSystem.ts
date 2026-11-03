@@ -601,7 +601,14 @@ export class AtmosphereSystem {
         const light = this.m_atmosphereLight;
         if (csm == null || light == null) return;
 
-        const viewFar = this.mapView.viewRanges.far;
+        // `viewRanges.far` covers the whole globe (reversed depth buffer — the far plane never
+        // clips visible geometry), but shadows only apply to the nearby scene. Keep the CSM
+        // range bounded at the horizon scale instead of globally disabling shadows whenever the
+        // far plane goes planetary.
+        const viewFar = Math.min(
+            Number(this.mapView.viewRanges.far),
+            AtmosphereSystem.SHADOW_DISABLE_DISTANCE
+        );
 
         if (viewFar > AtmosphereSystem.SHADOW_DISABLE_DISTANCE) {
             if (light.castShadow) {

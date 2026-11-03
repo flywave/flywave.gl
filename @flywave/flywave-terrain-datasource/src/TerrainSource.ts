@@ -51,6 +51,7 @@ import { TERRAIN_TILE_DECODER_ID } from "./Constants";
 // satisfies the three Intersection contract. This raycast is consumed by
 // camera collision only and never enters picking results.
 const terrainCollisionObject = new Object3D();
+
 import {
     type TileGeometryBuilder,
     GeographicStandardTilingTileGeometryBuilder,
@@ -947,14 +948,21 @@ export abstract class TerrainSource<
     }
 
     /**
-     * Camera-collision raycast (the `ICameraCollidable` contract): steps
-     * along the caller's ray, sampling the elevation provider until the
-     * sample altitude drops to the terrain height (+ 1mm tolerance). The ray
+     * Camera-collision raycast (the `ICameraCollidable` contract): finds the
+     * first point along the caller's ray that reaches the terrain surface
+     * (sample altitude drops to the terrain height + 1mm tolerance). The ray
      * arrives in the geo frame (direction is frame-invariant); the output
      * point is render space per the data source contract, translated back by
      * the consumer with `.add(camera.position)`. Below zoom level 13 the
      * elevation grid is too coarse for collision, so the source opts out and
      * the controller falls back to the mathematical surface.
+     *
+     * The crossing is located with exponential bracketing + bisection instead
+     * of a linear march: doubling strides find a below-surface sample, then
+     * the bracket is halved to sub-meter precision. This bounds the sample
+     * count at ~50 regardless of camera altitude, where the previous linear
+     * march (50 m step cap) needed tens of thousands of samples from high
+     * altitudes.
      */
     raycast(raycaster: Raycaster, intersections: Intersection[]): void {
         if (!this.enableCameraCollision || this.isDetached()) {
@@ -967,35 +975,75 @@ export abstract class TerrainSource<
 
         const projection = this.mapView.projection;
         const maxDistance = 2 * projection.unitScale; // long enough detection distance
-        const minStep = 1.0; // meters
+        // Halvings that shrink an earth-scale bracket below the old marcher's
+        // 1 m resolution (2 * unitScale / 2^24 < 1 m).
+        const bisectionIterations = 24;
         const direction = raycaster.ray.direction;
         const origin = raycaster.ray.origin;
         const currentPos = new Vector3();
 
-        let currentDistance = 0;
-        while (currentDistance <= maxDistance) {
-            currentPos.copy(origin).addScaledVector(direction, currentDistance);
+        // Altitude of the ray point above the terrain (<= 0 once the ray has
+        // reached or penetrated the surface), or null where the point cannot
+        // be unprojected.
+        const sampleAboveTerrain = (distance: number): number | null => {
+            currentPos.copy(origin).addScaledVector(direction, distance);
             const geoPos = projection.unprojectPoint(currentPos);
-            if (geoPos) {
-                const terrainHeight = elevationProvider.getHeight(geoPos) ?? 0;
-                if (geoPos.altitude <= terrainHeight + 0.001) {
-                    // small tolerance; emit a fresh point (never reuse
-                    // currentPos — consumers keep the reference)
-                    intersections.push({
-                        distance: currentDistance,
-                        point: new Vector3().copy(currentPos).sub(this.mapView.camera.position),
-                        object: terrainCollisionObject
-                    });
-                    return;
-                }
+            if (!geoPos) {
+                return null;
+            }
+            const terrainHeight = elevationProvider.getHeight(geoPos) ?? 0;
+            return geoPos.altitude - (terrainHeight + 0.001);
+        };
 
-                // adaptive step: large when far above ground, down to 1m
-                // near the surface
-                currentDistance += Math.max(minStep, Math.min(geoPos.altitude - terrainHeight, 50));
-            } else {
-                currentDistance += minStep;
+        const emitHit = (distance: number): void => {
+            // emit a fresh point (never reuse currentPos — consumers keep the
+            // reference)
+            currentPos.copy(origin).addScaledVector(direction, distance);
+            intersections.push({
+                distance,
+                point: new Vector3().copy(currentPos).sub(this.mapView.camera.position),
+                object: terrainCollisionObject
+            });
+        };
+
+        // Already at or below the surface at the ray origin: report
+        // immediately, same as the old marcher's first iteration.
+        const aboveAtOrigin = sampleAboveTerrain(0);
+        if (aboveAtOrigin !== null && aboveAtOrigin <= 0) {
+            emitHit(0);
+            return;
+        }
+
+        // Exponential strides to bracket the first penetration.
+        let lowDistance = 0;
+        let belowDistance = -1;
+        for (let distance = 1; distance <= maxDistance; distance *= 2) {
+            const above = sampleAboveTerrain(distance);
+            if (above !== null && above <= 0) {
+                belowDistance = distance;
+                break;
+            }
+            if (above !== null) {
+                lowDistance = distance;
             }
         }
+
+        if (belowDistance < 0) {
+            return; // ray never reaches the terrain within maxDistance
+        }
+
+        // Bisect the bracket down to sub-meter precision.
+        for (let i = 0; i < bisectionIterations; i++) {
+            const mid = (lowDistance + belowDistance) / 2;
+            const aboveMid = sampleAboveTerrain(mid);
+            if (aboveMid === null || aboveMid > 0) {
+                lowDistance = mid;
+            } else {
+                belowDistance = mid;
+            }
+        }
+
+        emitHit(belowDistance);
     }
 
     /**

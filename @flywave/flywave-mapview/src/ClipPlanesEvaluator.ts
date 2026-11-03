@@ -163,13 +163,15 @@ namespace SphericalProj {
     ): number | undefined {
         raycaster.setFromCamera(ndcDir, camera);
         let intersection: THREE.Vector3 | null = new THREE.Vector3();
+        // `rayCast` returns -1 when the ray misses the surface, leaving the result vector
+        // untouched, in which case it must be discarded. Otherwise it holds the hit point.
         if (
             projection.rayCast(
                 intersection,
                 raycaster.ray.origin,
                 tmpVectors[0].addVectors(camera.position, raycaster.ray.direction),
                 R
-            ) > -1
+            ) === -1
         ) {
             intersection = null;
         }
@@ -726,7 +728,7 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
             projection,
             useLogarithmicDepth
         );
-        viewRanges.far = this.computeFarDistSphericalProj(camera, projection, useLogarithmicDepth);
+        viewRanges.far = this.computeFarDistSphericalProj(camera, projection);
 
         return this.applyViewRangeConstraints(
             viewRanges,
@@ -792,42 +794,20 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
 
     private computeFarDistSphericalProj(
         camera: THREE.PerspectiveCamera,
-        projection: Projection,
-        useLogarithmicDepth: boolean
+        projection: Projection
     ): number {
         assert(projection.type === ProjectionType.Spherical);
+
+        // Cesium/Google Earth style: the far plane must never clip visible geometry. The engine
+        // renders with a reversed depth buffer, so a large near/far ratio costs no precision and
+        // the far plane can simply cover everything renderable: the farthest point of the
+        // max-elevation sphere lies at d + maxR (its antipode). Computing a tight far (frustum
+        // corner / horizon-tangent projections) is brittle at grazing view angles, where the
+        // horizon produces a hard clip line near the top of the screen.
         const d = camera.position.length();
         const cameraAltitude = projection.groundDistance(camera.position);
         const r = Math.max(d - cameraAltitude, 0);
-        const minR = r + this.minElevation;
-        const maxR = r + this.maxElevation;
-
-        CameraUtils.getPrincipalPoint(camera, this.m_tmpV2);
-        const isRightIntersectionFarther = this.m_tmpV2.x <= 0.0;
-        const ndcX = isRightIntersectionFarther ? 1 : -1;
-        const checkBottomIntersection = this.m_tmpV2.y > 0;
-
-        const topDist = SphericalProj.getProjSphereIntersectionDistance(
-            camera,
-            this.m_tmpV2.set(ndcX, 1),
-            this.maxElevation,
-            projection as SphereProjection
-        );
-        const bottomDist = checkBottomIntersection
-            ? SphericalProj.getProjSphereIntersectionDistance(
-                  camera,
-                  this.m_tmpV2.set(ndcX, -1),
-                  this.maxElevation,
-                  projection as SphereProjection
-              )
-            : 0;
-
-        const largestDist = Math.max(topDist ?? Infinity, bottomDist ?? Infinity);
-        if (largestDist !== Infinity) {
-            return largestDist;
-        }
-
-        return SphericalProj.getFarDistanceFromElevatedHorizon(camera, d, minR, maxR);
+        return d + r + this.maxElevation;
     }
 
     private applyViewRangeConstraints(
@@ -848,9 +828,20 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
         const cameraAltitude = projection.groundDistance(camera.position);
         const farMin = cameraAltitude - this.minElevation;
 
-        const farMax = useLogarithmicDepth
+        let farMax = useLogarithmicDepth
             ? distance * this.farMaxRatio * 10
             : distance * this.farMaxRatio;
+
+        // In spherical projection visibility is limited by the globe itself, not by the target
+        // distance: clamping to `distance * this.farMaxRatio` clipped the horizon when the
+        // camera was tilted towards it. With the reversed depth buffer the far plane can cover
+        // everything renderable at no precision cost (Cesium/Google Earth approach), so never
+        // clamp below d + maxR — the farthest point of the max-elevation sphere.
+        if (projection.type === ProjectionType.Spherical) {
+            const d = camera.position.length();
+            const r = Math.max(d - cameraAltitude, 0);
+            farMax = Math.max(farMax, d + r + this.maxElevation);
+        }
 
         const nearMin = useLogarithmicDepth ? Math.max(this.nearMin, 0.001) : this.nearMin;
 
