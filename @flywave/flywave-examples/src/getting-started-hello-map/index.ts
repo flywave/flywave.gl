@@ -1,12 +1,8 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import {
-    applyPanelStyle,
-    attachTerrainImagery,
-    createExampleMap,
-    demoTerrain,
-    logExampleInfo
-} from "../common";
+import { ArcGISTileProvider, DEMTerrainSource, GeoCoordinates } from "@flywave/flywave.gl";
+
+import { applyPanelStyle, createExampleMap, demoTerrain, logExampleInfo } from "../common";
 
 /**
  * Add a one-line footnote explaining the WebGPU -> WebGL fallback: appending
@@ -30,60 +26,143 @@ function addRendererFootnote(): void {
 }
 
 /**
- * Hello Map: the smallest useful flywave.gl example.
+ * Global DEM: the AWS Open Data "Terrain Tiles" terrarium service (no token,
+ * CORS enabled, covers the whole planet at zoom 0..15). The encoding MUST be
+ * declared explicitly — the decoder defaults to mapbox and would misread
+ * terrarium heights by orders of magnitude.
+ */
+function globalTerrain(): DEMTerrainSource {
+    return new DEMTerrainSource({
+        source: {
+            type: "raster-dem",
+            minzoom: 0,
+            maxzoom: 15,
+            tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+            bounds: [-180, -85.0511, 180, 85.0511],
+            scheme: "xyz",
+            tileSize: 256,
+            attribution: "Terrain: AWS Open Data Terrain Tiles / Mapzen"
+        },
+        encoding: "terrarium"
+    });
+}
+
+/**
+ * Unix-ms timestamp at solar noon over the given longitude. The atmosphere
+ * derives the sun direction from the timestamp, so this keeps the hemisphere
+ * facing the default camera in daylight regardless of the machine clock.
+ */
+function solarNoonTimestamp(longitudeDeg: number): number {
+    const now = new Date();
+    const utcHour = 12 - longitudeDeg / 15;
+    const dayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    return dayStart + ((utcHour + 24) % 24) * 3600 * 1000;
+}
+
+/** Default view: whole globe, centered on Asia. */
+const GLOBE_TARGET = { lat: 25, lng: 110 };
+const GLOBE_ZOOM = 2.3;
+
+/**
+ * Global terrain map: the whole planet as a 3D DEM surface.
  *
- * Demonstrates the canonical three-step setup shared by every example:
+ * Demonstrates the canonical setup shared by every example:
  * 1. {@link createExampleMap} wires MapView + MapControls + the UI overlay,
- * 2. attach an elevation (terrain) source,
- * 3. attach an imagery source, then move the camera with a single flyTo.
+ * 2. attach a GLOBAL elevation source (AWS terrarium, zoom 0..15),
+ * 3. drape imagery into the terrain tiles with `imageryLevelOffset: 1` — every
+ *    terrain tile renders a 2x2 mosaic of its four child imagery tiles (4x
+ *    the texels at the same mesh count).
+ *
+ * URL flags:
+ *   ?mapterhorn   — public terrarium DEM from tiles.mapterhorn.com
+ *   ?localdem     — local demo DEM bundled with the examples
+ *   ?emptyterrain — empty draping carrier (no DEM data)
+ *   ?flyto=lat,lng,distance,tilt,heading — debug camera override
  */
 async function main(): Promise<void> {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
+    const urlParams = new URLSearchParams(window.location.search);
 
-    // Step 1: map + controls from the shared factory. The theme below and the
-    // DEM tiles in step 2 are served from the examples' local `resources/`
-    // folder through the MapView asset uri resolver.
+    // Step 1: map + controls from the shared factory.
     const { mapView } = await createExampleMap(canvas, {
-        theme: "resources/tilezen_base_globe.json",
+        themeObject: {
+            extends: "resources/tilezen_base_globe.json",
+            atmosphere: {
+                enabled: true,
+                // Keep the Asia-facing hemisphere in daylight.
+                sunTime: solarNoonTimestamp(GLOBE_TARGET.lng),
+                sunTimeTransitionDuration: 0
+            }
+        },
         controlsUi: "compact",
-        lookAt: { target: { lat: 36.4862, lng: 118.1727 }, zoomLevel: 12, tilt: 40 }
+        lookAt: { target: GLOBE_TARGET, zoomLevel: GLOBE_ZOOM, tilt: 0 }
     });
 
-    // Step 2: DEM terrain from the local `resources/dem_terrain` dataset,
-    // fed by ArcGIS elevation rasters outside the local tile coverage.
-    const terrain = demoTerrain();
-    mapView.setElevationSource(terrain);
-    // Step 2b: drape Esri World Imagery INTO the terrain tiles. Never add
-    // imagery as an independent DataSource on top of an elevation source:
-    // the flat layer is coplanar with the draped surface and depth-fights.
-    attachTerrainImagery(terrain);
+    // Step 2: global DEM (debug sources opt-in via URL flags).
+    const terrain = urlParams.has("mapterhorn")
+        ? new DEMTerrainSource({
+              source: {
+                  minzoom: 0,
+                  maxzoom: 14,
+                  tiles: ["https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"],
+                  bounds: [-180, -85.0511, 180, 85.0511],
+                  scheme: "xyz",
+                  tileSize: 512,
+                  type: "raster-dem"
+              },
+              encoding: "terrarium"
+          })
+        : urlParams.has("emptyterrain")
+        ? new DEMTerrainSource({
+              source: {
+                  minzoom: 0,
+                  maxzoom: 15,
+                  tiles: [],
+                  bounds: [-180, -90, 180, 90],
+                  scheme: "xyz",
+                  tileSize: 256,
+                  type: "raster-dem"
+              }
+          })
+        : urlParams.has("localdem")
+        ? demoTerrain()
+        : globalTerrain();
+
+    // Step 3: drape Esri World Imagery INTO the terrain tiles, one imagery
+    // level finer than the mesh. Never add imagery as an independent
+    // DataSource on top of an elevation source: the flat layer is coplanar
+    // with the draped surface and depth-fights.
+    terrain.addWebTileDataSource(new ArcGISTileProvider({ minDataLevel: 0, maxDataLevel: 18 }), {
+        imageryLevelOffset: 1
+    });
+    await mapView.setElevationSource(terrain);
+
+    // Pin the global pose explicitly. The constructor lookAt runs before the
+    // elevation source exists, and the camera distance is recomputed once the
+    // terrain under the target resolves (the zoom drifts a couple of levels);
+    // re-applying it here keeps the default view on the whole globe.
+    mapView.lookAt({
+        target: new GeoCoordinates(GLOBE_TARGET.lat, GLOBE_TARGET.lng),
+        zoomLevel: GLOBE_ZOOM,
+        tilt: 0,
+        heading: 0
+    });
 
     // Rendering is on-demand: request a repaint after changing visual state.
     mapView.update();
 
-    // A single camera flight to show motion: approach the local DEM area
-    // from an oblique angle. `?flyto=lat,lng,distance,tilt,heading` overrides it
-    // (engine debugging, e.g. grazing-angle clip-plane checks).
-    const [pLat, pLng, pDist, pTilt, pHdg] =
-        new URLSearchParams(window.location.search).get("flyto")?.split(",").map(Number) ?? [];
-    void mapView.flyTo(
-        Number.isFinite(pLat)
-            ? {
-                  target: { latitude: pLat, longitude: pLng },
-                  distance: pDist,
-                  tilt: pTilt,
-                  heading: pHdg,
-                  duration: 2
-              }
-            : {
-                  target: { latitude: 36.48, longitude: 118.18 },
-                  zoomLevel: 14,
-                  tilt: 55,
-                  heading: 30,
-                  duration: 6,
-                  curve: "bow"
-              }
-    );
+    // Optional camera flight for engine debugging. The default view stays the
+    // whole globe; `?flyto=lat,lng,distance,tilt,heading` overrides it.
+    const [pLat, pLng, pDist, pTilt, pHdg] = urlParams.get("flyto")?.split(",").map(Number) ?? [];
+    if (Number.isFinite(pLat)) {
+        void mapView.flyTo({
+            target: { latitude: pLat, longitude: pLng },
+            distance: pDist,
+            tilt: pTilt,
+            heading: pHdg,
+            duration: 2
+        });
+    }
 
     addRendererFootnote();
     logExampleInfo("getting-started-hello-map", mapView);

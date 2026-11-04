@@ -49,6 +49,13 @@ export class AtmosphereSystem {
     private static readonly MOON_RADIUS = 1737400;
     private static readonly SHADOW_DISABLE_DISTANCE = 2e5;
 
+    /**
+     * Faint sky fill so the night side of the globe keeps a natural (moonlit) look instead of
+     * going pitch black — the same role the ambient night light plays in other globe engines.
+     * The sun dominates the day side, so the fill is barely perceptible there.
+     */
+    private static readonly NIGHT_AMBIENT_INTENSITY = 0.4;
+
     private currentDate?: Date;
     private targetDate?: Date;
     private m_sunTimeTransitionDuration: number = 2000;
@@ -57,6 +64,7 @@ export class AtmosphereSystem {
     private m_atmosphereContext?: AtmosphereContext;
     private m_skyNode?: SkyNode;
     private m_atmosphereLight?: AtmosphereLight;
+    private m_nightAmbientLight?: THREE.HemisphereLight;
     private m_csmShadowNode?: CascadedShadowMapsNode;
     private m_atmosphereEnabled: boolean = true;
     private m_cloudsEnabled: boolean = false;
@@ -173,6 +181,14 @@ export class AtmosphereSystem {
         this.m_csmShadowNode.fade = false;
         this.m_atmosphereLight.shadow.shadowNode = this.m_csmShadowNode;
 
+        // Night-side sky fill: a faint bluish hemisphere light keeps the unlit hemisphere
+        // readable (moonlit look) instead of rendering pure black.
+        this.m_nightAmbientLight = new THREE.HemisphereLight(
+            0x33455e,
+            0x0a0c10,
+            AtmosphereSystem.NIGHT_AMBIENT_INTENSITY
+        );
+
         this.mapView.ready.then(() => {
             const renderer = this.mapView.renderer as Renderer & {
                 contextNode?: { value: Record<string, unknown> };
@@ -230,6 +246,11 @@ export class AtmosphereSystem {
 
             this.m_atmosphereLight.layers.enable(TRANSLUCENT_LAYER_BIT);
             this.mapView.scene.add(this.m_atmosphereLight);
+
+            if (this.m_nightAmbientLight != null) {
+                this.m_nightAmbientLight.layers.enable(TRANSLUCENT_LAYER_BIT);
+                this.mapView.scene.add(this.m_nightAmbientLight);
+            }
 
             this.applyAtmosphereEnabled();
         });
@@ -676,6 +697,11 @@ export class AtmosphereSystem {
         if (lightNeedsUpdate && this.m_atmosphereLight != null) {
             this.m_atmosphereLight.visible = effective;
             this.m_atmosphereLight.castShadow = effective && this.mapView.shadowsEnabled;
+            // Without the atmosphere there is no sun; theme lights take over, so the night
+            // fill must not double up with them.
+            if (this.m_nightAmbientLight != null) {
+                this.m_nightAmbientLight.visible = effective;
+            }
         }
 
         if (sceneNeedsUpdate) {

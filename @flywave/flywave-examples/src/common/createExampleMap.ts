@@ -196,6 +196,12 @@ export async function createExampleMap(
     if (options.minCameraHeight !== undefined) {
         mapViewOptions.minCameraHeight = options.minCameraHeight;
     }
+    // Debug hook: `?lodpixel=<px>` tunes the mixed-LOD subdivision granularity (default 256).
+    // Lower values refine distant tiles further, matching Cesium-style screen-space error.
+    const lodPixelParam = Number(new URLSearchParams(window.location.search).get("lodpixel"));
+    if (Number.isFinite(lodPixelParam) && lodPixelParam > 0) {
+        mapViewOptions.lodMinTilePixelSize = lodPixelParam;
+    }
     if (lookAt?.target !== undefined) {
         mapViewOptions.target = new GeoCoordinates(
             lookAt.target.lat,

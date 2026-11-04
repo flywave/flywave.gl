@@ -191,12 +191,18 @@ export abstract class ResourceProvider<
         level: number,
         abortSignal: AbortSignal
     ): Promise<{ value: T; memoryUsed: number }> | boolean {
+        // `level` may be FINER than the terrain tile (imagery level offsets): a negative
+        // levelOffset would shift row/column by 31 bits and collapse every tile onto
+        // (0, 0) — in that case the resource belongs to the tile itself.
         const levelOffset = tileKey.level - level;
-        const parentKey = TileKey.fromRowColumnLevel(
-            tileKey.row >> levelOffset,
-            tileKey.column >> levelOffset,
-            level
-        );
+        const parentKey =
+            levelOffset > 0
+                ? TileKey.fromRowColumnLevel(
+                      tileKey.row >> levelOffset,
+                      tileKey.column >> levelOffset,
+                      level
+                  )
+                : tileKey;
 
         // Get or create the parent terrain tile
         let parentTerrainParent = this.terrainSource!.getCachedTile(parentKey);

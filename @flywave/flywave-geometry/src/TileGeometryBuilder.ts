@@ -207,6 +207,23 @@ export interface TileGeometryWithTransform {
 }
 
 /**
+ * Terrain mesh density per tile (log2 of the segment count).
+ *
+ * Core grid = (2^d + 1)^2 vertices plus a skirt ring, i.e. per tile:
+ *   d = 3 -> 121,  d = 5 -> 1_225,  d = 6 -> 4_489,  d = 7 -> 17_161
+ *
+ * The DEM texture carries 256x256 samples per tile, so 8 would be the data
+ * limit — but 8 (259^2 = 67_081 vertices) overflows the Uint16 index buffer
+ * (65_535), so 7 (129x129, every 2nd DEM texel) is the safe maximum and 6
+ * (65x65, every 4th texel) the balanced default.
+ *
+ * The previous per-level formula (`max(6 - level, 3)`) left every tile at
+ * level >= 3 with a 9x9 core grid — roughly 130 m between vertices on a
+ * level-15 tile, which visibly flattened the relief regardless of the DEM.
+ */
+const TILE_MESH_DETAIL_LEVEL = 6;
+
+/**
  * Class for generating and managing sphere tile grids for geographic visualization
  */
 class TileGeometryBuilder {
@@ -466,8 +483,7 @@ class TileGeometryBuilder {
         const level = tileKey.level;
         const { maxDetailLevel, minDetailLevel } = this;
 
-        // Mesh density: base of 6 with a floor of 3 (one notch below the original base of 7, ~1/4 the triangle count)
-        const subdivision = Math.max(6 - level, 3);
+        const subdivision = TILE_MESH_DETAIL_LEVEL;
         const tileCount = 1 << level;
         let cacheKey: string;
 
@@ -485,6 +501,9 @@ class TileGeometryBuilder {
                 mode.is_simple_patch = true;
             } else {
                 needsNormalCalculation = true;
+                // Skirts only from `minDetailLevel` up: the whole-globe level-0/1 bucket
+                // geometry cannot carry the skirt ring (it sweeps across the planet as giant
+                // floating sheets).
                 mode =
                     level >= minDetailLevel
                         ? this.generatePatchWithBucketsAndSkirt(
@@ -537,8 +556,7 @@ class TileGeometryBuilder {
     getTileGeometryWithTransform(tileKey: TileKey): TileGeometryWithTransform {
         const row = tileKey.row;
         const level = tileKey.level;
-        // Mesh density: base of 6 with a floor of 3 (one notch below the original base of 7, ~1/4 the triangle count)
-        const subdivision = Math.max(6 - level, 3);
+        const subdivision = TILE_MESH_DETAIL_LEVEL;
 
         const cacheKey =
             level >= this.maxDetailLevel ? `simple.patch/${subdivision}` : `${level}/${row}/patch`;
