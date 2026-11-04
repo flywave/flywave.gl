@@ -8,6 +8,7 @@ import { type GeoBox, type TileKey } from "@flywave/flywave-geoutils";
 import debounce, { type DebouncedFunc } from "lodash.debounce";
 
 import {
+    type LoadingStage,
     type TerrainSourceOptions,
     TerrainSource,
     type TerrainResourceTile
@@ -149,6 +150,43 @@ export class DEMTerrainSource extends TerrainSource<DemTileProvider> {
      */
     protected getTerrainLevelRange(): [number, number] {
         return [this.dataProvider()?.getMinZoom() ?? 0, this.dataProvider()?.getMaxZoom() ?? 0];
+    }
+
+    /**
+     * Anchors the loading-stage table's LAST stage at the declared max zoom.
+     *
+     * `TerrainSource.shouldSubdivide` gates subdivision with the last stage's
+     * pacing key `(tile.row, tile.column, stage.minLevel)` — the offset
+     * degenerates to 0 for the last stage, so the key is a real cached tile
+     * only when `stage.minLevel === tileKey.level`. That holds automatically
+     * when the stage table's last stage starts AT the declared max zoom (the
+     * configuration global pyramids ship with), but NOT when it starts below
+     * it: with maxZoom 12 the table's last stage is 10..11 (+12 via the
+     * fallback), so level 11/12 look up out-of-grid keys that never cache —
+     * subdivision, and the imagery draped on the tiles, freeze near the
+     * declared value even though finer imagery exists.
+     *
+     * Re-keying the last stage to the declared max zoom reproduces the
+     * working configuration for ANY declared max zoom: at the boundary the
+     * gate is a self-check (the tile's own resource — a failed download
+     * stores an invalid resource, which still counts as cached), above the
+     * boundary the display-driven branch carries refinement, and levels
+     * between the table's old last-stage start and the boundary pace on
+     * their own data.
+     */
+    protected getStageForLevel(tileKey: TileKey): LoadingStage {
+        const stage = super.getStageForLevel(tileKey);
+        const maxZoom = this.getTerrainLevelRange()[1];
+        if (!stage.isLast || maxZoom <= 0) {
+            return stage;
+        }
+        if (tileKey.level >= maxZoom) {
+            // Boundary and above: key at the declared max zoom.
+            return stage.minLevel === maxZoom ? stage : { ...stage, minLevel: maxZoom };
+        }
+        // Below the boundary but inside the old last stage: pace on the
+        // tile's own level instead of the stage start.
+        return stage.minLevel === tileKey.level ? stage : { ...stage, minLevel: tileKey.level };
     }
 
     /**
