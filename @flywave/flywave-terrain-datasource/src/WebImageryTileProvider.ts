@@ -102,13 +102,18 @@ class WebImageryTileResource extends TileValidResource {
      * @inheritdoc
      */
     getBytesUsed(): number {
-        return this.tiles.reduce(
-            (acc, cur) =>
-                acc +
-                    (cur.texture.image as { data?: { byteLength: number } } | undefined)?.data
-                        ?.byteLength || 0,
-            0
-        );
+        // ImageBitmap/HTMLImageElement have no `.data` byteLength to read, and
+        // reporting 0 starves the terrain LRU's byte-based eviction (every
+        // imagery tile then looks free while its GPU texture costs ~1MB).
+        // Account pixels honestly for every supported image type.
+        return this.tiles.reduce((acc, cur) => {
+            const image = cur.texture.image;
+            if (typeof ImageBitmap !== "undefined" && image instanceof ImageBitmap) {
+                return acc + image.width * image.height * 4;
+            }
+            const data = (image as { data?: { byteLength: number } } | undefined)?.data;
+            return acc + (data?.byteLength ?? 0);
+        }, 0);
     }
 
     protected listenerTerrainModification() {}

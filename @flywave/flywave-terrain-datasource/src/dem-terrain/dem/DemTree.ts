@@ -501,19 +501,31 @@ const buildDemMipmap = (dem: DEMData): MipLevel[] => {
     let blockCount = Math.ceil(Math.pow(2, levelCount));
     let mip = new MipLevel(blockCount);
 
+    // Block corners form a (blockCount + 1) x (blockCount + 1) grid and each
+    // interior corner is shared by up to four adjacent blocks. Sample every
+    // unique corner once instead of re-sampling the four corners of every
+    // block (dim = 512: 66k samples instead of 262k; each sample costs four
+    // DEMData.get calls).
+    const cornerSize = blockCount + 1;
+    const cornerElevations = new Float32Array(cornerSize * cornerSize);
+    const blockSize = 1 / blockCount;
+    for (let cy = 0; cy < cornerSize; cy++) {
+        for (let cx = 0; cx < cornerSize; cx++) {
+            cornerElevations[cy * cornerSize + cx] = sampleElevation(
+                cx * blockSize,
+                cy * blockSize,
+                dem
+            );
+        }
+    }
+
     for (let y = 0; y < blockCount; y++) {
         for (let x = 0; x < blockCount; x++) {
             const idx = mip.toIdx(x, y);
-            const blockSize = 1 / blockCount;
-            const minx = x * blockSize;
-            const maxx = (x + 1) * blockSize;
-            const miny = y * blockSize;
-            const maxy = (y + 1) * blockSize;
-
-            const e0 = sampleElevation(minx, miny, dem);
-            const e1 = sampleElevation(maxx, miny, dem);
-            const e2 = sampleElevation(maxx, maxy, dem);
-            const e3 = sampleElevation(minx, maxy, dem);
+            const e0 = cornerElevations[y * cornerSize + x];
+            const e1 = cornerElevations[y * cornerSize + (x + 1)];
+            const e2 = cornerElevations[(y + 1) * cornerSize + (x + 1)];
+            const e3 = cornerElevations[(y + 1) * cornerSize + x];
 
             mip.minimums[idx] = Math.min(e0, e1, e2, e3);
             mip.maximums[idx] = Math.max(e0, e1, e2, e3);

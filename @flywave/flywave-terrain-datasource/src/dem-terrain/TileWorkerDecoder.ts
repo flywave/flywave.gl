@@ -13,7 +13,17 @@ import { type DEMEncoding, DEMData } from "./dem/DemData";
 export interface DecodeTileParams {
     uid: string;
     encoding: DEMEncoding;
-    imageData: ImageData;
+    /**
+     * Decoded pixels. Exactly one of imageData / imageBuffer is set; when
+     * imageBuffer carries the still-encoded tile image, the worker decodes it
+     * itself so the main thread never runs the image decoder.
+     */
+    imageData?: ImageData | ImageBitmap;
+    /**
+     * Raw, still-encoded tile image (PNG/JPEG bytes). Cloned as a plain
+     * ArrayBuffer (compressed bytes, far smaller than raw pixels).
+     */
+    imageBuffer?: ArrayBuffer;
     geoBox: GeoBoxArray;
     padding: number;
     buildQuadTree: boolean;
@@ -90,7 +100,13 @@ export const processDEMTile = async (params: DecodeTileParams): Promise<DecodeTi
     validateDecodeParams(params);
     const { uid, encoding, geoBox } = params;
 
-    const imagePixels = await getImageData(params.imageData, params.padding);
+    // Decode still-encoded buffers here in the worker (createImageBitmap is
+    // available in workers); the main thread only fetches the bytes.
+    const imageSource: ImageBitmap | ImageData = params.imageBuffer
+        ? await createImageBitmap(new Blob([params.imageBuffer]))
+        : (params.imageData as ImageBitmap | ImageData);
+
+    const imagePixels = await getImageData(imageSource, params.padding);
 
     // Bake patch layers into the pixel buffer BEFORE the quad tree and the
     // border fill are built, so min/max trees, borders and every downstream

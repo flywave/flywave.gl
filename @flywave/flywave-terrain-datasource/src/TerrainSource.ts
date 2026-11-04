@@ -42,6 +42,7 @@ import {
     type Raycaster,
     Matrix4,
     Object3D,
+    Sphere,
     Vector3
 } from "three/webgpu";
 
@@ -51,6 +52,10 @@ import { TERRAIN_TILE_DECODER_ID } from "./Constants";
 // satisfies the three Intersection contract. This raycast is consumed by
 // camera collision only and never enters picking results.
 const terrainCollisionObject = new Object3D();
+
+// Scratch matrix for the per-frame view-projection matrix (avoids allocating a
+// fresh Matrix4 on every onWillTouchTiled call).
+const viewProjectionMatrixScratch = new Matrix4();
 
 import {
     type TileGeometryBuilder,
@@ -203,6 +208,22 @@ export class TerrainResourceTile extends Tile {
     private _cachedMesh: Object3D | null = null;
     private _layerMeshes: Map<string, TerrainLayerMesh> | null = null;
     private _layerTileState: TerrainTileState | null = null;
+    /**
+     * Lazily cached world bounding sphere of this tile (refreshed whenever the
+     * bounding box changes). Used for the per-frame visibility pass; see
+     * updateVisibilityState.
+     */
+    private _visibilitySphere: Sphere | undefined;
+    private _visibilitySphereDirty = true;
+
+    /**
+     * Track bounding-box changes so the cached visibility sphere is refreshed
+     * (covers construction, elevation-range updates and decoded-tile bounds).
+     */
+    protected override updateBoundingBox(newBoundingBox?: OrientedBox3) {
+        super.updateBoundingBox(newBoundingBox);
+        this._visibilitySphereDirty = true;
+    }
 
     shouldDisposeObjectGeometry() {
         return false;
@@ -284,12 +305,35 @@ export class TerrainResourceTile extends Tile {
 
     /**
      * Update the tile's visibility state
+     *
+     * Runs once per frame for every cached tile, so the per-tile work is kept
+     * to a sphere test against a cached bounding sphere (conservative superset
+     * of the oriented box, refreshed only when the bound changes). The two
+     * fields below feed only the loading-queue priority heuristic
+     * ({@link tileLoadingPriorityComparator}); tile visibility itself is driven
+     * by the requested-frame counter on {@link Tile.isVisible}.
+     *
      * @param mapView - The current map view
      * @param frustum - The view frustum (optional)
      */
     updateVisibilityState(mapView: MapView, frustum?: ExtendedFrustum) {
-        this._distanceFromCamera = this.boundingBox.distanceToPoint(mapView.camera.position);
-        this._isInFrustum = frustum ? this.boundingBox.intersects(frustum) : false;
+        let sphere = this._visibilitySphere;
+        if (sphere === undefined || this._visibilitySphereDirty) {
+            sphere = this.boundingBox.getBoundingSphere(sphere ?? new Sphere());
+            this._visibilitySphere = sphere;
+            this._visibilitySphereDirty = false;
+        }
+
+        const cameraPosition = mapView.camera.position;
+        const dx = cameraPosition.x - sphere.center.x;
+        const dy = cameraPosition.y - sphere.center.y;
+        const dz = cameraPosition.z - sphere.center.z;
+        // Conservative lower bound of the distance to the box surface.
+        this._distanceFromCamera = Math.max(
+            0,
+            Math.sqrt(dx * dx + dy * dy + dz * dz) - sphere.radius
+        );
+        this._isInFrustum = frustum ? frustum.intersectsSphere(sphere) : false;
     }
 
     /**
@@ -493,6 +537,13 @@ export abstract class TerrainSource<
 
     private readonly m_viewFrustum: ExtendedFrustum = new ExtendedFrustum();
     private readonly m_loadingQueue = new PriorityQueue<TileType>();
+    /**
+     * Tiles currently queued for loading. The per-frame visibility refresh
+     * (see TileLRUCache.scheduleUpdateTile) only needs to cover these: the
+     * visibility flags' only consumer is the loading-queue priority
+     * comparator, which ranks exactly these tiles.
+     */
+    private readonly m_queuedTiles = new Set<TileType>();
     private readonly m_tileCache = new TileLRUCache<TileType>(this);
     private readonly m_groundModificationManager: HeightMapModifierManager;
     private readonly m_demPatchManager: DemPatchManager;
@@ -709,7 +760,9 @@ export abstract class TerrainSource<
         abortSignal?.addEventListener("abort", () => {
             this.dequeueTileLoadingTask(tile);
         });
-        return this.m_loadingQueue.add(tile, task);
+        const promise = this.m_loadingQueue.add(tile, task);
+        this.m_queuedTiles.add(tile);
+        return promise;
     }
 
     /**
@@ -717,6 +770,7 @@ export abstract class TerrainSource<
      * @param tile - The tile whose task should be removed
      */
     dequeueTileLoadingTask(tile: TileType) {
+        this.m_queuedTiles.delete(tile);
         this.m_loadingQueue.remove(tile);
     }
 
@@ -872,7 +926,7 @@ export abstract class TerrainSource<
      */
     public override onWillTouchTiled() {
         this.m_viewFrustum.setFromProjectionMatrix(
-            new Matrix4().multiplyMatrices(
+            viewProjectionMatrixScratch.multiplyMatrices(
                 this.mapView.camera.projectionMatrix,
                 this.mapView.camera.matrixWorldInverse
             )
@@ -887,7 +941,7 @@ export abstract class TerrainSource<
             this.m_projectionSwitchController.update();
         }
 
-        this.m_tileCache.scheduleUpdateTile(this.mapView, this.m_viewFrustum);
+        this.m_tileCache.scheduleUpdateTile(this.mapView, this.m_viewFrustum, this.m_queuedTiles);
     }
 
     /**
@@ -895,6 +949,14 @@ export abstract class TerrainSource<
      */
     public override onTouchTiledComplete(): void {
         this.m_loadingQueue.scheduleJobRun();
+        // Jobs that finished inside the queue are not seen by
+        // dequeueTileLoadingTask; drop them so the queue-following visibility
+        // set stays tight.
+        for (const tile of this.m_queuedTiles) {
+            if (!this.m_loadingQueue.has(tile)) {
+                this.m_queuedTiles.delete(tile);
+            }
+        }
         this.m_tileCache.scheduleUnloadAndUpdateTile();
     }
 

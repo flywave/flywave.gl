@@ -36,6 +36,41 @@ const tmpVector4 = new THREE.Vector4();
 const POLAR_RADIUS = EarthConstants.EQUATORIAL_RADIUS * (1 - 1 / 298.257223563);
 
 /**
+ * World-space bounds of a tile projected once and reused across frames.
+ *
+ * The projection of a tile's geo box only depends on the box itself, the
+ * elevation range and the data source geometry heights - never on the camera -
+ * so the result is cached per (tiling scheme, tile key, wrap offset) and
+ * re-validated against the altitudes it was computed with on every frame.
+ */
+interface ProjectedBoundsCacheEntry {
+    bounds: OrientedBox3 | THREE.Box3;
+    /** Final minimum altitude (elevation range + minGeometryHeight) the bounds were projected with. */
+    minAltitude: number;
+    /** Final maximum altitude (elevation range + maxGeometryHeight) the bounds were projected with. */
+    maxAltitude: number;
+}
+
+/** Cap for the projected-bounds cache; on overflow the oldest half is dropped. */
+const MAX_PROJECTED_BOUNDS_CACHE_ENTRIES = 60000;
+
+/**
+ * Copies tile bounds between same-typed bound objects. Target and source are
+ * always the same concrete type within a projection (the cache is keyed by the
+ * projection instance and cleared when it changes).
+ */
+function copyTileBounds(
+    target: OrientedBox3 | THREE.Box3,
+    source: OrientedBox3 | THREE.Box3
+): void {
+    if (target instanceof THREE.Box3) {
+        target.copy(source as THREE.Box3);
+    } else {
+        target.copy(source as OrientedBox3);
+    }
+}
+
+/**
  * Represents a unique TileKey and the area it takes up on screen.
  *
  * Note, in certain tiling projections, it is possible to have an offset, which represents a tile
@@ -98,6 +133,15 @@ export class FrustumIntersection {
     private readonly m_mapTileCuller: MapTileCuller;
     private m_rootTileKeys: TileKeyEntry[] = [];
     private readonly m_tileKeyEntries: ZoomLevelTileKeyMap = new Map();
+
+    /** Per tiling scheme: tile key morton code -> wrap offset -> cached projection. */
+    private readonly m_projectedBoundsCache: Map<
+        TilingScheme,
+        Map<number, Map<number, ProjectedBoundsCacheEntry>>
+    > = new Map();
+    private m_projectedBoundsCacheSize: number = 0;
+    /** Projection instance the projected-bounds cache was built with. */
+    private m_projectedBoundsCacheProjection: Projection | undefined;
 
     constructor(
         private readonly m_camera: THREE.PerspectiveCamera,
@@ -166,6 +210,14 @@ export class FrustumIntersection {
         dataSources: DataSource[]
     ): IntersectionResult {
         this.m_tileKeyEntries.clear();
+
+        // Cached projections are only valid for the projection instance they
+        // were computed with; a globe/mercator switch replaces the instance.
+        if (this.m_projectedBoundsCacheProjection !== this.mapView.projection) {
+            this.m_projectedBoundsCacheProjection = this.mapView.projection;
+            this.m_projectedBoundsCache.clear();
+            this.m_projectedBoundsCacheSize = 0;
+        }
 
         // Compute target tile area in clip space size.
         // A tile should take up roughly 256x256 pixels on screen in accordance to
@@ -330,26 +382,64 @@ export class FrustumIntersection {
         dataSources: DataSource[],
         elevationRangeSource?: ElevationRangeSource
     ): TileKeyEntry | undefined {
-        const geoBox = getGeoBox(tilingScheme, tileKey, offset);
-
-        // For tiles without elevation range source, default 0 (getGeoBox always
-        // returns box with altitude min/max equal to zero) will be propagated as
+        // For tiles without elevation range source, default 0 will be propagated as
         // min and max elevation, these tiles most probably contains features that
         // lays directly on the ground surface.
+        let minElevation = 0;
+        let maxElevation = 0;
         if (elevationRangeSource !== undefined) {
             const range = elevationRangeSource!.getElevationRange(tileKey, dataSources);
-            geoBox.southWest.altitude = range.minElevation;
-            geoBox.northEast.altitude = range.maxElevation;
+            minElevation = range.minElevation;
+            maxElevation = range.maxElevation;
             cache.calculationFinal =
                 cache.calculationFinal &&
                 range.calculationStatus === CalculationStatus.FinalPrecise;
         }
 
-        // Enlarge the bounding boxes of tiles with min/max geometry height for visibility tests.
-        geoBox.southWest.altitude = (geoBox.southWest.altitude ?? 0) + minGeometryHeight;
-        geoBox.northEast.altitude = (geoBox.northEast.altitude ?? 0) + maxGeometryHeight;
+        // Final altitudes incl. the conservative geometry-height enlargement.
+        // Together with the (camera independent) lat/lon box they fully
+        // determine the projected bounds, so they serve as the cache validity key.
+        const minAltitude = minElevation + minGeometryHeight;
+        const maxAltitude = maxElevation + maxGeometryHeight;
 
-        this.mapView.projection.projectBox(geoBox, cache.tileBounds);
+        const mortonCode = tileKey.mortonCode(tilingScheme.mortonTileEncoding);
+        let byMorton = this.m_projectedBoundsCache.get(tilingScheme);
+        if (byMorton === undefined) {
+            byMorton = new Map();
+            this.m_projectedBoundsCache.set(tilingScheme, byMorton);
+        }
+        let byOffset = byMorton.get(mortonCode);
+        if (byOffset === undefined) {
+            byOffset = new Map();
+            byMorton.set(mortonCode, byOffset);
+        }
+        const cached = byOffset.get(offset);
+        if (
+            cached !== undefined &&
+            cached.minAltitude === minAltitude &&
+            cached.maxAltitude === maxAltitude
+        ) {
+            // Reuse the projection from a previous frame instead of re-projecting
+            // every visited tile on every frame during camera movement.
+            copyTileBounds(cache.tileBounds, cached.bounds);
+        } else {
+            const geoBox = getGeoBox(tilingScheme, tileKey, offset);
+            geoBox.southWest.altitude = minAltitude;
+            geoBox.northEast.altitude = maxAltitude;
+
+            this.mapView.projection.projectBox(geoBox, cache.tileBounds);
+            if (cached !== undefined) {
+                copyTileBounds(cached.bounds, cache.tileBounds);
+            } else {
+                const bounds =
+                    cache.tileBounds instanceof THREE.Box3 ? new THREE.Box3() : new OrientedBox3();
+                copyTileBounds(bounds, cache.tileBounds);
+                byOffset.set(offset, { bounds, minAltitude, maxAltitude });
+                this.m_projectedBoundsCacheSize++;
+                this.pruneProjectedBoundsCache();
+            }
+        }
+
         const { area, distance } = this.computeTileAreaAndDistance(cache.tileBounds);
 
         if (area > 0) {
@@ -358,14 +448,43 @@ export class FrustumIntersection {
                 area,
                 offset,
                 {
-                    minElevation: geoBox.southWest.altitude,
-                    maxElevation: geoBox.northEast.altitude
+                    minElevation: minAltitude,
+                    maxElevation: maxAltitude
                 },
                 distance
             );
         }
 
         return undefined;
+    }
+
+    /**
+     * Drops the oldest half of the projected-bounds cache once it exceeds its
+     * size cap (Map iteration is insertion-ordered, so the dropped morton
+     * buckets are the least recently added ones).
+     */
+    private pruneProjectedBoundsCache(): void {
+        if (this.m_projectedBoundsCacheSize <= MAX_PROJECTED_BOUNDS_CACHE_ENTRIES) {
+            return;
+        }
+        const target = Math.floor(this.m_projectedBoundsCacheSize / 2);
+        let dropped = 0;
+        for (const [tilingScheme, byMorton] of this.m_projectedBoundsCache) {
+            if (dropped >= target) {
+                break;
+            }
+            for (const [morton, byOffset] of byMorton) {
+                dropped += byOffset.size;
+                byMorton.delete(morton);
+                if (dropped >= target) {
+                    break;
+                }
+            }
+            if (byMorton.size === 0) {
+                this.m_projectedBoundsCache.delete(tilingScheme);
+            }
+        }
+        this.m_projectedBoundsCacheSize -= dropped;
     }
 
     /**

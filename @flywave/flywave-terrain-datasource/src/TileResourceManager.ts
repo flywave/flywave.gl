@@ -113,14 +113,32 @@ export class TileLRUCache<TileType extends TerrainResourceTile> extends LRUCache
     /**
      * Schedules update for all tiles visibility state
      *
+     * When `queuedTiles` is supplied, only those tiles get fresh visibility
+     * flags: the flags' only consumer is the loading-queue priority
+     * comparator, which ranks exactly the tiles currently queued for loading.
+     * This keeps the per-frame cost proportional to the (small) loading queue
+     * instead of the whole tile cache.
+     *
      * @param mapView - The MapView instance
      * @param frustum - The frustum for visibility testing (optional)
+     * @param queuedTiles - Tiles currently queued for loading (optional)
      */
-    scheduleUpdateTile(mapView: MapView, frustum?: ExtendedFrustum): void {
+    scheduleUpdateTile(
+        mapView: MapView,
+        frustum?: ExtendedFrustum,
+        queuedTiles?: Iterable<TileType>
+    ): void {
         this.markAllUnused();
+
+        if (queuedTiles !== undefined) {
+            for (const tile of queuedTiles) {
+                tile.updateVisibilityState(mapView, frustum);
+            }
+            return;
+        }
+
         this._tileMap.forEach(tile => {
             tile.updateVisibilityState(mapView, frustum);
-            //     tile._isUsed = false;
         });
     }
 

@@ -13,6 +13,7 @@ import {
     arrayBufferToImage,
     arrayBufferToImageBitmap,
     browser,
+    getBinaryImageMetadata,
     offscreenCanvasSupported
 } from "@flywave/flywave-utils";
 import { Box2, Vector2 } from "three/webgpu";
@@ -124,7 +125,12 @@ export class DemTileResource extends TileValidResource {
      * processing, ground modifications, patch baking, and neighboring tile
      * backfilling.
      *
-     * @param imgData - The source image data (Image, ImageBitmap, or ImageData)
+     * When an encoded ArrayBuffer is passed (PNG/JPEG bytes straight from the
+     * network), the buffer is forwarded to the decoder worker and the image is
+     * decoded THERE — the main thread never runs the image decoder.
+     *
+     * @param imgData - The source image (Image, ImageBitmap, ImageData) or the
+     * raw encoded image buffer
      * @param tileKey - The tile key identifying this tile
      * @param terrainSource - The terrain data source
      * @param encoding - The DEM encoding format
@@ -133,22 +139,46 @@ export class DemTileResource extends TileValidResource {
      * @returns A promise that resolves to a new DemTileResource
      */
     static async createDemTileResourceFromImageryData(
-        imgData: HTMLImageElement | ImageBitmap | ImageData,
+        imgData: HTMLImageElement | ImageBitmap | ImageData | ArrayBuffer,
         tileKey: TileKey,
         terrainSource: ITerrainSource,
         encoding: DEMEncoding,
         patchSnapshot?: DemPatchSnapshot
     ) {
-        const { decodePadding: padding, borderReady } = computeDemTileGrid(imgData.width);
+        let width: number;
+        let height: number;
+        let imageData: ImageData | ImageBitmap | undefined;
+        let imageBuffer: ArrayBuffer | undefined;
 
-        let imageData: ImageData;
-        if (imgData instanceof ImageData) {
-            imageData = imgData as ImageData;
+        if (imgData instanceof ArrayBuffer) {
+            const metadata = getBinaryImageMetadata(imgData);
+            if (!metadata) {
+                throw new Error("unsupported encoded DEM image format");
+            }
+            width = metadata.width;
+            height = metadata.height;
+            imageBuffer = imgData;
         } else {
-            const transfer =
-                window.ImageBitmap && imgData instanceof ImageBitmap && offscreenCanvasSupported();
+            width = imgData.width;
+            height = imgData.height;
+        }
 
-            imageData = (transfer ? imgData : browser.getImageData(imgData, padding)) as ImageData;
+        const { decodePadding: padding, borderReady } = computeDemTileGrid(width);
+
+        if (!imageBuffer) {
+            if (imgData instanceof ImageData) {
+                imageData = imgData as ImageData;
+            } else {
+                const source = imgData as HTMLImageElement | ImageBitmap;
+                const transfer =
+                    window.ImageBitmap &&
+                    source instanceof ImageBitmap &&
+                    offscreenCanvasSupported();
+
+                imageData = (
+                    transfer ? source : browser.getImageData(source, padding)
+                ) as ImageData;
+            }
         }
         const geoBox = terrainSource.getTilingScheme().getGeoBox(tileKey);
 
@@ -162,13 +192,13 @@ export class DemTileResource extends TileValidResource {
                 {
                     type: TaskType.RasterDEM,
                     coord: tileKey,
-                    imageData,
+                    ...(imageBuffer ? { imageBuffer } : { imageData: imageData! }),
                     encoding,
                     geoBox: geoBox.toArray(),
                     padding,
                     terrainSourceId: terrainSource.name,
-                    height: imgData.height,
-                    width: imgData.width,
+                    height,
+                    width,
                     flipY: (terrainSource.dataProvider() as DemTileProvider).isElevationMapFlipY(),
                     patches: patchSnapshot?.patches
                 },
@@ -405,21 +435,36 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
                 : null;
 
         const dbuffer = await this._fetchTileData(tileKey, abortSignal);
-        const img: HTMLImageElement | ImageBitmap = await new Promise(resolve => {
-            if (window.createImageBitmap) {
-                arrayBufferToImageBitmap(dbuffer, (err, imgBitmap) => {
-                    resolve(imgBitmap);
-                });
-            } else {
-                arrayBufferToImage(dbuffer, (err, img) => {
-                    resolve(img);
-                });
-            }
-        });
+        if (!dbuffer || dbuffer.byteLength === 0) {
+            return await Promise.resolve(undefined);
+        }
 
-        if (!img) return await Promise.resolve(undefined);
+        // PNG/JPEG bytes are decoded IN THE WORKER (the buffer travels as a
+        // plain ArrayBuffer): the old path ran Blob + createImageBitmap on the
+        // main thread per tile, which dominated the main thread while streaming
+        // terrain. Unknown formats fall back to the legacy main-thread decode.
+        const metadata = getBinaryImageMetadata(dbuffer);
+        let imgSource: ArrayBuffer | ImageBitmap | HTMLImageElement;
+        if (metadata) {
+            imgSource = dbuffer;
+        } else {
+            imgSource = await new Promise<ImageBitmap | HTMLImageElement | undefined>(resolve => {
+                if (window.createImageBitmap) {
+                    arrayBufferToImageBitmap(dbuffer, (err, imgBitmap) => {
+                        resolve(imgBitmap);
+                    });
+                } else {
+                    arrayBufferToImage(dbuffer, (err, img) => {
+                        resolve(img);
+                    });
+                }
+            });
+        }
 
-        const { dim } = computeDemTileGrid(img.width);
+        if (!imgSource) return await Promise.resolve(undefined);
+
+        const sourceWidth = metadata ? metadata.width : (imgSource as { width: number }).width;
+        const { dim } = computeDemTileGrid(sourceWidth);
         let resource: DemTileResource | undefined;
         // Bounded re-bake on patch-set changes mid-decode; patch images are
         // LRU-cached so retries only redo resampling + decode.
@@ -434,7 +479,7 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
                 ? patchManager.resamplePatchTiles(await collection, tileKey, dim)
                 : undefined;
             resource = await DemTileResource.createDemTileResourceFromImageryData(
-                img,
+                imgSource,
                 tileKey,
                 this.terrainSource,
                 this.encoding,

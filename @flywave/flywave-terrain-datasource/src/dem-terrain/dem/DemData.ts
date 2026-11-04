@@ -247,9 +247,15 @@ export default class DEMData extends TileValidResource {
             x = clamp(x, -1, this.dim);
             y = clamp(y, -1, this.dim);
         }
-        const index = this._idx(x, y) * 4;
-        const [r, g, b] = this.pixels.slice(index, index + 3);
-        return this._unpackFn(r, g, b);
+        // Read the three color channels in place. The previous implementation
+        // used `pixels.slice(index, index + 3)`, which allocated a fresh
+        // Uint8Array on every call - this method is called O(dim^2) times per
+        // tile while building the DEM min/max mipmap, so the allocation churn
+        // was a measurable GC source in the decode worker.
+        // `| 0` reproduces the slice() index truncation for fractional inputs.
+        const index = (this._idx(x, y) * 4) | 0;
+        const pixels = this.pixels;
+        return this._unpackFn(pixels[index], pixels[index + 1], pixels[index + 2]);
     }
 
     /** Scan all pixels and return {min, max} elevation (memoized — the scan is O(w·h)) */
