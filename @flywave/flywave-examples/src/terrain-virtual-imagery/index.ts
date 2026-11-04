@@ -112,9 +112,9 @@ interface SlotReport {
 
 /**
  * Reads the imagery resource currently attached to a terrain tile and reports
- * where each quadrant slot's texture came from. The span ratio is
- * `tileSpan / entrySpan`: 2.0 means an actual child tile, 1.0 means the tile's
- * own level (borrowed), 0.5 means a parent, and so on.
+ * where each entry's texture came from. The span ratio is
+ * `tileSpan / entrySpan`: 1.0 means a composed mosaic (or the tile's own
+ * level), 0.5 means a parent, and so on.
  */
 function readSlotReports(terrain: DEMTerrainSource, tileKey: TileKey): SlotReport[] {
     const provider = terrain.getWebTileDataSources()[0];
@@ -130,7 +130,7 @@ function readSlotReports(terrain: DEMTerrainSource, tileKey: TileKey): SlotRepor
         const ratio = entrySpan > 0 ? tileSpan / entrySpan : Number.NaN;
         const levelDelta = Number.isFinite(ratio) ? Math.round(Math.log2(ratio)) : 0;
         return {
-            slot: entry.slotIndex ?? index,
+            slot: index,
             ratio,
             label: `z${tileKey.level + levelDelta}`
         };
