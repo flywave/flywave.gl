@@ -1,6 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { webMercatorTerrainTilingScheme } from "@flywave/flywave-geoutils";
+import { webMercatorTerrainTilingScheme, type TileKey } from "@flywave/flywave-geoutils";
 import { TextElement } from "@flywave/flywave-mapview";
 import type * as THREE from "three/webgpu";
 
@@ -39,6 +39,8 @@ interface TargetLayer {
     kind: DEMLayerKind;
     texture?: THREE.Texture;
     uvTransform?: THREE.Vector4;
+    /** Tile key the resource came from (drives the crossfade decision). */
+    sourceKey?: TileKey;
     opacity?: number;
     blending?: THREE.Blending;
 }
@@ -92,7 +94,12 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             if (texture) {
                 // The decoding constants must follow the DEM encoding (terrarium
                 // and mapbox use completely different unpack vectors)
-                state.setHeightMap(texture, demTile.tileKey, demTile.resource.demData.unpackVector);
+                state.setHeightMap(
+                    texture,
+                    demTile.tileKey,
+                    demTile.resource.demData.unpackVector,
+                    this.dataSource.tileFadeDuration
+                );
                 // Data-driven skirt depth: the tile's own elevation span makes
                 // skirts cover T-junction bends against coarser neighbors and
                 // the hard cliffs at DEM patch boundaries (memoized scan).
@@ -183,6 +190,9 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
         // computed against the same tile whose center the renderer adds back.
         state.attachTile(this.tile);
         state.setModifierManager(this.dataSource.getGroundModificationManager());
+        // Keeps ancestor resources alive while their textures are still being
+        // crossfaded out (see TerrainTileState.setHeightMap / TerrainLayerMesh.setImagery).
+        state.setFadePinSink(this.dataSource);
         return state;
     }
 
@@ -213,14 +223,16 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
                         key: "base",
                         kind: "base",
                         texture: webTileEntry.texture,
-                        uvTransform: transform
+                        uvTransform: transform,
+                        sourceKey: webTile.tileKey
                     });
                 } else {
                     targets.push({
                         key: `web:${provider.uuid}:${index}`,
                         kind: "overlay",
                         texture: webTileEntry.texture,
-                        uvTransform: transform
+                        uvTransform: transform,
+                        sourceKey: webTile.tileKey
                     });
                 }
             });
@@ -290,7 +302,7 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
                 target.key,
                 target.kind
             );
-            mesh.setImagery(target.texture ?? null, target.uvTransform);
+            mesh.setImagery(target.texture ?? null, target.uvTransform, target.sourceKey, 0);
             return mesh;
         }
 
@@ -340,7 +352,12 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             // gaps (high-zoom movement churn): keep the last-good texture
             // until a new one arrives — matches the pre-refactor pipeline.
             if (target.texture !== undefined || mesh.layerTexture === null) {
-                mesh.setImagery(target.texture ?? null, target.uvTransform);
+                mesh.setImagery(
+                    target.texture ?? null,
+                    target.uvTransform,
+                    target.sourceKey,
+                    this.dataSource.tileFadeDuration
+                );
             }
             return;
         }

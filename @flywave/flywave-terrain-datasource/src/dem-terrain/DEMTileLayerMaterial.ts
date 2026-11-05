@@ -74,6 +74,16 @@ const _heightMapTex = texture(dummyTex(255));
 const _heightMapFallback = dummyTex(255);
 _heightMapTex.onObjectUpdate(({ object }) => object.heightMapTexture ?? _heightMapFallback);
 
+// Previous elevation texture, sampled only while a DEM refinement crossfade
+// is running (parent DEM -> exact DEM). Same dummy/fallback contract as
+// _heightMapTex: a distinct dummy instance is REQUIRED, otherwise the two
+// nodes hash alike and one binding is silently dropped.
+const _heightMapTexPrev = texture(dummyTex(255));
+const _heightMapFallbackPrev = dummyTex(255);
+_heightMapTexPrev.onObjectUpdate(
+    ({ object }) => object.heightMapTexturePrev ?? _heightMapFallbackPrev
+);
+
 // Ground-modification (brush/excavation) height+mask texture.
 const _modifierTex = texture(dummyTex(255));
 const _modifierFallback = dummyTex(255);
@@ -95,9 +105,25 @@ const _layerTex = texture(dummyTex(255));
 const _layerFallback = dummyTex(255);
 _layerTex.onObjectUpdate(({ object }) => object.layerTexture ?? _layerFallback);
 
+// Previous albedo/decal texture for the in-place imagery crossfade. Kept as
+// its own node (and dummy) for the same binding-hash reason as above.
+const _layerTexPrev = texture(dummyTex(255));
+const _layerFallbackPrev = dummyTex(255);
+_layerTexPrev.onObjectUpdate(({ object }) => object.layerTexturePrev ?? _layerFallbackPrev);
+
 // Per-mesh plain-value uniforms (resolved per draw call from the mesh).
 const _uvTransform = uniform(new THREE.Vector4(1, 1, 0, 0));
 _uvTransform.onObjectUpdate(({ object }) => object.uvTransform ?? _uvTransform.value);
+
+const _uvTransformPrev = uniform(new THREE.Vector4(1, 1, 0, 0));
+_uvTransformPrev.onObjectUpdate(({ object }) => object.uvTransformPrev ?? _uvTransformPrev.value);
+
+/** 0 -> previous texture, 1 -> current texture (smoothstep-eased on the CPU). */
+const _imageryFade = uniform(1);
+_imageryFade.onObjectUpdate(({ object }) => object.imageryFade ?? 1);
+
+const _hasImageryPrev = uniform(0);
+_hasImageryPrev.onObjectUpdate(({ object }) => object.hasImageryPrev ?? 0);
 
 const _opacity = uniform(1);
 _opacity.onObjectUpdate(({ object }) => object.opacity ?? 1);
@@ -129,6 +155,27 @@ _heightMapPos.onObjectUpdate(({ object }) => object.heightMapPos ?? _heightMapPo
 
 const _texSize = uniform(new THREE.Vector2(1, 1));
 _texSize.onObjectUpdate(({ object }) => object.texSize ?? _texSize.value);
+
+// Previous DEM sampling state, used only while a height crossfade is active.
+// Kept separate from the current state because the old texture may come from
+// an ancestor tile: its uv window, texel size and unpack vector all differ.
+const _heightMapPosPrev = uniform(new THREE.Vector4(1, 0, 0, 0));
+_heightMapPosPrev.onObjectUpdate(
+    ({ object }) => object.heightMapPosPrev ?? _heightMapPosPrev.value
+);
+
+const _texSizePrev = uniform(new THREE.Vector2(1, 1));
+_texSizePrev.onObjectUpdate(({ object }) => object.texSizePrev ?? _texSizePrev.value);
+
+const _demUnpackPrev = uniform(new THREE.Vector4());
+_demUnpackPrev.onObjectUpdate(({ object }) => object.demUnpackPrev ?? _demUnpackPrev.value);
+
+/** 0 -> previous DEM surface, 1 -> current DEM surface (smoothstep on the CPU). */
+const _heightFade = uniform(1);
+_heightFade.onObjectUpdate(({ object }) => object.heightFade ?? 1);
+
+const _hasHeightMapPrev = uniform(0);
+_hasHeightMapPrev.onObjectUpdate(({ object }) => object.hasHeightPrev ?? 0);
 
 // Border/texel-center offset used by tileUvToDemSample. Calibrated
 // empirically (Baotou coarse-fallback sweep, 2026-11): 0.5 puts the displaced
@@ -193,6 +240,12 @@ const s_sharedNodes = (() => {
         return dot(vec4(v.xyz.mul(255.0), float(-1.0)), _demUnpack);
     });
 
+    // Same decode against the outgoing DEM's encoding (ancestor tiles may use
+    // a different encoding than the tile's own data).
+    const decodeElevationPrev = Fn(([v]: [ReturnType<typeof vec4>]) => {
+        return dot(vec4(v.xyz.mul(255.0), float(-1.0)), _demUnpackPrev);
+    });
+
     // The modifier texture is always mapbox terrain-rgb encoded (by
     // HeightMapModifierManager convention), so decoding MUST use the mapbox
     // constants — never reuse _demUnpack: with a terrarium DEM _demUnpack is
@@ -203,25 +256,36 @@ const s_sharedNodes = (() => {
         return dot(vec4(v.xyz.mul(255.0), float(-1.0)), _modifierUnpack);
     });
 
-    const tileUvToDemSample = Fn(([t]: [ReturnType<typeof vec2>]) => {
-        // The DEM texture carries a 1-texel border (size = core grid + 2, see
-        // DemData._buildTexture), so tile-uv [0, 1] across the core grid maps
-        // to texture-uv (tileUv * (texSize - 2) + K) / texSize with the
-        // texel-center constant K = 0.5 (empirically calibrated — see the
-        // uniform comment). Sampling raw tile-uv instead drifts the sampled
-        // position across the tile — sub-meter on fine grids, tens of
-        // kilometers (hundreds of meters of elevation) on coarse fallback
-        // tiles.
-        const sample = vec2(
-            t.x.mul(_heightMapPos.x).add(_heightMapPos.z),
-            t.y.mul(_heightMapPos.x).add(_heightMapPos.y)
-        );
-        const core = _texSize.x.sub(2);
-        return vec2(
-            sample.x.mul(core).add(_demSampleOffset.x).div(_texSize.x),
-            sample.y.mul(_texSize.y.sub(2)).add(_demSampleOffset.x).div(_texSize.y)
-        );
-    });
+    const tileUvToDemSampleWith = Fn(
+        ([t, pos, size]: [
+            ReturnType<typeof vec2>,
+            ReturnType<typeof vec4>,
+            ReturnType<typeof vec2>
+        ]) => {
+            // The DEM texture carries a 1-texel border (size = core grid + 2, see
+            // DemData._buildTexture), so tile-uv [0, 1] across the core grid maps
+            // to texture-uv (tileUv * (texSize - 2) + K) / texSize with the
+            // texel-center constant K = 0.5 (empirically calibrated — see the
+            // uniform comment). Sampling raw tile-uv instead drifts the sampled
+            // position across the tile — sub-meter on fine grids, tens of
+            // kilometers (hundreds of meters of elevation) on coarse fallback
+            // tiles.
+            const sample = vec2(t.x.mul(pos.x).add(pos.z), t.y.mul(pos.x).add(pos.y));
+            const core = size.x.sub(2);
+            return vec2(
+                sample.x.mul(core).add(_demSampleOffset.x).div(size.x),
+                sample.y.mul(size.y.sub(2)).add(_demSampleOffset.x).div(size.y)
+            );
+        }
+    );
+
+    const tileUvToDemSample = Fn(([t]: [ReturnType<typeof vec2>]) =>
+        tileUvToDemSampleWith(t, _heightMapPos, _texSize)
+    );
+
+    const tileUvToDemSamplePrev = Fn(([t]: [ReturnType<typeof vec2>]) =>
+        tileUvToDemSampleWith(t, _heightMapPosPrev, _texSizePrev)
+    );
 
     const applyModifier = Fn(([height, t]: [ReturnType<typeof float>, ReturnType<typeof vec2>]) => {
         const b = _modifierUVBounds;
@@ -248,8 +312,12 @@ const s_sharedNodes = (() => {
     });
 
     const smoothElevationVertex = Fn(([t]: [ReturnType<typeof vec2>]) => {
-        const demUv = tileUvToDemSample(t);
-        const h = decodeElevation(texture(_heightMapTex, demUv));
+        const hNew = decodeElevation(texture(_heightMapTex, tileUvToDemSample(t)));
+        // Previous DEM sample is only meaningful while a height crossfade is
+        // active; the select keeps a single-code-path graph (no per-tile
+        // shader variants) and falls back to the current surface otherwise.
+        const hPrev = decodeElevationPrev(texture(_heightMapTexPrev, tileUvToDemSamplePrev(t)));
+        const h = select(_hasHeightMapPrev.greaterThan(0), tslMix(hPrev, hNew, _heightFade), hNew);
         return applyModifier(h, t);
     });
 
@@ -304,17 +372,29 @@ const s_sharedNodes = (() => {
         return finalPos;
     })();
 
-    return { positionNode, vTerrainNormal, texUv, tileUvToDemSample, webMercatorY };
+    return {
+        positionNode,
+        vTerrainNormal,
+        texUv,
+        tileUvToDemSample,
+        tileUvToDemSamplePrev,
+        webMercatorY
+    };
 })();
 
 // WORKAROUND (inherited from the legacy DEMTileMeshMaterial): sample the
 // height-map once in the fragment stage so its binding gets VERTEX|FRAGMENT
 // visibility; vertex-only bindings are unstable under WebGPU after LOD splits.
+// The outgoing DEM texture participates in the height crossfade, so it needs
+// the same visibility treatment.
 function withHeightMapVisibilityFix(color, nodes) {
     const demUv = nodes.tileUvToDemSample(nodes.texUv);
+    const demUvPrev = nodes.tileUvToDemSamplePrev(nodes.texUv);
     // Pure expression — assign would require an Fn() stack context, and the
     // overlay materials call this from plain-expression colorNodes.
-    return color.add(texture(_heightMapTex, demUv).mul(0.0001));
+    return color
+        .add(texture(_heightMapTex, demUv).mul(0.0001))
+        .add(texture(_heightMapTexPrev, demUvPrev).mul(0.0001));
 }
 
 // --- Base variant: lit, one imagery texture as albedo or solid fallback ---
@@ -332,18 +412,35 @@ const s_baseNodes = (() => {
         mapUv.x.mul(_uvTransform.x).add(_uvTransform.z),
         mapUv.y.mul(_uvTransform.y).add(_uvTransform.w)
     );
+    // uv window of the outgoing image; an ancestor image covers a larger
+    // geoBox, so it needs its own transform while the crossfade runs.
+    const tUvPrev = vec2(
+        mapUv.x.mul(_uvTransformPrev.x).add(_uvTransformPrev.z),
+        mapUv.y.mul(_uvTransformPrev.y).add(_uvTransformPrev.w)
+    );
     // Attach the uv AFTER construction (plain property write) — see the
     // load-bearing note on _layerTex above.
     _layerTex.uvNode = tUv;
+    _layerTexPrev.uvNode = tUvPrev;
     const inRange = tUv.x
         .greaterThanEqual(float(-0.01))
         .and(tUv.x.lessThanEqual(float(1.01)))
         .and(tUv.y.greaterThanEqual(float(-0.01)))
         .and(tUv.y.lessThanEqual(float(1.01)));
+    const inRangePrev = tUvPrev.x
+        .greaterThanEqual(float(-0.01))
+        .and(tUvPrev.x.lessThanEqual(float(1.01)))
+        .and(tUvPrev.y.greaterThanEqual(float(-0.01)))
+        .and(tUvPrev.y.lessThanEqual(float(1.01)));
 
     const colorNode = Fn(() => {
         const useImagery = _hasImagery.equal(1).and(inRange);
-        const color = select(useImagery, _layerTex, vec4(_fallbackColor, 1.0));
+        const currentColor = select(useImagery, _layerTex, vec4(_fallbackColor, 1.0));
+        // With no outgoing image the fade starts from the same solid fallback
+        // the tile rendered before its imagery arrived.
+        const useImageryPrev = _hasImageryPrev.equal(1).and(inRangePrev);
+        const previousColor = select(useImageryPrev, _layerTexPrev, vec4(_fallbackColor, 1.0));
+        const color = tslMix(previousColor, currentColor, _imageryFade);
         return withHeightMapVisibilityFix(color, s_sharedNodes);
     })();
 

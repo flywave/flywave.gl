@@ -89,6 +89,13 @@ import { type WebTileLoaderOptions, WebImageryTileProvider } from "./WebImageryT
 const MAX_PRESERVED_LAYER_MESH_TILES = 4096;
 
 /**
+ * Default duration of the in-place imagery / DEM refinement crossfade.
+ * Google-Earth-like: long enough to hide the resolution step, short enough
+ * that streaming tiles do not all fade at once.
+ */
+const DEFAULT_TILE_FADE_DURATION = 400;
+
+/**
  * Configuration options for TerrainSource
  */
 export interface TerrainSourceOptions<DataProviderType extends DataProvider = DataProvider>
@@ -124,6 +131,17 @@ export interface TerrainSourceOptions<DataProviderType extends DataProvider = Da
      * @default true
      */
     enableCameraCollision?: boolean;
+
+    /**
+     * Duration in milliseconds of the in-place crossfade applied when a
+     * tile's imagery or DEM is upgraded from an ancestor level to its exact
+     * level (the "Google Earth" tile-loading fade). `0` disables it.
+     *
+     * Only refinements fade; downgrades to an ancestor swap instantly.
+     *
+     * @default 400
+     */
+    tileFadeDuration?: number;
 }
 
 /**
@@ -563,6 +581,16 @@ export abstract class TerrainSource<
         { meshes: Map<string, TerrainLayerMesh>; state: TerrainTileState }
     >();
 
+    /**
+     * Tiles whose resources are still sampled by an in-flight crossfade.
+     * Marked as "used" every frame before the LRU sweep so their textures
+     * cannot be disposed mid-fade. Keyed by level:row:column; refcounted
+     * because several layers of one tile may fade simultaneously.
+     */
+    private readonly m_fadePins = new Map<string, { tileKey: TileKey; count: number }>();
+
+    private readonly m_tileFadeDuration: number;
+
     protected m_disposing: boolean = false;
 
     private stageConfigs: LoadingStage[] = [];
@@ -612,6 +640,10 @@ export abstract class TerrainSource<
 
         this.m_showDebugInfo = options.showDebugInfo ?? false;
         this.enableCameraCollision = options.enableCameraCollision ?? true;
+        this.m_tileFadeDuration = Math.max(
+            0,
+            options.tileFadeDuration ?? DEFAULT_TILE_FADE_DURATION
+        );
     }
 
     /**
@@ -650,6 +682,39 @@ export abstract class TerrainSource<
             }
         }
         return this.m_tileBaseGeometryBuilder;
+    }
+
+    /** Duration of the imagery/DEM refinement crossfade in milliseconds. */
+    public get tileFadeDuration(): number {
+        return this.m_tileFadeDuration;
+    }
+
+    /**
+     * Keeps a tile's resources out of the LRU sweep while a layer mesh is
+     * still crossfading its textures (called by TerrainTileState).
+     */
+    public pinFadeResource(tileKey: TileKey): void {
+        const key = `${tileKey.level}:${tileKey.row}:${tileKey.column}`;
+        const entry = this.m_fadePins.get(key);
+        if (entry) {
+            entry.count++;
+        } else {
+            this.m_fadePins.set(key, { tileKey, count: 1 });
+        }
+        // Also mark it used right away: a fade can start while tiles are being
+        // created, i.e. AFTER this frame's onWillTouchTiled pass — the LRU
+        // sweep at the end of the same frame must not evict it.
+        this.m_tileCache.getTile(tileKey)?.markUsedTile(this.mapView);
+    }
+
+    public unpinFadeResource(tileKey: TileKey): void {
+        const key = `${tileKey.level}:${tileKey.row}:${tileKey.column}`;
+        const entry = this.m_fadePins.get(key);
+        if (!entry) return;
+        entry.count--;
+        if (entry.count <= 0) {
+            this.m_fadePins.delete(key);
+        }
     }
 
     async setTheme(theme: Theme | FlatTheme, languages?: string[]): Promise<void> {}
@@ -942,6 +1007,15 @@ export abstract class TerrainSource<
         }
 
         this.m_tileCache.scheduleUpdateTile(this.mapView, this.m_viewFrustum, this.m_queuedTiles);
+
+        // Crossfade pins are marked AFTER scheduleUpdateTile (which resets
+        // the used set) so the LRU sweep later this frame cannot unload the
+        // ancestor texture an in-flight fade is still sampling.
+        if (this.m_fadePins.size > 0) {
+            for (const { tileKey } of this.m_fadePins.values()) {
+                this.m_tileCache.getTile(tileKey)?.markUsedTile(this.mapView);
+            }
+        }
     }
 
     /**
@@ -1210,6 +1284,7 @@ export abstract class TerrainSource<
     dispose(): void {
         this.m_disposing = true;
         super.dispose();
+        this.m_fadePins.clear();
         this.m_tileCache.removeAllTiles();
         this.m_layerMeshCache.forEach(preserved => {
             preserved.meshes.forEach(mesh => {

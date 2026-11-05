@@ -42,6 +42,16 @@ function computeHeightMapPos(tileKey: TileKey, demTileKey: TileKey, yDown: boole
 }
 
 /**
+ * Sink used to keep a tile's resources from LRU eviction while a crossfade is
+ * still sampling its textures (the outgoing image / DEM may belong to an
+ * ancestor tile that is otherwise free to be evicted).
+ */
+export interface TerrainFadePinSink {
+    pinFadeResource(tileKey: TileKey): void;
+    unpinFadeResource(tileKey: TileKey): void;
+}
+
+/**
  * Per-tile render state shared by all layer meshes of one tile.
  *
  * Computes the per-frame tile state once (projection interpolation, RTE
@@ -77,6 +87,20 @@ export class TerrainTileState {
     private readonly m_texSize: Vector2 = new Vector2(1, 1);
     /** Unpack vector for the current DEM texture's encoding (follows DEMData.encoding; mapbox by default) */
     private readonly m_demUnpack: Vector4 = DEFAULT_DEM_UNPACK.clone();
+    /** Tile key the current height map came from (equals the tile key unless it fell back to an ancestor). */
+    private m_heightDemTileKey?: TileKey;
+
+    // --- Outgoing DEM state, only used while a refinement crossfade runs ---
+    private m_heightMapTexturePrev: THREE.Texture | null = null;
+    private readonly m_heightMapPosPrev: Vector4 = new Vector4(1, 0, 0, 0);
+    private readonly m_texSizePrev: Vector2 = new Vector2(1, 1);
+    private readonly m_demUnpackPrev: Vector4 = new Vector4();
+    private m_heightFade: number = 1;
+    private m_heightFadeStart: number = 0;
+    private m_heightFadeDuration: number = 0;
+    private m_heightFadeActive: boolean = false;
+    private m_heightPrevPinKey?: TileKey;
+    private m_fadePinSink?: TerrainFadePinSink;
     /**
      * Data-driven skirt extension (the tile's elevation span) pushed into the
      * shared displacement graph — see _skirtExtra in DEMTileLayerMaterial.
@@ -146,7 +170,21 @@ export class TerrainTileState {
         this.m_frameDirty = true;
     }
 
-    setHeightMap(texture: THREE.Texture, demTileKey: TileKey, demUnpack?: THREE.Vector4): void {
+    /**
+     * @param fadeDuration - Duration (ms) of the crossfade from the previous
+     *   height map to this one. Only refinement (same or finer source level)
+     *   fades; a downgrade to an ancestor swaps instantly, matching the
+     *   previous look. `0` disables the crossfade.
+     */
+    setHeightMap(
+        texture: THREE.Texture,
+        demTileKey: TileKey,
+        demUnpack?: THREE.Vector4,
+        fadeDuration: number = 0
+    ): void {
+        const previousTexture = this.m_heightMapTexture;
+        const previousDemKey = this.m_heightDemTileKey;
+
         // The yDown row flip is REQUIRED here: the dem texture buffer rows run
         // south-up (buffer end = north), while the rendered tile rows address
         // the parent grid from the north edge, so the parent-case uv offset
@@ -157,8 +195,44 @@ export class TerrainTileState {
         // never exposed it.
         const yDown = this.m_tilingSchemeTileGrid.isYAxisDown();
         const pos = computeHeightMapPos(this.m_tileKey, demTileKey, yDown);
+
+        const sameTexture = previousTexture === texture;
+        const isRefinement =
+            previousTexture !== null &&
+            !sameTexture &&
+            (!previousDemKey || demTileKey.level >= previousDemKey.level);
+        if (fadeDuration > 0 && isRefinement) {
+            // A previous fade may still be holding a pin; release it before
+            // taking over as the new outgoing state.
+            this.releaseHeightFade();
+            // Snapshot the outgoing sampling state BEFORE overwriting it.
+            this.m_heightMapTexturePrev = previousTexture;
+            this.m_heightMapPosPrev.copy(this.m_heightMapPos);
+            this.m_texSizePrev.copy(this.m_texSize);
+            this.m_demUnpackPrev.copy(this.m_demUnpack);
+            this.m_heightFade = 0;
+            this.m_heightFadeStart = performance.now();
+            this.m_heightFadeDuration = fadeDuration;
+            this.m_heightFadeActive = true;
+
+            // The outgoing texture usually lives on an ancestor tile that is
+            // free to be LRU-evicted; keep it alive until the fade finishes.
+            if (previousDemKey) {
+                this.m_heightPrevPinKey = previousDemKey;
+                this.m_fadePinSink?.pinFadeResource(previousDemKey);
+            }
+        } else if (!sameTexture) {
+            // A real change (downgrade / disabled fade / same-level rebind):
+            // cancel any in-flight fade. A rebuild that re-passes the SAME
+            // texture must NOT cancel it — terrain shadow tiles are recreated
+            // on every imagery/DEM resource arrival, and cancelling here made
+            // the height crossfade disappear after one frame.
+            this.releaseHeightFade();
+        }
+
         texture.flipY = this.m_yDown;
         this.m_heightMapTexture = texture;
+        this.m_heightDemTileKey = demTileKey;
         // DEM texture pixels are uploaded in their source encoding (see DemData._buildTexture),
         // so the decoding constants must follow that encoding (terrarium's
         // (256,1,1/256,32768) has a completely different scale from mapbox —
@@ -183,9 +257,34 @@ export class TerrainTileState {
      * Layer meshes/materials stay alive for warm-cache adoption.
      */
     invalidateElevation(): void {
+        this.releaseHeightFade();
         this.m_heightMapTexture = null;
+        this.m_heightDemTileKey = undefined;
         this.m_skirtExtra = 0;
         this.m_frameDirty = true;
+    }
+
+    /** Wire the sink that keeps outgoing textures alive during crossfades. */
+    setFadePinSink(sink: TerrainFadePinSink | undefined): void {
+        this.m_fadePinSink = sink;
+    }
+
+    pinFadeResource(tileKey: TileKey): void {
+        this.m_fadePinSink?.pinFadeResource(tileKey);
+    }
+
+    unpinFadeResource(tileKey: TileKey): void {
+        this.m_fadePinSink?.unpinFadeResource(tileKey);
+    }
+
+    /** Whether the height crossfade is still running (used to keep rendering). */
+    get isHeightFading(): boolean {
+        return this.m_heightFadeActive;
+    }
+
+    /** The shadow tile whose center the renderer adds back this frame. */
+    get currentTile(): Tile | undefined {
+        return this.m_currentTile;
     }
 
     /**
@@ -233,6 +332,30 @@ export class TerrainTileState {
 
         this.m_lastProjFactor = projectionFactor;
         this.updateModifierState();
+        this.updateHeightFade(performance.now());
+    }
+
+    /** Advance the DEM refinement crossfade and release its pin when done. */
+    private updateHeightFade(now: number): void {
+        if (!this.m_heightFadeActive) return;
+        const t =
+            this.m_heightFadeDuration > 0
+                ? Math.min(1, (now - this.m_heightFadeStart) / this.m_heightFadeDuration)
+                : 1;
+        this.m_heightFade = t * t * (3 - 2 * t);
+        if (t >= 1) {
+            this.releaseHeightFade();
+        }
+    }
+
+    private releaseHeightFade(): void {
+        this.m_heightFadeActive = false;
+        this.m_heightFade = 1;
+        this.m_heightMapTexturePrev = null;
+        if (this.m_heightPrevPinKey) {
+            this.m_fadePinSink?.unpinFadeResource(this.m_heightPrevPinKey);
+            this.m_heightPrevPinKey = undefined;
+        }
     }
 
     /** Push the current tile state into one layer mesh's draw-time properties. */
@@ -257,12 +380,24 @@ export class TerrainTileState {
             mesh.heightMapPos.copy(this.m_heightMapPos);
             mesh.texSize.copy(this.m_texSize);
             mesh.skirtExtra = this.m_skirtExtra;
+            mesh.heightMapTexturePrev = this.m_heightMapTexturePrev;
+            mesh.heightMapPosPrev.copy(this.m_heightMapPosPrev);
+            mesh.texSizePrev.copy(this.m_texSizePrev);
+            mesh.demUnpackPrev.copy(this.m_demUnpackPrev);
+            mesh.heightFade = this.m_heightFade;
+            mesh.hasHeightPrev = this.m_heightMapTexturePrev ? 1 : 0;
         } else {
             mesh.heightMapTexture = null;
             mesh.demUnpack.set(0, 0, 0, 0);
             mesh.heightMapPos.set(1, 0, 0, 0);
             mesh.texSize.set(1, 1);
             mesh.skirtExtra = 0;
+            mesh.heightMapTexturePrev = null;
+            mesh.heightMapPosPrev.set(1, 0, 0, 0);
+            mesh.texSizePrev.set(1, 1);
+            mesh.demUnpackPrev.set(0, 0, 0, 0);
+            mesh.heightFade = 1;
+            mesh.hasHeightPrev = 0;
         }
 
         if (this.m_modifierTexture) {
@@ -456,6 +591,7 @@ export class TerrainTileState {
     }
 
     dispose(): void {
+        this.releaseHeightFade();
         if (this.m_mergedTexture) {
             this.m_mergedTexture.dispose();
             this.m_mergedTexture = null;
@@ -502,6 +638,27 @@ export class TerrainLayerMesh extends Mesh {
     public hasModifier: number = 0;
     public displacement: Vector3 = new Vector3();
 
+    // --- Outgoing state for the imagery crossfade (base layer only) ---
+    public layerTexturePrev: THREE.Texture | null = null;
+    public uvTransformPrev: Vector4 = new Vector4(1, 1, 0, 0);
+    public hasImageryPrev: number = 0;
+    public imageryFade: number = 1;
+
+    // --- Outgoing state for the DEM height crossfade (written by the state) ---
+    public heightMapTexturePrev: THREE.Texture | null = null;
+    public heightMapPosPrev: Vector4 = new Vector4(1, 0, 0, 0);
+    public texSizePrev: Vector2 = new Vector2(1, 1);
+    public demUnpackPrev: Vector4 = new Vector4();
+    public heightFade: number = 1;
+    public hasHeightPrev: number = 0;
+
+    private readonly m_tileState: TerrainTileState;
+    private m_imageryFadeStart: number = 0;
+    private m_imageryFadeDuration: number = 0;
+    private m_imageryFadeActive: boolean = false;
+    private m_layerSourceKey?: TileKey;
+    private m_layerSourceKeyPrev?: TileKey;
+
     constructor(
         geometry: THREE.BufferGeometry,
         material: THREE.Material,
@@ -511,6 +668,7 @@ export class TerrainLayerMesh extends Mesh {
     ) {
         super(geometry, material);
 
+        this.m_tileState = tileState;
         this.layerKey = layerKey;
         this.layerKind = layerKind;
         this.userData.tileKey = tileState.tileKey;
@@ -528,6 +686,16 @@ export class TerrainLayerMesh extends Mesh {
         this.onBeforeRender = () => {
             tileState.updateFrame();
             tileState.writeTo(this);
+            const imageryFading = this.updateImageryFade(performance.now());
+            // Keep the render loop alive while any crossfade is running —
+            // rendering is on-demand, so without this the fade would freeze
+            // as soon as the camera stops.
+            if (imageryFading || tileState.isHeightFading) {
+                const mapView = tileState.currentTile?.mapView;
+                if (mapView && !mapView.updatePending) {
+                    mapView.update();
+                }
+            }
         };
 
         // Pre-compute the draw-time state BEFORE the first render. The
@@ -541,12 +709,58 @@ export class TerrainLayerMesh extends Mesh {
         tileState.writeTo(this);
     }
 
-    /** Swap albedo imagery in place (plain property write, zero rebuilds). */
-    setImagery(tex: THREE.Texture | null, uvTransform?: THREE.Vector4) {
+    /**
+     * Swap albedo imagery in place (plain property write, zero rebuilds).
+     *
+     * @param sourceKey - Tile key the image came from. When it changes to a
+     *   finer level the old texture is crossfaded out; a downgrade to an
+     *   ancestor swaps instantly.
+     * @param fadeDuration - Crossfade duration in ms (`0` = instant). Only
+     *   upgrades fade; the first texture on a fresh mesh must pass `0` so a
+     *   tile that replaces its parent does not flash from the fallback gray.
+     */
+    setImagery(
+        tex: THREE.Texture | null,
+        uvTransform?: THREE.Vector4,
+        sourceKey?: TileKey,
+        fadeDuration: number = 0
+    ) {
+        const changed = tex !== this.layerTexture;
+        if (changed) {
+            const isUpgrade =
+                !this.m_layerSourceKey ||
+                !sourceKey ||
+                sourceKey.level >= this.m_layerSourceKey.level;
+            const canFade = tex !== null && fadeDuration > 0 && isUpgrade;
+            if (canFade) {
+                // Drop any in-flight fade (and its pin) before becoming the
+                // new outgoing state.
+                this.releaseImageryFade();
+                this.layerTexturePrev = this.layerTexture;
+                this.uvTransformPrev.copy(this.uvTransform);
+                this.hasImageryPrev = this.hasImagery;
+                this.imageryFade = 0;
+                this.m_imageryFadeStart = performance.now();
+                this.m_imageryFadeDuration = fadeDuration;
+                this.m_imageryFadeActive = true;
+                if (this.m_layerSourceKey && this.m_layerSourceKey !== sourceKey) {
+                    this.m_layerSourceKeyPrev = this.m_layerSourceKey;
+                    this.m_tileState.pinFadeResource(this.m_layerSourceKey);
+                } else {
+                    this.m_layerSourceKeyPrev = undefined;
+                }
+            } else {
+                this.releaseImageryFade();
+            }
+        }
+
         this.layerTexture = tex;
         this.hasImagery = tex ? 1 : 0;
         if (uvTransform) {
             this.uvTransform.copy(uvTransform);
+        }
+        if (sourceKey) {
+            this.m_layerSourceKey = sourceKey;
         }
         // Legacy per-material rebind hook. The shared-graph base material
         // picks the texture up per draw via its OBJECT-type node update
@@ -555,6 +769,32 @@ export class TerrainLayerMesh extends Mesh {
         const mat = this.material as any;
         if (mat.imageryTexNode && mat.imageryTexNode.value !== (tex ?? emptyOpaqueTex)) {
             mat.imageryTexNode.value = tex ?? emptyOpaqueTex;
+        }
+    }
+
+    /** Advance the imagery crossfade; returns whether it is still running. */
+    private updateImageryFade(now: number): boolean {
+        if (!this.m_imageryFadeActive) return false;
+        const t =
+            this.m_imageryFadeDuration > 0
+                ? Math.min(1, (now - this.m_imageryFadeStart) / this.m_imageryFadeDuration)
+                : 1;
+        this.imageryFade = t * t * (3 - 2 * t);
+        if (t >= 1) {
+            this.releaseImageryFade();
+            return false;
+        }
+        return true;
+    }
+
+    private releaseImageryFade(): void {
+        this.m_imageryFadeActive = false;
+        this.imageryFade = 1;
+        this.layerTexturePrev = null;
+        this.hasImageryPrev = 0;
+        if (this.m_layerSourceKeyPrev) {
+            this.m_tileState.unpinFadeResource(this.m_layerSourceKeyPrev);
+            this.m_layerSourceKeyPrev = undefined;
         }
     }
 
@@ -577,6 +817,7 @@ export class TerrainLayerMesh extends Mesh {
     }
 
     dispose(): void {
+        this.releaseImageryFade();
         (this.material as THREE.Material).dispose();
     }
 

@@ -52,10 +52,11 @@ export type DemTerrainSourceOptions = Omit<
  * How long a retired (replaced) DEM resource stays alive before disposal.
  * Render tiles keep referencing the retired resource's texture until their
  * layer state swaps to the replacement — disposing earlier risks sampling a
- * destroyed GPU texture (garbage elevation). 30 frames is far beyond the
- * debounced overlay refresh + re-resolve cycle.
+ * destroyed GPU texture (garbage elevation). The window must also outlast the
+ * refinement crossfade (`tileFadeDuration`, default 400 ms ≈ 24 frames at
+ * 60 fps, 48 at 120 fps), hence 90 frames.
  */
-const RETIRED_RESOURCE_FRAMES = 30;
+const RETIRED_RESOURCE_FRAMES = 90;
 
 /**
  * Grace period for a re-bake batch: once it passes, whatever landed swaps as
