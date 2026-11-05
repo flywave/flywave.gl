@@ -436,7 +436,17 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
 
         const dbuffer = await this._fetchTileData(tileKey, abortSignal);
         if (!dbuffer || dbuffer.byteLength === 0) {
-            return await Promise.resolve(undefined);
+            if (abortSignal?.aborted) {
+                // Cancelled: settle without a resource so the tile can be
+                // loaded again when it is rendered next time.
+                return await Promise.resolve(undefined);
+            }
+            // Inside-bounds request produced nothing: surface it so the queue
+            // stamps an invalid (settled) resource instead of leaving the
+            // tile heightless and the subdivision gate closed forever.
+            throw new Error(
+                `DEM tile unavailable: ${tileKey.level}/${tileKey.row}/${tileKey.column}`
+            );
         }
 
         // PNG/JPEG bytes are decoded IN THE WORKER (the buffer travels as a
@@ -461,7 +471,14 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
             });
         }
 
-        if (!imgSource) return await Promise.resolve(undefined);
+        if (!imgSource) {
+            if (abortSignal?.aborted) {
+                return await Promise.resolve(undefined);
+            }
+            throw new Error(
+                `DEM tile decode failed: ${tileKey.level}/${tileKey.row}/${tileKey.column}`
+            );
+        }
 
         const sourceWidth = metadata ? metadata.width : (imgSource as { width: number }).width;
         const { dim } = computeDemTileGrid(sourceWidth);
@@ -563,9 +580,20 @@ export class DemTileProvider extends ResourceProvider<DemTileResource, DEMTerrai
             url = this._resolveRelativeUrl(url, this.dem_options.source);
         }
 
-        return this._transferManager
-            .downloadArrayBuffer(url, { signal: abortSignal })
-            .catch(e => Promise.resolve(new ArrayBuffer(0)));
+        return this._transferManager.downloadArrayBuffer(url, { signal: abortSignal }).catch(e => {
+            // Cancelled loads must stay UNSETTLED (empty buffer -> no resource
+            // stored) so a later attempt can still load the tile; genuine
+            // failures (404 / 5xx / network) reject and get stamped as an
+            // invalid resource by the loading queue, which counts as
+            // "settled" for the subdivision gate. Without this distinction a
+            // DEM 404 left NO trace at all: the gate waited for a resource
+            // that would never exist and the terrain - with the imagery
+            // draped on it - froze at that level.
+            if (abortSignal?.aborted) {
+                return new ArrayBuffer(0);
+            }
+            return Promise.reject(e);
+        });
     }
 
     /**
