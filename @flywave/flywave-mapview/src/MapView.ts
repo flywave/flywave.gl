@@ -1118,6 +1118,15 @@ export class MapView extends EventDispatcher {
 
         const forceWebGL = this.m_options.forceWebGL === true;
 
+        // Mirror the WebGPU availability check used by
+        // resolveColorAttachmentLimit: when WebGPU is unavailable (e.g. a
+        // non-secure-context origin where navigator.gpu is absent), the
+        // WebGPURenderer silently falls back to the WebGL2 backend, and the
+        // reversed depth buffer must be disabled exactly as in the explicit
+        // forceWebGL path below.
+        const webgpuExpected =
+            !forceWebGL && typeof navigator !== "undefined" && "gpu" in navigator;
+
         const rendererParams: WebGPURendererParameters = {
             canvas: this.canvas,
             forceWebGL,
@@ -1128,7 +1137,7 @@ export class MapView extends EventDispatcher {
             // fails GL validation ("Depth/stencil buffer format combination
             // not allowed for blit"), which kills every frame — so the WebGL
             // path keeps the conventional depth convention.
-            reversedDepthBuffer: !forceWebGL,
+            reversedDepthBuffer: webgpuExpected,
             ...(powerPreference !== undefined ? { powerPreference } : {}),
             requiredLimits: {}
         };
