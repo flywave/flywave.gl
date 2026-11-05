@@ -78,10 +78,25 @@ const GLOBE_ZOOM = 2.3;
  *   ?localdem     — local demo DEM bundled with the examples
  *   ?emptyterrain — empty draping carrier (no DEM data)
  *   ?flyto=lat,lng,distance,tilt,heading — debug camera override
+ *   ?init=lat,lng,distance,tilt,heading — initial-camera override: placement
+ *     is ellipsoid-based, so a near-surface distance over high terrain starts
+ *     the camera UNDERGROUND (MapControls' per-frame guard must recover it).
  */
 async function main(): Promise<void> {
     const canvas = document.getElementById("mapCanvas") as HTMLCanvasElement;
     const urlParams = new URLSearchParams(window.location.search);
+
+    // Initial-camera debug override (consumed at construction, before any
+    // animation: this is what "the default position starts underground" means).
+    const initParts = urlParams.get("init")?.split(",").map(Number) ?? [];
+    const initLookAt = Number.isFinite(initParts[0])
+        ? {
+              target: { lat: initParts[0], lng: initParts[1] },
+              distance: initParts[2],
+              tilt: initParts[3] ?? 0,
+              heading: initParts[4] ?? 0
+          }
+        : undefined;
 
     // Step 1: map + controls from the shared factory.
     const { mapView } = await createExampleMap(canvas, {
@@ -95,7 +110,7 @@ async function main(): Promise<void> {
             }
         },
         controlsUi: "compact",
-        lookAt: { target: GLOBE_TARGET, zoomLevel: GLOBE_ZOOM, tilt: 0 }
+        lookAt: initLookAt ?? { target: GLOBE_TARGET, zoomLevel: GLOBE_ZOOM, tilt: 0 }
     });
 
     // Step 2: global DEM (debug sources opt-in via URL flags).
@@ -141,12 +156,19 @@ async function main(): Promise<void> {
     // elevation source exists, and the camera distance is recomputed once the
     // terrain under the target resolves (the zoom drifts a couple of levels);
     // re-applying it here keeps the default view on the whole globe.
-    mapView.lookAt({
-        target: new GeoCoordinates(GLOBE_TARGET.lat, GLOBE_TARGET.lng),
-        zoomLevel: GLOBE_ZOOM,
-        tilt: 0,
-        heading: 0
-    });
+    // The ?init= debug override re-applies AFTER the elevation source instead:
+    // its whole point is a construction-like placement (possibly underground
+    // over high terrain) with DEM data already available.
+    if (initLookAt === undefined) {
+        mapView.lookAt({
+            target: new GeoCoordinates(GLOBE_TARGET.lat, GLOBE_TARGET.lng),
+            zoomLevel: GLOBE_ZOOM,
+            tilt: 0,
+            heading: 0
+        });
+    } else {
+        mapView.lookAt(initLookAt);
+    }
 
     // Rendering is on-demand: request a repaint after changing visual state.
     mapView.update();

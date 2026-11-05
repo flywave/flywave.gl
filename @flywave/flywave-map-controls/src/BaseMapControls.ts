@@ -273,6 +273,11 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
         this.cameraTransform.cameraToWorld.copy(this.mapView.camera.matrixWorld);
 
+        // Normalize the camera FIRST: a buried camera poisons the geometric
+        // bookkeeping below (screen-center hits, pivot balancing), which can
+        // drag the camera to an unrelated location instead of recovering it.
+        this.enforceMinCameraHeightAboveTerrain();
+
         const cameraPos = new Vector3();
         this.cameraTransform.getOrigin(cameraPos);
         const normal = new Vector3();
@@ -325,6 +330,41 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
         this.dispatchEvent(EventUpdate);
         return false;
+    }
+
+    /**
+     * Terrain clearance guard: keep the camera at least
+     * {@link MapView.minCameraHeight} above the terrain surface, pushed out
+     * along the ellipsoid surface normal. lookAt/flyTo place the camera from
+     * the reference ellipsoid, so at high-elevation locations the placed
+     * camera can end up below the terrain, and MapView's own per-frame
+     * min-height constraint is skipped whenever the GPU center-depth path
+     * hits — a buried camera could then never recover. This runs every frame
+     * from {@link BaseMapControls.update} and is a no-op while the camera is
+     * above the clearance limit.
+     */
+    private enforceMinCameraHeightAboveTerrain(): void {
+        const elevationProvider = this.mapView.elevationProvider;
+        if (elevationProvider === undefined) {
+            return;
+        }
+        const cameraPos = new Vector3();
+        this.cameraTransform.getOrigin(cameraPos);
+        const geoCoords = this.mapView.projection.unprojectPoint(cameraPos);
+        const terrainAltitude = elevationProvider.getHeight(geoCoords);
+        if (terrainAltitude === undefined) {
+            return;
+        }
+        const clearance = geoCoords.altitude - terrainAltitude;
+        const minCameraHeight = this.mapView.minCameraHeight;
+        if (clearance >= minCameraHeight) {
+            return;
+        }
+        const correction = minCameraHeight - clearance;
+        const outwardNormal = new Vector3();
+        this.getDistanceAndNormal(outwardNormal, cameraPos);
+        cameraPos.add(outwardNormal.multiplyScalar(correction));
+        this.cameraTransform.cameraToWorld.setPosition(cameraPos);
     }
 
     private applyToMapView() {
