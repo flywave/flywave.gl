@@ -51,6 +51,23 @@ export class WebTileLoader extends BaseTileLoader {
                 texture.minFilter = THREE.LinearFilter;
                 texture.magFilter = THREE.LinearFilter;
                 texture.generateMipmaps = false;
+                // Orientation contract with the ground plane: zero texture flips
+                // plus the plane's UVs being v = 1 at the SOUTH edge (see
+                // AddGroundPlane.createGroundPlaneGeometry). flipY = false makes
+                // this identical on both backends because three r185's flips are
+                // asymmetric:
+                // - WebGPU flips an ImageBitmap at upload only (flipY === true);
+                // - the WebGL fallback flips BOTH at upload (UNPACK_FLIP_Y_WEBGL)
+                //   and in the shader (TextureNode.isFlipY) for ImageBitmap +
+                //   flipY === true, so flipY = true double-flips there.
+                // Render-target textures keep three's forced shader flip and are
+                // not re-oriented here.
+                if (
+                    !(texture as THREE.Texture & { isRenderTargetTexture?: boolean })
+                        .isRenderTargetTexture
+                ) {
+                    texture.flipY = false;
+                }
                 // This is required because the WebTileDataSource uses the default setting of
                 // useGeometryLoader on the DataSource, so it has to clear the tile's objects
                 // manually.

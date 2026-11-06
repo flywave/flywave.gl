@@ -408,15 +408,22 @@ function withHeightMapVisibilityFix(color, nodes) {
 // affect the compiled shader.
 const s_baseNodes = (() => {
     const mapUv = vec2(s_sharedNodes.texUv.x, s_sharedNodes.webMercatorY);
+    // Imagery textures are bound with flipY = false on EVERY backend (see
+    // TerrainTileLoader): three r185 flips ImageBitmap textures at upload on
+    // WebGPU but at upload AND in the shader on the WebGL fallback, so a
+    // texture-level flip cannot be made backend-independent. The uvTransform
+    // maps tile uv to the imagery's row index in the old (flipped-texture)
+    // space, where v=0 meant the tile's south edge; with zero flips the bitmap
+    // row 0 is its top (north), hence the explicit 1 - v here.
     const tUv = vec2(
         mapUv.x.mul(_uvTransform.x).add(_uvTransform.z),
-        mapUv.y.mul(_uvTransform.y).add(_uvTransform.w)
+        float(1).sub(mapUv.y.mul(_uvTransform.y).add(_uvTransform.w))
     );
     // uv window of the outgoing image; an ancestor image covers a larger
     // geoBox, so it needs its own transform while the crossfade runs.
     const tUvPrev = vec2(
         mapUv.x.mul(_uvTransformPrev.x).add(_uvTransformPrev.z),
-        mapUv.y.mul(_uvTransformPrev.y).add(_uvTransformPrev.w)
+        float(1).sub(mapUv.y.mul(_uvTransformPrev.y).add(_uvTransformPrev.w))
     );
     // Attach the uv AFTER construction (plain property write) — see the
     // load-bearing note on _layerTex above.
@@ -516,11 +523,13 @@ export class DEMTileOverlayMaterial extends MeshBasicNodeMaterial {
         this.depthWrite = false;
         this.positionNode = s_sharedNodes.positionNode;
 
-        // Tile-UV × uvTransform with a hard [0,1] gate.
+        // Tile-UV × uvTransform with a hard [0,1] gate. The final `1 - v`
+        // mirrors the base-variant convention: imagery is bound with zero
+        // texture flips on every backend (see s_baseNodes / TerrainTileLoader).
         const mapUv = vec2(s_sharedNodes.texUv.x, s_sharedNodes.webMercatorY);
         const tUv = vec2(
             mapUv.x.mul(_uvTransform.x).add(_uvTransform.z),
-            mapUv.y.mul(_uvTransform.y).add(_uvTransform.w)
+            float(1).sub(mapUv.y.mul(_uvTransform.y).add(_uvTransform.w))
         );
         const inRange = tUv.x
             .greaterThanEqual(float(0))

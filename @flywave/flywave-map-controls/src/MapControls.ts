@@ -3,7 +3,7 @@
 import { ProjectionType } from "@flywave/flywave-geoutils";
 import { type ICameraCollidable, type MapView } from "@flywave/flywave-mapview";
 import { PickingRaycaster } from "@flywave/flywave-mapview/PickingRaycaster";
-import { type Intersection, Vector2, Vector3 } from "three/webgpu";
+import { Vector2, Vector3 } from "three/webgpu";
 
 import { type BaseMapControlsOptions, BaseMapControls, EventNames } from "./BaseMapControls";
 import { type CameraTransform } from "./CameraTransform";
@@ -43,8 +43,9 @@ export class MapControls extends BaseMapControls {
         }
 
         // Tier 1: data source raycast (terrain / 3D Tiles etc. participate according to
-        // enableCameraCollision; terrain sources participate by default). The hit point is
-        // in render space and is translated back to the geo frame.
+        // enableCameraCollision; terrain sources participate by default), via the shared
+        // MapView loop -- identical to the screen-to-surface query, with the collision
+        // flag filter kept here because it is camera-behavior policy.
         const canvasClientSize = this.mapView.getCanvasClientSize();
         const rayCaster = new PickingRaycaster(
             new Vector2(canvasClientSize.width, canvasClientSize.height)
@@ -52,21 +53,16 @@ export class MapControls extends BaseMapControls {
 
         rayCaster.ray.set(origin, target.clone().sub(origin).normalize());
 
-        const intersection: Intersection[] = [];
+        const hit = this.mapView.castRayThroughDataSources(rayCaster, true);
 
-        this.getTilesRenderDataSources().forEach(datasource => {
-            datasource.raycast(rayCaster, intersection);
-        });
-
-        if (intersection.length > 0) {
-            intersection.sort((a, b) => a.distance - b.distance);
-            result.copy(intersection[0].point).add(this.mapView.camera.position);
+        if (hit !== null) {
+            result.copy(hit.point);
             if (noFallback) {
                 this.m_collisionLock = result.clone();
                 this.m_collisionLockX = weh.lastMouseX;
                 this.m_collisionLockY = weh.lastMouseY;
             }
-            return intersection[0].distance;
+            return hit.distance;
         }
 
         // Tier 2 fallback: MapView screen-space picking. Coordinate convention:

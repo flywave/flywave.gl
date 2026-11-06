@@ -99,6 +99,7 @@ import {
     ResourceComputationType,
     VisibleTileSet
 } from "./VisibleTileSet";
+import { type WorldPositionOptions } from "./WorldPositionOptions";
 
 // `process` is provided globally by @types/node (see tsconfig types: ["node"]).
 
@@ -2963,8 +2964,18 @@ export class MapView extends EventDispatcher {
         return p;
     }
 
-    getWorldPositionAt(x: number, y: number, fallback: true): THREE.Vector3;
-    getWorldPositionAt(x: number, y: number, fallback?: boolean): THREE.Vector3 | null;
+    getWorldPositionAt(
+        x: number,
+        y: number,
+        fallback: true,
+        options?: WorldPositionOptions
+    ): THREE.Vector3;
+    getWorldPositionAt(
+        x: number,
+        y: number,
+        fallback?: boolean,
+        options?: WorldPositionOptions
+    ): THREE.Vector3 | null;
 
     /**
      * Returns the world space position from the given screen position.
@@ -2982,22 +2993,145 @@ export class MapView extends EventDispatcher {
      * @param x - The X position in css/client coordinates (without applied display ratio).
      * @param y - The Y position in css/client coordinates (without applied display ratio).
      * @param fallback - Whether to compute a fallback position if depth reading fails.
+     * @param options - Query stage control: `useDepth: false` skips the GPU depth stage,
+     * `excludeObjects` makes hits on given object subtrees count as a miss (e.g. a placement
+     * preview following the cursor), and `terrainOnly: true` answers from elevation-providing
+     * data sources only (implies skipping the depth stage).
      */
-    getWorldPositionAt(x: number, y: number, fallback?: boolean): THREE.Vector3 | null {
-        // Always try to read depth first (includes terrain and 3D models)
-        const worldPosByDepth = this.getWorldPositionAtByDepth(x, y);
-        if (worldPosByDepth !== null) {
-            return worldPosByDepth;
+    getWorldPositionAt(
+        x: number,
+        y: number,
+        fallback?: boolean,
+        options?: WorldPositionOptions
+    ): THREE.Vector3 | null {
+        // Always try to read depth first (includes terrain and 3D models) —
+        // unless the caller opts out because scene objects must not answer.
+        // A terrain-only query cannot use depth either: the depth buffer holds
+        // every rendered surface, not just terrain.
+        const useDepth = options?.useDepth !== false && options?.terrainOnly !== true;
+        if (useDepth) {
+            const worldPosByDepth = this.getWorldPositionAtByDepth(x, y, options?.excludeObjects);
+            if (worldPosByDepth !== null) {
+                return worldPosByDepth;
+            }
         }
 
-        // Depth reading failed, use raycasting against math model (fallback)
+        // Depth readback is asynchronous and lands only after a rendered
+        // frame, so the first query at any pixel falls through here. Cast the
+        // ray through the data sources' surface raycast (the same DEM
+        // bisection the camera collision uses) for a sub-meter pixel-accurate
+        // hit without waiting for any frame.
+        this.m_raycaster.setFromCamera(this.getNormalizedScreenCoordinates(x, y), this.m_camera);
+        const worldPosByTerrain = this.castRayThroughDataSources(
+            this.m_raycaster,
+            false,
+            options?.excludeObjects,
+            options?.terrainOnly === true
+        );
+        if (worldPosByTerrain !== null) {
+            return worldPosByTerrain.point;
+        }
+
+        // No DEM surface hit (below the bisection zoom gate / no elevation
+        // source): use raycasting against math model (fallback)
         return this.getWorldPositionAtWithRaycast(x, y, fallback);
     }
 
-    private getWorldPositionAtByDepth(x: number, y: number): THREE.Vector3 | null {
+    /**
+     * Ask every attached tile data source where the given ray hits its data —
+     * the data sources' `raycast` (`ICameraCollidable`) contract that the
+     * camera collision and the screen-to-surface query share. Sources gate
+     * themselves (elevation present, zoom sufficient); with
+     * `collisionOnly` the sources that did not opt into camera collision are
+     * skipped (the `MapControls` filter). `excludeObjects` drops intersections
+     * whose hit object belongs to an excluded subtree; `terrainOnly` keeps only
+     * elevation-providing sources (skips primitive / 3D-tiles data sources).
+     * @returns Nearest hit — `distance` in the raycaster's frame, `point`
+     * already translated to the geo frame — or `null` when nothing was hit.
+     */
+    public castRayThroughDataSources(
+        raycaster: THREE.Raycaster,
+        collisionOnly: boolean,
+        excludeObjects?: readonly THREE.Object3D[],
+        terrainOnly: boolean = false
+    ): { distance: number; point: THREE.Vector3 } | null {
+        const intersections: THREE.Intersection[] = [];
+        for (const dataSource of this.dataSources) {
+            const candidate = dataSource as unknown as {
+                raycast?: (raycaster: THREE.Raycaster, intersections: THREE.Intersection[]) => void;
+                enableCameraCollision?: boolean;
+                getElevationProvider?: () => unknown;
+            };
+            if (typeof candidate.raycast !== "function") {
+                continue;
+            }
+            if (collisionOnly && !candidate.enableCameraCollision) {
+                continue;
+            }
+            // Terrain-only: elevation-providing sources are the DEM surface
+            // providers; primitive/3D-tiles/anchor sources are skipped even
+            // though they expose their own `raycast`.
+            if (
+                terrainOnly &&
+                typeof (dataSource as Partial<TerrainDataSource>).getElevationProvider !== "function"
+            ) {
+                continue;
+            }
+            candidate.raycast(raycaster, intersections);
+        }
+
+        // Excluded subtrees must not answer, on the CPU route as well: data
+        // sources raycast the scene's registered objects (the primitive data
+        // source walks every registered primitive, preview included), so the
+        // filter is by hit object rather than by data source.
+        const hits =
+            excludeObjects !== undefined && excludeObjects.length > 0
+                ? intersections.filter(
+                      intersection => !this.isExcludedObject(intersection.object, excludeObjects)
+                  )
+                : intersections;
+        if (hits.length === 0) {
+            return null;
+        }
+        hits.sort((a, b) => a.distance - b.distance);
+        const nearest = hits[0];
+        // Hit points are in render space per the data source contract.
+        return { distance: nearest.distance, point: nearest.point.add(this.camera.position) };
+    }
+
+    private getWorldPositionAtByDepth(
+        x: number,
+        y: number,
+        excludeObjects?: readonly THREE.Object3D[]
+    ): THREE.Vector3 | null {
         const ndc = this.getNormalizedScreenCoordinates(x, y);
         const ndcVector = new THREE.Vector3(ndc.x, ndc.y, 0.5);
-        const depth = this.mapRenderingManager.readDepth(ndcVector);
+
+        let depth: number | null;
+        if (excludeObjects !== undefined && excludeObjects.length > 0) {
+            // Excluding objects needs the rendered object behind the pixel:
+            // the pickId packed into the same readback resolves it (shared
+            // slot mechanics with readDepth, no extra render pass).
+            const vrm = this.mapRenderingManager.viewRenderManager;
+            if (vrm === undefined) {
+                return null;
+            }
+            const pick = vrm.readPickSync(ndcVector);
+            if (pick === null || pick.pickId <= 0) {
+                // Cold pixel or sky/background: nothing rendered to answer with.
+                return null;
+            }
+            const hitObject = vrm.getPickedObject(pick.pickId);
+            if (hitObject !== undefined && this.isExcludedObject(hitObject, excludeObjects)) {
+                // Depth belongs to an excluded subtree (e.g. the placement
+                // preview): treat as a miss so the caller falls through to
+                // the terrain raycast / math model.
+                return null;
+            }
+            depth = pick.depth;
+        } else {
+            depth = this.mapRenderingManager.readDepth(ndcVector);
+        }
 
         if (depth === null) {
             return null;
@@ -3006,6 +3140,19 @@ export class MapView extends EventDispatcher {
 
         const worldPosition = new THREE.Vector3();
         return this.ndcToView(ndcWithDepth, worldPosition).add(this.camera.position);
+    }
+
+    /** Whether the rendered object (or any of its ancestors) is one of the excluded roots. */
+    private isExcludedObject(
+        object: THREE.Object3D,
+        excludeObjects: readonly THREE.Object3D[]
+    ): boolean {
+        for (let node: THREE.Object3D | null = object; node !== null; node = node.parent) {
+            if (excludeObjects.includes(node)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private getWorldPositionAtWithRaycast(
@@ -3034,7 +3181,63 @@ export class MapView extends EventDispatcher {
                 .multiplyScalar(this.m_camera.far / cosAlpha)
                 .add(this.m_camera.position);
         }
+        if (worldPos !== null) {
+            // Align the math-surface fallback with the terrain: raise the
+            // sea-level sphere / z=0 plane intersection to the DEM elevation,
+            // mirroring the camera target path (getTargetAndDistance ->
+            // getWorldTargetFromCamera, which intersects the ground surface
+            // raised by the elevation). Without this, the raycast fallback
+            // that serves the first query at any pixel (the GPU depth readback
+            // is async and lands only after a rendered frame) returns a
+            // sea-level point under elevated terrain. No-op without an
+            // elevation source, or before elevation data has loaded.
+            this.elevateWorldPositionToTerrain(worldPos);
+        }
         return worldPos;
+    }
+
+    /**
+     * Refine a math-surface raycast hit (sea-level sphere / z=0 plane) to the
+     * terrain elevation from the elevation provider. Two iterations converge
+     * the parallax between the sea-level hit and the elevated terrain hit.
+     * Leaves the point unchanged when no elevation source is attached or no
+     * elevation data is loaded yet (height 0 / undefined), preserving the
+     * previous behavior in those states.
+     */
+    private elevateWorldPositionToTerrain(worldPos: THREE.Vector3): void {
+        const elevationProvider = this.m_elevationProvider;
+        if (elevationProvider === undefined) {
+            return;
+        }
+        const ray = this.m_raycaster.ray;
+        const spherical = this.projection.type === ProjectionType.Spherical;
+        const hit = new THREE.Vector3();
+        for (let iteration = 0; iteration < 2; iteration++) {
+            const elevation = elevationProvider.getHeight(
+                this.projection.unprojectPoint(worldPos)
+            );
+            if (elevation === undefined || elevation === 0) {
+                return;
+            }
+            let intersected: boolean;
+            if (spherical) {
+                intersected =
+                    (this.projection as SphereProjection).rayCast(
+                        hit,
+                        ray.origin,
+                        ray.origin.clone().add(ray.direction),
+                        elevation
+                    ) !== -1;
+            } else {
+                intersected =
+                    ray.intersectPlane(new THREE.Plane(this.m_plane.normal, -elevation), hit) !==
+                    null;
+            }
+            if (!intersected) {
+                return;
+            }
+            worldPos.copy(hit);
+        }
     }
 
     /**

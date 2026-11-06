@@ -212,7 +212,13 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
                 );
                 if (transform === false) return;
 
-                webTileEntry.texture.flipY = this.dataSource.isYAxisDown;
+                // Zero-flip contract (see DEMTileLayerMaterial.s_baseNodes):
+                // the imagery is sampled with an explicit `1 - v`, so the
+                // texture must NOT be flipped by three. A texture-level flip
+                // is backend-dependent in r185 (WebGPU: upload only; WebGL
+                // fallback: upload + shader), which mirrored the imagery on
+                // the WebGL path.
+                webTileEntry.texture.flipY = false;
                 if (!baseAssigned) {
                     // Stable "base" key: the lit base mesh never changes
                     // identity — progressive resolution upgrades swap the
@@ -271,16 +277,12 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
             );
             if (transform === false) continue;
 
-            // flipY follows the SAME convention as the proven DEM/imagery
-            // paths (see TerrainTileState.setHeightMap: texture.flipY =
-            // yDown, and computeHeightMapPos' row flip): uv.y/webMercatorY
-            // increase NORTHWARD (south = 0, north = 1) and the texture v
-            // axis then has v = 0 at the image BOTTOM (south) — matching the
-            // positive-scale signed-offset transform from
-            // computeTextureUvTransform(..., invertV = true).
+            // Zero-flip contract, same as the base/overlay imagery above:
+            // DEMTileOverlayMaterial applies the explicit `1 - v`, so the
+            // texture itself must stay unflipped on every backend.
             // NOTE: never set texture.needsUpdate here — this runs on every
             // tile rebuild and would re-upload the texture each pass.
-            entry.texture.flipY = this.dataSource.isYAxisDown;
+            entry.texture.flipY = false;
             targets.push({
                 key: `proj:${entry.layerId}`,
                 kind: "projector",

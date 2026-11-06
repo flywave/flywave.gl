@@ -1,7 +1,7 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 // @ts-nocheck
 
-import { float, Fn, fwidth, length, pointUV, smoothstep, uniform, vec2, vec3, vec4 } from "three/tsl";
+import { float, Fn, uniform, vec4 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { NodeMaterial } from "three/webgpu";
 
@@ -40,15 +40,17 @@ export class CirclePointsMaterial extends NodeMaterial {
         // fragmentNode bypasses the renderer's MRT wrapping in three r185
         // (see SolidLineMaterial.setupNodes for the full comment) and makes
         // the WebGPU pipeline invalid in the MRT scene pass.
-        const fragmentColor = Fn(() => {
-            const radius = float(0.5);
-            const coords = pointUV.sub(vec2(0.5));
-            const len = length(coords);
-            const falloff = fwidth(len);
-            const threshold = float(1).sub(smoothstep(radius.sub(falloff), radius, len));
-            const alpha = this.m_opacityUniform.mul(threshold);
-            return vec4(this.m_colorUniform, alpha);
-        })();
+        //
+        // The per-fragment circle falloff cannot be expressed here: `pointUV`
+        // is WebGL-only (it emits `gl_PointCoord`), so on the WebGPU backend
+        // the fragment module failed to parse ("unresolved value
+        // 'gl_PointCoord'") and the resulting invalid pipeline discarded the
+        // whole frame's command buffer. There is nothing to shade anyway:
+        // WebGPU rasterizes `point-list` primitives as exactly one pixel, and
+        // the node-based WebGL fallback pins `gl_PointSize` to 1.0
+        // (GLSLNodeBuilder), so a point covers a single fragment. `size` is
+        // therefore used for picking (`Circles.testPoint`) only.
+        const fragmentColor = vec4(this.m_colorUniform, this.m_opacityUniform);
         this.colorNode = fragmentColor;
         // Alpha above already includes m_opacityUniform (aliased by the
         // `opacity` accessor); pin opacityNode to 1 to avoid double-multiply.

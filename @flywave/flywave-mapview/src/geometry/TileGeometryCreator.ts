@@ -829,10 +829,7 @@ export class TileGeometryCreator {
                     // extruded lines are normal meshes, and need transparency only when fading or
                     // dynamic properties is defined.
                     if (technique.fadeFar !== undefined) {
-                        const fadingParams = this.getFadingParams(
-                            mapView.env,
-                            technique as StandardExtrudedLineTechnique
-                        );
+                        const fadingParams = this.getFadingParams(mapView.env, technique);
 
                         FadingFeature.addRenderHelper(
                             object,
@@ -861,9 +858,9 @@ export class TileGeometryCreator {
                 ) {
                     // filled polygons are normal meshes, and need transparency only when fading or
                     // dynamic properties is defined.
-
                     if (technique.fadeFar !== undefined) {
                         const fadingParams = this.getFadingParams(discreteZoomEnv, technique);
+
                         FadingFeature.addRenderHelper(
                             object,
                             viewRanges,
@@ -881,10 +878,11 @@ export class TileGeometryCreator {
                 if (renderDepthPrePass) {
                     const depthPassMesh = createDepthPrePassMesh(
                         object as THREE.Mesh,
-                        (mapView.renderer as { reversedDepthBuffer?: boolean })
-                            .reversedDepthBuffer === true
+                        mapView.renderer.reversedDepthBuffer === true
                     );
+
                     this.addUserData(tile, srcGeometry, technique, depthPassMesh);
+
                     // Set geometry kind for depth pass mesh so that it gets the displacement map
                     // for elevation overlay.
                     registerTileObject(tile, depthPassMesh, techniqueKind, {
@@ -892,7 +890,6 @@ export class TileGeometryCreator {
                         pickability: Pickability.transient
                     });
                     objects.push(depthPassMesh);
-
                     if (extrusionAnimationEnabled) {
                         addToExtrudedMaterials(depthPassMesh.material, extrudedMaterials);
                     }
@@ -903,6 +900,7 @@ export class TileGeometryCreator {
                 const techniquePickability = transientToPickability(
                     getPropertyValue(technique.transient, mapView.env)
                 );
+
                 // register all objects as pickable except solid lines with outlines, in that case
                 // it's enough to make outlines pickable.
                 registerTileObject(tile, object, techniqueKind, {
@@ -911,6 +909,7 @@ export class TileGeometryCreator {
                         ? Pickability.transient
                         : techniquePickability
                 });
+
                 objects.push(object);
 
                 // Add the extruded polygon edges as a separate geometry.
@@ -926,9 +925,12 @@ export class TileGeometryCreator {
                         srcGeometry.edgeFeatureStarts.length > 0;
 
                     const buildingTechnique = technique as ExtrudedPolygonTechnique;
-                    const edgeGeometry = new THREE.BufferGeometry();
-                    edgeGeometry.setAttribute("position", bufferGeometry.getAttribute("position"));
 
+                    const edgeGeometry = new THREE.BufferGeometry();
+                    edgeGeometry.setAttribute(
+                        "position",
+                        bufferGeometry.getAttribute("position")
+                    );
                     const colorAttribute = bufferGeometry.getAttribute("color");
                     if (colorAttribute !== undefined) {
                         edgeGeometry.setAttribute("color", colorAttribute);

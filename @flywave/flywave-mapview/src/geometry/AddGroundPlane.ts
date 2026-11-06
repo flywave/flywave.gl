@@ -194,7 +194,12 @@ function createGroundPlaneGeometry(
     geometry.setIndex(new THREE.BufferAttribute(new Uint16Array([0, 1, 2, 2, 1, 3]), 1));
 
     if (createTexCoords) {
-        const uvAttr = new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), 2);
+        // v = 1 at the SOUTH edge (corner order here is sw, se, nw, ne).
+        // WebTileLoader keeps the texture unflipped (flipY = false) because
+        // three r185 flips ImageBitmap textures inconsistently between the
+        // WebGPU and WebGL backends; with zero flips the bitmap's v = 0 row is
+        // its top (north) row, so the south edge must sample v = 1.
+        const uvAttr = new THREE.BufferAttribute(new Float32Array([0, 1, 1, 1, 0, 0, 1, 0]), 2);
         geometry.setAttribute("uv", uvAttr);
     }
 

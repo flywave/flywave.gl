@@ -22,13 +22,14 @@ export class TextureLoader {
      * streaming imagery tiles.
      *
      * Orientation: the bitmap is decoded in its natural (top-left origin)
-     * orientation and `texture.flipY` stays false. That reproduces the old
-     * pipeline exactly: three r185 WebGPU only flips in-shader for
-     * `image instanceof ImageBitmap && flipY === true` (see the flipYUniform
-     * in three.webgpu.js), so the old path (HTMLImageElement + flipY=true)
-     * sampled the raw, natural orientation - and the terrain imagery flow
-     * overrode flipY to false anyway before re-encoding bitmaps with
-     * `imageOrientation: "none"`.
+     * orientation and `texture.flipY` is false — the loader guarantees a
+     * ZERO-flip texture on both backends. three r185's flip behaviour is
+     * asymmetric (WebGPU flips ImageBitmap at upload; the WebGL fallback flips
+     * at upload AND in the shader), so texture-level flips cannot be made to
+     * agree across backends. Consumers that need the web-mercator north-up
+     * orientation own it in their UVs instead: see the ground-plane UV
+     * convention in AddGroundPlane / WebTileLoader. The terrain flow also
+     * re-creates textures from ImageBitmaps itself and sets flipY explicitly.
      *
      * @param url - URL to the image
      * @param requestHeaders - Optional request headers to load image(e.g. Authorization)
@@ -53,6 +54,8 @@ export class TextureLoader {
         try {
             const imageBitmap = await createImageBitmap(new Blob([buffer]));
             const texture = new THREE.Texture(imageBitmap);
+            // Zero-flip contract: v = 0 is the bitmap's top (north) row on
+            // both backends. See the orientation note above.
             texture.flipY = false;
             texture.needsUpdate = true;
             // three r137+ dropped RGBFormat support, so jpg/png textures are
@@ -65,6 +68,8 @@ export class TextureLoader {
             // Image element can (e.g. SVG); fall back to the legacy loader.
             const blob = new Blob([buffer]);
             const texture = await this.loadWithThreeLoader(URL.createObjectURL(blob));
+            // Same zero-flip contract as the ImageBitmap path.
+            texture.flipY = false;
             texture.format = THREE.RGBAFormat;
             return texture;
         }
