@@ -49,8 +49,15 @@ const FRUSTUM_CORNERS = [
 export class AtmosphereSystem {
     private static readonly MOON_RADIUS = 1737400;
     private static readonly SHADOW_DISABLE_DISTANCE = 2e5;
-    /** Cesium ShadowMap.maximumDistance analog: hard cap on the shadowed range (m). */
-    private static readonly SHADOW_MAXIMUM_DISTANCE = 5000;
+    /**
+     * Floor for the shadowed range (m): the shadow far must never collapse below this, or the
+     * cut-off line where shadows stop lands inside the typical tilted view as a hard
+     * brightness step (low-sun long-shadow views make it obvious — a near-horizontal seam
+     * across the terrain). The scene-far estimate can undershoot badly at close range
+     * (distance×6 chain ~2 km), so clamp it up to this floor. Near-field sharpness does not
+     * depend on this value: the cascade depth clamps keep cascade 0 at ~25 m near the ground.
+     */
+    private static readonly SHADOW_MINIMUM_DISTANCE = 20000;
 
     /**
      * Faint sky fill so the night side of the globe keeps a natural (moonlit) look instead of
@@ -99,6 +106,7 @@ export class AtmosphereSystem {
     private m_toneMappingExposure: number = 3;
     private m_toneMappingMode?: ToneMappingMode;
     private m_lastCsmMaxFar: number = 0;
+    private m_lastCsmClosest: number = 0;
     private readonly m_scratchMoonPos = new THREE.Vector3();
 
     private static readonly CONTEXT_KEY = "getAtmosphere";
@@ -640,12 +648,11 @@ export class AtmosphereSystem {
                       this.mapView.elevationProvider
                   )
                 : Number(this.mapView.viewRanges.far);
-        // Cesium ShadowMap.maximumDistance-style fixed cap: shadows only render within
-        // `maximumDistance` of the camera, independent of how far the scene extends. The
-        // 2e5 horizon bound stays as the planetary kill-switch for very high cameras.
+        // The shadow range must never collapse to the near field (see
+        // SHADOW_MINIMUM_DISTANCE): clamp the scene estimate UP to the floor, and keep the
+        // 2e5 horizon bound as the planetary kill-switch for very high cameras.
         const viewFar = Math.min(
-            sceneFar,
-            AtmosphereSystem.SHADOW_MAXIMUM_DISTANCE,
+            Math.max(sceneFar, AtmosphereSystem.SHADOW_MINIMUM_DISTANCE),
             AtmosphereSystem.SHADOW_DISABLE_DISTANCE
         );
 
@@ -680,12 +687,19 @@ export class AtmosphereSystem {
 
         const desiredMaxFar = viewFar;
         const ratio = this.m_lastCsmMaxFar > 0 ? desiredMaxFar / this.m_lastCsmMaxFar : Infinity;
+        // The cascade depth clamps key off closestObjectSize, so a change there must rebuild
+        // the splits too — otherwise the clamps never apply while maxFar sits pinned at the
+        // minimum-distance floor (breaks keep the unclamped λ split, and near-field shadows
+        // stay coarse).
+        const closestRatio =
+            this.m_lastCsmClosest > 0 ? csm.closestObjectSize / this.m_lastCsmClosest : Infinity;
 
-        if (ratio > 1.1 || ratio < 0.9) {
+        if (ratio > 1.1 || ratio < 0.9 || closestRatio > 1.1 || closestRatio < 0.9) {
             if (csm.camera != null) {
                 csm.maxFar = desiredMaxFar;
                 csm.updateFrustums();
                 this.m_lastCsmMaxFar = desiredMaxFar;
+                this.m_lastCsmClosest = csm.closestObjectSize;
             }
         }
 
