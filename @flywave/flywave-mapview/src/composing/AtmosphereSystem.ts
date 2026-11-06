@@ -177,8 +177,12 @@ export class AtmosphereSystem {
         this.m_atmosphereLight.intensity = 1;
         this.m_atmosphereLight.castShadow = true;
         this.m_atmosphereLight.shadow.mapSize.set(2048, 2048);
-        this.m_atmosphereLight.shadow.bias = -0.0005;
-        this.m_atmosphereLight.shadow.normalBias = 0.1;
+        // Constant NDC bias must stay 0 here: the cascade depth shell spans ±lightMargin
+        // (≈20 km), so even -0.0005 maps to ~20 m of world depth offset — enough to
+        // peter-pan a meter-scale model's whole shadow off its receiver (shadows appear
+        // halved/absent). Depth comparison relies on the world-space normalBias instead.
+        this.m_atmosphereLight.shadow.bias = 0;
+        this.m_atmosphereLight.shadow.normalBias = 0.02;
         this.m_atmosphereLight.shadow.camera.near = 0;
         this.m_atmosphereLight.shadow.camera.far = 3e5;
         this.m_atmosphereLight.shadow.camera.left = -1e5;

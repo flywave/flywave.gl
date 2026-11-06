@@ -33,7 +33,17 @@ const planeScratch = /*#__PURE__*/ new Plane();
  */
 const SPLIT_LAMBDA = 0.9;
 const SMALL_OBJECT_SIZE = 200.0;
-const MAX_CASCADE_DISTANCES = [25.0, 150.0, 700.0, Number.MAX_VALUE];
+/**
+ * Cesium ships [25, 150, 700] because its shadow camera has a caster-extension pass
+ * (`fitShadowMapToScene` projects the whole scene into each cascade) — a caster just
+ * outside a cascade slice still lands in that cascade's depth map. three's CSMShadowNode
+ * fits each cascade's ortho box to the VIEW SLICE only, so a shadow crossing a cascade
+ * boundary is cut in half (near half drawn, far half empty). At this engine's typical
+ * viewing distances (a ~25 m character with a ~3 m shadow) a 25 m cascade-0 depth puts
+ * the boundary mid-shadow and halves the shadow. Widen the near cascades so everyday
+ * near-field shadows stay inside one cascade; texel at cascade 0 is still ~10 cm.
+ */
+const MAX_CASCADE_DISTANCES = [100.0, 300.0, 1000.0, Number.MAX_VALUE];
 
 /**
  * Cascade far-depth ends in three's `customSplitsCallback` convention: `breaks.length ===
