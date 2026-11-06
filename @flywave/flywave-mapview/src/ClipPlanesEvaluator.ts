@@ -810,12 +810,73 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
         return d + r + this.maxElevation;
     }
 
+    /**
+     * The constrained, view-dependent far distance of the scene: the pre-globe-coverage
+     * view-range value — tight far (frustum side rays against the max-elevation sphere,
+     * horizon fallback) followed by the SAME constraint clamps the old pipeline applied
+     * (`farMin` / `distance * farMaxRatio` / near-far margin), WITHOUT the planetary
+     * `d + maxR` floor. Consumers that need a scene-scale range rather than a clip plane —
+     * e.g. the shadow cascades — feed on this: the raw tight far alone still reaches tens
+     * of kilometers at grazing tilts and starves the cascades of resolution.
+     */
+    computeSceneFar(
+        camera: THREE.PerspectiveCamera,
+        projection: Projection,
+        elevationProvider?: ElevationProvider
+    ): number {
+        assert(projection.type === ProjectionType.Spherical);
+        const d = camera.position.length();
+        const cameraAltitude = projection.groundDistance(camera.position);
+        const r = Math.max(d - cameraAltitude, 0);
+        const minR = r + this.minElevation;
+        const maxR = r + this.maxElevation;
+
+        CameraUtils.getPrincipalPoint(camera, this.m_tmpV2);
+        const isRightIntersectionFarther = this.m_tmpV2.x <= 0.0;
+        const ndcX = isRightIntersectionFarther ? 1 : -1;
+        const checkBottomIntersection = this.m_tmpV2.y > 0;
+
+        const topDist = SphericalProj.getProjSphereIntersectionDistance(
+            camera,
+            this.m_tmpV2.set(ndcX, 1),
+            this.maxElevation,
+            projection as SphereProjection
+        );
+        const bottomDist = checkBottomIntersection
+            ? SphericalProj.getProjSphereIntersectionDistance(
+                  camera,
+                  this.m_tmpV2.set(ndcX, -1),
+                  this.maxElevation,
+                  projection as SphereProjection
+              )
+            : 0;
+
+        const largestDist = Math.max(topDist ?? Infinity, bottomDist ?? Infinity);
+        const tightFar =
+            largestDist !== Infinity
+                ? largestDist
+                : SphericalProj.getFarDistanceFromElevatedHorizon(camera, d, minR, maxR);
+
+        // Re-run the old constraint chain (planetary floor off) so the value matches what
+        // `viewRanges.far` was before the globe-coverage change.
+        const sceneRanges = this.applyViewRangeConstraints(
+            { near: camera.near, far: tightFar, minimum: 0, maximum: 0 },
+            camera,
+            projection,
+            elevationProvider,
+            false,
+            false
+        );
+        return sceneRanges.far;
+    }
+
     private applyViewRangeConstraints(
         viewRanges: ViewRanges,
         camera: THREE.Camera,
         projection: Projection,
         elevationProvider: ElevationProvider | undefined,
-        useLogarithmicDepth: boolean
+        useLogarithmicDepth: boolean,
+        sphericalFarFloor = true
     ): ViewRanges {
         // Compute the focus point (target) distance for current camera and projection setup,
         // in a same way the MapView component does.
@@ -837,7 +898,7 @@ export class TiltViewClipPlanesEvaluator extends TopViewClipPlanesEvaluator {
         // camera was tilted towards it. With the reversed depth buffer the far plane can cover
         // everything renderable at no precision cost (Cesium/Google Earth approach), so never
         // clamp below d + maxR — the farthest point of the max-elevation sphere.
-        if (projection.type === ProjectionType.Spherical) {
+        if (sphericalFarFloor && projection.type === ProjectionType.Spherical) {
             const d = camera.position.length();
             const r = Math.max(d - cameraAltitude, 0);
             farMax = Math.max(farMax, d + r + this.maxElevation);

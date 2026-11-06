@@ -19,9 +19,96 @@ declare module "three/examples/jsm/csm/CSMShadowNode.js" {
 const vectorScratch1 = /*#__PURE__*/ new Vector3();
 const planeScratch = /*#__PURE__*/ new Plane();
 
+/**
+ * Cesium-style cascade split scheme (CesiumJS ShadowMap.js computeCascades):
+ *
+ * - Heavily log-biased split mix (`lerp(uniform, log, 0.9)`) concentrates the first
+ *   cascades near the camera — three's default practical split (λ=0.5) gives cascade 0
+ *   a far larger share and starves near-receiver resolution on planetary ranges.
+ * - When only SMALL objects are near the camera (`closestObjectSize < 200 m`), each
+ *   cascade's depth extent is clamped to `MAX_CASCADE_DISTANCES` ([25, 150, 700, ∞]) so
+ *   near-cascade resolution is decoupled from the total shadow range: even at a 5 km
+ *   range, cascade 0 stays at a ~2.4 cm texel on a 2048² map. Big near objects skip the
+ *   clamp so tall casters are not sliced.
+ */
+const SPLIT_LAMBDA = 0.9;
+const SMALL_OBJECT_SIZE = 200.0;
+const MAX_CASCADE_DISTANCES = [25.0, 150.0, 700.0, Number.MAX_VALUE];
+
+/**
+ * Cascade far-depth ends in three's `customSplitsCallback` convention: `breaks.length ===
+ * cascadeCount`, each entry the normalized (÷ `cameraFar`) far depth of cascade i — the
+ * Cesium scheme converted from its own absolute `splits[0..cascadeCount]` convention.
+ */
+function cesiumCascadeSplits(
+    cascadeCount: number,
+    cameraNear: number,
+    cameraFar: number,
+    closestObjectSize: number,
+    breaks: number[]
+): void {
+    const range = cameraFar - cameraNear;
+    const ratio = cameraFar / cameraNear;
+
+    const clampCascades = closestObjectSize < SMALL_OBJECT_SIZE;
+
+    breaks.length = cascadeCount;
+
+    const cascadeDistances: number[] = [];
+    let prevEnd = cameraNear;
+    for (let i = 0; i < cascadeCount; ++i) {
+        const p = (i + 1) / cascadeCount;
+        const logScale = cameraNear * Math.pow(ratio, p);
+        const uniformScale = cameraNear + range * p;
+        // Cesium: lerp(uniform, log, lambda)
+        const end = uniformScale + (logScale - uniformScale) * SPLIT_LAMBDA;
+        breaks[i] = end / cameraFar;
+        cascadeDistances[i] = end - prevEnd;
+        prevEnd = end;
+    }
+
+    if (clampCascades) {
+        for (let i = 0; i < cascadeCount; ++i) {
+            cascadeDistances[i] = Math.min(cascadeDistances[i], MAX_CASCADE_DISTANCES[i]);
+        }
+        // Recompute the split ends from the clamped cascade extents.
+        let distance = cameraNear;
+        for (let i = 0; i < cascadeCount; ++i) {
+            distance += cascadeDistances[i];
+            breaks[i] = distance / cameraFar;
+        }
+    }
+}
+
 export class CascadedShadowMapsNode extends CSMShadowNode {
     declare camera: PerspectiveCamera;
     declare light: DirectionalLight;
+
+    /**
+     * Size (m) of the closest shadow receiver/caster to the camera, set per frame by the
+     * AtmosphereSystem. Below {@link SMALL_OBJECT_SIZE} the cascades are clamped to
+     * {@link MAX_CASCADE_DISTANCES} depths (Cesium behavior). Large default = no clamping.
+     */
+    closestObjectSize: number = 1000;
+
+    constructor(light: DirectionalLight) {
+        super(light, { cascades: 4, maxFar: 1e5 });
+        this.mode = "custom";
+        this.customSplitsCallback = (cascadeCount, cameraNear, cameraFar, breaks) =>
+            cesiumCascadeSplits(cascadeCount, cameraNear, cameraFar, this.closestObjectSize, breaks);
+    }
+
+    /**
+     * three's `updateFrustums` walks `this.lights`, which is only populated by `_init()`
+     * during the renderer's first shadow pass. Skip until that state is consistent — the
+     * renderer itself calls `updateFrustums` right after `_init`, so nothing is lost.
+     */
+    override updateFrustums(): void {
+        if (this.camera == null || this.lights.length !== this.cascades) {
+            return;
+        }
+        super.updateFrustums();
+    }
 
     override updateBefore(frame: NodeFrame): void {
         super.updateBefore(frame);

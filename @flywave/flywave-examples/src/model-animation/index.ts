@@ -27,10 +27,12 @@ import {
     MapViewEventNames
 } from "@flywave/flywave.gl";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
+import { clone as SkeletonUtilsClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three/webgpu";
 
 import {
     applyPanelStyle,
+    attachTerrainImagery,
     createExampleGui,
     createExampleMap,
     demoTerrain,
@@ -47,10 +49,10 @@ const CONFIG = {
     anchor: new GeoCoordinates(36.48619699228674, 118.17270928364879, 330),
     /** FBX is Y-up, anchored frames are Z-up. */
     modelUprightRotationX: Math.PI / 2,
-    modelScale: 0.5,
+    modelScale: 0.01,
     sunHour: 13,
-    cameraTilt: 55,
-    cameraDistance: 120
+    cameraTilt: 35,
+    cameraDistance: 800
 };
 
 /** Inline theme: atmosphere sun at noon casts the shadows, no extra lights. */
@@ -67,8 +69,9 @@ function buildTheme(): Theme {
 }
 
 /**
- * Load the FBX, upright it inside an anchored wrapper group and return the
- * model, its mixer and the clip list for the GUI.
+ * Load the FBX and place a row of scaled clones (skinned-mesh safe) along an
+ * east-west line so the (northward) shadows never overlap a neighbour's probe
+ * points. Returns the first mixer and the clip list for the GUI.
  */
 async function placeAnimatedModel(mapView: MapView): Promise<{
     model: THREE.Object3D;
@@ -77,25 +80,88 @@ async function placeAnimatedModel(mapView: MapView): Promise<{
 }> {
     const model = await new FBXLoader().loadAsync(CONFIG.modelUrl);
 
-    model.scale.setScalar(CONFIG.modelScale);
-    model.rotateX(CONFIG.modelUprightRotationX);
-    model.traverse(child => {
-        if ((child as THREE.Mesh).isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
+    // Keep the raw asset un-transformed: each row instance clones it and applies its own
+    // scale + upright rotation, so a clone never inherits a double rotation.
+    const rowScales = [0.01, 0.05, 0.1, 0.3, 0.5];
+    const metersPerDegLng = 111320 * Math.cos((CONFIG.anchor.latitude / 180) * Math.PI);
+    const rowSpacing = 200;
+    const mixers: THREE.AnimationMixer[] = [];
+    const elevationProvider = mapView.elevationProvider;
+    const rowRoots: Array<{ root: MapAnchor<THREE.Object3D>; geo: GeoCoordinates }> = [];
+
+    rowScales.forEach((scale, i) => {
+        const instance = SkeletonUtilsClone(model);
+        instance.scale.setScalar(scale);
+        instance.rotateX(CONFIG.modelUprightRotationX);
+        instance.traverse(child => {
+            if ((child as THREE.Mesh).isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        const offsetLng = ((i - (rowScales.length - 1) / 2) * rowSpacing) / metersPerDegLng;
+        // Anchor each instance at ITS OWN terrain elevation — a fixed altitude buries the
+        // model halfway into whatever high ground sits along the row. The DEM is usually NOT
+        // loaded yet at placement time, so the initial query returns a coarse fallback; a
+        // tracker below re-anchors once the fine tiles arrive.
+        const anchorGeo = new GeoCoordinates(
+            CONFIG.anchor.latitude,
+            CONFIG.anchor.longitude + offsetLng,
+            CONFIG.anchor.altitude
+        );
+        const terrainHeight = elevationProvider?.getHeight(anchorGeo, 14);
+        anchorGeo.altitude = terrainHeight !== undefined ? terrainHeight : CONFIG.anchor.altitude;
+        const root: MapAnchor<THREE.Object3D> = new THREE.Group();
+        root.anchor = anchorGeo;
+        root.lookAt(
+            ellipsoidProjection.projectPoint(
+                anchorGeo,
+                new THREE.Vector3()
+            )
+        );
+        root.add(instance);
+        mapView.mapAnchors.add(root);
+        rowRoots.push({ root, geo: anchorGeo });
+        const mixer = new THREE.AnimationMixer(instance);
+        const clip = model.animations[0];
+        if (clip !== undefined) {
+            mixer.clipAction(clip).play();
         }
+        mixers.push(mixer);
     });
 
-    // Wrapper group carries the geo placement and the upright orientation.
-    const root: MapAnchor<THREE.Object3D> = new THREE.Group();
-    root.anchor = CONFIG.anchor;
-    root.lookAt(ellipsoidProjection.projectPoint(CONFIG.anchor, new THREE.Vector3()));
-    root.add(model);
-    mapView.mapAnchors.add(root);
+    // Re-anchor each model as the DEM refines: poll the elevation provider until every
+    // anchor has been stable for a few consecutive checks, then stop.
+    let stableChecks = 0;
+    const anchorTracker = window.setInterval(() => {
+        let changed = false;
+        for (const { root, geo } of rowRoots) {
+            const height = elevationProvider?.getHeight(geo, 14);
+            if (height !== undefined && Math.abs(height - geo.altitude) > 0.5) {
+                geo.altitude = height;
+                root.lookAt(ellipsoidProjection.projectPoint(geo, new THREE.Vector3()));
+                changed = true;
+            }
+        }
+        if (changed) {
+            stableChecks = 0;
+            mapView.update();
+        } else if (++stableChecks >= 3) {
+            window.clearInterval(anchorTracker);
+        }
+    }, 1000);
+    (window as any).__shadowRow = {
+        scales: rowScales,
+        spacing: rowSpacing,
+        centerLat: CONFIG.anchor.latitude,
+        centerLng: CONFIG.anchor.longitude
+    };
 
     const mixer = new THREE.AnimationMixer(model);
     const clips = model.animations;
     logger.info(`Loaded ${CONFIG.modelUrl} with ${clips.length} animation clip(s)`);
+    // The GUI drives every row instance through the shared timeScale.
+    (mixer as any).__rowMixers = mixers;
     return { model, mixer, clips };
 }
 
@@ -153,7 +219,7 @@ function setupGui(
             }
         });
     folder
-        .add(state, "scale", 0.05, 1, 0.01)
+        .add(state, "scale", 0.01, 1, 0.01)
         .name("scale")
         .onChange((scale: number) => {
             model.scale.setScalar(scale);
@@ -183,9 +249,11 @@ async function main(): Promise<void> {
     logExampleInfo("model-animation", mapView);
 
     // Local offline DEM so the model stands on real ground and receives the
-    // sun shadow.
+    // sun shadow; satellite imagery is draped onto the terrain tiles (must go
+    // through the terrain source, not a standalone layer, or it depth-fights).
     const terrain = demoTerrain();
-    mapView.setElevationSource(terrain);
+    await mapView.setElevationSource(terrain);
+    attachTerrainImagery(terrain);
 
     const { model, mixer, clips } = await placeAnimatedModel(mapView);
 
@@ -197,11 +265,57 @@ async function main(): Promise<void> {
         const delta = Math.min((now - lastTime) / 1000, 0.1);
         lastTime = now;
         mixer.update(delta);
+        const rowMixers = (mixer as any).__rowMixers as THREE.AnimationMixer[] | undefined;
+        if (rowMixers !== undefined) {
+            for (const m of rowMixers) {
+                m.update(delta);
+            }
+        }
     });
     mapView.beginAnimation();
 
     await mapView.getTheme();
     setupGui(mapView, model, mixer, clips);
+
+    // TEMP shadow-debug HUD: real far/near numbers to judge CSM resolution. Remove when done.
+    const hud = document.createElement("div");
+    hud.style.cssText =
+        "position:absolute;left:8px;bottom:40px;color:#0f0;background:rgba(0,0,0,.6);" +
+        "font:12px/1.5 monospace;padding:4px 6px;z-index:999;white-space:pre";
+    document.body.appendChild(hud);
+    const refreshHud = (): void => {
+        const cam = mapView.camera;
+        const sceneFar = (
+            mapView.clipPlanesEvaluator as any
+        ).computeSceneFar(cam, mapView.projection, mapView.elevationProvider);
+        const camGeo = mapView.projection.unprojectPoint(cam.position);
+        const csm = (mapView.mapRenderingManager.viewRenderManager as any)?.csmShadowNode;
+        const light = csm?.light;
+        const breaks = (csm?.breaks ?? []).map((b: number) => b.toFixed(3)).join(",");
+        hud.textContent =
+            `viewRanges.far = ${mapView.viewRanges.far.toFixed(0)} m\n` +
+            `computeSceneFar = ${sceneFar.toFixed(0)} m\n` +
+            `camera.near = ${cam.near.toFixed(2)}  camera.far = ${cam.far.toFixed(0)} m\n` +
+            `castShadow=${light?.castShadow} csm.maxFar=${csm?.maxFar} lights=${csm?.lights.length}\n` +
+            `breaks(norm×far)= ${breaks}\n` +
+            `cam lat=${camGeo.latitude.toFixed(5)} lng=${camGeo.longitude.toFixed(5)} ` +
+            `alt=${camGeo.altitude.toFixed(0)} m`;
+    };
+    refreshHud();
+    window.setInterval(refreshHud, 1000);
+
+    // Optional camera override for shadow debugging: ?flyto=lat,lng,distance,tilt,heading
+    const [pLat, pLng, pDist, pTilt, pHdg] =
+        new URLSearchParams(window.location.search).get("flyto")?.split(",").map(Number) ?? [];
+    if (Number.isFinite(pLat)) {
+        void mapView.flyTo({
+            target: { latitude: pLat, longitude: pLng },
+            distance: pDist,
+            tilt: pTilt,
+            heading: pHdg,
+            duration: 1
+        });
+    }
 }
 
 void main();

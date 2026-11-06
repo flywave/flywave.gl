@@ -27,6 +27,7 @@ import { texture } from "three/tsl";
 import type { Renderer } from "three/webgpu";
 import * as THREE from "three/webgpu";
 
+import { TiltViewClipPlanesEvaluator } from "../ClipPlanesEvaluator";
 import { type MapView } from "../MapView";
 import { EarthCelestialDirections } from "./celestial/EarthCelestialDirections";
 import { JulianDate } from "./celestial/JulianDate";
@@ -48,6 +49,8 @@ const FRUSTUM_CORNERS = [
 export class AtmosphereSystem {
     private static readonly MOON_RADIUS = 1737400;
     private static readonly SHADOW_DISABLE_DISTANCE = 2e5;
+    /** Cesium ShadowMap.maximumDistance analog: hard cap on the shadowed range (m). */
+    private static readonly SHADOW_MAXIMUM_DISTANCE = 5000;
 
     /**
      * Faint sky fill so the night side of the globe keeps a natural (moonlit) look instead of
@@ -622,12 +625,27 @@ export class AtmosphereSystem {
         const light = this.m_atmosphereLight;
         if (csm == null || light == null) return;
 
-        // `viewRanges.far` covers the whole globe (reversed depth buffer — the far plane never
-        // clips visible geometry), but shadows only apply to the nearby scene. Keep the CSM
-        // range bounded at the horizon scale instead of globally disabling shadows whenever the
-        // far plane goes planetary.
+        // The far PLANE stays globe-spanning (d + r + maxElev, reversed depth — nothing visible
+        // is ever clipped, so looking far away costs nothing). But the CSM cascades need the
+        // SCENE extent: fed the planetary far they spread over 200 km and shadow resolution
+        // collapses to sub-texel mush (a 100 m caster under a single ~12 m texel). Give them
+        // the tight, view-dependent scene far (the pre-globe-coverage formula) instead; the
+        // disable branch below still switches shadows off at horizon-scale ranges.
+        const projection = this.mapView.projection;
+        const sceneFar =
+            projection.type === ProjectionType.Spherical
+                ? (this.mapView.clipPlanesEvaluator as TiltViewClipPlanesEvaluator).computeSceneFar(
+                      this.mapView.camera,
+                      projection,
+                      this.mapView.elevationProvider
+                  )
+                : Number(this.mapView.viewRanges.far);
+        // Cesium ShadowMap.maximumDistance-style fixed cap: shadows only render within
+        // `maximumDistance` of the camera, independent of how far the scene extends. The
+        // 2e5 horizon bound stays as the planetary kill-switch for very high cameras.
         const viewFar = Math.min(
-            Number(this.mapView.viewRanges.far),
+            sceneFar,
+            AtmosphereSystem.SHADOW_MAXIMUM_DISTANCE,
             AtmosphereSystem.SHADOW_DISABLE_DISTANCE
         );
 
@@ -643,6 +661,22 @@ export class AtmosphereSystem {
         }
 
         csm.lightMargin = viewFar;
+
+        // Cesium-style closest-object proxy: the camera height above TERRAIN stands in for the
+        // nearest receiver size (a camera skimming 20 m above the ground observes meter-scale
+        // receivers; a satellite view only needs block-scale shadows). NOTE this must be the
+        // height above the elevation surface, NOT the ellipsoid altitude — terrain at 300 m
+        // would otherwise make a street-level camera read "large objects" and never clamp.
+        // Below the small-object threshold the CascadedShadowMapsNode clamps each cascade's
+        // depth extent ([25, 150, 700] m), decoupling near resolution from the total range.
+        const groundDistance = projection.groundDistance(this.mapView.camera.position);
+        const terrainElevation = this.mapView.elevationProvider?.getHeight(
+            this.mapView.projection.unprojectPoint(this.mapView.camera.position),
+            14
+        );
+        const heightAboveTerrain =
+            terrainElevation !== undefined ? groundDistance - terrainElevation : groundDistance;
+        csm.closestObjectSize = Math.max(heightAboveTerrain, 1);
 
         const desiredMaxFar = viewFar;
         const ratio = this.m_lastCsmMaxFar > 0 ? desiredMaxFar / this.m_lastCsmMaxFar : Infinity;
