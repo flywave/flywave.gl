@@ -22,6 +22,27 @@ export const GLTF_FORMAT = {
     EMBEDDED: 1
 };
 
+/**
+ * Resolves the glTF URI of a tile against the URL the tile itself was loaded from.
+ *
+ * The 3D Tiles spec requires relative glTF URIs (gltfFormat 0) to be resolved
+ * against the referring tile: `../templates/model.glb` inside
+ * `.../output/i3dm/tile.i3dm` refers to `.../output/templates/model.glb`.
+ * Handing the raw relative string to `fetch` would resolve it against the hosting
+ * document instead, i.e. against whatever origin serves the page.
+ */
+export function resolveGltfUrl(gltfUrl: string, tileUrl?: string): string {
+    if (!tileUrl) {
+        return gltfUrl;
+    }
+    try {
+        return new URL(gltfUrl, tileUrl).toString();
+    } catch {
+        // Non-absolute base (e.g. a bare string in unit tests): keep it untouched
+        return gltfUrl;
+    }
+}
+
 export function parse3DTileGLTFViewSync(
     tile: Tiles3DTileContent,
     arrayBuffer: ArrayBuffer,
@@ -73,15 +94,20 @@ export async function extractGLTF(
 ): Promise<void> {
     const tile3DOptions = options?.["3d-tiles"] || {};
 
-    extractGLTFBufferOrURL(tile, gltfFormat, options);
+    extractGLTFBufferOrURL(tile, gltfFormat, options, context);
 
     if (tile3DOptions.loadGLTF) {
         if (!context) {
             return;
         }
         if (tile.gltfUrl) {
-            const { fetch } = context;
-            const response = await fetch(tile.gltfUrl, options);
+            const fetchFn: typeof fetch = context.fetch || fetch;
+            const response = await fetchFn(tile.gltfUrl, options as RequestInit);
+            if (response && response.ok === false) {
+                throw new Error(
+                    `Failed to fetch glTF "${tile.gltfUrl}": ${response.status} ${response.statusText}`
+                );
+            }
             tile.gltfArrayBuffer = await response.arrayBuffer();
             tile.gltfByteOffset = 0;
         }
@@ -105,7 +131,8 @@ export async function extractGLTF(
 function extractGLTFBufferOrURL(
     tile: Tiles3DTileContent,
     gltfFormat: number,
-    options: Tiles3DLoaderOptions | undefined
+    options: Tiles3DLoaderOptions | undefined,
+    context?: any
 ) {
     switch (gltfFormat) {
         case GLTF_FORMAT.URI:
@@ -115,7 +142,9 @@ function extractGLTFBufferOrURL(
                 const gltfUrlBytes = new Uint8Array(tile.gltfArrayBuffer, tile.gltfByteOffset);
                 const textDecoder = new TextDecoder();
                 const gltfUrl = textDecoder.decode(gltfUrlBytes);
-                tile.gltfUrl = gltfUrl.replace(/[\s\0]+$/, "");
+                // The URI is relative to the referring tile, never to the document
+                const tileUrl = (context?.url || context?.response?.url) as string | undefined;
+                tile.gltfUrl = resolveGltfUrl(gltfUrl.replace(/[\s\0]+$/, ""), tileUrl);
             }
             delete tile.gltfArrayBuffer;
             delete tile.gltfByteOffset;
@@ -131,7 +160,7 @@ function extractGLTFBufferOrURL(
 async function parseFromContext(
     data: ArrayBuffer,
     loader: typeof GLTFLoader,
-    options: any,
+    options: Parameters<typeof GLTFLoader.parse>[1],
     context: any
 ): Promise<GLTFWithBuffers> {
     // If there is context, use the parsing capability provided by the context
