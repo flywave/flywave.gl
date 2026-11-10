@@ -349,6 +349,60 @@ export interface AtmosphereThemeConfig {
     sunCastShadow?: boolean;
 
     /**
+     * Number of cascaded shadow maps for the atmosphere sun light.
+     *
+     * Each cascade renders the shadow-casting scene into its own depth map, so
+     * fewer cascades directly reduce per-frame draw calls (a scene with many
+     * separate casters pays `cascades × casters` submissions). 2 cascades are
+     * usually enough for a street-level view; 4 is the highest quality.
+     *
+     * Range: `2`–`4` (values outside are clamped). Only effective before the
+     * first shadow render; after that, use the constructor-time
+     * `MapViewOptions.shadowCascades` (changing it later is ignored with a
+     * warning because the per-cascade lights are already built).
+     *
+     * @default 4
+     */
+    sunShadowCascades?: number;
+
+    /**
+     * Resolution (width = height, pixels) of each cascade's shadow map.
+     *
+     * Larger maps sharpen distant cascades but cost fill rate and memory
+     * (`4 × size²` depth texels at four cascades). Range: `256`–`4096`,
+     * rounded to the nearest power of two. Like {@link sunShadowCascades}, this
+     * is only effective before the first shadow render; afterwards use
+     * `MapViewOptions.shadowMapSize`.
+     *
+     * @default 2048
+     */
+    sunShadowMapSize?: number;
+
+    /**
+     * Shadow filter used by the sun light.
+     *
+     * three r186 removed `PCFSoftShadowMap` from WebGPURenderer; `PCFShadowMap`
+     * now provides the soft filter. Both values are therefore accepted for
+     * backwards compatibility and resolve to the same PCF filter.
+     *
+     * @default "pcf-soft"
+     */
+    sunShadowFilter?: "pcf" | "pcf-soft";
+
+    /**
+     * Maximum distance (meters) from the camera that receives sun shadows.
+     *
+     * When omitted, the engine derives the range from the visible scene and
+     * the camera height (3 km–20 km). Set a smaller value (e.g. `3000`) for a
+     * close-range scene to cull distant casters out of the shadow passes.
+     * Use `0` to restore the automatic range.
+     *
+     * Range: `[0, 200000]`. Values above the hard horizon limit (200 km) are
+     * clamped; the sun light stops casting shadows entirely at that range.
+     */
+    sunShadowMaxDistance?: number;
+
+    /**
      * Cloud rendering configuration.
      *
      * - `true` — enable clouds with default settings.
@@ -943,29 +997,13 @@ export interface GradientSky {
 }
 
 /**
- * Interface that defines a cubemap sky.
- */
-export interface CubemapSky {
-    /** Sky type. */
-    type: "cubemap";
-    /** Positive X cube map face. */
-    positiveX: string;
-    /** Negative X cube map face. */
-    negativeX: string;
-    /** Positive Y cube map face. */
-    positiveY: string;
-    /** Negative Y cube map face. */
-    negativeY: string;
-    /** Positive Z cube map face. */
-    positiveZ: string;
-    /** Negative Z cube map face. */
-    negativeZ: string;
-}
-
-/**
  * Interface that defines the options to configure the sky.
+ *
+ * Cubemap skies were removed: the cubemap only ever rendered when the
+ * atmosphere was disabled, is ignored in planar projection, and the accurate
+ * star catalogue (atmosphere.stars) is the supported night sky.
  */
-export type Sky = GradientSky | CubemapSky;
+export type Sky = GradientSky;
 
 /**
  * Interface that defines the options to configure fog.

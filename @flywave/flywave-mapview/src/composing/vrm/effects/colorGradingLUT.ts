@@ -305,9 +305,11 @@ export class ColorGradingLutController {
 
     private m_loadedUrl: string | null = null;
     private m_loadToken = 0;
+    /** Identity LUT reused for the "None" preset and for resets. */
+    private readonly m_neutralTexture = createNeutralLutTexture();
 
     constructor() {
-        this.textureNode = texture3D(createNeutralLutTexture());
+        this.textureNode = texture3D(this.m_neutralTexture);
     }
 
     /** Currently loaded LUT URL, or null while the neutral LUT is active. */
@@ -322,25 +324,47 @@ export class ColorGradingLutController {
      */
     async setLut(url: string): Promise<boolean> {
         if (url === this.m_loadedUrl) return false;
-        this.m_loadedUrl = url;
-        if (url === "") return true;
+        const previousUrl = this.m_loadedUrl;
+        // Invalidate any in-flight load so a late result cannot override the
+        // newly selected LUT (including the neutral "None" preset).
         const token = ++this.m_loadToken;
-        const { size, texture3D: tex } = await loadLutCached(url);
-        if (token !== this.m_loadToken) return true; // superseded
-        tex.generateMipmaps = false;
-        tex.magFilter = THREE.LinearFilter;
-        tex.minFilter = THREE.LinearFilter;
-        tex.wrapS = tex.wrapT = tex.wrapR = THREE.ClampToEdgeWrapping;
-        tex.needsUpdate = true;
-        this.textureNode.value = tex;
-        const cell = 1 / size;
-        this.domainScale.value.setScalar(1 - cell);
-        this.domainOffset.value.setScalar(cell * 0.5);
-        return true;
+        if (url === "") {
+            // Actually reset to identity: keeping the previous texture here made
+            // the "None" preset a no-op.
+            this.m_loadedUrl = "";
+            const size = NEUTRAL_LUT_SIZE;
+            this.textureNode.value = this.m_neutralTexture;
+            const cell = 1 / size;
+            this.domainScale.value.setScalar(1 - cell);
+            this.domainOffset.value.setScalar(cell * 0.5);
+            return true;
+        }
+        try {
+            const { size, texture3D: tex } = await loadLutCached(url);
+            if (token !== this.m_loadToken) return true; // superseded
+            tex.generateMipmaps = false;
+            tex.magFilter = THREE.LinearFilter;
+            tex.minFilter = THREE.LinearFilter;
+            tex.wrapS = tex.wrapT = tex.wrapR = THREE.ClampToEdgeWrapping;
+            tex.needsUpdate = true;
+            this.textureNode.value = tex;
+            const cell = 1 / size;
+            this.domainScale.value.setScalar(1 - cell);
+            this.domainOffset.value.setScalar(cell * 0.5);
+            this.m_loadedUrl = url;
+            return true;
+        } catch (error) {
+            // Keep whatever texture was applied before; a later call may retry.
+            if (token === this.m_loadToken) this.m_loadedUrl = previousUrl;
+            throw error;
+        }
     }
 
     dispose(): void {
         const value = this.textureNode.value as THREE.Data3DTexture;
         value.dispose();
+        if (this.m_neutralTexture !== value) {
+            this.m_neutralTexture.dispose();
+        }
     }
 }

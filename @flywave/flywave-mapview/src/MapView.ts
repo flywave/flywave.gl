@@ -658,6 +658,39 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
     enableShadows?: boolean;
 
     /**
+     * Number of cascades for the atmosphere sun shadow. Fewer cascades reduce
+     * per-frame shadow draw calls (`cascades × casters`).
+     *
+     * Constructor-time only: the cascade lights are created on the first shadow
+     * pass, so this cannot be changed safely later. Range `2`–`4`.
+     * @default 4
+     */
+    shadowCascades?: number;
+
+    /**
+     * Resolution (width = height, pixels) of each sun-shadow cascade map.
+     * Constructor-time only. Range `256`–`4096`, snapped to a power of two.
+     * @default 2048
+     */
+    shadowMapSize?: number;
+
+    /**
+     * Sun shadow filter. three r186 removed `PCFSoftShadowMap` from
+     * WebGPURenderer; `PCFShadowMap` is the soft filter now, so both values
+     * resolve to it. Can also be overridden at runtime via
+     * `theme.atmosphere.sunShadowFilter`.
+     * @default "pcf-soft"
+     */
+    shadowFilter?: "pcf" | "pcf-soft";
+
+    /**
+     * Maximum distance (meters) that receives sun shadows. When omitted the
+     * engine derives it from the scene extent and camera height. `0` means
+     * automatic. Can also be overridden via `theme.atmosphere.sunShadowMaxDistance`.
+     */
+    shadowMaxDistance?: number;
+
+    /**
      * Enable throttling for the TaskScheduler
      * @default false
      * @beta
@@ -3073,7 +3106,8 @@ export class MapView extends EventDispatcher {
             // though they expose their own `raycast`.
             if (
                 terrainOnly &&
-                typeof (dataSource as Partial<TerrainDataSource>).getElevationProvider !== "function"
+                typeof (dataSource as Partial<TerrainDataSource>).getElevationProvider !==
+                    "function"
             ) {
                 continue;
             }
@@ -3213,9 +3247,7 @@ export class MapView extends EventDispatcher {
         const spherical = this.projection.type === ProjectionType.Spherical;
         const hit = new THREE.Vector3();
         for (let iteration = 0; iteration < 2; iteration++) {
-            const elevation = elevationProvider.getHeight(
-                this.projection.unprojectPoint(worldPos)
-            );
+            const elevation = elevationProvider.getHeight(this.projection.unprojectPoint(worldPos));
             if (elevation === undefined || elevation === 0) {
                 return;
             }
@@ -3326,6 +3358,13 @@ export class MapView extends EventDispatcher {
      * @param height - The new height.
      */
     resize(width: number, height: number) {
+        // A zero/NaN size carries no usable projection (and WebGPU rejects
+        // zero-sized attachments); keep the previous size until a real resize
+        // arrives. This is what an embedded/hidden window reports momentarily
+        // while it is being collapsed or restored.
+        if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+            return;
+        }
         this.m_renderer.setSize(width, height, false);
         if (this.m_renderer.getPixelRatio() !== this.pixelRatio) {
             this.m_renderer.setPixelRatio(this.pixelRatio);
@@ -3658,6 +3697,39 @@ export class MapView extends EventDispatcher {
         return this.m_options.enableShadows === true;
     }
 
+    /**
+     * Constructor-time sun-shadow cascade count (see {@link MapViewOptions.shadowCascades}).
+     * @internal
+     */
+    get shadowCascades(): number {
+        return this.m_options.shadowCascades ?? 4;
+    }
+
+    /**
+     * Constructor-time sun-shadow map size (see {@link MapViewOptions.shadowMapSize}).
+     * @internal
+     */
+    get shadowMapSize(): number {
+        return this.m_options.shadowMapSize ?? 2048;
+    }
+
+    /**
+     * Sun-shadow filter (see {@link MapViewOptions.shadowFilter}).
+     * @internal
+     */
+    get shadowFilter(): "pcf" | "pcf-soft" {
+        return this.m_options.shadowFilter ?? "pcf-soft";
+    }
+
+    /**
+     * Sun-shadow maximum distance in metres; `undefined`/`0` means automatic.
+     * @internal
+     */
+    get shadowMaxDistance(): number | undefined {
+        const value = this.m_options.shadowMaxDistance;
+        return value !== undefined && value > 0 ? value : undefined;
+    }
+
     set shadowsEnabled(enabled: boolean) {
         // shadowMap is undefined if we are testing (three.js always set it to be defined).
         if (
@@ -3669,9 +3741,9 @@ export class MapView extends EventDispatcher {
         this.m_options.enableShadows = enabled;
         // There is a bug in three.js where this doesn't currently work once enabled.
         this.m_renderer.shadowMap.enabled = enabled;
-        // TODO: Make this configurable. Note, there is currently issues when using the
-        // VSMShadowMap type, this should be investigated if this type is requested.
-        this.m_renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        // Do NOT reset shadowMap.type here: the default is applied in setupRenderer
+        // and the theme can override it (atmosphere.sunShadowFilter). Re-applying
+        // PCFSoft on every toggle silently discarded that configuration.
         this.clearTileCache();
     }
 
@@ -3882,9 +3954,15 @@ export class MapView extends EventDispatcher {
         this.updateLookAtSettings();
 
         const { width, height } = this.m_renderer.getSize(cache.vector2[0]);
-        this.m_camera.aspect =
-            this.m_forceCameraAspect !== undefined ? this.m_forceCameraAspect : width / height;
-        this.setFovOnCamera(this.m_options.fovCalculation!, height);
+        // A collapsed viewport (window/panel resized to zero, hidden canvas) has no
+        // meaningful aspect or projection: width / height would be Infinity and the
+        // FOV assertion (focal length > 0) would throw. Keep the previous camera
+        // parameters until the canvas gets a real size again.
+        if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+            this.m_camera.aspect =
+                this.m_forceCameraAspect !== undefined ? this.m_forceCameraAspect : width / height;
+            this.setFovOnCamera(this.m_options.fovCalculation!, height);
+        }
 
         // When calculating clip planes account for the highest building on the earth,
         // multiplying its height by projection scaling factor. This approach assumes
@@ -4413,14 +4491,18 @@ export class MapView extends EventDispatcher {
         if (this.renderLabels && !this.m_pointOfView) {
             const savedColorSpace = this.m_renderer.outputColorSpace;
             this.m_renderer.outputColorSpace = THREE.ColorManagement.workingColorSpace;
-            this.m_textElementsRenderer.renderText(this.m_viewRanges.maximum);
+            this.withSingleSampledCanvasPass(() =>
+                this.m_textElementsRenderer.renderText(this.m_viewRanges.maximum)
+            );
             this.m_renderer.outputColorSpace = savedColorSpace;
         }
 
         if (this.m_overlaySceneRoot.children.length > 0) {
             const savedColorSpace = this.m_renderer.outputColorSpace;
             this.m_renderer.outputColorSpace = THREE.ColorManagement.workingColorSpace;
-            this.m_renderer.render(this.m_overlayScene, camera);
+            this.withSingleSampledCanvasPass(() =>
+                this.m_renderer.render(this.m_overlayScene, camera)
+            );
             this.m_renderer.outputColorSpace = savedColorSpace;
         }
 
@@ -4668,9 +4750,45 @@ export class MapView extends EventDispatcher {
         this.m_scene.add(this.m_sceneRoot);
         this.m_overlayScene.add(this.m_overlaySceneRoot);
 
+        // Default sun-shadow filter. AtmosphereSystem can override this from the
+        // theme (`atmosphere.sunShadowFilter`); toggling shadows must not reset it.
+        // three r186 removed PCFSoftShadowMap for WebGPURenderer — PCFShadowMap
+        // now provides the soft filter.
+        this.m_renderer.shadowMap.type = THREE.PCFShadowMap;
+
         this.shadowsEnabled = this.m_options.enableShadows ?? false;
 
         tileObjectRenderer.setupRenderer();
+    }
+
+    /**
+     * three r187 (WebGPU) caches the canvas render-pass descriptor per sample
+     * count (`WebGPUBackend._getDefaultRenderPassDescriptor`). The VRM final
+     * output is a fullscreen quad rendered with `currentSamples === 0`; a
+     * following text/overlay pass at the renderer-wide MSAA count would rebuild
+     * the descriptor against the shared multisample colour buffer (whose
+     * contents are stale), and its resolve overwrites the map. Render those
+     * passes single-sampled while the VRM pipeline is active: the final image
+     * is single-sampled anyway, while VRM scene passes keep their own render
+     * target sample count.
+     */
+    private withSingleSampledCanvasPass(render: () => void): void {
+        if (this.mapRenderingManager.viewRenderManager == null) {
+            render();
+            return;
+        }
+        const renderer = this.m_renderer as Renderer & { _samples: number };
+        if (renderer.samples === 0) {
+            render();
+            return;
+        }
+        const samples = renderer._samples;
+        renderer._samples = 0;
+        try {
+            render();
+        } finally {
+            renderer._samples = samples;
+        }
     }
 
     private createTextRenderer(): TextElementsRenderer {
@@ -4735,6 +4853,12 @@ export class MapView extends EventDispatcher {
      * @param height - Viewport height.
      */
     private setFovOnCamera(fovCalculation: FovCalculation, height: number) {
+        // Degenerate viewport (0/NaN height) would derive a zero focal length and
+        // trip the "Focal length must be larger than 0" assertion. There is
+        // nothing meaningful to apply until the canvas has a real size.
+        if (!Number.isFinite(height) || height <= 0) {
+            return;
+        }
         const fovRad = THREE.MathUtils.degToRad(fovCalculation.fov);
 
         if (fovCalculation.type === "fixed") {

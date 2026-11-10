@@ -402,6 +402,13 @@ export class MapRenderingManager implements IMapRenderingManager {
         vrm.config.colorGradingLUT.enabled = this.colorGradingLUT.enabled;
         vrm.config.colorGradingLUT.url = this.colorGradingLUT.url;
         vrm.config.colorGradingLUT.opacity = this.colorGradingLUT.opacity ?? 1;
+        // The URL is deliberately outside the rebuild signature: swapping the
+        // preset must not recompile the graph, so the async texture swap is
+        // kicked off right here instead of only inside buildNodeGraph.
+        const lutUrl = this.colorGradingLUT.url ?? "";
+        if (this.colorGradingLUT.enabled || lutUrl !== "") {
+            vrm.setLutUrl(lutUrl);
+        }
 
         vrm.config.fogLight.enabled = this.fogLight.enabled;
         // intensity/density are uniforms the fog node reads per frame.

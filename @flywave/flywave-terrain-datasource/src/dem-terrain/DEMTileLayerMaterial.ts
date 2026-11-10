@@ -352,22 +352,25 @@ const s_sharedNodes = (() => {
     const positionNode = Fn(() => {
         const finalPos = computeMvPos(texUv, pos).xyz.toVar();
 
-        If(isSimplePatch, () => {
-            const texelsPerUV = _texSize.x.mul(_heightMapPos.x);
-            const e = float(1.0).div(texelsPerUV);
-            const ox = vec2(e, float(0));
-            const oy = vec2(float(0), e);
+        // NOTE: computed unconditionally, NOT inside an If. In three r187 a
+        // varying assigned inside a conditionally executed block no longer
+        // interpolates per vertex (the whole surface shades with one constant
+        // normal). The value is only consumed for simple patches; for other
+        // tiles the fragment-side select picks `defaultNormal`.
+        const texelsPerUV = _texSize.x.mul(_heightMapPos.x);
+        const e = float(1.0).div(texelsPerUV);
+        const ox = vec2(e, float(0));
+        const oy = vec2(float(0), e);
 
-            const pR = computeMvPos(texUv.add(ox), vec3(pos.x.add(e), pos.y, pos.z)).xyz;
-            const pL = computeMvPos(texUv.sub(ox), vec3(pos.x.sub(e), pos.y, pos.z)).xyz;
-            const pU = computeMvPos(texUv.add(oy), vec3(pos.x, pos.y.add(e), pos.z)).xyz;
-            const pD = computeMvPos(texUv.sub(oy), vec3(pos.x, pos.y.sub(e), pos.z)).xyz;
+        const pR = computeMvPos(texUv.add(ox), vec3(pos.x.add(e), pos.y, pos.z)).xyz;
+        const pL = computeMvPos(texUv.sub(ox), vec3(pos.x.sub(e), pos.y, pos.z)).xyz;
+        const pU = computeMvPos(texUv.add(oy), vec3(pos.x, pos.y.add(e), pos.z)).xyz;
+        const pD = computeMvPos(texUv.sub(oy), vec3(pos.x, pos.y.sub(e), pos.z)).xyz;
 
-            const dxa = pR.sub(pL);
-            const dya = pU.sub(pD);
+        const dxa = pR.sub(pL);
+        const dya = pU.sub(pD);
 
-            vTerrainNormal.assign(transformNormalToView(normalize(cross(dxa, dya))));
-        });
+        vTerrainNormal.assign(transformNormalToView(normalize(cross(dxa, dya))));
 
         return finalPos;
     })();

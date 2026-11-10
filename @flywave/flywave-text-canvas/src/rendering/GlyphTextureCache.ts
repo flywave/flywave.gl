@@ -83,8 +83,9 @@ export class GlyphTextureCache {
         this.m_copyMaterial = new GlyphCopyMaterial({
             rendererCapabilities: GlyphTextureCache.DEFAULT_CAPABILITIES
         });
-        this.m_clearQuad = new QuadMesh(this.m_clearMaterial as THREE.Material);
-        this.m_copyQuad = new QuadMesh(this.m_copyMaterial as THREE.Material);
+        // QuadMesh now requires a NodeMaterial; both glyph materials derive from it.
+        this.m_clearQuad = new QuadMesh(this.m_clearMaterial);
+        this.m_copyQuad = new QuadMesh(this.m_copyMaterial);
     }
 
     dispose(): void {

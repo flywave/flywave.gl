@@ -206,6 +206,12 @@ export interface IViewRenderManager {
     setSize(width: number, height: number): void;
     dispose(): void;
     needsUpdate: boolean;
+    /**
+     * Swaps the color-grading LUT texture asynchronously without a graph
+     * rebuild (the texture slot is persistent). `""` restores the neutral
+     * identity LUT.
+     */
+    setLutUrl(url: string): void;
     setLensFlareConfig(config: ILensFlareConfig): void;
     getColorTexture(): THREE.Texture | null;
     getDepthTexture(): THREE.Texture | null;

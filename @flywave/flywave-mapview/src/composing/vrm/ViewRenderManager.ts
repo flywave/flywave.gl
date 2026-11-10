@@ -642,19 +642,7 @@ export class ViewRenderManager implements IViewRenderManager {
             // the background; the (neutral or previous) texture stays until
             // it resolves, then one rebuild picks up domain uniforms.
             const lutUrl = this.config.colorGradingLUT.url;
-            if (lutUrl !== this.m_appliedLutUrl) {
-                this.m_appliedLutUrl = lutUrl;
-                const controller = this.ensureLutController();
-                controller.setLut(lutUrl).then(changed => {
-                    // Force a frame so the swapped texture becomes visible
-                    // even on a static map (uniform swap alone needs no
-                    // rebuild, but needsUpdate is the only redraw trigger).
-                    if (changed) {
-                        this.needsUpdate = true;
-                        this.onNeedsRender?.();
-                    }
-                });
-            }
+            this.setLutUrl(lutUrl);
             if (this.config.colorGradingLUT.opacity > 0) {
                 finalNode = colorGradingLut(
                     finalNode,
@@ -808,6 +796,36 @@ export class ViewRenderManager implements IViewRenderManager {
             this.m_lutController = new ColorGradingLutController();
         }
         return this.m_lutController;
+    }
+
+    /**
+     * Swap the color-grading LUT texture in the background. The texture slot
+     * (and its domain uniforms) is shared across graph rebuilds — three's
+     * `NodeSampledTexture3D.update` exchanges the bind-group texture when
+     * `textureNode.value` changes — so a swap needs no rebuild, only a frame.
+     * Called by MapRenderingManager when the theme LUT url changes; the url is
+     * excluded from the rebuild fingerprint on purpose, otherwise every preset
+     * pick would recompile the whole node graph.
+     */
+    setLutUrl(url: string): void {
+        if (url === this.m_appliedLutUrl) {
+            return;
+        }
+        this.m_appliedLutUrl = url;
+        this.ensureLutController()
+            .setLut(url)
+            .then(changed => {
+                if (changed) {
+                    this.onNeedsRender?.();
+                }
+            })
+            .catch(error => {
+                // Keep the previous texture; allow a later sync to retry the url.
+                if (this.m_appliedLutUrl === url) {
+                    this.m_appliedLutUrl = undefined;
+                }
+                console.warn(`ViewRenderManager: failed to load LUT "${url}"`, error);
+            });
     }
 
     dispose(): void {

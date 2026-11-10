@@ -42,8 +42,12 @@ const magnitudeToLuminance = /*#__PURE__*/ FnVar(
 );
 
 export class StarsNodeMaterial extends PointsNodeMaterial {
-    pointSize = uniform(1);
-    intensity = uniform(1000);
+    pointSize = uniform(6);
+    // The physical luminance above is scaled into display range at the end of
+    // the sky pipeline; 1000 left the whole catalogue below the tone-mapping
+    // floor. This is the value that makes the accurate catalogue visible
+    // without touching the brightness model.
+    intensity = uniform(1e9);
 
     magnitudeRange = [-2, 8];
 

@@ -170,15 +170,13 @@ export class TileObjectRenderer {
             return stableSort(a, b);
         };
 
-        // three r185 `RenderList.sort()` REVERSES the sorted opaque and
-        // transparent lists when the camera renders into a reversed depth
-        // buffer (the WebGPU backend here). The comparator therefore has to
-        // produce the mirror image of the intended order so the reversal
-        // lands on it — otherwise every renderOrder-based layering flips
-        // (ground planes drawn over water fills, casings over road fills).
-        const reversedDepth =
-            (this.m_renderer as { reversedDepthBuffer?: boolean }).reversedDepthBuffer === true;
-        const sign = reversedDepth ? -1 : 1;
+        // three r185 reversed the sorted opaque and transparent lists when the
+        // camera renders into a reversed depth buffer (WebGPU), so the
+        // comparators here used to be negated to cancel that reversal. r187
+        // honors `renderOrder` ascending again (verified: a renderOrder-0 quad
+        // wins on 185, the renderOrder-1 quad wins on 187), so the comparators
+        // are used as-is — negating them now flips every renderOrder layer
+        // (background ground tiles over water fills, casings over roads).
         const transparentSort = (a: RenderItem, b: RenderItem): number => {
             const groupOrderA = a.groupOrder ?? 0;
             const groupOrderB = b.groupOrder ?? 0;
@@ -198,11 +196,11 @@ export class TileObjectRenderer {
 
         // Temporary workaround due to incorrect comparator type definition:
         // https://github.com/three-types/three-ts-types/issues/41
-        this.m_renderer.setOpaqueSort(
-            (a: RenderItem, b: RenderItem) => sign * painterSortStable(a, b)
+        this.m_renderer.setOpaqueSort((a: RenderItem, b: RenderItem) =>
+            painterSortStable(a, b)
         );
-        this.m_renderer.setTransparentSort(
-            (a: RenderItem, b: RenderItem) => sign * transparentSort(a, b)
+        this.m_renderer.setTransparentSort((a: RenderItem, b: RenderItem) =>
+            transparentSort(a, b)
         );
     }
 

@@ -125,13 +125,31 @@ function parseArrayField(
     if (match === null) {
         return { present, elements: [], valid: !present };
     }
-    const rawElements = match[1]
-        .split(",")
-        .map(e => e.trim())
-        .filter(e => e.length > 0);
+    // Split on commas that are outside string literals: prose entries in
+    // `concerns` routinely contain commas, which a naive split would tear apart
+    // and then report as "not an array of strings".
+    const rawElements: string[] = [];
+    let current = "";
+    let quote: string | null = null;
+    for (const ch of match[1]) {
+        if (quote !== null) {
+            current += ch;
+            if (ch === quote) quote = null;
+        } else if (ch === '"' || ch === "'") {
+            quote = ch;
+            current += ch;
+        } else if (ch === ",") {
+            rawElements.push(current);
+            current = "";
+        } else {
+            current += ch;
+        }
+    }
+    rawElements.push(current);
+    const trimmedElements = rawElements.map(e => e.trim()).filter(e => e.length > 0);
     let valid = true;
     const elements: string[] = [];
-    for (const raw of rawElements) {
+    for (const raw of trimmedElements) {
         const s = /^(?:"([^"]*)"|'([^']*)')$/.exec(raw);
         if (s === null) {
             valid = false;
@@ -293,11 +311,19 @@ function checkBlacklist(example: ExampleReport, files: string[], exempt: boolean
     }
 }
 
-function checkSize(example: ExampleReport, files: string[]): void {
+function checkSize(example: ExampleReport, files: string[], exempt: boolean): void {
     for (const file of files) {
         const lineCount = fs.readFileSync(file, "utf8").split("\n").length;
         const rel = path.basename(file);
         if (lineCount > ERROR_LINES) {
+            if (exempt) {
+                // Internal test benches may carry large isolation harnesses.
+                example.issues.push({
+                    level: "warning",
+                    message: `${rel} is large: ${lineCount} lines (internal, max ${ERROR_LINES})`
+                });
+                continue;
+            }
             example.issues.push({
                 level: "error",
                 message: `${rel} is too large: ${lineCount} lines (max ${ERROR_LINES})`
@@ -401,7 +427,7 @@ function main(): void {
 
         const mainFiles = getMainTsFiles(dir);
         checkBlacklist(report, mainFiles, parsed?.internal === true);
-        checkSize(report, mainFiles);
+        checkSize(report, mainFiles, parsed?.internal === true);
 
         const hasError = report.issues.some(i => i.level === "error");
         report.status = hasError ? "FAIL" : report.issues.length > 0 ? "WARN" : "OK";

@@ -28,8 +28,6 @@ import {
 } from "@flywave/flywave-utils";
 import { threadId } from "worker_threads";
 
-import { SKY_CUBEMAP_FACE_COUNT, SkyCubemapFaceId } from "./SkyCubemapTexture";
-
 /**
  * @internal
  */
@@ -588,14 +586,6 @@ export class ThemeLoader {
     }
 
     private static resolveResources(theme: Theme, childUrlResolver: UriResolver) {
-        if (theme.sky && theme.sky.type === "cubemap") {
-            for (let i = 0; i < SKY_CUBEMAP_FACE_COUNT; ++i) {
-                const faceUrl: string | undefined = (theme.sky as any)[SkyCubemapFaceId[i]];
-                if (faceUrl !== undefined) {
-                    (theme.sky as any)[SkyCubemapFaceId[i]] = childUrlResolver.resolveUri(faceUrl);
-                }
-            }
-        }
         if (theme.images) {
             for (const name of Object.keys(theme.images)) {
                 const image = theme.images[name];

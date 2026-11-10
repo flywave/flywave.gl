@@ -16,7 +16,8 @@ import {
     GeoCoordinates,
     type MapAnchor,
     MapView,
-    type Theme
+    type Theme,
+    type ToneMappingMode
 } from "@flywave/flywave.gl";
 
 import { BoxGeometry, Color, Mesh, MeshBasicNodeMaterial } from "three/webgpu";
@@ -39,6 +40,8 @@ interface ILutState {
     enabled: boolean;
     preset: LutPresetName;
     opacity: number;
+    toneMappingMode: ToneMappingMode;
+    exposure: number;
 }
 
 /**
@@ -69,11 +72,16 @@ function addReferenceBlocks(mapView: MapView): void {
  * patch deep-merges `postEffects`, and the LUT url resolves through the
  * MapView uriResolver just like theme assets.
  */
-function setupLutGui(mapView: MapView): void {
+function setupLutGui(
+    mapView: MapView,
+    initialToneMapping: { mode: ToneMappingMode; exposure: number }
+): void {
     const state: ILutState = {
         enabled: mapView.postEffects?.colorGradingLUT?.enabled ?? true,
         preset: "Fuji 160C",
-        opacity: 1
+        opacity: 1,
+        toneMappingMode: initialToneMapping.mode,
+        exposure: initialToneMapping.exposure
     };
 
     const gui = createExampleGui();
@@ -97,6 +105,33 @@ function setupLutGui(mapView: MapView): void {
     folder.add(state, "preset", Object.keys(LUT_PRESETS)).onChange(applyLut);
     folder.add(state, "opacity", 0, 1, 0.01).onChange(applyLut);
     folder.open();
+
+    // Tone mapping runs before the LUT in the VRM chain (the LUT grades the
+    // tone-mapped image); switching the mode here makes both stages observable
+    // and proves they are not duplicates of each other.
+    const toneFolder = gui.addFolder("Tone mapping (before LUT)");
+    const applyToneMapping = (): void => {
+        mapView.patchTheme({
+            toneMappingMode: state.toneMappingMode,
+            toneMappingExposure: state.exposure
+        });
+        mapView.update();
+    };
+    toneFolder
+        .add(state, "toneMappingMode", [
+            "none",
+            "linear",
+            "reinhard",
+            "cineon",
+            "aces",
+            "agx",
+            "agx-punchy",
+            "neutral"
+        ])
+        .name("mode")
+        .onChange(applyToneMapping);
+    toneFolder.add(state, "exposure", 0.2, 4, 0.05).name("exposure").onChange(applyToneMapping);
+    toneFolder.open();
 }
 
 /**
@@ -117,7 +152,8 @@ async function main(): Promise<void> {
         lights: [],
         atmosphere: {
             enabled: true,
-            sunTime: new Date().setHours(17, 30, 0, 0)
+            // Daylight: the LUT and tone-mapping differences must be readable.
+            sunTime: new Date().setHours(15, 0, 0, 0)
         },
         postEffects: lutOff
             ? undefined
@@ -140,6 +176,10 @@ async function main(): Promise<void> {
         }
     });
     logExampleInfo("fx-color-grading-lut", mapView);
+    // Automation hook (not part of the public example surface).
+    Object.assign(window, { __lutDebug: { mapView } });
+    // Flat, saturated blocks make the grading and tone mapping readable.
+    addReferenceBlocks(mapView);
 
     const terrain = demoTerrain();
     mapView.setElevationSource(terrain);
@@ -148,8 +188,11 @@ async function main(): Promise<void> {
     // The LUT panel (and any patchTheme call) needs the resolved theme; this
     // await is race-free even if ThemeLoaded already fired during renderer
     // initialization.
-    await mapView.getTheme();
-    setupLutGui(mapView);
+    const resolvedTheme = await mapView.getTheme();
+    setupLutGui(mapView, {
+        mode: resolvedTheme.toneMappingMode ?? "agx-punchy",
+        exposure: resolvedTheme.toneMappingExposure ?? 1
+    });
 }
 
 void main();

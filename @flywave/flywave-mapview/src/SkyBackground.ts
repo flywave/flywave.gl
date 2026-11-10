@@ -1,17 +1,20 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type CubemapSky, type GradientSky } from "@flywave/flywave-datasource-protocol";
+import { type GradientSky } from "@flywave/flywave-datasource-protocol";
 import { type ProjectionType } from "@flywave/flywave-geoutils";
 import type * as THREE from "three/webgpu";
 
-import { SkyCubemapTexture } from "./SkyCubemapTexture";
 import { SkyGradientTexture } from "./SkyGradientTexture";
 
 /**
  * Class that handles {@link MapView}'s sky background.
+ *
+ * Only gradient skies are supported: the cubemap sky was removed (it was never
+ * visible while the atmosphere was enabled, is meaningless in planar
+ * projection, and the accurate star catalogue is the supported night sky).
  */
 export class SkyBackground {
-    private m_skyTexture?: SkyGradientTexture | SkyCubemapTexture;
+    private m_skyTexture: SkyGradientTexture;
 
     /**
      * Constructs a new `SkyBackground`.
@@ -21,45 +24,35 @@ export class SkyBackground {
      * @param camera - {@link MapView}'s camera.
      */
     constructor(
-        private m_sky: GradientSky | CubemapSky,
+        private m_sky: GradientSky,
         private m_projectionType: ProjectionType,
         camera: THREE.Camera
     ) {
-        switch (this.m_sky.type) {
-            case "gradient":
-                this.m_skyTexture = new SkyGradientTexture(this.m_sky, this.m_projectionType);
-                this.updateCamera(camera);
-                break;
-            case "cubemap": {
-                this.m_skyTexture = new SkyCubemapTexture(this.m_sky);
-                break;
-            }
-        }
+        this.m_skyTexture = new SkyGradientTexture(this.m_sky, this.m_projectionType);
+        this.updateCamera(camera);
     }
 
     /**
      * Disposes allocated resources.
      */
     dispose() {
-        this.m_skyTexture!.dispose();
+        this.m_skyTexture.dispose();
     }
 
     /**
      * Sky texture.
      */
     get texture(): THREE.Texture {
-        return this.m_skyTexture!.texture;
+        return this.m_skyTexture.texture;
     }
 
     /**
-     * This method updates the skybox based on the camera position (needed for some types of sky).
+     * This method updates the skybox based on the camera position.
      *
      * @param camera - The camera used in the map view.
      */
     updateCamera(camera: THREE.Camera) {
-        if (this.m_sky.type === "gradient") {
-            (this.m_skyTexture! as SkyGradientTexture).update(camera);
-        }
+        this.m_skyTexture.update(camera);
     }
 
     /**
@@ -69,25 +62,12 @@ export class SkyBackground {
      * @param projectionType - Which projection is used, this may also change (in which case the
      * textures should be recreated).
      */
-    updateTexture(params: GradientSky | CubemapSky, projectionType: ProjectionType) {
-        const isSameSkyType =
-            this.m_sky.type === params.type && this.m_projectionType === projectionType;
-        switch (params.type) {
-            case "gradient":
-                if (isSameSkyType) {
-                    (this.m_skyTexture! as SkyGradientTexture).updateTexture(params);
-                } else {
-                    this.m_skyTexture = new SkyGradientTexture(params, projectionType);
-                }
-                break;
-            case "cubemap": {
-                if (isSameSkyType) {
-                    (this.m_skyTexture! as SkyCubemapTexture).updateTexture(params);
-                } else {
-                    this.m_skyTexture = new SkyCubemapTexture(params);
-                }
-                break;
-            }
+    updateTexture(params: GradientSky, projectionType: ProjectionType) {
+        if (this.m_projectionType === projectionType) {
+            this.m_skyTexture.updateTexture(params);
+        } else {
+            this.m_skyTexture.dispose();
+            this.m_skyTexture = new SkyGradientTexture(params, projectionType);
         }
         this.m_projectionType = projectionType;
         this.m_sky = params;

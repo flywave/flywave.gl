@@ -46,16 +46,27 @@ const FRUSTUM_CORNERS = [
     { x: 1, y: 1, z: 1 }
 ];
 
+/** Clamp a theme cascade count into the range the CSM split scheme supports. */
+function clampShadowCascades(value: number): number {
+    return Math.min(4, Math.max(2, Math.round(value)));
+}
+
+/** Clamp a theme shadow-map size into [256, 4096] and snap it to a power of two. */
+function clampShadowMapSize(value: number): number {
+    const size = Math.min(4096, Math.max(256, Math.round(value)));
+    return 2 ** Math.round(Math.log2(size));
+}
+
 export class AtmosphereSystem {
     private static readonly MOON_RADIUS = 1737400;
     private static readonly SHADOW_DISABLE_DISTANCE = 2e5;
     /**
-     * Floor for the shadowed range (m): the shadow far must never collapse below this, or the
-     * cut-off line where shadows stop lands inside the typical tilted view as a hard
-     * brightness step (low-sun long-shadow views make it obvious — a near-horizontal seam
-     * across the terrain). The scene-far estimate can undershoot badly at close range
-     * (distance×6 chain ~2 km), so clamp it up to this floor. Near-field sharpness does not
-     * depend on this value: the cascade depth clamps keep cascade 0 at ~25 m near the ground.
+     * Upper bound for the adaptive shadow-range floor (m). The shadow far must never
+     * collapse below a floor, or the cut-off line where shadows stop lands inside the
+     * typical tilted view as a hard brightness step (low-sun long-shadow views make it
+     * obvious — a near-horizontal seam across the terrain). The floor now scales with the
+     * camera height above terrain (3 km–20 km) instead of always being 20 km, so a
+     * street-level view does not pay for a 20 km cascade-3 footprint.
      */
     private static readonly SHADOW_MINIMUM_DISTANCE = 20000;
 
@@ -88,6 +99,13 @@ export class AtmosphereSystem {
     private m_accurateShadowScattering: boolean = true;
     private m_correctAltitude: boolean = true;
     private m_constrainCamera: boolean = true;
+    // Shadow configuration (theme: atmosphere.sunShadow*). Applied by
+    // applyShadowOptions(); changing the cascade count rebuilds the CSM node and
+    // forces shadow materials to recompile.
+    private m_shadowCascades = 4;
+    private m_shadowMapSize = 2048;
+    private m_shadowFilter: "pcf" | "pcf-soft" = "pcf-soft";
+    private m_shadowMaxDistance?: number;
     private readonly m_atmosphereOverrides: {
         rayleighScale: number;
         mieScale: number;
@@ -166,6 +184,14 @@ export class AtmosphereSystem {
     }
 
     private init2(): void {
+        // Shadow budget from the constructor-time MapView options. These cannot be
+        // changed after the first shadow pass (the CSM node's per-cascade lights are
+        // created then), so they must be read before any material compiles.
+        this.m_shadowCascades = clampShadowCascades(this.mapView.shadowCascades);
+        this.m_shadowMapSize = clampShadowMapSize(this.mapView.shadowMapSize);
+        this.m_shadowFilter = this.mapView.shadowFilter;
+        this.m_shadowMaxDistance = this.mapView.shadowMaxDistance;
+
         this.m_skyNode = sky();
         this.m_skyNode.showSun = true;
         this.m_skyNode.showMoon = true;
@@ -176,7 +202,12 @@ export class AtmosphereSystem {
         this.m_atmosphereLight = new AtmosphereLight(1e5, "sun");
         this.m_atmosphereLight.intensity = 1;
         this.m_atmosphereLight.castShadow = true;
-        this.m_atmosphereLight.shadow.mapSize.set(2048, 2048);
+        this.m_atmosphereLight.shadow.mapSize.set(this.m_shadowMapSize, this.m_shadowMapSize);
+        // Default filter for the sun shadows; the theme can override it at runtime
+        // through `atmosphere.sunShadowFilter` (see applyShadowOptions). three r186
+        // removed PCFSoftShadowMap for WebGPURenderer, so both "pcf" and "pcf-soft"
+        // resolve to PCFShadowMap (which now provides the soft filter).
+        this.mapView.renderer.shadowMap.type = THREE.PCFShadowMap;
         // Constant NDC bias must stay 0 here: the cascade depth shell spans ±lightMargin
         // (≈20 km), so even -0.0005 maps to ~20 m of world depth offset — enough to
         // peter-pan a meter-scale model's whole shadow off its receiver (shadows appear
@@ -191,7 +222,7 @@ export class AtmosphereSystem {
         this.m_atmosphereLight.shadow.camera.bottom = -1e5;
 
         this.m_csmShadowNode = new CascadedShadowMapsNode(this.m_atmosphereLight);
-        this.m_csmShadowNode.cascades = 4;
+        this.m_csmShadowNode.cascades = this.m_shadowCascades;
         this.m_csmShadowNode.maxFar = 1e5;
         this.m_csmShadowNode.fade = false;
         this.m_atmosphereLight.shadow.shadowNode = this.m_csmShadowNode;
@@ -207,19 +238,15 @@ export class AtmosphereSystem {
         this.mapView.ready.then(() => {
             const renderer = this.mapView.renderer as Renderer & {
                 contextNode?: { value: Record<string, unknown> };
-                library: {
-                    addLight: (
-                        nodeClass: typeof AtmosphereLightNode,
-                        lightClass: typeof AtmosphereLight
-                    ) => void;
-                };
             };
             if (renderer.contextNode != null) {
                 renderer.contextNode.value[AtmosphereSystem.CONTEXT_KEY] = () =>
                     this.m_atmosphereContext;
             }
 
-            renderer.library.addLight(AtmosphereLightNode, AtmosphereLight);
+            // three r187: custom light nodes register on the light class itself
+            // (`Light.registerNode`) instead of `renderer.library.addLight`.
+            AtmosphereLight.registerNode(AtmosphereLightNode);
 
             const scene = this.mapView.scene as THREE.Scene & {
                 backgroundNode?: THREE.Scene["backgroundNode"];
@@ -323,6 +350,7 @@ export class AtmosphereSystem {
         if (options?.sunCastShadow !== undefined) {
             this.mapView.shadowsEnabled = options.sunCastShadow;
         }
+        this.applyShadowOptions(options);
         if (options?.clouds !== undefined) {
             this.m_cloudsEnabled = typeof options.clouds === "boolean" ? options.clouds : true;
             if (typeof options.clouds === "object") {
@@ -437,6 +465,107 @@ export class AtmosphereSystem {
         }
         if (needsAtmosphereRebuild) this.rebuildAtmosphere();
         this.applyAtmosphereEnabled();
+    }
+
+    /**
+     * Apply the `atmosphere.sunShadow*` theme knobs.
+     *
+     * Cascades and map size are baked into the CSM node on the first shadow pass
+     * (the per-cascade lights and depth targets are created then). Swapping the
+     * node afterwards crashes `CSMShadowNode.updateBefore` (its camera is still
+     * null) and disposing the old maps silently leaves stale shadow textures, so
+     * those two knobs are constructor-time only ({@link MapViewOptions}), and a
+     * late theme change is ignored with a warning. The filter (a program cache
+     * key) and the maximum distance stay live.
+     */
+    private applyShadowOptions(options?: AtmosphereThemeConfig): void {
+        if (options == null) return;
+
+        const csmInitialized =
+            this.m_csmShadowNode != null && this.m_csmShadowNode.lights.length > 0;
+        const requestedCascades = clampShadowCascades(
+            options.sunShadowCascades ?? this.m_shadowCascades
+        );
+        const requestedMapSize = clampShadowMapSize(
+            options.sunShadowMapSize ?? this.m_shadowMapSize
+        );
+        const nextFilter = options.sunShadowFilter ?? this.m_shadowFilter;
+        const nextMaxDistance =
+            options.sunShadowMaxDistance !== undefined
+                ? options.sunShadowMaxDistance > 0
+                    ? Math.min(
+                          options.sunShadowMaxDistance,
+                          AtmosphereSystem.SHADOW_DISABLE_DISTANCE
+                      )
+                    : undefined
+                : this.m_shadowMaxDistance;
+
+        // Cascades/map size only before the first shadow render.
+        const nextCascades = csmInitialized ? this.m_shadowCascades : requestedCascades;
+        const nextMapSize = csmInitialized ? this.m_shadowMapSize : requestedMapSize;
+        if (
+            csmInitialized &&
+            (requestedCascades !== nextCascades || requestedMapSize !== nextMapSize)
+        ) {
+            logger.warn(
+                "atmosphere.sunShadowCascades/sunShadowMapSize changed after shadow rendering " +
+                    "started; set MapViewOptions.shadowCascades/shadowMapSize (or reload) instead."
+            );
+        }
+
+        const cascadesChanged = nextCascades !== this.m_shadowCascades;
+        const mapSizeChanged = nextMapSize !== this.m_shadowMapSize;
+        const filterChanged = nextFilter !== this.m_shadowFilter;
+        const maxDistanceChanged = nextMaxDistance !== this.m_shadowMaxDistance;
+        if (!cascadesChanged && !mapSizeChanged && !filterChanged && !maxDistanceChanged) {
+            return;
+        }
+
+        this.m_shadowCascades = nextCascades;
+        this.m_shadowMapSize = nextMapSize;
+        this.m_shadowFilter = nextFilter;
+        this.m_shadowMaxDistance = nextMaxDistance;
+
+        const light = this.m_atmosphereLight;
+        if (light != null) {
+            if (mapSizeChanged) {
+                light.shadow.mapSize.set(nextMapSize, nextMapSize);
+            }
+            if (filterChanged) {
+                // r186: PCFSoftShadowMap is gone; PCFShadowMap is the soft filter.
+                this.mapView.renderer.shadowMap.type = THREE.PCFShadowMap;
+            }
+            if (cascadesChanged) {
+                this.rebuildCsmShadowNode(nextCascades);
+            }
+            // Force a fresh split/layout pass with the new settings.
+            this.m_lastCsmMaxFar = 0;
+            this.m_lastCsmClosest = 0;
+        }
+
+        this.mapView.update();
+    }
+
+    /**
+     * Replace the CSM node. Only safe before the first shadow pass: the new node
+     * starts with `camera === null` and `lights.length === 0`, and its
+     * `updateBefore` would throw if it were plugged into a running light graph.
+     */
+    private rebuildCsmShadowNode(cascades: number): void {
+        const light = this.m_atmosphereLight;
+        if (light == null) return;
+
+        const previous = this.m_csmShadowNode;
+        if (previous != null) {
+            previous.dispose();
+        }
+
+        const csm = new CascadedShadowMapsNode(light);
+        csm.cascades = cascades;
+        csm.maxFar = 1e5;
+        csm.fade = false;
+        light.shadow.shadowNode = csm;
+        this.m_csmShadowNode = csm;
     }
 
     updateToneMapping(exposure?: number, mode?: ToneMappingMode): void {
@@ -652,26 +781,6 @@ export class AtmosphereSystem {
                       this.mapView.elevationProvider
                   )
                 : Number(this.mapView.viewRanges.far);
-        // The shadow range must never collapse to the near field (see
-        // SHADOW_MINIMUM_DISTANCE): clamp the scene estimate UP to the floor, and keep the
-        // 2e5 horizon bound as the planetary kill-switch for very high cameras.
-        const viewFar = Math.min(
-            Math.max(sceneFar, AtmosphereSystem.SHADOW_MINIMUM_DISTANCE),
-            AtmosphereSystem.SHADOW_DISABLE_DISTANCE
-        );
-
-        if (viewFar > AtmosphereSystem.SHADOW_DISABLE_DISTANCE) {
-            if (light.castShadow) {
-                light.castShadow = false;
-            }
-            return;
-        }
-
-        if (!light.castShadow && this.m_atmosphereEnabled && this.mapView.shadowsEnabled) {
-            light.castShadow = true;
-        }
-
-        csm.lightMargin = viewFar;
 
         // Cesium-style closest-object proxy: the camera height above TERRAIN stands in for the
         // nearest receiver size (a camera skimming 20 m above the ground observes meter-scale
@@ -679,7 +788,7 @@ export class AtmosphereSystem {
         // height above the elevation surface, NOT the ellipsoid altitude — terrain at 300 m
         // would otherwise make a street-level camera read "large objects" and never clamp.
         // Below the small-object threshold the CascadedShadowMapsNode clamps each cascade's
-        // depth extent ([25, 150, 700] m), decoupling near resolution from the total range.
+        // depth extent, decoupling near resolution from the total range.
         const groundDistance = projection.groundDistance(this.mapView.camera.position);
         const terrainElevation = this.mapView.elevationProvider?.getHeight(
             this.mapView.projection.unprojectPoint(this.mapView.camera.position),
@@ -689,16 +798,61 @@ export class AtmosphereSystem {
             terrainElevation !== undefined ? groundDistance - terrainElevation : groundDistance;
         csm.closestObjectSize = Math.max(heightAboveTerrain, 1);
 
+        // Planetary kill-switch: judged on the UNCLAMPED scene estimate. The previous code
+        // compared the already-clamped `viewFar` against the limit, so the branch could never
+        // fire and shadows stayed enabled at horizon/globe scale.
+        const userMaxDistance = this.m_shadowMaxDistance;
+        if (userMaxDistance === undefined && sceneFar > AtmosphereSystem.SHADOW_DISABLE_DISTANCE) {
+            if (light.castShadow) {
+                light.castShadow = false;
+            }
+            return;
+        }
+
+        // Adaptive shadow-range floor: keep the full 20 km only for high/aerial cameras; a
+        // street-level view scales the floor with the camera height (3 km–20 km) so the
+        // cascade split distances — and the footprint each cascade re-renders — stay small.
+        // Measured on the stress demo: a 4-cascade 20 km range put the whole caster set into
+        // cascades 2 and 3; capping the range to 3 km cut shadow draw calls by ~26% at the
+        // same load. An explicit `sunShadowMaxDistance` wins over both the scene estimate and
+        // the floor. ×10 matches the visible ground footprint at a 55° tilt.
+        const adaptiveFloor = Math.min(
+            AtmosphereSystem.SHADOW_MINIMUM_DISTANCE,
+            Math.max(3000, heightAboveTerrain * 10)
+        );
+        const viewFar =
+            userMaxDistance !== undefined
+                ? Math.min(userMaxDistance, AtmosphereSystem.SHADOW_DISABLE_DISTANCE)
+                : Math.min(
+                      Math.max(sceneFar, adaptiveFloor),
+                      AtmosphereSystem.SHADOW_DISABLE_DISTANCE
+                  );
+
+        if (!light.castShadow && this.m_atmosphereEnabled && this.mapView.shadowsEnabled) {
+            light.castShadow = true;
+        }
+
+        csm.lightMargin = viewFar;
+
+        // Sun elevation drives the per-cascade caster sweep length (shadow length is
+        // casterHeight / sin(elevation)). The scene is RTE (a translation of ECEF), so
+        // the camera's radial direction is the local up and the light position points
+        // towards the sun in the same frame.
+        const up = this.mapView.camera.position.clone().normalize();
+        const sunDirection = light.position.clone().normalize();
+        csm.sunElevationSin = THREE.MathUtils.clamp(Math.abs(sunDirection.dot(up)), 0.05, 1);
+
         const desiredMaxFar = viewFar;
         const ratio = this.m_lastCsmMaxFar > 0 ? desiredMaxFar / this.m_lastCsmMaxFar : Infinity;
-        // The cascade depth clamps key off closestObjectSize, so a change there must rebuild
-        // the splits too — otherwise the clamps never apply while maxFar sits pinned at the
-        // minimum-distance floor (breaks keep the unclamped λ split, and near-field shadows
-        // stay coarse).
+        // Rebuild splits when the scene range changes by >10%, and when the closest-object
+        // proxy changes by >4%. The tighter closest gate keeps the (now smoothly blended)
+        // clamp transition small from frame to frame: a 10% step near the 200 m threshold
+        // would still move the cascade splits by tens of metres at once, which the
+        // per-cascade caster culling turns into a visible shadow pop.
         const closestRatio =
             this.m_lastCsmClosest > 0 ? csm.closestObjectSize / this.m_lastCsmClosest : Infinity;
 
-        if (ratio > 1.1 || ratio < 0.9 || closestRatio > 1.1 || closestRatio < 0.9) {
+        if (ratio > 1.1 || ratio < 0.9 || closestRatio > 1.04 || closestRatio < 0.96) {
             if (csm.camera != null) {
                 csm.maxFar = desiredMaxFar;
                 csm.updateFrustums();

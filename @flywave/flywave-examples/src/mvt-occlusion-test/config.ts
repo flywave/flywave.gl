@@ -18,5 +18,7 @@ const config: ExampleConfig = {
     level: "intermediate",
     tags: ["mvt", "openfreemap", "vectortiles", "occlusion", "renderOrder", "datasource"],
     apis: ["VectorTileDataSource", "DataSource", "Tile", "onWillTouchTiled"],
+    // Diagnostic renderOrder bench (uses an internal __probe handle).
+    internal: true,
 };
 export default config;

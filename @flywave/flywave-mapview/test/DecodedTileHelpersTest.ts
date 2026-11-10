@@ -67,11 +67,12 @@ describe("DecodedTileHelpers", function () {
             expect(assert.exists(material));
 
             assert.approximately(material.opacity, 7 / 15, 0.00001);
-            // SolidLineMaterial is built with transparent=true (line AA); standard
-            // NormalBlending composites identically to the old CustomBlending default
-            assert.equal(material.blending, THREE.NormalBlending);
+            // SolidLineMaterial enforces CustomBlending while keeping
+            // `transparent = false` so lines stay in the OPAQUE render list and
+            // layer by renderOrder (see enforceBlending/SolidLineMaterial).
+            assert.equal(material.blending, THREE.CustomBlending);
             assert.equal(material.color.getHex(), 0xff00ff);
-            assert.equal(material.transparent, true);
+            assert.equal(material.transparent, false);
         });
         it("ignores alpha when applying #rgba to secondary colors", function () {
             const technique: SolidLineTechnique = {
@@ -88,9 +89,10 @@ describe("DecodedTileHelpers", function () {
             expect(assert.exists(material));
 
             assert.equal(material.opacity, 1);
-            assert.equal(material.blending, THREE.NormalBlending);
+            // Opaque solid lines keep the enforced CustomBlending/opaque-list setup.
+            assert.equal(material.blending, THREE.CustomBlending);
             assert.equal(material.color.getHex(), 0xff00ff);
-            assert.equal(material.transparent, true);
+            assert.equal(material.transparent, false);
         });
         it("ignores invalid colors", function () {
             const technique: SolidLineTechnique = {

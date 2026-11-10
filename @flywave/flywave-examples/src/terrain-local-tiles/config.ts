@@ -23,7 +23,9 @@ const config: ExampleConfig = {
     tags: ["terrain", "imagery", "levels", "diagnostic", "local-tiles"],
     apis: ["DEMTerrainSource", "addWebTileDataSource", "imageryLevelOffset"],
     concerns: [],
-    dataPolicy: "open-data"
+    dataPolicy: "open-data",
+    // Diagnostic bench pointed at a private local tile server (192.168.x).
+    internal: true
 };
 
 export default config;

@@ -458,16 +458,16 @@ function createMeshForPrimitive(
         geometry.setAttribute("uv1", geometry.attributes.uv);
     }
 
-    if (
-        material instanceof MeshStandardNodeMaterial &&
-        material.normalMap &&
-        !geometry.attributes.tangent &&
-        geometry.attributes.uv &&
-        geometry.attributes.normal &&
-        geometry.attributes.position
-    ) {
-        geometry.computeTangents();
-    }
+    // if (
+    //     material instanceof MeshStandardNodeMaterial &&
+    //     material.normalMap &&
+    //     !geometry.attributes.tangent &&
+    //     geometry.attributes.uv &&
+    //     geometry.attributes.normal &&
+    //     geometry.attributes.position
+    // ) {
+    //     geometry.computeTangents();
+    // }
 
     // Handle morph targets
     if (primitive.targets?.length > 0) {

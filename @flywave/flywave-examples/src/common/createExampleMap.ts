@@ -70,6 +70,17 @@ export interface ExampleMapOptions {
     /** Enable shadow casting. @default false */
     enableShadows?: boolean;
     /**
+     * Sun-shadow cascade count (constructor-time). Passed straight to
+     * `MapViewOptions.shadowCascades`; ignored unless shadows are enabled.
+     */
+    shadowCascades?: number;
+    /** Sun-shadow map size per cascade (constructor-time). */
+    shadowMapSize?: number;
+    /** Sun-shadow filter; `"pcf-soft"` (default) or the cheaper `"pcf"`. */
+    shadowFilter?: "pcf" | "pcf-soft";
+    /** Maximum sun-shadow distance in metres; `0` means automatic. */
+    shadowMaxDistance?: number;
+    /**
      * Add the engine's BackgroundDataSource (per-tile ground plane colored by
      * the theme clearColor). Off by default in the engine; vector basemaps
      * whose data has no land polygons (e.g. OpenMapTiles) need it, otherwise
@@ -195,6 +206,18 @@ export async function createExampleMap(
     }
     if (options.minCameraHeight !== undefined) {
         mapViewOptions.minCameraHeight = options.minCameraHeight;
+    }
+    if (options.shadowCascades !== undefined) {
+        mapViewOptions.shadowCascades = options.shadowCascades;
+    }
+    if (options.shadowMapSize !== undefined) {
+        mapViewOptions.shadowMapSize = options.shadowMapSize;
+    }
+    if (options.shadowFilter !== undefined) {
+        mapViewOptions.shadowFilter = options.shadowFilter;
+    }
+    if (options.shadowMaxDistance !== undefined) {
+        mapViewOptions.shadowMaxDistance = options.shadowMaxDistance;
     }
     // Debug hook: `?lodpixel=<px>` tunes the mixed-LOD subdivision granularity (default 256).
     // Lower values refine distant tiles further, matching Cesium-style screen-space error.
