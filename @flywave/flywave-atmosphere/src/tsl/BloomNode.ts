@@ -25,10 +25,10 @@ import {
     QuadMesh,
     RendererUtils,
     RenderTarget,
-    TempNode,
     Vector2,
     Vector3
 } from "three/webgpu";
+import { TempNode } from "./node";
 
 const _quadMesh = /*@__PURE__*/ new QuadMesh();
 const _size = /*@__PURE__*/ new Vector2();

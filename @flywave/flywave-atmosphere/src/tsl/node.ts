@@ -6,6 +6,30 @@ import { Node as ThreeNode } from "three/webgpu";
 export { ThreeNode as Node };
 
 /**
+ * Non-deprecated stand-in for three's `TempNode`.
+ *
+ * three r187 deprecated `TempNode` and warns on every construction
+ * ("TempNode: This module has been deprecated. Extend Node instead."), which
+ * flooded the console on every node-graph rebuild. flywave's custom nodes
+ * extend this class instead.
+ *
+ * The deprecated class's only extra behaviour was caching itself in a
+ * temporary variable when referenced more than once (`isCacheable` +
+ * `getDataFromNode().usageCount`, an API missing from the public typings).
+ * None of the flywave nodes rely on it: nodes referenced from two places
+ * (`ShadowLengthNode` is shared by the aerial-perspective and sky
+ * subgraphs) still register `updateBefore` exactly once because
+ * `NodeBuilder` tracks nodes in a `Set`; only the cheap final expression
+ * would be inlined twice. A node that ever needs value caching should call
+ * `.toVar()` / `cache()` explicitly in its `setup`.
+ */
+export class TempNode extends ThreeNode {
+    static get type(): string {
+        return "TempNode";
+    }
+}
+
+/**
  * Complete set of TSL primitive type identifiers.
  */
 export type NodeType =

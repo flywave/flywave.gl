@@ -8,12 +8,11 @@ import {
     type TextureNode,
     HalfFloatType,
     NodeUpdateType,
-    RenderTarget,
-    TempNode
+    RenderTarget
 } from "three/webgpu";
 import invariant from "tiny-invariant";
 
-import type { Node } from "./node";
+import { TempNode, type Node } from "./node";
 import { outputTexture } from "./OutputTextureNode";
 
 export abstract class FilterNode extends TempNode {

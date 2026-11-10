@@ -8,7 +8,7 @@ export { QuadGeometry } from "./atmosphere/QuadGeometry";
 
 // TSL infrastructure
 export { reinterpretType, type AnyFloatType, type UniformMap } from "./tsl/types";
-export { type Node, type NodeType, type NodeValueType } from "./tsl/node";
+export { TempNode, type Node, type NodeType, type NodeValueType } from "./tsl/node";
 export { FnLayout, type FnLayoutSpec, type FnLayoutInput } from "./tsl/FnLayout";
 export { FnVar } from "./tsl/FnVar";
 export { isWebGPU } from "./tsl/utils";

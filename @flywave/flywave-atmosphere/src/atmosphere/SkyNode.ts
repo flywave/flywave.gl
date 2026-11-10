@@ -2,9 +2,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
 import { Fn, mix, nodeProxy, positionView, uv, vec2, vec3, vec4 } from "three/tsl";
-import { type NodeBuilder, TempNode } from "three/webgpu";
+import { type NodeBuilder } from "three/webgpu";
 
-import type { Node } from "../tsl/node";
+import { TempNode, type Node } from "../tsl/node";
 import { equirectToDirectionWorld } from "../tsl/transformations";
 import { hashValues } from "../tsl/utils";
 import { getAtmosphereContext } from "./AtmosphereContext";

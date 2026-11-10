@@ -7,9 +7,9 @@ import {
     type NodeFrame,
     type TextureNode,
     NodeUpdateType,
-    TempNode,
     Vector2
 } from "three/webgpu";
+import { TempNode } from "./node";
 import invariant from "tiny-invariant";
 
 import { FnLayout } from "./FnLayout";

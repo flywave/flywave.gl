@@ -18,10 +18,10 @@ import {
     vec3,
     vec4
 } from "three/tsl";
-import { type NodeBuilder, type SampleNode, type TextureNode, TempNode } from "three/webgpu";
+import { type NodeBuilder, type SampleNode, type TextureNode } from "three/webgpu";
 
 import { FnLayout } from "../tsl/FnLayout";
-import type { Node } from "../tsl/node";
+import { TempNode, type Node } from "../tsl/node";
 import { getAtmosphereContext } from "./AtmosphereContext";
 import { atmosphereParametersStruct, makeDestructible } from "./AtmosphereContextBase";
 import { Luminance3 } from "./dimensional";

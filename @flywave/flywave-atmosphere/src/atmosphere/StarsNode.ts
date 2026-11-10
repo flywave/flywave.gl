@@ -11,9 +11,9 @@ import {
     NodeUpdateType,
     RendererUtils,
     RenderTarget,
-    TempNode,
     Vector2
 } from "three/webgpu";
+import { TempNode } from "../tsl/node";
 
 import { DEFAULT_STARS_DATA_URL } from "../constants";
 import { outputTexture } from "../tsl/OutputTextureNode";

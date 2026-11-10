@@ -943,6 +943,8 @@ export class MapView extends EventDispatcher {
 
     private m_pixelToWorld?: number;
     private m_pixelRatio?: number;
+    /** Scratch for the per-frame canvas backing-store check (see render()). */
+    private readonly m_drawingBufferSize = new THREE.Vector2();
 
     /** Default scene for map objects and map anchors */
     private readonly m_scene: THREE.Scene = new THREE.Scene();
@@ -4343,6 +4345,11 @@ export class MapView extends EventDispatcher {
             this.m_renderer.setPixelRatio(this.pixelRatio);
         }
 
+        // A canvas resized outside the renderer API desynchronizes three's
+        // cached canvas pass attachments from the swap-chain texture; heal it
+        // before any pass is encoded this frame.
+        this.syncCanvasBackingStore();
+
         this.updateCameras();
         this.updateEnv();
 
@@ -4789,6 +4796,36 @@ export class MapView extends EventDispatcher {
         } finally {
             renderer._samples = samples;
         }
+    }
+
+    /**
+     * Keep the canvas backing store consistent with the renderer's
+     * drawing-buffer size.
+     *
+     * three builds the canvas depth/multisample attachments from
+     * `renderer.getDrawingBufferSize()` (the CanvasTarget's logical size times
+     * the renderer pixel ratio), while the swap-chain texture always follows
+     * the `<canvas>` element's own `width`/`height`. A host app that sizes the
+     * canvas itself — a common way to implement a "render scale" setting, e.g.
+     * `canvas.width = cssWidth * devicePixelRatio` — leaves the two out of
+     * sync, and every canvas pass then fails WebGPU validation with
+     * "The depth stencil attachment ... does not match the size of the other
+     * attachments". Render scaling belongs in {@link MapView.pixelRatio} (or
+     * `renderer.setPixelRatio`/`setDrawingBufferSize`); this guard only heals
+     * a canvas that was resized behind the renderer's back, before the first
+     * pass of the frame is encoded.
+     */
+    private syncCanvasBackingStore(): void {
+        const canvas = this.m_renderer.domElement as HTMLCanvasElement;
+        const size = this.m_renderer.getDrawingBufferSize(this.m_drawingBufferSize);
+        if (canvas.width === size.x && canvas.height === size.y) {
+            return;
+        }
+        const { width, height } = this.getCanvasClientSize();
+        if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+            return;
+        }
+        this.m_renderer.setSize(width, height, false);
     }
 
     private createTextRenderer(): TextElementsRenderer {

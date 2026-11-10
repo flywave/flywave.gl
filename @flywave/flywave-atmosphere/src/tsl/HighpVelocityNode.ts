@@ -7,9 +7,9 @@ import {
     type NodeFrame,
     type Object3D,
     Matrix4,
-    NodeUpdateType,
-    TempNode
+    NodeUpdateType
 } from "three/webgpu";
+import { TempNode } from "./node";
 
 export class HighpVelocityNode extends TempNode {
     static override get type(): string {

@@ -41,7 +41,6 @@ import {
     QuadMesh,
     RendererUtils,
     RenderTarget,
-    TempNode,
     Vector2,
     Vector3
 } from "three/webgpu";
@@ -54,7 +53,7 @@ import { CloudUniforms } from "../clouds/CloudUniforms";
 import { type QualityPreset } from "../clouds/QualityPresets";
 import { resolveResourceUrl } from "../resourceResolver";
 import { inverseProjectionMatrix } from "../tsl/accessors";
-import type { Node } from "../tsl/node";
+import { TempNode, type Node } from "../tsl/node";
 import { outputTexture } from "../tsl/OutputTextureNode";
 import { convertToTexture } from "../tsl/RenderTargetNode";
 import { stbn, stbnFrameUniform, stbnTexture } from "../tsl/STBNTextureNode";

@@ -244,9 +244,30 @@ export class AtmosphereSystem {
                     this.m_atmosphereContext;
             }
 
-            // three r187: custom light nodes register on the light class itself
-            // (`Light.registerNode`) instead of `renderer.library.addLight`.
-            AtmosphereLight.registerNode(AtmosphereLightNode);
+            // three r187 registers the custom light node on the light class
+            // itself (`Light.registerNode`). Host bundles still shipping an
+            // older three only expose the legacy `renderer.library.addLight`,
+            // so detect at runtime: a planar map never renders the atmosphere
+            // light, and must not die during startup because of a version
+            // mismatch in this optional registration.
+            const registrableLight = AtmosphereLight as typeof AtmosphereLight & {
+                registerNode?: (nodeClass: typeof AtmosphereLightNode) => void;
+            };
+            const lightLibrary = (
+                renderer as {
+                    library?: {
+                        addLight?: (
+                            lightClass: typeof AtmosphereLight,
+                            nodeClass: typeof AtmosphereLightNode
+                        ) => void;
+                    };
+                }
+            ).library;
+            if (typeof registrableLight.registerNode === "function") {
+                registrableLight.registerNode(AtmosphereLightNode);
+            } else if (typeof lightLibrary?.addLight === "function") {
+                lightLibrary.addLight(AtmosphereLight, AtmosphereLightNode);
+            }
 
             const scene = this.mapView.scene as THREE.Scene & {
                 backgroundNode?: THREE.Scene["backgroundNode"];

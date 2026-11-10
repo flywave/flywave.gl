@@ -34,7 +34,6 @@ import {
     QuadMesh,
     RendererUtils,
     RenderTarget,
-    TempNode,
     Vector2
 } from "three/webgpu";
 
@@ -43,7 +42,7 @@ import { FnLayout } from "./FnLayout";
 import { FnVar } from "./FnVar";
 import { highpVelocity } from "./HighpVelocityNode";
 import { haltonOffsets } from "./internals";
-import type { Node } from "./node";
+import { TempNode, type Node } from "./node";
 import { outputTexture } from "./OutputTextureNode";
 import { convertToTexture } from "./RenderTargetNode";
 import { logarithmicToPerspectiveDepth } from "./transformations";
@@ -72,20 +71,6 @@ function isSupportedCamera(camera: Camera): camera is SupportedCamera {
             "setViewOffset" in camera &&
             "clearViewOffset" in camera)
     );
-}
-
-interface RenderPipelineContext {
-    context: {
-        onBeforeRenderPipeline?: () => void;
-        onAfterRenderPipeline?: () => void;
-    };
-}
-
-interface PostProcessingContext {
-    context: {
-        onBeforePostProcessing?: () => void;
-        onAfterPostProcessing?: () => void;
-    };
 }
 
 // Reference: https://github.com/playdeadgames/temporal
@@ -504,20 +489,25 @@ export class TemporalAntialiasNode extends TempNode {
     }
 
     override setup(builder: NodeBuilder): unknown {
-        // We have to take care of the renaming of PostProcessing to RenderPipeline
-        // in r183, as well as changes to property fields in the context.
+        // Jitter the camera right before the pipeline renders its scene pass;
+        // `updateBefore` clears the offset again once the TAA pass has resolved.
         const onBeforeRenderPipeline = (): void => {
             const size = builder.renderer.getDrawingBufferSize(sizeScratch);
             this.setViewOffset(size.width, size.height);
         };
-        if (builder.context.renderPipeline != null) {
-            const { context } = builder.context.renderPipeline as RenderPipelineContext;
-            context.onBeforeRenderPipeline = onBeforeRenderPipeline;
-            this.needsSyncRenderPipeline = true;
-        }
-        if (builder.context.postProcessing != null) {
-            const { context } = builder.context.postProcessing as PostProcessingContext;
-            context.onBeforePostProcessing = onBeforeRenderPipeline;
+        // three r187 exposes the per-render pipeline hooks as callback arrays
+        // on the node-builder context (EventNode's BEFORE_RENDER_PIPELINE uses
+        // the same slot). The old `renderPipeline.context.onBeforeRenderPipeline`
+        // / `postProcessing.context.onBeforePostProcessing` fields were removed
+        // with the r183 PostProcessing → RenderPipeline rename: in 0.187
+        // `builder.context.renderPipeline` is the pipeline itself, so reading
+        // `.context` off it returned undefined and assigning the callback threw
+        // "Cannot set properties of undefined (setting 'onBeforeRenderPipeline')".
+        const pipelineCallbacks = (
+            builder.context as { onBeforePipelineCallbacks?: Array<() => void> }
+        ).onBeforePipelineCallbacks;
+        if (pipelineCallbacks != null) {
+            pipelineCallbacks.push(onBeforeRenderPipeline);
             this.needsSyncRenderPipeline = true;
         }
 

@@ -13,9 +13,9 @@ import {
     NodeMaterial,
     NodeUpdateType,
     RGBAFormat,
-    TempNode,
     Vector3
 } from "three/webgpu";
+import { TempNode } from "../tsl/node";
 
 import { inverseProjectionMatrix } from "../tsl/accessors";
 import { getAtmosphereContext } from "./AtmosphereContext";

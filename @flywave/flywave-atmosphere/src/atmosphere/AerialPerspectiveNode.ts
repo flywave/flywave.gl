@@ -20,11 +20,11 @@ import {
     viewportSharedTexture,
     viewportUV
 } from "three/tsl";
-import { type NodeBuilder, type Texture, type TextureNode, TempNode } from "three/webgpu";
+import { type NodeBuilder, type Texture, type TextureNode } from "three/webgpu";
 
 import { inverseProjectionMatrix, projectionMatrix } from "../tsl/accessors";
 import { rayEllipsoidIntersection } from "../tsl/math";
-import type { Node } from "../tsl/node";
+import { TempNode, type Node } from "../tsl/node";
 import { depthToViewZ, screenToPositionView } from "../tsl/transformations";
 import { hashValues, isWebGPU } from "../tsl/utils";
 import { getAtmosphereContext } from "./AtmosphereContext";

@@ -34,7 +34,6 @@ import {
     NodeMaterial,
     NodeUpdateType,
     PerspectiveCamera,
-    TempNode,
     Vector2,
     Vector3,
     Vector4
@@ -42,7 +41,7 @@ import {
 import invariant from "tiny-invariant";
 
 import { OnBeforeFrameUpdate } from "../tsl/events";
-import type { Node } from "../tsl/node";
+import { TempNode, type Node } from "../tsl/node";
 import { hashValues } from "../tsl/utils";
 import { getAtmosphereContext } from "./AtmosphereContext";
 import { CoordinateNode } from "./ShadowLengthNode/CoordinateNode";

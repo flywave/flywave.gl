@@ -591,7 +591,6 @@ export class ViewRenderManager implements IViewRenderManager {
             const smaaNode = smaaWrapped(finalNode);
             this._smaaNode = smaaNode;
             finalNode = smaaNode;
-            console.log("[VRM] SMAA wrapper node created and attached to pipeline");
         } else {
             this._smaaNode = null;
         }
