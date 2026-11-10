@@ -458,16 +458,12 @@ function createMeshForPrimitive(
         geometry.setAttribute("uv1", geometry.attributes.uv);
     }
 
-    // if (
-    //     material instanceof MeshStandardNodeMaterial &&
-    //     material.normalMap &&
-    //     !geometry.attributes.tangent &&
-    //     geometry.attributes.uv &&
-    //     geometry.attributes.normal &&
-    //     geometry.attributes.position
-    // ) {
-    //     geometry.computeTangents();
-    // }
+    // Tangents are intentionally NOT computed here. three's node-based normal
+    // mapping derives the tangent frame from UV/position derivatives when the
+    // attribute is absent (Tangent.js -> tangentViewFrame), and
+    // BufferGeometry.computeTangents() only supports indexed geometries: a
+    // non-indexed glTF primitive logs "Missing required attributes" and keeps
+    // no tangents, while degenerate UVs can produce NaNs.
 
     // Handle morph targets
     if (primitive.targets?.length > 0) {
@@ -713,8 +709,7 @@ function createInstancedMesh(
     const customAttrNames = Object.keys(instanceAttributes).filter(
         name => name !== "TRANSLATION" && name !== "ROTATION" && name !== "SCALE"
     );
-    const geometry =
-        customAttrNames.length > 0 ? sourceMesh.geometry.clone() : sourceMesh.geometry;
+    const geometry = customAttrNames.length > 0 ? sourceMesh.geometry.clone() : sourceMesh.geometry;
     const material = sourceMesh.material;
     const instancedMesh = new InstancedMesh(geometry, material, instanceCount);
 
