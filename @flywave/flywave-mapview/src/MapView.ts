@@ -56,6 +56,7 @@ import {
     type IMapRenderingManager,
     MapRenderingManager
 } from "./composing";
+import { installCoalescedUniformUploads } from "./composing/CoalescedUniformBackend";
 import type { IFogLightDef } from "./composing/vrm/ViewRenderTypes";
 import { ConcurrentDecoderFacade } from "./ConcurrentDecoderFacade";
 import { ConcurrentTilerFacade } from "./ConcurrentTilerFacade";
@@ -265,6 +266,14 @@ export interface MapViewOptions extends TextElementsRendererOptions, Partial<Loo
      * The canvas element used to render the scene.
      */
     canvas: HTMLCanvasElement;
+
+    /**
+     * Coalesces per-object uniform buffer uploads into a single transport per
+     * frame (WebGPU backend only). Reduces the number of `queue.writeBuffer`
+     * calls from one per visible render object to one per frame. Default is
+     * `true`; set to `false` to fall back to three's per-object uploads.
+     */
+    uniformCoalescing?: boolean;
 
     /**
      * Optional rendering context.
@@ -1195,6 +1204,9 @@ export class MapView extends EventDispatcher {
             })
             .then(() => {
                 this.m_rendererInitialized = true;
+                if (this.m_options.uniformCoalescing !== false) {
+                    installCoalescedUniformUploads(this.m_renderer);
+                }
                 // Re-apply the theme-driven environment once the renderer
                 // exists. An inline theme object resolves instantly, so its
                 // clear color / sky / lights may have been applied BEFORE

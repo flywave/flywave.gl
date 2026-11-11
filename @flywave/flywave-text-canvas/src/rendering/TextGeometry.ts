@@ -75,6 +75,8 @@ export class TextGeometry {
     private m_currentCapacity: number;
     private m_drawCount: number;
     private m_updateOffset: number;
+    /** True when vertex/index content changed since the last GPU upload. */
+    private m_dirty: boolean = true;
 
     private m_positionAttribute: THREE.BufferAttribute;
     private m_rotationAttribute: THREE.BufferAttribute;
@@ -115,28 +117,21 @@ export class TextGeometry {
         this.m_currentCapacity = Math.min(initialSize, capacity);
         this.m_drawCount = 0;
         this.m_updateOffset = 0;
+        this.m_dirty = true;
 
         const numVerts = this.m_currentCapacity * VERTICES_PER_QUAD;
         this.m_positionAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 3), 3);
-        this.m_positionAttribute.setUsage(THREE.DynamicDrawUsage);
         this.m_rotationAttribute = new THREE.BufferAttribute(new Float32Array(numVerts), 1);
-        this.m_rotationAttribute.setUsage(THREE.DynamicDrawUsage);
         this.m_uvAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 2), 2);
-        this.m_uvAttribute.setUsage(THREE.DynamicDrawUsage);
         // Per-vertex copy of the glyph's atlas patch rect (u0,v0,u1,v1). The fragment shader
         // clamps the sampled SDF distance by the distance to this rect: font atlas pages clip
         // the SDF field at the patch border (ink may reach the last texel with values >= iso),
         // which otherwise renders as opaque vertical/horizontal hairlines at the quad edges.
         this.m_uvRectAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 4), 4);
-        this.m_uvRectAttribute.setUsage(THREE.DynamicDrawUsage);
         this.m_weightAttribute = new THREE.BufferAttribute(new Float32Array(numVerts), 1);
-        this.m_weightAttribute.setUsage(THREE.DynamicDrawUsage);
         this.m_bgWeightAttribute = new THREE.BufferAttribute(new Float32Array(numVerts), 1);
-        this.m_bgWeightAttribute.setUsage(THREE.DynamicDrawUsage);
         this.m_colorAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 4), 4);
-        this.m_colorAttribute.setUsage(THREE.DynamicDrawUsage);
         this.m_bgColorAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 4), 4);
-        this.m_bgColorAttribute.setUsage(THREE.DynamicDrawUsage);
         // Static per-corner quad UVs (0,0)(1,0)(0,1)(1,1) used by the background plate pass.
         this.m_localUvAttribute = new THREE.BufferAttribute(new Float32Array(numVerts * 2), 2);
         this.fillLocalUvs();
@@ -145,7 +140,6 @@ export class TextGeometry {
             new Uint32Array(this.m_currentCapacity * QUAD_INDEX_MEMORY_FOOTPRINT),
             INDEX_BUFFER_STRIDE
         );
-        this.m_indexBuffer.setUsage(THREE.DynamicDrawUsage);
 
         this.m_geometry = new THREE.BufferGeometry();
         this.m_geometry.setAttribute("position", this.m_positionAttribute);
@@ -185,6 +179,7 @@ export class TextGeometry {
     clear() {
         this.m_drawCount = 0;
         this.m_updateOffset = 0;
+        this.m_dirty = true;
         this.m_pickingDataArray.length = 0;
     }
 
@@ -192,7 +187,11 @@ export class TextGeometry {
      * Update the GPU resources to reflect the latest additions to the geometry.
      */
     update() {
-        if (this.drawCount > this.m_updateOffset) {
+        // Upload the used vertex prefix [0, drawCount) whenever content changed. A plain
+        // drawCount > m_updateOffset guard is NOT sufficient: when a layout SHRINKS or
+        // rewrites glyphs in place, the guard skips the upload while the draw range still
+        // changes, rendering stale vertex data from previous frames (ghost text).
+        if (this.m_dirty) {
             const attrs = [
                 this.m_positionAttribute,
                 this.m_rotationAttribute,
@@ -203,18 +202,18 @@ export class TextGeometry {
                 this.m_colorAttribute,
                 this.m_bgColorAttribute
             ];
+            const usedVertices = this.m_drawCount * VERTICES_PER_QUAD;
             for (const attr of attrs) {
                 attr.needsUpdate = true;
                 //@ts-ignore
-                attr.addUpdateRange(0, attr.count * attr.itemSize);
+                // addUpdateRange counts ARRAY ELEMENTS, not vertices — scale by itemSize.
+                attr.addUpdateRange(0, usedVertices * attr.itemSize);
             }
 
             this.m_indexBuffer.needsUpdate = true;
             //@ts-ignore
-            this.m_indexBuffer.addUpdateRange(
-                this.m_updateOffset * QUAD_INDEX_MEMORY_FOOTPRINT,
-                (this.m_drawCount - this.m_updateOffset) * QUAD_INDEX_MEMORY_FOOTPRINT
-            );
+            this.m_indexBuffer.addUpdateRange(0, this.m_drawCount * QUAD_INDEX_MEMORY_FOOTPRINT);
+            this.m_dirty = false;
         }
         this.m_updateOffset = this.m_drawCount;
         this.m_geometry.setDrawRange(0, this.m_drawCount * INDICES_PER_QUAD);
@@ -292,6 +291,7 @@ export class TextGeometry {
         this.m_indexBuffer.setX(baseIndex + 5, baseVertex + 3);
 
         ++this.m_drawCount;
+        this.m_dirty = true;
         return true;
     }
 
@@ -485,6 +485,7 @@ export class TextGeometry {
         }
 
         this.m_drawCount += textBufferObject.glyphs.length;
+        this.m_dirty = true;
         return true;
     }
 
@@ -586,7 +587,7 @@ export class TextGeometry {
             const newArray = new Float32Array(count * itemSize);
             newArray.set(old.array.subarray(0, Math.min(old.array.length, newArray.length)));
             const newAttr = new THREE.BufferAttribute(newArray, itemSize);
-            newAttr.setUsage(THREE.DynamicDrawUsage);
+            
             return newAttr;
         };
 
@@ -604,7 +605,6 @@ export class TextGeometry {
         const newIndexBuffer = new Uint32Array(size * QUAD_INDEX_MEMORY_FOOTPRINT);
         newIndexBuffer.set(this.m_indexBuffer.array);
         this.m_indexBuffer = new THREE.BufferAttribute(newIndexBuffer, INDEX_BUFFER_STRIDE);
-        this.m_indexBuffer.setUsage(THREE.DynamicDrawUsage);
 
         this.m_geometry.dispose();
         this.m_geometry = new THREE.BufferGeometry();

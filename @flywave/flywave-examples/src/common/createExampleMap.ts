@@ -225,6 +225,10 @@ export async function createExampleMap(
     if (Number.isFinite(lodPixelParam) && lodPixelParam > 0) {
         mapViewOptions.lodMinTilePixelSize = lodPixelParam;
     }
+    // Debug hook: `?uniformcoalesce=1` enables the per-object uniform upload coalescer.
+    if (new URLSearchParams(window.location.search).get("uniformcoalesce") === "1") {
+        mapViewOptions.uniformCoalescing = true;
+    }
     if (lookAt?.target !== undefined) {
         mapViewOptions.target = new GeoCoordinates(
             lookAt.target.lat,

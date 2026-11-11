@@ -339,6 +339,9 @@ export class BoxBuffer {
         const indexAttribute = this.m_indexAttribute!;
 
         positionAttribute.clearUpdateRanges();
+        colorAttribute.clearUpdateRanges();
+        uvAttribute.clearUpdateRanges();
+        indexAttribute.clearUpdateRanges();
         if (this.m_positionCount > 0) {
             positionAttribute.needsUpdate = true;
             positionAttribute.addUpdateRange(0, this.m_positionCount * positionAttribute.itemSize);
@@ -356,6 +359,9 @@ export class BoxBuffer {
 
         if (this.m_indexCount > 0) {
             indexAttribute.needsUpdate = true;
+            // Partial update: without a range the full index capacity is re-uploaded
+            // every frame.
+            indexAttribute.addUpdateRange(0, this.m_indexCount);
             this.m_geometry.setDrawRange(0, this.m_indexCount);
         }
 
@@ -586,7 +592,6 @@ export class BoxBuffer {
             newPositionArray,
             NUM_POSITION_VALUES_PER_VERTEX
         );
-        this.m_positionAttribute.setUsage(THREE.DynamicDrawUsage);
 
         const newColorArray = new Uint8Array(
             newSize * NUM_VERTICES_PER_ELEMENT * NUM_COLOR_VALUES_PER_VERTEX
@@ -601,7 +606,6 @@ export class BoxBuffer {
             newColorArray,
             NUM_COLOR_VALUES_PER_VERTEX
         );
-        this.m_colorAttribute.setUsage(THREE.DynamicDrawUsage);
 
         const newUvArray = new Float32Array(
             newSize * NUM_VERTICES_PER_ELEMENT * NUM_UV_VALUES_PER_VERTEX
@@ -613,7 +617,6 @@ export class BoxBuffer {
             newUvArray.set(this.m_uvAttribute.array.slice(0, copyCount));
         }
         this.m_uvAttribute = new THREE.BufferAttribute(newUvArray, NUM_UV_VALUES_PER_VERTEX);
-        this.m_uvAttribute.setUsage(THREE.DynamicDrawUsage);
 
         const numIndexValues = newSize * NUM_INDICES_PER_ELEMENT * NUM_INDEX_VALUES_PER_VERTEX;
 
@@ -631,7 +634,6 @@ export class BoxBuffer {
             newIndexArray,
             NUM_INDEX_VALUES_PER_VERTEX
         );
-        this.m_indexAttribute.setUsage(THREE.DynamicDrawUsage);
 
         this.m_size = newSize;
     }
