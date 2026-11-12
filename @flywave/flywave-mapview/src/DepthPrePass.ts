@@ -80,19 +80,17 @@ export interface DepthPrePassProperties {
  *
  * @internal
  */
-export function createDepthPrePassMaterial(
-    baseMaterial: THREE.Material,
-    reversedDepth: boolean = false
-): THREE.Material {
+export function createDepthPrePassMaterial(baseMaterial: THREE.Material): THREE.Material {
     baseMaterial.depthWrite = false;
     // The color pass must draw exactly the surface the pre-pass wrote
-    // (EqualDepth). three r185's WebGPU backend remaps every depthFunc through
-    // `ReversedDepthFuncs` when the renderer uses a reversed depth buffer, and
-    // that table maps EqualDepth -> NotEqualDepth (it negates instead of
-    // mirroring), which colors every surface EXCEPT the nearest one (x-ray
-    // buildings). Pre-compensate so the remap lands on Equal again. LessDepth
-    // below is mirrored correctly (-> GreaterDepth) and needs nothing.
-    baseMaterial.depthFunc = reversedDepth ? THREE.NotEqualDepth : THREE.EqualDepth;
+    // (EqualDepth). The renderer may remap depth funcs through
+    // `ReversedDepthFuncs` when a reversed depth buffer is used; three r187
+    // mirrors EqualDepth correctly there ([EqualDepth]: EqualDepth), so plain
+    // EqualDepth is correct under both buffering modes (matches harp). Do NOT
+    // pre-compensate: r185's broken table ([EqualDepth]: NotEqualDepth) once
+    // required feeding NotEqualDepth, and keeping that stale compensation on
+    // r187 turned the color pass into NotEqualDepth -> x-ray buildings.
+    baseMaterial.depthFunc = THREE.EqualDepth;
     baseMaterial.colorWrite = true;
     enforceBlending(baseMaterial);
 
@@ -143,7 +141,7 @@ export function isDepthPrePassMesh(object: THREE.Object3D): boolean {
  *
  * @internal
  */
-export function createDepthPrePassMesh(mesh: THREE.Mesh, reversedDepth: boolean = false): THREE.Mesh {
+export function createDepthPrePassMesh(mesh: THREE.Mesh): THREE.Mesh {
     const originalGeometry = mesh.geometry;
 
     if (!(originalGeometry instanceof THREE.BufferGeometry)) {
@@ -180,8 +178,8 @@ export function createDepthPrePassMesh(mesh: THREE.Mesh, reversedDepth: boolean 
 
     const depthPassMaterial =
         mesh.material instanceof Array
-            ? mesh.material.map(m => createDepthPrePassMaterial(m, reversedDepth))
-            : createDepthPrePassMaterial(mesh.material, reversedDepth);
+            ? mesh.material.map(m => createDepthPrePassMaterial(m))
+            : createDepthPrePassMaterial(mesh.material);
 
     const depthPassMesh = new THREE.Mesh(depthPassGeometry, depthPassMaterial);
     depthPassMesh.renderOrder = mesh.renderOrder - DEPTH_PRE_PASS_RENDER_ORDER_OFFSET;

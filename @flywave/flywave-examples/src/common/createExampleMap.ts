@@ -225,8 +225,12 @@ export async function createExampleMap(
     if (Number.isFinite(lodPixelParam) && lodPixelParam > 0) {
         mapViewOptions.lodMinTilePixelSize = lodPixelParam;
     }
-    // Debug hook: `?uniformcoalesce=1` enables the per-object uniform upload coalescer.
-    if (new URLSearchParams(window.location.search).get("uniformcoalesce") === "1") {
+    // Debug hook: `?uniformcoalesce=0|1` forces the per-object uniform upload
+    // coalescer off/on (default is on; omit the param to keep the default).
+    const uniformCoalesceParam = new URLSearchParams(window.location.search).get("uniformcoalesce");
+    if (uniformCoalesceParam === "0") {
+        mapViewOptions.uniformCoalescing = false;
+    } else if (uniformCoalesceParam === "1") {
         mapViewOptions.uniformCoalescing = true;
     }
     if (lookAt?.target !== undefined) {

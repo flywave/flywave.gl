@@ -876,10 +876,7 @@ export class TileGeometryCreator {
                     isRenderDepthPrePassEnabled(technique, discreteZoomEnv);
 
                 if (renderDepthPrePass) {
-                    const depthPassMesh = createDepthPrePassMesh(
-                        object as THREE.Mesh,
-                        mapView.renderer.reversedDepthBuffer === true
-                    );
+                    const depthPassMesh = createDepthPrePassMesh(object as THREE.Mesh);
 
                     this.addUserData(tile, srcGeometry, technique, depthPassMesh);
 
