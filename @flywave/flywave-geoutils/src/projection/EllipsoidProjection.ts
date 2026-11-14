@@ -342,8 +342,23 @@ class EllipsoidProjection extends Projection {
         maximumHeight: number,
         result: OrientedBox3Like
     ): void {
-        const { west, south, east, north } = rectangle;
+        let { west, south, east, north } = rectangle;
         const EPSILON = 1e-10;
+
+        // Bounds are unordered: latitude has no wrap-around and some sources (e.g. 3D Tiles
+        // region metadata derived from content bounds) report south > north by a tiny amount.
+        // Swap the pair instead of rejecting an otherwise usable rectangle.
+        if (south > north) {
+            const latitude = south;
+            south = north;
+            north = latitude;
+        }
+
+        // Longitude bounds crossing the antimeridian arrive with west > east; normalize to an
+        // eastward span, mirroring `GeoBox`'s degree-space normalization.
+        if (east < west) {
+            east += Math.PI * 2;
+        }
 
         // Validate rectangle dimensions
         let width = east - west;
@@ -374,7 +389,12 @@ class EllipsoidProjection extends Projection {
         }
 
         // Choose appropriate OBB computation method based on rectangle size
-        this.computeUnifiedRectangleOBB(rectangle, minimumHeight, maximumHeight, result);
+        this.computeUnifiedRectangleOBB(
+            { west, south, east, north },
+            minimumHeight,
+            maximumHeight,
+            result
+        );
     }
 
     /**
