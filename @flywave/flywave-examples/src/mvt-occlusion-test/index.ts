@@ -15,6 +15,7 @@ import { type GUI } from "dat.gui";
 
 import {
     DataSource,
+    EdgeMaterial,
     GeoCoordinates,
     PerformanceStatistics,
     quadTreeSubdivisionScheme,
@@ -25,7 +26,6 @@ import {
     webMercatorProjection,
     type MapView
 } from "@flywave/flywave.gl";
-import { EdgeMaterial } from "@flywave/flywave-materials";
 import {
     BoxGeometry,
     BufferAttribute,
@@ -75,7 +75,7 @@ import { loadTilezenStylesetForOpenMapTiles } from "./tilezen-omt-adapter";
 
 /** 测试城市：纽约曼哈顿下城（对齐 harp 参考图的机位与构图）。 */
 const CENTER = { lat: 40.7075, lng: -74.0113 };
-const BOX_GEO = { lat: 40.7072, lng: -74.0130 };
+const BOX_GEO = { lat: 40.7072, lng: -74.013 };
 const OPENFREEMAP_TILEJSON = "https://tiles.openfreemap.org/planet";
 
 /** 承载外部 three.js 对象的最小数据源（持久子树 + 每帧 RTE + 根瓦片保活）。 */
@@ -165,7 +165,9 @@ async function runThemeIsolation(
         string,
         unknown
     >;
-    for (const image of Object.values((base.images as Record<string, { url: string; atlas?: string }>) ?? {})) {
+    for (const image of Object.values(
+        (base.images as Record<string, { url: string; atlas?: string }>) ?? {}
+    )) {
         image.url = "resources/" + image.url;
         if (image.atlas !== undefined) {
             image.atlas = "resources/" + image.atlas;
@@ -358,17 +360,12 @@ async function main(): Promise<void> {
     const modelDataSource = new ModelDataSource();
     await mapView.addDataSource(modelDataSource);
     (window as unknown as Record<string, unknown>).__mvtDs = modelDataSource;
-    const box = new Mesh(
-        new BoxGeometry(200, 80, 100),
-        new MeshBasicMaterial({ color: 0xff5a2a })
-    );
+    const box = new Mesh(new BoxGeometry(200, 80, 100), new MeshBasicMaterial({ color: 0xff5a2a }));
     // 放置必须用数据源所在地图的 projection（球面模式下是 ECEF 系），
     // 不能用导入的 webMercatorProjection——平面坐标进球面世界等于把
     // 模型放进太空，任何角度都不可见
     box.position.copy(
-        modelDataSource.projection.projectPoint(
-            new GeoCoordinates(BOX_GEO.lat, BOX_GEO.lng, 0)
-        )
+        modelDataSource.projection.projectPoint(new GeoCoordinates(BOX_GEO.lat, BOX_GEO.lng, 0))
     );
     box.position.z += 50; // 半高：底面贴地
     modelDataSource.addObject(box);
@@ -380,12 +377,8 @@ async function main(): Promise<void> {
     const applyRenderOrder = (order: number) => {
         box.renderOrder = order;
     };
-    folder
-        .add({ ro0: () => applyRenderOrder(0) }, "ro0")
-        .name("renderOrder 0");
-    folder
-        .add({ ro10: () => applyRenderOrder(10) }, "ro10")
-        .name("renderOrder 10");
+    folder.add({ ro0: () => applyRenderOrder(0) }, "ro0").name("renderOrder 0");
+    folder.add({ ro10: () => applyRenderOrder(10) }, "ro10").name("renderOrder 10");
     const flyTo = (name: string, zoomLevel: number, tilt: number, heading: number) => {
         void mapView.lookAt({
             target: { lat: BOX_GEO.lat, lng: BOX_GEO.lng },
@@ -395,18 +388,10 @@ async function main(): Promise<void> {
         });
         mapView.update();
     };
-    folder
-        .add({ f1: () => flyTo("大面积 12.5", 12.5, 40, 0) }, "f1")
-        .name("大面积 12.5");
-    folder
-        .add({ f2: () => flyTo("中景 14.5", 14.5, 50, 30) }, "f2")
-        .name("中景 14.5");
-    folder
-        .add({ f3: () => flyTo("近景 16", 16, 60, 60) }, "f3")
-        .name("近景 16");
-    folder
-        .add({ f4: () => flyTo("低角 75°", 15.5, 75, 200) }, "f4")
-        .name("低角 75°");
+    folder.add({ f1: () => flyTo("大面积 12.5", 12.5, 40, 0) }, "f1").name("大面积 12.5");
+    folder.add({ f2: () => flyTo("中景 14.5", 14.5, 50, 30) }, "f2").name("中景 14.5");
+    folder.add({ f3: () => flyTo("近景 16", 16, 60, 60) }, "f3").name("近景 16");
+    folder.add({ f4: () => flyTo("低角 75°", 15.5, 75, 200) }, "f4").name("低角 75°");
     folder.open();
 }
 

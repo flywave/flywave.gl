@@ -10,20 +10,18 @@
  * 两页同格对比即可定位移植差异。数值取自 tilezen 皮肤 z16 档。
  */
 
-import { mercatorProjection } from "@flywave/flywave-geoutils";
-import { LineGroup } from "@flywave/flywave-lines";
 import {
     EdgeMaterial,
-    MapMeshBasicMaterial,
-    MapMeshStandardMaterial,
-    SolidLineMaterial
-} from "@flywave/flywave-materials";
-import {
     FontCatalog,
     FontUnit,
+    LineGroup,
+    MapMeshBasicMaterial,
+    MapMeshStandardMaterial,
+    mercatorProjection,
+    SolidLineMaterial,
     TextCanvas,
     TextRenderStyle
-} from "@flywave/flywave-text-canvas";
+} from "@flywave/flywave.gl";
 import * as THREE from "three/webgpu";
 
 const CELL_W = 256;
@@ -609,9 +607,14 @@ export async function runIsolationTest(): Promise<void> {
         stripRenderer.setPixelRatio(1);
         stripRenderer.setSize(STRIP_W, STRIP_H, false);
         stripRenderer.setClearColor(0xede7e1, 1);
-        const fontCatalog = await FontCatalog.load("resources/fonts/Default_FontCatalog.json", 1024);
+        const fontCatalog = await FontCatalog.load(
+            "resources/fonts/Default_FontCatalog.json",
+            1024
+        );
         const textCanvas = new TextCanvas({
-            renderer: stripRenderer as unknown as ConstructorParameters<typeof TextCanvas>[0]["renderer"],
+            renderer: stripRenderer as unknown as ConstructorParameters<
+                typeof TextCanvas
+            >[0]["renderer"],
             rendererCapabilities: { isWebGL2: false, logarithmicDepthBuffer: false },
             fontCatalog,
             minGlyphCount: 8,
@@ -647,16 +650,29 @@ export async function runIsolationTest(): Promise<void> {
                 );
             }
             textCanvas.textRenderStyle = new TextRenderStyle({
-                fontSize: { unit: FontUnit.Pixel, size: s.size, backgroundSize: s.bg !== undefined ? 40 : 0 },
+                fontSize: {
+                    unit: FontUnit.Pixel,
+                    size: s.size,
+                    backgroundSize: s.bg !== undefined ? 40 : 0
+                },
                 color: col,
                 backgroundColor: bgCol,
                 backgroundOpacity: s.bg !== undefined ? 1 : 0
             });
             // TextCanvas 屏幕坐标原点在画布中心，Y 向上
-            addResults.push(textCanvas.addText(s.text, new THREE.Vector3(s.cx - STRIP_W / 2, 0, 0)));
+            addResults.push(
+                textCanvas.addText(s.text, new THREE.Vector3(s.cx - STRIP_W / 2, 0, 0))
+            );
         }
         document.body.insertBefore(stripCanvas, wrap);
-        const ortho = new THREE.OrthographicCamera(-STRIP_W / 2, STRIP_W / 2, STRIP_H / 2, -STRIP_H / 2, -1000, 1000);
+        const ortho = new THREE.OrthographicCamera(
+            -STRIP_W / 2,
+            STRIP_W / 2,
+            STRIP_H / 2,
+            -STRIP_H / 2,
+            -1000,
+            1000
+        );
         // 底色
         await stripRenderer.renderAsync(new THREE.Scene(), ortho);
         // 文字 pass（复刻 TextCanvas.render，异步提交）；输出 pass-through
@@ -665,7 +681,14 @@ export async function runIsolationTest(): Promise<void> {
         stripRenderer.setRenderTarget(null);
         const savedAuto = stripRenderer.autoClear;
         stripRenderer.autoClear = false;
-        const layers = (textCanvas as unknown as { m_layers: Array<{ id: number; storage: { update(): void; backgroundScene: THREE.Scene; scene: THREE.Scene } }> }).m_layers;
+        const layers = (
+            textCanvas as unknown as {
+                m_layers: Array<{
+                    id: number;
+                    storage: { update(): void; backgroundScene: THREE.Scene; scene: THREE.Scene };
+                }>;
+            }
+        ).m_layers;
         for (const layer of layers) {
             layer.storage.update();
             await stripRenderer.renderAsync(layer.storage.backgroundScene, ortho);
@@ -676,7 +699,9 @@ export async function runIsolationTest(): Promise<void> {
         (window as unknown as Record<string, unknown>).__colorDiag = (() => {
             const c = new THREE.Color(0x333333);
             let vColor = null;
-            const layer = (textCanvas as unknown as { m_layers: Array<{ storage: { scene: THREE.Scene } }> }).m_layers[0];
+            const layer = (
+                textCanvas as unknown as { m_layers: Array<{ storage: { scene: THREE.Scene } }> }
+            ).m_layers[0];
             layer.storage.scene.traverse(o => {
                 if (!vColor && (o as THREE.Mesh).isMesh) {
                     const g = (o as THREE.Mesh).geometry as THREE.BufferGeometry;
@@ -695,7 +720,9 @@ export async function runIsolationTest(): Promise<void> {
             add: addResults
         };
     } catch (e) {
-        (window as unknown as Record<string, unknown>).__textError = String((e as Error).stack || e);
+        (window as unknown as Record<string, unknown>).__textError = String(
+            (e as Error).stack || e
+        );
     }
 
     // 取样
@@ -716,8 +743,7 @@ export async function runIsolationTest(): Promise<void> {
     const results: Record<string, unknown> = {
         engine: "flywave three/webgpu",
         renderer: {
-            backend: (renderer.backend as unknown as { isWebGPUBackend?: boolean })
-                .isWebGPUBackend
+            backend: (renderer.backend as unknown as { isWebGPUBackend?: boolean }).isWebGPUBackend
                 ? "webgpu"
                 : "webgl2",
             outputColorSpace: renderer.outputColorSpace,

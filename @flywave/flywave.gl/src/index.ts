@@ -41,6 +41,13 @@ export {
     VerticalAlignment,
     HorizontalAlignment
 } from "@flywave/flywave-text-canvas";
+export {
+    EdgeMaterial,
+    MapMeshBasicMaterial,
+    MapMeshStandardMaterial,
+    SolidLineMaterial
+} from "@flywave/flywave-materials";
+export { LineGroup } from "@flywave/flywave-lines";
 
 export class MapView extends RawMapView {
     constructor(options: Omit<MapViewOptions, "uriResolver">) {
