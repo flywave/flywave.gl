@@ -9,6 +9,7 @@ const _fogLightOffset = new THREE.Vector3();
 
 import type {
     type AerialPerspectiveNode,
+    type BloomNode,
     type CloudRenderNode,
     type LensFlareNode,
     type TemporalAntialiasNode,
@@ -60,7 +61,12 @@ import {
 } from "three/webgpu";
 
 import { bloom } from "./effects/bloom";
-import { brightnessContrast, hueSaturation, sepia } from "./effects/colorGrading";
+import {
+    brightnessContrast,
+    createColorGradingUniforms,
+    hueSaturation,
+    sepia
+} from "./effects/colorGrading";
 import { colorGradingLut, ColorGradingLutController } from "./effects/colorGradingLUT";
 import {
     type IFogLightUniforms,
@@ -70,7 +76,7 @@ import {
 } from "./effects/fogLight";
 import { outline } from "./effects/outline";
 import { type SSRNode, ssr } from "./effects/ssr";
-import { vignette } from "./effects/vignette";
+import { createVignetteUniforms, vignette } from "./effects/vignette";
 import {
     type TranslucentLayerEffect,
     OUTLINE_LAYER_BIT,
@@ -234,6 +240,16 @@ export class ViewRenderManager implements IViewRenderManager {
     onNeedsRender?: () => void;
     private taaNode?: TemporalAntialiasNode;
     private ssrNode?: SSRNode;
+    /**
+     * Bloom pass of the CURRENT graph build. The node itself is rebuilt with
+     * the graph, but strength/radius/threshold are uniforms — the handle lets
+     * `applyUniformParams` push theme edits without a rebuild (a rebuilt
+     * graph would dispose the pipeline and recompile every shader).
+     */
+    private m_bloomNode?: BloomNode;
+    /** Uniform slots reused across graph rebuilds (see applyUniformParams). */
+    private readonly m_vignetteUniforms = createVignetteUniforms();
+    private readonly m_colorGradingUniforms = createColorGradingUniforms();
     private _smaaNode?: ReturnType<typeof smaa>;
     private readonly scene?: THREE.Scene;
     private camera?: THREE.Camera;
@@ -489,6 +505,11 @@ export class ViewRenderManager implements IViewRenderManager {
             this.ssrNode = ssr(colorNode, depthNode, ssrDataNode, camera);
             this.ssrNode.setConfig(this.config.ssr);
             outputNode = this.ssrNode;
+        } else if (this.ssrNode != null) {
+            // Drop the stale handle: its params are uniform-fed (see
+            // applyUniformParams), no consumer may touch a disposed node.
+            this.ssrNode.dispose();
+            this.ssrNode = undefined;
         }
 
         // Clouds first (matches reference EffectComposer order: Clouds before
@@ -572,13 +593,18 @@ export class ViewRenderManager implements IViewRenderManager {
             const bloomIntensityPass = this.passNode.getTextureNode("bloomIntensity");
             const bloomInput =
                 bloomIntensityPass != null ? colorNode.mul(bloomIntensityPass) : colorNode;
-            const bloomPass = bloom(
+            // Keep the handle: strength/radius/threshold are uniforms, so
+            // subsequent theme edits are applied in place by
+            // `applyUniformParams` instead of rebuilding the graph.
+            this.m_bloomNode = bloom(
                 bloomInput,
                 this.config.bloom.intensity,
                 this.config.bloom.radius,
                 this.config.bloom.threshold
             );
-            outputNode = outputNode.add(bloomPass);
+            outputNode = outputNode.add(this.m_bloomNode);
+        } else {
+            this.m_bloomNode = undefined;
         }
 
         let finalNode = this.applyToneMapping(outputNode);
@@ -609,28 +635,16 @@ export class ViewRenderManager implements IViewRenderManager {
             );
         }
         if (this.config.vignette.enabled) {
-            finalNode = vignette(
-                finalNode,
-                this.config.vignette.offset,
-                this.config.vignette.darkness
-            );
+            finalNode = vignette(finalNode, this.m_vignetteUniforms);
         }
         if (this.config.brightnessContrast.enabled) {
-            finalNode = brightnessContrast(
-                finalNode,
-                this.config.brightnessContrast.brightness,
-                this.config.brightnessContrast.contrast
-            );
+            finalNode = brightnessContrast(finalNode, this.m_colorGradingUniforms);
         }
         if (this.config.hueSaturation.enabled) {
-            finalNode = hueSaturation(
-                finalNode,
-                this.config.hueSaturation.hue,
-                this.config.hueSaturation.saturation
-            );
+            finalNode = hueSaturation(finalNode, this.m_colorGradingUniforms);
         }
         if (this.config.sepia.enabled) {
-            finalNode = sepia(finalNode, this.config.sepia.amount);
+            finalNode = sepia(finalNode, this.m_colorGradingUniforms);
         }
 
         // 3D LUT film grading — applied AFTER all analytic grading so the LUT
@@ -839,6 +853,7 @@ export class ViewRenderManager implements IViewRenderManager {
         this.aerialNode = undefined;
         this.m_cloudNode = undefined;
         this.taaNode = undefined;
+        this.m_bloomNode = undefined;
         this.ssrNode?.dispose();
         this.ssrNode = undefined;
         this.m_lutController?.dispose();
@@ -851,11 +866,55 @@ export class ViewRenderManager implements IViewRenderManager {
     }
 
     setLensFlareConfig(config: ILensFlareConfig): void {
+        const wasEnabled = this.config.lensFlare.enabled;
         this.config.lensFlare = config;
         if (this.lensFlareNode != null) {
+            // Intensity fields are uniforms on the persistent flare node.
             this.lensFlareNode.setConfig(config);
         }
-        this.needsUpdate = true;
+        // Only the arm state is baked into the graph (the flare node is
+        // added/removed by `enabled`); intensity edits must not recompile.
+        if (config.enabled !== wasEnabled) {
+            this.needsUpdate = true;
+        }
+    }
+
+    /**
+     * Push uniform-fed post-effect parameters into the live graph. These
+     * fields are deliberately excluded from the rebuild fingerprint in
+     * `MapRenderingManager.syncConfigToViewRenderManager`: changing them never
+     * alters the node structure, so a theme edit must not dispose the
+     * pipeline and recompile every shader in the chain.
+     *
+     * Safe to call unconditionally, including while a rebuild is pending (the
+     * rebuilt graph re-reads the same config; writing the old nodes is a
+     * harmless no-op for the frame that is about to be replaced).
+     */
+    applyUniformParams(): void {
+        if (this.m_bloomNode != null) {
+            this.m_bloomNode.strength.value = this.config.bloom.intensity;
+            this.m_bloomNode.radius.value = this.config.bloom.radius;
+            this.m_bloomNode.threshold.value = this.config.bloom.threshold;
+        }
+
+        this.m_vignetteUniforms.offset.value = this.config.vignette.offset;
+        this.m_vignetteUniforms.darkness.value = this.config.vignette.darkness;
+
+        // `hueSaturation` has no hue term in the shader (only saturation is
+        // applied), so there is nothing to write for `config.hueSaturation.hue`.
+        this.m_colorGradingUniforms.brightness.value = this.config.brightnessContrast.brightness;
+        this.m_colorGradingUniforms.contrast.value = this.config.brightnessContrast.contrast;
+        this.m_colorGradingUniforms.saturation.value = this.config.hueSaturation.saturation;
+        this.m_colorGradingUniforms.sepiaAmount.value = this.config.sepia.amount;
+
+        if (this.m_lutController != null) {
+            // Persistent controller uniform (see colorGradingLut's blend).
+            this.m_lutController.opacity.value = this.config.colorGradingLUT.opacity;
+        }
+
+        // Recreated per rebuild, all params are uniforms (resolution changes
+        // are applied by its own updateBefore sizing).
+        this.ssrNode?.setConfig(this.config.ssr);
     }
 
     getColorTexture(): THREE.Texture | null {

@@ -213,6 +213,14 @@ export interface IViewRenderManager {
      */
     setLutUrl(url: string): void;
     setLensFlareConfig(config: ILensFlareConfig): void;
+    /**
+     * Writes the uniform-fed post-effect parameters (bloom strength/radius/
+     * threshold, vignette, analytic grading, LUT opacity, SSR config) into the
+     * live graph without rebuilding it. Called by
+     * `MapRenderingManager.syncConfigToViewRenderManager` after the config
+     * copy; these fields are excluded from its rebuild fingerprint.
+     */
+    applyUniformParams(): void;
     getColorTexture(): THREE.Texture | null;
     getDepthTexture(): THREE.Texture | null;
     readDepthAsync(ndc: THREE.Vector2 | THREE.Vector3): Promise<number | null>;

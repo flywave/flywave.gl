@@ -338,23 +338,29 @@ export class MapRenderingManager implements IMapRenderingManager {
         // at build time. A re-sync with identical values must stay
         // rebuild-free — a whole-chain dispose+recompile is a visible stall —
         // so `needsUpdate` is only set when this fingerprint actually
-        // changes. Uniform-fed fields (fogLight intensity/density) and the
-        // async-swapped LUT url are excluded on purpose.
+        // changes. Uniform-fed fields (bloom strength/radius/threshold,
+        // vignette offset/darkness, brightness/contrast/hue-saturation/sepia
+        // amounts, LUT opacity, SSR params, fogLight intensity/density) and
+        // the async-swapped LUT url are excluded on purpose;
+        // `vrm.applyUniformParams()` writes them into the live graph instead.
         const signature = () => {
             const c = vrm.config;
             return JSON.stringify([
                 c.antialiasing,
                 c.taa.enabled,
-                c.bloom,
+                c.bloom.enabled,
                 c.outline,
-                c.vignette,
-                c.brightnessContrast,
-                c.hueSaturation,
-                c.sepia,
+                c.vignette.enabled,
+                c.brightnessContrast.enabled,
+                c.hueSaturation.enabled,
+                c.sepia.enabled,
                 c.colorGradingLUT.enabled,
-                c.colorGradingLUT.opacity,
+                // opacity 0 means "LUT pass not in the graph" (the builder
+                // skips it), so crossing 0/1 is structural; the value itself
+                // is a uniform (written by applyUniformParams).
+                c.colorGradingLUT.opacity > 0,
                 c.fogLight.enabled,
-                c.ssr
+                c.ssr.enabled
             ]);
         };
         const before = signature();
@@ -426,6 +432,11 @@ export class MapRenderingManager implements IMapRenderingManager {
         if (signature() !== before) {
             vrm.needsUpdate = true;
         }
+        // The copied params that are NOT in the fingerprint never changed the
+        // graph, so they can be pushed into the live nodes unconditionally —
+        // including when a rebuild is already pending (the rebuilt graph
+        // re-reads the same config).
+        vrm.applyUniformParams();
     }
 
     syncPostEffectsToVRM(): void {

@@ -193,6 +193,20 @@ mapView.removeFogLight(def); // 同一对象身份
 2. **节点图重建很贵**：`needsUpdate` → 整条 pipeline dispose + 重建 + 着色器
    重编译。连续调参要先 diff 再置位（参考 `AtmosphereSystem.applyAtmosphereEnabled`
    的 `vrmChanged` diff 模式、cloud-mapview 示例的 "apply once until it sticks"）。
+   **重建指纹 + uniform 热更新**（2026-11-13）：
+   `MapRenderingManager.syncConfigToViewRenderManager` 的 `signature()` 只包含
+   build 期结构性字段（各 effect 的 `enabled`、`outline` 全部字段、
+   `colorGradingLUT.opacity > 0`）；强度/半径/阈值/颜色参数是 uniform-fed，
+   由 `vrm.applyUniformParams()` 写进现存节点，**不置 `needsUpdate`**：
+   bloom（`m_bloomNode.strength/radius/threshold`）、vignette、brightness/
+   contrast、hueSaturation(仅 saturation，hue 在 shader 里无项)、sepia、
+   LUT opacity、SSR 全部参数、fogLight intensity/density、lensFlare 各强度
+   （`setLensFlareConfig` 只在 `enabled` 变化时重建）。
+   实测（fx-post-processing，CDP 数 `device.createRenderPipeline`）：
+   bloom 强度/半径/阈值改 20 次 = **0 新增管线 / 0 新增 shader module**；
+   模拟旧路径（每次改值置 `needsUpdate`）10 次 = **+10 管线 / +20 shader
+   module**。新增 effect 时照此分类：值进 `applyUniformParams`，结构进
+   `signature()`，两者必须成对（漏写回 = 参数静默失效，漏窄化 = 白重建）。
 3. **相机是 RTE 相机**：新 pass 里 `camera.position` 恒为 0，需要 geo 位置走
    `mapView.camera` 或 pickDepth 反投影（铁律 1）。
 4. **跨重建的有状态节点**：cloudNode/lensFlareNode 跨 buildNodeGraph 复用
