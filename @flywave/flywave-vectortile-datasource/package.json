@@ -1,70 +1,82 @@
 {
-    "name": "@flywave/flywave-vectortile-datasource",
-    "version": "0.0.1",
-    "description": "Vector Tile Data Source for flywave.gl",
-    "main": "lib/src/index.js",
-    "typings": "lib/src/index",
-    "exports": {
-        ".": {
-            "import": "./lib/src/index.js",
-            "require": "./lib/src/index.js",
-            "types": "./lib/src/index.d.ts"
-        },
-        "./index-worker": {
-            "import": "./lib/src/index-worker.js",
-            "require": "./lib/src/index-worker.js",
-            "types": "./lib/src/index-worker.d.ts"
-        },
-        "./*": {
-            "import": "./lib/src/*",
-            "require": "./lib/src/*",
-            "types": "./lib/src/*.d.ts"
-        },
-        "./package.json": "./package.json"
+  "name": "@flywave/flywave-vectortile-datasource",
+  "version": "0.0.1",
+  "description": "Vector Tile Data Source for flywave.gl",
+  "main": "lib/src/index.js",
+  "typings": "lib/src/index",
+  "exports": {
+    ".": {
+      "import": "./lib/src/index.js",
+      "require": "./lib/src/index.js",
+      "types": "./lib/src/index.d.ts"
     },
-    "directories": {
-        "test": "test"
+    "./index-worker": {
+      "import": "./lib/src/index-worker.js",
+      "require": "./lib/src/index-worker.js",
+      "types": "./lib/src/index-worker.d.ts"
     },
-    "scripts": {
-        "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
-        "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/OmvTest.js",
-        "gen-decoder": "pbjs -t static-module -w commonjs --no-encode --no-verify --no-create src/adapters/omv/proto/vector_tile.proto -o src/adapters/omv/proto/vector_tile.js && pbts src/adapters/omv/proto/vector_tile.js -o src/adapters/omv/proto/vector_tile.d.ts",
-        "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+    "./*": {
+      "import": "./lib/src/*",
+      "require": "./lib/src/*",
+      "types": "./lib/src/*.d.ts"
     },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/flywave/flywave.gl.git",
-        "directory": "@flywave/flywave-vectortile-datasource"
-    },
-    "author": {
-        "name": "flywave.gl contributors",
-        "url": "https://flywave.net"
-    },
-    "license": "Apache-2.0",
-    "dependencies": {
-        "earcut": "catalog:",
-        "long": "catalog:",
-        "protobufjs": "catalog:",
-        "chai-as-promised": "catalog:",
-        "@types/chai-as-promised": "catalog:"
-    },
-    "devDependencies": {
-        "@flywave/flywave-test-utils": "workspace:*",
-        "@types/chai": "catalog:",
-        "@types/earcut": "catalog:",
-        "@types/long": "catalog:",
-        "@types/mocha": "catalog:",
-        "@types/node": "catalog:",
-        "@types/sinon": "catalog:",
-        "@types/three": "catalog:",
-        "@turf/geojson-rbush": "catalog:",
-        "chai": "catalog:",
-        "copyfiles": "catalog:",
-        "cross-env": "catalog:",
-        "mocha": "catalog:",
-        "sinon": "catalog:",
-        "source-map-support": "catalog:",
-        "typescript": "catalog:"
-    },
-    "private": true
+    "./package.json": "./package.json"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "build": "cross-env tsc --build $EXTRA_TSC_ARGS",
+    "test": "cross-env mocha --require source-map-support/register $EXTRA_MOCHA_ARGS ./test/OmvTest.js",
+    "gen-decoder": "pbjs -t static-module -w commonjs --no-encode --no-verify --no-create src/adapters/omv/proto/vector_tile.proto -o src/adapters/omv/proto/vector_tile.js && pbts src/adapters/omv/proto/vector_tile.js -o src/adapters/omv/proto/vector_tile.d.ts",
+    "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS --force"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/flywave/flywave.gl.git",
+    "directory": "@flywave/flywave-vectortile-datasource"
+  },
+  "author": {
+    "name": "flywave.gl contributors",
+    "url": "https://flywave.net"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "earcut": "catalog:",
+    "long": "catalog:",
+    "protobufjs": "catalog:",
+    "chai-as-promised": "catalog:",
+    "@types/chai-as-promised": "catalog:",
+    "@flywave/flywave-datasource-protocol": "workspace:*",
+    "@flywave/flywave-fetch": "workspace:*",
+    "@flywave/flywave-geoutils": "workspace:*",
+    "@flywave/flywave-mapview": "workspace:*",
+    "@flywave/flywave-mapview-decoder": "workspace:*",
+    "@flywave/flywave-text-canvas": "workspace:*",
+    "@flywave/flywave-transfer-manager": "workspace:*",
+    "@flywave/flywave-utils": "workspace:*",
+    "@flywave/flywave-geometry": "workspace:*",
+    "@flywave/flywave-lines": "workspace:*",
+    "@flywave/flywave-materials": "workspace:*",
+    "@flywave/flywave-test-utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@flywave/flywave-test-utils": "workspace:*",
+    "@types/chai": "catalog:",
+    "@types/earcut": "catalog:",
+    "@types/long": "catalog:",
+    "@types/mocha": "catalog:",
+    "@types/node": "catalog:",
+    "@types/sinon": "catalog:",
+    "@types/three": "catalog:",
+    "@turf/geojson-rbush": "catalog:",
+    "chai": "catalog:",
+    "copyfiles": "catalog:",
+    "cross-env": "catalog:",
+    "mocha": "catalog:",
+    "sinon": "catalog:",
+    "source-map-support": "catalog:",
+    "typescript": "catalog:"
+  },
+  "private": true
 }
