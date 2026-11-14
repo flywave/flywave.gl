@@ -11,6 +11,7 @@
  */
 
 const path = require("path");
+const fs = require("fs");
 const webpack = require("webpack");
 
 const ROOT = __dirname;
@@ -18,6 +19,33 @@ const TSLOADER = path.join(
     ROOT,
     "node_modules/.pnpm/ts-loader@9.5.4_typescript@5.8.2_webpack@5.104.1/node_modules"
 );
+
+// 测试源码 import 的同仓包大多没有在各自 package.json 里声明（tsc 靠各包
+// tsconfig 的 paths 才能解析），webpack 不能依赖 node_modules 链接，否则
+// `Module not found: '@flywave/flywave-geoutils'` 会让整个套件启动即红。
+// 与 3dtiles node 测试链一致：所有工作区包显式 alias 到 src，保证 karma
+// 永远编译当前源码而不是陈旧 lib。
+const WORKSPACE_ALIASES = (() => {
+    const aliases = {};
+    const packagesDir = path.join(ROOT, "@flywave");
+    for (const name of fs.readdirSync(packagesDir)) {
+        const pkgDir = path.join(packagesDir, name);
+        const srcDir = path.join(pkgDir, "src");
+        // flywave-test-utils 有专门的 web 入口 alias（见下方），跳过避免歧义
+        if (name === "flywave-test-utils") continue;
+        if (!fs.existsSync(path.join(pkgDir, "package.json"))) continue;
+        if (fs.existsSync(srcDir)) {
+            aliases[`@flywave/${name}`] = srcDir;
+        } else {
+            // 少数包（如 flywave-fetch）入口在包根：浏览器侧优先 *.web.ts
+            const webEntry = path.join(pkgDir, "index.web.ts");
+            const rootEntry = path.join(pkgDir, "index.ts");
+            if (fs.existsSync(webEntry)) aliases[`@flywave/${name}$`] = webEntry;
+            else if (fs.existsSync(rootEntry)) aliases[`@flywave/${name}$`] = rootEntry;
+        }
+    }
+    return aliases;
+})();
 
 // karma 只收集各包 test/ 下的 *Test.ts（HERE 传统）与 *.test.ts（3dtiles 新链）。
 // 根 test/ 的 ImportTest/LicenseHeaderTest/performance/rendering 走各自链路，不入 karma。
@@ -112,6 +140,7 @@ module.exports = {
                     extensions: [".ts", ".js"],
                     fallback: { path: false, fs: false, querystring: false },
                     alias: {
+                        ...WORKSPACE_ALIASES,
                         // 测试基建用 web 变体（loadTestResource 走 fetch 而非 node fs）
                         "@flywave/flywave-test-utils$": path.join(
                             ROOT,

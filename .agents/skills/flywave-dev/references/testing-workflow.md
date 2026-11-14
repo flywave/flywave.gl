@@ -73,6 +73,14 @@ atmosphere 零 @flywave 运行时依赖，webpack 无需跨包 alias。
   served patterns（`test/resources/`、`resources/`、`theme.schema.json`），
   `loadTestResource`（web 变体）经 `/base/<包名>/<路径>` fetch。
   `@flywave/flywave-test-utils` alias 到 `src/index.web.ts`。
+- **坑 0（2026-11-13 修）**：测试源码 import 的同仓包大多没在各自
+  `package.json` 里声明（tsc 靠各包 tsconfig 的 `paths` 解析），webpack
+  默认走 node_modules 链接会成片报 `Module not found: '@flywave/flywave-geoutils'`
+  让套件启动即红。`karma.options.js` 现在把 `@flywave/*` 全量 alias 到各包
+  `src`（入口在包根的包如 `flywave-fetch` 用 `$` 精确 alias 到
+  `index.web.ts`），与 3dtiles node 链一致，保证 bundle 的是当前源码而非
+  陈旧 `lib/`。全量套件基线（2026-11-13）：2143 收集 / 2100 绿 / 1 已知红
+  （TextElementsRenderer）+ 5 skipped。
 - **坑 1**：必须在仓库根目录跑 karma——从包目录跑会拿到空默认配置
   （files/browsers 全空、launcher 不启动、日志只有 "No captured browser"）。
 - **坑 2**：文件顶层的 uncaught（如模块加载即崩的重集成测试）会杀死
