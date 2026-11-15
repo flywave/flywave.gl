@@ -4,6 +4,7 @@
 // AtmosphereLUTNode extends Node and uses WebGPU-specific lifecycle hooks
 // (updateBeforeType, version, dispatchEvent) not fully typed in @types/three@0.184.
 
+import { float } from "three/tsl";
 import {
     type NodeBuilder,
     type NodeFrame,
@@ -105,6 +106,15 @@ export class AtmosphereLUTNode extends Node {
 
         this.parameters = parameters;
         this.textureType = textureType;
+
+        // LUTs have no mipmaps. Sample them at an explicit level 0 so the
+        // raymarch loops never emit implicit-gradient texture reads: on
+        // WebGL2/ANGLE D3D11 those make the shader pathological (45-73 ms per
+        // frame on desktop GPUs, upstream issue #115). Explicit level sampling
+        // is pixel-identical on the other backends.
+        for (const node of Object.values(this._textureNodes)) {
+            node.levelNode = float(0);
+        }
     }
 
     getTextureNode(name: AtmosphereLUTTextureName): TextureNode;
@@ -164,6 +174,20 @@ export class AtmosphereLUTNode extends Node {
         }
     }
 
+    /**
+     * Recomputes the LUTs outside the node graph and marks the current version
+     * as computed.
+     *
+     * Used by the host when it replaces the atmosphere parameters: the new
+     * tables must be ready before the rebuilt graph samples them, otherwise an
+     * on-demand map can render one frame against empty tables and then stop
+     * (black sky until something else triggers another frame).
+     */
+    async refreshTextures(renderer: Renderer): Promise<void> {
+        await this.updateTextures(renderer);
+        this.currentVersion = this.version;
+    }
+
     updateBefore({ renderer }: NodeFrame): void {
         if (renderer == null || this.version === this.currentVersion) {
             return;
@@ -176,34 +200,45 @@ export class AtmosphereLUTNode extends Node {
         });
     }
 
-    setup(builder: NodeBuilder): unknown {
-        if (this.textures == null) {
-            this.textures = isWebGPU(builder)
-                ? new AtmosphereLUTTexturesWebGPU()
-                : new AtmosphereLUTTexturesWebGL();
-
-            const {
-                transmittance,
-                irradiance,
-                multipleScattering,
-                scattering,
-                singleMieScattering,
-                higherOrderScattering
-            } = this._textureNodes;
-            transmittance.value = this.textures.get("transmittance");
-            multipleScattering.value = this.textures.get("multipleScattering");
-            scattering.value = this.textures.get("scattering");
-            singleMieScattering.value = this.textures.get("singleMieScattering");
-            higherOrderScattering.value = this.textures.get("higherOrderScattering");
-            irradiance.value = this.textures.get("irradiance");
-
-            const textureType = isFloatLinearSupported(builder.renderer)
-                ? this.textureType ?? FloatType
-                : HalfFloatType;
-            this.parameters.update();
-            this.textures.setup(this.parameters, textureType);
+    /**
+     * Creates the LUT textures and allocates their render targets.
+     *
+     * This is idempotent and does not require a node builder.
+     */
+    initialize(renderer: Renderer): void {
+        if (this.textures != null) {
+            return;
         }
 
+        this.textures = isWebGPU(renderer)
+            ? new AtmosphereLUTTexturesWebGPU()
+            : new AtmosphereLUTTexturesWebGL();
+
+        const {
+            transmittance,
+            irradiance,
+            multipleScattering,
+            scattering,
+            singleMieScattering,
+            higherOrderScattering
+        } = this._textureNodes;
+        transmittance.value = this.textures.get("transmittance");
+        multipleScattering.value = this.textures.get("multipleScattering");
+        scattering.value = this.textures.get("scattering");
+        singleMieScattering.value = this.textures.get("singleMieScattering");
+        higherOrderScattering.value = this.textures.get("higherOrderScattering");
+        irradiance.value = this.textures.get("irradiance");
+
+        const textureType = isFloatLinearSupported(renderer)
+            ? this.textureType ?? FloatType
+            : HalfFloatType;
+        this.parameters.update();
+        this.textures.setup(this.parameters, textureType);
+        this.textures.initRenderTargets(renderer);
+    }
+
+    setup(builder: NodeBuilder): unknown {
+        this.initialize(builder.renderer);
         return super.setup(builder);
     }
 

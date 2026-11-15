@@ -40,5 +40,17 @@ export abstract class AtmosphereLUTTextures {
         this.textureType = textureType;
     }
 
+    /**
+     * Allocates the backing GPU textures before any material samples them.
+     *
+     * The WebGL path defers LUT generation to time-sliced passes on the first
+     * frame, while scene materials may sample the tables during the very same
+     * frame. Allocating there first would recreate (and delete) the texture
+     * after it has already been bound, which WebGL reports as
+     * "bindTexture: attempt to use a deleted object". The WebGPU path uses
+     * compute passes and has nothing to preallocate, so this is a no-op there.
+     */
+    initRenderTargets(_renderer: Renderer): void {}
+
     dispose(): void {}
 }
