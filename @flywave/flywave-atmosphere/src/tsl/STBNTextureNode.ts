@@ -1,7 +1,7 @@
 // @ts-nocheck
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { float, Fn, nodeImmutable, screenCoordinate, uniform, vec3 } from "three/tsl";
+import { Fn, nodeImmutable, screenCoordinate, uniform, vec3 } from "three/tsl";
 import {
     type NodeBuilder,
     Data3DTexture,
@@ -34,10 +34,6 @@ export class STBNTextureNode extends Texture3DNode {
 
     constructor() {
         super(emptyTexture3D);
-        // The STBN texture has no mipmaps. Sample it at an explicit level 0 to
-        // avoid implicit-gradient texture reads inside raymarch loops, which
-        // are pathologically slow on WebGL2/ANGLE D3D11 (upstream #115).
-        this.levelNode = float(0);
     }
 
     override customCacheKey(): number {

@@ -83,8 +83,6 @@ export class AtmosphereSystem {
     private m_lastSunTimeUpdateMs: number = 0;
     private readonly m_celestialDirections: EarthCelestialDirections;
     private m_atmosphereContext?: AtmosphereContext;
-    /** Guards async LUT rebuilds against superseded parameter changes. */
-    private m_atmosphereRebuildGeneration = 0;
     private m_skyNode?: SkyNode;
     private m_atmosphereLight?: AtmosphereLight;
     private m_nightAmbientLight?: THREE.HemisphereLight;
@@ -146,11 +144,6 @@ export class AtmosphereSystem {
     }
 
     private buildAtmosphereContext(): void {
-        this.m_atmosphereContext = this.createAtmosphereContext();
-        registerAtmosphereContext(this.m_atmosphereContext);
-    }
-
-    private createAtmosphereContext(): AtmosphereContext {
         const baseParams = new AtmosphereParameters();
         const o = this.m_atmosphereOverrides;
 
@@ -162,75 +155,32 @@ export class AtmosphereSystem {
         if (o.luminanceScale > 0) baseParams.luminanceScale = o.luminanceScale;
 
         const lutNode = new AtmosphereLUTNode(baseParams);
-        const context = new AtmosphereContext(baseParams, lutNode);
-        context.camera = this.mapView.camera;
-        context._overrideCameraPositionECEF = this.mapView.camera.position;
-        context.showGround = this.m_showGround;
-        context.raymarchScattering = this.m_raymarchScattering;
-        context.accurateShadowScattering = this.m_accurateShadowScattering;
-        context.correctAltitude = this.m_correctAltitude;
-        context.constrainCamera = this.m_constrainCamera;
-        return context;
+        this.m_atmosphereContext = new AtmosphereContext(baseParams, lutNode);
+        this.m_atmosphereContext.camera = this.mapView.camera;
+        this.m_atmosphereContext._overrideCameraPositionECEF = this.mapView.camera.position;
+        this.m_atmosphereContext.showGround = this.m_showGround;
+        this.m_atmosphereContext.raymarchScattering = this.m_raymarchScattering;
+        this.m_atmosphereContext.accurateShadowScattering = this.m_accurateShadowScattering;
+        this.m_atmosphereContext.correctAltitude = this.m_correctAltitude;
+        this.m_atmosphereContext.constrainCamera = this.m_constrainCamera;
+        registerAtmosphereContext(this.m_atmosphereContext);
     }
 
     private rebuildAtmosphere(): void {
-        const previous = this.m_atmosphereContext;
-        if (!previous) return;
+        if (!this.m_atmosphereContext) return;
+        this.m_atmosphereContext.dispose();
+        this.buildAtmosphereContext();
 
-        // Build the replacement without publishing it yet: the old graph keeps
-        // rendering the old (still alive) tables while the new LUTs are
-        // computed. Publishing first would let an on-demand frame sample
-        // uninitialized tables; since the map stops rendering afterwards, that
-        // black sky would persist until an unrelated frame triggered a redraw.
-        const next = this.createAtmosphereContext();
-        const generation = ++this.m_atmosphereRebuildGeneration;
         const renderer = this.mapView.renderer as Renderer & {
             contextNode?: { value: Record<string, unknown> };
-            _initialized?: boolean;
         };
+        if (renderer?.contextNode?.value) {
+            renderer.contextNode.value[AtmosphereSystem.CONTEXT_KEY] = () =>
+                this.m_atmosphereContext;
+        }
+
         const vrm = this.mapView?.mapRenderingManager?.viewRenderManager;
-
-        const finalize = (): void => {
-            if (generation !== this.m_atmosphereRebuildGeneration) {
-                // A newer parameter change superseded this rebuild.
-                next.dispose();
-                return;
-            }
-            this.m_atmosphereContext = next;
-            registerAtmosphereContext(next);
-            previous.dispose();
-
-            if (renderer?.contextNode?.value) {
-                renderer.contextNode.value[AtmosphereSystem.CONTEXT_KEY] = () =>
-                    this.m_atmosphereContext;
-            }
-            if (vrm) {
-                vrm.needsUpdate = true;
-                this.mapView.update();
-            }
-        };
-
-        if (vrm == null || renderer?._initialized === false) {
-            finalize();
-            return;
-        }
-
-        try {
-            next.lutNode.initialize(renderer);
-        } catch (error) {
-            // eslint-disable-next-line no-console
-            console.error("AtmosphereSystem: failed to initialize the LUT textures", error);
-            finalize();
-            return;
-        }
-
-        void next.lutNode
-            .refreshTextures(renderer)
-            .catch((error: unknown) => {
-                // eslint-disable-next-line no-console
-                console.error("AtmosphereSystem: failed to rebuild the LUT textures", error);
-            })
-            .finally(finalize);
+        if (vrm) vrm.needsUpdate = true;
     }
 
     private init2(): void {
