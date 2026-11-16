@@ -92,6 +92,10 @@ export async function loadExplicitBitstream(
         return;
     }
 
+    if (!subtree.bufferViews || !subtree.buffers) {
+        throw new Error("Subtree bufferViews or buffers are missing");
+    }
+
     const bufferView = subtree.bufferViews[bufferViewIndex];
     const buffer = subtree.buffers[bufferView.buffer];
 
@@ -103,9 +107,11 @@ export async function loadExplicitBitstream(
         throw new Error("fetch is not provided");
     }
 
-    // External bitstream loading
+    // External or embedded (data URI) bitstream loading
     if (buffer.uri) {
-        const bufferUri = `${context?.baseUrl || ""}/${buffer.uri}`;
+        const bufferUri = /^data:/i.test(buffer.uri)
+            ? buffer.uri
+            : `${context?.baseUrl || ""}/${buffer.uri}`;
         const response = await context.fetch(bufferUri);
         const data = await response.arrayBuffer();
         availabilityObject.explicitBitstream = new Uint8Array(

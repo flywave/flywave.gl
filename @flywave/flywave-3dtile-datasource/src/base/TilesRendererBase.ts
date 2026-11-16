@@ -13,7 +13,7 @@ import {
     TILE_REFINEMENT
 } from "../loader/types";
 import { getUrlExtension } from "../utilities/urlExtension";
-import { type LoadState, FAILED, LOADED, LOADING, PARSING, UNLOADED } from "./constants";
+import { type LoadState, FAILED, LOADED, LOADING, PARSING, QUEUED, UNLOADED } from "./constants";
 import { expandSubtree } from "./ResloveSubtree";
 import { type ITile, type SubTreeTile, type Tile, type TileInternal, TileSet } from "./Tile";
 import {
@@ -43,6 +43,16 @@ interface Stats {
      * Number of tiles currently being parsed
      */
     parsing: number;
+
+    /**
+     * Number of tiles waiting in the download queue
+     */
+    queued: number;
+
+    /**
+     * Number of tiles the last update refused to queue because the cache was full
+     */
+    refused: number;
 
     /**
      * Number of tiles currently being downloaded
@@ -120,6 +130,17 @@ export class TilesRendererBase {
     private readonly queuedTiles: ITile[] = [];
 
     /**
+     * Set of tiles already queued for download during the current update
+     */
+    private readonly queuedTileSet = new Set<ITile>();
+
+    /**
+     * Tiles that have been added to the cache and are waiting for, downloading, or parsing
+     * their content. Used to drop queued downloads that are no longer needed.
+     */
+    private readonly loadingTiles = new Set<ITile>();
+
+    /**
      * Set of tiles cached since load completion
      */
     private readonly cachedSinceLoadComplete = new Set<ITile>();
@@ -188,6 +209,8 @@ export class TilesRendererBase {
         inCacheSinceLoad: 0,
         inCache: 0,
         parsing: 0,
+        queued: 0,
+        refused: 0,
         downloading: 0,
         failed: 0,
         inFrustum: 0,
@@ -233,7 +256,7 @@ export class TilesRendererBase {
      */
     get loadProgress(): number {
         const { stats, isLoading } = this;
-        const loading = stats.downloading + stats.parsing;
+        const loading = stats.queued + stats.downloading + stats.parsing;
         const total = stats.inCacheSinceLoad + (isLoading ? 1 : 0);
         return total === 0 ? 1.0 : 1.0 - loading / total;
     }
@@ -315,10 +338,38 @@ export class TilesRendererBase {
      * @param tile The tile to queue
      */
     queueTileForDownload(tile: TileInternal): void {
-        if (tile.__loadingState !== UNLOADED) {
+        if (tile.__loadingState !== UNLOADED || this.queuedTileSet.has(tile)) {
             return;
         }
+
+        this.queuedTileSet.add(tile);
+
+        if (this.lruCache.isFull()) {
+            this.stats.refused++;
+            return;
+        }
+
         this.queuedTiles.push(tile);
+    }
+
+    /**
+     * Removes tiles that are still waiting in the download queue but are no longer used.
+     * Tiles that already started downloading or parsing are left alone so partially
+     * downloaded content is not discarded.
+     */
+    private removeUnusedPendingTiles(): void {
+        const { lruCache, loadingTiles } = this;
+        const toRemove: ITile[] = [];
+
+        for (const tile of loadingTiles) {
+            if (!lruCache.isUsed(tile) && (tile as TileInternal).__loadingState === QUEUED) {
+                toRemove.push(tile);
+            }
+        }
+
+        for (let i = 0, l = toRemove.length; i < l; i++) {
+            lruCache.remove(toRemove[i]);
+        }
     }
 
     /**
@@ -385,6 +436,7 @@ export class TilesRendererBase {
         stats.used = 0;
         stats.active = 0;
         stats.visible = 0;
+        stats.refused = 0;
         this.frameCount++;
 
         // Clear used tiles from previous frame
@@ -399,6 +451,9 @@ export class TilesRendererBase {
 
         this.updateTileShadows(root as TileInternal);
 
+        // Drop queued downloads that are no longer needed before starting new ones
+        this.removeUnusedPendingTiles();
+
         // Sort and load queued tiles
         const queuedTiles = this.queuedTiles;
         queuedTiles.sort(lruCache.unloadPriorityCallback);
@@ -406,6 +461,7 @@ export class TilesRendererBase {
             this.requestTileContents(queuedTiles[i] as TileInternal);
         }
         queuedTiles.length = 0;
+        this.queuedTileSet.clear();
 
         // Schedule unloading of unused tiles
         lruCache.scheduleUnload();
@@ -487,9 +543,15 @@ export class TilesRendererBase {
             lruCache.remove(toRemove[i]);
         }
 
+        this.loadingTiles.clear();
+        this.queuedTiles.length = 0;
+        this.queuedTileSet.clear();
+
         // Reset statistics
         this.stats = {
             parsing: 0,
+            queued: 0,
+            refused: 0,
             downloading: 0,
             failed: 0,
             inFrustum: 0,
@@ -722,10 +784,9 @@ export class TilesRendererBase {
      */
     private preprocessSubtreeNode(tile: SubTreeTile) {
         if (tile.implicitTiling) {
-            tile.__hasUnrenderableContent = true;
-            tile.__hasRenderableContent = false;
-
-            // Declare some properties
+            // The tileset loader has already expanded the implicit tree, so the tile keeps the
+            // content flags derived from its (level 0) content. Only remember the implicit
+            // coordinates for child derivation and diagnostics.
             tile.__subtreeIdx = 0; // Idx of the tile in its subtree
             tile.__implicitRoot = tile; // Keep this tile as an Implicit Root Tile
 
@@ -835,7 +896,9 @@ export class TilesRendererBase {
      * @returns The preprocessed URL
      */
     private preprocessSubtreeURL(url: string, tile: SubTreeTile) {
-        if (tile && tile.implicitTiling) {
+        // The tileset loader already expands implicit trees (including the root content URI),
+        // so only rewrite content URIs that still contain template placeholders.
+        if (tile && tile.implicitTiling && /\{(level|x|y|z)\}/.test(url)) {
             const implicitUri = tile.implicitTiling.subtrees.uri
                 .replace("{level}", tile.__level.toString())
                 .replace("{x}", tile.__x.toString())
@@ -901,6 +964,11 @@ export class TilesRendererBase {
         const downloadQueue = this.downloadQueue;
         const parseQueue = this.parseQueue;
         const extension = getUrlExtension(uri);
+        // Explicit ".subtree" content is fetched and expanded by the renderer. Implicit tiling
+        // roots are expanded by the tileset loader (normalizeImplicitTileHeaders), so their
+        // (already normalized) content is renderable and must go through the normal path.
+        const isSubtreeContent =
+            extension === "subtree" || !!(tile as SubTreeTile).__subtreeContent;
 
         // Set up abort controller for cancellation
         const controller = new AbortController();
@@ -908,6 +976,7 @@ export class TilesRendererBase {
         const addedSuccessfully = lruCache.add(tile, (t: TileInternal) => {
             // Cleanup when tile is unloaded
             controller.abort();
+            this.loadingTiles.delete(t);
 
             if (isExternalTileSet) {
                 t.children.length = 0;
@@ -923,7 +992,9 @@ export class TilesRendererBase {
                 stats.inCacheSinceLoad--;
             }
 
-            if (t.__loadingState === LOADING) {
+            if (t.__loadingState === QUEUED) {
+                stats.queued--;
+            } else if (t.__loadingState === LOADING) {
                 stats.downloading--;
             } else if (t.__loadingState === PARSING) {
                 stats.parsing--;
@@ -947,8 +1018,9 @@ export class TilesRendererBase {
         this.cachedSinceLoadComplete.add(tile);
         stats.inCacheSinceLoad++;
         stats.inCache++;
-        stats.downloading++;
-        tile.__loadingState = LOADING;
+        stats.queued++;
+        tile.__loadingState = QUEUED;
+        this.loadingTiles.add(tile);
 
         // Start download process
         downloadQueue
@@ -961,21 +1033,23 @@ export class TilesRendererBase {
                         return await Promise.resolve(undefined);
                     }
 
+                    stats.queued--;
+                    stats.downloading++;
+                    tile.__loadingState = LOADING;
+
                     let res: TileSet | Tiles3DTileContent | Subtree | undefined;
-                    if (extension === "json") {
+                    if (isSubtreeContent) {
+                        res = await this.fetchSubtreeTile(uri, {
+                            ...this.fetchOptions,
+                            signal
+                        });
+                    } else if (extension === "json") {
                         res = await this.fetchTileJson(uri, { ...this.fetchOptions, signal });
                     } else {
-                        if (extension === "subtree") {
-                            res = await this.fetchSubtreeTile(uri, {
-                                ...this.fetchOptions,
-                                signal
-                            });
-                        } else {
-                            res = await this.fetchTileContent(uri, {
-                                ...this.fetchOptions,
-                                signal
-                            });
-                        }
+                        res = await this.fetchTileContent(uri, {
+                            ...this.fetchOptions,
+                            signal
+                        });
                     }
                     this.dispatchEvent({ type: "tile-download-start", tile });
                     return res;
@@ -995,7 +1069,12 @@ export class TilesRendererBase {
                         return Promise.resolve();
                     }
 
-                    if (extension === "json" && (content as TileSet).root) {
+                    if (isSubtreeContent) {
+                        // Expand the subtree using the already fetched data instead of
+                        // requesting it a second time.
+                        expandSubtree(tile as SubTreeTile, content as Subtree);
+                        return Promise.resolve();
+                    } else if (extension === "json" && (content as TileSet).root) {
                         this.preprocessTileSet(content as TileSet, uri, tile);
                         tile.children.push((content as TileSet).root as TileInternal);
                         externalTileset = content as TileSet;
@@ -1017,6 +1096,7 @@ export class TilesRendererBase {
                     return;
                 }
 
+                this.loadingTiles.delete(tile);
                 stats.parsing--;
                 tile.__loadingState = LOADED;
                 lruCache.setLoaded(tile, true);
@@ -1056,8 +1136,11 @@ export class TilesRendererBase {
                 if (error.name !== "AbortError") {
                     parseQueue.remove(tile);
                     downloadQueue.remove(tile);
+                    this.loadingTiles.delete(tile);
 
-                    if (tile.__loadingState === PARSING) {
+                    if (tile.__loadingState === QUEUED) {
+                        stats.queued--;
+                    } else if (tile.__loadingState === PARSING) {
                         stats.parsing--;
                     } else if (tile.__loadingState === LOADING) {
                         stats.downloading--;

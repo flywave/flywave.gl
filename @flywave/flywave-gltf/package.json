@@ -39,9 +39,8 @@
   "license": "Apache-2.0",
   "dependencies": {
     "ktx-parse": "^1.1.0",
-    "@spz-loader/core": "^0.3.0",
+    "gaussian-splat-lite": "^1.8.1",
     "@flywave/flywave-draco": "workspace:*",
-    "@flywave/flywave-splats": "workspace:*",
     "@flywave/flywave-utils": "workspace:*"
   },
   "devDependencies": {

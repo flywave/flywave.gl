@@ -10,6 +10,8 @@
   },
   "scripts": {
     "test": "npx webpack --config scripts/webpack.test.cjs && node test-dist/run.cjs",
+    "test:data:download": "node scripts/test-data/download.mjs",
+    "test:data:serve": "node scripts/test-data/serve.mjs",
     "build": "cross-env tsc --build $EXTRA_TSC_ARGS --force",
     "prepare": "cross-env tsc --build $EXTRA_TSC_ARGS"
   },

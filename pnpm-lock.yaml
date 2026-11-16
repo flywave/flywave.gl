@@ -1249,15 +1249,12 @@ importers:
       '@flywave/flywave-draco':
         specifier: workspace:*
         version: link:../flywave-draco
-      '@flywave/flywave-splats':
-        specifier: workspace:*
-        version: link:../flywave-splats
       '@flywave/flywave-utils':
         specifier: workspace:*
         version: link:../flywave-utils
-      '@spz-loader/core':
-        specifier: ^0.3.0
-        version: 0.3.0
+      gaussian-splat-lite:
+        specifier: ^1.8.1
+        version: 1.8.1(three@0.187.0)
       ktx-parse:
         specifier: ^1.1.0
         version: 1.1.0
@@ -1746,64 +1743,6 @@ importers:
       react-dom:
         specifier: '>=16.8.0'
         version: 19.2.4(react@19.2.4)
-
-  '@flywave/flywave-splats':
-    dependencies:
-      '@flywave/flywave-utils':
-        specifier: workspace:*
-        version: link:../flywave-utils
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      '@flywave/flywave-test-utils':
-        specifier: workspace:*
-        version: link:../flywave-test-utils
-      '@types/chai':
-        specifier: 'catalog:'
-        version: 4.3.20
-      '@types/earcut':
-        specifier: 'catalog:'
-        version: 2.1.4
-      '@types/long':
-        specifier: 'catalog:'
-        version: 4.0.2
-      '@types/mocha':
-        specifier: 'catalog:'
-        version: 10.0.10
-      '@types/node':
-        specifier: 'catalog:'
-        version: 16.18.126
-      '@types/sinon':
-        specifier: 'catalog:'
-        version: 9.0.11
-      '@types/three':
-        specifier: 'catalog:'
-        version: 0.187.0
-      chai:
-        specifier: 'catalog:'
-        version: 4.5.0
-      copyfiles:
-        specifier: 'catalog:'
-        version: 2.4.1
-      cross-env:
-        specifier: 'catalog:'
-        version: 7.0.3
-      eslint-plugin-simple-import-sort:
-        specifier: ^12.1.1
-        version: 12.1.1(eslint@8.57.1)
-      mocha:
-        specifier: 'catalog:'
-        version: 11.7.5
-      sinon:
-        specifier: 'catalog:'
-        version: 9.2.4
-      source-map-support:
-        specifier: 'catalog:'
-        version: 0.5.21
-      typescript:
-        specifier: 'catalog:'
-        version: 5.8.2
 
   '@flywave/flywave-terrain-datasource':
     dependencies:
@@ -4777,10 +4716,6 @@ packages:
 
   '@socket.io/component-emitter@3.1.2':
     resolution: {integrity: sha512-9BCxFwvbGg/RsZK9tjXd8s4UcwR0MWeFQ1XEKIQVVvAGJyINdrqKMcTRyLoK8Rse1GjzLV9cwjWV1olXRWEXVA==}
-
-  '@spz-loader/core@0.3.0':
-    resolution: {integrity: sha512-sbStwMHb/MIE29st7rRuMYWqhX1UmLSFzdpyGtUZUXLkFNIuYKblzjQdtiet8bau8sUf21uL1DQ451zuySGmcA==}
-    engines: {node: '>=16', pnpm: '>=8'}
 
   '@svgr/babel-plugin-add-jsx-attribute@8.0.0':
     resolution: {integrity: sha512-b9MIk7yhdS1pMCZM8VeNfUlSKVRhsHZNMl5O9SfaX0l0t5wjdgu4IDzGB8bpnGBBOjGST3rRFVsaaEtI4W6f7g==}
@@ -8111,6 +8046,13 @@ packages:
   gauge@2.7.4:
     resolution: {integrity: sha512-14x4kjc6lkD3ltw589k0NrPD6cCNTD6CWoVUNpB85+DrtONoZn+Rug6xZU5RvSC4+TZPxA5AnBibQYAvZn41Hg==}
     deprecated: This package is no longer supported.
+
+  gaussian-splat-lite@1.8.1:
+    resolution: {integrity: sha512-pQOWTO4ifW45Re9lhi09QcKVubcVEh1UU9y4sKOqWh3Yn/ZPKkbtI7KB7CShnpOm6U0AgLKJZl6E8jFVSj4l1A==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
+    peerDependencies:
+      three: ^0.187.0
 
   generator-function@2.0.1:
     resolution: {integrity: sha512-SFdFmIJi+ybC0vjlHN0ZGVGHc3lgE0DxPAT0djjVg+kjOnSqclqmj0KQ7ykTOLP6YxoqOvuAODGdcHJn+43q3g==}
@@ -16799,8 +16741,6 @@ snapshots:
 
   '@socket.io/component-emitter@3.1.2': {}
 
-  '@spz-loader/core@0.3.0': {}
-
   '@svgr/babel-plugin-add-jsx-attribute@8.0.0(@babel/core@7.28.6)':
     dependencies:
       '@babel/core': 7.28.6
@@ -21121,6 +21061,10 @@ snapshots:
       string-width: 1.0.2
       strip-ansi: 3.0.1
       wide-align: 1.1.5
+
+  gaussian-splat-lite@1.8.1(three@0.187.0):
+    dependencies:
+      three: 0.187.0
 
   generator-function@2.0.1: {}
 

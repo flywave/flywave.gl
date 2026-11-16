@@ -16,7 +16,7 @@ import Tile3DBatchTable from "../loader/classes/Tile3DBatchTable";
 import Tile3DFeatureTable from "../loader/classes/Tile3DFeatureTable";
 import {
     type ImplicitTilingData,
-    type TILE_REFINEMENT,
+    TILE_REFINEMENT,
     type Tiles3DTileContent,
     type Tiles3DTileContentJSON,
     type Tiles3DTileJSONPostprocessed,
@@ -301,6 +301,13 @@ export abstract class TileInternal extends ITile {
     __hasRenderableContent: boolean;
     __hasUnrenderableContent: boolean;
 
+    /**
+     * Whether this tile has to keep refining regardless of the error target because it cannot
+     * display any content itself (external tileset / implicit subtree) or shares the geometric
+     * error of the nearest such ancestor.
+     */
+    __unconditionallyRefine: boolean;
+
     // resource tracking
     __usedLastFrame: boolean;
     declare __used: boolean;
@@ -451,10 +458,21 @@ export class Tile extends TileInternal {
     }
 
     /**
-     * Gets the content metadata for this tile
+     * Gets the content metadata for this tile.
+     *
+     * For tiles using the 3DTILES_multiple_contents extension, the first content is used.
+     * Multiple contents per tile are not rendered yet (the loader keeps a single content URI).
      */
     get content() {
-        return this.tiles3DTileJSONPostprocessed.content;
+        const metadata = this.tiles3DTileJSONPostprocessed;
+        if (metadata.content) {
+            return metadata.content;
+        }
+
+        const contents = (metadata as any).extensions?.["3DTILES_multiple_contents"]?.contents as
+            | Tiles3DTileContentJSON[]
+            | undefined;
+        return contents && contents.length > 0 ? contents[0] : undefined;
     }
 
     /**
@@ -1037,15 +1055,15 @@ export class SubTreeTile extends TileInternal {
     /**
      * Gets the implicit tiling data for this tile
      */
-    get implicitTiling(): ImplicitTilingData {
-        throw new Error("Method not implemented.");
+    get implicitTiling(): ImplicitTilingData | undefined {
+        return (this.__implicitRoot as unknown as Tile | undefined)?.implicitTiling;
     }
 
     /**
      * Gets the transform matrix for this tile
      */
     get transform(): number[] {
-        throw new Error("Method not implemented.");
+        return (this.__implicitRoot as unknown as Tile | undefined)?.transform;
     }
 
     private _boundingVolume: BoundingVolume;
@@ -1080,11 +1098,26 @@ export class SubTreeTile extends TileInternal {
         this._geometricError = value;
     }
 
+    private _refine: TILE_REFINEMENT;
+
     /**
      * Gets the refinement type for this tile
      */
     get refine(): TILE_REFINEMENT {
-        throw new Error("Method not implemented.");
+        if (this._refine !== undefined) {
+            return this._refine;
+        }
+
+        return (
+            (this.__implicitRoot as unknown as Tile | undefined)?.refine ?? TILE_REFINEMENT.REPLACE
+        );
+    }
+
+    /**
+     * Sets the refinement type for this tile
+     */
+    set refine(value: TILE_REFINEMENT) {
+        this._refine = value;
     }
 
     __implicitRoot: SubTreeTile;
@@ -1093,6 +1126,9 @@ export class SubTreeTile extends TileInternal {
     __y: number;
     __z: number;
     __level: number;
+
+    /** Marks content that points to a child subtree file rather than a renderable tile. */
+    __subtreeContent?: boolean;
 
     /**
      * Creates a new SubTreeTile instance
@@ -1106,6 +1142,8 @@ export class SubTreeTile extends TileInternal {
         __y: number;
         __z: number;
         __level: number;
+        __implicitRoot?: SubTreeTile;
+        refine?: TILE_REFINEMENT;
     }) {
         super();
         if (config) {
@@ -1115,6 +1153,9 @@ export class SubTreeTile extends TileInternal {
             this.__y = config.__y;
             this.__z = config.__z;
             this.__level = config.__level;
+            this.__implicitRoot =
+                config.__implicitRoot ?? (config.parent && config.parent.__implicitRoot);
+            this._refine = config.refine;
         }
     }
 }

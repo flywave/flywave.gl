@@ -31,7 +31,20 @@ module.exports = {
             "@flywave/flywave-splats/src": PKG + "/../flywave-splats/src",
             "@flywave/flywave-splats$": PKG + "/../flywave-splats/src",
             "@flywave/flywave-datasource-protocol/src": PKG + "/../flywave-datasource-protocol/src",
-            "@flywave/flywave-datasource-protocol$": PKG + "/../flywave-datasource-protocol/src"
+            "@flywave/flywave-datasource-protocol$": PKG + "/../flywave-datasource-protocol/src",
+
+            // Subpath imports used by the package ("@flywave/xxx/Foo" rather than the root).
+            "@flywave/flywave-utils/LRUCache": PKG + "/../flywave-utils/src/LRUCache",
+            "@flywave/flywave-utils/PriorityQueue": PKG + "/../flywave-utils/src/PriorityQueue",
+            "@flywave/flywave-utils/ExtendedFrustum": PKG + "/../flywave-utils/src/ExtendedFrustum",
+            "@flywave/flywave-utils/throttle": PKG + "/../flywave-utils/src/throttle",
+            "@flywave/flywave-mapview/IntersectParams":
+                PKG + "/../flywave-mapview/src/IntersectParams",
+            "@flywave/flywave-mapview/ThemeLoader": PKG + "/../flywave-mapview/src/ThemeLoader",
+            "@flywave/flywave-mapview/ITilesRenderer":
+                PKG + "/../flywave-mapview/src/ITilesRenderer",
+            "@flywave/flywave-datasource-protocol/StyleSetEvaluator":
+                PKG + "/../flywave-datasource-protocol/src/StyleSetEvaluator"
         }
     },
     resolveLoader: {

@@ -30,6 +30,13 @@ export function estimateBytesUsed(object: THREE.Object3D): number {
 
     // Traverse the entire object hierarchy
     object.traverse(c => {
+        // Gaussian splat meshes keep their data in gaussian-splat-lite's Splats container.
+        const splats = (c as any).splats;
+        if (splats?.getByteLength && !dedupeSet.has(splats)) {
+            totalBytes += splats.getByteLength();
+            dedupeSet.add(splats);
+        }
+
         // Calculate geometry memory usage
         const mesh = c as THREE.Mesh;
         if (mesh.geometry && !dedupeSet.has(mesh.geometry)) {

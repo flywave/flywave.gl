@@ -103,3 +103,5 @@ export { createExtMeshFeatures } from "./gltf/extensions/EXT_mesh_features";
 
 // glTF to ThreeJS conversion
 export { createThreeSceneFromGLTF, type ConversionOptions } from "./gltf/api/gltf-three";
+export { loadGaussianSplatLite } from "./gltf/api/gaussian-splat-mesh";
+export { encodeRawGaussianPly } from "./gltf/extensions/utils/gaussian-splat-ply";

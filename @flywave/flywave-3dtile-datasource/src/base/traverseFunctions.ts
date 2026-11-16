@@ -29,7 +29,17 @@ function areChildrenProcessed(tile: TileInternal): boolean {
     return tile.__childrenProcessed === tile.children.length;
 }
 
-function resetFrameState(tile: TileInternal, renderer: TilesRendererBase): void {
+/**
+ * Resets the per-frame traversal state of a tile.
+ *
+ * `computeViewError` can be disabled for passes that only update the frame state (for example
+ * {@link toggleTiles}), avoiding redundant screen space error calculations.
+ */
+function resetFrameState(
+    tile: TileInternal,
+    renderer: TilesRendererBase,
+    computeViewError: boolean = true
+): void {
     if (tile.__lastFrameVisited !== renderer.frameCount) {
         tile.__lastFrameVisited = renderer.frameCount;
         tile.__used = false;
@@ -42,22 +52,58 @@ function resetFrameState(tile: TileInternal, renderer: TilesRendererBase): void 
         tile.__childrenWereVisible = false;
         tile.__allChildrenLoaded = false;
 
-        renderer.calculateTileViewError(tile, viewErrorTarget);
-        tile.__inFrustum = viewErrorTarget.inView;
-        tile.__error = viewErrorTarget.error;
-        tile.__distanceFromCamera = viewErrorTarget.distanceFromCamera;
+        // A tile whose content is an external tileset or an implicit subtree cannot render
+        // anything itself, so it has to keep refining even after the error target is met.
+        // The same applies to a tile whose geometric error is not lower than the nearest such
+        // ancestor (matches CesiumJS and 3DTilesRendererJS 0.5.4).
+        let unconditionallyRefine = !!tile.__hasUnrenderableContent;
+        if (!unconditionallyRefine) {
+            let ancestor = tile.parent as TileInternal | undefined;
+            while (ancestor && ancestor.__unconditionallyRefine) {
+                ancestor = ancestor.parent as TileInternal | undefined;
+            }
+            if (ancestor && ancestor.geometricError <= tile.geometricError) {
+                unconditionallyRefine = true;
+            }
+        }
+        tile.__unconditionallyRefine = unconditionallyRefine;
+
+        if (computeViewError) {
+            renderer.calculateTileViewError(tile, viewErrorTarget);
+            tile.__inFrustum = viewErrorTarget.inView;
+            tile.__error = viewErrorTarget.error;
+            tile.__distanceFromCamera = viewErrorTarget.distanceFromCamera;
+        }
     }
 }
 
-function recursivelyMarkUsed(tile: TileInternal, renderer: TilesRendererBase): void {
+/**
+ * Recursively marks a tile as used down to the next layer, skipping external tilesets.
+ *
+ * When `cacheOnly` is true the tiles are only kept in the LRU cache (so they are not disposed
+ * and re-downloaded when the camera moves back) without being counted as used for rendering.
+ */
+function recursivelyMarkUsed(
+    tile: TileInternal,
+    renderer: TilesRendererBase,
+    cacheOnly: boolean = false
+): void {
     renderer.ensureChildrenArePreprocessed(tile);
     resetFrameState(tile, renderer);
-    markUsed(tile, renderer);
 
-    if (!tile.__hasRenderableContent && areChildrenProcessed(tile)) {
+    if (cacheOnly) {
+        renderer.markTileUsed(tile);
+    } else {
+        markUsed(tile, renderer);
+    }
+
+    const shouldTraverse = cacheOnly
+        ? !!tile.__unconditionallyRefine
+        : !tile.__hasRenderableContent;
+    if (shouldTraverse && areChildrenProcessed(tile)) {
         const children = tile.children;
         for (let i = 0, l = children.length; i < l; i++) {
-            recursivelyMarkUsed(children[i] as TileInternal, renderer);
+            recursivelyMarkUsed(children[i] as TileInternal, renderer, cacheOnly);
         }
     }
 }
@@ -94,7 +140,18 @@ function markUsed(tile: ITile, renderer: TilesRendererBase): void {
 }
 
 function canTraverse(tile: TileInternal, renderer: TilesRendererBase): boolean {
-    if (tile.__error !== undefined && tile.__error <= renderer.errorTarget) {
+    // Tiles that only contain an external tileset or implicit subtree (and their descendants
+    // sharing the same geometric error) must keep refining even once the error target is met,
+    // otherwise the whole subtree would stop rendering.
+    // Tiles without any content are structural containers (e.g. a Cesium ion root that only
+    // points at an external tileset); they can never render anything themselves, so they must
+    // keep refining as well. Stopping there leaves the whole tileset blank.
+    if (
+        tile.__error !== undefined &&
+        tile.__error <= renderer.errorTarget &&
+        !tile.__unconditionallyRefine &&
+        !!tile.__hasContent
+    ) {
         return false;
     }
 
@@ -160,6 +217,22 @@ export function markUsedTiles(tile: TileInternal, renderer: TilesRendererBase): 
         return;
     }
 
+    // Skip a child of an additive tile if the parent already meets the error target in the
+    // child's region. This optimization is only valid when the parent actually renders
+    // something: a parent holding an external tileset or implicit subtree shares its geometric
+    // error with its child, so the ratio would be 1 and the whole subtree would be skipped.
+    const parent = tile.parent as TileInternal | undefined;
+    if (
+        parent &&
+        parent.refine === TILE_REFINEMENT.ADD &&
+        !parent.__hasUnrenderableContent &&
+        tile.geometricError > 0 &&
+        (tile.__error as number) * (parent.geometricError / tile.geometricError) <=
+            renderer.errorTarget
+    ) {
+        return;
+    }
+
     if (!canTraverse(tile, renderer)) {
         markUsed(tile, renderer);
         return;
@@ -173,6 +246,18 @@ export function markUsedTiles(tile: TileInternal, renderer: TilesRendererBase): 
         markUsedTiles(c, renderer);
         anyChildrenUsed = anyChildrenUsed || isUsedThisFrame(c, renderer.frameCount);
         anyChildrenInFrustum = anyChildrenInFrustum || !!c.__inFrustum;
+    }
+
+    // If none of the children are in the frustum then there is no reason to display this tile.
+    // Keep this tile and its children in the cache (but not used) so they are not disposed,
+    // which would cause repeated load/unload flicker while the camera moves.
+    if (tile.refine === TILE_REFINEMENT.REPLACE && !anyChildrenInFrustum && children.length !== 0) {
+        tile.__inFrustum = false;
+        renderer.markTileUsed(tile);
+        for (let i = 0, l = children.length; i < l; i++) {
+            recursivelyMarkUsed(children[i] as TileInternal, renderer, true);
+        }
+        return;
     }
 
     markUsed(tile, renderer);
@@ -210,6 +295,8 @@ export function markUsedSetLeaves(tile: TileInternal, renderer: TilesRendererBas
                 childrenWereVisible || !!c.__wasSetVisible || !!c.__childrenWereVisible;
 
             if (isUsedThisFrame(c, frameCount)) {
+                // Consider a child loaded when its own children are loaded, its content is
+                // ready, it is completely empty, or an external tileset failed to load.
                 const childLoaded =
                     !!c.__allChildrenLoaded ||
                     (!!c.__hasRenderableContent && isDownloadFinished(c.__loadingState!)) ||
@@ -285,6 +372,10 @@ export function markVisibleTiles(tile: TileInternal, renderer: TilesRendererBase
 }
 
 export function toggleTiles(tile: TileInternal, renderer: TilesRendererBase): void {
+    // Only update the frame state here: the screen space error was already computed during the
+    // traversal, and tiles that are not visited this frame only need their state reset.
+    resetFrameState(tile, renderer, false);
+
     const isUsed = isUsedThisFrame(tile, renderer.frameCount);
     if (isUsed || tile.__usedLastFrame) {
         let setActive = false;
@@ -294,8 +385,6 @@ export function toggleTiles(tile: TileInternal, renderer: TilesRendererBase): vo
             setVisible = renderer.displayActiveTiles
                 ? !!tile.__active || !!tile.__visible
                 : !!tile.__visible;
-        } else {
-            resetFrameState(tile, renderer);
         }
 
         if (tile.__hasRenderableContent && tile.__loadingState === LOADED) {

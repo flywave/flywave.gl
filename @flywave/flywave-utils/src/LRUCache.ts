@@ -21,7 +21,11 @@ class LRUCache<T> {
     private readonly usedSet: Set<T>;
     private readonly callbacks: Map<T, RemoveCallback<T>>;
     private unloadingHandle: number;
-    protected cachedBytes: number;
+    /**
+     * Total number of bytes tracked for the items currently in the cache.
+     * Can be used alongside `maxBytesSize` and `isFull` to adjust settings as memory grows.
+     */
+    public cachedBytes: number;
     protected bytesMap: Map<T, number>;
     private readonly loadedSet: Set<T>;
     private scheduled: boolean;
@@ -88,6 +92,10 @@ class LRUCache<T> {
         return this.bytesMap.get(item) ?? null;
     }
 
+    isUsed(item: T): boolean {
+        return this.usedSet.has(item);
+    }
+
     add(item: T, removeCb: RemoveCallback<T>): boolean {
         const itemSet = this.itemSet;
         if (itemSet.has(item)) {
@@ -108,9 +116,11 @@ class LRUCache<T> {
         itemSet.set(item, Date.now());
         callbacks.set(item, removeCb);
 
-        // computeMemoryUsageCallback can return "null" if memory usage is not known, yet
-        const bytes = this.computeMemoryUsageCallback(item);
-        this.cachedBytes += bytes || 0;
+        // computeMemoryUsageCallback can return "null" if memory usage is not known, yet.
+        // Byte sizes are rounded to integers so the tracked total stays exactly equal to the
+        // sum of the item sizes (fractional drift can otherwise prevent unloading).
+        const bytes = Math.round(this.computeMemoryUsageCallback(item) || 0);
+        this.cachedBytes += bytes;
         bytesMap.set(item, bytes);
 
         return true;
@@ -170,7 +180,7 @@ class LRUCache<T> {
 
         this.cachedBytes -= bytesMap.get(item) || 0;
 
-        const bytes = this.computeMemoryUsageCallback(item);
+        const bytes = Math.round(this.computeMemoryUsageCallback(item) || 0);
         bytesMap.set(item, bytes);
         this.cachedBytes += bytes;
     }
@@ -262,6 +272,10 @@ class LRUCache<T> {
                 this.cachedBytes - removedBytes > maxBytesSize ||
                 itemList.length - removedNodes > maxSize
             ) {
+                if (removedNodes >= itemList.length) {
+                    break;
+                }
+
                 const item = itemList[removedNodes];
                 const bytes = bytesMap.get(item) || 0;
                 if (
@@ -279,6 +293,10 @@ class LRUCache<T> {
             // evict up to the min node or bytes size, keeping one more item over the min bytes limit
             // so we're meeting it
             while (removedBytes < bytesToUnload || removedNodes < nodesToUnload) {
+                if (removedNodes >= itemList.length) {
+                    break;
+                }
+
                 const item = itemList[removedNodes];
                 const bytes = bytesMap.get(item) || 0;
                 if (

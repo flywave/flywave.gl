@@ -12,6 +12,25 @@ import { extractGLTF, parse3DTileGLTFViewSync } from "./helpers/Parse3DTileGltfV
 import { parse3DTileHeaderSync } from "./helpers/Parse3DTileHeader";
 import { parse3DTileTablesHeaderSync, parse3DTileTablesSync } from "./helpers/Parse3DTileTables";
 
+/**
+ * Decodes an oct-encoded normal (spec: 3D Tiles i3dm NORMAL_UP_OCT32P /
+ * NORMAL_RIGHT_OCT32P) into a unit vector.
+ */
+export function octDecodeInRange(x: number, y: number, rangeMax: number, result: Vector3): Vector3 {
+    x = (x / rangeMax) * 2.0 - 1.0;
+    y = (y / rangeMax) * 2.0 - 1.0;
+    result.x = x;
+    result.y = y;
+    result.z = 1.0 - Math.abs(x) - Math.abs(y);
+    if (result.z < 0.0) {
+        const oldX = result.x;
+        result.x = (1.0 - Math.abs(result.y)) * (oldX >= 0.0 ? 1.0 : -1.0);
+        result.y = (1.0 - Math.abs(oldX)) * (result.y >= 0.0 ? 1.0 : -1.0);
+    }
+    result.normalize();
+    return result;
+}
+
 export async function parseInstancedModel3DTile(
     tile: Tiles3DTileContent,
     arrayBuffer: ArrayBuffer,
@@ -174,7 +193,23 @@ function extractInstancedAttributes(
                         "i3dm: oct-encoded orientation requires NORMAL_UP_OCT32P and NORMAL_RIGHT_OCT32P"
                     );
                 }
-                throw new Error("i3dm: oct-encoded orientation not implemented");
+                const normalUp = featureTable.getProperty(
+                    "NORMAL_UP_OCT32P",
+                    GL.UNSIGNED_SHORT,
+                    2,
+                    i,
+                    []
+                );
+                const normalRight = featureTable.getProperty(
+                    "NORMAL_RIGHT_OCT32P",
+                    GL.UNSIGNED_SHORT,
+                    2,
+                    i,
+                    []
+                );
+                octDecodeInRange(normalUp[0], normalUp[1], 65535, instanceNormalUp);
+                octDecodeInRange(normalRight[0], normalRight[1], 65535, instanceNormalRight);
+                hasCustomOrientation = true;
             } else if (tile.eastNorthUp) {
                 eastNorthUpToFixedFrame(instancePosition, instanceTransform);
                 instanceRotation.extractRotation(instanceTransform);

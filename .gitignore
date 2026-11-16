@@ -18,3 +18,4 @@ credentials.js
 @flywave/flywave.gl/dist
 dist
 test-dist
+.tiles-test-data/

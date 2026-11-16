@@ -863,6 +863,19 @@ export abstract class TilesRenderer extends TilesRendererBase {
                   // applied, so keep the historical behavior unchanged).
                   createThreeSceneFromGLTF(metadata.gltf, { upAxis: "z" });
 
+        // Gaussian splat meshes are decoded asynchronously by gaussian-splat-lite. Wait for
+        // them before the tile is marked as loaded, otherwise the first frames are empty and
+        // memory accounting/disposal can race the decode.
+        const splatInitializations = (res.scene.userData as any)?.splatInitializations as
+            | Promise<unknown>
+            | undefined;
+        if (splatInitializations) {
+            await splatInitializations;
+            if (abortSignal.aborted) {
+                return;
+            }
+        }
+
         const instances: InstancedMesh[] = [];
         const meshes: Array<Mesh | InstancedMesh> = [];
         const originalMatrices: Matrix4[] = [];
@@ -1086,6 +1099,9 @@ export abstract class TilesRenderer extends TilesRendererBase {
 
         // Dispose of special features
         cached.scene.traverse((child: any) => {
+            if (child.userData.gaussianSplatDispose) {
+                child.userData.gaussianSplatDispose();
+            }
             if (child.userData.meshFeatures) child.userData.meshFeatures.dispose();
             if (child.userData.structuralMetadata) child.userData.structuralMetadata.dispose();
         });

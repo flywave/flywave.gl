@@ -32,6 +32,11 @@ import {
 } from "three/webgpu";
 
 import type { Tile as InternalTile } from "./base/Tile";
+import {
+    acquireGaussianSplatRenderer,
+    releaseGaussianSplatRenderer,
+    sceneHasGaussianSplat
+} from "./GaussianSplatRendererManager";
 import { type ITile } from "./ObserveTileChange";
 import { type MatrixTransformCallback } from "./renderer/TilesRenderer";
 import { type CustomAttributeConfig, Tiles3DStyleWatcher } from "./theme/Tiles3DStyleWatcher";
@@ -267,6 +272,30 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
     private readonly m_options: TileRenderDataSourceOptions;
     private m_isConnected: boolean = false;
     private m_attachedMapView?: MapView;
+    private m_gaussianSplatAcquired = false;
+
+    private readonly m_onSplatModelLoaded = (event: { scene?: Object3D }): void => {
+        const mapView = this.m_attachedMapView;
+        if (this.m_gaussianSplatAcquired || !mapView || !event.scene) {
+            return;
+        }
+        if (!sceneHasGaussianSplat(event.scene)) {
+            return;
+        }
+
+        this.m_gaussianSplatAcquired = true;
+        acquireGaussianSplatRenderer(mapView)
+            .then(() => {
+                // The data source may have detached while the lite chunk was loading.
+                if (!this.m_gaussianSplatAcquired || this.m_attachedMapView !== mapView) {
+                    releaseGaussianSplatRenderer(mapView);
+                }
+            })
+            .catch(error => {
+                console.error("Failed to initialize Gaussian splat renderer", error);
+                this.m_gaussianSplatAcquired = false;
+            });
+    };
 
     // Theme system related properties
     private m_currentTheme?: Theme;
@@ -414,6 +443,7 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
             this.m_isConnected = false;
         }
 
+        this.releaseGaussianSplatRenderer();
         this.m_attachedMapView = undefined;
         super.detach(mapView);
     }
@@ -426,10 +456,20 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
             this.m_tilesRenderer.disconnectMapView();
         }
 
+        this.m_tilesRenderer.removeEventListener("load-model", this.m_onSplatModelLoaded);
+        this.releaseGaussianSplatRenderer();
+
         // Clean up the tiles renderer
         this.m_tilesRenderer.dispose();
 
         super.dispose();
+    }
+
+    private releaseGaussianSplatRenderer(): void {
+        if (this.m_gaussianSplatAcquired && this.m_attachedMapView) {
+            releaseGaussianSplatRenderer(this.m_attachedMapView);
+        }
+        this.m_gaussianSplatAcquired = false;
     }
 
     /**
@@ -563,6 +603,9 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
         this.m_tilesRenderer.addEventListener("onRootNodeLoaded", () => {
             this.requestUpdate();
         });
+
+        // Create the shared gaussian-splat-lite renderer on first Gaussian splat content.
+        this.m_tilesRenderer.addEventListener("load-model", this.m_onSplatModelLoaded);
     }
 
     /**

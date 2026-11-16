@@ -15,6 +15,15 @@ context.keys().forEach(key => context(key));
 const loaderContext = require.context("./loader", true, /\.test\.ts$/);
 loaderContext.keys().forEach(key => loaderContext(key));
 
+const traversalContext = require.context("./traversal", true, /\.test\.ts$/);
+traversalContext.keys().forEach(key => traversalContext(key));
+
+const utilsContext = require.context("./utils", true, /\.test\.ts$/);
+utilsContext.keys().forEach(key => utilsContext(key));
+
+const integrationContext = require.context("./integration", true, /\.test\.ts$/);
+integrationContext.keys().forEach(key => integrationContext(key));
+
 mocha.run(failures => {
     process.exitCode = failures ? 1 : 0;
 });

@@ -1,6 +1,9 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { SplatMesh } from "@flywave/flywave-splats";
+import {
+    createGaussianSplatPlaceholder,
+    startGaussianSplatPlaceholders
+} from "./gaussian-splat-mesh";
 import {
     type Camera,
     type InstancedBufferAttribute,
@@ -119,6 +122,14 @@ function createThreeSceneFromGLTF(
     applyUpAxisRotation(scene, mergedOptions.upAxis);
 
     applyEnvMap(scene, gltf.extras, textureArray);
+
+    // Gaussian splat meshes are created asynchronously by gaussian-splat-lite. Expose their
+    // readiness so the tile loader can wait for the content before marking the tile loaded.
+    // Only placeholders attached to nodes (not the glTF mesh cache) are started.
+    const splatInitializations = startGaussianSplatPlaceholders(scene);
+    if (splatInitializations.length > 0) {
+        scene.userData.splatInitializations = Promise.all(splatInitializations);
+    }
 
     return { scene, animations, nodes: nodeMap, textures: textureArray, extras: gltf.extras };
 }
@@ -358,6 +369,11 @@ function processMeshes(
         group.name = gltfMesh.name || "";
 
         for (const primitive of gltfMesh.primitives) {
+            if (primitive.extras?.isGaussianSplatting) {
+                group.add(createGaussianSplatPlaceholder(primitive));
+                continue;
+            }
+
             const geometry = createPrimitiveGeometry(primitive);
             const material = primitive.material
                 ? materialMap.get(primitive.material?.id) || new MeshStandardNodeMaterial()
@@ -421,7 +437,7 @@ function createMeshForPrimitive(
     gltfMesh: any
 ): Object3D {
     if (!!primitive.extras?.isGaussianSplatting) {
-        return createSplatMesh(gltf, primitive, geometry);
+        return createGaussianSplatPlaceholder(primitive);
     }
 
     if (primitive.mode === 1) {
@@ -474,39 +490,6 @@ function createMeshForPrimitive(
     }
 
     return mesh;
-}
-
-function createSplatMesh(
-    gltf: GLTFPostprocessed,
-    primitive: GLTFMeshPrimitivePostprocessed,
-    geometry: BufferGeometry
-): Object3D {
-    const setSplatAttribute = (
-        name: string,
-        attributeName: string,
-        itemSize: number,
-        normalized = false
-    ) => {
-        const accessor = primitive.attributes[attributeName];
-        if (!accessor) {
-            throw new Error(`Missing required attribute for splat: ${attributeName}`);
-        }
-        splatGeometry.setAttribute(name, new BufferAttribute(accessor.value, itemSize, normalized));
-    };
-
-    const splatGeometry: BufferGeometry = new BufferGeometry();
-    setSplatAttribute("position", "POSITION", 3);
-    setSplatAttribute("scale", "_SCALE", 3);
-    setSplatAttribute("rotation", "_ROTATION", 4);
-    setSplatAttribute("color", "COLOR_0", 4, true);
-    geometry.copy(splatGeometry);
-
-    const splatMesh = new SplatMesh();
-
-    splatMesh.updateDataFromGeometry(geometry);
-    splatMesh.userData.gltfPrimitive = primitive;
-
-    return splatMesh;
 }
 
 function applyMorphTargets(

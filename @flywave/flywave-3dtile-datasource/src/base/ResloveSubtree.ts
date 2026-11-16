@@ -93,9 +93,17 @@ function getBit(object: Availability, index: number): boolean {
         return !!object.constant as boolean;
     }
 
+    // The bitstream is stored on "explicitBitstream" after the buffer view has been loaded.
+    // Index it directly instead of wrapping it in a new Uint8Array on every bit test, which
+    // copies the whole buffer and makes expansion quadratic in the subtree size.
+    const bitstream = object.explicitBitstream;
+    if (!bitstream) {
+        return false;
+    }
+
     const byteIndex = index >> 3;
     const bitIndex = index % 8;
-    return ((new Uint8Array(object.bitstream!)[byteIndex] >> bitIndex) & 1) === 1;
+    return ((bitstream[byteIndex] >> bitIndex) & 1) === 1;
 }
 
 /**
@@ -106,6 +114,15 @@ function getBit(object: Availability, index: number): boolean {
  */
 export function expandSubtree(subtreeRoot: SubTreeTile, subtreeData: Subtree): void {
     const contentTile = new SubTreeTile();
+    contentTile.__implicitRoot = subtreeRoot.__implicitRoot;
+    contentTile.__subtreeIdx = 0;
+    contentTile.__level = 0;
+    contentTile.__x = 0;
+    contentTile.__y = 0;
+    contentTile.__z = 0;
+    contentTile.parent = subtreeRoot;
+    contentTile.refine = subtreeRoot.refine;
+    contentTile.geometricError = subtreeRoot.geometricError;
 
     const subtree = new SubTreeMetaData(subtreeData);
 
@@ -117,6 +134,10 @@ export function expandSubtree(subtreeRoot: SubTreeTile, subtreeData: Subtree): v
             break;
         }
     }
+
+    contentTile.__hasContent = !!contentTile.content?.uri;
+    contentTile.__hasRenderableContent = contentTile.__hasContent;
+    contentTile.__hasUnrenderableContent = false;
 
     subtreeRoot.children.push(contentTile);
     const bottomRow = transcodeSubtreeTiles(contentTile, subtree, subtreeRoot.__implicitRoot);
@@ -139,6 +160,7 @@ export function expandSubtree(subtreeRoot: SubTreeTile, subtreeData: Subtree): v
                 subtreeRoot.__implicitRoot.implicitTiling.subtrees.uri
             )
         };
+        subtreeTile.__subtreeContent = true;
         leafTile.children.push(subtreeTile);
     }
 }
@@ -215,7 +237,9 @@ function deriveChildTile(
         __x: 0,
         __y: 0,
         __z: 0,
-        parent: parentTile
+        parent: parentTile,
+        __implicitRoot: parentTile.__implicitRoot,
+        refine: parentTile.refine
     });
 
     [subtreeTile.__x, subtreeTile.__y, subtreeTile.__z] = getSubtreeCoordinates(
@@ -229,6 +253,9 @@ function deriveChildTile(
         for (let i = 0; i < subtree.contentAvailability.length; i++) {
             if (getBit(subtree.contentAvailability[i], childBitIndex)) {
                 subtreeTile.content = { uri: parseImplicitURI(subtreeTile, rootTile.content.uri) };
+                subtreeTile.__hasContent = true;
+                subtreeTile.__hasRenderableContent = true;
+                subtreeTile.__hasUnrenderableContent = false;
                 break;
             }
         }
