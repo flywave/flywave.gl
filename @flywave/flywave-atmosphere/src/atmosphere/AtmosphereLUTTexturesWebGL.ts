@@ -391,6 +391,26 @@ export class AtmosphereLUTTexturesWebGL extends AtmosphereLUTTextures {
         super.setup(parameters, textureType);
     }
 
+    override initRenderTargets(renderer: Renderer): void {
+        // Allocate every table before a scene material can sample it. The LUT
+        // generation is time-sliced and starts on the first frame, which is
+        // also when materials draw; without this the target may be created
+        // (and its previous texture deleted) after the material has already
+        // bound it (upstream issue #116). This must run before the first
+        // compute pass: initializing higherOrderScattering afterwards would
+        // replace the MRT-written texture with fresh, empty storage.
+        renderer.initRenderTarget(this.transmittanceRT);
+        renderer.initRenderTarget(this.multipleScatteringRT);
+        renderer.initRenderTarget(this.scatteringRT);
+        if (this.parameters?.combinedScatteringTextures === false) {
+            renderer.initRenderTarget(this.singleMieScatteringRT);
+        }
+        if (this.parameters?.higherOrderScatteringTexture !== false) {
+            renderer.initRenderTarget(this.higherOrderScatteringRT);
+        }
+        renderer.initRenderTarget(this.irradianceRT);
+    }
+
     override dispose(): void {
         this.transmittanceRT.dispose();
         this.multipleScatteringRT.dispose();

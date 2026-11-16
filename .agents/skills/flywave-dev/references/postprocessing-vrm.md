@@ -10,6 +10,9 @@ AtmosphereSystem 就没有 VRM**（planar 模式也会创建，只是效果禁�
 配置类型：`@flywave/flywave-datasource-protocol/src/PostEffects.ts`、
 `AtmosphereConfig.ts`、`Theme.ts`。
 
+> 大气/云移植自 takram `three-geospatial`；与上游的对齐状态、已知 issue 与
+> 复查方法见 `references/atmosphere-clouds-upstream.md`。
+
 ## 节点链实际顺序（语义即顺序，重排改变观感）
 
 scene pass → **clouds** → **aerialPerspective**（含 CSM god rays 的
