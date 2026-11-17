@@ -238,6 +238,13 @@ export class ViewRenderManager implements IViewRenderManager {
      * `mapView.update()` so the frame is actually scheduled on a static map.
      */
     onNeedsRender?: () => void;
+    /**
+     * Set when the graph was built before three's CSM node had its cascade
+     * lights (they are created by the first shadow pass). The aerial
+     * perspective shadow-length node would then compile to a constant zero
+     * forever, so the next frame rebuilds the graph once the cascades exist.
+     */
+    private m_waitingForCsmCascades = false;
     private taaNode?: TemporalAntialiasNode;
     private ssrNode?: SSRNode;
     /**
@@ -353,6 +360,11 @@ export class ViewRenderManager implements IViewRenderManager {
             (this.outlineObjects.size > 0 || this.config.outline.keepPassAlive === true);
         const aerialEnabled = this.config.aerialPerspective.enabled;
         const hasCSM = this.csmShadowNode != null;
+        // three populates CSMShadowNode.lights during the first shadow pass
+        // (`_init`), which can happen after this post-processing graph is
+        // built. shadowLength() compiles to a constant zero when there are no
+        // cascades, so treat that as "not ready" and rebuild after the pass.
+        const hasCsmCascades = (this.csmShadowNode?.lights.length ?? 0) > 0;
         // God rays (the epipolar shadow-length chain) are skipped on the WebGL
         // backend: the chain reads its intermediate textures through
         // .load(screenCoordinate) patterns that resolve to all zeros there,
@@ -362,7 +374,8 @@ export class ViewRenderManager implements IViewRenderManager {
         const webglBackend =
             (this.renderer as { backend?: { isWebGPUBackend?: boolean } } | undefined)?.backend
                 ?.isWebGPUBackend !== true;
-        const hasGodRays = hasCSM && !webglBackend;
+        const hasGodRays = hasCSM && !webglBackend && hasCsmCascades;
+        this.m_waitingForCsmCascades = hasCSM && !webglBackend && aerialEnabled && !hasCsmCascades;
 
         const WORLD_TO_UNIT = 0.001;
 
@@ -782,6 +795,16 @@ export class ViewRenderManager implements IViewRenderManager {
 
         this.pipeline.render();
 
+        // The scene pass above is also the first shadow pass, which is what
+        // creates the CSM cascade lights. If the graph was built before they
+        // existed, rebuild it once so the shadow-length god-ray node compiles
+        // against real cascades; onNeedsRender wakes the on-demand loop.
+        if (this.m_waitingForCsmCascades && (this.csmShadowNode?.lights.length ?? 0) > 0) {
+            this.m_waitingForCsmCascades = false;
+            this.needsUpdate = true;
+            this.onNeedsRender?.();
+        }
+
         if (this.gpuPicking) {
             const moved =
                 this.lastCameraPos.distanceToSquared(camera.position) > 0.01 ||
@@ -859,6 +882,7 @@ export class ViewRenderManager implements IViewRenderManager {
         this.m_lutController?.dispose();
         this.m_lutController = undefined;
         this.m_appliedLutUrl = undefined;
+        this.m_waitingForCsmCascades = false;
         this.centerSlot = createDepthSlot();
         this.querySlot = createDepthSlot();
         this.gpuPickRegistry.clear();
