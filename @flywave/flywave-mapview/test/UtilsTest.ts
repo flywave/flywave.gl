@@ -547,6 +547,27 @@ describe("MapViewUtils", function () {
 
                     expect(res3.final).to.be.true;
                 });
+
+                it("flags whether the view ray hit the ground", function () {
+                    const lookingDown = MapViewUtils.getTargetAndDistance(projection, camera);
+                    expect(lookingDown.hitGround).to.be.true;
+
+                    // Point the camera straight up: the ray misses the ground and the
+                    // along-view fallback is used (hitGround false).
+                    if (projection.type === ProjectionType.Spherical) {
+                        const radius = EarthConstants.EQUATORIAL_RADIUS + 1000;
+                        const scale = radius / Math.sqrt(3);
+                        camera.position.set(scale, scale, scale);
+                        camera.lookAt(camera.position.clone().multiplyScalar(2));
+                    } else {
+                        camera.position.set(0, 0, 1000);
+                        camera.lookAt(new THREE.Vector3(0, 0, 2000));
+                    }
+                    camera.updateMatrixWorld(true);
+
+                    const lookingUp = MapViewUtils.getTargetAndDistance(projection, camera);
+                    expect(lookingUp.hitGround).to.be.false;
+                });
             });
 
             describe("constrainTargetAndDistanceToViewBounds", function () {

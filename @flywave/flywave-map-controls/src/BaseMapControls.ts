@@ -38,6 +38,40 @@ const BeginInteractionUpdate = {
     type: EventNames.BeginInteraction
 } as Event<EventNames.BeginInteraction, any>;
 
+/**
+ * Below this clearance (metres) the map is navigated like a first-person
+ * camera: rotation is applied around the camera itself instead of a ground
+ * pivot. Orbiting a distant ground point from a few metres above the terrain
+ * swings the camera up/down by hundreds of metres per gesture.
+ */
+const FIRST_PERSON_ROTATION_CLEARANCE = 100;
+
+/** Tilt (degrees from nadir) above which the camera looks at the sky. Matches MapViewUtils.MAX_TILT_DEG. */
+const HORIZON_TILT_DEG = 89;
+
+/**
+ * Returns true when every element of the matrix is finite and none of its
+ * rotation columns has collapsed to zero.
+ *
+ * `Matrix4.decompose` writes NaN into the position/quaternion when the matrix
+ * is non-finite and into the quaternion when a rotation column is zero (it
+ * divides by the column length), so both cases must be rejected before the
+ * matrix is copied into the map camera.
+ */
+function isUsableCameraMatrix(matrix: Matrix4): boolean {
+    const e = matrix.elements;
+    for (let i = 0; i < 16; i++) {
+        if (!Number.isFinite(e[i])) {
+            return false;
+        }
+    }
+    return (
+        (e[0] !== 0 || e[1] !== 0 || e[2] !== 0) &&
+        (e[4] !== 0 || e[5] !== 0 || e[6] !== 0) &&
+        (e[8] !== 0 || e[9] !== 0 || e[10] !== 0)
+    );
+}
+
 const EndInteractionUpdate = {
     type: EventNames.EndInteraction
 } as Event<EventNames.EndInteraction, any>;
@@ -276,7 +310,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         // Normalize the camera FIRST: a buried camera poisons the geometric
         // bookkeeping below (screen-center hits, pivot balancing), which can
         // drag the camera to an unrelated location instead of recovering it.
-        this.enforceMinCameraHeightAboveTerrain();
+        // The returned clearance also selects the first-person rotation mode.
+        const clearance = this.enforceMinCameraHeightAboveTerrain();
 
         const cameraPos = new Vector3();
         this.cameraTransform.getOrigin(cameraPos);
@@ -301,21 +336,45 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         this.handleZoomOperations(mouseZ, hitDistance, cameraPos);
         this.cameraTransform.getOrigin(cameraPos);
 
+        // First-person rotation: close to the ground (or looking at the sky,
+        // where the center is not a usable ground pivot) rotate around the
+        // camera itself. Orbiting a distant ground point from a low camera
+        // moved it hundreds of metres up/down while the user was only trying
+        // to look up.
+        const firstPersonRotation =
+            this.mapView.tilt > HORIZON_TILT_DEG ||
+            (clearance !== undefined &&
+                Number.isFinite(clearance) &&
+                clearance <= FIRST_PERSON_ROTATION_CLEARANCE);
+        const rotationGravity = new Vector3();
+        if (firstPersonRotation) {
+            this.getDistanceToGlobe(cameraPos, rotationGravity);
+        }
+        const firstPersonPivot = firstPersonRotation ? cameraPos : undefined;
+        const firstPersonGravity = firstPersonRotation ? rotationGravity : undefined;
+
         const canRotate = !this._disableTilt && !this._disableHeading;
         this.mouseState.prevDown[2] = canRotate;
-        this.handleRotationOperations(mouseDown, mouseX, mouseY);
+        this.handleRotationOperations(
+            mouseDown,
+            mouseX,
+            mouseY,
+            firstPersonPivot,
+            firstPersonGravity
+        );
 
-        this.applyTiltAndHeadingChanges();
+        this.applyTiltAndHeadingChanges(firstPersonPivot, firstPersonGravity);
 
-        if ((!mouseDown[0] || !this.isPanHit) && this.lastHitCenterDistance > 0) {
-            this.cameraTransform.applyTiltLimit(
-                this.lastHitCenter,
-                this.lastHitGravity,
-                this.tiltLimit
-            );
+        if (
+            (!mouseDown[0] || !this.isPanHit) &&
+            (firstPersonRotation || this.lastHitCenterDistance > 0)
+        ) {
+            const rotationCenter = firstPersonRotation ? cameraPos : this.lastHitCenter;
+            const rotationDirection = firstPersonRotation ? rotationGravity : this.lastHitGravity;
+            this.cameraTransform.applyTiltLimit(rotationCenter, rotationDirection, this.tiltLimit);
             this.cameraTransform.smartBalance(
-                this.lastHitCenter.clone(),
-                this.lastHitGravity.clone(),
+                rotationCenter.clone(),
+                rotationDirection.clone(),
                 this.tiltLimit
             );
         }
@@ -333,42 +392,73 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     }
 
     /**
-     * Terrain clearance guard: keep the camera at least
-     * {@link MapView.minCameraHeight} above the terrain surface, pushed out
-     * along the ellipsoid surface normal. lookAt/flyTo place the camera from
-     * the reference ellipsoid, so at high-elevation locations the placed
-     * camera can end up below the terrain, and MapView's own per-frame
+     * Terrain clearance guard: recover a camera that ended up below the
+     * terrain surface by pushing it out along the ellipsoid surface normal to
+     * {@link MapView.minCameraHeight} above the terrain. lookAt/flyTo place the
+     * camera from the reference ellipsoid, so at high-elevation locations the
+     * placed camera can end up below the terrain, and MapView's own per-frame
      * min-height constraint is skipped whenever the GPU center-depth path
-     * hits — a buried camera could then never recover. This runs every frame
-     * from {@link BaseMapControls.update} and is a no-op while the camera is
-     * above the clearance limit.
+     * hits — a buried camera could then never recover.
+     *
+     * The guard deliberately only triggers for a genuinely buried camera
+     * (clearance < 0). Enforcing the full clearance as a per-frame floor made
+     * legitimate low-altitude views jump upwards on every frame (e.g. when the
+     * user looks up from just above the ground).
      */
-    private enforceMinCameraHeightAboveTerrain(): void {
+    private enforceMinCameraHeightAboveTerrain(): number | undefined {
         const elevationProvider = this.mapView.elevationProvider;
         if (elevationProvider === undefined) {
-            return;
+            return undefined;
         }
         const cameraPos = new Vector3();
         this.cameraTransform.getOrigin(cameraPos);
         const geoCoords = this.mapView.projection.unprojectPoint(cameraPos);
         const terrainAltitude = elevationProvider.getHeight(geoCoords);
-        if (terrainAltitude === undefined) {
-            return;
+        if (terrainAltitude === undefined || !Number.isFinite(terrainAltitude)) {
+            return undefined;
         }
         const clearance = geoCoords.altitude - terrainAltitude;
-        const minCameraHeight = this.mapView.minCameraHeight;
-        if (clearance >= minCameraHeight) {
-            return;
+        if (!Number.isFinite(clearance)) {
+            return undefined;
         }
-        const correction = minCameraHeight - clearance;
+        if (clearance >= 0) {
+            return clearance;
+        }
+        const correction = this.mapView.minCameraHeight - clearance;
         const outwardNormal = new Vector3();
         this.getDistanceAndNormal(outwardNormal, cameraPos);
+        if (
+            !Number.isFinite(outwardNormal.x) ||
+            !Number.isFinite(outwardNormal.y) ||
+            !Number.isFinite(outwardNormal.z)
+        ) {
+            return clearance;
+        }
         cameraPos.add(outwardNormal.multiplyScalar(correction));
+        if (
+            !Number.isFinite(cameraPos.x) ||
+            !Number.isFinite(cameraPos.y) ||
+            !Number.isFinite(cameraPos.z)
+        ) {
+            return clearance;
+        }
         this.cameraTransform.cameraToWorld.setPosition(cameraPos);
+        return this.mapView.minCameraHeight;
     }
 
     private applyToMapView() {
         const cameraToMapViewMatrix = this.cameraTransform.getMatrix();
+
+        // A NaN/degenerate transform must never be written into the map camera:
+        // decompose() would poison position/quaternion/scale, and three's
+        // lookAt does not touch scale, so the camera stays NaN for the rest of
+        // the session (the next FOV recompute then trips "Focal length must be
+        // larger than 0"). Re-seed the transform from the last valid camera
+        // matrix instead, which also makes the next frame self-healing.
+        if (!isUsableCameraMatrix(cameraToMapViewMatrix)) {
+            this.cameraTransform.cameraToWorld.copy(this.mapView.camera.matrixWorld);
+            return;
+        }
 
         if (this.haveMatricesChanged(cameraToMapViewMatrix, this.mapView.camera.matrixWorld)) {
             this.mapView.update();
@@ -380,6 +470,21 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             this.mapView.camera.quaternion,
             this.mapView.camera.scale
         );
+
+        // Defense in depth: a zero column can still slip through the check
+        // above after floating-point cancellation; reset the scale so the next
+        // lookAt/updateMatrixWorld produces a finite matrixWorld again.
+        const scale = this.mapView.camera.scale;
+        if (
+            !Number.isFinite(scale.x) ||
+            !Number.isFinite(scale.y) ||
+            !Number.isFinite(scale.z) ||
+            scale.x === 0 ||
+            scale.y === 0 ||
+            scale.z === 0
+        ) {
+            scale.set(1, 1, 1);
+        }
     }
 
     private handleMouseInteractions(
@@ -480,13 +585,25 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         }
     }
 
-    private handleRotationOperations(mouseDown: boolean[], mouseX: number, mouseY: number): void {
+    private handleRotationOperations(
+        mouseDown: boolean[],
+        mouseX: number,
+        mouseY: number,
+        firstPersonPivot?: Vector3,
+        firstPersonGravity?: Vector3
+    ): void {
         const rotationDamping = 0.1;
+        const firstPerson = firstPersonPivot !== undefined;
 
         // On the right-button press edge: capture the rotation pivot at the cursor (one CPU ray + projection fallback).
+        // In first-person mode the pivot is the camera itself, so no ray is needed.
         if (mouseDown[2] && !this.m_rotateDragging) {
             this.m_rotateDragging = true;
-            this.captureRotatePivot(mouseX, mouseY);
+            if (firstPerson) {
+                this.m_rotatePivotDistance = -1;
+            } else {
+                this.captureRotatePivot(mouseX, mouseY);
+            }
         } else if (!mouseDown[2]) {
             this.m_rotateDragging = false;
         }
@@ -522,28 +639,27 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         }
 
         if (
-            (this.lastHitCenterDistance > 0 || this.m_rotatePivotDistance > 0) &&
+            (firstPerson || this.lastHitCenterDistance > 0 || this.m_rotatePivotDistance > 0) &&
             (this.inertialDeltaX !== 0 || this.inertialDeltaY !== 0)
         ) {
             const rotationStep = 0.0045;
             const tiltStep = rotationStep * 0.5;
 
-            let pivotPoint = this.lastHitCenter;
+            let pivotPoint = firstPerson ? firstPersonPivot! : this.lastHitCenter;
             const camPos = new Vector3();
             this.cameraTransform.getOrigin(camPos);
 
-            if (this.cameraSwivel) {
-                pivotPoint = this.lastHitCenterClick || camPos;
-            }
-
-            let gravityPoint = this.lastHitGravity;
-            if (this.cameraSwivel) {
-                pivotPoint = camPos;
-                this.getDistanceToGlobe(camPos, gravityPoint);
-            } else if (this.m_rotatePivotDistance > 0) {
-                // Right-button rotation pivot: the world point locked at the press position (gesture + inertia tail).
-                pivotPoint = this.m_rotatePivot;
-                gravityPoint = this.m_rotateGravity;
+            let gravityPoint =
+                firstPerson && firstPersonGravity ? firstPersonGravity : this.lastHitGravity;
+            if (!firstPerson) {
+                if (this.cameraSwivel) {
+                    pivotPoint = camPos;
+                    this.getDistanceToGlobe(camPos, gravityPoint);
+                } else if (this.m_rotatePivotDistance > 0) {
+                    // Right-button rotation pivot: the world point locked at the press position (gesture + inertia tail).
+                    pivotPoint = this.m_rotatePivot;
+                    gravityPoint = this.m_rotateGravity;
+                }
             }
 
             let tiltChange = this.inertialDeltaY * tiltStep;
@@ -592,33 +708,40 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         this.m_rotatePivotScreenY = this.windowEventHandler.lastMouseY;
     }
 
-    private applyTiltAndHeadingChanges(): void {
+    private applyTiltAndHeadingChanges(
+        firstPersonPivot?: Vector3,
+        firstPersonGravity?: Vector3
+    ): void {
+        const firstPerson = firstPersonPivot !== undefined;
         if (
             (this.headingSet !== undefined || this.tiltSet !== undefined) &&
-            this.lastHitCenterDistance > 0
+            (firstPerson || this.lastHitCenterDistance > 0)
         ) {
             if (this.headingSet !== undefined) {
-                this.applyHeadingChange();
+                this.applyHeadingChange(firstPersonPivot, firstPersonGravity);
             }
 
             if (this.tiltSet !== undefined && this._tiltEnabled) {
-                this.applyTiltChange();
+                this.applyTiltChange(firstPersonPivot, firstPersonGravity);
             }
 
             this.headingSet = undefined;
             this.tiltSet = undefined;
         } else if (this.headingVelocity !== 0 || this.tiltVelocity !== 0) {
             const rotationStep = 0.03;
-            if (this.lastHitCenterDistance > 0) {
+            if (firstPerson || this.lastHitCenterDistance > 0) {
                 const tiltStepValue = this._tiltEnabled ? this.tiltVelocity * rotationStep : 0;
+                const pivot = firstPerson ? firstPersonPivot! : this.lastHitCenter;
+                const gravity =
+                    firstPerson && firstPersonGravity ? firstPersonGravity : this.lastHitGravity;
 
                 this.cameraTransform.rotateAroundPivotAndTilt(
-                    this.lastHitCenter.x,
-                    this.lastHitCenter.y,
-                    this.lastHitCenter.z,
-                    this.lastHitGravity.x,
-                    this.lastHitGravity.y,
-                    this.lastHitGravity.z,
+                    pivot.x,
+                    pivot.y,
+                    pivot.z,
+                    gravity.x,
+                    gravity.y,
+                    gravity.z,
                     this.headingVelocity * rotationStep,
                     tiltStepValue,
                     this.tiltLimit
@@ -627,12 +750,14 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         }
     }
 
-    private applyHeadingChange(): void {
+    private applyHeadingChange(pivot?: Vector3, gravity?: Vector3): void {
+        const center = pivot ?? this.lastHitCenter;
+        const direction = gravity ?? this.lastHitGravity;
         const right = new Vector3();
         this.cameraTransform.getRight(right);
 
         const rotationMatrix = new Matrix4();
-        this.setRotationLookDown(rotationMatrix, this.lastHitGravity);
+        this.setRotationLookDown(rotationMatrix, direction);
         rotationMatrix.multiply(new Matrix4().makeRotationZ(this.headingSet || 0));
 
         const angle = Math.acos(
@@ -647,50 +772,47 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             )
         );
 
-        const direction =
+        const sign =
             right.x * rotationMatrix.elements[4] +
             right.y * rotationMatrix.elements[5] +
             right.z * rotationMatrix.elements[6];
 
         this.cameraTransform.rotateAroundPivot(
-            this.lastHitCenter.x,
-            this.lastHitCenter.y,
-            this.lastHitCenter.z,
-            this.lastHitGravity.x,
-            this.lastHitGravity.y,
-            this.lastHitGravity.z,
-            direction > 0 ? -angle : angle
+            center.x,
+            center.y,
+            center.z,
+            direction.x,
+            direction.y,
+            direction.z,
+            sign > 0 ? -angle : angle
         );
 
         this.inertialDeltaX = 0;
     }
 
-    private applyTiltChange(): void {
+    private applyTiltChange(pivot?: Vector3, gravity?: Vector3): void {
+        const center = pivot ?? this.lastHitCenter;
+        const direction = gravity ?? this.lastHitGravity;
         const down = new Vector3();
         const forward = new Vector3();
         this.cameraTransform.getDown(down);
         this.cameraTransform.getForward(forward);
 
-        const downDot =
-            this.lastHitGravity.x * down.x +
-            this.lastHitGravity.y * down.y +
-            this.lastHitGravity.z * down.z;
+        const downDot = direction.x * down.x + direction.y * down.y + direction.z * down.z;
 
         const forwardDot =
-            this.lastHitGravity.x * forward.x +
-            this.lastHitGravity.y * forward.y +
-            this.lastHitGravity.z * forward.z;
+            direction.x * forward.x + direction.y * forward.y + direction.z * forward.z;
 
         let angle = Math.acos(Math.min(Math.max(downDot, -1), 1));
         if (forwardDot > 0) angle = -angle;
 
         this.cameraTransform.rotateAroundPivotAndTilt(
-            this.lastHitCenter.x,
-            this.lastHitCenter.y,
-            this.lastHitCenter.z,
-            this.lastHitGravity.x,
-            this.lastHitGravity.y,
-            this.lastHitGravity.z,
+            center.x,
+            center.y,
+            center.z,
+            direction.x,
+            direction.y,
+            direction.z,
             0,
             angle - (Math.PI * 0.5 - (this.tiltSet || 0)),
             this.tiltLimit

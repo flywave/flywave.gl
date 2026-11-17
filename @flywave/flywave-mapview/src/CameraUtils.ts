@@ -128,7 +128,11 @@ function computeFocalLengthFromFov(fov: number, viewportSide: number, ppOffset: 
 
     // Case 1. Symmetric fov split. Principal point is centered (centered projection):
     const halfSide = viewportSide / 2;
-    const ppCentered = ppOffset === 0;
+    // A NaN offset can only come from a poisoned projection matrix; it carries
+    // no usable off-center information. Fall back to a centered projection
+    // instead of producing NaN (the asymmetric formulas take square roots /
+    // tangents that are undefined there).
+    const ppCentered = ppOffset === 0 || !Number.isFinite(ppOffset);
     if (ppCentered) {
         return halfSide / Math.tan(fov / 2);
     }
@@ -300,6 +304,16 @@ export namespace CameraUtils {
     ): Vector2Like {
         result.x = -camera.projectionMatrix.elements[8];
         result.y = -camera.projectionMatrix.elements[9];
+        // A NaN projection matrix (degenerate near/far/fov) carries no usable
+        // principal-point information; treat it as centered instead of
+        // propagating NaN into the FOV / focal-length math (where it trips the
+        // "Focal length must be larger than 0" assertion).
+        if (!Number.isFinite(result.x)) {
+            result.x = 0;
+        }
+        if (!Number.isFinite(result.y)) {
+            result.y = 0;
+        }
         return result;
     }
 

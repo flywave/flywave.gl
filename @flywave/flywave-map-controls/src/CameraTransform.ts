@@ -7,6 +7,18 @@ import { Matrix4, Quaternion, Spherical, Vector3, Vector4 } from "three/webgpu";
 import { slerpMatrices, sphericalLerp } from "./math";
 
 /**
+ * Clamps an angle argument to the `asin` domain [-1, 1].
+ *
+ * The projection of a (nominally unit-length) camera axis onto the gravity
+ * direction can exceed 1 by a few ULPs after repeated rotations; `Math.asin`
+ * returns NaN outside the domain, and a NaN angle turns the whole camera
+ * matrix into NaN via `makeRotationAxis`.
+ */
+function clampUnit(value: number): number {
+    return Math.max(-1, Math.min(1, value));
+}
+
+/**
  * A camera controller that provides smooth transitions and advanced movement controls
  * using matrix transformations. Supports great circle paths, pivot-based rotations,
  * and tilt-limited movements.
@@ -329,12 +341,13 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
             if (yComponent < 0) {
                 if (zComponent > Math.sin(maxTilt)) {
                     const adjustDirection = yComponent > 0 ? -1 : 1;
-                    const adjustAngle = adjustDirection * (Math.asin(zComponent) + maxTilt);
+                    const adjustAngle =
+                        adjustDirection * (Math.asin(clampUnit(zComponent)) + maxTilt);
                     this.rotateAxisAngleT(cameraMatrix, xAxis.x, xAxis.y, xAxis.z, adjustAngle);
                     adjusted = true;
                 }
             } else {
-                const adjustAngle = -Math.asin(yComponent);
+                const adjustAngle = -Math.asin(clampUnit(yComponent));
                 this.rotateAxisAngleT(cameraMatrix, xAxis.x, xAxis.y, xAxis.z, adjustAngle);
                 adjusted = true;
             }
@@ -386,7 +399,8 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
         if (yComponent < 0) {
             if (zComponent > -Math.sin(tiltLimit)) {
                 const adjustDirection = yComponent > 0 ? -1 : 1;
-                const adjustAngle = adjustDirection * (Math.asin(zComponent) + tiltLimit) * 0.5;
+                const adjustAngle =
+                    adjustDirection * (Math.asin(clampUnit(zComponent)) + tiltLimit) * 0.5;
                 this.rotateAxisAngleT(
                     cameraMatrix,
                     cameraXAxis.x,
@@ -396,7 +410,7 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
                 );
             }
         } else {
-            const adjustAngle = -Math.asin(yComponent) * 0.5;
+            const adjustAngle = -Math.asin(clampUnit(yComponent)) * 0.5;
             this.rotateAxisAngleT(
                 cameraMatrix,
                 cameraXAxis.x,
@@ -492,8 +506,28 @@ export abstract class CameraTransform<ProjectionType extends Projection = Projec
         axisZ: number,
         angle: number
     ): void {
+        // A non-finite angle/axis (NaN `asin` argument, degenerate gravity
+        // direction) would make `makeRotationAxis` emit a matrix full of NaN.
+        // `BaseMapControls.applyToMapView` then decomposes that matrix into the
+        // map camera, and three's `lookAt` cannot repair the resulting NaN
+        // scale — the camera stays broken for the rest of the session. Dropping
+        // one rotation is always preferable to poisoning the camera.
+        if (
+            !Number.isFinite(angle) ||
+            !Number.isFinite(axisX) ||
+            !Number.isFinite(axisY) ||
+            !Number.isFinite(axisZ)
+        ) {
+            return;
+        }
+        const axis = new Vector3(axisX, axisY, axisZ);
+        // A zero-length axis would scale the whole matrix by cos(angle) (and
+        // produce a zero column for 90°, which decomposes to NaN as well).
+        if (axis.lengthSq() < Number.EPSILON) {
+            return;
+        }
         const rotation = new Matrix4();
-        const axis = new Vector3(axisX, axisY, axisZ).normalize();
+        axis.normalize();
         rotation.makeRotationAxis(axis, angle);
         matrix.premultiply(rotation);
     }

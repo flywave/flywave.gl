@@ -725,7 +725,14 @@ export namespace MapViewUtils {
         camera: THREE.Camera,
         elevationProvider?: ElevationProvider,
         collidables?: ICameraCollidable[]
-    ): { target: THREE.Vector3; distance: number; altitude?: number; final: boolean } {
+    ): {
+        target: THREE.Vector3;
+        distance: number;
+        altitude?: number;
+        final: boolean;
+        /** False when the view ray missed the ground (camera looking at the sky). */
+        hitGround: boolean;
+    } {
         const cameraPitch = extractAttitude({ projection }, camera).pitch;
 
         //FIXME: For now we keep the old behaviour when terrain is enabled (i.e. use the camera
@@ -749,7 +756,7 @@ export namespace MapViewUtils {
                 : null;
         if (target !== null) {
             const distance = camera.position.distanceTo(target);
-            return { target, distance, altitude: elevation, final };
+            return { target, distance, altitude: elevation, final, hitGround: true };
         } else {
             // We either reached the [[PITCH_LIMIT]] or we did not hit the ground surface.
             // In this case we do the reverse, i.e. compute some fallback distance and
@@ -770,7 +777,13 @@ export namespace MapViewUtils {
             cameraDir.multiplyScalar(distance);
             const fallbackTarget = cache.vector3[1];
             fallbackTarget.copy(camera.position).add(cameraDir);
-            return { target: fallbackTarget, distance, altitude: elevation, final };
+            return {
+                target: fallbackTarget,
+                distance,
+                altitude: elevation,
+                final,
+                hitGround: false
+            };
         }
     }
 
@@ -850,7 +863,13 @@ export namespace MapViewUtils {
         camera: THREE.Camera,
         mapView: MapView,
         elevationProvider?: ElevationProvider
-    ): Promise<{ target: THREE.Vector3; distance: number; final: boolean }> {
+    ): Promise<{
+        target: THREE.Vector3;
+        distance: number;
+        final: boolean;
+        /** False when the view ray missed the ground (camera looking at the sky). */
+        hitGround: boolean;
+    }> {
         const cameraPitch = extractAttitude({ projection }, camera).pitch;
 
         // Get elevation information
@@ -888,7 +907,7 @@ export namespace MapViewUtils {
 
         if (target !== null) {
             const distance = camera.position.distanceTo(target);
-            return { target, distance, final };
+            return { target, distance, final, hitGround: true };
         } else {
             // We either reached the [[PITCH_LIMIT]] or we did not hit the ground surface.
             // In this case we do the reverse, i.e. compute some fallback distance and
@@ -903,7 +922,7 @@ export namespace MapViewUtils {
             cameraDir.multiplyScalar(distance);
             const fallbackTarget = cache.vector3[1];
             fallbackTarget.copy(camera.position).add(cameraDir);
-            return { target: fallbackTarget, distance, final };
+            return { target: fallbackTarget, distance, final, hitGround: false };
         }
     }
 

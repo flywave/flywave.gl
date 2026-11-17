@@ -947,6 +947,9 @@ export class MapView extends EventDispatcher {
         minimum: DEFAULT_CAM_NEAR_PLANE,
         maximum: DEFAULT_CAM_FAR_PLANE
     };
+    // One-shot warning when a non-finite clip-plane range is rejected, so a
+    // broken data source/pose is visible in the console without spamming.
+    private m_viewRangeWarningLogged = false;
 
     private m_pointOfView?: THREE.PerspectiveCamera;
 
@@ -3419,7 +3422,7 @@ export class MapView extends EventDispatcher {
         if (frameStartTime === undefined) {
             frameStartTime = PerformanceTimer.now();
         }
-        this.render(frameStartTime);
+        this.renderGuarded(frameStartTime);
     }
 
     /**
@@ -3998,6 +4001,8 @@ export class MapView extends EventDispatcher {
         // Copy all properties from new view ranges to our readonly object.
         // This allows to keep all view ranges references valid and keeps up-to-date
         // information within them. Works the same as copping all properties one-by-one.
+        const previousNear = this.m_camera.near;
+        const previousFar = this.m_camera.far;
         Object.assign(
             this.m_viewRanges,
             viewRanges === undefined
@@ -4007,8 +4012,42 @@ export class MapView extends EventDispatcher {
                   )
                 : viewRanges
         );
-        this.m_viewRanges.far = this.m_viewRanges.far;
-        this.m_viewRanges.maximum = this.m_viewRanges.maximum;
+
+        // A non-finite clip plane (NaN elevation range, NaN data-source
+        // geometry height, degenerate camera pose) must never reach the
+        // projection matrix: `near = NaN` makes `elements[9]` NaN, and the
+        // next FOV recompute then trips the focal-length assertion, which
+        // kills the render loop. Keep the last finite range instead.
+        const { near, far } = this.m_viewRanges;
+        if (
+            !Number.isFinite(near) ||
+            near <= 0 ||
+            !Number.isFinite(far) ||
+            far <= near ||
+            !Number.isFinite(this.m_viewRanges.minimum) ||
+            !Number.isFinite(this.m_viewRanges.maximum)
+        ) {
+            const fallbackNear =
+                Number.isFinite(previousNear) && previousNear > 0
+                    ? previousNear
+                    : DEFAULT_CAM_NEAR_PLANE;
+            const fallbackFar =
+                Number.isFinite(previousFar) && previousFar > fallbackNear
+                    ? previousFar
+                    : fallbackNear * 1000;
+            if (!this.m_viewRangeWarningLogged) {
+                this.m_viewRangeWarningLogged = true;
+                logger.warn("Rejected non-finite camera clip planes and kept the previous range", {
+                    rejected: { ...this.m_viewRanges },
+                    fallbackNear,
+                    fallbackFar
+                });
+            }
+            this.m_viewRanges.near = fallbackNear;
+            this.m_viewRanges.far = fallbackFar;
+            this.m_viewRanges.minimum = fallbackNear;
+            this.m_viewRanges.maximum = fallbackFar;
+        }
         this.m_camera.near = this.m_viewRanges.near;
         this.m_camera.far = this.m_viewRanges.far;
 
@@ -4068,21 +4107,38 @@ export class MapView extends EventDispatcher {
 
         const actualDistance = geoCoords.altitude - altitude;
 
-        // Apply minCameraHeight limit
-        if (actualDistance < this.minCameraHeight) {
-            const correction = this.minCameraHeight - actualDistance;
-
-            // For adjustment direction, use vertical direction as simplification
-            const normal = this.projection.surfaceNormal(cameraPos, cache.vector3[0]).negate();
-
-            cameraPos.x -= correction * normal.x;
-            cameraPos.y -= correction * normal.y;
-            cameraPos.z -= correction * normal.z;
-
-            // Update camera position
-            this.camera.position.copy(cameraPos);
-            this.camera.updateMatrixWorld(true);
+        if (!Number.isFinite(actualDistance)) {
+            return;
         }
+
+        // Only recover a genuinely buried camera; the minCameraHeight is the
+        // push-out target for that recovery, not a per-frame floor. Enforcing
+        // it as a floor made legitimate low-altitude views jump upwards while
+        // the user was simply looking up from near the ground.
+        if (actualDistance >= 0) {
+            return;
+        }
+
+        const correction = this.minCameraHeight - actualDistance;
+
+        // For adjustment direction, use vertical direction as simplification
+        const normal = this.projection.surfaceNormal(cameraPos, cache.vector3[0]).negate();
+
+        cameraPos.x -= correction * normal.x;
+        cameraPos.y -= correction * normal.y;
+        cameraPos.z -= correction * normal.z;
+
+        if (
+            !Number.isFinite(cameraPos.x) ||
+            !Number.isFinite(cameraPos.y) ||
+            !Number.isFinite(cameraPos.z)
+        ) {
+            return;
+        }
+
+        // Update camera position
+        this.camera.position.copy(cameraPos);
+        this.camera.updateMatrixWorld(true);
     }
 
     /**
@@ -4101,8 +4157,15 @@ export class MapView extends EventDispatcher {
         let altitude: number | undefined;
 
         const renderCam = viewRenderManager?.renderCamera;
+        // The GPU depth slot does not distinguish the sky/background sphere
+        // from real geometry, so an above-horizon view can report a bogus
+        // "hit" kilometers away (and drag the rotation pivot with it).
+        // Above the horizon there is no ground at the screen center by
+        // construction, so skip the depth path entirely.
+        const lookingAtSky = this.extractAttitude().pitch > MapViewUtils.MAX_TILT_RAD;
         let gpuTargetUsed = false;
         if (
+            !lookingAtSky &&
             gpuDepth !== null &&
             gpuDepth > 0 &&
             gpuDepth < 1 &&
@@ -4139,6 +4202,22 @@ export class MapView extends EventDispatcher {
             distance = result.distance;
             final = result.final;
             altitude = result.altitude;
+
+            // The ray missed the ground (looking at the sky). Anchor the center
+            // at the ground point directly below the camera instead of the
+            // along-view fallback, whose distance is ~1/cos(89°) × clearance
+            // (kilometres at low altitude). The far fallback used to drag the
+            // MapControls rotation pivot, zoom level and LOD with it.
+            if (!result.hitGround) {
+                const nadirGeo = this.projection.unprojectPoint(this.camera.position);
+                nadirGeo.altitude = altitude ?? 0;
+                const nadir = this.projection.projectPoint(nadirGeo, new THREE.Vector3());
+                const nadirDistance = this.camera.position.distanceTo(nadir);
+                if (Number.isFinite(nadirDistance)) {
+                    target = nadir;
+                    distance = Math.max(nadirDistance, 1);
+                }
+            }
         }
 
         // Temporal coherence guard on the derived center distance. The two
@@ -4242,7 +4321,7 @@ export class MapView extends EventDispatcher {
 
         if (this.maxFps === 0) {
             // Render with max fps
-            this.render(frameStartTime);
+            this.renderGuarded(frameStartTime);
         } else {
             // Limit fps by skipping frames
 
@@ -4254,7 +4333,7 @@ export class MapView extends EventDispatcher {
             const targetTime = previousFrameTime + frameInterval - fudgeTimeInMs;
 
             if (frameStartTime >= targetTime) {
-                this.render(frameStartTime);
+                this.renderGuarded(frameStartTime);
             }
         }
 
@@ -4293,6 +4372,29 @@ export class MapView extends EventDispatcher {
         }
 
         return enabledDataSources;
+    }
+
+    /**
+     * Runs a frame and guarantees the re-entrancy flag is released.
+     *
+     * `render()` clears `m_drawing` only on its normal exit path; a thrown
+     * assertion (e.g. a NaN downstream state) left the flag set forever and
+     * every later frame returned early — the map appeared frozen even though
+     * the loop kept scheduling frames.
+     */
+    private renderGuarded(frameStartTime: number): void {
+        // Nested call (e.g. from an event dispatched inside a running frame):
+        // render() will bail out on its own; do not touch the in-progress
+        // frame's flag.
+        if (this.m_drawing) {
+            this.render(frameStartTime);
+            return;
+        }
+        try {
+            this.render(frameStartTime);
+        } finally {
+            this.m_drawing = false;
+        }
     }
 
     /**
@@ -4908,7 +5010,42 @@ export class MapView extends EventDispatcher {
         if (!Number.isFinite(height) || height <= 0) {
             return;
         }
-        const fovRad = THREE.MathUtils.degToRad(fovCalculation.fov);
+
+        // `setFovCalculation()` does not clamp its input; keep a bad runtime
+        // value from turning the whole FOV/focal-length chain into NaN.
+        const fovDeg = THREE.MathUtils.clamp(
+            Number.isFinite(fovCalculation.fov) ? fovCalculation.fov : DEFAULT_FOV_CALCULATION.fov,
+            MIN_FOV_DEG,
+            MAX_FOV_DEG
+        );
+
+        // A poisoned projection matrix (NaN near/far left behind by a
+        // degenerate frame) makes the principal-point lookup below return NaN
+        // and trips the focal-length assertion. Rebuild the matrix from the
+        // last finite camera parameters before doing the FOV math.
+        const projectionElements = this.m_camera.projectionMatrix.elements;
+        if (!Number.isFinite(projectionElements[8]) || !Number.isFinite(projectionElements[9])) {
+            const camera = this.m_camera;
+            if (!Number.isFinite(camera.near) || camera.near <= 0) {
+                camera.near = DEFAULT_CAM_NEAR_PLANE;
+            }
+            if (!Number.isFinite(camera.far) || camera.far <= camera.near) {
+                camera.far = camera.near * 1000;
+            }
+            if (
+                !Number.isFinite(camera.fov) ||
+                camera.fov < MIN_FOV_DEG ||
+                camera.fov > MAX_FOV_DEG
+            ) {
+                camera.fov = fovDeg;
+            }
+            if (!Number.isFinite(camera.aspect) || camera.aspect <= 0) {
+                camera.aspect = 1;
+            }
+            camera.updateProjectionMatrix();
+        }
+
+        const fovRad = THREE.MathUtils.degToRad(fovDeg);
 
         if (fovCalculation.type === "fixed") {
             CameraUtils.setVerticalFov(this.m_camera, fovRad, height);

@@ -24,6 +24,26 @@ describe("CameraUtils", function () {
         );
     });
 
+    it("treats a NaN principal point from a poisoned projection matrix as centered", function () {
+        const height = 100;
+        const vFov = THREE.MathUtils.degToRad(40);
+        // A degenerate near plane makes projectionMatrix.elements[9] NaN — the
+        // state left behind by a broken frame (NaN clip planes).
+        camera.near = Number.NaN;
+        camera.updateProjectionMatrix();
+        expect(camera.projectionMatrix.elements[9]).to.be.NaN;
+
+        expect(() => CameraUtils.setVerticalFov(camera, vFov, height)).to.not.throw();
+        expect(CameraUtils.getFocalLength(camera)!).to.be.closeTo(
+            height / 2 / Math.tan(vFov / 2),
+            1e-9
+        );
+
+        camera.near = 1;
+        camera.updateProjectionMatrix();
+        expect(camera.projectionMatrix.elements[9]).to.equal(0);
+    });
+
     describe("setFocalLength and setVerticalFov", function () {
         const tests: Array<[number, number, number, number, number?]> = [
             // [fov (deg), height, ppal point y offset, expected focal length, aspect ratio (opt)]
