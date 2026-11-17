@@ -117,12 +117,107 @@ async function main(): Promise<void> {
     const handle = await createExampleMap(canvas, {
         projection: "globe",
         lookAt: LOOK_AT,
-        themeObject: { atmosphere: { clouds: true, enabled: true } },
+        // Pin the sun to late-morning over the US West so longitudes from
+        // roughly Japan to the Rocky Mountains stay in daylight while flying
+        // around (a real-time sun leaves night-side jumps pitch black).
+        themeObject: {
+            atmosphere: {
+                // Volumetric clouds envelope the camera at terrain altitudes
+                // and hide the terrain — keep them off for this example.
+                clouds: false,
+                enabled: true,
+                sunTime: new Date().setUTCHours(19, 30, 0, 0)
+            }
+        },
         onReady: view => logExampleInfo("terrain-quantized-mesh", view)
     });
 
     const terrain = await connectTerrain(handle.mapView, accessToken);
     buildInfoPanel(terrain);
+
+    // ---- WebGPU compile/memory probe ----
+    // The historical terrain stutter root cause (DEM/3d-tiles sessions) was
+    // per-instance material keys → NodeMaterial graph rebuild → new WGSL →
+    // pipeline cache MISS. The exact signal is WebGPU's own
+    // createShaderModule (one call == one WGSL compile) and
+    // createRenderPipeline (one == one pipeline build): patch the native API
+    // and count. A static camera must produce ZERO new compiles; bursts only
+    // on first-seen level/morph variants.
+    const gpuProbe = {
+        shaderModules: 0,
+        renderPipelines: 0,
+        computePipelines: 0,
+        bursts: [] as Array<{ t: number; kind: string; delta: number }>,
+        marks: [] as Array<Record<string, number>>,
+        report() {
+            const info = (window as any).__flywave?.mapView?.renderer?.info;
+            return {
+                shaderModules: this.shaderModules,
+                renderPipelines: this.renderPipelines,
+                computePipelines: this.computePipelines,
+                bursts: this.bursts.slice(-10),
+                marks: this.marks.slice(-20),
+                gpuMemory: info
+                    ? { geometries: info.memory?.geometries, textures: info.memory?.textures }
+                    : null,
+                drawCalls: info?.render?.drawCalls
+            };
+        }
+    };
+    (window as unknown as Record<string, unknown>).__gpuProbe = gpuProbe;
+    type GPUDeviceCtor = {
+        prototype: {
+            createShaderModule: (...args: unknown[]) => unknown;
+            createRenderPipeline: (...args: unknown[]) => unknown;
+            createComputePipeline: (...args: unknown[]) => unknown;
+        };
+    };
+    // WebGPU typings are not part of this project's `lib`; use a structural
+    // type instead of referencing the global `GPUDevice` type.
+    const gpuDeviceCtor = (globalThis as unknown as { GPUDevice?: GPUDeviceCtor }).GPUDevice;
+    if (gpuDeviceCtor) {
+        const patch = (
+            proto: GPUDeviceCtor["prototype"],
+            key: "createShaderModule" | "createRenderPipeline" | "createComputePipeline",
+            counter: "shaderModules" | "renderPipelines" | "computePipelines"
+        ) => {
+            const original = proto[key];
+            proto[key] = function (this: unknown, ...args: unknown[]) {
+                gpuProbe[counter]++;
+                return original.apply(this, args);
+            };
+        };
+        patch(gpuDeviceCtor.prototype, "createShaderModule", "shaderModules");
+        patch(gpuDeviceCtor.prototype, "createRenderPipeline", "renderPipelines");
+        patch(gpuDeviceCtor.prototype, "createComputePipeline", "computePipelines");
+    }
+    let lastGpuSample: { t: number; shaders: number; pipelines: number } | undefined;
+    window.setInterval(() => {
+        const info = (window as any).__flywave?.mapView?.renderer?.info;
+        const mem = (performance as any).memory;
+        const mark = {
+            t: Date.now(),
+            shaders: gpuProbe.shaderModules,
+            pipelines: gpuProbe.renderPipelines,
+            drawCalls: info?.render?.drawCalls ?? 0,
+            geometries: info?.memory?.geometries ?? 0,
+            textures: info?.memory?.textures ?? 0,
+            heapMB: mem ? Math.round(mem.usedJSHeapSize / 1048576) : -1
+        };
+        if (lastGpuSample) {
+            const dShaders = mark.shaders - lastGpuSample.shaders;
+            const dPipelines = mark.pipelines - lastGpuSample.pipelines;
+            if (dShaders > 2 || dPipelines > 2) {
+                gpuProbe.bursts.push({ t: mark.t, kind: `shader+${dShaders} pipeline+${dPipelines}`, delta: dShaders + dPipelines });
+                logger.warn(
+                    `WGSL/pipeline recompile burst: +${dShaders} shaders, +${dPipelines} pipelines in the last second`
+                );
+            }
+        }
+        lastGpuSample = { t: mark.t, shaders: mark.shaders, pipelines: mark.pipelines };
+        gpuProbe.marks.push(mark);
+        if (gpuProbe.marks.length > 600) gpuProbe.marks.shift();
+    }, 1000);
 
     // Volumetric clouds drift continuously, keep the on-demand loop awake.
     handle.mapView.beginAnimation();

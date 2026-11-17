@@ -105,7 +105,12 @@ const commonConfig: Configuration = merge(createBaseConfig(flywaveConfig), {
     plugins: [
         new webpack.DefinePlugin({
             THEMES: JSON.stringify(themeList),
-            CESIUM_ION_TOKEN: JSON.stringify(
+            // Examples read `process.env.CESIUM_ION_TOKEN` at runtime
+            // (token-config.ts / datasources.ts checkIonToken) — the define
+            // key must be the full `process.env.*` path, otherwise the baked
+            // default never reaches browser code and every Ion example shows
+            // the "token required" card.
+            "process.env.CESIUM_ION_TOKEN": JSON.stringify(
                 process.env.CESIUM_ION_TOKEN ||
                     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOTFkYWMzNC1mYjI1LTRlYTYtYTc2ZS04NWI1MTU2OTVlMDYiLCJpZCI6Mzg2NzksImlhdCI6MTY0MTE5NTAyNn0.4xsIJgYTK81yhRu67GG0x2FMit6zpYFCWsvWSwiFVV4"
             )

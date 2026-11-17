@@ -65,7 +65,9 @@ export interface IDemoImageryOptions {
  * (e.g. show a hint) when it returns `undefined`.
  */
 export function checkIonToken(): string | undefined {
-    const fromProcess = typeof process !== "undefined" ? process.env?.CESIUM_ION_TOKEN : undefined;
+    // Exact `process.env.CESIUM_ION_TOKEN` expression — replaced by the
+    // webpack DefinePlugin at build time (see webpack.config.ts).
+    const fromProcess = process.env.CESIUM_ION_TOKEN;
     if (typeof fromProcess === "string" && fromProcess.length > 0) {
         return fromProcess;
     }
