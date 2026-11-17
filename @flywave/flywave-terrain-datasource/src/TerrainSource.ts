@@ -142,6 +142,16 @@ export interface TerrainSourceOptions<DataProviderType extends DataProvider = Da
      * @default 400
      */
     tileFadeDuration?: number;
+
+    /**
+     * Whether terrain tile meshes cast shadows. Opt-in: terrain covers the
+     * whole view, so shadow-casting it doubles the shadow-pass geometry and is
+     * only useful for terrain self-shadowing (and the CSM shadow-length god
+     * rays in the atmosphere pass).
+     *
+     * @default false
+     */
+    castShadow?: boolean;
 }
 
 /**
@@ -740,6 +750,14 @@ export abstract class TerrainSource<
 
     get showDebugInfo(): boolean {
         return this.m_showDebugInfo;
+    }
+
+    /**
+     * Whether terrain tile meshes cast shadows; see
+     * `TerrainSourceOptions.castShadow`.
+     */
+    get castShadow(): boolean {
+        return this.options.castShadow ?? false;
     }
 
     get debugObject(): Object3D {

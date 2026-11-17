@@ -304,6 +304,9 @@ export class HeightMapTileLoader extends TerrainTileLoader<DemTileResource, DEMT
                 target.key,
                 target.kind
             );
+            // Opt-in terrain self-shadowing (also feeds the CSM shadow-length
+            // god rays in the atmosphere pass). See TerrainSourceOptions.
+            mesh.castShadow = this.dataSource.castShadow;
             mesh.setImagery(target.texture ?? null, target.uvTransform, target.sourceKey, 0);
             return mesh;
         }
