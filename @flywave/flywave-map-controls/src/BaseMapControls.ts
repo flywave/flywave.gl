@@ -39,15 +39,25 @@ const BeginInteractionUpdate = {
 } as Event<EventNames.BeginInteraction, any>;
 
 /**
- * Below this clearance (metres) the map is navigated like a first-person
- * camera: rotation is applied around the camera itself instead of a ground
- * pivot. Orbiting a distant ground point from a few metres above the terrain
- * swings the camera up/down by hundreds of metres per gesture.
+ * Angular margin (degrees) below the orbit-mode tilt limit at which the
+ * first-person mode engages. The orbit-mode clamp starts rotating the camera
+ * around the ground pivot `maxTiltAngle` below the horizon (pulling the camera
+ * up/down instead of raising the view); entering slightly before that point
+ * guarantees the clamp never fires.
  */
-const FIRST_PERSON_ROTATION_CLEARANCE = 100;
+const FIRST_PERSON_ENTRY_MARGIN_DEG = 0.25;
 
-/** Tilt (degrees from nadir) above which the camera looks at the sky. Matches MapViewUtils.MAX_TILT_DEG. */
-const HORIZON_TILT_DEG = 89;
+/** Pitch (degrees from nadir) of a horizontal view. */
+const HORIZON_PITCH_DEG = 90;
+
+/**
+ * Maximum pitch (radians from nadir) reachable in first-person mode:
+ * straight up (zenith). Dragging further only rotates past the zenith, which
+ * would tilt the view back down on the opposite side.
+ */
+const MAX_VIEW_PITCH_RAD = Math.PI;
+
+const DEG_TO_RAD = Math.PI / 180;
 
 /**
  * Returns true when every element of the matrix is finite and none of its
@@ -310,8 +320,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         // Normalize the camera FIRST: a buried camera poisons the geometric
         // bookkeeping below (screen-center hits, pivot balancing), which can
         // drag the camera to an unrelated location instead of recovering it.
-        // The returned clearance also selects the first-person rotation mode.
-        const clearance = this.enforceMinCameraHeightAboveTerrain();
+        this.enforceMinCameraHeightAboveTerrain();
 
         const cameraPos = new Vector3();
         this.cameraTransform.getOrigin(cameraPos);
@@ -336,16 +345,12 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         this.handleZoomOperations(mouseZ, hitDistance, cameraPos);
         this.cameraTransform.getOrigin(cameraPos);
 
-        // First-person rotation: close to the ground (or looking at the sky,
-        // where the center is not a usable ground pivot) rotate around the
-        // camera itself. Orbiting a distant ground point from a low camera
-        // moved it hundreds of metres up/down while the user was only trying
-        // to look up.
-        const firstPersonRotation =
-            this.mapView.tilt > HORIZON_TILT_DEG ||
-            (clearance !== undefined &&
-                Number.isFinite(clearance) &&
-                clearance <= FIRST_PERSON_ROTATION_CLEARANCE);
+        // First-person rotation once the view rises to the orbit-mode tilt
+        // limit: from there on the pivot is the camera itself, so dragging up
+        // keeps the position fixed and raises the view into the sky instead of
+        // orbiting a (often very distant) ground point. Below the threshold the
+        // normal orbit-around-ground behaviour is kept, also at low altitude.
+        const firstPersonRotation = this.getViewPitchRad() >= this.firstPersonTiltThresholdRad;
         const rotationGravity = new Vector3();
         if (firstPersonRotation) {
             this.getDistanceToGlobe(cameraPos, rotationGravity);
@@ -371,7 +376,17 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         ) {
             const rotationCenter = firstPersonRotation ? cameraPos : this.lastHitCenter;
             const rotationDirection = firstPersonRotation ? rotationGravity : this.lastHitGravity;
-            this.cameraTransform.applyTiltLimit(rotationCenter, rotationDirection, this.tiltLimit);
+            if (!firstPersonRotation) {
+                // The orbit-mode tilt clamp rotates the camera around the ground
+                // pivot, so applying it while looking up translated the camera
+                // along a huge arc. In first-person mode the tilt is free (up to
+                // the zenith, enforced where the rotation is applied).
+                this.cameraTransform.applyTiltLimit(
+                    rotationCenter,
+                    rotationDirection,
+                    this.tiltLimit
+                );
+            }
             this.cameraTransform.smartBalance(
                 rotationCenter.clone(),
                 rotationDirection.clone(),
@@ -405,24 +420,24 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
      * legitimate low-altitude views jump upwards on every frame (e.g. when the
      * user looks up from just above the ground).
      */
-    private enforceMinCameraHeightAboveTerrain(): number | undefined {
+    private enforceMinCameraHeightAboveTerrain(): void {
         const elevationProvider = this.mapView.elevationProvider;
         if (elevationProvider === undefined) {
-            return undefined;
+            return;
         }
         const cameraPos = new Vector3();
         this.cameraTransform.getOrigin(cameraPos);
         const geoCoords = this.mapView.projection.unprojectPoint(cameraPos);
         const terrainAltitude = elevationProvider.getHeight(geoCoords);
         if (terrainAltitude === undefined || !Number.isFinite(terrainAltitude)) {
-            return undefined;
+            return;
         }
         const clearance = geoCoords.altitude - terrainAltitude;
         if (!Number.isFinite(clearance)) {
-            return undefined;
+            return;
         }
         if (clearance >= 0) {
-            return clearance;
+            return;
         }
         const correction = this.mapView.minCameraHeight - clearance;
         const outwardNormal = new Vector3();
@@ -432,7 +447,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             !Number.isFinite(outwardNormal.y) ||
             !Number.isFinite(outwardNormal.z)
         ) {
-            return clearance;
+            return;
         }
         cameraPos.add(outwardNormal.multiplyScalar(correction));
         if (
@@ -440,10 +455,9 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             !Number.isFinite(cameraPos.y) ||
             !Number.isFinite(cameraPos.z)
         ) {
-            return clearance;
+            return;
         }
         this.cameraTransform.cameraToWorld.setPosition(cameraPos);
-        return this.mapView.minCameraHeight;
     }
 
     private applyToMapView() {
@@ -593,7 +607,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         firstPersonGravity?: Vector3
     ): void {
         const rotationDamping = 0.1;
-        const firstPerson = firstPersonPivot !== undefined;
+        let firstPerson = firstPersonPivot !== undefined;
 
         // On the right-button press edge: capture the rotation pivot at the cursor (one CPU ray + projection fallback).
         // In first-person mode the pivot is the camera itself, so no ray is needed.
@@ -645,26 +659,48 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             const rotationStep = 0.0045;
             const tiltStep = rotationStep * 0.5;
 
-            let pivotPoint = firstPerson ? firstPersonPivot! : this.lastHitCenter;
             const camPos = new Vector3();
             this.cameraTransform.getOrigin(camPos);
-
-            let gravityPoint =
-                firstPerson && firstPersonGravity ? firstPersonGravity : this.lastHitGravity;
-            if (!firstPerson) {
-                if (this.cameraSwivel) {
-                    pivotPoint = camPos;
-                    this.getDistanceToGlobe(camPos, gravityPoint);
-                } else if (this.m_rotatePivotDistance > 0) {
-                    // Right-button rotation pivot: the world point locked at the press position (gesture + inertia tail).
-                    pivotPoint = this.m_rotatePivot;
-                    gravityPoint = this.m_rotateGravity;
-                }
-            }
 
             let tiltChange = this.inertialDeltaY * tiltStep;
             if (!this._tiltEnabled) {
                 tiltChange = 0;
+            }
+
+            // Enter the first-person mode inside this very rotation if it would
+            // cross the tilt limit: one large step still orbiting a distant
+            // ground pivot would translate the camera by a huge arc.
+            if (!firstPerson && tiltChange > 0 && this.wouldReachFirstPersonTilt(tiltChange)) {
+                firstPerson = true;
+            }
+
+            let pivotPoint: Vector3;
+            let gravityPoint: Vector3;
+            if (firstPerson) {
+                pivotPoint = camPos;
+                gravityPoint = new Vector3();
+                if (firstPersonGravity !== undefined) {
+                    gravityPoint.copy(firstPersonGravity);
+                } else {
+                    this.getDistanceToGlobe(camPos, gravityPoint);
+                }
+                // Free head-up in first-person mode: the view may rise above
+                // the horizon, capped at the zenith (straight up).
+                const maxRise = MAX_VIEW_PITCH_RAD - this.getViewPitchRad();
+                if (tiltChange > maxRise) {
+                    tiltChange = maxRise;
+                }
+            } else if (this.cameraSwivel) {
+                pivotPoint = camPos;
+                gravityPoint = new Vector3();
+                this.getDistanceToGlobe(camPos, gravityPoint);
+            } else if (this.m_rotatePivotDistance > 0) {
+                // Right-button rotation pivot: the world point locked at the press position (gesture + inertia tail).
+                pivotPoint = this.m_rotatePivot;
+                gravityPoint = this.m_rotateGravity;
+            } else {
+                pivotPoint = this.lastHitCenter;
+                gravityPoint = this.lastHitGravity;
             }
 
             this.cameraTransform.rotateAroundPivotAndTilt(
@@ -676,7 +712,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
                 gravityPoint.z,
                 -this.inertialDeltaX * rotationStep,
                 tiltChange,
-                this.tiltLimit
+                firstPerson ? undefined : this.tiltLimit
             );
         }
     }
@@ -791,6 +827,7 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     }
 
     private applyTiltChange(pivot?: Vector3, gravity?: Vector3): void {
+        const firstPerson = pivot !== undefined;
         const center = pivot ?? this.lastHitCenter;
         const direction = gravity ?? this.lastHitGravity;
         const down = new Vector3();
@@ -806,6 +843,13 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         let angle = Math.acos(Math.min(Math.max(downDot, -1), 1));
         if (forwardDot > 0) angle = -angle;
 
+        let tiltChange = angle - (Math.PI * 0.5 - (this.tiltSet || 0));
+        if (firstPerson && tiltChange > 0) {
+            // Same zenith cap as the drag path: the API-driven tilt must not
+            // rotate the view past straight up either.
+            tiltChange = Math.min(tiltChange, MAX_VIEW_PITCH_RAD - this.getViewPitchRad());
+        }
+
         this.cameraTransform.rotateAroundPivotAndTilt(
             center.x,
             center.y,
@@ -814,8 +858,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
             direction.y,
             direction.z,
             0,
-            angle - (Math.PI * 0.5 - (this.tiltSet || 0)),
-            this.tiltLimit
+            tiltChange,
+            firstPerson ? undefined : this.tiltLimit
         );
 
         this.inertialDeltaY = 0;
@@ -869,6 +913,44 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
 
     public getDistanceAndNormal(result: Vector3, position: Vector3): number {
         return this.cameraTransform.getDistanceAndNormal(result, position);
+    }
+
+    /**
+     * Pitch of the current view in radians, measured from the nadir direction
+     * (0 = straight down, PI / 2 = horizon, PI = straight up).
+     */
+    private getViewPitchRad(): number {
+        const cameraPos = new Vector3();
+        this.cameraTransform.getOrigin(cameraPos);
+
+        const down = new Vector3();
+        this.getDistanceToGlobe(cameraPos, down);
+
+        // `getForward` exposes the camera's +Z axis (backward); the view
+        // direction is its negation.
+        const viewDirection = new Vector3();
+        this.cameraTransform.getForward(viewDirection);
+        viewDirection.negate().normalize();
+
+        return Math.acos(Math.min(Math.max(viewDirection.dot(down), -1), 1));
+    }
+
+    /**
+     * Pitch (radians from nadir) at which the first-person mode engages. The
+     * orbit mode's tilt limit (`applyTiltLimit`) starts pulling the camera back
+     * around the ground pivot when the view is `maxTiltAngle` below the
+     * horizon; from there on rotating around the ground pivot only moves the
+     * camera (up/down) instead of raising the view. The pivot then becomes the
+     * camera itself and the view may rise freely.
+     */
+    private get firstPersonTiltThresholdRad(): number {
+        const maxTiltDeg = (this.tiltLimit * 180) / Math.PI;
+        return (HORIZON_PITCH_DEG - maxTiltDeg - FIRST_PERSON_ENTRY_MARGIN_DEG) * DEG_TO_RAD;
+    }
+
+    /** Whether an upwards tilt change would reach the first-person threshold. */
+    private wouldReachFirstPersonTilt(tiltChange: number): boolean {
+        return this.getViewPitchRad() + tiltChange >= this.firstPersonTiltThresholdRad;
     }
 
     public getAltitude(lon: number, lat: number, defaultHeight: number): number {
