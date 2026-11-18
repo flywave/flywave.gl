@@ -79,14 +79,33 @@ export interface IHeightMap {
  */
 export abstract class QuantizedTileResource extends TileValidResource {
     /**
-     * Gets the height map implementation for this tile
+     * Gets the height raster for this tile, if one exists.
      *
-     * This abstract method must be implemented by concrete subclasses
-     * to provide access to the height map data for this tile.
+     * Quantized terrain tiles no longer keep a per-tile height raster:
+     * heights are sampled from the mesh triangles (see {@link sampleHeight})
+     * and the loading-period coverage comes from the ancestor fallback in the
+     * map view. A raster is only produced for tiles whose ground was modified.
      *
-     * @returns IHeightMap instance
+     * @returns IHeightMap instance or undefined
      */
-    abstract get demMap(): IHeightMap;
+    get demMap(): IHeightMap | undefined {
+        return undefined;
+    }
+
+    /**
+     * Samples the terrain height at normalized tile coordinates (0..1).
+     *
+     * Default implementation samples the tile's height raster when one is
+     * present; resources backed by a triangle mesh override this with a
+     * mesh-based lookup.
+     *
+     * @param x - Normalized coordinate along the tile's longitude span (0..1)
+     * @param y - Normalized coordinate along the tile's latitude span (0..1)
+     * @returns The height in meters or undefined when it cannot be sampled
+     */
+    sampleHeight(x: number, y: number): number | undefined {
+        return this.demMap?.getByScale(x, y);
+    }
 
     /**
      * Gets the maximum height value in this tile

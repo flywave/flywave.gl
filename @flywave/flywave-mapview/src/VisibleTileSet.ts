@@ -407,6 +407,15 @@ export class VisibleTileSet {
     dataSourceTileList: DataSourceTileList[] = [];
     allVisibleTilesLoaded: boolean = false;
 
+    /**
+     * Tiles that were rendered in the previous frame, per data source. The
+     * exclusive fallback uses them to keep the previous view on screen during
+     * a large zoom-out until the coarser tiles are ready (the detail
+     * preservation Cesium's `QuadtreePrimitive` performs through
+     * `anyWereRenderedLastFrame`).
+     */
+    private readonly m_lastRenderedTiles = new Map<DataSource, Tile[]>();
+
     private readonly m_cameraOverride = new THREE.PerspectiveCamera();
     private readonly m_dataSourceCache: DataSourceCache;
     private m_viewRange: ViewRanges = {
@@ -633,7 +642,17 @@ export class VisibleTileSet {
         this.allVisibleTilesLoaded =
             allVisibleTilesLoaded && visibleTileKeysResult.allBoundingBoxesFinal;
 
-        this.populateRenderedTiles();
+        this.populateRenderedTiles(frameNumber);
+
+        // Remember what was drawn this frame: the exclusive fallback keeps
+        // these tiles on screen while a coarser level loads.
+        this.m_lastRenderedTiles.clear();
+        for (const renderListEntry of this.dataSourceTileList) {
+            this.m_lastRenderedTiles.set(
+                renderListEntry.dataSource,
+                Array.from(renderListEntry.renderedTiles.values())
+            );
+        }
 
         this.forEachCachedTile(tile => {
             // Remove all tiles that are still being loaded, but are no longer visible. They have to
@@ -1115,8 +1134,13 @@ export class VisibleTileSet {
      * [[allowOverlappingTiles]] flag.
      *
      */
-    private populateRenderedTiles() {
+    private populateRenderedTiles(frameNumber: number) {
         this.dataSourceTileList.forEach(renderListEntry => {
+            if (renderListEntry.dataSource.useExclusiveFallback) {
+                this.populateRenderedTilesExclusive(renderListEntry, frameNumber);
+                return;
+            }
+
             const renderedTiles = renderListEntry.renderedTiles;
 
             // Tiles for which we need to fall(back/forward) to.
@@ -1180,6 +1204,150 @@ export class VisibleTileSet {
                 }
             }
         });
+    }
+
+    /**
+     * Populates `renderedTiles` for data sources that opt into the exclusive
+     * fallback ({@link DataSource.useExclusiveFallback}).
+     *
+     * A tile is rendered only when every *visible* tile of its sibling group
+     * is ready. Otherwise the whole group is represented by the nearest
+     * cached ancestor with geometry, which renders the area once without any
+     * placeholder mesh and without parent/child overlap. Tiles that are not
+     * visible this frame are not waited for, so off-screen siblings never
+     * block refinement.
+     */
+    private populateRenderedTilesExclusive(renderListEntry: DataSourceTileList, frameNumber: number) {
+        const {
+            dataSource,
+            visibleTiles,
+            renderedTiles,
+            zoomLevel: dataZoomLevel
+        } = renderListEntry;
+        const tilingScheme = dataSource.getTilingScheme();
+        const mortonTileEncoding = tilingScheme.mortonTileEncoding;
+
+        // Tiles that were already on screen last frame. An ancestor fallback
+        // must never replace them: doing so would visibly downgrade detail
+        // (e.g. rotating the camera would make the whole view blurry).
+        // Cesium guards the same way through `anyWereRenderedLastFrame`.
+        const previouslyRendered = new Set<number>();
+        for (const previous of this.m_lastRenderedTiles.get(dataSource) ?? []) {
+            previouslyRendered.add(previous.uniqueKey);
+        }
+
+        /**
+         * Checks whether any *visible* tile that was rendered last frame lies
+         * in the given tile's subtree (or is the tile itself).
+         */
+        const subtreeHasPreviousRender = (ancestorTileKey: TileKey): boolean => {
+            for (const visible of visibleTiles) {
+                if (!previouslyRendered.has(visible.uniqueKey)) {
+                    continue;
+                }
+                if (
+                    visible.tileKey.level === ancestorTileKey.level
+                        ? visible.tileKey.row === ancestorTileKey.row &&
+                          visible.tileKey.column === ancestorTileKey.column
+                        : isAncestorOf(ancestorTileKey, visible.tileKey)
+                ) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        /**
+         * Nearest cached ancestor that can be drawn. The search is not
+         * distance-limited: on a large zoom change the last rendered level
+         * can be many levels away and is still the right fallback.
+         *
+         * An ancestor that was never turned into a render tile (the traversal
+         * jumped straight to a deeper level) is created on demand: its
+         * resource is normally already in the data source cache because child
+         * resources are derived from it, so it becomes drawable immediately.
+         * Without this the area would stay empty until the requested tiles
+         * finish loading.
+         */
+        const findCachedAncestor = (tile: Tile): Tile | undefined => {
+            let ancestorKey = tile.tileKey.parent();
+            while (ancestorKey !== undefined) {
+                let ancestor = this.m_dataSourceCache.get(
+                    ancestorKey.mortonCode(mortonTileEncoding),
+                    tile.offset,
+                    dataSource
+                );
+                if (ancestor === undefined && dataSource.canRenderTile(ancestorKey)) {
+                    ancestor = this.getTile(dataSource, ancestorKey, tile.offset, frameNumber);
+                }
+                if (ancestor !== undefined && ancestor.hasGeometry && !ancestor.delayRendering) {
+                    ancestor.levelOffset = -(dataZoomLevel - ancestorKey.level);
+                    return ancestor;
+                }
+                ancestorKey = ancestorKey.level > 0 ? ancestorKey.parent() : undefined;
+            }
+            return undefined;
+        };
+
+        /**
+         * Zoom-out fallback: keep whatever was on screen last frame when no
+         * ancestor is cached yet. The kept tiles are descendants of the
+         * requested tile, so they tile its area without overlapping.
+         */
+        const findPreviousRenderedTile = (tile: Tile): Tile | undefined => {
+            const previousTiles = this.m_lastRenderedTiles.get(dataSource);
+            if (previousTiles === undefined) {
+                return undefined;
+            }
+            for (const previous of previousTiles) {
+                if (
+                    previous.hasGeometry &&
+                    !previous.delayRendering &&
+                    (isAncestorOf(previous.tileKey, tile.tileKey) ||
+                        isAncestorOf(tile.tileKey, previous.tileKey))
+                ) {
+                    previous.levelOffset = previous.tileKey.level - dataZoomLevel;
+                    return previous;
+                }
+            }
+            return undefined;
+        };
+
+        const fallbackTiles: Tile[] = [];
+        for (const tile of visibleTiles) {
+            tile.levelOffset = 0;
+            if (tile.hasGeometry && !tile.delayRendering) {
+                renderedTiles.set(tile.uniqueKey, tile);
+                continue;
+            }
+            const fallback = findCachedAncestor(tile) ?? findPreviousRenderedTile(tile);
+            if (fallback === undefined) {
+                continue;
+            }
+            // A coarser fallback is only allowed for areas that had nothing on
+            // screen last frame. Replacing already rendered detail with it
+            // would make the view visibly coarser (e.g. on camera rotation).
+            if (
+                isAncestorOf(fallback.tileKey, tile.tileKey) &&
+                subtreeHasPreviousRender(fallback.tileKey)
+            ) {
+                continue;
+            }
+            renderedTiles.set(fallback.uniqueKey, fallback);
+            fallbackTiles.push(fallback);
+        }
+
+        // A fallback ancestor covers its whole area, so nothing finer below it
+        // may render - otherwise parent and child tiles overlap (mixed LOD
+        // entries from neighbouring groups). This is the "kick the whole
+        // subtree" half of Cesium's rule.
+        if (fallbackTiles.length > 0) {
+            for (const [key, tile] of Array.from(renderedTiles.entries())) {
+                if (fallbackTiles.some(fallback => isAncestorOf(fallback.tileKey, tile.tileKey))) {
+                    renderedTiles.delete(key);
+                }
+            }
+        }
     }
 
     private findDown(
@@ -1473,5 +1641,23 @@ export class VisibleTileSet {
 function viewRangesEqual(a: ViewRanges, b: ViewRanges) {
     return (
         a.far === b.far && a.maximum === b.maximum && a.minimum === b.minimum && a.near === b.near
+    );
+}
+
+/**
+ * Returns `true` when `ancestorKey` is a strict ancestor of `descendantKey`.
+ *
+ * Both the quad and the half-quad subdivision schemes derive a child's row
+ * and column from its parent's coordinates by a one-bit shift per level, so
+ * a prefix comparison over the level difference is enough.
+ */
+function isAncestorOf(ancestorKey: TileKey, descendantKey: TileKey): boolean {
+    const levelDifference = descendantKey.level - ancestorKey.level;
+    if (levelDifference <= 0) {
+        return false;
+    }
+    return (
+        descendantKey.row >> levelDifference === ancestorKey.row &&
+        descendantKey.column >> levelDifference === ancestorKey.column
     );
 }

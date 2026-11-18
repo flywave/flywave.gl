@@ -41,6 +41,15 @@ export class QuantizedMesh extends THREE.Mesh {
     public frameNumber: number = 0;
     public clipUvTransform: THREE.Vector3 = new THREE.Vector3(1, 0, 0);
 
+    /**
+     * Per-tile clip window `(uMin, vMin, uMax, vMax)` in the mesh's own
+     * `(uv.x, webMercatorY)` space, used when this mesh draws an ancestor's
+     * geometry for a tile that has no exact resource yet.
+     */
+    public clipUvRect: THREE.Vector4 = new THREE.Vector4(0, 0, 1, 1);
+    /** Enables {@link clipUvRect}; `0` for regular tiles. */
+    public clipEnabled: number = 0;
+
     /** Geographic extent of this tile mesh. */
     get geoBox(): GeoBox {
         return this.selfGeoBox;

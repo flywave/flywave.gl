@@ -4,6 +4,7 @@ import {
     type GeoBox,
     type TileKey,
     type TilingScheme,
+    ConvertWebMercatorY,
     ProjectionType
 } from "@flywave/flywave-geoutils";
 import { type MapView, type Tile, TextElement } from "@flywave/flywave-mapview";
@@ -408,6 +409,102 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
     }
 
     /**
+     * Restricts an ancestor's mesh to this tile's exact extent.
+     *
+     * The clipping happens in the fragment shader (see
+     * `QuantizedMeshMaterial`): every fragment outside the window is
+     * discarded, so the ancestor's geometry covers exactly the requested tile
+     * without overlapping its neighbours.
+     */
+    private applyTileClip(mesh: QuantizedMesh, ancestorTileKey: TileKey): void {
+        const tilingScheme = this.dataSource.getTilingScheme();
+        const ancestorGeoBox = tilingScheme.getGeoBox(ancestorTileKey);
+        const tileGeoBox = this.tile.geoBox;
+
+        const uMin = (tileGeoBox.west - ancestorGeoBox.west) / ancestorGeoBox.longitudeSpan;
+        const uMax = (tileGeoBox.east - ancestorGeoBox.west) / ancestorGeoBox.longitudeSpan;
+
+        // The mesh stores `webMercatorY = 1 - mercatorY(latitude)` normalized to
+        // the ancestor's latitude span, so the vertical window is computed with
+        // the same converter.
+        const toRadians = Math.PI / 180;
+        const converter = new ConvertWebMercatorY(
+            ancestorGeoBox.south * toRadians,
+            ancestorGeoBox.north * toRadians
+        );
+        const vMin = 1 - converter.convert(tileGeoBox.north * toRadians);
+        const vMax = 1 - converter.convert(tileGeoBox.south * toRadians);
+
+        // Cesium makes the upsampled child mesh share the parent's exact
+        // (integer-quantized) UV edges and hides LOD cracks with skirts. A
+        // fragment-space clip has neither, and the interpolated `webMercatorY`
+        // differs slightly from the analytic boundary value, which leaves a
+        // hairline gap at the clip edge. Overlap the window by a fraction of a
+        // child texel instead: the neighbouring tile draws on top where it is
+        // higher, and the gap is closed where it is not.
+        const overlap = 1 / 512;
+        const marginU = (uMax - uMin) * overlap;
+        const marginV = (vMax - vMin) * overlap;
+        mesh.clipUvRect.set(
+            uMin - marginU,
+            vMin - marginV,
+            uMax + marginU,
+            vMax + marginV
+        );
+        mesh.clipEnabled = 1;
+    }
+
+    /**
+     * Requests the worker-clipped fallback mesh (exact extent + skirts) for a
+     * tile whose own resource is still loading.
+     *
+     * The result is cached in the tile's resource manager under its own key
+     * and replaces the fragment-clipped ancestor fill as soon as it arrives,
+     * so the T-junction crack against neighbouring tiles only exists for the
+     * first frames.
+     */
+    private requestFallbackMesh(fallbackResourceKey: string): void {
+        const resourceManager = this.tile.resourceManager;
+        if (resourceManager.hasLoadingResource(fallbackResourceKey)) {
+            return;
+        }
+
+        const provider = this.dataSource.dataProvider();
+        const promise = provider
+            .createFallbackMesh(this.tile.tileKey)
+            .then(mesh => {
+                if (mesh === undefined) {
+                    return undefined;
+                }
+                // The exact resource may have arrived while the worker clipped.
+                if (provider.getPreciseResource(this.tile.tileKey) !== undefined) {
+                    mesh.dispose();
+                    return undefined;
+                }
+                mesh.connectToDataSource(this.dataSource, this.tile.tileKey);
+                resourceManager.setResource(fallbackResourceKey, mesh);
+                return mesh;
+            })
+            .catch(() => undefined)
+            .finally(() => {
+                resourceManager.removeLoadingResource(fallbackResourceKey);
+                if (resourceManager.hasResource(fallbackResourceKey)) {
+                    this.dataSource.updateMemoryUsage(this.tile);
+                    // Rebuild now instead of waiting for the debounced
+                    // overlay refresh, so the skirted mesh takes over quickly.
+                    this.loadTileMeshImpl();
+                    this.dataSource.mapView.update();
+                }
+            });
+
+        resourceManager.addLoadingResource(
+            fallbackResourceKey,
+            this.tile.tileKey,
+            promise as unknown as Promise<never>
+        );
+    }
+
+    /**
      * Implementation of tile mesh loading for terrain data
      *
      * This method loads and configures the mesh objects for quantized terrain
@@ -420,30 +517,53 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
     loadTileMeshImpl() {
         this.tile.clear();
 
-        const quantizedDataResource = this.dataSource
-            .dataProvider()
-            .getBestAvailableResourceTile(this.tile.tileKey);
+        const provider = this.dataSource.dataProvider();
+        const fallbackResourceKey = `${provider.getResourceKey()}:fallback`;
+        const resourceManager = this.tile.resourceManager;
 
-        let needDemDraw = false;
-        if (
-            quantizedDataResource?.resource.tryReprojectToProjection(
-                this.dataSource.mapView.projection
-            )
-        ) {
-            needDemDraw = true;
+        const quantizedDataResource = provider.getBestAvailableResourceTile(this.tile.tileKey);
+
+        // Start the projection switch when needed. The resource keeps its
+        // previous projection until the reprojection completes; the tile is
+        // simply rendered with it and rebuilt when the new geometry is ready.
+        quantizedDataResource?.resource.tryReprojectToProjection(
+            this.dataSource.mapView.projection
+        );
+
+        const resource = quantizedDataResource?.resource;
+        const hasGroundModifiers =
+            this.dataSource.getGroundModificationManager().getModifierCount() > 0;
+        // Ground modifications are baked into the tile's DEM raster, so those
+        // tiles are the only ones still rendered through the height-map block.
+        const useModifiedBlock =
+            resource?.demMap !== undefined &&
+            (hasGroundModifiers || resource.isGroundElevationModified);
+        const exactResource =
+            quantizedDataResource !== undefined &&
+            quantizedDataResource.tileKey.level === this.tile.tileKey.level
+                ? quantizedDataResource.resource
+                : undefined;
+
+        // The tile's own resource is here: drop the temporary fallback.
+        if (exactResource !== undefined) {
+            resourceManager.removeResource(fallbackResourceKey);
+        }
+
+        // Worker-clipped fallback (exact extent + skirts). Until it arrives the
+        // raw ancestor below covers the tile with a fragment-space clip.
+        const workerFallback =
+            exactResource === undefined && !useModifiedBlock
+                ? resourceManager.getResource<QuantizedTerrainMesh>(fallbackResourceKey)
+                : undefined;
+        if (exactResource === undefined && !useModifiedBlock && workerFallback === undefined) {
+            this.requestFallbackMesh(fallbackResourceKey);
         }
 
         this.dataSource.getWebTileDataSources().forEach(webTiles => {
             const webTile = webTiles.getBestAvailableResourceTile(this.tile.tileKey);
             if (!webTile) return;
 
-            if (
-                !quantizedDataResource ||
-                needDemDraw ||
-                this.tile.tileKey.level !== quantizedDataResource.tileKey.level ||
-                quantizedDataResource.resource.isGroundElevationModified ||
-                this.dataSource.getGroundModificationManager().getModifierCount() > 0
-            ) {
+            if (useModifiedBlock) {
                 const block = this.makeIntermediateTerrainBlock(
                     {
                         webTiles: webTile.resource.value,
@@ -453,11 +573,15 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                 );
                 this.attachDecalMeshes(block, this.tile.geoBox);
                 this.tile.objects.push(block);
-            } else {
-                if (!quantizedDataResource?.resource) return;
+                return;
+            }
+
+            // A real mesh for this tile's exact extent: draw it as is.
+            const renderResource = exactResource ?? workerFallback;
+            if (renderResource) {
                 const mesh = TileObjectMesh.makeMapViewQuantizedMesh(
                     {
-                        quantizedData: quantizedDataResource.resource,
+                        quantizedData: renderResource,
                         webTiles: webTile.resource.value,
                         tile: this.tile,
                         webTingScheme: webTiles.tilingScheme,
@@ -470,16 +594,38 @@ export class QuantizedTerrainTileLoader extends TerrainTileLoader<
                 const inner = mesh.children[0] as QuantizedMesh;
                 this.attachDecalMeshes(inner, inner.geoBox);
                 this.tile.objects.push(mesh);
+                return;
             }
+
+            // First frames only: the tile's own resource has not arrived yet,
+            // draw the nearest cached ancestor's mesh clipped to this tile's
+            // exact extent (fragment discard, no height raster, no geometry
+            // clipping). It lacks skirts, so the worker-clipped mesh requested
+            // above replaces it as soon as it is ready.
+            if (!quantizedDataResource) return;
+            const fallbackMesh = TileObjectMesh.makeMapViewQuantizedMesh(
+                {
+                    quantizedData: quantizedDataResource.resource,
+                    webTiles: webTile.resource.value,
+                    tile: this.tile,
+                    webTingScheme: webTiles.tilingScheme,
+                    terrainSource: this.dataSource,
+                    quantizedTilingScheme: this.dataSource.getTilingScheme()
+                },
+                this.dataSource.mapView
+            );
+            const fallbackInner = fallbackMesh.children[0] as QuantizedMesh;
+            this.applyTileClip(fallbackInner, quantizedDataResource.tileKey);
+            this.tile.objects.push(fallbackMesh);
         });
 
         // Projector-only tiles (no web imagery provider produced an object):
         // still render the quantized mesh so decals have a surface.
         if (this.collectProjectorEntries().length > 0 && this.tile.objects.length === 0) {
-            if (quantizedDataResource?.resource) {
+            if (exactResource) {
                 const mesh = TileObjectMesh.makeMapViewQuantizedMesh(
                     {
-                        quantizedData: quantizedDataResource.resource,
+                        quantizedData: exactResource,
                         webTiles: [],
                         webTingScheme: this.dataSource.getTilingScheme(),
                         tile: this.tile,

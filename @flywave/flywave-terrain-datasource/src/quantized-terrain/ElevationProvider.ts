@@ -82,19 +82,17 @@ export class ElevationProvider implements InnerElevationProvider {
         if (parent) {
             while (tk.level >= level) {
                 const tile = this.dataSource.dataProvider().getPreciseResource(tk);
-                if (tile && tile.demMap) {
+                if (tile) {
                     const { southWest, longitudeSpan, latitudeSpan } = this.dataSource
                         .getTilingScheme()
                         .getGeoBox(tk);
 
                     const x = (normaledGeoPoint.lng - southWest.lng) / longitudeSpan;
                     const y = (normaledGeoPoint.lat - southWest.lat) / latitudeSpan;
-                    return {
-                        altitude: tile?.demMap?.getByScale(x, y) || defaultIfNotLoaded,
-                        tileKey: tk
-                    };
-
-                    break;
+                    const height = tile.sampleHeight(x, y);
+                    if (height !== undefined) {
+                        return { altitude: height || defaultIfNotLoaded, tileKey: tk };
+                    }
                 }
                 if (tk.level == 0) break;
                 tk = tk.parent();
@@ -130,16 +128,27 @@ export class ElevationProvider implements InnerElevationProvider {
 
         if (!tile) return undefined;
 
-        const { width, height } = tile.resource.demMap.getDisplacementMap();
+        // Quantized tiles no longer carry a height raster. Only tiles whose
+        // ground was modified keep one; without it there is nothing to drape
+        // overlays/text with, so report "not available" instead of falling
+        // back to a stale or mismatched raster.
+        const demMap = tile.resource.demMap;
+        if (!demMap) return undefined;
+
+        const texture = demMap.getDisplacementMap();
+        if (!texture) return undefined;
+
+        // The raster belongs to the best available tile, so both the tile key
+        // and the geo box must describe that tile, not the requested one.
         return {
-            tileKey,
-            texture: tile.resource.demMap.getDisplacementMap(),
+            tileKey: tile.tileKey,
+            texture,
             displacementMap: {
-                xCountVertices: width,
-                yCountVertices: height,
-                buffer: new Float32Array(tile.resource.demMap.getDisplacementMapBuffer().buffer)
+                xCountVertices: texture.image.width,
+                yCountVertices: texture.image.height,
+                buffer: new Float32Array(demMap.getDisplacementMapBuffer().buffer)
             },
-            geoBox: this.dataSource.getTilingScheme().getGeoBox(tileKey)
+            geoBox: this.dataSource.getTilingScheme().getGeoBox(tile.tileKey)
         };
     }
 

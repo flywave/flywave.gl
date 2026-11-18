@@ -190,6 +190,37 @@ export abstract class DataSource<TEventMap extends {} = {}> extends THREE.EventD
 
     allowOverlappingTiles: boolean = true;
 
+    /**
+     * When `true`, a tile is only rendered once every *visible* tile of its
+     * sibling group is ready. While the group is still loading the whole
+     * group is replaced by the nearest cached ancestor that has geometry -
+     * the same all-or-nothing fallback Cesium's `QuadtreePrimitive` performs
+     * when descendants are not renderable yet.
+     *
+     * This avoids placeholder meshes and prevents parent and child tiles from
+     * rendering on top of each other while a group loads.
+     *
+     * @default false
+     */
+    get useExclusiveFallback(): boolean {
+        return false;
+    }
+
+    /**
+     * Returns `true` when a tile can be rendered as-is, i.e. its render data
+     * is already cached.
+     *
+     * The exclusive fallback uses this to decide whether a missing ancestor
+     * can be turned into a render tile on demand: without a ready resource
+     * creating it would only start a load and could flood the queue, so the
+     * fallback walks further up instead.
+     *
+     * @default true
+     */
+    canRenderTile(_tileKey: TileKey): boolean {
+        return true;
+    }
+
     enablePicking: boolean = true;
 
     /**

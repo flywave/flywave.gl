@@ -3,6 +3,7 @@
 
 import {
     attribute,
+    Discard,
     float,
     Fn,
     mix as tslMix,
@@ -100,6 +101,22 @@ _normalSampler.onObjectUpdate(({ object }) => object.normalSampler ?? emptyTextu
 
 const _frameNumber = uniform(0.0).onObjectUpdate(({ object }) => object.frameNumber);
 
+/**
+ * Per-tile clip window (uMin, vMin, uMax, vMax) in the tile's own
+ * (uv.x, webMercatorY) space, plus its enable flag.
+ *
+ * A tile that is rendered from an ancestor's mesh (the loading-period
+ * fallback) uses this to discard the fragments outside its own extent, so the
+ * ancestor covers exactly the requested tile without a height raster, without
+ * geometry clipping and without overlapping neighbouring tiles.
+ */
+const DEFAULT_CLIP_UV_RECT = new THREE.Vector4(0, 0, 1, 1);
+const _clipUvRect = uniform(DEFAULT_CLIP_UV_RECT.clone()).onObjectUpdate(
+    ({ object }) => object.clipUvRect ?? DEFAULT_CLIP_UV_RECT
+);
+const _clipEnabled = uniform(0.0).onObjectUpdate(({ object }) => object.clipEnabled ?? 0);
+
+
 const _clipUvTransform = uniform(new THREE.Vector3(1, 0, 0)).onObjectUpdate(
     ({ object }) => object.clipUvTransform
 );
@@ -129,7 +146,20 @@ function buildNodes() {
         return tslMix(color, vec4(1.0), float(0.1));
     })();
 
-    return { colorNode };
+    // Discard everything outside the per-tile clip window. Disabled (0) for
+    // regular tiles, enabled only when an ancestor mesh is drawn for a tile
+    // that has no exact resource yet.
+    const clipped = _clipEnabled
+        .greaterThan(0.5)
+        .and(
+            mapUv.x
+                .lessThan(_clipUvRect.x)
+                .or(mapUv.x.greaterThan(_clipUvRect.z))
+                .or(mapUv.y.lessThan(_clipUvRect.y))
+                .or(mapUv.y.greaterThan(_clipUvRect.w))
+        );
+
+    return { colorNode, clipped };
 }
 
 const s_nodes = buildNodes();
@@ -147,7 +177,9 @@ export class QuantizedMeshMaterial extends MeshStandardNodeMaterial {
 
     constructor(parameters?: THREE.MeshStandardMaterialParameters) {
         super(parameters);
-        this.colorNode = s_nodes.colorNode;
+        // Discard fragments outside the tile's clip window. `clipEnabled` is
+        // zero for regular tiles, so the branch is a no-op for them.
+        this.colorNode = s_nodes.clipped.select(Discard(), s_nodes.colorNode);
     }
 
     dispose() {

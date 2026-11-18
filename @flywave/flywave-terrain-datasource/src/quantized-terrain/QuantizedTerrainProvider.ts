@@ -1,7 +1,6 @@
 /* Copyright (C) 2025 flywave.gl contributors */
 
-import { type TileKey, geographicTerrainStandardTiling } from "@flywave/flywave-geoutils";
-
+import { TileKey, geographicTerrainStandardTiling } from "@flywave/flywave-geoutils";
 import { ResourceProvider } from "../ResourceProvider";
 import { ITileResource } from "../TileResourceManager";
 import {
@@ -171,6 +170,19 @@ export abstract class QuantizedProvider<
     }
 
     /**
+     * Builds a temporary renderable mesh for a tile whose own resource is
+     * still loading, derived from the nearest cached ancestor.
+     *
+     * The quantized terrain provider overrides this with the worker-side
+     * clipping/upsampling chain, so the fallback geometry has the tile's exact
+     * extent and its own skirts (which is what closes the T-junction cracks
+     * against neighbouring tiles). Providers without upsampling return
+     * `undefined`.
+     */
+    public async createFallbackMesh(_tileKey: TileKey): Promise<Resource | undefined> {
+        return undefined;
+    }
+    /**
      * Checks if the elevation map should be flipped on the Y axis
      *
      * This method determines whether the Y axis should be flipped when
@@ -195,6 +207,66 @@ export abstract class QuantizedProvider<
  * available even when exact resolution data is not present.
  */
 export class QuantizedTerrainProvider extends QuantizedProvider<QuantizedTerrainMesh> {
+    /**
+     * Height rasters are no longer generated for quantized terrain tiles:
+     * heights are sampled from the mesh triangles and the loading-period
+     * coverage comes from the map view's ancestor fallback. Only ground
+     * modifications force a raster, and that decision is made per tile in
+     * `getQuantizedMeshTerrain` / `getUpSamplQuantizedMeshTerrain` from the
+     * modifiers found in the tile area.
+     */
+    protected override isElevationMapEnabled(tileKey: TileKey): boolean {
+        return false;
+    }
+
+    /**
+     * Builds the loading-period fallback mesh for a tile whose own resource is
+     * still loading.
+     *
+     * The ancestor's mesh is clipped to the requested tile's exact extent by
+     * the same worker-side chain that produces regular upsampled tiles
+     * (`TaskType.QuantizedUpsample`), so the result carries the tile's own
+     * edge geometry and skirts. Those skirts are what closes the T-junction
+     * cracks against neighbouring tiles - a fragment-space clip cannot.
+     */
+    public override async createFallbackMesh(
+        tileKey: TileKey
+    ): Promise<QuantizedTerrainMesh | undefined> {
+        if (tileKey.level === 0) {
+            return undefined;
+        }
+
+        // Nearest cached ancestor; the requested tile's own resource is still
+        // loading by definition.
+        const ancestor = this.getBestAvailableResourceTile(tileKey.parent(), false);
+        if (ancestor === undefined) {
+            return undefined;
+        }
+
+        let mesh = ancestor.resource;
+        let currentKey = ancestor.tileKey;
+        while (currentKey.level < tileKey.level) {
+            const levelOffset = tileKey.level - currentKey.level - 1;
+            const childKey = TileKey.fromRowColumnLevel(
+                tileKey.row >> levelOffset,
+                tileKey.column >> levelOffset,
+                currentKey.level + 1
+            );
+            mesh = await getUpSamplQuantizedMeshTerrain(
+                this.layerStrategy,
+                this.terrainSource,
+                mesh,
+                currentKey,
+                childKey,
+                false,
+                this.isElevationMapFlipY()
+            );
+            currentKey = childKey;
+        }
+
+        return mesh;
+    }
+
     /**
      * Retrieves a terrain tile, handling both direct loading and up-sampling scenarios
      *

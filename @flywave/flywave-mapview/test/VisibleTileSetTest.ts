@@ -411,6 +411,88 @@ describe("VisibleTileSet", function () {
         assert.equal(renderedTiles.get(parentKey)!.tileKey.mortonCode(), parentCode);
     });
 
+    /**
+     * Enables the Cesium-style all-or-nothing fallback on a fake data source.
+     */
+    function enableExclusiveFallback(dataSource: DataSource) {
+        Object.defineProperty(dataSource, "useExclusiveFallback", {
+            configurable: true,
+            get: () => true
+        });
+    }
+
+    it("exclusive fallback renders the parent while a visible sibling group is incomplete", function () {
+        setupBerlinCenterCameraFromSamples();
+        enableExclusiveFallback(fixture.ds[0]);
+
+        const zoomLevel = 15;
+        const storageLevel = 14;
+        const offset = 0;
+        const frameNumber = 42;
+
+        const parentCode = TileKey.parentMortonCode(371506851);
+        const parentTileKey = TileKey.fromMortonCode(parentCode);
+        const parentKey = TileKeyUtils.getKeyForTileKeyAndOffset(parentTileKey, offset);
+        const parentTile = fixture.vts.getTile(
+            fixture.ds[0],
+            parentTileKey,
+            offset,
+            frameNumber
+        ) as Tile;
+        assert.exists(parentTile);
+        parentTile.forceHasGeometry(true);
+
+        // Only one of the two visible tiles is loaded: the group is still
+        // incomplete, so neither of them may render.
+        const loadedChildKey = TileKey.fromMortonCode(371506850);
+        const loadedChild = fixture.vts.getTile(
+            fixture.ds[0],
+            loadedChildKey,
+            offset,
+            frameNumber
+        ) as Tile;
+        assert.exists(loadedChild);
+        loadedChild.forceHasGeometry(true);
+
+        const dataSourceTileList = updateRenderList(zoomLevel, storageLevel).tileList;
+        assert.equal(dataSourceTileList[0].visibleTiles.length, 2);
+
+        const renderedTiles = dataSourceTileList[0].renderedTiles;
+        assert.equal(renderedTiles.size, 1);
+        assert(renderedTiles.has(parentKey));
+        assert.equal(renderedTiles.get(parentKey)!.tileKey.mortonCode(), parentCode);
+    });
+
+    it("exclusive fallback renders the visible tiles once the whole group is ready", function () {
+        setupBerlinCenterCameraFromSamples();
+        enableExclusiveFallback(fixture.ds[0]);
+
+        const zoomLevel = 15;
+        const storageLevel = 14;
+        const offset = 0;
+        const frameNumber = 42;
+
+        for (const mortonCode of [371506850, 371506851]) {
+            const tileKey = TileKey.fromMortonCode(mortonCode);
+            const tile = fixture.vts.getTile(fixture.ds[0], tileKey, offset, frameNumber) as Tile;
+            assert.exists(tile);
+            tile.forceHasGeometry(true);
+        }
+
+        const dataSourceTileList = updateRenderList(zoomLevel, storageLevel).tileList;
+        assert.equal(dataSourceTileList[0].visibleTiles.length, 2);
+
+        const renderedTiles = dataSourceTileList[0].renderedTiles;
+        assert.equal(renderedTiles.size, 2);
+        for (const mortonCode of [371506850, 371506851]) {
+            const key = TileKeyUtils.getKeyForTileKeyAndOffset(
+                TileKey.fromMortonCode(mortonCode),
+                offset
+            );
+            assert(renderedTiles.has(key));
+        }
+    });
+
     it("#updateRenderList properly filters root tiles", function () {
         fixture = new Fixture(
             { tileWrappingEnabled: true },

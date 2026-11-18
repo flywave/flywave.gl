@@ -42,11 +42,11 @@ export class QuantizedStratumResource extends QuantizedTileResource {
     }
 
     /**
-     * Gets the height map (not implemented in this class)
-     * @throws Error - Method not implemented
+     * Stratum resources do not expose a height raster; heights are read from
+     * the stratum geometry instead.
      */
-    get demMap(): IHeightMap {
-        throw new Error("Method not implemented.");
+    get demMap(): IHeightMap | undefined {
+        return undefined;
     }
 
     // Private field to store the stratum tile data

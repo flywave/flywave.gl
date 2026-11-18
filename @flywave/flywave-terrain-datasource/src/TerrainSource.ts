@@ -413,7 +413,9 @@ export class ShadowTerrainResourceTile extends TerrainResourceTile {
         private readonly resTile: TerrainResourceTile
     ) {
         super(dataSource, tileKey);
-        this.forceHasGeometry(true);
+        // `hasGeometry` intentionally follows the actual render objects: a tile
+        // without a ready resource reports no geometry so that the map view's
+        // ancestor fallback (Cesium-style) covers the area while it loads.
     }
 
     get resourceManager() {
@@ -758,6 +760,26 @@ export abstract class TerrainSource<
      */
     get castShadow(): boolean {
         return this.options.castShadow ?? false;
+    }
+
+    /**
+     * Terrain renders a tile only when its whole visible sibling group is
+     * ready; until then the nearest cached ancestor covers the area (the
+     * Cesium `QuadtreePrimitive` fallback). No placeholder height-map block
+     * is rendered while a tile loads.
+     */
+    override get useExclusiveFallback(): boolean {
+        return true;
+    }
+
+    /**
+     * A terrain tile is drawable once its quantized mesh resource is cached.
+     * Used by the exclusive fallback to materialise a missing ancestor tile
+     * on demand instead of leaving the area empty while the requested tiles
+     * load.
+     */
+    override canRenderTile(tileKey: TileKey): boolean {
+        return this.dataProvider().hasResource(tileKey);
     }
 
     get debugObject(): Object3D {
