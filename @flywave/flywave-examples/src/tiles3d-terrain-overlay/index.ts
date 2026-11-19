@@ -28,13 +28,13 @@ const INITIAL_POSE = {
 } as const;
 
 /**
- * Scene theme: dawn sun with volumetric clouds and shadow casting, which
- * makes the terrain-vs-mesh compositing easy to judge.
+ * Scene theme: dawn sun without a cloud layer (the translucentDepth composite
+ * is easier to judge against a clean sky), with shadow casting.
  */
 const SCENE_THEME: FlatTheme = {
     atmosphere: {
         enabled: true,
-        clouds: { quality: "high" },
+        clouds: false,
         sunCastShadow: true,
         sunTime: new Date().setHours(4, 30)
     }
@@ -74,6 +74,12 @@ function createDataSource(token: string): CesiumIonDataSource {
 }
 
 /**
+ * Constant X-ray highlight color for the buried-geometry ghost, decoupled
+ * from sun time (wired through the theme's `translucentDepth.color`).
+ */
+const GHOST_COLOR = "#59c2ff";
+
+/**
  * Compact bilingual hint shown when no Ion token is configured.
  */
 function showTokenHint(): void {
@@ -109,7 +115,9 @@ function setupEffectGui(mapView: MapView, dataSource: CesiumIonDataSource): void
         .name("translucentDepth")
         .onChange(enabled => {
             void dataSource.setTheme({
-                postEffects: { translucentDepth: { enabled } }
+                postEffects: {
+                    translucentDepth: { enabled, color: GHOST_COLOR }
+                }
             });
             mapView.update();
         });
@@ -137,7 +145,9 @@ async function startExample(token: string): Promise<void> {
     attachTerrain(mapView);
 
     const dataSource = createDataSource(token);
-    void dataSource.setTheme({ postEffects: { translucentDepth: { enabled: true } } });
+    void dataSource.setTheme({
+        postEffects: { translucentDepth: { enabled: true, color: GHOST_COLOR } }
+    });
     await mapView.addDataSource(dataSource);
 
     setupEffectGui(mapView, dataSource);

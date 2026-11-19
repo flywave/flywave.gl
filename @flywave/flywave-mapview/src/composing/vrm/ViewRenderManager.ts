@@ -359,6 +359,11 @@ export class ViewRenderManager implements IViewRenderManager {
             this.config.outline.enabled &&
             (this.outlineObjects.size > 0 || this.config.outline.keepPassAlive === true);
         const aerialEnabled = this.config.aerialPerspective.enabled;
+        // Translucent-layer X-ray ghost: reads the mesh-only pass DEPTH against
+        // the scene depth, so like every depth consumer it needs single-sampled
+        // scene passes (see sceneSamples below).
+        const ghostEnabled =
+            this.translucentLayerEffect != null && this.translucentLayerEffect.hasObjects;
         const hasCSM = this.csmShadowNode != null;
         // three populates CSMShadowNode.lights during the first shadow pass
         // (`_init`), which can happen after this post-processing graph is
@@ -462,7 +467,7 @@ export class ViewRenderManager implements IViewRenderManager {
         // morphology) forces single-sampled scene passes. TAA provides its
         // own AA, so nothing is lost in that mode.
         const sceneSamples =
-            this.config.antialiasing === "taa" || ssrEnabled || outlineEnabled
+            this.config.antialiasing === "taa" || ssrEnabled || outlineEnabled || ghostEnabled
                 ? 0
                 : this.renderer.samples;
         this.passNode =
@@ -678,7 +683,7 @@ export class ViewRenderManager implements IViewRenderManager {
             }
         }
 
-        if (this.translucentLayerEffect != null && this.translucentLayerEffect.hasObjects) {
+        if (ghostEnabled) {
             const buildingLayers = new THREE.Layers();
             buildingLayers.set(TRANSLUCENT_LAYER_BIT);
             this._sunDir = uniform(vec3(new THREE.Vector3(0, 1, 0)));
@@ -700,20 +705,52 @@ export class ViewRenderManager implements IViewRenderManager {
             this.buildingColorPassNode.setLayers(buildingLayers);
             this.buildingColorPassNode.overrideMaterial = _buildingColorMat;
             const buildingColorNode = this.buildingColorPassNode.getTextureNode("output");
+            const buildingDepthNode = this.buildingColorPassNode.getTextureNode("depth");
 
-            const hasObject = buildingColorNode.a.greaterThan(float(0.5));
+            // Presence is read from the pass DEPTH, never from alpha: the
+            // scene Background ignores layers, so the sky re-renders into this
+            // pass with alpha 1 at every non-mesh pixel (the old alpha-based
+            // footprint test was therefore true frame-wide and washed the
+            // whole image). Reversed depth: the background lands exactly on
+            // the far plane = 0, any real mesh surface is far above epsilon —
+            // same "depth > 0 = geometry" rule as the outline mask.
+            const depthEps = uniform(1e-5);
+            const hasObject = buildingDepthNode.greaterThan(depthEps);
 
-            const alpha = float(0.3);
-            const buildingColor = vec4(
-                this.config.toneMappingMode === "agx-punchy"
+            // X-ray stage: geometry the scene front (terrain, other buildings)
+            // occludes never reaches the scene pass fragment, so ghost it in
+            // here. Buried ⟺ the mesh-only pass depth sits behind the scene
+            // front; exposed surfaces (both depths equal) stay untouched.
+            // Reversed depth: nearer = larger value, same comparison family
+            // as the outline occlusion test.
+            const occlusionBias = uniform(1e-6);
+            const buried = buildingDepthNode.lessThan(depthNode.sub(occlusionBias));
+
+            const mixFactor = float(this.translucentLayerEffect!.mixFactor).toConst();
+            // Ghost color: an explicitly configured highlight color renders
+            // flat and constant, decoupled from sun time (the classic X-ray
+            // look). Without one the pass's flat-lit mesh color is used —
+            // the blend sits after tone mapping while that pass output is
+            // still linear, hence the agx-punchy compensation.
+            const highlight = this.translucentLayerEffect!.highlightColor;
+            const ghostColor =
+                highlight != null
+                    ? vec3(highlight.r, highlight.g, highlight.b)
+                    : this.config.toneMappingMode === "agx-punchy"
                     ? agxPunchyToneMapping(buildingColorNode.rgb, this.exposure)
-                    : buildingColorNode.rgb,
+                    : buildingColorNode.rgb;
+            const ghostBlend = finalNode.rgb
+                .mul(mixFactor.oneMinus())
+                .add(ghostColor.mul(mixFactor));
+            finalNode = vec4(
+                hasObject.select(buried.select(ghostBlend, finalNode.rgb), finalNode.rgb),
                 1
             );
-            const undergroundBlend = finalNode.rgb
-                .mul(float(1.0).sub(alpha))
-                .add(buildingColor.rgb.mul(alpha));
-            finalNode = vec4(hasObject.select(undergroundBlend, finalNode.rgb), 1);
+        } else {
+            // Toggled off (no registered objects): drop the stale pass handle,
+            // mirroring the outline mask pass above — otherwise the previous
+            // build's render target stays referenced until dispose().
+            this.buildingColorPassNode = undefined;
         }
 
         // Dithering hides banding introduced by tone mapping; in the "none"

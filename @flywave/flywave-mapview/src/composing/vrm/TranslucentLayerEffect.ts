@@ -59,7 +59,8 @@ export class TranslucentLayerEffect {
     private readonly layerDataTexture: DataTexture;
     private needsLayerTextureUpdate: boolean = false;
 
-    private readonly registeredObjects = new Set<Object3D>();
+    /** Registered roots keyed by the layer id they were registered under. */
+    private readonly registeredObjects = new Map<Object3D, string>();
 
     constructor() {
         this.layerDataTexture = this.createLayerDataTexture();
@@ -148,7 +149,7 @@ export class TranslucentLayerEffect {
         object.traverse(child => {
             child.layers.enable(TRANSLUCENT_LAYER_BIT);
         });
-        this.registeredObjects.add(object);
+        this.registeredObjects.set(object, layerId);
     }
 
     removeObject(object: Object3D): void {
@@ -159,8 +160,58 @@ export class TranslucentLayerEffect {
         this.registeredObjects.delete(object);
     }
 
+    /**
+     * Unregister every mesh of one layer (or all layers), including meshes
+     * whose tiles went inactive before a disable reached them — the per-tile
+     * disable path only revisits ACTIVE tiles, so without this sweep stale
+     * registrations keep `hasObjects` true and the ghost pass armed forever.
+     */
+    clearObjects(layerId?: string): void {
+        for (const [object, owner] of this.registeredObjects) {
+            if (layerId !== undefined && owner !== layerId) continue;
+            object.traverse(child => {
+                child.layers.disable(TRANSLUCENT_LAYER_BIT);
+            });
+            this.registeredObjects.delete(object);
+        }
+    }
+
+    /** Iterate the registered roots of one layer (or all) for bookkeeping. */
+    forEachRegistered(callback: (object: Object3D) => void, layerId?: string): void {
+        for (const [object, owner] of this.registeredObjects) {
+            if (layerId !== undefined && owner !== layerId) continue;
+            callback(object);
+        }
+    }
+
     get hasObjects(): boolean {
         return this.registeredObjects.size > 0;
+    }
+
+    /**
+     * Blend factor (0-1) of the first registered layer, for the node-graph
+     * blend. Falls back to 0.5 when the layer was registered without an
+     * explicit `mixFactor` (the previous hardcoded 0.3 made the effect
+     * indistinguishable from the mesh's own lit color).
+     */
+    get mixFactor(): number {
+        for (const config of this.layers.values()) {
+            return config.mixFactor ?? 0.5;
+        }
+        return 0.5;
+    }
+
+    /**
+     * Explicit highlight color of the first registered layer, or undefined
+     * when the layer was registered without one. Undefined keeps the ghost
+     * lit by the simplified flat-light model; a configured color renders the
+     * ghost flat and constant, decoupled from sun time.
+     */
+    get highlightColor(): Color | undefined {
+        for (const config of this.layers.values()) {
+            return config.color ? config.parsedColor : undefined;
+        }
+        return undefined;
     }
 
     getLayerDataTexture(): DataTexture {
@@ -182,7 +233,7 @@ export class TranslucentLayerEffect {
     }
 
     dispose(): void {
-        for (const obj of this.registeredObjects) {
+        for (const [obj] of this.registeredObjects) {
             obj.traverse(child => {
                 child.layers.disable(TRANSLUCENT_LAYER_BIT);
             });

@@ -98,6 +98,10 @@ interface BatchTableData {
 export class Tiles3DStyleWatcher extends Observe3DTileChange {
     private m_styleEvaluator: BatchStyleProcessor;
 
+    /** Whether the previous theme had translucentDepth enabled (transition
+     * guard for the disable sweep in updateTheme). */
+    private m_translucentWasEnabled: boolean = false;
+
     private readonly m_appliedMaterials = new Map<string, B3DMBatchMaterial[]>();
     private m_hasBatchStyles: boolean = false;
     private readonly m_tileFeatures = new Map<string, B3DMTileFeature | I3DMTileFeature>();
@@ -174,6 +178,7 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
         this.m_styleEvaluator = new BatchStyleProcessor(styleSetOptions);
         this.m_hasBatchStyles = styleSet.length > 0;
 
+        const translucentNowEnabled = theme?.postEffects?.translucentDepth?.enabled === true;
         this.m_mapRenderingManager?.addTranslucentLayer(
             this.observeId,
             theme?.postEffects?.translucentDepth || {
@@ -181,6 +186,16 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                 blendMode: "mix"
             }
         );
+
+        if (this.m_translucentWasEnabled && !translucentNowEnabled) {
+            // Disabled: sweep EVERY registration of OUR layer, not just the
+            // active tiles nodifyActiveTiles revisits — meshes whose tiles
+            // went inactive earlier would otherwise keep the ghost pass armed
+            // forever. Scoped to this watcher's layer so other datasources'
+            // registrations are untouched.
+            this.m_mapRenderingManager?.clearTranslucentObjects?.(this.observeId);
+        }
+        this.m_translucentWasEnabled = translucentNowEnabled;
 
         this.nodifyActiveTiles();
     }
@@ -232,16 +247,32 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
 
     /**
      * Applies translucent depth effect configuration
+     *
+     * `updateTheme` → `nodifyActiveTiles` re-fires every active tile through
+     * this method, so it is the only path that can react to a
+     * `translucentDepth.enabled` toggle. An explicit `enabled: false` must
+     * unregister the previously registered meshes — otherwise the layer bits
+     * stay on, `hasObjects` stays true and the translucent pass remains in
+     * the node graph forever (the toggle appears dead). `undefined` (no
+     * config at all) keeps this a no-op for datasources that never use the
+     * effect.
+     *
+     * The effect's visual (buried mesh parts ghosting through the terrain)
+     * lives entirely in the render manager's translucent stage; here we only
+     * register/unregister the meshes — no material is modified.
+     *
      * @param object - 3D object to apply effect to
      */
     private applyRenderEffectConfig(object: THREE.Object3D): void {
         const isBloomEnabled = this.m_datasourcePostEffects?.bloom?.enabled ?? false;
         const isTranslucentDepthEnabled = this.theme?.postEffects?.translucentDepth?.enabled;
-        if (!isTranslucentDepthEnabled && !isBloomEnabled) return;
+        if (isTranslucentDepthEnabled === undefined && !isBloomEnabled) return;
         object.traverse(child => {
             if (child && (child instanceof THREE.Mesh || child instanceof THREE.InstancedMesh)) {
-                if (isTranslucentDepthEnabled)
+                if (isTranslucentDepthEnabled === true)
                     this.m_mapRenderingManager?.addTranslucentObject(child, this.observeId);
+                else if (isTranslucentDepthEnabled === false)
+                    this.m_mapRenderingManager?.removeTranslucentObject(child);
                 if (isBloomEnabled) this.m_mapRenderingManager?.addBloomObject(child);
             }
         });
@@ -298,6 +329,12 @@ export class Tiles3DStyleWatcher extends Observe3DTileChange {
                 }
             });
         }
+
+        // Forget the uri so a later REMOUNT re-fires onTileLoaded: the dedup
+        // set would otherwise swallow the reactivation, leaving the remounted
+        // mesh without its effect registration (and without the material
+        // opacity the translucentDepth effect applied on first load).
+        super.onTileDisposed(tile);
 
         // Restore original materials for meshes
         this.restoreOriginalMaterials(tileId, tile);

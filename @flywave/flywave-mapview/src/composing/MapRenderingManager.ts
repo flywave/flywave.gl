@@ -154,6 +154,7 @@ export interface IMapRenderingManager extends IPassManager {
         }
     ): void;
     removeTranslucentLayer(layer: string): void;
+    clearTranslucentObjects(layer?: string): void;
 
     addCustomEffect(customEffect: ICustomEffect): void;
     removeCustomEffect(effectId: string): boolean;
@@ -745,6 +746,31 @@ export class MapRenderingManager implements IMapRenderingManager {
         });
         const isEmpty = this.m_translucentLayerEffect?.hasObjects === false;
         if (isEmpty && this.viewRenderManager) this.viewRenderManager.needsUpdate = true;
+    }
+
+    /**
+     * Unregister every translucent mesh of one layer at once. A disable only
+     * revisits ACTIVE tiles through the datasource watcher, so meshes whose
+     * tiles went inactive earlier would otherwise stay registered forever
+     * (pass armed, layer bits on, objects pinned). One-time toggle cost, not
+     * per-frame.
+     */
+    clearTranslucentObjects(layer?: string): void {
+        const effect = this.m_translucentLayerEffect;
+        if (effect == null || !effect.hasObjects) return;
+        effect.forEachRegistered(object => {
+            object.traverse(child => {
+                const mat = (child as THREE.Mesh).material as BloomMrtMaterial | undefined;
+                if (mat?.userData?.__translucentLayerId) {
+                    delete mat.userData.__translucentLayerId;
+                    this.rebuildMrtNode(mat);
+                }
+            });
+        }, layer);
+        effect.clearObjects(layer);
+        if (effect.hasObjects === false && this.viewRenderManager) {
+            this.viewRenderManager.needsUpdate = true;
+        }
     }
 
     addTranslucentLayer(layer: string, layerConfig: ITranslucentLayerConfig): void {
