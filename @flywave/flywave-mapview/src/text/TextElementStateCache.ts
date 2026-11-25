@@ -102,6 +102,19 @@ function isBetterPathDuplicate(
     return newCandidate.pathLengthSqr > oldCandidate.pathLengthSqr;
 }
 
+// Distance between the bodies of two path labels. The path anchor (`position`) is the path
+// start point: linear features fanning out from one junction (station tracks, tributaries)
+// share it although their bodies span different areas. Used as an additional veto on top of
+// the anchor distance, so duplicate detection only ever shrinks, never extends.
+function pathBodyDistanceSquared(a: TextElementState, b: TextElementState): number {
+    const pathA = a.element.path;
+    const pathB = b.element.path;
+    if (pathA === undefined || pathB === undefined || pathA.length < 2 || pathB.length < 2) {
+        return a.position.distanceToSquared(b.position);
+    }
+    return pathA[Math.floor(pathA.length / 2)].distanceToSquared(pathB[Math.floor(pathB.length / 2)]);
+}
+
 // Duplicate criteria for point labels. Candidates are better the nearer they are to the label being
 // tested for duplicates.
 function isBetterPointDuplicate(
@@ -131,6 +144,7 @@ function findDuplicateByText(
     const elementPosition = elementState.position;
     const elementVisible = elementState.visible;
     const isLineMarker = isLineMarkerElementState(elementState);
+    const isPathLabel = element.type === TextElementType.PathLabel;
     let dupIndex: number = -1;
     let duplicate: TextElement | undefined;
     let dupDistSquared: number = Infinity;
@@ -152,6 +166,14 @@ function findDuplicateByText(
         const distSquared = elementPosition.distanceToSquared(cachedElement.position);
         if (distSquared > maxSqDistError) {
             // Cached text element is too far away to be a duplicate.
+            continue;
+        }
+        if (
+            isPathLabel &&
+            pathBodyDistanceSquared(elementState, candidateEntry) > maxSqDistError
+        ) {
+            // Anchors coincide but the path bodies lie apart (features fanning out from one
+            // junction): distinct labels, not duplicates.
             continue;
         }
 

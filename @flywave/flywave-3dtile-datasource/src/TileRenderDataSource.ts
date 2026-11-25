@@ -150,7 +150,10 @@ export interface TileRenderDataSourceOptions extends DataSourceOptions {
     tilingScheme?: TilingScheme;
 
     /**
-     * Maximum number of concurrent tile requests
+     * Maximum number of concurrent tile content downloads for this data
+     * source's download queue. Aligned with Cesium's per-server semantics.
+     *
+     * @default 18
      */
     maxConcurrentRequests?: number;
 
@@ -328,7 +331,8 @@ export class TileRenderDataSource extends DataSource implements ICameraCollidabl
             debugBoundingVolume: options.debugBoundingVolume,
             castShadow: options.castShadow,
             receiveShadow: options.receiveShadow,
-            wireframe: options.wireframe
+            wireframe: options.wireframe,
+            maxConcurrentRequests: options.maxConcurrentRequests
         };
 
         this.m_tilesRenderer = new TilesRenderer(rendererOptions);

@@ -291,7 +291,11 @@ export class TilesRendererBase {
 
         // Initialize queues with different concurrency levels
         this.downloadQueue = new PriorityQueue<Tile>();
-        this.downloadQueue.maxJobs = 10;
+        // Default matches Cesium's RequestScheduler.maximumRequestsPerServer
+        // (18, since 1.113): one cap per tileset, sized for a single-server
+        // download stream. Override via TilesRendererOptions
+        // .maxConcurrentRequests.
+        this.downloadQueue.maxJobs = 18;
         this.downloadQueue.priorityCallback = priorityCallback;
 
         this.parseQueue = new PriorityQueue<Tile>();

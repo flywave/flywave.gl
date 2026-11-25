@@ -768,7 +768,10 @@ export class MapRenderingManager implements IMapRenderingManager {
             });
         }, layer);
         effect.clearObjects(layer);
-        if (effect.hasObjects === false && this.viewRenderManager) {
+        // Re-read the live getter: the early return above narrowed it to `true`,
+        // and clearing one layer may still leave other layers registered.
+        const hasObjects: boolean = effect.hasObjects;
+        if (!hasObjects && this.viewRenderManager) {
             this.viewRenderManager.needsUpdate = true;
         }
     }

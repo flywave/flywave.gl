@@ -131,6 +131,24 @@ export function computeViewDistance(
             );
 
             viewDistance = Math.min(viewDistance0, viewDistance1);
+
+            // Long ground paths (rail tracks, roads, rivers) frequently extend beyond the
+            // camera plane: at oblique view angles one endpoint lies behind the camera while
+            // a long middle section crosses the view. The endpoint minimum alone is then
+            // negative, which dismisses the label even though its visible part is well in
+            // front of the camera. When the path crosses the camera plane, measure the
+            // distance of the in-front section instead: the smallest non-negative distance
+            // among all path points (0 when none exists besides the crossing endpoints).
+            if (viewDistance < 0 && Math.max(viewDistance0, viewDistance1) >= 0) {
+                let minInFront = Infinity;
+                for (const point of path) {
+                    const d = pointToPlaneDistance(point, eyePosition, eyeLookAt);
+                    if (d >= 0 && d < minInFront) {
+                        minInFront = d;
+                    }
+                }
+                viewDistance = minInFront === Infinity ? 0 : minInFront;
+            }
         }
     } else {
         viewDistance = pointToPlaneDistance(textElement.position, eyePosition, eyeLookAt);
@@ -832,6 +850,143 @@ export function placePathLabel(
 }
 
 /**
+ * Clips a polyline to the screen bounds and returns the longest visible sub-polyline.
+ *
+ * Implements the fix for FLYWAVE-3515: long path labels (rail tracks, rivers, roads) keep
+ * their text outside the visible viewport because the text is laid out along the whole
+ * parameterized path, including parts that project far outside the screen. Clipping the
+ * projected polyline to the screen rect confines the label to the visible part of the path.
+ *
+ * Points behind the camera (invalid projections) split the polyline into independent
+ * sub-polylines; each is clipped separately and the longest result wins.
+ *
+ * @param points - Projected screen-space polyline points (screen coordinates, origin at
+ * screen center). Points whose projection is invalid must already be excluded by the caller.
+ * @param halfWidth - Half of the screen width in pixels.
+ * @param halfHeight - Half of the screen height in pixels.
+ * @returns The longest clipped sub-polyline (at least 2 points), or `undefined` when no
+ * part of the polyline intersects the screen.
+ */
+function clipPolylineToScreen(
+    points: THREE.Vector2[],
+    halfWidth: number,
+    halfHeight: number
+): THREE.Vector2[] | undefined {
+    if (points.length < 2) {
+        return undefined;
+    }
+    const minX = -halfWidth;
+    const minY = -halfHeight;
+    const maxX = halfWidth;
+    const maxY = halfHeight;
+    const inside = (v: THREE.Vector2): boolean =>
+        v.x >= minX && v.x <= maxX && v.y >= minY && v.y <= maxY;
+    // Intersection of segment (a -> b) with the screen rect; undefined when the segment
+    // is fully outside.
+    const clipSegment = (a: THREE.Vector2, b: THREE.Vector2): THREE.Vector2[] | undefined => {
+        let t0 = 0;
+        let t1 = 1;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        // Liang-Barsky against the four rect edges.
+        const edges: Array<[number, number]> = [
+            [-dx, a.x - minX], // left:  p = -dx, q = a.x - minX
+            [dx, maxX - a.x], // right
+            [-dy, a.y - minY], // bottom
+            [dy, maxY - a.y] // top
+        ];
+        for (const [p, q] of edges) {
+            if (p === 0) {
+                if (q < 0) {
+                    return undefined;
+                }
+                continue;
+            }
+            const t = q / p;
+            if (p < 0) {
+                if (t > t1) {
+                    return undefined;
+                }
+                if (t > t0) {
+                    t0 = t;
+                }
+            } else {
+                if (t < t0) {
+                    return undefined;
+                }
+                if (t < t1) {
+                    t1 = t;
+                }
+            }
+        }
+        return [
+            new THREE.Vector2(a.x + t0 * dx, a.y + t0 * dy),
+            new THREE.Vector2(a.x + t1 * dx, a.y + t1 * dy)
+        ];
+    };
+    const measure = (poly: THREE.Vector2[]): number => {
+        let length = 0;
+        for (let i = 1; i < poly.length; ++i) {
+            length += poly[i].distanceTo(poly[i - 1]);
+        }
+        return length;
+    };
+    let best: THREE.Vector2[] | undefined;
+    let bestLength = -1;
+    let current: THREE.Vector2[] = [];
+    const flush = (): void => {
+        if (current.length >= 2) {
+            const length = measure(current);
+            if (length > bestLength) {
+                bestLength = length;
+                best = current;
+            }
+        }
+        current = [];
+    };
+    for (let i = 0; i < points.length; ++i) {
+        const v = points[i];
+        if (inside(v)) {
+            current.push(v.clone());
+            continue;
+        }
+        // Point outside: connect it to the previous inside point with the clipped
+        // crossing segment, then start a new sub-polyline from the crossing segment.
+        if (current.length > 0) {
+            const clipped = clipSegment(current[current.length - 1], v);
+            if (clipped !== undefined) {
+                current.push(clipped[1]);
+                flush();
+            } else {
+                flush();
+            }
+            // Re-enter the rect later: the crossing segment from v back into the rect.
+            const next = points[i + 1];
+            if (next !== undefined) {
+                const reentry = clipSegment(v, next);
+                if (reentry !== undefined && inside(reentry[0])) {
+                    current = [reentry[0]];
+                    continue;
+                }
+            }
+            current = [];
+        } else {
+            // Current sub-polyline empty: v is outside, bridge to the next point.
+            const next = points[i + 1];
+            if (next === undefined) {
+                break;
+            }
+            const clipped = clipSegment(v, next);
+            if (clipped !== undefined && inside(clipped[0])) {
+                current = [clipped[0]];
+            }
+        }
+    }
+    flush();
+    return best;
+}
+
+/**
  * Check if a given path label is too small to be rendered.
  * @param textElement - The text element to check.
  * @param screenProjector - Used to project coordinates from world to screen space.
@@ -851,10 +1006,9 @@ export function isPathLabelTooSmall(
     let anyPointVisible = false;
 
     for (const pt of textElement.points as THREE.Vector3[]) {
-        // Skip invisible points at the beginning of the path.
-        const screenPoint = anyPointVisible
-            ? screenProjector.project(pt, tmpScreenPosition)
-            : screenProjector.projectToScreen(pt, tmpScreenPosition);
+        // projectToScreen returns undefined for points behind the camera or beyond the
+        // far plane: such points are invalid and split the path into sub-polylines.
+        const screenPoint = screenProjector.projectToScreen(pt, tmpScreenPosition);
         if (screenPoint === undefined) {
             continue;
         }
@@ -863,14 +1017,25 @@ export function isPathLabelTooSmall(
         outScreenPoints.push(tmpScreenPosition.clone());
     }
 
-    // TODO: (FLYWAVE-3515)
-    //      The rendering of a path label that contains just a single point that is not
-    //      visible is impossible, which is problematic with long paths.
-    //      Fix: Skip/clip the invisible points at beginning and end of the path to get
-    //      the visible part of the path.
+    // FLYWAVE-3515: long paths (rail tracks, rivers, roads) keep extending far outside
+    // the visible viewport. The label text is laid out along the whole parameterized
+    // path, so whenever part of the path projects outside the screen the text ends up
+    // outside as well and disappears. Clip the polyline to the screen bounds and lay
+    // the text out on the longest visible part of the path.
+    if (outScreenPoints.length >= 2) {
+        const halfWidth = screenProjector.width / 2;
+        const halfHeight = screenProjector.height / 2;
+        const clipped = clipPolylineToScreen(outScreenPoints, halfWidth, halfHeight);
+        if (clipped !== undefined) {
+            outScreenPoints.length = 0;
+            for (const v of clipped) {
+                outScreenPoints.push(v);
+            }
+        }
+    }
 
     // If not a single point is visible, skip the path
-    if (!anyPointVisible) {
+    if (!anyPointVisible || outScreenPoints.length < 2) {
         return true;
     }
 

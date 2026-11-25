@@ -50,6 +50,16 @@ export type WaterMask = DataTextureImageData & {
 export type QuantizedMetaData = {
     minHeight: number;
     maxHeight: number;
+    /**
+     * The `metadata` extension JSON carried by the tile (when requested).
+     * `available` lists the subtree tile ranges that exist below this tile,
+     * which is how deeper real data (up to `maxzoom`) is discovered.
+     */
+    metadata?: {
+        available?: unknown;
+        geometricerror?: number;
+        [key: string]: unknown;
+    };
 } & MetadataExtension;
 
 export interface QuantizedTerrainMeshData {

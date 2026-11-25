@@ -358,6 +358,14 @@ export class ViewRenderManager implements IViewRenderManager {
         const outlineEnabled =
             this.config.outline.enabled &&
             (this.outlineObjects.size > 0 || this.config.outline.keepPassAlive === true);
+        // Outline only needs single-sampled scene passes when its compositing
+        // actually reads the main scene depth (occlusion test: xray off, or a
+        // hiddenColor is set). Plain xray without hiddenColor never taps the
+        // scene depth — the silhouette comes from the dedicated mask pass —
+        // so the main scene pass keeps its geometric MSAA in that mode.
+        const outlineNeedsSceneDepth =
+            outlineEnabled &&
+            (!this.config.outline.xray || this.config.outline.hiddenColor != null);
         const aerialEnabled = this.config.aerialPerspective.enabled;
         // Translucent-layer X-ray ghost: reads the mesh-only pass DEPTH against
         // the scene depth, so like every depth consumer it needs single-sampled
@@ -467,7 +475,10 @@ export class ViewRenderManager implements IViewRenderManager {
         // morphology) forces single-sampled scene passes. TAA provides its
         // own AA, so nothing is lost in that mode.
         const sceneSamples =
-            this.config.antialiasing === "taa" || ssrEnabled || outlineEnabled || ghostEnabled
+            this.config.antialiasing === "taa" ||
+            ssrEnabled ||
+            (outlineEnabled && outlineNeedsSceneDepth) ||
+            ghostEnabled
                 ? 0
                 : this.renderer.samples;
         this.passNode =
@@ -503,7 +514,10 @@ export class ViewRenderManager implements IViewRenderManager {
                 maskMat.blending = THREE.NoBlending;
                 this.m_outlineMaskMaterial = maskMat;
             }
-            this.outlineMaskPassNode = pass(scene, camera, { samples: sceneSamples });
+            // Mask pass stays single-sampled: its depth IS the silhouette
+            // mask the outline effect samples, and a multisampled depth
+            // attachment cannot be resolved/sampled on WebGPU.
+            this.outlineMaskPassNode = pass(scene, camera, { samples: 0 });
             this.outlineMaskPassNode.setLayers(outlineLayers);
             this.outlineMaskPassNode.overrideMaterial = this.m_outlineMaskMaterial;
         } else {

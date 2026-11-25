@@ -383,7 +383,7 @@ function updateHud(
         `visible: ${invertedVisible}\n` +
         problemText +
         `\n(?cam=lat,lng,alt,tilt,hdg | ?problem=1 close-up | ?boxes=1 OBBs | ` +
-        `?terrain=1 global DEM)\n`;
+        `?terrain=1 global DEM | ?url= tileset | ?error= SSE target)\n`;
 }
 
 async function main(): Promise<void> {
@@ -430,9 +430,14 @@ async function main(): Promise<void> {
 
     // Load the 3D Tiles subject. SSE (errorTarget) is pinned explicitly so the
     // LOD decision in the HUD does not depend on engine defaults.
+    // ?url= and ?error= override the baked tileset / SSE for ad-hoc tests
+    // against another mirror (e.g. download-concurrency measurements). The
+    // baked URL is only fetched when no override is given.
+    const errorOverride = Number(urlParams.get("error"));
     const dataSource = new TileRenderDataSource({
-        url: TILESET_URL,
-        errorTarget: 100,
+        url: urlParams.get("url") ?? TILESET_URL,
+        errorTarget:
+            Number.isFinite(errorOverride) && errorOverride > 0 ? errorOverride : 100,
         debugBoundingVolume: urlParams.has("boxes")
     });
     await mapView.addDataSource(dataSource);

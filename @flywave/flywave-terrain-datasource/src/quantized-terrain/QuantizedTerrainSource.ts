@@ -76,7 +76,9 @@ export class QuantizedTerrainSource extends BaseQuantizedTerrainSource<Quantized
             headers: options.headers,
             requestWaterMask: options.requestWaterMask ?? false,
             requestVertexNormals: options.requestVertexNormals ?? false,
-            requestMetadata: options.requestMetadata ?? false
+            // Metadata carries the per-tile availability ranges; it is needed
+            // to request real data deeper than the static layer.json ranges.
+            requestMetadata: options.requestMetadata ?? true
         });
     }
 

@@ -234,7 +234,9 @@ function createDefaultMaterial(
         name: gltfMaterial.name || "",
         side: gltfMaterial.doubleSided ? DoubleSide : FrontSide,
         transparent: gltfMaterial.alphaMode === "BLEND",
-        alphaTest: gltfMaterial.alphaCutoff ?? 0,
+        // glTF 2.0 规范:MASK 未指定 alphaCutoff 时默认 0.5(兜底 0 = 永不
+        // 裁剪,半透明边缘像素全部漏出 → 植被叶片黑边)
+        alphaTest: gltfMaterial.alphaCutoff ?? (gltfMaterial.alphaMode === "MASK" ? 0.5 : 0),
         depthWrite: gltfMaterial.alphaMode !== "BLEND",
         roughness: 1.0,
         metalness: 1.0

@@ -286,16 +286,18 @@ export class QuantizedTerrainProvider extends QuantizedProvider<QuantizedTerrain
         // Try direct loading if data is available for this tile
         let result: QuantizedTerrainMesh;
         if (this.layerStrategy.getTileDataAvailable(tileKey)) {
-            try {
-                result = await getQuantizedMeshTerrain(
-                    this.layerStrategy,
-                    this.terrainSource,
-                    tileKey,
-                    this.isElevationMapEnabled(tileKey),
-                    this.isElevationMapFlipY()
-                );
-            } catch (e) {
-                console.error(e);
+            result = await this.loadDirect(tileKey);
+        } else {
+            // Availability above the static layer.json ranges is only known
+            // after a "metadata level" tile has been decoded. Wait for that
+            // ancestor (one round trip per area, shared by all tiles below it)
+            // before deciding between real data and upsampling.
+            const metadataRequest = this.ensureMetadataAvailability(tileKey);
+            if (metadataRequest) {
+                await metadataRequest;
+            }
+            if (this.layerStrategy.getTileDataAvailable(tileKey)) {
+                result = await this.loadDirect(tileKey);
             }
         }
         if (!result) {
@@ -314,6 +316,125 @@ export class QuantizedTerrainProvider extends QuantizedProvider<QuantizedTerrain
                 );
         }
         return result;
+    }
+
+    /**
+     * Downloads and decodes the tile's own data and feeds its metadata
+     * availability back into the layer strategy.
+     */
+    private async loadDirect(tileKey: TileKey): Promise<QuantizedTerrainMesh | undefined> {
+        try {
+            const mesh = await getQuantizedMeshTerrain(
+                this.layerStrategy,
+                this.terrainSource,
+                tileKey,
+                this.isElevationMapEnabled(tileKey),
+                this.isElevationMapFlipY()
+            );
+            this.addMetadataAvailability(tileKey, mesh);
+            return mesh;
+        } catch (e) {
+            console.error(e);
+            return undefined;
+        }
+    }
+
+    /** Metadata-level ancestor fetches, by morton code. */
+    private readonly m_metadataRequests = new Map<number, Promise<void>>();
+
+    /**
+     * Makes sure the availability ranges of a "metadata level" ancestor are
+     * known, so real data deeper than the static layer.json ranges can be
+     * requested instead of upsampled.
+     *
+     * Quantized-mesh tiles carry metadata at levels that are multiples of
+     * `metadataAvailability` (e.g. level 10 reports availability for levels
+     * 11..20). Terrain LOD selection may skip those levels entirely, so their
+     * metadata is fetched explicitly here.
+     *
+     * @returns A promise that resolves once availability was updated, or
+     *          `undefined` when no metadata ancestor fetch is needed.
+     */
+    private ensureMetadataAvailability(tileKey: TileKey): Promise<void> | undefined {
+        const availabilityLevels = this.layerStrategy.getLayerInformation()?.availabilityLevels;
+        if (!Number.isFinite(availabilityLevels) || availabilityLevels <= 0) {
+            return undefined;
+        }
+
+        const level = tileKey.level;
+        if (level <= 0) {
+            return undefined;
+        }
+
+        const metadataLevel = Math.floor(level / availabilityLevels) * availabilityLevels;
+        if (metadataLevel === level) {
+            // This tile is itself a metadata level; its normal load carries
+            // the metadata. It only gets here when that load failed.
+            return undefined;
+        }
+
+        const levelOffset = level - metadataLevel;
+        const ancestorKey = TileKey.fromRowColumnLevel(
+            tileKey.row >> levelOffset,
+            tileKey.column >> levelOffset,
+            metadataLevel
+        );
+        const tilingScheme = this.layerStrategy.tilingScheme;
+        const code = ancestorKey.mortonCode(tilingScheme.mortonTileEncoding);
+
+        const pending = this.m_metadataRequests.get(code);
+        if (pending) {
+            return pending;
+        }
+        if (this.hasResource(ancestorKey)) {
+            // Decoded earlier without metadata feedback (or before this
+            // feature existed); nothing to fetch.
+            return undefined;
+        }
+
+        const request = getQuantizedMeshTerrain(
+            this.layerStrategy,
+            this.terrainSource,
+            ancestorKey,
+            false,
+            this.isElevationMapFlipY()
+        )
+            .then(mesh => {
+                if (!mesh) {
+                    this.m_metadataRequests.delete(code);
+                    return;
+                }
+                this.addMetadataAvailability(ancestorKey, mesh);
+
+                // Keep the decoded ancestor for later rendering instead of
+                // throwing the download away.
+                const cachedTile = this.terrainSource?.getCachedTile(ancestorKey, false);
+                if (cachedTile && !cachedTile.resourceManager.hasResource(this.getResourceKey())) {
+                    mesh.connectToDataSource(this.terrainSource!, ancestorKey);
+                    cachedTile.resourceManager.setResource(this.getResourceKey(), mesh);
+                    this.terrainSource!.updateMemoryUsage(cachedTile);
+                }
+            })
+            .catch(() => {
+                this.m_metadataRequests.delete(code);
+            });
+
+        this.m_metadataRequests.set(code, request);
+        return request;
+    }
+
+    /**
+     * Feeds the availability ranges carried by a tile's `metadata` extension
+     * back into the layer strategy, so finer real data (up to `maxzoom`) is
+     * requested instead of being upsampled from the parent.
+     */
+    private addMetadataAvailability(tileKey: TileKey, mesh: QuantizedTerrainMesh): void {
+        const metadata = (mesh.metaData as { metadata?: { available?: unknown } } | undefined)
+            ?.metadata;
+        if (metadata?.available === undefined) {
+            return;
+        }
+        this.layerStrategy.addMetadataAvailability(tileKey, metadata.available);
     }
 }
 

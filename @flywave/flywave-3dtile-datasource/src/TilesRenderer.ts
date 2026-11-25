@@ -73,6 +73,15 @@ export interface TilesRendererOptions {
      * @default false
      */
     wireframe?: boolean;
+
+    /**
+     * Maximum number of concurrent tile content downloads. Aligned with
+     * Cesium's RequestScheduler.maximumRequestsPerServer. Values that are not
+     * finite or not positive are ignored.
+     *
+     * @default 18
+     */
+    maxConcurrentRequests?: number;
 }
 
 /**
@@ -102,6 +111,18 @@ export class TilesRenderer extends ThreeTilesRenderer implements ITilesRenderer 
         super(options.url);
 
         this.fetchOptions.headers = options.headers;
+
+        // Concurrent download cap override; the base default (18) matches
+        // Cesium's per-server limit. There is one download queue per tileset,
+        // so this behaves like Cesium's maximumRequestsPerServer.
+        const maxConcurrentRequests = options.maxConcurrentRequests;
+        if (
+            maxConcurrentRequests !== undefined &&
+            Number.isFinite(maxConcurrentRequests) &&
+            maxConcurrentRequests > 0
+        ) {
+            this.downloadQueue.maxJobs = maxConcurrentRequests;
+        }
 
         this.object = new Object3D();
 

@@ -7,6 +7,21 @@
 
 import { EventDispatcher, Vector2 } from "three/webgpu";
 
+/** Max finger travel (canvas-local px) for a touch to count as a tap. */
+const TAP_SLOP_PX = 5;
+/** Max interval between the two taps of a double tap. */
+const DOUBLE_TAP_INTERVAL_MS = 300;
+/** Max distance between the two tap points of a double tap. */
+const DOUBLE_TAP_SLOP_PX = 30;
+/** Max duration of a single tap gesture. */
+const TAP_MAX_DURATION_MS = 350;
+/**
+ * Pinch sensitivity: wheel-delta added per log2 of the finger distance ratio.
+ * A distance doubling (+1) equals 2.5 wheel notches (a notch is 2), landing
+ * between a wheel notch and the double-click zoom (+10).
+ */
+const PINCH_WHEEL_SCALE = 5;
+
 /**
  * Window event map interface
  * Defines all supported event types and their corresponding event objects
@@ -64,6 +79,26 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     private __lastMouseY?: number;
     private __lastMouseZ?: number;
 
+    // ==================== Touch gesture state ====================
+    // Active touches by identifier, positions in canvas-local CSS pixels.
+    private readonly m_touchPositions = new Map<number, { x: number; y: number }>();
+    /** Where the current touch gesture started (canvas-local), for tap detection. */
+    private m_gestureStart: { x: number; y: number; time: number } | null = null;
+    /** The gesture saw two or more simultaneous fingers (blocks tap synthesis). */
+    private m_isMultiTouch: boolean = false;
+    /** Pinch baseline: distance and angle between the first two fingers. */
+    private m_pinchDistance: number = 0;
+    private m_pinchAngle: number = 0;
+    /** Offset keeping the virtual pointer continuous across finger count changes. */
+    private m_pointerOffsetX: number = 0;
+    private m_pointerOffsetY: number = 0;
+    /** Previous completed tap, for double-tap detection. */
+    private m_lastTap: { x: number; y: number; time: number } | null = null;
+    /** The current gesture's first tap qualified as the first tap of a double tap. */
+    private m_doubleTapArmed: boolean = false;
+    /** Accumulated two-finger twist in radians, consumed via takeTwistDelta. */
+    private m_twistDelta: number = 0;
+
     /**
      * Constructor
      * @param el - HTML element to bind events to
@@ -71,6 +106,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     constructor(el: HTMLElement) {
         super();
         this.el = el;
+        this.applyTouchAction();
         this.bindEvent();
     }
 
@@ -355,10 +391,7 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         event.preventDefault();
 
         // Clear possible single-click timer
-        if (this._clickTimeId) {
-            clearTimeout(this._clickTimeId);
-            this._clickTimeId = null;
-        }
+        this.cancelClickTimer();
 
         // Double-click zoom functionality
         if (this.doubleZoomEnable) {
@@ -385,63 +418,320 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
     };
 
     // ==================== Touch Event Handling ====================
+    // Touch gestures are translated into the mouse state consumed by the
+    // camera controls: one finger maps to mouse drag (pan), two fingers map to
+    // pinch zoom (wheel delta) + twist (takeTwistDelta) + midpoint pan. Taps
+    // synthesize the click events that touchstart preventDefault suppresses.
 
     /**
-     * Touch move event handling (converts to mouse event)
+     * Touch start: first finger begins a drag, further fingers enter the
+     * pinch/twist gesture without re-triggering a press.
      */
-    private readonly touchMove = (event: TouchEvent) => {
-        if (event.changedTouches.length > 1) {
-            return; // Ignore multi-touch
+    private readonly onTouchStart = (event: TouchEvent) => {
+        event.preventDefault();
+
+        for (let i = 0; i < event.changedTouches.length; i++) {
+            const touch = event.changedTouches[i];
+            this.m_touchPositions.set(
+                touch.identifier,
+                this.toCanvasLocal(touch.clientX, touch.clientY)
+            );
         }
 
-        const touch = event.changedTouches[0];
-        const fakeMouseEvent = new MouseEvent("mousemove", {
-            clientX: touch.clientX,
-            clientY: touch.clientY,
-            button: 0
-        });
+        // A new gesture (or the second tap of a double tap) cancels a pending
+        // single click, mirroring how a real dblclick cancels the delayed click.
+        this.cancelClickTimer();
 
-        event.preventDefault();
-        this.onMousemove(fakeMouseEvent);
-    };
-
-    /**
-     * Touch end event handling (converts to mouse event)
-     */
-    private readonly touchUp = (event: TouchEvent) => {
-        if (event.changedTouches.length > 1) {
+        if (this.m_touchPositions.size === 1) {
+            const position = this.firstTouchPosition();
+            const now = performance.now();
+            this.m_gestureStart = { x: position.x, y: position.y, time: now };
+            this.m_isMultiTouch = false;
+            this.m_pointerOffsetX = 0;
+            this.m_pointerOffsetY = 0;
+            this.m_doubleTapArmed =
+                this.m_lastTap !== null &&
+                now - this.m_lastTap.time <= DOUBLE_TAP_INTERVAL_MS &&
+                Math.hypot(position.x - this.m_lastTap.x, position.y - this.m_lastTap.y) <=
+                    DOUBLE_TAP_SLOP_PX;
+            this.onMousedown(this.createTouchMouseEvent("mousedown", position));
             return;
         }
 
-        const touch = event.changedTouches[0];
-        const fakeMouseEvent = new MouseEvent("mouseup", {
-            clientX: touch.clientX,
-            clientY: touch.clientY,
-            button: 0
-        });
-
-        event.preventDefault();
-        this.onMouseUp(fakeMouseEvent);
+        this.m_isMultiTouch = true;
+        if (this.m_touchPositions.size === 2) {
+            this.reanchorPinch();
+            this.reanchorPointerOffset();
+        }
     };
 
     /**
-     * Touch start event handling (converts to mouse event)
+     * Touch move: single finger maps to mousemove; two fingers feed pinch
+     * zoom, twist and midpoint pan.
      */
-    private readonly touchDown = (event: TouchEvent) => {
-        if (event.changedTouches.length > 1) {
+    private readonly onTouchMove = (event: TouchEvent) => {
+        event.preventDefault();
+
+        for (let i = 0; i < event.changedTouches.length; i++) {
+            const touch = event.changedTouches[i];
+            if (this.m_touchPositions.has(touch.identifier)) {
+                this.m_touchPositions.set(
+                    touch.identifier,
+                    this.toCanvasLocal(touch.clientX, touch.clientY)
+                );
+            }
+        }
+
+        if (this.m_touchPositions.size === 0) {
             return;
         }
 
-        const touch = event.changedTouches[0];
-        const fakeMouseEvent = new MouseEvent("mousedown", {
-            clientX: touch.clientX,
-            clientY: touch.clientY,
+        if (this.m_touchPositions.size === 1 && !this.m_isMultiTouch) {
+            this.onMousemove(this.createTouchMouseEvent("mousemove", this.firstTouchPosition()));
+            return;
+        }
+
+        this.updatePinchAndPointer();
+    };
+
+    /**
+     * Touch end: the last lifted finger ends the gesture (mouseup + tap
+     * synthesis); lifting one of two fingers re-anchors pinch and pointer.
+     */
+    private readonly onTouchEnd = (event: TouchEvent) => {
+        event.preventDefault();
+
+        for (let i = 0; i < event.changedTouches.length; i++) {
+            this.m_touchPositions.delete(event.changedTouches[i].identifier);
+        }
+
+        if (this.m_touchPositions.size >= 2) {
+            this.reanchorPinch();
+            this.reanchorPointerOffset();
+            return;
+        }
+
+        if (this.m_touchPositions.size === 1) {
+            // Keep the virtual pointer continuous so the drag does not jump
+            // from the pinch midpoint to the remaining finger.
+            this.reanchorPointerOffset();
+            return;
+        }
+
+        this.finishGesture();
+    };
+
+    /**
+     * Touch cancel: immediately end the gesture without tap/click synthesis,
+     * otherwise the pressed state leaks into later mouse input.
+     */
+    private readonly onTouchCancel = (event: TouchEvent) => {
+        event.preventDefault();
+
+        // Only release our own touch gesture; a cancel arriving during a real
+        // mouse drag (mixed touch/trackpad devices) must not inject a mouseup.
+        const hadGesture =
+            this.m_gestureStart !== null || this.m_isMultiTouch || this.m_touchPositions.size > 0;
+
+        for (let i = 0; i < event.changedTouches.length; i++) {
+            this.m_touchPositions.delete(event.changedTouches[i].identifier);
+        }
+        this.resetTouchGestureState();
+
+        if (hadGesture) {
+            this.onMouseUp(this.createTouchMouseEvent("mouseup", this.currentPointerPosition()));
+        }
+    };
+
+    /**
+     * Ends a fully lifted gesture: mouseup plus tap/click/double-tap synthesis.
+     */
+    private finishGesture(): void {
+        const start = this.m_gestureStart;
+        const position = this.currentPointerPosition();
+        const wasMultiTouch = this.m_isMultiTouch;
+        const now = performance.now();
+
+        this.onMouseUp(this.createTouchMouseEvent("mouseup", position));
+
+        const isTap =
+            !wasMultiTouch &&
+            start !== null &&
+            now - start.time <= TAP_MAX_DURATION_MS &&
+            Math.hypot(position.x - start.x, position.y - start.y) <= TAP_SLOP_PX;
+
+        if (isTap) {
+            if (this.m_doubleTapArmed) {
+                this.m_doubleTapArmed = false;
+                this.m_lastTap = null;
+                this.onDoubleClick(this.createTouchMouseEvent("dblclick", position));
+            } else {
+                this.m_lastTap = { x: position.x, y: position.y, time: now };
+                // Reuse the desktop click path (3px re-check + delayed
+                // dispatch) so touch and mouse produce identical semantics.
+                this.onClick(this.createTouchMouseEvent("click", position));
+            }
+        } else {
+            this.m_lastTap = null;
+            this.m_doubleTapArmed = false;
+        }
+
+        this.resetTouchGestureState();
+    }
+
+    /**
+     * Pinch zoom + twist from the first two fingers; the touch midpoint drives
+     * the virtual pointer (keeps pan following the fingers and gives the wheel
+     * zoom its target pixel).
+     */
+    private updatePinchAndPointer(): void {
+        if (this.m_touchPositions.size >= 2) {
+            const pair = this.firstTwoTouchPositions();
+            if (pair !== null) {
+                const [a, b] = pair;
+                const distance = Math.hypot(b.x - a.x, b.y - a.y);
+                const angle = Math.atan2(b.y - a.y, b.x - a.x);
+                if (this.m_pinchDistance > 0) {
+                    const ratio = distance / this.m_pinchDistance;
+                    if (ratio > 0 && this.zoomEnabled) {
+                        this.lastMouseZ += Math.log2(ratio) * PINCH_WHEEL_SCALE;
+                    }
+                    let twist = angle - this.m_pinchAngle;
+                    // Wrap to [-PI, PI] so crossing the +/-PI seam stays short.
+                    twist = Math.atan2(Math.sin(twist), Math.cos(twist));
+                    this.m_twistDelta += twist;
+                }
+                this.m_pinchDistance = distance;
+                this.m_pinchAngle = angle;
+            }
+        }
+
+        const midpoint = this.touchesMidpoint();
+        if (midpoint !== null) {
+            this.onMousemove(
+                this.createTouchMouseEvent("mousemove", {
+                    x: midpoint.x + this.m_pointerOffsetX,
+                    y: midpoint.y + this.m_pointerOffsetY
+                })
+            );
+        }
+    }
+
+    private reanchorPinch(): void {
+        const pair = this.firstTwoTouchPositions();
+        if (pair === null) {
+            this.m_pinchDistance = 0;
+            return;
+        }
+        const [a, b] = pair;
+        this.m_pinchDistance = Math.hypot(b.x - a.x, b.y - a.y);
+        this.m_pinchAngle = Math.atan2(b.y - a.y, b.x - a.x);
+    }
+
+    /**
+     * Keeps the virtual pointer continuous: offset = current pointer - new
+     * touch centroid, so switching finger count never jumps the pointer.
+     */
+    private reanchorPointerOffset(): void {
+        const midpoint = this.touchesMidpoint();
+        if (midpoint === null) {
+            return;
+        }
+        this.m_pointerOffsetX = this.lastMouseX - midpoint.x;
+        this.m_pointerOffsetY = this.lastMouseY - midpoint.y;
+    }
+
+    private resetTouchGestureState(): void {
+        this.m_touchPositions.clear();
+        this.m_gestureStart = null;
+        this.m_isMultiTouch = false;
+        this.m_pinchDistance = 0;
+        this.m_pointerOffsetX = 0;
+        this.m_pointerOffsetY = 0;
+        this.m_doubleTapArmed = false;
+        this.m_twistDelta = 0;
+    }
+
+    private firstTouchPosition(): { x: number; y: number } {
+        const values = Array.from(this.m_touchPositions.values());
+        return values.length > 0 ? values[0] : { x: 0, y: 0 };
+    }
+
+    private firstTwoTouchPositions(): Array<{ x: number; y: number }> | null {
+        const values = Array.from(this.m_touchPositions.values());
+        return values.length >= 2 ? [values[0], values[1]] : null;
+    }
+
+    private touchesMidpoint(): { x: number; y: number } | null {
+        const values = Array.from(this.m_touchPositions.values());
+        if (values.length === 0) {
+            return null;
+        }
+        let x = 0;
+        let y = 0;
+        for (const position of values) {
+            x += position.x;
+            y += position.y;
+        }
+        return { x: x / values.length, y: y / values.length };
+    }
+
+    /** The virtual pointer position last fed into the mouse pipeline. */
+    private currentPointerPosition(): { x: number; y: number } {
+        return { x: this.lastMouseX, y: this.lastMouseY };
+    }
+
+    /**
+     * Converts client coordinates to canvas-local CSS pixels. The mouse
+     * pipeline stores offsetX/offsetY (canvas padding edge), which real mouse
+     * events provide but touch events must compute here.
+     */
+    private toCanvasLocal(clientX: number, clientY: number): { x: number; y: number } {
+        const rect = this.el.getBoundingClientRect();
+        return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    /**
+     * Synthetic mouse event carrying canvas-local coordinates in clientX/Y:
+     * handlers read offsetX, which for undispatched synthetic events falls
+     * back to clientX, so downstream offsetX consumers get canvas-local values.
+     */
+    private createTouchMouseEvent(type: string, position: { x: number; y: number }): MouseEvent {
+        return new MouseEvent(type, {
+            clientX: position.x,
+            clientY: position.y,
             button: 0
         });
+    }
 
-        event.preventDefault();
-        this.onMousedown(fakeMouseEvent);
-    };
+    private cancelClickTimer(): void {
+        if (this._clickTimeId) {
+            clearTimeout(this._clickTimeId);
+            this._clickTimeId = null;
+        }
+    }
+
+    /**
+     * Two-finger twist accumulated since the previous call, in radians.
+     * Positive values are clockwise rotations on screen (screen Y points down,
+     * matching the atan2 convention of the pinch baseline).
+     */
+    public takeTwistDelta(): number {
+        const delta = this.m_twistDelta;
+        this.m_twistDelta = 0;
+        return delta;
+    }
+
+    /**
+     * Two-finger gestures (pinch/twist) must not fall through to browser page
+     * zoom or scroll; iOS Safari ignores user-scalable=no, so CSS is the only
+     * reliable switch. Only overrides the default, never an explicit choice.
+     */
+    private applyTouchAction(): void {
+        if (getComputedStyle(this.el).touchAction === "auto") {
+            this.el.style.touchAction = "none";
+        }
+    }
 
     // ==================== Public Methods ====================
 
@@ -464,9 +754,10 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         this.el.addEventListener("keyup", this.onKeyup);
 
         // Touch events
-        this.el.addEventListener("touchstart", this.touchDown);
-        this.el.addEventListener("touchmove", this.touchMove);
-        this.el.addEventListener("touchend", this.touchUp);
+        this.el.addEventListener("touchstart", this.onTouchStart);
+        this.el.addEventListener("touchmove", this.onTouchMove);
+        this.el.addEventListener("touchend", this.onTouchEnd);
+        this.el.addEventListener("touchcancel", this.onTouchCancel);
 
         // Window events
         window.addEventListener("resize", this.onResize);
@@ -492,13 +783,16 @@ class WindowEventHandler extends EventDispatcher<WindowEventMap> {
         this.el.removeEventListener("keyup", this.onKeyup);
 
         // Touch events
-        this.el.removeEventListener("touchstart", this.touchDown);
-        this.el.removeEventListener("touchmove", this.touchMove);
-        this.el.removeEventListener("touchend", this.touchUp);
+        this.el.removeEventListener("touchstart", this.onTouchStart);
+        this.el.removeEventListener("touchmove", this.onTouchMove);
+        this.el.removeEventListener("touchend", this.onTouchEnd);
+        this.el.removeEventListener("touchcancel", this.onTouchCancel);
 
         // Window events
         window.removeEventListener("resize", this.onResize);
         window.removeEventListener("load", this.onResize);
+
+        this.cancelClickTimer();
     };
 
     /**

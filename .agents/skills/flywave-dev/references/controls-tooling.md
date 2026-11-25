@@ -24,6 +24,12 @@
   ——**临时改画布尺寸 + `renderSync()` + 硬编码 setTimeout(500)** 再还原，会有闪烁与时序脆弱。
 - 其他：`MouseCursorManager`（内联 SVG 光标）、`PivotIndicator`（canvas 需有 parentElement）、
   `LongPressHandler(element, onLongPress, onTap?)`（timeout=500/moveThreshold=5 是公开字段）。
+- 触摸手势（`WindowEventHandler`，utils）：单指=鼠标拖拽（画布本地坐标 `client-rect`）+tap 合成
+  `realclick/mouseclick`（复用桌面 3px/200ms 路径）；双指=pinch→wheel 增量（log2 比率×5）+中点
+  平移（指数切换用偏移保持指针连续）+twist（`takeTwistDelta()` 弧度，BaseMapControls 每帧消费转
+  heading）；双击=合成 `dblclick`（+10 wheel，同桌面）；touchcancel 释放手势；构造时给元素设
+  `touch-action:none`。多指判定用 `touches` 数量而非 `changedTouches.length`（后者检测不到第二根
+  手指）。karma 用例在 `flywave-utils/test/WindowEventHandlerTest.ts`。
 - 坑：控件内部鼠标坐标被画布尺寸翻转；`getWorldPositionAt` 需要真实 screen 坐标——
   只有 `pickPoint` 转换正确。右键旋转是 Google Earth 式：按下时一次 CPU 射线锁定枢轴。
 

@@ -139,7 +139,7 @@ export class QuantizedMeshLoader extends QuantizedMeshLoaderBase {
 
         mesh.position.copy(tileCenter);
 
-        const includeNormals = "octvertexnormals" in extensions;
+        let includeNormals = "octvertexnormals" in extensions;
         const vertexCount = vertexData.u.length;
         const positions: number[] = [];
         const uvs: number[] = [];
@@ -148,7 +148,6 @@ export class QuantizedMeshLoader extends QuantizedMeshLoaderBase {
         const normals: number[] = [];
         let groupOffset = 0;
         let materialIndex = 0;
-
         // construct terrain
         for (let i = 0; i < vertexCount; i++) {
             readUVHeight(i, _uvh);
@@ -160,6 +159,31 @@ export class QuantizedMeshLoader extends QuantizedMeshLoaderBase {
 
         for (let i = 0, l = indices.length; i < l; i++) {
             indexArr.push(indices[i]);
+        }
+
+        if (!includeNormals) {
+            // Tiles without the `octvertexnormals` extension would otherwise
+            // have no per-vertex lighting at all. Generate normals from the
+            // cap geometry, matching 3d-tiles-renderer's QuantizedMeshLoader.
+            const normalGeometry = new BufferGeometry();
+            normalGeometry.setIndex(
+                new BufferAttribute(
+                    vertexCount > 65535 ? new Uint32Array(indices) : new Uint16Array(indices),
+                    1,
+                    false
+                )
+            );
+            normalGeometry.setAttribute(
+                "position",
+                new BufferAttribute(new Float32Array(positions), 3, false)
+            );
+            normalGeometry.computeVertexNormals();
+
+            extensions.octvertexnormals = {
+                extensionId: 1,
+                normals: normalGeometry.getAttribute("normal").array as Float32Array
+            };
+            includeNormals = true;
         }
 
         if (includeNormals && extensions.octvertexnormals) {

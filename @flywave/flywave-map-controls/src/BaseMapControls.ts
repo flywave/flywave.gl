@@ -60,6 +60,14 @@ const MAX_VIEW_PITCH_RAD = Math.PI;
 const DEG_TO_RAD = Math.PI / 180;
 
 /**
+ * Heading change applied per radian of two-finger twist. The twist is
+ * accumulated in screen atan2 radians (positive = clockwise on screen); the
+ * rotation pipeline turns positive angles into counter-clockwise imagery
+ * motion, so the sign is flipped to make the imagery follow the fingers.
+ */
+const TOUCH_TWIST_HEADING_SCALE = -1;
+
+/**
  * Returns true when every element of the matrix is finite and none of its
  * rotation columns has collapsed to zero.
  *
@@ -288,6 +296,9 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
     protected update(): boolean {
         if (!this.enabled) {
             this.windowEventHandler.lastMouseZ = this.mouseState.z;
+            // Drop pending twist the same way wheel input is dropped above,
+            // otherwise it would apply as a sudden turn on re-enable.
+            this.windowEventHandler.takeTwistDelta();
             return false;
         }
 
@@ -369,6 +380,8 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
         );
 
         this.applyTiltAndHeadingChanges(firstPersonPivot, firstPersonGravity);
+
+        this.applyTouchTwist();
 
         if (
             (!mouseDown[0] || !this.isPanHit) &&
@@ -784,6 +797,48 @@ export abstract class BaseMapControls extends EventDispatcher<EventMap> {
                 );
             }
         }
+    }
+
+    /**
+     * Two-finger twist heading rotation: WindowEventHandler accumulates the
+     * pinch angle change in radians; consume it once per frame and rotate the
+     * heading around the same pivot selection as the drag/velocity paths.
+     */
+    private applyTouchTwist(): void {
+        const twist = this.windowEventHandler.takeTwistDelta();
+        if (twist === 0) {
+            return;
+        }
+        if (this._disableHeading) {
+            return;
+        }
+
+        const firstPerson = this.getViewPitchRad() >= this.firstPersonTiltThresholdRad;
+        if (!firstPerson && this.lastHitCenterDistance <= 0) {
+            return;
+        }
+
+        const pivot = new Vector3();
+        const gravity = new Vector3();
+        if (firstPerson) {
+            this.cameraTransform.getOrigin(pivot);
+            this.getDistanceToGlobe(pivot, gravity);
+        } else {
+            pivot.copy(this.lastHitCenter);
+            gravity.copy(this.lastHitGravity);
+        }
+
+        this.cameraTransform.rotateAroundPivotAndTilt(
+            pivot.x,
+            pivot.y,
+            pivot.z,
+            gravity.x,
+            gravity.y,
+            gravity.z,
+            twist * TOUCH_TWIST_HEADING_SCALE,
+            0,
+            firstPerson ? undefined : this.tiltLimit
+        );
     }
 
     private applyHeadingChange(pivot?: Vector3, gravity?: Vector3): void {

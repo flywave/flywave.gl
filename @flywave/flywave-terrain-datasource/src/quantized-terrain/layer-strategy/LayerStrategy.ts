@@ -126,6 +126,19 @@ export interface ILayerStrategy {
     getTileDataAvailable(tileKey: TileKey): boolean | undefined;
 
     /**
+     * Adds the availability ranges reported by a tile's `metadata` extension.
+     *
+     * Quantized-mesh tiles can describe their own subtree availability:
+     * `available[offset]` lists the tile ranges that exist at
+     * `tile.level + offset + 1`. This is how real data deeper than the static
+     * `layer.json` ranges (up to `maxzoom`) is discovered.
+     *
+     * @param tileKey - The tile that carried the metadata
+     * @param available - The `available` array from the metadata JSON
+     */
+    addMetadataAvailability(tileKey: TileKey, available: unknown): void;
+
+    /**
      * Gets the maximum supported zoom level
      *
      * @returns The maximum zoom level supported by this layer
@@ -559,50 +572,80 @@ class LayerStrategy implements ILayerStrategy {
      * @returns True if available, false if not, undefined if unknown
      */
     public getTileDataAvailable(tileKey: TileKey): boolean | undefined {
-        const { column: x, row: y, level } = tileKey;
-
-        // Check level range constraints
-        if (level < this.layerInformation.availability.minimumLevel) {
-            return false;
-        }
-
-        if (level > this.layerInformation.availability.maximumLevel) {
-            return false;
-        }
-
-        // Return undefined if no availability information is available
-        if (!defined(this.layerInformation.availability)) {
+        const layerInformation = this.layerInformation;
+        if (!defined(layerInformation) || !defined(layerInformation.availability)) {
             return undefined;
         }
 
-        // Check direct tile availability
-        return this.layerInformation.availability.isTileAvailable(level, x, y);
-        // If metadata is supported, check parent tile availability
-        if (this._hasMetadata && defined(this.layerInformation.availabilityLevels)) {
-            // Check parent tiles for availability information
-            let parentTile = this.getAvailabilityTile(this.layerInformation, x, y, level);
-            while (defined(parentTile)) {
-                if (
-                    this.layerInformation.availability.isTileAvailable(
-                        parentTile.level,
-                        parentTile.x,
-                        parentTile.y
-                    )
-                ) {
-                    return true; // Parent available indicates potential data
-                }
-                parentTile = this.getAvailabilityTile(
-                    this.layerInformation,
-                    parentTile.x,
-                    parentTile.y,
-                    parentTile.level
-                );
-            }
-            return false; // No available parent tiles found
+        const availability = layerInformation.availability;
+        const { column: x, row: y, level } = tileKey;
+
+        // Check level range constraints
+        if (level < availability.minimumLevel || level > availability.maximumLevel) {
+            return false;
         }
 
-        // Return false if no metadata support
-        return false;
+        // Ranges added from tile metadata (see `addMetadataAvailability`) are
+        // part of the same availability tree, so this covers both the static
+        // layer.json ranges and the dynamically discovered ones.
+        return availability.isTileAvailable(level, x, y);
+    }
+
+    /**
+     * Adds the availability ranges reported by a tile's `metadata` extension.
+     *
+     * `available[offset]` lists the tile ranges that exist at
+     * `tile.level + offset + 1` (quantized-mesh TMS row/column). This is the
+     * Cesium availability model: the layer.json ranges describe the coarse
+     * levels, and each tile's metadata reveals where real data exists further
+     * down, up to `maxzoom`.
+     *
+     * @param tileKey - The tile that carried the metadata
+     * @param available - The `available` array from the metadata JSON
+     */
+    public addMetadataAvailability(tileKey: TileKey, available: unknown): void {
+        const availability = this.layerInformation?.availability;
+        if (!defined(availability) || !Array.isArray(available)) {
+            return;
+        }
+
+        const maximumLevel = availability.maximumLevel;
+        for (let offset = 0; offset < available.length; offset++) {
+            const level = tileKey.level + offset + 1;
+            if (level > maximumLevel) {
+                break;
+            }
+
+            const rangesAtLevel = available[offset] as Array<{
+                startX: number;
+                startY: number;
+                endX: number;
+                endY: number;
+            }>;
+            if (!Array.isArray(rangesAtLevel)) {
+                continue;
+            }
+
+            for (const range of rangesAtLevel) {
+                if (
+                    !defined(range) ||
+                    typeof range.startX !== "number" ||
+                    typeof range.startY !== "number" ||
+                    typeof range.endX !== "number" ||
+                    typeof range.endY !== "number"
+                ) {
+                    continue;
+                }
+
+                availability.addAvailableTileRange(
+                    level,
+                    range.startX,
+                    range.startY,
+                    range.endX,
+                    range.endY
+                );
+            }
+        }
     }
 
     /**
@@ -793,47 +836,99 @@ class LayerStrategy implements ILayerStrategy {
         // Parse availability information
         const availabilityLevels = data.metadataAvailability;
         const availableTiles = data.available;
+        const minimumLevel = minZoom || 0;
         let availability: TileAvailability;
-        let availabilityTilesLoaded: TileAvailability;
+        let availabilityTilesLoaded: TileAvailability | undefined;
 
-        // if (defined(availableTiles) && !defined(availabilityLevels)) {
-        // Direct availability specification
-        availability = TileAvailability.createInitialRanges(
-            this._tilingScheme,
-            minZoom || 0,
-            minZoom + availableTiles.length - 1,
-            availableTiles[0]
-        );
+        if (defined(availableTiles) && !defined(availabilityLevels)) {
+            // Direct availability specification (static ranges from layer.json).
+            availability = TileAvailability.createInitialRanges(
+                this._tilingScheme,
+                minimumLevel,
+                minimumLevel + availableTiles.length - 1,
+                availableTiles[0]
+            );
 
-        for (let level = minZoom || 0; level < minZoom + availableTiles.length; ++level) {
-            const index = level - minZoom;
-            const rangesAtLevel = availableTiles[index];
+            for (let level = minimumLevel; level < minimumLevel + availableTiles.length; ++level) {
+                const index = level - minimumLevel;
+                const rangesAtLevel = availableTiles[index];
 
-            if (!defined(this.overallAvailability[level])) {
-                this.overallAvailability[level] = [];
+                if (!defined(this.overallAvailability[level])) {
+                    this.overallAvailability[level] = [];
+                }
+
+                for (let rangeIndex = 0; rangeIndex < rangesAtLevel.length; ++rangeIndex) {
+                    const range = rangesAtLevel[rangeIndex];
+                    const yStart = range.startY;
+                    const yEnd = range.endY;
+
+                    this.overallAvailability[level].push([range.startX, yStart, range.endX, yEnd]);
+                    availability.addAvailableTileRange(
+                        level,
+                        range.startX,
+                        yStart,
+                        range.endX,
+                        yEnd
+                    );
+                }
             }
+        } else {
+            // Hierarchical availability (Cesium semantics): layer.json only
+            // describes the coarse ranges; every tile's `metadata` extension
+            // reports where real data exists further down, up to `maxzoom`.
+            // This is what lets deeper levels be loaded from the network
+            // instead of being upsampled from the parent.
+            const maximumLevel = defined(maxZoom)
+                ? maxZoom
+                : defined(availableTiles)
+                ? minimumLevel + availableTiles.length - 1
+                : 22;
 
-            for (let rangeIndex = 0; rangeIndex < rangesAtLevel.length; ++rangeIndex) {
-                const range = rangesAtLevel[rangeIndex];
-                const yStart = range.startY;
-                const yEnd = range.endY;
+            availabilityTilesLoaded = new TileAvailability(
+                this._tilingScheme,
+                minimumLevel,
+                maximumLevel
+            );
 
-                this.overallAvailability[level].push([range.startX, yStart, range.endX, yEnd]);
-                availability.addAvailableTileRange(level, range.startX, yStart, range.endX, yEnd);
+            const rootRanges =
+                defined(availableTiles) && availableTiles[0] && availableTiles[0].length > 0
+                    ? availableTiles[0]
+                    : [{ startX: 0, startY: 0, endX: 1, endY: 0 }];
+            availability = TileAvailability.createInitialRanges(
+                this._tilingScheme,
+                minimumLevel,
+                maximumLevel,
+                rootRanges
+            );
+
+            if (defined(availableTiles)) {
+                for (
+                    let level = minimumLevel;
+                    level < minimumLevel + availableTiles.length;
+                    ++level
+                ) {
+                    const rangesAtLevel = availableTiles[level - minimumLevel];
+                    if (!defined(this.overallAvailability[level])) {
+                        this.overallAvailability[level] = [];
+                    }
+                    for (const range of rangesAtLevel) {
+                        this.overallAvailability[level].push([
+                            range.startX,
+                            range.startY,
+                            range.endX,
+                            range.endY
+                        ]);
+                        availability.addAvailableTileRange(
+                            level,
+                            range.startX,
+                            range.startY,
+                            range.endX,
+                            range.endY
+                        );
+                    }
+                }
             }
         }
-        // } else if (defined(availabilityLevels)) {
-        //     // Hierarchical availability specification
-        //     availabilityTilesLoaded = new TileAvailability(this._tilingScheme, minZoom, maxZoom);
-        //     availability = TileAvailability.createInitialRanges(
-        //         this._tilingScheme,
-        //         minZoom,
-        //         maxZoom,
-        //         availableTiles[0]
-        //     );
-        //     this.overallAvailability[0] = [[0, 0, 1, 0]];
-        //     // availability.addAvailableTileRange(0, 0, 0, 1, 0);
-        // }
 
         // Update extension support flags
         this._hasWaterMask = hasWaterMask;

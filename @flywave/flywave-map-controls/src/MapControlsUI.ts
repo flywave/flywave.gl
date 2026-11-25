@@ -369,6 +369,8 @@ export class MapControlsUI {
                 position: absolute;
                 right: 20px;
                 bottom: 20px;
+                right: calc(20px + env(safe-area-inset-right, 0px));
+                bottom: calc(20px + env(safe-area-inset-bottom, 0px));
             `;
         }
 
@@ -855,6 +857,24 @@ function getTextStyle() {
         .flywave-gl_controls-button:hover .flywave-gl_controls-switch_svg {
             stroke: #fff;
             fill: #fff;
+        }
+
+        /* Touch devices: meet the ~44px minimum tap target and enlarge the
+           small geo readout. Uses the pointer media feature so mouse-only
+           desktops keep the compact layout. */
+        @media (pointer: coarse) {
+            .flywave-gl_controls-button.compass,
+            .flywave-gl_controls-toggle,
+            .flywave-gl_controls-button.expanded,
+            .flywave-gl_controls_zoom-level {
+                width: 44px;
+                height: 44px;
+            }
+
+            .flywave-gl_geo-center-display {
+                font-size: 12px;
+                min-width: 150px;
+            }
         }
     `;
 }

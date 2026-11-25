@@ -107,7 +107,11 @@ const EXCLUDE_PATTERNS = [
     // 3dtiles 旧样式手工测试（无 describe 部分已在上方排除；这些 describe
     // 用例断言旧 unpackStyle 内部字段），功能已由 test/theme/*.test.ts 覆盖
     "@flywave/flywave-3dtile-datasource/test/B3DMUnpackStyleTest.ts",
-    "@flywave/flywave-3dtile-datasource/test/B3DMUnpackStyleDebugTest.ts"
+    "@flywave/flywave-3dtile-datasource/test/B3DMUnpackStyleDebugTest.ts",
+    // 需要本地 Cesium 数据服务（TILES_TEST_DATA_URL / 127.0.0.1:3010）且模块
+    // 顶层直接读 process.env——浏览器会话无 process，加载即 uncaught 杀掉
+    // 整个套件。node 侧链路专用，接入 karma 需先补 process shim + 静态数据服务
+    "@flywave/flywave-3dtile-datasource/test/integration/TilesRendererBase.integration.test.ts"
 ];
 
 module.exports = {
