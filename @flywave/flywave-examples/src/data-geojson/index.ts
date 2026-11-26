@@ -110,6 +110,19 @@ function sampleDataset(): IDataset {
     };
 }
 
+/**
+ * Dense synthetic line grid (rendering QA): ~100 m spacing wireframe around
+ * the scene center, exercising the map line pipeline with many thin,
+ * high-contrast lines. Load with `?grid=1`.
+ */
+function lineGridDataset(): IDataset {
+    return {
+        id: "line-grid",
+        label: "file: line_grid.geojson",
+        load: async () => TransferManager.instance().downloadJson("line_grid.geojson")
+    };
+}
+
 /** Theme: plain tilezen base plus a style set covering all geometry types. */
 function createGeoJsonTheme(): Theme {
     return {
@@ -208,6 +221,8 @@ async function main(): Promise<void> {
         lookAt: { target: { lat: CENTER.lat, lng: CENTER.lng }, zoomLevel: 15 }
     });
     logExampleInfo("data-geojson", mapView);
+    // Automation hook (not part of the public example surface).
+    Object.assign(window, { __geoDebug: { mapView } });
 
     // Imagery ground layer with offline debug-grid fallback.
     await createImageryWithFallback(mapView, demoImagery({ provider: "arcgis" }));
@@ -230,6 +245,10 @@ async function main(): Promise<void> {
     folder.open();
 
     await loadAndReport(surveyDataset());
+    // Rendering QA: dense synthetic line grid (?grid=1).
+    if (new URLSearchParams(location.search).get("grid") === "1") {
+        await loadAndReport(lineGridDataset());
+    }
 }
 
 void main();

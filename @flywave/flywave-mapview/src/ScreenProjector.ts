@@ -56,7 +56,7 @@ export class ScreenProjector {
      * Apply current projectionViewMatrix of the camera to project the source vector into
      * screen coordinates.
      *
-     * @param {(Vector3Like)} source The source vector to project.
+     * @param {Vector3Like} source The source vector to project.
      * @param {THREE.Vector2} target The target vector.
      * @returns {THREE.Vector2} The projected vector (the parameter 'target')
      */
@@ -67,6 +67,20 @@ export class ScreenProjector {
         const p = this.projectVector(source, ScreenProjector.tempV3);
         (target as any)._depth = p.z;
         return this.ndcToScreen(p, target);
+    }
+
+    /**
+     * Signed depth of the source point along the camera axis (view space z): negative in
+     * front of the camera plane, positive behind it. The perspective projection wraps
+     * around the camera plane — the screen coordinates of points on or behind it do not
+     * follow the geometry (the near-range NDC test cannot detect them, the wrapped
+     * coordinates still fall inside the valid range) — so callers laying out screen-space
+     * features from projected polylines must exclude them.
+     */
+    cameraAxisDepth(source: Vector3Like): number {
+        const p = ScreenProjector.tempV3.set(source.x, source.y, source.z);
+        p.applyMatrix4(this.m_camera.matrixWorldInverse);
+        return p.z;
     }
 
     /**

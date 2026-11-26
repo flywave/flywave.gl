@@ -389,6 +389,7 @@ const tmpMeasurementParams: MeasurementParameters = {};
 const tmpCollisionBoxes: CollisionBox[] = [];
 const tmpCollisionBox = new CollisionBox();
 const tmpScreenPosition = new THREE.Vector2();
+const tmpNearPoint = new THREE.Vector3();
 const tmpTextOffset = new THREE.Vector2();
 const tmp2DBox = new Math2D.Box();
 const tmpCenter = new THREE.Vector2();
@@ -1005,16 +1006,58 @@ export function isPathLabelTooSmall(
     outScreenPoints.length = 0;
     let anyPointVisible = false;
 
-    for (const pt of textElement.points as THREE.Vector3[]) {
-        // projectToScreen returns undefined for points behind the camera or beyond the
-        // far plane: such points are invalid and split the path into sub-polylines.
-        const screenPoint = screenProjector.projectToScreen(pt, tmpScreenPosition);
+    const pushProjected = (p: THREE.Vector3): boolean => {
+        const screenPoint = screenProjector.projectToScreen(p, tmpScreenPosition);
         if (screenPoint === undefined) {
-            continue;
+            return false;
         }
         anyPointVisible = true;
+        const last = outScreenPoints[outScreenPoints.length - 1];
+        if (last === undefined || last.x !== tmpScreenPosition.x || last.y !== tmpScreenPosition.y) {
+            outScreenPoints.push(tmpScreenPosition.clone());
+        }
+        return true;
+    };
 
-        outScreenPoints.push(tmpScreenPosition.clone());
+    // Project the polyline segment by segment. Points on or behind the camera plane must
+    // not be projected directly: the perspective projection wraps around the plane, and
+    // their screen coordinates do not follow the geometry. A segment crossing the plane
+    // still renders on screen — as the ray sweeping from its in-front endpoint towards
+    // the plane — so its visible part is represented by a point placed 0.1% of the
+    // segment away from the crossing; the projection of that point lies in the true sweep
+    // direction far outside the viewport, and the viewport clipping below trims it at
+    // the screen border. Segments with both endpoints on or behind the plane have no
+    // faithful screen representation and are dropped.
+    const points = textElement.points as THREE.Vector3[];
+    let prev: THREE.Vector3 | undefined;
+    let prevDepth = 0;
+    for (const pt of points) {
+        const depth = screenProjector.cameraAxisDepth(pt);
+        if (prev !== undefined) {
+            const exits = prevDepth < 0 && depth >= 0;
+            const enters = prevDepth >= 0 && depth < 0;
+            if (!exits && !enters && depth >= 0) {
+                prev = pt;
+                prevDepth = depth;
+                continue;
+            }
+            let a = prev;
+            let b = pt;
+            if (exits || enters) {
+                const tCross = prevDepth / (prevDepth - depth);
+                const t = exits ? tCross * 0.999 : tCross + (1 - tCross) * 0.001;
+                tmpNearPoint.copy(prev).lerp(pt, t);
+                if (exits) {
+                    b = tmpNearPoint;
+                } else {
+                    a = tmpNearPoint;
+                }
+            }
+            pushProjected(a);
+            pushProjected(b);
+        }
+        prev = pt;
+        prevDepth = depth;
     }
 
     // FLYWAVE-3515: long paths (rail tracks, rivers, roads) keep extending far outside

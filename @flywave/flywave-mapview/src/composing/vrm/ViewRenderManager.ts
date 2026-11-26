@@ -21,7 +21,6 @@ import {
     cloudRender,
     convertToTexture,
     dithering,
-    highpVelocity,
     lensFlare,
     shadowLength,
     smaaWrapped,
@@ -50,7 +49,8 @@ import {
     uniform,
     vec2,
     vec3,
-    vec4
+    vec4,
+    velocity
 } from "three/tsl";
 import {
     type Renderer,
@@ -393,7 +393,14 @@ export class ViewRenderManager implements IViewRenderManager {
         const WORLD_TO_UNIT = 0.001;
 
         const mrtEntries: Record<string, unknown> = { output };
-        if (taaEnabled) mrtEntries.velocity = highpVelocity;
+        // three r187's official velocity node — the same source three's own
+        // TRAA consumes. It copies the previous-frame matrices into fixed
+        // uniform instances (no `.value` re-pointing like the atmosphere
+        // package's highpVelocity, which desyncs from per-object uniform
+        // uploads in the batched tile scene and fills the MRT with
+        // cross-object garbage) and reads the CURRENT transform from the
+        // renderer-maintained `modelViewMatrix`.
+        if (taaEnabled) mrtEntries.velocity = velocity;
         if (bloomEnabled) mrtEntries.bloomIntensity = float(0);
         if (ssrEnabled) {
             // SSR reflectivity mask: default vec4(0) = NOT reflective (the

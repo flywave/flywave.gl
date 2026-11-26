@@ -18,7 +18,8 @@ import {
     textureSize,
     uniform,
     vec3,
-    vec4
+    vec4,
+    velocity
 } from "three/tsl";
 import {
     type Camera,
@@ -237,7 +238,7 @@ export class TemporalAntialiasNode extends TempNode {
     private readonly resolveMaterial = new NodeMaterial();
     private readonly mesh = new QuadMesh();
     private _rendererState?: RendererUtils.RendererState;
-    private needsSyncRenderPipeline = false;
+    private pipelineHooksRegistered = false;
     private needsClearHistory = false;
 
     private readonly resolveNode = texture(this.resolveRT.texture);
@@ -253,7 +254,13 @@ export class TemporalAntialiasNode extends TempNode {
         camera: Camera
     ) {
         super("vec4");
-        this.updateBeforeType = NodeUpdateType.FRAME;
+        // NodeUpdateType.FRAME is gated on NodeFrame.frameId, which three r187
+        // only advances in its internal animation loop (Animation) and in
+        // compileAsync — NOT per renderer.render() call. On-demand engines
+        // (MapView renderSync) therefore never reach the resolve, and the
+        // camera stays jittered. RENDER tracks renderId, which does advance
+        // per renderer.render(), so the resolve runs once per rendered frame.
+        this.updateBeforeType = NodeUpdateType.RENDER;
         this.resolveMaterial.name = "TemporalAntialias [Resolve]";
         this.mesh.name = "TemporalAntialias";
 
@@ -316,6 +323,13 @@ export class TemporalAntialiasNode extends TempNode {
         camera.updateProjectionMatrix();
         this.originalProjectionMatrix.copy(camera.projectionMatrix);
         highpVelocity.setProjectionMatrix(this.originalProjectionMatrix);
+        // three r187's official `velocity` node (the one ViewRenderManager feeds
+        // into the scene-pass MRT) must ALSO see the unjittered matrix — it
+        // otherwise falls back to camera.projectionMatrix, which is jittered at
+        // scene-pass time, polluting the velocity with per-frame jitter deltas
+        // (misaligned history reprojection → shimmer on thin lines in motion).
+        // Same wiring as three's own TRAANode/TAAUNode.
+        velocity.setProjectionMatrix(this.originalProjectionMatrix);
 
         const offset = haltonOffsets[this.jitterIndex];
         const dx = offset.x - 0.5;
@@ -327,6 +341,7 @@ export class TemporalAntialiasNode extends TempNode {
         // Reset the projection matrix modified in setViewOffset():
         this.camera.clearViewOffset();
         highpVelocity.setProjectionMatrix(null);
+        velocity.setProjectionMatrix(null);
 
         // setViewOffset() can be called multiple times in a frame. Increment the
         // jitter index here.
@@ -388,11 +403,6 @@ export class TemporalAntialiasNode extends TempNode {
             this.copyDepthTexture(renderer);
         }
         this.swapBuffers();
-
-        // Don't jitter the camera in subsequent render passes if any:
-        if (this.needsSyncRenderPipeline) {
-            this.clearViewOffset();
-        }
     }
 
     private setupResolveNode({ renderer }: NodeBuilder): Node {
@@ -489,11 +499,18 @@ export class TemporalAntialiasNode extends TempNode {
     }
 
     override setup(builder: NodeBuilder): unknown {
-        // Jitter the camera right before the pipeline renders its scene pass;
-        // `updateBefore` clears the offset again once the TAA pass has resolved.
+        // Jitter the camera right before the pipeline renders its scene pass
+        // and clear the offset right after the whole pipeline has finished, so
+        // exactly one jitter offset is consumed per pipeline render. Clearing
+        // here (instead of inside `updateBefore`) also keeps the offset from
+        // leaking into passes rendered after the pipeline in the same frame
+        // (labels, overlay scene).
         const onBeforeRenderPipeline = (): void => {
             const size = builder.renderer.getDrawingBufferSize(sizeScratch);
             this.setViewOffset(size.width, size.height);
+        };
+        const onAfterRenderPipeline = (): void => {
+            this.clearViewOffset();
         };
         // three r187 exposes the per-render pipeline hooks as callback arrays
         // on the node-builder context (EventNode's BEFORE_RENDER_PIPELINE uses
@@ -503,12 +520,20 @@ export class TemporalAntialiasNode extends TempNode {
         // `builder.context.renderPipeline` is the pipeline itself, so reading
         // `.context` off it returned undefined and assigning the callback threw
         // "Cannot set properties of undefined (setting 'onBeforeRenderPipeline')".
-        const pipelineCallbacks = (
-            builder.context as { onBeforePipelineCallbacks?: Array<() => void> }
-        ).onBeforePipelineCallbacks;
-        if (pipelineCallbacks != null) {
-            pipelineCallbacks.push(onBeforeRenderPipeline);
-            this.needsSyncRenderPipeline = true;
+        const context = builder.context as {
+            onBeforePipelineCallbacks?: Array<() => void>;
+            onAfterPipelineCallbacks?: Array<() => void>;
+        };
+        // Guard against duplicate registration: `setup` re-runs on shader
+        // rebuilds while the pipeline (and its context arrays) stay alive.
+        if (
+            context.onBeforePipelineCallbacks != null &&
+            context.onAfterPipelineCallbacks != null &&
+            !this.pipelineHooksRegistered
+        ) {
+            context.onBeforePipelineCallbacks.push(onBeforeRenderPipeline);
+            context.onAfterPipelineCallbacks.push(onAfterRenderPipeline);
+            this.pipelineHooksRegistered = true;
         }
 
         const { resolveMaterial } = this;
@@ -559,7 +584,7 @@ export function temporalAntialias(...args: any[]): any {
             camera: Camera
         ): TemporalAntialiasNode =>
             new TemporalAntialiasNode(
-                convertToTexture(inputNode, { name: "TemporalAntialias [Input]" }),
+                convertToTexture(inputNode, { name: "TemporalAntialias [Input]", updateBeforeType: NodeUpdateType.RENDER }),
                 depthNode,
                 velocityNode,
                 camera
@@ -567,7 +592,7 @@ export function temporalAntialias(...args: any[]): any {
     }
     const [inputNode, depthNode, velocityNode, camera] = args;
     return new TemporalAntialiasNode(
-        convertToTexture(inputNode, { name: "TemporalAntialias [Input]" }),
+        convertToTexture(inputNode, { name: "TemporalAntialias [Input]", updateBeforeType: NodeUpdateType.RENDER }),
         depthNode,
         velocityNode,
         camera
